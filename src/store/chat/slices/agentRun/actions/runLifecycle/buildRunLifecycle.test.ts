@@ -11,7 +11,7 @@ const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
 }));
 

@@ -48,7 +48,7 @@ const isSendMessageLoadingForTopic = (topicKey: string) => (s: ChatStoreState) =
   });
 };
 
-export const aiChatSelectors = {
+export const agentRunSelectors = {
   isCurrentSendMessageError,
   isCurrentSendMessageLoading,
   isIntentUnderstanding,

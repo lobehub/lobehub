@@ -18,7 +18,7 @@ import { StreamingExecutorActionImpl } from './streamingExecutor';
 import { type StreamingStatesAction } from './streamingStates';
 import { StreamingStatesActionImpl } from './streamingStates';
 
-export type ChatAIChatAction = ChatMemoryAction &
+export type ChatAgentRunAction = ChatMemoryAction &
   ClientToolExecutionAction &
   ConversationLifecycleAction &
   ConversationControlAction &
@@ -26,17 +26,17 @@ export type ChatAIChatAction = ChatMemoryAction &
   StreamingExecutorAction &
   StreamingStatesAction;
 
-export const chatAiChat: StateCreator<
+export const chatAgentRun: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
-  ChatAIChatAction
+  ChatAgentRunAction
 > = (
   ...params: Parameters<
-    StateCreator<ChatStore, [['zustand/devtools', never]], [], ChatAIChatAction>
+    StateCreator<ChatStore, [['zustand/devtools', never]], [], ChatAgentRunAction>
   >
 ) =>
-  flattenActions<ChatAIChatAction>([
+  flattenActions<ChatAgentRunAction>([
     new ChatMemoryActionImpl(...params),
     new ClientToolExecutionActionImpl(...params),
     new ConversationLifecycleActionImpl(...params),

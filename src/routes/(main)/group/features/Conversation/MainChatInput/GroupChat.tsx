@@ -14,7 +14,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
-import { aiChatSelectors } from '@/store/chat/selectors';
+import { agentRunSelectors } from '@/store/chat/selectors';
 
 import MessageFromUrl from './MessageFromUrl';
 import { useSendMenuItems } from './useSendMenuItems';
@@ -36,7 +36,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
   const isGroupConfigLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
 
   const [mainInputSendErrorMsg, clearSendMessageError] = useChatStore((s) => [
-    aiChatSelectors.isCurrentSendMessageError(s),
+    agentRunSelectors.isCurrentSendMessageError(s),
     s.clearSendMessageError,
   ]);
 

@@ -39,7 +39,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/agentSignalBridge';
 import { type ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { getElectronStoreState } from '@/store/electron';

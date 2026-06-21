@@ -11,15 +11,15 @@ import { createStore } from '../../index';
 // is regenerate silently dropping image attachments (the send path forwards
 // them; this path must too).
 const mockExecuteHeterogeneousAgent = vi.fn();
-vi.mock('@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => mockExecuteHeterogeneousAgent(...args),
 }));
 
-vi.mock('@/store/chat/slices/aiChat/actions/agentDispatcher', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/agentDispatcher', () => ({
   selectRuntimeType: () => 'hetero',
 }));
 
-vi.mock('@/store/chat/slices/aiChat/actions/heteroResume', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/heteroResume', () => ({
   resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
 }));
 

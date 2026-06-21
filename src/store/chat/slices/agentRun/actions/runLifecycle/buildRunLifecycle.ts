@@ -6,8 +6,8 @@ import { t } from 'i18next';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import type { AgentRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
+import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/agentDispatcher';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';

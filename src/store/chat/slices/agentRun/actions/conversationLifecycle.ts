@@ -37,11 +37,11 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
-import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
-import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
-import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
-import { buildRunLifecycle } from '@/store/chat/slices/aiChat/actions/runLifecycle/buildRunLifecycle';
-import type { RunScope } from '@/store/chat/slices/aiChat/actions/runLifecycle/types';
+import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/agentDispatcher';
+import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/heteroResume';
+import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/nonHeteroSubAgentDispatcher';
+import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/runLifecycle/buildRunLifecycle';
+import type { RunScope } from '@/store/chat/slices/agentRun/actions/runLifecycle/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';

@@ -12,7 +12,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
-} from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+} from '@/store/chat/slices/agentRun/actions/agentDispatcher';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';

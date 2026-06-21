@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
 
-import { aiChatSelectors } from './selectors';
+import { agentRunSelectors } from './selectors';
 
-describe('aiChatSelectors', () => {
+describe('agentRunSelectors', () => {
   beforeEach(() => {
     useChatStore.setState(useChatStore.getInitialState());
   });
@@ -22,13 +22,13 @@ describe('aiChatSelectors', () => {
         });
       });
 
-      expect(aiChatSelectors.isMessageInReasoning('msg1')(result.current)).toBe(true);
+      expect(agentRunSelectors.isMessageInReasoning('msg1')(result.current)).toBe(true);
     });
 
     it('should return false when message has no reasoning operation', () => {
       const { result } = renderHook(() => useChatStore());
 
-      expect(aiChatSelectors.isMessageInReasoning('msg1')(result.current)).toBe(false);
+      expect(agentRunSelectors.isMessageInReasoning('msg1')(result.current)).toBe(false);
     });
   });
 
@@ -40,8 +40,8 @@ describe('aiChatSelectors', () => {
         useChatStore.setState({ searchWorkflowLoadingIds: ['msg1', 'msg2'] });
       });
 
-      expect(aiChatSelectors.isMessageInSearchWorkflow('msg1')(result.current)).toBe(true);
-      expect(aiChatSelectors.isMessageInSearchWorkflow('msg2')(result.current)).toBe(true);
+      expect(agentRunSelectors.isMessageInSearchWorkflow('msg1')(result.current)).toBe(true);
+      expect(agentRunSelectors.isMessageInSearchWorkflow('msg2')(result.current)).toBe(true);
     });
 
     it('should return false when message is not in search workflow', () => {
@@ -51,7 +51,7 @@ describe('aiChatSelectors', () => {
         useChatStore.setState({ searchWorkflowLoadingIds: ['msg1'] });
       });
 
-      expect(aiChatSelectors.isMessageInSearchWorkflow('msg2')(result.current)).toBe(false);
+      expect(agentRunSelectors.isMessageInSearchWorkflow('msg2')(result.current)).toBe(false);
     });
   });
 
@@ -63,13 +63,13 @@ describe('aiChatSelectors', () => {
         useChatStore.setState({ searchWorkflowLoadingIds: ['msg1'] });
       });
 
-      expect(aiChatSelectors.isIntentUnderstanding('msg1')(result.current)).toBe(true);
+      expect(agentRunSelectors.isIntentUnderstanding('msg1')(result.current)).toBe(true);
     });
 
     it('should return false when message is not in search workflow', () => {
       const { result } = renderHook(() => useChatStore());
 
-      expect(aiChatSelectors.isIntentUnderstanding('msg1')(result.current)).toBe(false);
+      expect(agentRunSelectors.isIntentUnderstanding('msg1')(result.current)).toBe(false);
     });
   });
 
@@ -85,7 +85,7 @@ describe('aiChatSelectors', () => {
         });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageLoading(result.current)).toBe(true);
+      expect(agentRunSelectors.isCurrentSendMessageLoading(result.current)).toBe(true);
     });
 
     it('should return false when there is no sendMessage operation', () => {
@@ -95,7 +95,7 @@ describe('aiChatSelectors', () => {
         useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
+      expect(agentRunSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
     });
 
     it('should return false when sendMessage operation is completed', () => {
@@ -115,7 +115,7 @@ describe('aiChatSelectors', () => {
         result.current.completeOperation(opId);
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
+      expect(agentRunSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
     });
 
     it('should return false for different context', () => {
@@ -129,7 +129,7 @@ describe('aiChatSelectors', () => {
         });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
+      expect(agentRunSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
     });
   });
 
@@ -153,7 +153,7 @@ describe('aiChatSelectors', () => {
         });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageError(result.current)).toBe('Network error');
+      expect(agentRunSelectors.isCurrentSendMessageError(result.current)).toBe('Network error');
     });
 
     it('should return undefined when there is no error', () => {
@@ -167,7 +167,7 @@ describe('aiChatSelectors', () => {
         });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageError(result.current)).toBeUndefined();
+      expect(agentRunSelectors.isCurrentSendMessageError(result.current)).toBeUndefined();
     });
 
     it('should return undefined when there are no operations', () => {
@@ -177,7 +177,7 @@ describe('aiChatSelectors', () => {
         useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
       });
 
-      expect(aiChatSelectors.isCurrentSendMessageError(result.current)).toBeUndefined();
+      expect(agentRunSelectors.isCurrentSendMessageError(result.current)).toBeUndefined();
     });
 
     it('should return the latest error when multiple operations exist', () => {
@@ -210,7 +210,7 @@ describe('aiChatSelectors', () => {
       });
 
       // Should return the latest (second) error
-      expect(aiChatSelectors.isCurrentSendMessageError(result.current)).toBe('Second error');
+      expect(agentRunSelectors.isCurrentSendMessageError(result.current)).toBe('Second error');
     });
   });
 
@@ -226,7 +226,7 @@ describe('aiChatSelectors', () => {
       });
 
       expect(
-        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+        agentRunSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
       ).toBe(true);
     });
 
@@ -234,7 +234,7 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       expect(
-        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+        agentRunSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
       ).toBe(false);
     });
 
@@ -255,7 +255,7 @@ describe('aiChatSelectors', () => {
       });
 
       expect(
-        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+        agentRunSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
       ).toBe(false);
     });
 
@@ -270,10 +270,10 @@ describe('aiChatSelectors', () => {
       });
 
       expect(
-        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+        agentRunSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
       ).toBe(true);
       expect(
-        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic2')(result.current),
+        agentRunSelectors.isSendMessageLoadingForTopic('main_session1_topic2')(result.current),
       ).toBe(false);
     });
   });

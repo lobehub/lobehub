@@ -1,8 +1,8 @@
 // sort-imports-ignore
+import { type ChatAIChatState } from './slices/agentRun/initialState';
+import { initialAiChatState } from './slices/agentRun/initialState';
 import { type ChatAIAgentState } from './slices/aiAgent/initialState';
 import { initialAiAgentState } from './slices/aiAgent/initialState';
-import { type ChatAIChatState } from './slices/aiChat/initialState';
-import { initialAiChatState } from './slices/aiChat/initialState';
 import { type ChatToolState } from './slices/builtinTool/initialState';
 import { initialToolState } from './slices/builtinTool/initialState';
 import { type ChatMessageState } from './slices/message/initialState';

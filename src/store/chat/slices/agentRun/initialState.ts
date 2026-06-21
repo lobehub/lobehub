@@ -1,5 +1,5 @@
 import { type ChatInputEditor } from '@/features/ChatInput';
-import type { GatewayConnection } from '@/store/chat/slices/aiChat/actions/gateway';
+import type { GatewayConnection } from '@/store/chat/slices/agentRun/actions/gateway';
 
 export interface ChatAIChatState {
   /**
