@@ -6,7 +6,15 @@ import {
   workspaceMembers,
   workspaces,
 } from '../schemas/workspace';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
+
+const lockWorkspaceById = async (tx: Transaction, id: string) => {
+  const [workspace] = await tx.select().from(workspaces).where(eq(workspaces.id, id)).for('update');
+
+  if (!workspace) throw new Error('Workspace not found');
+
+  return workspace;
+};
 
 export class WorkspaceModel {
   protected readonly db: LobeChatDatabase;
@@ -157,11 +165,8 @@ export class WorkspaceModel {
       throw new Error('New primary owner must be a different user');
 
     return this.db.transaction(async (tx) => {
-      const current = await tx.query.workspaces.findFirst({
-        where: eq(workspaces.id, id),
-      });
+      const current = await lockWorkspaceById(tx, id);
 
-      if (!current) throw new Error('Workspace not found');
       if (current.primaryOwnerId !== this.userId)
         throw new Error('Only the primary owner can transfer primary ownership');
 
@@ -225,10 +230,7 @@ export class WorkspaceModel {
 
   demoteFromOwner = async (id: string, targetUserId: string) => {
     return this.db.transaction(async (tx) => {
-      const workspace = await tx.query.workspaces.findFirst({
-        where: eq(workspaces.id, id),
-      });
-      if (!workspace) throw new Error('Workspace not found');
+      const workspace = await lockWorkspaceById(tx, id);
       if (workspace.primaryOwnerId === targetUserId)
         throw new Error(
           'Cannot demote the primary owner — transfer primary ownership to another owner first',
@@ -252,6 +254,19 @@ export class WorkspaceModel {
       });
       if (!target) throw new Error('Target user is not a member of this workspace');
       if (target.role !== 'owner') return target;
+
+      const [otherOwners] = await tx
+        .select({ count: count() })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, id),
+            eq(workspaceMembers.role, 'owner'),
+            ne(workspaceMembers.userId, targetUserId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        );
+      if ((otherOwners?.count ?? 0) === 0) throw new Error('Cannot demote the last owner');
 
       await tx
         .update(workspaceMembers)
@@ -287,11 +302,8 @@ export class WorkspaceModel {
    */
   downgradeToSolo = async (id: string) => {
     return this.db.transaction(async (tx) => {
-      const current = await tx.query.workspaces.findFirst({
-        where: eq(workspaces.id, id),
-      });
+      const current = await lockWorkspaceById(tx, id);
 
-      if (!current) throw new Error('Workspace not found');
       if (current.primaryOwnerId !== this.userId)
         throw new Error('Only the primary owner can downgrade this workspace');
 

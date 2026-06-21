@@ -11,19 +11,10 @@ import { RouteMetaBridge } from '@/features/RouteMeta';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { shouldShowMobileNav } from './mobileNavigation';
 import NavBar from './NavBar';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
-const MOBILE_NAV_ROUTES = new Set([
-  '/',
-  '/community',
-  '/community/agent',
-  '/community/mcp',
-  '/community/plugin',
-  '/community/model',
-  '/community/provider',
-  '/me',
-]);
 
 export const normalizeMobileNavPathname = (pathname: string, activeSlug?: string | null) => {
   if (!activeSlug) return pathname || '/';

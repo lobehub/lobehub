@@ -88,7 +88,11 @@ export const workspaceMemberRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' });
       }
       if (invitation.expiresAt.getTime() < Date.now()) {
-        await ctx.workspaceMemberModel.updateInvitationStatus(invitation.id, 'expired');
+        await ctx.workspaceMemberModel.updateInvitationStatus(
+          invitation.id,
+          'expired',
+          invitation.workspaceId,
+        );
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation expired' });
       }
 
@@ -97,7 +101,11 @@ export const workspaceMemberRouter = router({
         userId: ctx.userId,
         workspaceId: invitation.workspaceId,
       });
-      await ctx.workspaceMemberModel.updateInvitationStatus(invitation.id, 'accepted');
+      await ctx.workspaceMemberModel.updateInvitationStatus(
+        invitation.id,
+        'accepted',
+        invitation.workspaceId,
+      );
       await ctx.workspaceAuditLogModel.create({
         action: 'member.joined',
         ipAddress: ctx.clientIp ?? undefined,
@@ -124,7 +132,11 @@ export const workspaceMemberRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' });
       }
       if (pending.invitation.expiresAt.getTime() < Date.now()) {
-        await ctx.workspaceMemberModel.updateInvitationStatus(pending.invitation.id, 'expired');
+        await ctx.workspaceMemberModel.updateInvitationStatus(
+          pending.invitation.id,
+          'expired',
+          pending.workspace.id,
+        );
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation expired' });
       }
 
@@ -133,7 +145,11 @@ export const workspaceMemberRouter = router({
         userId: ctx.userId,
         workspaceId: pending.workspace.id,
       });
-      await ctx.workspaceMemberModel.updateInvitationStatus(pending.invitation.id, 'accepted');
+      await ctx.workspaceMemberModel.updateInvitationStatus(
+        pending.invitation.id,
+        'accepted',
+        pending.workspace.id,
+      );
       await ctx.workspaceAuditLogModel.create({
         action: 'member.joined',
         ipAddress: ctx.clientIp ?? undefined,
@@ -265,7 +281,7 @@ export const workspaceMemberRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertWorkspaceOwner(ctx, input.workspaceId);
 
-      await ctx.workspaceMemberModel.revokeInvitation(input.id);
+      await ctx.workspaceMemberModel.revokeInvitation(input.id, input.workspaceId);
       await ctx.workspaceAuditLogModel.create({
         action: 'invitation.revoked',
         ipAddress: ctx.clientIp ?? undefined,

@@ -1,11 +1,23 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid/non-secure';
 
-import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
-import type { LobeChatDatabase } from '../type';
+import { workspaceInvitations, workspaceMembers, workspaces } from '../schemas/workspace';
+import type { LobeChatDatabase, Transaction } from '../type';
 
 type MemberRole = 'member' | 'owner' | 'viewer';
+
+const lockWorkspaceForOwnerChange = async (tx: Transaction, workspaceId: string) => {
+  const [workspace] = await tx
+    .select({ primaryOwnerId: workspaces.primaryOwnerId })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .for('update');
+
+  if (!workspace) throw new Error('Workspace not found');
+
+  return workspace;
+};
 
 export class WorkspaceMemberModel {
   private readonly db: LobeChatDatabase;
@@ -57,29 +69,93 @@ export class WorkspaceMemberModel {
   };
 
   removeMember = async (workspaceId: string, userId: string) => {
-    return this.db
-      .update(workspaceMembers)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
+    return this.db.transaction(async (tx) => {
+      const workspace = await lockWorkspaceForOwnerChange(tx, workspaceId);
+      if (workspace.primaryOwnerId === userId) {
+        throw new Error('Cannot remove the primary owner — transfer primary ownership first');
+      }
+
+      const member = await tx.query.workspaceMembers.findFirst({
+        columns: { role: true },
+        where: and(
           eq(workspaceMembers.workspaceId, workspaceId),
           eq(workspaceMembers.userId, userId),
           isNull(workspaceMembers.deletedAt),
         ),
-      );
+      });
+      if (!member) return;
+
+      if (member.role === 'owner') {
+        const [otherOwners] = await tx
+          .select({ count: count() })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.role, 'owner'),
+              ne(workspaceMembers.userId, userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          );
+        if ((otherOwners?.count ?? 0) === 0) throw new Error('Cannot remove the last owner');
+      }
+
+      return tx
+        .update(workspaceMembers)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        );
+    });
   };
 
   updateMemberRole = async (workspaceId: string, userId: string, role: MemberRole) => {
-    return this.db
-      .update(workspaceMembers)
-      .set({ role })
-      .where(
-        and(
+    return this.db.transaction(async (tx) => {
+      const workspace = await lockWorkspaceForOwnerChange(tx, workspaceId);
+      if (workspace.primaryOwnerId === userId && role !== 'owner') {
+        throw new Error('Cannot demote the primary owner — transfer primary ownership first');
+      }
+
+      const member = await tx.query.workspaceMembers.findFirst({
+        columns: { role: true },
+        where: and(
           eq(workspaceMembers.workspaceId, workspaceId),
           eq(workspaceMembers.userId, userId),
           isNull(workspaceMembers.deletedAt),
         ),
-      );
+      });
+      if (!member) return;
+
+      if (member.role === 'owner' && role !== 'owner') {
+        const [otherOwners] = await tx
+          .select({ count: count() })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.role, 'owner'),
+              ne(workspaceMembers.userId, userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          );
+        if ((otherOwners?.count ?? 0) === 0) throw new Error('Cannot demote the last owner');
+      }
+
+      return tx
+        .update(workspaceMembers)
+        .set({ role })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        );
+    });
   };
 
   // ===== Invitations ===== //
@@ -117,17 +193,25 @@ export class WorkspaceMemberModel {
     });
   };
 
-  revokeInvitation = async (id: string) => {
+  revokeInvitation = async (id: string, workspaceId: string) => {
     return this.db
       .update(workspaceInvitations)
       .set({ status: 'revoked' })
-      .where(eq(workspaceInvitations.id, id));
+      .where(
+        and(eq(workspaceInvitations.id, id), eq(workspaceInvitations.workspaceId, workspaceId)),
+      );
   };
 
-  updateInvitationStatus = async (id: string, status: 'accepted' | 'expired' | 'revoked') => {
+  updateInvitationStatus = async (
+    id: string,
+    status: 'accepted' | 'expired' | 'revoked',
+    workspaceId: string,
+  ) => {
     return this.db
       .update(workspaceInvitations)
       .set({ status })
-      .where(eq(workspaceInvitations.id, id));
+      .where(
+        and(eq(workspaceInvitations.id, id), eq(workspaceInvitations.workspaceId, workspaceId)),
+      );
   };
 }

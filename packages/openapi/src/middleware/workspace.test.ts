@@ -31,6 +31,8 @@ vi.mock('@/database/schemas', () => ({
     workspaceId: 'workspaceMembers.workspaceId',
   },
   workspaces: {
+    frozen: 'workspaces.frozen',
+    frozenReason: 'workspaces.frozenReason',
     id: 'workspaces.id',
   },
 }));
@@ -90,6 +92,47 @@ describe('OpenAPI workspace middleware', () => {
     expect(mockGetServerDB).not.toHaveBeenCalled();
   });
 
+  it('keeps API-key workspace context when the workspace header is absent', async () => {
+    const app = new Hono<TestHonoEnv>();
+    app.onError((error, c) =>
+      error instanceof HTTPException ? error.getResponse() : c.text(error.message, 500),
+    );
+    app.use('*', async (c, next) => {
+      c.set('userId', 'user-1');
+      c.set('workspaceId', 'workspace-1');
+      await next();
+    });
+    app.use('*', workspaceAuthMiddleware);
+    app.get('/workspace', (c) => c.json({ workspaceId: c.get('workspaceId') }));
+
+    const response = await app.request('/workspace');
+
+    await expect(response.json()).resolves.toEqual({ workspaceId: 'workspace-1' });
+    expect(response.status).toBe(200);
+    expect(mockWorkspacesFindFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects mismatched workspace header for a workspace-scoped API key', async () => {
+    const app = new Hono<TestHonoEnv>();
+    app.onError((error, c) =>
+      error instanceof HTTPException ? error.getResponse() : c.text(error.message, 500),
+    );
+    app.use('*', async (c, next) => {
+      c.set('userId', 'user-1');
+      c.set('workspaceId', 'workspace-1');
+      await next();
+    });
+    app.use('*', workspaceAuthMiddleware);
+    app.get('/workspace', (c) => c.json({ workspaceId: c.get('workspaceId') }));
+
+    const response = await app.request('/workspace', {
+      headers: { [OPENAPI_WORKSPACE_HEADER]: 'workspace-2' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockGetServerDB).not.toHaveBeenCalled();
+  });
+
   it('rejects workspace access when the request is unauthenticated', async () => {
     const app = createApp(null);
 
@@ -122,6 +165,22 @@ describe('OpenAPI workspace middleware', () => {
     });
 
     expect(response.status).toBe(403);
+  });
+
+  it('rejects access to a frozen workspace', async () => {
+    const app = createApp();
+    mockWorkspacesFindFirst.mockResolvedValueOnce({
+      frozen: true,
+      frozenReason: 'billing overdue',
+      id: 'workspace-1',
+    });
+
+    const response = await app.request('/workspace', {
+      headers: { [OPENAPI_WORKSPACE_HEADER]: 'workspace-1' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockWorkspaceMembersFindFirst).not.toHaveBeenCalled();
   });
 
   it('sets workspace context when the user is a workspace member', async () => {

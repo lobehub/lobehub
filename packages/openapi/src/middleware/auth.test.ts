@@ -10,6 +10,7 @@ interface TestHonoEnv {
     authorizationHeader: string | null;
     authType: string | null;
     userId: string | null;
+    workspaceId: string | undefined;
   };
 }
 
@@ -36,7 +37,17 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/apiKey', () => ({
-  ApiKeyModel: class {},
+  ApiKeyModel: class {
+    findByKey = vi.fn().mockResolvedValue({
+      enabled: true,
+      expiresAt: null,
+      id: 'api-key-1',
+      name: 'Workspace key',
+      userId: 'api-user',
+      workspaceId: 'workspace-1',
+    });
+    updateLastUsed = vi.fn().mockResolvedValue(undefined);
+  },
 }));
 
 vi.mock('@/envs/auth', () => ({
@@ -73,6 +84,7 @@ const createApp = () => {
     c.json({
       authType: c.get('authType'),
       userId: c.get('userId'),
+      workspaceId: c.get('workspaceId') ?? null,
     }),
   );
 
@@ -103,6 +115,7 @@ describe('OpenAPI auth middleware', () => {
     await expect(response.json()).resolves.toEqual({
       authType: 'oidc',
       userId: 'oidc-user',
+      workspaceId: null,
     });
     expect(response.status).toBe(200);
     expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
@@ -126,5 +139,22 @@ describe('OpenAPI auth middleware', () => {
 
     expect(response.status).toBe(401);
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(mockServerDB, 'banned-user');
+  });
+
+  it('should attach workspace context from a workspace-scoped API key', async () => {
+    const app = createApp();
+    mockExtractBearerToken.mockReturnValueOnce('sk-lh-workspacekey');
+    mockValidateApiKeyFormat.mockReturnValueOnce(true);
+
+    const response = await app.request('/protected', {
+      headers: { Authorization: 'Bearer sk-lh-workspacekey' },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      authType: 'apikey',
+      userId: 'api-user',
+      workspaceId: 'workspace-1',
+    });
+    expect(response.status).toBe(200);
   });
 });

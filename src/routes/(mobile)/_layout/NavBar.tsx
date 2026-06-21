@@ -1,7 +1,7 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { type TabBarProps } from '@lobehub/ui/mobile';
+import type { TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
 import { createStaticStyles } from 'antd-style';
 import { Compass, MessageSquare, User } from 'lucide-react';
