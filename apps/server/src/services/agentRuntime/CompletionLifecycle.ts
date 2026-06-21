@@ -289,6 +289,7 @@ export class CompletionLifecycle {
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
+        groupId: op.chatGroupId ?? undefined,
         metadata: { verifyOperationId: operationId },
         parentId: assistantMessageId,
         role: 'verify',
