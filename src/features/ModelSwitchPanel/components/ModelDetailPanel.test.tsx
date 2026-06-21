@@ -115,6 +115,18 @@ const imagePricing = {
   units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
 };
 
+const emptyLookupPricing = {
+  currency: 'USD',
+  units: [
+    {
+      lookup: { prices: {} },
+      name: 'imageGeneration',
+      strategy: 'lookup',
+      unit: 'image',
+    },
+  ],
+};
+
 const createEnabledList = (
   provider: string,
   pricing: Record<string, unknown>,
@@ -192,5 +204,18 @@ describe('ModelDetailPanel pricing', () => {
 
     expect(videoResult.container).toHaveTextContent('~ 800.0K credits / video');
     expect(videoResult.container).not.toHaveTextContent('$0.80');
+  });
+
+  it('renders a placeholder for empty lookup pricing tables', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', emptyLookupPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Image Generation');
+    expect(container).toHaveTextContent('- credits/img');
   });
 });

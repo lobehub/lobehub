@@ -229,7 +229,11 @@ describe('LobeAzureOpenAI', () => {
         expect(createCall.top_logprobs).toBeUndefined();
         expect(createCall.top_p).toBeUndefined();
 
-        expect(getModelPricingModule.getModelPricing).toHaveBeenCalledWith('o3', 'lobehub');
+        expect(getModelPricingModule.getModelPricing).toHaveBeenCalledWith(
+          'o3',
+          'lobehub',
+          undefined,
+        );
         expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
           mockProdStream,
           expect.objectContaining({

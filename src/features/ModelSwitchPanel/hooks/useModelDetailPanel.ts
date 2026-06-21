@@ -221,6 +221,8 @@ const formatUnitRate = (
 
   if (unit.strategy === 'lookup') {
     const entries = Object.entries(unit.lookup.prices);
+    if (entries.length === 0) return { current: '-' };
+
     if (entries.length === 1) {
       const [key, price] = entries[0];
       const originalPrice = unit.lookup.originalPrices?.[key];
