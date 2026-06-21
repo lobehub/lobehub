@@ -133,6 +133,42 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    // LOBE-10066: MCP tool schemas with `items: true` or array props missing
+    // `type` must be normalized before reaching the upstream validator.
+    it('should normalize tool parameter schemas before sending to upstream', async () => {
+      (instance['client'].chat.completions.create as Mock).mockResolvedValue(
+        Promise.resolve(new ReadableStream()),
+      );
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'mistralai/mistral-7b-instruct:free',
+        temperature: 0.7,
+        tools: [
+          {
+            function: {
+              name: 'mcp_tool',
+              parameters: {
+                properties: {
+                  ids: { items: true, type: 'array' },
+                  sourceIds: { items: { type: 'string' } },
+                },
+                type: 'object',
+              },
+            },
+            type: 'function',
+          },
+        ],
+      });
+
+      const callArgs = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const params = callArgs.tools[0].function.parameters;
+      // `items: true` collapsed to `{}`
+      expect(params.properties.ids.items).toEqual({});
+      // array prop missing `type` gets backfilled
+      expect(params.properties.sourceIds.type).toBe('array');
+    });
+
     it('should keep logical model for provider payload handling while sending mapped model id', async () => {
       const handlePayload = vi.fn(
         (payload: ChatStreamPayload): OpenAI.ChatCompletionCreateParamsStreaming => ({
