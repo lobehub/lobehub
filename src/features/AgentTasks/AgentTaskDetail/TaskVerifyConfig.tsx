@@ -6,7 +6,6 @@ import {
   Button,
   Flexbox,
   Icon,
-  Input,
   Select,
   SortableList,
   Tag,
@@ -15,12 +14,21 @@ import {
 } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { ChevronUp, Plus, RotateCcw, ShieldCheck, Sparkles, Trash } from 'lucide-react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ChevronRight,
+  ChevronUp,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Trash,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { openVerifyCriterionModal } from '@/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal';
 import { useRubrics } from '@/features/Verify/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
@@ -50,15 +58,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   subtitle: css`
     color: ${cssVar.colorTextSecondary};
-  `,
-  trigger: css`
-    cursor: pointer;
-    width: fit-content;
-    border-radius: 8px;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
 }));
 
@@ -112,6 +111,9 @@ const TaskVerifyConfig = memo(() => {
   // Collapsed by default — the section is revealed by clicking the "+" trigger,
   // so it never sits open and noisy on a task that hasn't configured acceptance.
   const [expanded, setExpanded] = useState(false);
+  // Configured view defaults to a read-only preview; structural editing (reorder,
+  // delete, add, requirement rewrite) is revealed only after clicking "Edit".
+  const [editing, setEditing] = useState(false);
 
   // Hydrate the working list once per task from the persisted criterion ids.
   const hydratedTaskRef = useRef<string | null>(null);
@@ -249,9 +251,33 @@ const TaskVerifyConfig = memo(() => {
     }
   }, [requirement, generating, model, provider, commit, message, t]);
 
+  const handleRemove = useCallback(
+    (id: string) => {
+      commit(drafts.filter((d) => d.id !== id));
+    },
+    [drafts, commit],
+  );
+
+  // New criteria are authored in the detail modal, not via an inline empty row —
+  // so a half-typed criterion never leaks into the read-only preview.
   const handleManualAdd = useCallback(() => {
-    commit([...drafts, toDraftItem({ required: true, title: '', verifierType: 'llm' })]);
+    openVerifyCriterionModal({
+      initial: { required: true, title: '', verifierType: 'llm' },
+      onSubmit: (next) => commit([...drafts, toDraftItem(next)]),
+    });
   }, [drafts, commit]);
+
+  // Open the per-criterion detail editor; title/notes/verifier/required all live here.
+  const openCriterionDetail = useCallback(
+    (item: DraftItem) => {
+      openVerifyCriterionModal({
+        initial: item,
+        onDelete: () => handleRemove(item.id),
+        onSubmit: (next) => commit(drafts.map((d) => (d.id === item.id ? { ...d, ...next } : d))),
+      });
+    },
+    [drafts, commit, handleRemove],
+  );
 
   const handlePickTemplate = useCallback(
     async (rubricId: string) => {
@@ -274,27 +300,6 @@ const TaskVerifyConfig = memo(() => {
       }
     },
     [commit],
-  );
-
-  const handleTitleChange = useCallback(
-    (id: string, title: string) => {
-      commit(drafts.map((d) => (d.id === id ? { ...d, title } : d)));
-    },
-    [drafts, commit],
-  );
-
-  const handleToggleRequired = useCallback(
-    (id: string, required: boolean) => {
-      commit(drafts.map((d) => (d.id === id ? { ...d, required } : d)));
-    },
-    [drafts, commit],
-  );
-
-  const handleRemove = useCallback(
-    (id: string) => {
-      commit(drafts.filter((d) => d.id !== id));
-    },
-    [drafts, commit],
   );
 
   const handleSortEnd = useCallback(
@@ -352,15 +357,21 @@ const TaskVerifyConfig = memo(() => {
         clickable
         horizontal
         align={'center'}
-        className={styles.trigger}
         gap={8}
-        paddingBlock={8}
-        paddingInline={12}
-        variant={'outlined'}
+        paddingBlock={4}
+        paddingInline={8}
+        style={{ width: 'fit-content' }}
+        variant={'borderless'}
         onClick={() => setExpanded(true)}
       >
-        <Icon icon={savedCount > 0 ? ShieldCheck : Plus} size={16} />
-        <Text weight={500}>{t('verifyConfig.empty.title')}</Text>
+        <Icon
+          color={cssVar.colorTextDescription}
+          icon={savedCount > 0 ? ShieldCheck : Plus}
+          size={16}
+        />
+        <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+          {t('verifyConfig.empty.title')}
+        </Text>
         {savedCount > 0 ? (
           <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
         ) : (
@@ -432,97 +443,138 @@ const TaskVerifyConfig = memo(() => {
   }
 
   // ---- C. configured ----
+  const requirementText = requirement.trim();
+
+  // Title + verifier/required tags — the shared meta shown in both preview and edit rows.
+  const renderCriterionMeta = (item: DraftItem) => (
+    <>
+      <Text ellipsis className={styles.rowTitle}>
+        {item.title || t('verifyConfig.criterionTitlePlaceholder')}
+      </Text>
+      {item.verifierType ? (
+        <Tag>{t(`verifyConfig.verifierType.${item.verifierType}` as const)}</Tag>
+      ) : null}
+      <Tag>{item.required === false ? t('verifyConfig.optional') : t('verifyConfig.required')}</Tag>
+    </>
+  );
+
   return (
     <Block className={styles.section} variant={'outlined'}>
       <Flexbox gap={12}>
-        {/* header: title + enable */}
+        {/* header: title + enable + edit toggle */}
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon icon={ShieldCheck} size={18} />
             <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
           </Flexbox>
-          <Flexbox horizontal align={'center'} gap={8}>
+          <Flexbox horizontal align={'center'} gap={4}>
             <Switch checked={enabled} onChange={handleToggleEnabled} />
+            <Button size={'small'} type={'text'} onClick={() => setEditing((v) => !v)}>
+              {editing ? t('verifyConfig.done') : t('verifyConfig.edit')}
+            </Button>
             <ActionIcon icon={ChevronUp} size={'small'} onClick={() => setExpanded(false)} />
           </Flexbox>
         </Flexbox>
 
-        {/* requirement sentence + regenerate */}
+        {/* requirement: read-only sentence by default; TextArea + regenerate in edit mode */}
         <Flexbox gap={6}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Text className={styles.subtitle} fontSize={12}>
               {t('verifyConfig.requirementLabel')}
             </Text>
+            {editing ? (
+              <Button
+                disabled={!requirementText}
+                icon={RotateCcw}
+                size={'small'}
+                type={'text'}
+                onClick={handleGenerate}
+              >
+                {t('verifyConfig.regenerate')}
+              </Button>
+            ) : null}
+          </Flexbox>
+          {editing ? (
+            <TextArea
+              autoSize={{ maxRows: 4, minRows: 1 }}
+              placeholder={t('verifyConfig.requirementPlaceholder')}
+              value={requirement}
+              onBlur={() => commit(drafts, { requirement })}
+              onChange={(e) => handleRequirementChange(e.target.value)}
+            />
+          ) : (
+            <Text type={requirementText ? undefined : 'secondary'}>
+              {requirementText || t('verifyConfig.requirementEmpty')}
+            </Text>
+          )}
+        </Flexbox>
+
+        {/* criteria list: static rows in preview, drag-reorderable rows in edit mode */}
+        {editing ? (
+          <SortableList
+            className={styles.list}
+            items={drafts}
+            renderItem={(item: DraftItem) => (
+              <SortableList.Item className={styles.row} id={item.id} variant={'filled'}>
+                <SortableList.DragHandle />
+                <Block
+                  clickable
+                  horizontal
+                  align={'center'}
+                  className={styles.rowTitle}
+                  gap={8}
+                  paddingBlock={2}
+                  paddingInline={4}
+                  onClick={() => openCriterionDetail(item)}
+                >
+                  {renderCriterionMeta(item)}
+                </Block>
+                <ActionIcon
+                  icon={Trash}
+                  size={'small'}
+                  title={t('verifyConfig.removeCriterion')}
+                  onClick={() => handleRemove(item.id)}
+                />
+              </SortableList.Item>
+            )}
+            onChange={handleSortEnd}
+          />
+        ) : (
+          <Flexbox gap={4}>
+            {drafts.map((item) => (
+              <Block
+                clickable
+                horizontal
+                align={'center'}
+                className={styles.row}
+                gap={8}
+                key={item.id}
+                variant={'filled'}
+                onClick={() => openCriterionDetail(item)}
+              >
+                {renderCriterionMeta(item)}
+                <Icon className={styles.subtitle} icon={ChevronRight} size={16} />
+              </Block>
+            ))}
+          </Flexbox>
+        )}
+
+        {/* footer actions: only meaningful in edit mode */}
+        {editing ? (
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Button icon={Plus} size={'small'} type={'text'} onClick={handleManualAdd}>
+              {t('verifyConfig.addCriterion')}
+            </Button>
             <Button
-              disabled={!requirement.trim()}
-              icon={RotateCcw}
+              disabled={!hydrated || (verify?.verifyCriteriaIds?.length ?? 0) === 0}
               size={'small'}
               type={'text'}
-              onClick={handleGenerate}
+              onClick={handleSaveAsTemplate}
             >
-              {t('verifyConfig.regenerate')}
+              {t('verifyConfig.saveAsTemplate')}
             </Button>
           </Flexbox>
-          <TextArea
-            autoSize={{ maxRows: 4, minRows: 1 }}
-            placeholder={t('verifyConfig.requirementPlaceholder')}
-            value={requirement}
-            onBlur={() => commit(drafts, { requirement })}
-            onChange={(e) => handleRequirementChange(e.target.value)}
-          />
-        </Flexbox>
-
-        {/* criteria list (drag-reorderable) */}
-        <SortableList
-          className={styles.list}
-          items={drafts}
-          renderItem={(item: DraftItem) => (
-            <SortableList.Item className={styles.row} id={item.id} variant={'filled'}>
-              <SortableList.DragHandle />
-              <Input
-                className={styles.rowTitle}
-                placeholder={t('verifyConfig.criterionTitlePlaceholder')}
-                value={item.title}
-                variant={'borderless'}
-                onChange={(e) => handleTitleChange(item.id, e.target.value)}
-              />
-              {item.verifierType ? (
-                <Tag>{t(`verifyConfig.verifierType.${item.verifierType}` as const)}</Tag>
-              ) : null}
-              <Flexbox horizontal align={'center'} gap={6}>
-                <Text className={styles.subtitle} fontSize={12}>
-                  {t('verifyConfig.required')}
-                </Text>
-                <Switch
-                  checked={item.required !== false}
-                  onChange={(checked) => handleToggleRequired(item.id, checked)}
-                />
-              </Flexbox>
-              <ActionIcon
-                icon={Trash}
-                size={'small'}
-                title={t('verifyConfig.removeCriterion')}
-                onClick={() => handleRemove(item.id)}
-              />
-            </SortableList.Item>
-          )}
-          onChange={handleSortEnd}
-        />
-
-        {/* footer actions */}
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Button icon={Plus} size={'small'} type={'text'} onClick={handleManualAdd}>
-            {t('verifyConfig.addCriterion')}
-          </Button>
-          <Button
-            disabled={!hydrated || (verify?.verifyCriteriaIds?.length ?? 0) === 0}
-            size={'small'}
-            type={'text'}
-            onClick={handleSaveAsTemplate}
-          >
-            {t('verifyConfig.saveAsTemplate')}
-          </Button>
-        </Flexbox>
+        ) : null}
       </Flexbox>
     </Block>
   );
