@@ -20,6 +20,7 @@ import type {
   DeviceGitFileRevertResult,
   DeviceGitLinkedPullRequestResult,
   DeviceGitRemoteBranchListItem,
+  DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
   DeviceGitWorkingTreeFiles,
@@ -416,6 +417,39 @@ export class DeviceGateway {
     } catch (error) {
       log('deleteGitBranch: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Delete failed', success: false };
+    }
+  }
+
+  /**
+   * Remove a detached worktree in a directory's repository on a remote device via
+   * the `removeGitWorktree` device RPC.
+   */
+  async removeGitWorktree(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    worktreePath: string;
+  }): Promise<DeviceGitRemoveWorktreeResult> {
+    const { userId, deviceId, path, worktreePath, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitRemoveWorktreeResult>(
+        { deviceId, timeout, userId },
+        { method: 'removeGitWorktree', params: { path, worktreePath } },
+      );
+
+      if (!result.success || !result.data) {
+        log('removeGitWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Remove worktree failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('removeGitWorktree: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Remove worktree failed', success: false };
     }
   }
 

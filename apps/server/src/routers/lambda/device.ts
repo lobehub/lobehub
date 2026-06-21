@@ -292,6 +292,27 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Remove a detached worktree in a directory's repository on a remote device,
+   * via the device's `removeGitWorktree` RPC.
+   */
+  removeGitWorktree: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string(),
+        worktreePath: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.removeGitWorktree({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        worktreePath: input.worktreePath,
+      }),
+    ),
+
+  /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */

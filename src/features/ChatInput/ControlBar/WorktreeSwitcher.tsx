@@ -1,6 +1,7 @@
 import type { DeviceGitWorktreeListItem, WorkingDirEntry } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import {
+  confirmModal,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -9,9 +10,12 @@ import {
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckIcon, GitForkIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { CheckIcon, GitForkIcon, Trash2Icon } from 'lucide-react';
+import { memo, type MouseEvent, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { message } from '@/components/AntdStaticMethods';
+import { gitService } from '@/services/git';
 
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 
@@ -20,17 +24,24 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     padding-block: 1px;
-    padding-inline: 6px;
+    padding-inline: 5px;
     border-radius: 999px;
 
     font-size: 11px;
-    line-height: 16px;
+    line-height: 15px;
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillSecondary};
   `,
   branch: css`
     overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 40px;
+    max-width: 300px;
+
+    font-size: 13px;
+    line-height: 18px;
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -46,12 +57,22 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   check: css`
+    display: flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
+
     width: 18px;
+
     color: ${cssVar.colorPrimary};
   `,
-  clean: css`
-    color: ${cssVar.colorSuccess};
+  actionCell: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
   `,
   container: css`
     display: flex;
@@ -76,12 +97,11 @@ const styles = createStaticStyles(({ css }) => ({
   diffStat: css`
     display: inline-flex;
     flex: none;
-    gap: 4px;
+    gap: 3px;
     justify-content: flex-end;
 
-    min-width: 54px;
-
     font-variant-numeric: tabular-nums;
+    line-height: 1;
   `,
   diffStatAdded: css`
     color: ${cssVar.colorSuccess};
@@ -124,19 +144,24 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(44px, auto) 20px;
+    gap: 10px;
     align-items: center;
 
-    min-height: 62px;
-    padding-block: 8px;
+    min-height: 48px;
+    padding-block: 6px;
     padding-inline: 8px;
     border-radius: 8px;
 
+    font-size: 13px;
     color: ${cssVar.colorText};
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+    }
+
+    &:hover .worktree-row-action {
+      display: flex;
     }
 
     &[data-current='true'] {
@@ -152,6 +177,14 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-width: 0;
   `,
+  dirtyCell: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+
+    min-width: 44px;
+  `,
   list: css`
     overflow-y: auto;
     max-height: 360px;
@@ -159,25 +192,56 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   name: css`
     overflow: hidden;
-    font-weight: 600;
+    flex: 0 1 auto;
+
+    max-width: 240px;
+
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   path: css`
     overflow: hidden;
 
-    margin-block-start: 2px;
+    margin-block-start: 1px;
 
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 16px;
     color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   rowTitle: css`
+    overflow: hidden;
     display: flex;
     gap: 6px;
     align-items: center;
+
     min-width: 0;
+
+    white-space: nowrap;
+  `,
+  rowAction: css`
+    cursor: pointer;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
+    }
   `,
   trigger: css`
     cursor: pointer;
@@ -202,6 +266,10 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  triggerAnchor: css`
+    display: inline-flex;
+    flex: none;
+  `,
   worktreeName: css`
     overflow: hidden;
     max-width: 140px;
@@ -212,6 +280,45 @@ const styles = createStaticStyles(({ css }) => ({
 
 const getPathName = (path: string): string =>
   path.replaceAll('\\', '/').split('/').findLast(Boolean) || path;
+
+const normalizeDisplayPath = (path: string): string =>
+  path.replaceAll('\\', '/').replace(/\/+$/, '');
+
+const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
+
+const isTempPath = (path: string): boolean => {
+  const normalized = normalizeDisplayPath(path);
+  return TEMP_PATH_PREFIXES.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
+  );
+};
+
+const getRelativeDisplayPath = (targetPath: string, sourcePath: string): string => {
+  if (!targetPath || !sourcePath || isTempPath(targetPath)) return targetPath;
+
+  const target = normalizeDisplayPath(targetPath);
+  const source = normalizeDisplayPath(sourcePath);
+  if (!target.startsWith('/') || !source.startsWith('/')) return targetPath;
+  if (target === source) return targetPath;
+
+  const targetParts = target.split('/').filter(Boolean);
+  const sourceParts = source.split('/').filter(Boolean);
+  let commonLength = 0;
+  while (
+    commonLength < targetParts.length &&
+    commonLength < sourceParts.length &&
+    targetParts[commonLength] === sourceParts[commonLength]
+  ) {
+    commonLength += 1;
+  }
+
+  if (commonLength < 2) return targetPath;
+
+  const parentSteps = Array.from({ length: sourceParts.length - commonLength }, () => '..');
+  const relativeParts = [...parentSteps, ...targetParts.slice(commonLength)];
+
+  return relativeParts.length > 0 ? relativeParts.join('/') : '.';
+};
 
 const getShortHead = (head?: string): string | undefined => head?.slice(0, 7);
 
@@ -229,15 +336,15 @@ const getWorktreeBranch = (
 const isDisabled = (worktree: DeviceGitWorktreeListItem): boolean =>
   !!worktree.bare || !!worktree.prunable;
 
+const canRemoveWorktree = (worktree: DeviceGitWorktreeListItem): boolean =>
+  !!worktree.detached && !worktree.current && !worktree.locked && !isDisabled(worktree);
+
 interface DirtyStatProps {
   status?: DeviceGitWorktreeListItem['status'];
 }
 
 const DirtyStat = memo<DirtyStatProps>(({ status }) => {
-  const { t } = useTranslation('device');
-  if (!status)
-    return <span className={styles.headerMeta}>{t('workingDirectory.worktreeUnavailable')}</span>;
-  if (status.clean) return <span className={styles.clean}>{t('workingDirectory.clean')}</span>;
+  if (!status || status.clean) return null;
 
   return (
     <span className={styles.diffStat}>
@@ -256,14 +363,26 @@ interface WorktreeSwitcherProps {
   detached?: boolean;
   deviceId?: string;
   isGithub: boolean;
+  onWorktreesChange?: () => Promise<unknown> | unknown;
   path: string;
   sourcePath: string;
   worktrees: DeviceGitWorktreeListItem[];
 }
 
 const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
-  ({ agentId, currentBranch, detached, isGithub, path, sourcePath, worktrees }) => {
+  ({
+    agentId,
+    currentBranch,
+    detached,
+    deviceId,
+    isGithub,
+    onWorktreesChange,
+    path,
+    sourcePath,
+    worktrees,
+  }) => {
     const { t } = useTranslation('device');
+    const { t: tCommon } = useTranslation('common');
     const [open, setOpen] = useState(false);
     const { commit } = useCommitWorkingDirectory(agentId);
 
@@ -299,6 +418,36 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
       [commit, isGithub, sourcePath],
     );
 
+    const handleRemoveWorktree = useCallback(
+      (event: MouseEvent, worktree: DeviceGitWorktreeListItem) => {
+        event.stopPropagation();
+        setOpen(false);
+        confirmModal({
+          cancelText: tCommon('cancel'),
+          content: t('workingDirectory.removeWorktreeConfirm', {
+            name: getPathName(worktree.path),
+          }),
+          okButtonProps: { danger: true },
+          okText: tCommon('delete'),
+          onOk: async () => {
+            const result = await gitService.removeGitWorktree({
+              deviceId,
+              path,
+              worktreePath: worktree.path,
+            });
+            if (result.success) {
+              message.success(t('workingDirectory.removeWorktreeSuccess'));
+              await onWorktreesChange?.();
+              return;
+            }
+            message.error(result.error || t('workingDirectory.removeWorktreeFailed'));
+          },
+          title: t('workingDirectory.removeWorktreeTitle'),
+        });
+      },
+      [deviceId, onWorktreesChange, path, t, tCommon],
+    );
+
     const triggerTitle = detached
       ? t('workingDirectory.detachedHead', { sha: currentBranch })
       : `${currentName} · ${branchLabel}`;
@@ -314,8 +463,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger>
-          {open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}
+        <DropdownMenuTrigger className={styles.triggerAnchor}>
+          <div>{open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
@@ -343,7 +492,9 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       const branch = getWorktreeBranch(worktree, currentBranch, (sha) =>
                         t('workingDirectory.detachedHeadShort', { sha }),
                       );
+                      const displayPath = getRelativeDisplayPath(worktree.path, sourcePath);
                       const disabled = isDisabled(worktree);
+                      const removable = canRemoveWorktree(worktree);
 
                       return (
                         <DropdownMenuItem
@@ -354,12 +505,10 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                           key={worktree.path}
                           onClick={() => void commitWorktree(worktree)}
                         >
-                          <div className={styles.check}>
-                            {worktree.current && <Icon icon={CheckIcon} size={14} />}
-                          </div>
                           <div className={styles.itemMain}>
                             <div className={styles.rowTitle}>
                               <span className={styles.name}>{getPathName(worktree.path)}</span>
+                              <span className={styles.branch}>{branch}</span>
                               {worktree.current && (
                                 <span className={styles.badge}>
                                   {t('workingDirectory.currentWorktree')}
@@ -386,10 +535,31 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                                 </span>
                               )}
                             </div>
-                            <div className={styles.branch}>{branch}</div>
-                            <div className={styles.path}>{worktree.path}</div>
+                            <div className={styles.path} title={worktree.path}>
+                              {displayPath}
+                            </div>
                           </div>
-                          <DirtyStat status={worktree.status} />
+                          <div className={styles.dirtyCell}>
+                            <DirtyStat status={worktree.status} />
+                          </div>
+                          <div className={styles.actionCell}>
+                            {worktree.current ? (
+                              <Icon className={styles.check} icon={CheckIcon} size={14} />
+                            ) : (
+                              removable && (
+                                <Tooltip title={t('workingDirectory.removeWorktreeAction')}>
+                                  <div
+                                    aria-label={t('workingDirectory.removeWorktreeAction')}
+                                    className={`${styles.rowAction} worktree-row-action`}
+                                    role="button"
+                                    onClick={(event) => handleRemoveWorktree(event, worktree)}
+                                  >
+                                    <Icon icon={Trash2Icon} size={13} />
+                                  </div>
+                                </Tooltip>
+                              )
+                            )}
+                          </div>
                         </DropdownMenuItem>
                       );
                     })

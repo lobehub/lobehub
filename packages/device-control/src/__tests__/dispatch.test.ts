@@ -166,4 +166,13 @@ describe('executeDeviceRpc', () => {
     const result = await executeDeviceRpc('listGitWorktrees', { path: root }, makeDeps());
     expect(Array.isArray(result)).toBe(true);
   });
+
+  it('routes removeGitWorktree through the shared git dispatcher', async () => {
+    const result = (await executeDeviceRpc(
+      'removeGitWorktree',
+      { path: root, worktreePath: root },
+      makeDeps(),
+    )) as { success: boolean };
+    expect(result.success).toBe(false);
+  });
 });

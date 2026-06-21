@@ -367,6 +367,12 @@ export interface DeviceGitDeleteBranchResult {
   success: boolean;
 }
 
+/** Result of the `removeGitWorktree` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
 /**
  * Repo-relative paths of dirty working-tree files for a directory on a remote
  * device, returned by the `getGitWorkingTreeFiles` device RPC. Powers the Files

@@ -11,6 +11,7 @@ import {
   type GitPullResult,
   type GitPushResult,
   type GitRemoteBranchListItem,
+  type GitRemoveWorktreeResult,
   type GitRenameBranchResult,
   type GitWorkingTreeFiles,
   type GitWorkingTreePatches,
@@ -107,6 +108,13 @@ class ElectronGitService {
 
   async deleteGitBranch(params: { branch: string; path: string }): Promise<GitDeleteBranchResult> {
     return this.ipc.git.deleteGitBranch(params);
+  }
+
+  async removeGitWorktree(params: {
+    path: string;
+    worktreePath: string;
+  }): Promise<GitRemoveWorktreeResult> {
+    return this.ipc.git.removeGitWorktree(params);
   }
 }
 

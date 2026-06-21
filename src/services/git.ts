@@ -11,6 +11,7 @@ import type {
   DeviceGitCheckoutResult,
   DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
+  DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
   DeviceGitWorkingTreeStatus,
@@ -101,6 +102,21 @@ class GitService {
     return deviceId
       ? lambdaClient.device.deleteGitBranch.mutate({ branch, deviceId, path })
       : electronGitService.deleteGitBranch({ branch, path });
+  }
+
+  /** Remove a detached worktree from a working directory's repository. */
+  removeGitWorktree({
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitRemoveWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.removeGitWorktree.mutate({ deviceId, path, worktreePath })
+      : electronGitService.removeGitWorktree({ path, worktreePath });
   }
 
   /** Pull (`--ff-only`) the current branch of a working directory. */

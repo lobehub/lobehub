@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { getGitWorkingTreeStatus } from './info';
-import type { GitWorkingTreeStatus, GitWorktreeListItem } from './types';
+import type { GitRemoveWorktreeResult, GitWorkingTreeStatus, GitWorktreeListItem } from './types';
 
 const execFileAsync = promisify(execFile);
 
@@ -121,5 +121,43 @@ export const listGitWorktrees = async (dirPath: string): Promise<GitWorktreeList
     );
   } catch {
     return [];
+  }
+};
+
+const findListedWorktree = async (
+  dirPath: string,
+  worktreePath: string,
+): Promise<GitWorktreeListItem | undefined> => {
+  const targetPath = await safeRealpath(worktreePath);
+  const worktrees = await listGitWorktrees(dirPath);
+
+  for (const worktree of worktrees) {
+    if ((await safeRealpath(worktree.path)) === targetPath) return worktree;
+  }
+};
+
+export const removeGitWorktree = async (payload: {
+  path: string;
+  worktreePath: string;
+}): Promise<GitRemoveWorktreeResult> => {
+  const { path: dirPath, worktreePath } = payload;
+  if (!dirPath?.trim()) return { error: 'Working directory is required', success: false };
+  if (!worktreePath?.trim()) return { error: 'Worktree path is required', success: false };
+
+  const worktree = await findListedWorktree(dirPath, worktreePath);
+  if (!worktree) return { error: 'Worktree not found', success: false };
+  if (worktree.current) return { error: 'Cannot remove the current worktree', success: false };
+  if (!worktree.detached)
+    return { error: 'Only detached worktrees can be removed', success: false };
+
+  try {
+    await execFileAsync('git', ['worktree', 'remove', worktree.path], {
+      cwd: dirPath,
+      timeout: 30_000,
+    });
+    return { success: true };
+  } catch (error: any) {
+    const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+    return { error: stderr || 'git worktree remove failed', success: false };
   }
 };

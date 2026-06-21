@@ -206,6 +206,11 @@ export interface GitDeleteBranchResult {
   success: boolean;
 }
 
+export interface GitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
 export interface GitPullResult {
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */
