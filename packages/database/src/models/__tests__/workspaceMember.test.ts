@@ -152,6 +152,21 @@ describe('WorkspaceMemberModel', () => {
 
       expect(await model.listMembers(workspaceId)).toEqual([]);
     });
+
+    it('joins user email from the users table', async () => {
+      await serverDB
+        .update(users)
+        .set({ email: 'member@example.com' })
+        .where(eq(users.id, memberId));
+
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+
+      const rows = await model.listMembers(workspaceId);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].email).toBe('member@example.com');
+    });
   });
 
   describe('removeMember', () => {

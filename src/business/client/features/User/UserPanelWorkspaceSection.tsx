@@ -1,4 +1,5 @@
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Input, Text } from '@lobehub/ui';
+import { createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useSWRConfig } from 'swr';
@@ -38,6 +39,23 @@ export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspa
     }
   };
 
+  const openInviteModal = async () => {
+    createModal({
+      title: 'Принять приглашение',
+      width: 'min(90vw, 480px)',
+      content: (
+        <InviteModalContent
+          onAccept={(token) => {
+            navigate(`/invite/${token}`);
+            onSwitch?.();
+          }}
+        />
+      ),
+      footer: null,
+      maskClosable: true,
+    });
+  };
+
   return (
     <Flexbox gap={8} paddingBlock={8} paddingInline={12}>
       <Text fontSize={12} type="secondary">
@@ -70,9 +88,67 @@ export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspa
           {workspace.name}
         </Button>
       ))}
+      <Button block size="small" onClick={openInviteModal}>
+        Принять приглашение
+      </Button>
       <Button block loading={creating} size="small" onClick={createWorkspace}>
         Создать workspace
       </Button>
+    </Flexbox>
+  );
+}
+
+interface InviteModalContentProps {
+  onAccept: (token: string) => void;
+}
+
+function InviteModalContent({ onAccept }: InviteModalContentProps) {
+  const { close } = useModalContext();
+  const [token, setToken] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleAccept = async () => {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      setError('Введите код приглашения.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      onAccept(trimmed);
+      close();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Flexbox gap={16} style={{ width: '100%' }}>
+      <Text type="secondary">Введите invite код из письма или из ссылки.</Text>
+      <Input
+        placeholder="invite token"
+        value={token}
+        onPressEnter={handleAccept}
+        onChange={(e) => {
+          setError('');
+          setToken(e.target.value);
+        }}
+      />
+      {error ? (
+        <Text style={{ fontSize: 12 }} type="danger">
+          {error}
+        </Text>
+      ) : null}
+      <Flexbox horizontal gap={8} justify="flex-end" style={{ width: '100%' }}>
+        <Button disabled={loading} onClick={close}>
+          Отмена
+        </Button>
+        <Button loading={loading} type="primary" onClick={handleAccept}>
+          Открыть
+        </Button>
+      </Flexbox>
     </Flexbox>
   );
 }

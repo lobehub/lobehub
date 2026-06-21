@@ -133,7 +133,10 @@ export default function WorkspaceMembers() {
   const normalizedQuery = query.trim().toLowerCase();
   const filteredMembers = data.filter((member) => {
     const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-    const matchesQuery = !normalizedQuery || member.userId.toLowerCase().includes(normalizedQuery);
+    const matchesQuery =
+      !normalizedQuery ||
+      member.userId.toLowerCase().includes(normalizedQuery) ||
+      member.email.toLowerCase().includes(normalizedQuery);
 
     return matchesRole && matchesQuery;
   });
@@ -250,7 +253,7 @@ export default function WorkspaceMembers() {
         {filteredMembers.map((member) => (
           <div className={styles.item} key={`${member.workspaceId}-${member.userId}`}>
             <Flexbox gap={2}>
-              <Text>{member.userId}</Text>
+              <Text>{member.email || member.userId}</Text>
               <Flexbox horizontal gap={6}>
                 <Tag>{roleLabel(member.role)}</Tag>
                 {member.userId === workspace.primaryOwnerId && <Tag>Основной владелец</Tag>}

@@ -1,6 +1,6 @@
 export const BRANDING_LOGO_URL = '';
 export const BRANDING_NAME = 'LobeHub';
-export const DEFAULT_EMBEDDING_PROVIDER = 'openai';
+export const DEFAULT_EMBEDDING_PROVIDER = 'lobehub';
 export const DEFAULT_MINI_MODEL = 'gpt-5-mini';
 export const DEFAULT_MINI_PROVIDER = 'lobehub';
 export const DEFAULT_MODEL = 'gpt-5-chat-latest';

@@ -2,6 +2,7 @@ import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
 import { and, count, eq, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid/non-secure';
 
+import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers, workspaces } from '../schemas/workspace';
 import type { LobeChatDatabase, Transaction } from '../type';
 
@@ -61,11 +62,25 @@ export class WorkspaceMemberModel {
   };
 
   listMembers = async (workspaceId: string, options: { includeDeleted?: boolean } = {}) => {
-    return this.db.query.workspaceMembers.findMany({
-      where: options.includeDeleted
-        ? eq(workspaceMembers.workspaceId, workspaceId)
-        : and(eq(workspaceMembers.workspaceId, workspaceId), isNull(workspaceMembers.deletedAt)),
-    });
+    const whereClause = options.includeDeleted
+      ? eq(workspaceMembers.workspaceId, workspaceId)
+      : and(eq(workspaceMembers.workspaceId, workspaceId), isNull(workspaceMembers.deletedAt));
+
+    return this.db
+      .select({
+        workspaceId: workspaceMembers.workspaceId,
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        joinedAt: workspaceMembers.joinedAt,
+        updatedAt: workspaceMembers.updatedAt,
+        deletedAt: workspaceMembers.deletedAt,
+        email: users.email,
+        normalizedEmail: users.normalizedEmail,
+        username: users.username,
+      })
+      .from(workspaceMembers)
+      .leftJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(whereClause);
   };
 
   removeMember = async (workspaceId: string, userId: string) => {
