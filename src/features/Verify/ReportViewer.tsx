@@ -1,16 +1,38 @@
 'use client';
 
 import type { VerifyRunContext } from '@lobechat/types';
-import { Block, Flexbox, Icon, Markdown, Tag, Text } from '@lobehub/ui';
+import {
+  Block,
+  Center,
+  Drawer,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Image,
+  Markdown,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { Check, CircleHelp, X } from 'lucide-react';
-import { memo } from 'react';
+import { Check, CircleHelp, FileText, X } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import type { VerifyResultWithEvidence } from '@/services/verify';
+import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader';
+import type { VerifyEvidenceWithUrl, VerifyResultWithEvidence } from '@/services/verify';
+import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import { useVerifyReportBundle } from './hooks';
+
+/** Best-effort filename from a (possibly signed) file URL, for syntax highlighting. */
+const filenameFromUrl = (url: string): string => {
+  try {
+    return new URL(url).pathname.split('/').pop() || 'document';
+  } catch {
+    return 'document';
+  }
+};
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
@@ -20,20 +42,11 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-inline: auto;
     padding: 24px;
   `,
-  evidenceImg: css`
-    align-self: flex-start;
+  docTrigger: css`
+    cursor: pointer;
 
-    width: auto;
-    max-width: 100%;
-    height: auto;
-    max-height: 360px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
-
-    object-fit: contain;
-  `,
-  evidenceLink: css`
     display: inline-flex;
+    gap: 6px;
     align-items: center;
 
     width: fit-content;
@@ -43,8 +56,9 @@ const useStyles = createStyles(({ css, token }) => ({
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadius}px;
 
+    font-size: 13px;
     color: ${token.colorText};
-    text-decoration: none;
+    text-align: start;
 
     background: ${token.colorFillQuaternary};
 
@@ -58,6 +72,12 @@ const useStyles = createStyles(({ css, token }) => ({
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+  `,
+  docViewer: css`
+    overflow: auto;
+    height: 100%;
+    padding-block: 12px;
+    padding-inline: 16px;
   `,
   evidenceText: css`
     overflow: auto;
@@ -182,6 +202,69 @@ const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string |
   },
 );
 
+/** Fetches a file-backed text evidence and renders it decoded (avoids the raw
+ *  download's mojibake) with syntax highlighting. */
+const DocumentViewer = memo<{ url: string }>(({ url }) => {
+  const { styles } = useStyles();
+  const { fileData, loading, error } = useTextFileLoader(url);
+
+  if (loading)
+    return (
+      <Center flex={1} height={'100%'}>
+        <Loading debugId="verify-document-viewer" />
+      </Center>
+    );
+
+  if (error || fileData === null)
+    return (
+      <Center flex={1} gap={8} height={'100%'}>
+        <Text type="secondary">Failed to load document.</Text>
+        <a href={url} rel="noreferrer" target="_blank">
+          Open original
+        </a>
+      </Center>
+    );
+
+  return (
+    <Flexbox className={styles.docViewer}>
+      <Highlighter
+        wrap
+        language={getLanguageFromFilename(filenameFromUrl(url))}
+        showLanguage={false}
+        variant={'borderless'}
+      >
+        {fileData}
+      </Highlighter>
+    </Flexbox>
+  );
+});
+
+/** A file-backed (non-media) evidence — opens its decoded content in a right-side
+ *  detail drawer instead of navigating to the raw file. */
+const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }) => {
+  const { styles } = useStyles();
+  const [open, setOpen] = useState(false);
+  const title = evidence.description || filenameFromUrl(evidence.fileUrl!);
+
+  return (
+    <>
+      <button className={styles.docTrigger} type={'button'} onClick={() => setOpen(true)}>
+        <Icon icon={FileText} />
+        <span>View document</span>
+      </button>
+      <Drawer
+        open={open}
+        styles={{ body: { padding: 0 } }}
+        title={title}
+        width={'min(720px, 80vw)'}
+        onClose={() => setOpen(false)}
+      >
+        {open && <DocumentViewer url={evidence.fileUrl!} />}
+      </Drawer>
+    </>
+  );
+});
+
 const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   const { styles } = useStyles();
   return (
@@ -213,18 +296,19 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
                 </Text>
               )}
               {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
-                <img alt={e.description ?? e.type} className={styles.evidenceImg} src={e.fileUrl} />
+                <Flexbox align={'flex-start'}>
+                  <Image
+                    alt={e.description ?? e.type}
+                    maxHeight={360}
+                    objectFit={'contain'}
+                    src={e.fileUrl}
+                    variant={'outlined'}
+                  />
+                </Flexbox>
               ) : e.fileUrl && e.type === 'video' ? (
                 <video controls className={styles.evidenceVideo} src={e.fileUrl} />
               ) : e.fileUrl ? (
-                <a
-                  className={styles.evidenceLink}
-                  href={e.fileUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <span>{e.description ?? e.type}</span>
-                </a>
+                <DocumentEvidence evidence={e} />
               ) : e.content ? (
                 <div className={styles.evidenceText}>{e.content}</div>
               ) : (
