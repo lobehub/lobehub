@@ -31,7 +31,7 @@ const waitUntil = (task: Promise<unknown>) => {
 function createRuntimeContext(): BotPlatformRuntimeContext {
   return {
     appUrl: process.env.APP_URL,
-    redisClient: getAgentRuntimeRedisClient() as any,
+    redisClient: getAgentRuntimeRedisClient(),
   };
 }
 
