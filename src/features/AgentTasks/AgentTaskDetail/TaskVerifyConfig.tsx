@@ -16,7 +16,7 @@ import {
 import { Switch } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Plus, RotateCcw, ShieldCheck, Sparkles, Trash } from 'lucide-react';
+import { ChevronUp, Plus, RotateCcw, ShieldCheck, Sparkles, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -48,6 +48,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   subtitle: css`
     color: ${cssVar.colorTextSecondary};
+  `,
+  trigger: css`
+    cursor: pointer;
+    width: fit-content;
+    border-radius: 8px;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
 }));
 
@@ -97,6 +106,9 @@ const TaskVerifyConfig = memo(() => {
   const [generating, setGenerating] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  // Collapsed by default — the section is revealed by clicking the "+" trigger,
+  // so it never sits open and noisy on a task that hasn't configured acceptance.
+  const [expanded, setExpanded] = useState(false);
 
   // Hydrate the working list once per task from the persisted criterion ids.
   const hydratedTaskRef = useRef<string | null>(null);
@@ -303,6 +315,34 @@ const TaskVerifyConfig = memo(() => {
   if (!canEditTask) return null;
 
   const hasConfig = drafts.length > 0;
+  const savedCount = verify?.verifyCriteriaIds?.length ?? 0;
+
+  // ---- Collapsed trigger (default): a "+" row; reveals the editor on click ----
+  if (!expanded) {
+    return (
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        className={styles.trigger}
+        gap={8}
+        paddingBlock={8}
+        paddingInline={12}
+        variant={'outlined'}
+        onClick={() => setExpanded(true)}
+      >
+        <Icon icon={savedCount > 0 ? ShieldCheck : Plus} size={16} />
+        <Text weight={500}>{t('verifyConfig.empty.title')}</Text>
+        {savedCount > 0 ? (
+          <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
+        ) : (
+          <Text className={styles.subtitle} fontSize={12}>
+            {t('verifyConfig.collapsedHint')}
+          </Text>
+        )}
+      </Block>
+    );
+  }
 
   // ---- B. generating ----
   if (generating) {
@@ -321,9 +361,12 @@ const TaskVerifyConfig = memo(() => {
     return (
       <Block className={styles.section} variant={'outlined'}>
         <Flexbox gap={12}>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Icon icon={ShieldCheck} size={18} />
-            <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
+          <Flexbox horizontal align={'center'} justify={'space-between'}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Icon icon={ShieldCheck} size={18} />
+              <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
+            </Flexbox>
+            <ActionIcon icon={ChevronUp} size={'small'} onClick={() => setExpanded(false)} />
           </Flexbox>
           <Text className={styles.subtitle}>{t('verifyConfig.empty.subtitle')}</Text>
           <TextArea
@@ -370,7 +413,10 @@ const TaskVerifyConfig = memo(() => {
             <Icon icon={ShieldCheck} size={18} />
             <Text weight={600}>{t('verifyConfig.empty.title')}</Text>
           </Flexbox>
-          <Switch checked={enabled} onChange={handleToggleEnabled} />
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Switch checked={enabled} onChange={handleToggleEnabled} />
+            <ActionIcon icon={ChevronUp} size={'small'} onClick={() => setExpanded(false)} />
+          </Flexbox>
         </Flexbox>
 
         {/* requirement sentence + regenerate */}

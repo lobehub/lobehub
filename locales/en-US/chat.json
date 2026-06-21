@@ -942,6 +942,7 @@
   "upload.validation.unsupportedFileType": "Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.",
   "upload.validation.videoSizeExceeded": "Video file size must not exceed {{maxSize}}. Current file size is {{actualSize}}.",
   "verifyConfig.addCriterion": "Add criterion",
+  "verifyConfig.collapsedHint": "Add acceptance criteria",
   "verifyConfig.criteriaCount": "{{count}} criteria",
   "verifyConfig.criterionTitlePlaceholder": "Describe what to check",
   "verifyConfig.disabled": "Acceptance disabled",

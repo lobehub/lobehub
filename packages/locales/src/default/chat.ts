@@ -1256,6 +1256,7 @@ export default {
   'workingPanel.documents.unsaved': 'Unsaved changes',
   'workingPanel.title': 'Working Panel',
   'verifyConfig.addCriterion': 'Add criterion',
+  'verifyConfig.collapsedHint': 'Add acceptance criteria',
   'verifyConfig.criteriaCount': '{{count}} criteria',
   'verifyConfig.criterionTitlePlaceholder': 'Describe what to check',
   'verifyConfig.disabled': 'Acceptance disabled',
