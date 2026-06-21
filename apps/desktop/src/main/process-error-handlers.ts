@@ -70,7 +70,13 @@ export const installProcessErrorHandlers = () => {
       return;
     }
 
+    // Installing this listener overrides Node's default
+    // `--unhandled-rejections=throw`, so we must re-throw to preserve the fatal
+    // behavior. Throwing here surfaces as an uncaughtException (handled above,
+    // which also re-throws non-transient errors), instead of leaving the app
+    // partially booted on a genuine failure (e.g. an unawaited app.bootstrap()).
     logger.error('Unhandled rejection in main process:', reason);
+    throw reason;
   });
 
   logger.info('Process error handlers installed');
