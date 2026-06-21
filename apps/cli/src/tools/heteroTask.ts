@@ -57,6 +57,13 @@ export interface RunHeteroTaskParams {
   prompt: string;
   taskId: string;
   topicId: string;
+  /**
+   * Workspace id seeded by the server when the dispatched topic lives in a
+   * workspace. Threaded into auto-notify calls (as `X-Workspace-Id`) and into
+   * the spawned child's `LOBEHUB_WORKSPACE_ID` env so its own `lh notify`
+   * shells inherit the same scope.
+   */
+  workspaceId?: string;
 }
 
 export interface CancelHeteroTaskParams {
@@ -69,9 +76,10 @@ async function sendAutoNotify(
   taskId: string,
   text: string,
   agentId?: string,
+  workspaceId?: string,
 ): Promise<void> {
   try {
-    const client = await getTrpcClient();
+    const client = await getTrpcClient(workspaceId);
     await client.agentNotify.notify.mutate({
       agentId,
       content: text,
@@ -90,9 +98,13 @@ async function sendAutoNotify(
  * `sendAutoNotify` which writes an error message AND triggers completion via
  * the `done` flag.
  */
-async function sendDoneSignal(topicId: string, agentId?: string): Promise<void> {
+async function sendDoneSignal(
+  topicId: string,
+  agentId?: string,
+  workspaceId?: string,
+): Promise<void> {
   try {
-    const client = await getTrpcClient();
+    const client = await getTrpcClient(workspaceId);
     await client.agentNotify.notify.mutate({
       agentId,
       content: '',
@@ -138,9 +150,15 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
 }
 
 export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string> {
-  const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = params;
+  const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = params;
   const workDir = cwd || process.cwd();
   const lhPath = resolveLhPath();
+  // Propagate workspace scope into the spawned child so its own `lh notify`
+  // invocations (and any grandchildren it shells out) inherit the same scope
+  // via getTrpcClient → resolveWorkspaceId.
+  const childEnv: NodeJS.ProcessEnv = workspaceId
+    ? { ...process.env, LOBEHUB_WORKSPACE_ID: workspaceId }
+    : { ...process.env };
 
   if (agentType === 'openclaw') {
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
@@ -182,7 +200,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       {
         cwd: workDir,
         detached: true,
-        env: { ...process.env },
+        env: childEnv,
         stdio: 'ignore',
       },
     );
@@ -201,6 +219,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       startedAt: new Date().toISOString(),
       taskId,
       topicId,
+      workspaceId,
     });
     log.info(`OpenClaw task started: taskId=${taskId} pid=${pid} agent=${openclawAgent}`);
 
@@ -216,12 +235,12 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
           : `Task failed (exit code: ${code})`;
         // Send error message first, THEN signal done (sequential).
         // Fire-and-forget both, but ensure done is always sent even if notify fails.
-        void sendAutoNotify(topicId, taskId, text, agentId).finally(() =>
-          sendDoneSignal(topicId, agentId),
+        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+          sendDoneSignal(topicId, agentId, workspaceId),
         );
       } else {
         // Clean exit — openclaw already sent its final message; just signal done.
-        void sendDoneSignal(topicId, agentId);
+        void sendDoneSignal(topicId, agentId, workspaceId);
       }
     });
 
@@ -253,7 +272,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     const child = spawn('hermes', hermesArgs, {
       cwd: workDir,
       detached: true,
-      env: { ...process.env },
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'ignore'],
     });
 
@@ -269,6 +288,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       startedAt: new Date().toISOString(),
       taskId,
       topicId,
+      workspaceId,
     });
     log.info(`Hermes task started: taskId=${taskId} pid=${pid}`);
 
@@ -284,8 +304,8 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         const text = signal
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        void sendAutoNotify(topicId, taskId, text, agentId).finally(() =>
-          sendDoneSignal(topicId, agentId),
+        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+          sendDoneSignal(topicId, agentId, workspaceId),
         );
         return;
       }
@@ -298,11 +318,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       if (sessionId) saveHermesSessionId(topicId, sessionId);
 
       if (response) {
-        void sendAutoNotify(topicId, taskId, response, agentId).finally(() =>
-          sendDoneSignal(topicId, agentId),
+        void sendAutoNotify(topicId, taskId, response, agentId, workspaceId).finally(() =>
+          sendDoneSignal(topicId, agentId, workspaceId),
         );
       } else {
-        void sendDoneSignal(topicId, agentId);
+        void sendDoneSignal(topicId, agentId, workspaceId);
       }
     });
 
@@ -334,6 +354,7 @@ export async function cancelHeteroTask(params: CancelHeteroTaskParams): Promise<
       taskId,
       'Task already completed or cancelled',
       entry.agentId,
+      entry.workspaceId,
     );
   }
 

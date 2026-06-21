@@ -15,6 +15,12 @@ export const useVerifyResults = (operationId: string | null) =>
     verifyService.listResults(operationId!),
   );
 
+/** Full standalone report bundle (run + report + results + evidence) by verifyRunId. */
+export const useVerifyReportBundle = (verifyRunId: string | null) =>
+  useClientDataSWR(verifyRunId ? verifyKeys.reportBundle(verifyRunId) : null, () =>
+    verifyService.getReportBundle(verifyRunId!),
+  );
+
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
 export const useVerifierTracing = (tracingId: string | null | undefined) =>
   useClientDataSWR(tracingId ? verifyKeys.tracing(tracingId) : null, () =>

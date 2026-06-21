@@ -28,6 +28,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { withMappedModelId } from '../../utils/modelIdMapping';
 import { StreamingResponse } from '../../utils/response';
 import { createGoogleImage } from './createImage';
 import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
@@ -86,7 +88,7 @@ function getThreshold(model: string): HarmBlockThreshold {
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
-interface LobeGoogleAIParams {
+interface LobeGoogleAIParams extends ModelIdMappingOptions {
   apiKey?: string;
   baseURL?: string;
   client?: GoogleGenAI;
@@ -112,6 +114,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
   baseURL?: string;
   apiKey?: string;
   provider: string;
+  private readonly modelIdMappingOptions: ModelIdMappingOptions;
 
   constructor({
     apiKey,
@@ -120,6 +123,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     isVertexAi,
     id,
     defaultHeaders,
+    modelIdMapping,
   }: LobeGoogleAIParams = {}) {
     if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
@@ -131,6 +135,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     this.client = client ?? new GoogleGenAI({ apiKey, httpOptions });
     this.baseURL = client ? undefined : baseURL || DEFAULT_BASE_URL;
     this.isVertexAi = isVertexAi || false;
+    this.modelIdMappingOptions = { modelIdMapping };
 
     this.provider = id || (isVertexAi ? 'vertexai' : 'google');
   }
@@ -214,8 +219,9 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       };
 
       const inputStartAt = Date.now();
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
 
-      const finalPayload = { config, contents, model };
+      const finalPayload = { config, contents, model: requestPayload.model };
       const key = this.isVertexAi
         ? 'DEBUG_VERTEX_AI_CHAT_COMPLETION'
         : 'DEBUG_GOOGLE_CHAT_COMPLETION';
@@ -270,11 +276,20 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * @see https://ai.google.dev/gemini-api/docs/image-generation#imagen
    */
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
-    return createGoogleImage(this.client, this.provider, payload);
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    return createGoogleImage(this.client, this.provider, requestPayload, {
+      pricingModel: payload.model,
+      routingModel: payload.model,
+    });
   }
 
   async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
-    return createGoogleVideo(this.client, this.provider, payload);
+    return createGoogleVideo(
+      this.client,
+      this.provider,
+      withMappedModelId(payload, this.modelIdMappingOptions),
+    );
   }
 
   /**
@@ -283,7 +298,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    */
   async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
     try {
-      return await createGoogleTranscription(this.client, payload, options);
+      return await createGoogleTranscription(
+        this.client,
+        withMappedModelId(payload, this.modelIdMappingOptions),
+        options,
+      );
     } catch (e) {
       const err = e as Error;
 
@@ -316,12 +335,13 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     // Convert OpenAI messages to Google format
     const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
     const pricing = await getModelPricing(payload.model, this.provider);
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
 
     // Handle tools-based structured output
     if (payload.tools && payload.tools.length > 0) {
       return createGoogleGenerateObjectWithTools(
         this.client,
-        { contents, model: payload.model, tools: payload.tools },
+        { contents, model: requestPayload.model, tools: payload.tools },
         options,
         pricing,
       );
@@ -331,7 +351,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     if (payload.schema) {
       return createGoogleGenerateObject(
         this.client,
-        { contents, model: payload.model, schema: payload.schema },
+        { contents, model: requestPayload.model, schema: payload.schema },
         options,
         pricing,
       );

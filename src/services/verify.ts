@@ -1,7 +1,9 @@
 import type {
   VerifierType,
   VerifyCheckItem,
+  VerifyEvidence,
   VerifyOnFailStrategy,
+  VerifyReport,
   VerifyRubricConfig,
   VerifyUserDecision,
 } from '@lobechat/types';
@@ -11,6 +13,7 @@ import type {
   VerifyCheckResultItem,
   VerifyCriterionItem,
   VerifyRubricItem,
+  VerifyRunItem,
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -29,6 +32,21 @@ export interface VerifyStateResponse {
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   verifyStatus: VerifyStatus | null;
+}
+
+/** One evidence artifact plus its resolved (signed) file URL, when file-backed. */
+export type VerifyEvidenceWithUrl = VerifyEvidence & { fileUrl: string | null };
+
+/** One check result plus the evidence artifacts attached to it. */
+export type VerifyResultWithEvidence = VerifyCheckResultItem & {
+  evidence: VerifyEvidenceWithUrl[];
+};
+
+/** Everything the standalone report viewer needs for one verification session. */
+export interface VerifyReportBundle {
+  report: VerifyReport | null;
+  results: VerifyResultWithEvidence[];
+  run: VerifyRunItem;
 }
 
 export interface GenerateDraftPlanInput {
@@ -82,6 +100,12 @@ export class VerifyService {
   // ---- results / execution ----
   listResults = (operationId: string): Promise<VerifyCheckResultItem[]> =>
     lambdaClient.verify.listResults.query({ operationId }) as Promise<VerifyCheckResultItem[]>;
+
+  /** Full report payload for the standalone viewer, addressed by verifyRunId. */
+  getReportBundle = (verifyRunId: string): Promise<VerifyReportBundle | null> =>
+    lambdaClient.verify.getReportBundle.query({
+      verifyRunId,
+    }) as Promise<VerifyReportBundle | null>;
 
   executeVerify = (input: {
     batchLlm?: boolean;

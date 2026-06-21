@@ -3801,9 +3801,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
     });
 
-    // ── 2. metadata-save failure isolation (POST-LOBE-10379: guarded) ──
+    // ── 2. metadata-save failure isolation (guarded) ──
     it('a rejected updateTopicMetadata is swallowed and no longer blocks the queue drain', async () => {
-      // POST-LOBE-10379 ("heteroSessionId 保存…失败不阻断 core"): the metadata save
+      // The metadata save
       // is now `.catch`-guarded, so a rejection is logged but does NOT throw past
       // the drain block. The executor still resolves cleanly (no error escapes),
       // the completion notification still fires, AND — unlike the old unguarded
@@ -3853,7 +3853,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(threw).toBe(false);
       // The completion notification still fired (afterRunComplete in onComplete).
       expect(mockSetBadgeCount).toHaveBeenCalledWith(1);
-      // POST-LOBE-10379: the guarded metadata save no longer bypasses the drain.
+      // The guarded metadata save no longer bypasses the drain.
       expect(store.drainQueuedMessages).toHaveBeenCalled();
     });
 

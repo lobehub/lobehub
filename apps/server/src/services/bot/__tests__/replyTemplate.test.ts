@@ -417,6 +417,69 @@ describe('replyTemplate', () => {
       expect(zh).toContain('命令会话已断开');
     });
 
+    it('keeps command-disconnect copy after the error is refined to a StateStore code', () => {
+      // formatErrorForState pattern-refines "Command aborted due to connection
+      // close" to StateStorePersistError (write) / StateStoreReadError (read).
+      // The specific disconnect guidance must still win over the harness/system
+      // tiers now that errorType is always populated.
+      const persist = renderAgentError(
+        'StateStorePersistError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'harness',
+      );
+      expect(persist).toContain('Command session disconnected');
+
+      const read = renderAgentError(
+        'StateStoreReadError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(read).toContain('Command session disconnected');
+    });
+
+    it('uses provider-neutral copy for system infra errors (no model-provider blame)', () => {
+      // StateStoreReadError is system-attributed but the LLM provider is not
+      // involved — the fallback must not suggest switching models / blame the
+      // provider the way the network copy does.
+      const en = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(en).toContain('temporary system error');
+      expect(en).not.toContain('model provider');
+      expect(en).not.toMatch(/switch to a different model/i);
+      expect(en).toContain('op-1');
+
+      const zh = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'zh-CN',
+        'system',
+      );
+      expect(zh).toContain('临时系统错误');
+    });
+
+    it('still gives ProviderNetworkError the provider-specific network copy', () => {
+      // Regression guard: the provider-neutral system fallback must not swallow
+      // the one system-attributed code that IS about the model provider.
+      const out = renderAgentError(
+        'ProviderNetworkError',
+        'fetch failed',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(out).toContain('Network error talking to the model provider');
+    });
+
     it('falls back to the generic op-id template for unknown error codes without attribution', () => {
       expect(renderAgentError('SomeNewErrorCode', undefined, 'op-1')).toBe(
         '**Agent Execution Failed**\nOperation ID: `op-1`',
@@ -458,10 +521,10 @@ describe('replyTemplate', () => {
     });
 
     it('falls back by attribution when the exact code is unknown', () => {
-      // network/system → transient network copy
-      expect(
-        renderAgentError('SomeNewNetworkCode', undefined, 'op-1', 'en-US', 'system'),
-      ).toContain('Network error talking to the model provider');
+      // system → provider-neutral infra copy (must not blame the model provider)
+      expect(renderAgentError('SomeNewInfraCode', undefined, 'op-1', 'en-US', 'system')).toContain(
+        'temporary system error',
+      );
       // provider → temporarily-unavailable copy
       expect(renderAgentError('SomeNewCode', undefined, 'op-1', 'en-US', 'provider')).toContain(
         'temporarily unavailable',

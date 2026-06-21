@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "Delete document?",
   "workingPanel.resources.deleteTitleMulti": "{{count}}개 항목을 삭제하시겠습니까?",
   "workingPanel.resources.empty": "아직 문서가 없습니다. 이 에이전트와 연결된 문서는 여기에 표시됩니다.",
+  "workingPanel.resources.emptyDocuments": "아직 문서가 없습니다. 위의 + 버튼을 눌러 새로 만들어보세요.",
   "workingPanel.resources.error": "Failed to load resources",
   "workingPanel.resources.filter.documents": "문서",
   "workingPanel.resources.filter.skills": "스킬",

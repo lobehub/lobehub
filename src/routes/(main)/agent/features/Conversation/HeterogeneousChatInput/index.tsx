@@ -5,7 +5,7 @@ import {
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import { Alert, Button, Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 import urlJoin from 'url-join';
@@ -29,6 +29,36 @@ import HeteroControlBar from './HeteroControlBar';
 // can still toggle the rich-text formatting bar.
 const leftActions: ActionKeys[] = ['typo'];
 const rightActions: ActionKeys[] = [];
+
+/**
+ * GuardBanner
+ *
+ * A deliberately thin, single-line warning that sits just above the input. We
+ * fold the headline and the hint onto one line (no separate `description`
+ * block, no oversized 24px icon) so the guard stays a compact strip instead of
+ * eating a chunk of the conversation area.
+ */
+const GuardBanner = memo<{ action: ReactNode; hint?: string; title: string }>(
+  ({ title, hint, action }) => (
+    <WideScreenContainer>
+      <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
+        <Alert
+          action={action}
+          style={{ maxWidth: 880, width: '100%' }}
+          type={'warning'}
+          title={
+            <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
+              <span>{title}</span>
+              {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
+            </Flexbox>
+          }
+        />
+      </Flexbox>
+    </WideScreenContainer>
+  ),
+);
+
+GuardBanner.displayName = 'GuardBanner';
 
 /**
  * HeterogeneousChatInput
@@ -100,26 +130,20 @@ const HeterogeneousChatInput = memo(() => {
     }
 
     return (
-      <WideScreenContainer>
-        <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
-          <Alert
-            description={desc}
-            style={{ maxWidth: 880, width: '100%' }}
-            title={title}
-            type={'warning'}
-            action={
-              <Flexbox horizontal gap={6}>
-                <Button size={'small'} onClick={refresh}>
-                  {t('platformAgent.deviceGuard.refresh')}
-                </Button>
-                <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
-                  {t('platformAgent.deviceGuard.configure')}
-                </Button>
-              </Flexbox>
-            }
-          />
-        </Flexbox>
-      </WideScreenContainer>
+      <GuardBanner
+        hint={desc}
+        title={title}
+        action={
+          <Flexbox horizontal gap={4}>
+            <Button size={'small'} variant={'filled'} onClick={refresh}>
+              {t('platformAgent.deviceGuard.refresh')}
+            </Button>
+            <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
+              {t('platformAgent.deviceGuard.configure')}
+            </Button>
+          </Flexbox>
+        }
+      />
     );
   };
 
@@ -127,21 +151,15 @@ const HeterogeneousChatInput = memo(() => {
     if (isDeviceExecution || isConfigured) return null;
 
     return (
-      <WideScreenContainer>
-        <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
-          <Alert
-            description={t('heteroAgent.cloudNotConfigured.desc')}
-            style={{ maxWidth: 880, width: '100%' }}
-            title={t('heteroAgent.cloudNotConfigured.title')}
-            type={'warning'}
-            action={
-              <Button size={'small'} type={'primary'} onClick={goToConfig}>
-                {t('heteroAgent.cloudNotConfigured.action')}
-              </Button>
-            }
-          />
-        </Flexbox>
-      </WideScreenContainer>
+      <GuardBanner
+        hint={t('heteroAgent.cloudNotConfigured.desc')}
+        title={t('heteroAgent.cloudNotConfigured.title')}
+        action={
+          <Button size={'small'} type={'primary'} onClick={goToConfig}>
+            {t('heteroAgent.cloudNotConfigured.action')}
+          </Button>
+        }
+      />
     );
   };
 

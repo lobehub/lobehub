@@ -144,4 +144,35 @@ describe('AssistantGroup ContentBlock', () => {
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
+
+  it('renders the error below the content when a turn errors after streaming content', () => {
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="The assistant already wrote this before the turn died."
+        id="block-1"
+        error={
+          {
+            body: {
+              agentType: 'claude-code',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: "You've hit your limit · resets 2:50pm (Asia/Shanghai)",
+              rateLimitInfo: {
+                rateLimitType: 'five_hour',
+                resetsAt: 1_778_741_400,
+                status: 'rejected',
+              },
+              stderr: "You've hit your limit · resets 2:50pm (Asia/Shanghai)",
+            },
+            message: "You've hit your limit · resets 2:50pm (Asia/Shanghai)",
+            type: 'AgentRuntimeError',
+          } as any
+        }
+      />,
+    );
+
+    // Content is preserved AND the error is surfaced, instead of being dropped.
+    expect(screen.getByText('message content')).toBeInTheDocument();
+    expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+  });
 });

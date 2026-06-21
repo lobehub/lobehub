@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Marcar como activa",
   "defaultTitle": "Tema predeterminado",
   "displayItems": "Mostrar elementos",
+  "draft": "[Borrador]",
   "duplicateLoading": "Copiando tema...",
   "duplicateSuccess": "Tema copiado con éxito",
   "failedStatusTip": "Esta ejecución tuvo un error — ábrela para echar un vistazo.",

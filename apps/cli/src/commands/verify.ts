@@ -1,9 +1,13 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { uploadLocalFile } from '../utils/uploadLocalFile';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -30,6 +34,36 @@ function assertEnum<T extends string>(value: T | undefined, allowed: T[], flag: 
     log.error(`${flag} must be one of: ${allowed.join(', ')}`);
     process.exit(1);
   }
+}
+
+type Verdict = 'failed' | 'passed' | 'uncertain';
+type EvidenceType = 'dom_snapshot' | 'gif' | 'screenshot' | 'text' | 'transcript' | 'video';
+
+/** Map a free-form case/summary result token onto the verify verdict vocabulary. */
+function toVerdict(raw: unknown): Verdict {
+  const s = String(raw ?? '').toLowerCase();
+  if (['pass', 'passed', 'ok', 'success'].includes(s)) return 'passed';
+  if (['fail', 'failed', 'error'].includes(s)) return 'failed';
+  return 'uncertain'; // partial / blocked / skipped / pending / unknown
+}
+
+/** Pick an evidence medium from a file extension. */
+function evidenceTypeForFile(file: string): EvidenceType {
+  const ext = path.extname(file).toLowerCase().slice(1);
+  if (ext === 'gif') return 'gif';
+  if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp'].includes(ext)) return 'screenshot';
+  if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video';
+  if (['html', 'htm'].includes(ext)) return 'dom_snapshot';
+  return 'text';
+}
+
+/** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
+function evidencePaths(evidence: unknown): string[] {
+  if (!evidence) return [];
+  const arr = Array.isArray(evidence) ? evidence : [evidence];
+  return arr
+    .map((e) => (typeof e === 'string' ? e : (e?.path ?? e?.file)))
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
 }
 
 // ── Command Registration ───────────────────────────────────
@@ -368,9 +402,9 @@ export function registerVerifyCommand(program: Command) {
       console.log(`${pc.green('✓')} Skipped verification for run ${pc.bold(operationId)}`);
     });
 
-  // ════════════ run / results ════════════
+  // ════════════ execute (agent path) ════════════
   verify
-    .command('run <operationId>')
+    .command('execute <operationId>')
     .description('Execute the confirmed plan against a deliverable (LLM judge)')
     .requiredOption('--goal <goal>', "The run's task")
     .requiredOption('--deliverable <text>', 'The output to judge')
@@ -406,19 +440,290 @@ export function registerVerifyCommand(program: Command) {
       },
     );
 
-  verify
-    .command('results <operationId>')
-    .description('List check results for a run')
+  // ════════════ run (verification session entity) ════════════
+  const run = verify.command('run').description('Verification sessions (verify_runs)');
+
+  run
+    .command('create')
+    .description('Create a standalone verification session')
+    .option('--source <source>', 'agent | agent-testing', 'agent-testing')
+    .option('--operation <id>', 'Link to an existing Agent Run')
+    .option('--title <title>', 'Session title')
+    .option('--goal <goal>', 'Goal/task being verified')
     .option('--json [fields]', 'Output JSON')
-    .action(async (operationId: string, options: { json?: boolean | string }) => {
+    .action(
+      async (options: {
+        goal?: string;
+        json?: boolean | string;
+        operation?: string;
+        source?: string;
+        title?: string;
+      }) => {
+        const client = await getTrpcClient();
+        const created = await client.verify.createRun.mutate({
+          goal: options.goal,
+          operationId: options.operation,
+          source: options.source as any,
+          title: options.title,
+        });
+        if (options.json !== undefined) {
+          outputJson(created, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(`${pc.green('✓')} Created run ${pc.bold(created.id)}`);
+      },
+    );
+
+  run
+    .command('list')
+    .description('List recent verification sessions')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (options: { json?: boolean | string }) => {
       const client = await getTrpcClient();
-      const results = await client.verify.listResults.query({ operationId });
+      const runs = await client.verify.listRuns.query();
+      if (options.json !== undefined) {
+        outputJson(runs, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      if (runs.length === 0) return void console.log('No runs found.');
+      printTable(
+        runs.map((r: any) => [
+          r.id,
+          truncate(r.title || '', 40),
+          r.source,
+          r.status ?? '',
+          r.operationId ? 'agent' : 'standalone',
+          r.createdAt ? timeAgo(r.createdAt) : '',
+        ]),
+        ['ID', 'TITLE', 'SOURCE', 'STATUS', 'KIND', 'CREATED'],
+      );
+    });
+
+  run
+    .command('get <runId>')
+    .description('Show a verification session')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (runId: string, options: { json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const item = await client.verify.getRun.query({ verifyRunId: runId });
+      if (options.json !== undefined) {
+        outputJson(item, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      if (!item) return void console.log('Run not found.');
+      console.log(JSON.stringify(item, null, 2));
+    });
+
+  // ════════════ result (check result entity) ════════════
+  const result = verify.command('result').description('Check results (verify_check_results)');
+
+  result
+    .command('ingest')
+    .description('Upsert one check result by (run, checkItemId) from a supplied verdict')
+    .requiredOption('--run <verifyRunId>', 'Target session id')
+    .requiredOption('--check <checkItemId>', 'Stable check item id within the session')
+    .requiredOption('--verdict <verdict>', 'passed|failed|uncertain')
+    .option('--title <title>', 'Check title')
+    .option('--index <n>', 'Display index')
+    .option('--confidence <n>', '0-1 confidence')
+    .option('--status <status>', 'pending|running|passed|failed|skipped (derived from verdict)')
+    .option('--evidence <text>', 'Key observation (stored as Toulmin evidence)')
+    .option('--suggestion <text>', 'Remediation hint')
+    .option('--soft', 'Non-blocking (required=false); defaults to blocking')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        check: string;
+        confidence?: string;
+        evidence?: string;
+        index?: string;
+        json?: boolean | string;
+        run: string;
+        soft?: boolean;
+        status?: string;
+        suggestion?: string;
+        title?: string;
+        verdict: string;
+      }) => {
+        const client = await getTrpcClient();
+        const created = await client.verify.ingestResult.mutate({
+          checkItemId: options.check,
+          checkItemIndex: options.index ? Number.parseInt(options.index, 10) : undefined,
+          checkItemTitle: options.title,
+          confidence: options.confidence ? Number.parseFloat(options.confidence) : undefined,
+          required: options.soft ? false : undefined,
+          status: options.status as any,
+          suggestion: options.suggestion,
+          toulmin: options.evidence ? { evidence: options.evidence } : undefined,
+          verdict: options.verdict as any,
+          verifyRunId: options.run,
+        });
+        if (options.json !== undefined) {
+          outputJson(created, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(`${pc.green('✓')} Result ${pc.bold(created.id)} (${created.verdict})`);
+      },
+    );
+
+  result
+    .command('list')
+    .description('List check results — by session (--run) or by Agent Run (--operation)')
+    .option('--run <verifyRunId>', 'List by verification session')
+    .option('--operation <operationId>', 'List by Agent Run')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (options: { json?: boolean | string; operation?: string; run?: string }) => {
+      if (!options.run && !options.operation) {
+        log.error('Provide either --run or --operation');
+        process.exit(1);
+      }
+      const client = await getTrpcClient();
+      const results = options.run
+        ? await client.verify.listResultsByRun.query({ verifyRunId: options.run })
+        : await client.verify.listResults.query({ operationId: options.operation! });
       if (options.json !== undefined) {
         outputJson(results, typeof options.json === 'string' ? options.json : undefined);
         return;
       }
       if (results.length === 0) return void console.log('No results yet.');
       printResults(results);
+    });
+
+  // ════════════ evidence (artifact entity) ════════════
+  const evidence = verify.command('evidence').description('Evidence artifacts (verify_evidence)');
+
+  evidence
+    .command('upload')
+    .description('Attach an evidence artifact (file or inline text) to a check result')
+    .requiredOption('--check <checkResultId>', 'Target check result id')
+    .requiredOption('--type <type>', 'screenshot|gif|video|text|dom_snapshot|transcript')
+    .option('--file <path>', 'Local file to upload as the artifact')
+    .option('--content <text>', 'Inline text payload (instead of a file)')
+    .option('--by <capturedBy>', 'agent-browser|cdp|cli|program|llm_judge', 'cli')
+    .option('--desc <text>', 'Human-readable caption')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        by?: string;
+        check: string;
+        content?: string;
+        desc?: string;
+        file?: string;
+        json?: boolean | string;
+        type: string;
+      }) => {
+        if (Boolean(options.file) === Boolean(options.content)) {
+          log.error('Provide exactly one of --file or --content');
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        let fileId: string | undefined;
+        if (options.file) {
+          const uploaded = await uploadLocalFile(client, options.file);
+          fileId = uploaded.id;
+        }
+        const ev = await client.verify.uploadEvidence.mutate({
+          capturedBy: options.by as any,
+          checkResultId: options.check,
+          content: options.content,
+          description: options.desc,
+          fileId,
+          type: options.type as any,
+        });
+        if (options.json !== undefined) {
+          outputJson(ev, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Evidence ${pc.bold(ev.id)}${fileId ? ` (file ${fileId})` : ''}`,
+        );
+      },
+    );
+
+  evidence
+    .command('list <checkResultId>')
+    .description('List evidence for a check result')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (checkResultId: string, options: { json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const rows = await client.verify.listEvidence.query({ checkResultId });
+      if (options.json !== undefined) {
+        outputJson(rows, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      if (rows.length === 0) return void console.log('No evidence.');
+      printTable(
+        rows.map((e: any) => [
+          e.id,
+          e.type,
+          e.capturedBy ?? '',
+          e.fileId ? 'file' : 'inline',
+          truncate(e.description || '', 40),
+        ]),
+        ['ID', 'TYPE', 'BY', 'PAYLOAD', 'DESC'],
+      );
+    });
+
+  // ════════════ report (narrative entity) ════════════
+  const report = verify.command('report').description('Verification reports (verify_reports)');
+
+  report
+    .command('upsert')
+    .description('Write (overwrite) the report for a session')
+    .requiredOption('--run <verifyRunId>', 'Target session id')
+    .option('--verdict <verdict>', 'passed|failed|uncertain')
+    .option('--summary <text>', 'Short summary')
+    .option('--content <markdown>', 'Full markdown body')
+    .option('--total <n>', 'Total checks')
+    .option('--passed <n>', 'Passed checks')
+    .option('--failed <n>', 'Failed checks')
+    .option('--uncertain <n>', 'Uncertain checks')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        content?: string;
+        failed?: string;
+        json?: boolean | string;
+        passed?: string;
+        run: string;
+        summary?: string;
+        total?: string;
+        uncertain?: string;
+        verdict?: string;
+      }) => {
+        const num = (s?: string) => (s === undefined ? undefined : Number.parseInt(s, 10));
+        const client = await getTrpcClient();
+        const created = await client.verify.upsertReport.mutate({
+          content: options.content,
+          failedChecks: num(options.failed),
+          passedChecks: num(options.passed),
+          summary: options.summary,
+          totalChecks: num(options.total),
+          uncertainChecks: num(options.uncertain),
+          verdict: options.verdict as any,
+          verifyRunId: options.run,
+        });
+        if (options.json !== undefined) {
+          outputJson(created, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(`${pc.green('✓')} Report ${pc.bold(created.id)} (${created.verdict ?? '—'})`);
+      },
+    );
+
+  report
+    .command('get <runId>')
+    .description('Show the report for a session')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (runId: string, options: { json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const item = await client.verify.getReport.query({ verifyRunId: runId });
+      if (options.json !== undefined) {
+        outputJson(item, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      if (!item) return void console.log('No report.');
+      console.log(JSON.stringify(item, null, 2));
     });
 
   // ════════════ feedback ════════════
@@ -431,6 +736,128 @@ export function registerVerifyCommand(program: Command) {
       await client.verify.submitDecision.mutate({ decision, resultId });
       console.log(`${pc.green('✓')} Recorded ${pc.bold(decision)} on result ${pc.bold(resultId)}`);
     });
+
+  // ════════════ ingest (aggregate convenience over the atomic commands) ════════════
+  verify
+    .command('ingest-report <reportDir>')
+    .description(
+      'Ingest a local agent-testing report (result.json + report.md + assets) as a verify session',
+    )
+    .option('--source <source>', 'agent | agent-testing', 'agent-testing')
+    .option('--operation <id>', 'Link the session to an existing Agent Run')
+    .option('--title <title>', 'Override the session title')
+    .option('--goal <goal>', 'The goal/task being verified')
+    .option('--open', 'Print the in-app URL to open the report')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        reportDir: string,
+        options: {
+          goal?: string;
+          json?: boolean | string;
+          open?: boolean;
+          operation?: string;
+          source?: string;
+          title?: string;
+        },
+      ) => {
+        const dir = path.resolve(reportDir);
+        const resultPath = path.join(dir, 'result.json');
+        if (!existsSync(resultPath)) {
+          log.error(`result.json not found in ${dir}`);
+          process.exit(1);
+        }
+
+        let result: any;
+        try {
+          result = JSON.parse(readFileSync(resultPath, 'utf8'));
+        } catch {
+          log.error('result.json is not valid JSON');
+          process.exit(1);
+        }
+
+        const cases: any[] = Array.isArray(result.cases) ? result.cases : [];
+        const summary = result.summary ?? {};
+        const reportMdPath = path.join(dir, 'report.md');
+        const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
+
+        const client = await getTrpcClient();
+
+        // 1. Create the verification session.
+        const run = await client.verify.createRun.mutate({
+          goal: options.goal,
+          operationId: options.operation,
+          source: options.source as any,
+          title: options.title ?? result.title,
+        });
+
+        // 2. Ingest each case as a check result + its evidence.
+        let uploaded = 0;
+        for (const [index, c] of cases.entries()) {
+          const checkItemId = String(c.id ?? c.checkItemId ?? `case-${index + 1}`);
+          const verdict = toVerdict(c.result ?? c.status ?? c.verdict);
+          const observation = c.keyObservation ?? c.observation ?? c.note;
+          const checkResult = await client.verify.ingestResult.mutate({
+            checkItemId,
+            checkItemIndex: index,
+            checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
+            required: c.required ?? true,
+            // The case's key observation is recorded as Toulmin evidence; a real
+            // remediation hint (if the report provides one) goes to `suggestion`.
+            suggestion: typeof c.suggestion === 'string' ? c.suggestion : undefined,
+            toulmin: typeof observation === 'string' ? { evidence: observation } : undefined,
+            verdict,
+            verifierType: 'agent',
+            verifyRunId: run.id,
+          });
+
+          for (const rel of evidencePaths(c.evidence)) {
+            const abs = path.isAbsolute(rel) ? rel : path.join(dir, rel);
+            if (!existsSync(abs)) {
+              log.warn(`evidence not found, skipping: ${rel}`);
+              continue;
+            }
+            const file = await uploadLocalFile(client, abs);
+            await client.verify.uploadEvidence.mutate({
+              capturedBy: 'cli',
+              checkResultId: checkResult.id,
+              description: c.name ?? path.basename(abs),
+              fileId: file.id,
+              type: evidenceTypeForFile(abs),
+            });
+            uploaded += 1;
+          }
+        }
+
+        // 3. Write the report (full markdown + stats snapshot).
+        await client.verify.upsertReport.mutate({
+          content,
+          failedChecks: summary.failed,
+          passedChecks: summary.passed,
+          summary: typeof summary.note === 'string' ? summary.note : undefined,
+          totalChecks: summary.total ?? cases.length,
+          uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
+          verdict: summary.verdict ? toVerdict(summary.verdict) : undefined,
+          verifyRunId: run.id,
+        });
+
+        if (options.json !== undefined) {
+          outputJson(
+            { cases: cases.length, evidence: uploaded, verifyRunId: run.id },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+
+        console.log(
+          `${pc.green('✓')} Ingested ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(uploaded))} evidence file(s)`,
+        );
+        console.log(`${pc.bold('verifyRunId')}: ${run.id}`);
+        if (options.open) {
+          console.log(`${pc.bold('open')}: /verify/${run.id}`);
+        }
+      },
+    );
 }
 
 function printResults(results: any[]): void {

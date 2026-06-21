@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
@@ -37,14 +38,15 @@ export const runVerifyOnCompletion = async (
   workspaceId?: string,
 ): Promise<void> => {
   try {
-    const operationModel = new AgentOperationModel(db, userId, workspaceId);
-    const state = await operationModel.getVerifyState(params.operationId);
+    const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+      params.operationId,
+    );
 
     // Opt-in gate: only runs with a confirmed plan that hasn't been verified yet.
-    if (!state?.verifyPlan?.length || !state.verifyPlanConfirmedAt) return;
-    if (state.verifyStatus !== 'planned') return;
+    if (!run?.plan?.length || !run.planConfirmedAt) return;
+    if (run.status !== 'planned') return;
 
-    const op = await operationModel.findById(params.operationId);
+    const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
     if (!op?.model || !op?.provider) {
       log('op %s missing model/provider, cannot run verify', params.operationId);
       return;

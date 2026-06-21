@@ -1320,6 +1320,113 @@ describe('ClaudeCodeAdapter', () => {
       expect(types).not.toContain('stream_end');
       expect(types).not.toContain('stream_start');
     });
+
+    // ── Regression: post-tool text must not coalesce onto the tool-issuing turn ──
+    // Observed on a DEVICE (batch / `lh hetero exec`) Claude Code run — topic
+    // tpc_58GZ5d8NGPLx, assistant msg_orSJYzAH9HEL9Gb4k3. That run persisted the
+    // final answer text AND the 2 Bash `tool_use` blocks onto a SINGLE assistant
+    // message (the tool-issuing seed, no `metadata.mainMessageId`), while a
+    // trailing EMPTY assistant shell (msg_MUtsnMCWkbtBwcLlAH — content_len=0,
+    // `metadata.mainMessageId` set) was spawned. Downstream the renderer then
+    // drops the "Bash (2)" block BELOW the answer because text + tool_use share
+    // one message.
+    //
+    // Proximate cause: when CC reuses a `message.id` to stream the post-tool
+    // continuation (the model answering after a `tool_result`), the
+    // `messageId === this.currentMessageId` short-circuit in `openMainMessage`
+    // returns `[]` → no `newStep` → the text anchors to the same assistant that
+    // issued the tool calls. A turn that has ALREADY emitted `tool_use` must open
+    // a new step before absorbing post-tool text, so the answer lands on its own
+    // assistant (chained after the tool results).
+    //
+    // Fixed in `openMainMessage` / `handleAssistant`: a text-only event on the
+    // in-flight message.id that already emitted a tool_use now forces a step
+    // boundary so the answer anchors to its own assistant.
+    it('opens a new step for post-tool text that reuses the tool_use message.id (regression: tpc_58GZ5d8NGPLx)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // 1. Assistant issues a tool_use under msg_1.
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      // 2. Tool returns.
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // 3. Model continues with the final answer — CC REUSES msg_1 for this
+      //    post-tool text instead of minting a fresh message.id.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Desired: a step boundary precedes the post-tool text so it anchors to a
+      // NEW assistant, not the tool-issuing turn.
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+    });
+
+    // The forced split above must NOT reuse the tool turn's message.id as the
+    // newStep id: the main-agent reducer drops a `newStep` whose id equals the
+    // already-open turn's `currentMainMessageId` (replay idempotency). For any
+    // tool turn that was itself opened by a prior newStep, that id IS
+    // currentMainMessageId — reusing it would get the split dropped and the text
+    // would coalesce anyway. The first reused-id regression above only escaped
+    // this because the seed turn has no mainMessageId. Here the tool turn (msg_2)
+    // is opened by a real newStep, so the split must carry a DISTINCT key.
+    it('uses a key distinct from the tool turn id when forcing a post-tool split on a non-seed turn', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First turn after init (records msg_1, no step boundary).
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock first turn', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second turn (NEW id) — opened by a real newStep, so the reducer's
+      // currentMainMessageId becomes msg_2. This turn issues a tool_use.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // Post-tool answer reuses msg_2.
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+      // Distinct from the reused id (else the reducer drops it as a replay)…
+      expect(newStep!.data.messageId).not.toBe('msg_2');
+      // …but derived from it, so the key stays traceable + replay-stable.
+      expect(newStep!.data.messageId).toMatch(/^msg_2:/);
+    });
   });
 
   describe('usage and model extraction', () => {
@@ -2508,6 +2615,60 @@ describe('ClaudeCodeAdapter', () => {
       // Step 2: Monitor pushed an event → CC re-invokes the LLM without
       // any new user message. A signal callback.
       const cb1 = adapter.adapt(ccMessageStart('msg_03'));
+      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(cb1Start!.data.externalSignal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+    });
+
+    // Regression (P2): on the BATCH path, when the post-tool confirmation REUSES
+    // the Monitor tool's message.id, the forced split must still consume
+    // `hasUnhandledUserInput` (armed by the tool_result). Otherwise the stale
+    // flag survives and the next callback turn — opened while the task is active
+    // with no new user input — fails the `!hasUnhandledUserInput` signal check,
+    // leaving the first stdout callback untagged.
+    it('still tags the next callback after a forced post-tool split reuses the tool id (batch Monitor flow)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      // Monitor tool_use under msg_01 (batch: an `assistant` event, not a delta).
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
+      // tool_result → arms hasUnhandledUserInput.
+      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
+
+      // Confirmation turn REUSES msg_01 → forced post-tool split. It is the
+      // natural follow-up to the tool_result, so it carries no signal AND must
+      // consume hasUnhandledUserInput.
+      const confirm = adapter.adapt({
+        message: {
+          id: 'msg_01',
+          content: [{ text: 'mock monitoring confirmation', type: 'text' }],
+        },
+        type: 'assistant',
+      });
+      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(confirmStart).toBeDefined();
+      expect(confirmStart!.data.externalSignal).toBeUndefined();
+
+      // Monitor pushes an event → CC re-invokes with a NEW id and no new user
+      // input. This callback must be signal-tagged — only true once the forced
+      // split cleared the stale flag.
+      const cb1 = adapter.adapt({
+        message: { id: 'msg_02', content: [{ text: 'mock callback turn', type: 'text' }] },
+        type: 'assistant',
+      });
       const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
       expect(cb1Start!.data.externalSignal).toEqual({
         sequence: 1,

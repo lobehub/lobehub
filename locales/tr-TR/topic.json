@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Aktif olarak işaretle",
   "defaultTitle": "Varsayılan Konu",
   "displayItems": "Öğeleri Göster",
+  "draft": "[Taslak]",
   "duplicateLoading": "Konu Kopyalanıyor...",
   "duplicateSuccess": "Konu Başarıyla Kopyalandı",
   "failedStatusTip": "Bu çalışmada bir hata oluştu — incelemek için açın.",

@@ -372,6 +372,24 @@ export class AiAgentService {
   }
 
   /**
+   * If `deviceId` is a device enrolled into the caller's current workspace,
+   * return that workspaceId so device-gateway calls route to the
+   * `workspace:<id>` principal. Returns undefined for a personal device (or no
+   * workspace context), keeping the personal path byte-identical.
+   */
+  private async resolveDeviceWorkspaceId(
+    deviceId: string | undefined,
+  ): Promise<string | undefined> {
+    if (!deviceId || !this.workspaceId) return undefined;
+    const row = await new DeviceModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findWorkspaceDeviceById(deviceId);
+    return row ? this.workspaceId : undefined;
+  }
+
+  /**
    * Resolve the "workspace init" scan (project skills + AGENTS.md) for a run
    * bound to a device's project directory. Reads the cache on
    * `devices.workingDirs[].workspace`, reusing it within {@link WORKSPACE_INIT_TTL_MS};
@@ -392,9 +410,23 @@ export class AiAgentService {
     if (!activeDeviceId) return { workspace: empty };
 
     try {
-      const deviceModel = new DeviceModel(this.db, this.userId);
-      const device = await deviceModel.findByDeviceId(activeDeviceId);
+      // The active device may be personal (userId-scoped) or workspace-owned
+      // (workspace-scoped) — look up both pools so the bound cwd, project
+      // skills, and AGENTS/CLAUDE instructions still resolve for a workspace
+      // device. Mirrors the dispatch-side lookup (see `deviceModelForCwd`).
+      const deviceModel = new DeviceModel(this.db, this.userId, this.workspaceId);
+      const personalDevice = await deviceModel.findByDeviceId(activeDeviceId);
+      const workspaceDevice = personalDevice
+        ? undefined
+        : await deviceModel.findWorkspaceDeviceById(activeDeviceId);
+      const device = personalDevice ?? workspaceDevice;
       if (!device) return { workspace: empty };
+
+      // For a workspace-owned device, route the gateway RPC to the
+      // `workspace:<id>` principal and persist the scan via the workspace
+      // update path — otherwise the scan goes through the personal pool
+      // (empty result) and the writeback misses the row.
+      const deviceWorkspaceId = workspaceDevice ? this.workspaceId : undefined;
 
       // The bound project root we scan — resolved via the shared precedence
       // helper so it cannot drift from hetero dispatch / topic backfill. Read
@@ -423,6 +455,7 @@ export class AiAgentService {
         deviceId: activeDeviceId,
         scope: boundCwd,
         userId: this.userId,
+        workspaceId: deviceWorkspaceId,
       });
       if (!scanned) {
         // Scan failed (offline mid-run / parse error). Fall back to a stale
@@ -435,9 +468,15 @@ export class AiAgentService {
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
-      // a new MRU entry), keeping the JSONB payload bounded.
+      // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
+      // are owned by the workspace, not a userId — use the workspace-scoped
+      // update path so the writeback actually lands.
       const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
-      await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      if (deviceWorkspaceId) {
+        await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
+      } else {
+        await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      }
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
       return { boundCwd, workspace: scanned };
@@ -1401,8 +1440,9 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
+        const remoteDeviceWorkspaceId = await this.resolveDeviceWorkspaceId(remoteDeviceId);
         const result = await deviceGateway.executeToolCall(
-          { deviceId: remoteDeviceId, userId: this.userId },
+          { deviceId: remoteDeviceId, userId: this.userId, workspaceId: remoteDeviceWorkspaceId },
           {
             apiName: 'runHeteroTask',
             arguments: JSON.stringify({
@@ -1413,6 +1453,11 @@ export class AiAgentService {
               prompt,
               taskId: operationId,
               topicId,
+              // Scope notify callbacks to the same workspace as the dispatched
+              // topic so agentNotify can resolve the workspace-owned topic.
+              // Without this the device's notify call falls back to personal
+              // mode and TopicModel.findById returns NOT_FOUND.
+              workspaceId: remoteDeviceWorkspaceId,
             }),
             identifier: 'runHeteroTask',
           },
@@ -1510,9 +1555,13 @@ export class AiAgentService {
           // wins, else the device's user-configured defaultCwd. The device row
           // lives in the DB (the gateway only knows live connections), so read
           // it directly rather than via deviceGateway.
-          const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
-            dispatchDeviceId,
-          );
+          // The bound device may be personal (userId-scoped) or a workspace
+          // device (workspace-scoped) — look up both so its defaultCwd resolves.
+          const deviceModelForCwd = new DeviceModel(this.db, this.userId, this.workspaceId);
+          const boundDevice =
+            (await deviceModelForCwd.findByDeviceId(dispatchDeviceId)) ??
+            (await deviceModelForCwd.findWorkspaceDeviceById(dispatchDeviceId));
+          const dispatchWorkspaceId = await this.resolveDeviceWorkspaceId(dispatchDeviceId);
           // Resolve via the shared precedence helper so dispatch, workspace-init,
           // and the new-topic backfill below all agree on the cwd.
           const deviceCwd = resolveDeviceWorkingDirectory({
@@ -1548,6 +1597,9 @@ export class AiAgentService {
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
             systemContext: deviceSystemContext,
+            // Route to the workspace pool when this is a workspace device; the
+            // operation JWT stays member-scoped (the run belongs to the member).
+            workspaceId: dispatchWorkspaceId,
           });
           if (!result.success) {
             log('execAgent: hetero device dispatch failed: %s', result.error);
@@ -1871,7 +1923,16 @@ export class AiAgentService {
       const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
-          onlineDevices = await deviceGateway.queryDeviceList(this.userId);
+          // Personal pool (user principal) ∪ the current workspace's shared pool
+          // (workspace principal). Workspace devices are absent for non-workspace
+          // runs, so this is identical to the personal-only fetch there.
+          const [personalOnline, workspaceOnline] = await Promise.all([
+            deviceGateway.queryDeviceList(this.userId),
+            this.workspaceId
+              ? deviceGateway.queryDeviceList(this.userId, this.workspaceId)
+              : Promise.resolve([]),
+          ]);
+          onlineDevices = [...personalOnline, ...workspaceOnline];
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);
@@ -3811,9 +3872,14 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
+        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
         await deviceGateway
           .executeToolCall(
-            { deviceId: runningOp.deviceId, userId: this.userId },
+            {
+              deviceId: runningOp.deviceId,
+              userId: this.userId,
+              workspaceId: cancelWorkspaceId,
+            },
             {
               apiName: 'cancelHeteroTask',
               arguments: JSON.stringify({ signal: 'SIGINT', taskId }),

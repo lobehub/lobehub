@@ -92,6 +92,15 @@ export const wsProcedure = authedProcedure;
 
 export const wsMemberProcedure = authedProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
-export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceRoleWhenScoped('owner'));
+const requireWorkspaceId = trpc.middleware(async ({ ctx, next }) => {
+  if (!ctx.workspaceId) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'workspaceId is required' });
+  }
+  return next();
+});
+
+export const wsOwnerProcedure = authedProcedure
+  .use(requireWorkspaceId)
+  .use(requireWorkspaceRole('owner'));
 
 export const wsCompatProcedure = authedProcedure;

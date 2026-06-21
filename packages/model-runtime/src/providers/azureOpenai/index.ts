@@ -70,7 +70,7 @@ const normalizeAzureBaseURL = (value?: string) => {
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
 
-  return url.replace(regex, (match, protocol, subdomain, rest) => `${protocol}***${rest}`);
+  return url.replace(regex, (_match, protocol, _subdomain, rest) => `${protocol}***${rest}`);
 };
 
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
@@ -210,7 +210,8 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
   async createImage(payload: CreateImagePayload) {
     const { model, params } = payload;
-    azureImageLogger('Creating image with model: %s and params: %O', model, params);
+    const requestModel = this.getMappedModelId(model);
+    azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
 
     try {
       const userInput: Record<string, any> = { ...params };
@@ -244,7 +245,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
 
       const azureImageOptions: Record<string, any> = {
-        model,
+        model: requestModel,
         n: 1,
         ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
         ...userInput,

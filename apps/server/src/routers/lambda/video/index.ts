@@ -344,6 +344,7 @@ export const videoRouter = router({
               prechargeResult,
               provider,
               userId,
+              workspaceId: wsId,
             });
           } catch (chargeError) {
             console.error('[video] chargeAfterGenerate failed:', chargeError);

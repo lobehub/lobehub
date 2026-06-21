@@ -37,7 +37,8 @@ export interface CheckpointConfig {
  * Task-level delivery-acceptance (verify) gate config, persisted under
  * `tasks.config.verify`. This is the authoritative source for a task run's
  * verify gate — it is *not* unioned with any agent-level mount
- * (`agencyConfig.verifyRubricId`). See LOBE-10614 §2.
+ * (`agencyConfig.verifyRubricId`) — the task config is authoritative and never
+ * field-level merged with the agent-level rubric.
  *
  * Subtasks inherit with whole-config override semantics: a subtask uses its own
  * config when present, otherwise the nearest ancestor's config in full (never a

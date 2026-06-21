@@ -2222,7 +2222,7 @@ describe('StreamingExecutor actions', () => {
       // 2. A new operation will be created when user approves/rejects
       expect(result.current.operations[operationId!].status).toBe('completed');
       // Parked ≠ terminal: NO `client.runtime.complete` is emitted — the run has
-      // not ended, it is waiting for human approval (LOBE-10382). Previously this
+      // not ended, it is waiting for human approval — parked states do not emit
       // mis-emitted a terminal `cancelled` complete signal.
       const completeCall = agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mock.calls.find(
         (c: any) => c[0]?.sourceType === 'client.runtime.complete',
@@ -2568,7 +2568,7 @@ describe('StreamingExecutor actions', () => {
 
     // Parked states (run ≠ operation): parked is NOT terminal, so it fires no
     // terminal side effects and emits no `client.runtime.complete`. The run
-    // resumes under a new operation when the user acts (LOBE-10382).
+    // resumes under a new operation when the user acts.
     const pinStep = (operationId: string, status: AgentState['status']) => {
       vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
         events: [],
@@ -2602,7 +2602,7 @@ describe('StreamingExecutor actions', () => {
       expect(result.current.operations[operationId].status).toBe('running');
       expect(drainQueuedMessages).not.toHaveBeenCalled();
 
-      // No `client.runtime.complete` — the run has not ended (LOBE-10382).
+      // No `client.runtime.complete` — the run has not ended (parked ≠ terminal).
       const completeCall = agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mock.calls.find(
         (c: any) => c[0]?.sourceType === 'client.runtime.complete',
       );

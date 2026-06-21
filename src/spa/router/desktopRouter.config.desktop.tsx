@@ -35,6 +35,7 @@ import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/set
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
 import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
+import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
 import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
@@ -123,6 +124,7 @@ import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import VerifyReportPage from '@/routes/verify/[runId]';
 import VerifyImPage from '@/routes/verify-im';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -690,6 +692,7 @@ export const desktopRoutes: RouteObject[] = [
                   { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
                   { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
                   { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
+                  { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },
                 ],
                 element: <WorkspaceSlugSettingsContentLayout />,
               },
@@ -763,6 +766,13 @@ export const desktopRoutes: RouteObject[] = [
     element: <VerifyImPage />,
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  // Standalone verification-report viewer (outside main layout)
+  {
+    element: <VerifyReportPage />,
+    errorElement: <ErrorBoundary />,
+    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

@@ -5,7 +5,7 @@ import type { ChatStore } from '@/store/chat/store';
 
 import type { AgentRuntimeType } from '../agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
-import type { RunCompleteEvent, RunTerminalStatus } from './types';
+import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
 
 const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
@@ -20,10 +20,15 @@ const CONTEXT: ConversationContext = { agentId: 'a1', topicId: 't1' } as Convers
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
   const store = {
+    activeAgentId: 'a1',
+    activeGroupId: undefined,
+    activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
     drainQueuedMessages: vi.fn(() => []),
     failOperation: vi.fn(),
+    internal_updateTopic: vi.fn(),
+    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
     operations: {
@@ -33,6 +38,10 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
         status: 'running',
       },
     },
+    refreshTopic: vi.fn(async () => {}),
+    summaryTopicTitle: vi.fn(),
+    // topicDataMap / messagesMap reads default to empty (no topic, no messages).
+    topicDataMap: {},
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
 };
@@ -172,5 +181,70 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
         completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runtimes)', () => {
+  const persistedEvent = (
+    runtimeType: AgentRuntimeType,
+    runScope: 'sub_agent' | 'top_level',
+    fields: Partial<UserMessagePersistedEvent>,
+  ): UserMessagePersistedEvent => ({
+    context: CONTEXT,
+    isCreateNewTopic: true,
+    operationId: OP,
+    runId: OP,
+    runScope,
+    runtimeType,
+    topicId: 't1',
+    ...fields,
+  });
+
+  it('new topic (top_level) summarizes the title with the caller-provided messages', async () => {
+    const { get, store } = makeStore();
+    const messages = [{ content: 'hello there', id: 'm1', role: 'user' } as any];
+
+    await lifecycle('gateway', get, 'top_level').afterUserMessagePersisted(
+      persistedEvent('gateway', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('loads the topic first when it is absent from the store (gateway fire-and-forget refreshTopic race)', async () => {
+    const { get, store } = makeStore(); // topicMaps empty → getTopicById returns undefined
+    const messages = [{ content: 'hi', id: 'm1', role: 'user' } as any];
+
+    await lifecycle('gateway', get, 'top_level').afterUserMessagePersisted(
+      persistedEvent('gateway', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
+    );
+
+    // The new gateway topic isn't in the store yet → refreshTopic is awaited
+    // before summarizing so summaryTopicTitle doesn't bail on a missing topic.
+    expect(store.refreshTopic).toHaveBeenCalled();
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('does NOT title for a sub_agent run', async () => {
+    const { get, store } = makeStore();
+
+    await lifecycle('client', get, 'sub_agent').afterUserMessagePersisted(
+      persistedEvent('client', 'sub_agent', {
+        isCreateNewTopic: true,
+        messages: [{ content: 'x', id: 'm1', role: 'user' } as any],
+      }),
+    );
+
+    expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no topicId is resolved', async () => {
+    const { get, store } = makeStore();
+
+    await lifecycle('hetero', get, 'top_level').afterUserMessagePersisted(
+      persistedEvent('hetero', 'top_level', { isCreateNewTopic: true, topicId: undefined }),
+    );
+
+    expect(store.summaryTopicTitle).not.toHaveBeenCalled();
   });
 });

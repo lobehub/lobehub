@@ -1,5 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import type { OperationStatus } from '@/store/chat/slices/operation/types';
@@ -37,7 +37,15 @@ interface RunLifecycleEventBase extends RunLifecycleContext {
 }
 
 export interface UserMessagePersistedEvent extends RunLifecycleEventBase {
+  /** The just-created assistant placeholder — excluded from the title context. */
+  assistantMessageId?: string;
   isCreateNewTopic: boolean;
+  /**
+   * Title-context messages, supplied by the client path (`data.messages`) where
+   * the new-topic rows aren't in the store under the real topicId yet. Gateway /
+   * hetero omit it — the hook reads the persisted conversation from the store.
+   */
+  messages?: UIChatMessage[];
   topicId?: string;
 }
 

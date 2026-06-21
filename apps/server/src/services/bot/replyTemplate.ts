@@ -247,6 +247,7 @@ type SystemStrings = {
   errorProviderUnavailable: string;
   errorQuotaLimitReached: string;
   errorRateLimited: string;
+  errorSystemInfra: string;
   errorTimeout: string;
   errorTransientNetwork: string;
   errorUserGeneric: string;
@@ -323,6 +324,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Provider quota exhausted.**\nThe configured model provider is out of quota or rate-limited. Please wait a moment and try again, top up the account, or switch to a different provider in the agent's settings.",
     errorRateLimited:
       "**Too many requests.**\nThe model provider is rate-limiting requests right now. Please wait a moment before trying again, or switch to a different model in the agent's settings.",
+    errorSystemInfra:
+      '**A temporary system error occurred.**\nThe request hit a transient infrastructure issue on our side and could not be completed. Please try again in a moment.',
     errorTimeout:
       '**The agent run timed out.**\nThe operation ran too long without progress and was stopped. Please try again; if the task is large, try breaking it into smaller steps.',
     errorTransientNetwork:
@@ -396,6 +399,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**Provider 配额已用尽**\n所配置的模型 Provider 已达到配额上限或被限流。请稍后重试、为账户充值，或在 Agent 设置中切换到其他 Provider。',
     errorRateLimited:
       '**请求过于频繁**\n模型 Provider 正在限流。请稍后再试，或在 Agent 设置中切换到其他模型。',
+    errorSystemInfra:
+      '**发生了临时系统错误**\n由于我们这边的临时基础设施问题，本次请求未能完成。请稍后重试。',
     errorTimeout:
       '**Agent 执行超时**\n操作长时间无进展，已被中止。请重试；如果任务较大，可尝试拆分成更小的步骤。',
     errorTransientNetwork:
@@ -455,6 +460,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   ProviderServiceUnavailable: 'errorProviderUnavailable',
   RateLimitExceeded: 'errorRateLimited',
   // ── network / infra (attribution: system) ──
+  // ProviderNetworkError is the one system-attributed code that *is* about the
+  // model provider, so it keeps the provider-specific "switch model" copy. Other
+  // system codes (state-store reads) hit the provider-neutral `system` fallback.
   ProviderNetworkError: 'errorTransientNetwork',
   // ── harness watchdog: harness-owned but retry-friendly, so it gets its
   //    own retry-oriented copy rather than the generic internal-error tier ──
@@ -471,7 +479,11 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
 const FALLBACK_ERROR_BY_ATTRIBUTION: Record<string, keyof SystemStrings> = {
   harness: 'errorHarnessInternal',
   provider: 'errorProviderUnavailable',
-  system: 'errorTransientNetwork',
+  // Provider-neutral: `system` covers infra failures (state-store reads, etc.)
+  // where the LLM provider/model is not involved, so the copy must NOT blame the
+  // provider or suggest switching models. ProviderNetworkError, the one
+  // provider-related system code, is mapped precisely above.
+  system: 'errorSystemInfra',
   user: 'errorUserGeneric',
 };
 
@@ -483,11 +495,23 @@ const FALLBACK_ERROR_BY_ATTRIBUTION: Record<string, keyof SystemStrings> = {
 const appendOperationId = (value: string, operationId: string | undefined): string =>
   operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
 
+// `command aborted due to connection close` reaches us under a few stable
+// codes: the raw `500` fallback, or — once `formatErrorForState` pattern-refines
+// the Upstash/ioredis disconnect — `StateStorePersistError` (write path) /
+// `StateStoreReadError` (blocking-read path). The message stays the precise
+// signal; the type gate just has to let these through so the specific
+// "command session disconnected" guidance still wins over the generic tiers.
+const COMMAND_CONNECTION_CLOSED_TYPES = new Set([
+  '500',
+  'StateStorePersistError',
+  'StateStoreReadError',
+]);
+
 const isCommandConnectionClosedError = (
   errorType: string | undefined,
   errorMessage: string | undefined,
 ) => {
-  if (errorType && errorType !== '500') return false;
+  if (errorType && !COMMAND_CONNECTION_CLOSED_TYPES.has(errorType)) return false;
   if (!errorMessage) return false;
 
   return /command aborted due to connection close/i.test(errorMessage);

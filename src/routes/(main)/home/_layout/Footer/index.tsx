@@ -23,6 +23,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
 import HighlightNotification from '@/components/HighlightNotification';
@@ -107,6 +108,8 @@ const Footer = memo(() => {
   const navigate = useNavigate();
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  const settingLabelKey = hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting';
   const activeNavKey = useActiveNavKey();
   const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
@@ -315,7 +318,7 @@ const Footer = memo(() => {
             {
               icon: <Icon icon={Settings2} />,
               key: 'setting',
-              label: <WorkspaceLink to="/settings">{t('userPanel.setting')}</WorkspaceLink>,
+              label: <WorkspaceLink to="/settings">{t(settingLabelKey)}</WorkspaceLink>,
             },
             {
               type: 'divider' as const,
@@ -422,6 +425,7 @@ const Footer = memo(() => {
     isDevMode,
     shouldShowProductHuntMenuEntry,
     t,
+    settingLabelKey,
     billboardMenuItems,
     isHomeSidebar,
   ]);
@@ -481,10 +485,10 @@ const Footer = memo(() => {
           {isDevMode && (
             <WorkspaceLink to="/settings">
               <ActionIcon
-                aria-label={t('userPanel.setting')}
+                aria-label={t(settingLabelKey)}
                 icon={SettingsIcon}
                 size={16}
-                title={t('userPanel.setting')}
+                title={t(settingLabelKey)}
               />
             </WorkspaceLink>
           )}

@@ -1,7 +1,7 @@
 import type { VerifyReport } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { verifyReports } from '../schemas/verify';
+import { verifyReports, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -22,25 +22,55 @@ export class VerifyReportModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyReports);
 
+  private runOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyRuns);
+
+  private assertRunOwned = async (verifyRunId: string): Promise<void> => {
+    const [run] = await this.db
+      .select({ id: verifyRuns.id })
+      .from(verifyRuns)
+      .where(and(eq(verifyRuns.id, verifyRunId), this.runOwnership()))
+      .limit(1);
+
+    if (!run) {
+      throw new Error(`Verify run "${verifyRunId}" not found in the current workspace`);
+    }
+  };
+
   /**
-   * Write the report for a run. A report is unique per operation (regenerating
-   * overwrites in place), so this upserts on the `operation_id` unique index
+   * Write the report for a session. A report is unique per run (regenerating
+   * overwrites in place), so this upserts on the `verify_run_id` unique index
    * rather than ever inserting a second row.
    */
-  upsertByOperation = async (params: CreateVerifyReport) => {
+  upsertByRun = async (params: CreateVerifyReport) => {
+    await this.assertRunOwned(params.verifyRunId);
+
     const values = buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
       params,
     );
 
-    // `operation_id` is the conflict key, so it's excluded from the update set.
-    const { operationId: _operationId, ...mutable } = values;
+    // The conflict target and ownership keys identify the row, so they're excluded from the set.
+    const {
+      verifyRunId: _verifyRunId,
+      userId: _userId,
+      workspaceId: _workspaceId,
+      ...mutable
+    } = values;
 
     const [result] = await this.db
       .insert(verifyReports)
       .values(values)
-      .onConflictDoUpdate({ set: mutable, target: verifyReports.operationId })
+      .onConflictDoUpdate({
+        set: mutable,
+        setWhere: this.ownership(),
+        target: verifyReports.verifyRunId,
+      })
       .returning();
+
+    if (!result) {
+      throw new Error(`Verify report "${params.verifyRunId}" not found in the current workspace`);
+    }
 
     return result;
   };
@@ -51,10 +81,10 @@ export class VerifyReportModel {
     });
   };
 
-  /** The single report for one Agent Run, or undefined when not yet generated. */
-  findByOperation = async (operationId: string) => {
+  /** The single report for one verification session, or undefined when not yet generated. */
+  findByRun = async (verifyRunId: string) => {
     return this.db.query.verifyReports.findFirst({
-      where: and(eq(verifyReports.operationId, operationId), this.ownership()),
+      where: and(eq(verifyReports.verifyRunId, verifyRunId), this.ownership()),
     });
   };
 
@@ -66,11 +96,11 @@ export class VerifyReportModel {
   };
 
   /** Record that the user has acknowledged the report. */
-  markReviewed = async (operationId: string) => {
+  markReviewed = async (verifyRunId: string) => {
     return this.db
       .update(verifyReports)
       .set({ reviewedByUser: true })
-      .where(and(eq(verifyReports.operationId, operationId), this.ownership()));
+      .where(and(eq(verifyReports.verifyRunId, verifyRunId), this.ownership()));
   };
 
   delete = async (id: string) => {

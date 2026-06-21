@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "Delete document?",
   "workingPanel.resources.deleteTitleMulti": "Изтриване на {{count}} елемента?",
   "workingPanel.resources.empty": "Все още няма документи. Документите, свързани с този агент, ще се показват тук.",
+  "workingPanel.resources.emptyDocuments": "Все още няма документи. Създайте един с + по-горе.",
   "workingPanel.resources.error": "Failed to load resources",
   "workingPanel.resources.filter.documents": "Документи",
   "workingPanel.resources.filter.skills": "Умения",

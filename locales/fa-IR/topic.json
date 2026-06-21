@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "علامت‌گذاری به‌عنوان فعال",
   "defaultTitle": "گفت‌وگوی پیش‌فرض",
   "displayItems": "نمایش موارد",
+  "draft": "[پیش‌نویس]",
   "duplicateLoading": "در حال کپی‌برداری از گفت‌وگو...",
   "duplicateSuccess": "گفت‌وگو با موفقیت کپی شد",
   "failedStatusTip": "این اجرا با خطا مواجه شد — برای بررسی آن را باز کنید.",

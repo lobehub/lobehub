@@ -36,6 +36,7 @@ import type {
 } from '../../types';
 import { AgentRuntimeError } from '../../utils/createError';
 import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestError';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -57,6 +58,7 @@ interface ProviderIniOptions extends Record<string, any> {
   baseURL?: string;
   baseURLOrAccountID?: string;
   dangerouslyAllowBrowser?: boolean;
+  modelIdMapping?: Record<string, string>;
   region?: string;
   sdkType?: string;
   sessionToken?: string;
@@ -383,7 +385,7 @@ export const createRouterRuntime = ({
       if (resolvedApiType === 'vertexai') {
         const { apiKey, googleAuthOptions, project, location, ...restOptions } = finalOptions;
         const credentials = safeParseJSON<Record<string, any>>(apiKey);
-        const vertexOptions: GoogleGenAIOptions = {
+        const vertexOptions: GoogleGenAIOptions & ModelIdMappingOptions = {
           ...(restOptions as GoogleGenAIOptions),
           vertexai: true,
         };

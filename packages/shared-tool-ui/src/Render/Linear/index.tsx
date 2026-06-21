@@ -247,29 +247,25 @@ const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, u
     return (
       <Flexbox className={styles.container} gap={12}>
         {hasItems(model.resultEntities) && (
-          <Section title={'Result'}>
-            <Flexbox gap={8}>
-              {model.resultEntities.map((entity, index) => (
-                <EntityCard
-                  entity={entity}
-                  key={`${entity.id || entity.title || 'entity'}:${index}`}
-                />
-              ))}
-            </Flexbox>
-          </Section>
+          <Flexbox gap={8}>
+            {model.resultEntities.map((entity, index) => (
+              <EntityCard
+                entity={entity}
+                key={`${entity.id || entity.title || 'entity'}:${index}`}
+              />
+            ))}
+          </Flexbox>
         )}
         {model.resultText && (
-          <Section title={'Result'}>
-            <Highlighter
-              wrap
-              language={'text'}
-              showLanguage={false}
-              style={{ maxHeight: 220, overflow: 'auto', paddingInline: 8 }}
-              variant={'filled'}
-            >
-              {model.resultText}
-            </Highlighter>
-          </Section>
+          <Highlighter
+            wrap
+            language={'text'}
+            showLanguage={false}
+            style={{ maxHeight: 220, overflow: 'auto', paddingInline: 8 }}
+            variant={'filled'}
+          >
+            {model.resultText}
+          </Highlighter>
         )}
         {model.rawResultJson && (
           <details className={styles.rawDetails}>

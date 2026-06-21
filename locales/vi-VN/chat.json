@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "Delete document?",
   "workingPanel.resources.deleteTitleMulti": "Xóa {{count}} mục?",
   "workingPanel.resources.empty": "Chưa có tài liệu. Các tài liệu liên quan đến tác tử này sẽ xuất hiện ở đây.",
+  "workingPanel.resources.emptyDocuments": "Chưa có tài liệu nào. Tạo một tài liệu mới bằng cách nhấn vào dấu + ở trên.",
   "workingPanel.resources.error": "Failed to load resources",
   "workingPanel.resources.filter.documents": "Tài liệu",
   "workingPanel.resources.filter.skills": "Kỹ năng",

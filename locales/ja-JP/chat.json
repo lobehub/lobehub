@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "Delete document?",
   "workingPanel.resources.deleteTitleMulti": "{{count}} 件のアイテムを削除しますか？",
   "workingPanel.resources.empty": "まだドキュメントはありません。このエージェントに関連するドキュメントがここに表示されます。",
+  "workingPanel.resources.emptyDocuments": "まだドキュメントがありません。上の「+」を使って作成してください。",
   "workingPanel.resources.error": "Failed to load resources",
   "workingPanel.resources.filter.documents": "ドキュメント",
   "workingPanel.resources.filter.skills": "スキル",

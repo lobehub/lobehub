@@ -279,6 +279,7 @@ export const imageRouter = router({
               modelUsage,
               provider,
               userId: ctx.userId,
+              workspaceId,
             });
           }
 

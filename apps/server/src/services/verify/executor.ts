@@ -10,9 +10,9 @@ import type {
 } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { NewVerifyCheckResult } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -75,7 +75,7 @@ const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
 export class VerifyExecutorService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
-  private readonly operationModel: AgentOperationModel;
+  private readonly runModel: VerifyRunModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
   private readonly documentModel: DocumentModel;
@@ -83,7 +83,7 @@ export class VerifyExecutorService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
@@ -105,20 +105,22 @@ export class VerifyExecutorService {
    * spawner (results land asynchronously). Recomputes the rollup at the end.
    */
   async execute(params: ExecuteVerifyParams): Promise<void> {
-    const state = await this.operationModel.getVerifyState(params.operationId);
-    if (!state?.verifyPlan?.length) {
+    // Resolve (or lazily create) the verification session bound to this Agent Run.
+    const run = await this.runModel.ensureForOperation(params.operationId);
+    if (!run.plan?.length) {
       log('execute: no plan for op %s, skipping', params.operationId);
       return;
     }
-    if (!state.verifyPlanConfirmedAt) {
+    if (!run.planConfirmedAt) {
       log('execute: plan for op %s not confirmed, skipping', params.operationId);
       return;
     }
 
-    const items = state.verifyPlan as VerifyCheckItem[];
+    const verifyRunId = run.id;
+    const items = run.plan as VerifyCheckItem[];
 
     // Idempotently create the pending result rows (skip ones already present).
-    const existing = await this.resultModel.listByOperation(params.operationId);
+    const existing = await this.resultModel.listByRun(verifyRunId);
     const existingIds = new Set(existing.map((r) => r.checkItemId));
     const toCreate: Omit<NewVerifyCheckResult, 'userId'>[] = items
       .filter((i) => !existingIds.has(i.id))
@@ -126,11 +128,13 @@ export class VerifyExecutorService {
         checkItemId: item.id,
         checkItemIndex: item.index,
         checkItemTitle: item.title,
+        // Denormalized direct link to the Agent Run (canonical link is verifyRunId).
         operationId: params.operationId,
         required: item.required,
         status: 'pending' as const,
         verifierConfigHash: hashConfig(item.verifierConfig),
         verifierType: item.verifierType,
+        verifyRunId,
       }));
     if (toCreate.length > 0) await this.resultModel.createMany(toCreate);
 
@@ -143,18 +147,18 @@ export class VerifyExecutorService {
     // The three verifier kinds are independent — run them concurrently. LLM items
     // are judged in one batched call; each agent item spawns its own sub-agent.
     await Promise.all([
-      this.runProgramItems(params.operationId, programItems),
-      this.runLlmItems(params, llmItems),
-      ...agentItems.map((item) => this.runAgentItem(params, item)),
+      this.runProgramItems(verifyRunId, programItems),
+      this.runLlmItems(params, verifyRunId, llmItems),
+      ...agentItems.map((item) => this.runAgentItem(params, verifyRunId, item)),
     ]);
 
     await this.statusService.recompute(params.operationId);
   }
 
   /** Program verifiers are a v1 placeholder (no shell environment) — mark skipped. */
-  private async runProgramItems(operationId: string, items: VerifyCheckItem[]): Promise<void> {
+  private async runProgramItems(verifyRunId: string, items: VerifyCheckItem[]): Promise<void> {
     for (const item of items) {
-      await this.resultModel.updateByCheckItem(operationId, item.id, {
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
         status: 'skipped',
         toulmin: { limitation: 'Program verifier is not executed in v1.' },
@@ -163,13 +167,17 @@ export class VerifyExecutorService {
   }
 
   /** Judge all LLM items via the Toulmin judge (one batched call by default). */
-  private async runLlmItems(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
+  private async runLlmItems(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+  ): Promise<void> {
     if (items.length === 0) return;
     try {
       if (params.batchLlm ?? true) {
-        await this.judgeBatch(params, items);
+        await this.judgeBatch(params, verifyRunId, items);
       } else {
-        for (const item of items) await this.judgeSingle(params, item);
+        for (const item of items) await this.judgeSingle(params, verifyRunId, item);
       }
     } catch (error) {
       log('llm judge failed for op %s: %O', params.operationId, error);
@@ -178,9 +186,13 @@ export class VerifyExecutorService {
   }
 
   /** Run one agent check as a verifier sub-agent (verdict lands async via its hook) or skip. */
-  private async runAgentItem(params: ExecuteVerifyParams, item: VerifyCheckItem): Promise<void> {
+  private async runAgentItem(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    item: VerifyCheckItem,
+  ): Promise<void> {
     if (!params.runVerifierAgent) {
-      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
         status: 'skipped',
         toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
@@ -193,14 +205,14 @@ export class VerifyExecutorService {
         goal: params.goal,
         operationId: params.operationId,
       });
-      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         startedAt: new Date(),
         status: 'running',
         verifierOperationId: spawned?.verifierOperationId ?? null,
       });
     } catch (error) {
       log('agent verifier spawn failed for item %s: %O', item.id, error);
-      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
         status: 'failed',
         toulmin: { limitation: 'Agent verifier failed to start.' },
@@ -209,7 +221,11 @@ export class VerifyExecutorService {
     }
   }
 
-  private async judgeBatch(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
+  private async judgeBatch(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+  ): Promise<void> {
     // Batch: N verdicts share ONE tracing row (N:1).
     const tracingId = randomUUID();
     const promptItems = await Promise.all(
@@ -248,7 +264,7 @@ export class VerifyExecutorService {
           // Backfill the tracing FK only after the (async, best-effort) tracing
           // row is persisted — verdicts are written with a null link below.
           onPersisted: this.backfillTracing(
-            params.operationId,
+            verifyRunId,
             items.map((i) => i.id),
           ),
         },
@@ -266,13 +282,17 @@ export class VerifyExecutorService {
       if (!validIds.has(v.checkItemId)) continue;
       await this.writeVerdict({
         checkItemId: v.checkItemId,
-        operationId: params.operationId,
         verdict: v,
+        verifyRunId,
       });
     }
   }
 
-  private async judgeSingle(params: ExecuteVerifyParams, item: VerifyCheckItem): Promise<void> {
+  private async judgeSingle(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    item: VerifyCheckItem,
+  ): Promise<void> {
     // Per-criterion: each result gets its own tracing row (1:1).
     const tracingId = randomUUID();
     const { system, user } = buildJudgePrompt({
@@ -301,7 +321,7 @@ export class VerifyExecutorService {
             schemaName: SINGLE_VERDICT_JSON_SCHEMA.name,
             tracingId,
           } satisfies TracingOptions),
-          onPersisted: this.backfillTracing(params.operationId, [item.id]),
+          onPersisted: this.backfillTracing(verifyRunId, [item.id]),
         },
       },
     );
@@ -313,21 +333,21 @@ export class VerifyExecutorService {
     }
     await this.writeVerdict({
       checkItemId: item.id,
-      operationId: params.operationId,
       verdict: parsed.data,
+      verifyRunId,
     });
   }
 
   private async writeVerdict(params: {
     checkItemId: string;
-    operationId: string;
     verdict: SingleVerdict;
+    verifyRunId: string;
   }): Promise<void> {
-    const { operationId, checkItemId, verdict } = params;
+    const { verifyRunId, checkItemId, verdict } = params;
     // `verifier_tracing_id` is intentionally left null here — the tracing row is
     // written asynchronously (best-effort, after the response), so linking it now
     // would violate the FK. It is backfilled by `backfillTracing` once the row exists.
-    await this.resultModel.updateByCheckItem(operationId, checkItemId, {
+    await this.resultModel.updateByCheckItem(verifyRunId, checkItemId, {
       completedAt: new Date(),
       confidence: verdict.confidence,
       status: verdictToStatus(verdict.verdict),
@@ -344,13 +364,13 @@ export class VerifyExecutorService {
    * FK link. Receives the persisted tracing id (or null if tracing was disabled
    * or the record failed), so a missing tracing row simply leaves the link null.
    */
-  private backfillTracing(operationId: string, checkItemIds: string[]) {
+  private backfillTracing(verifyRunId: string, checkItemIds: string[]) {
     return async (tracingId: string | null): Promise<void> => {
       if (!tracingId) return;
       try {
-        await this.resultModel.backfillTracingId(operationId, checkItemIds, tracingId);
+        await this.resultModel.backfillTracingId(verifyRunId, checkItemIds, tracingId);
       } catch (error) {
-        log('tracing-id backfill failed for op %s (non-fatal): %O', operationId, error);
+        log('tracing-id backfill failed for run %s (non-fatal): %O', verifyRunId, error);
       }
     };
   }

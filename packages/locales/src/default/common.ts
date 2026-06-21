@@ -582,6 +582,7 @@ export default {
   'userPanel.setting': 'Settings',
   'userPanel.upgradePlan': 'Upgrade Plan',
   'userPanel.usages': 'Usage',
+  'userPanel.workspaceSetting': 'Workspace Settings',
   'version': 'Version',
   'zoom': 'Zoom',
 };
