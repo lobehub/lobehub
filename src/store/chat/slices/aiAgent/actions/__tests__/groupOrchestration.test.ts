@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat/store';
 
 // Keep zustand mock as it's needed globally
@@ -241,6 +242,90 @@ describe('groupOrchestration actions', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('#resolveGroupId fallback (chat store has no active group)', () => {
+    afterEach(() => {
+      useAgentGroupStore.setState({ activeGroupId: undefined, groupMap: {} }, false);
+    });
+
+    it('resolves the group from this run’s supervisor', async () => {
+      // Chat store active group is cleared (e.g. left the group route in a popup)…
+      useChatStore.setState({ activeGroupId: undefined }, false);
+      // …but the group is still known via its supervisor.
+      useAgentGroupStore.setState(
+        {
+          activeGroupId: undefined,
+          groupMap: {
+            [TEST_IDS.GROUP_ID]: {
+              agents: [],
+              id: TEST_IDS.GROUP_ID,
+              supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+            } as any,
+          },
+        },
+        false,
+      );
+
+      const { result } = renderHook(() => useChatStore());
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerSpeak({
+          agentId: 'target-agent-id',
+          instruction: 'hi',
+          skipCallSupervisor: false,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: TEST_IDS.GROUP_ID }),
+      );
+    });
+
+    it('skips instead of running against a stale popup group from a different supervisor', async () => {
+      useChatStore.setState({ activeGroupId: undefined }, false);
+      // A stale popup group lingers in the agentGroup store, but it is NOT this
+      // run’s supervisor — the trigger must skip, not run against it.
+      useAgentGroupStore.setState(
+        {
+          activeGroupId: 'stale-popup-group',
+          groupMap: {
+            'stale-popup-group': {
+              agents: [],
+              id: 'stale-popup-group',
+              supervisorAgentId: 'some-other-supervisor',
+            } as any,
+          },
+        },
+        false,
+      );
+
+      const { result } = renderHook(() => useChatStore());
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerSpeak({
+          agentId: 'target-agent-id',
+          instruction: 'hi',
+          skipCallSupervisor: false,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).not.toHaveBeenCalled();
     });
   });
 });

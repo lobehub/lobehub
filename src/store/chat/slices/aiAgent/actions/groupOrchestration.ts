@@ -7,6 +7,7 @@ import { type SWRResponse } from 'swr';
 import { useClientDataSWR } from '@/libs/swr';
 import { aiAgentService } from '@/services/aiAgent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { agentGroupByIdSelectors } from '@/store/agentGroup/selectors';
 import { createGroupOrchestrationExecutors } from '@/store/chat/agents/GroupOrchestration';
 import { type ChatStore } from '@/store/chat/store';
 import { type GroupOrchestrationCallbacks } from '@/store/tool/slices/builtin/types';
@@ -50,13 +51,20 @@ export class GroupOrchestrationActionImpl {
   }
 
   /**
-   * Resolve the active groupId for orchestration. The chat store's activeGroupId is
-   * route-synced and can be transiently empty; fall back to the agentGroup store (the
-   * authoritative group identity) so the supervisor doesn't silently skip triggering
-   * member agents.
+   * Resolve the groupId for an orchestration run. Prefer the chat store's
+   * route-synced activeGroupId; when it's transiently empty, resolve the group from
+   * the supervisor that owns THIS run — NOT the global agentGroup activeGroupId,
+   * which can be a stale popup group (popup agent routes only clear the chat store)
+   * and would make a non-group popup trigger work in the wrong group. Returns
+   * undefined for a non-group supervisor, so the trigger safely skips as before.
    */
-  #resolveActiveGroupId = (): string | undefined =>
-    this.#get().activeGroupId ?? getChatGroupStoreState().activeGroupId;
+  #resolveGroupId = (supervisorAgentId: string): string | undefined => {
+    const activeGroupId = this.#get().activeGroupId;
+    if (activeGroupId) return activeGroupId;
+    return agentGroupByIdSelectors.groupBySupervisorAgentId(supervisorAgentId)(
+      getChatGroupStoreState(),
+    )?.id;
+  };
 
   getGroupOrchestrationCallbacks = (): GroupOrchestrationCallbacks => {
     return {
@@ -80,7 +88,7 @@ export class GroupOrchestrationActionImpl {
       skipCallSupervisor,
     );
 
-    const groupId = this.#resolveActiveGroupId();
+    const groupId = this.#resolveGroupId(supervisorAgentId);
     if (!groupId) {
       log('[triggerSpeak] No active group, skipping');
       return;
@@ -114,7 +122,7 @@ export class GroupOrchestrationActionImpl {
       toolMessageId,
     );
 
-    const groupId = this.#resolveActiveGroupId();
+    const groupId = this.#resolveGroupId(supervisorAgentId);
     if (!groupId) {
       log('[triggerBroadcast] No active group, skipping');
       return;
@@ -146,7 +154,7 @@ export class GroupOrchestrationActionImpl {
       reason,
     );
 
-    const groupId = this.#resolveActiveGroupId();
+    const groupId = this.#resolveGroupId(supervisorAgentId);
     if (!groupId) {
       log('[triggerDelegate] No active group, skipping');
       return;
@@ -190,7 +198,7 @@ export class GroupOrchestrationActionImpl {
       runInClient,
     );
 
-    const groupId = this.#resolveActiveGroupId();
+    const groupId = this.#resolveGroupId(supervisorAgentId);
     if (!groupId) {
       log('[triggerExecuteTask] No active group, skipping');
       return;
@@ -223,7 +231,7 @@ export class GroupOrchestrationActionImpl {
       skipCallSupervisor,
     );
 
-    const groupId = this.#resolveActiveGroupId();
+    const groupId = this.#resolveGroupId(supervisorAgentId);
     if (!groupId) {
       log('[triggerExecuteTasks] No active group, skipping');
       return;
