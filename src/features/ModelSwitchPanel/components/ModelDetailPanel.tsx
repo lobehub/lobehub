@@ -7,11 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import {
-  type FormattedUnitPrice,
-  UNIT_ICON_MAP,
-  useModelDetailPanel,
-} from '../hooks/useModelDetailPanel';
+import type { FormattedUnitPrice } from '../hooks/useModelDetailPanel';
+import { UNIT_ICON_MAP, useModelDetailPanel } from '../hooks/useModelDetailPanel';
 import type { PricingMode } from '../types';
 
 export type { PricingMode } from '../types';

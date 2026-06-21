@@ -7,24 +7,24 @@ import type {
 import { GoogleGenAI } from '@google/genai';
 import debug from 'debug';
 
-import { type LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
-import {
-  type ASROptions,
-  type ASRPayload,
-  type ASRResponse,
-  type ChatCompletionTool,
-  type ChatMethodOptions,
-  type ChatStreamPayload,
-  type CreateImageMethodOptions,
-  type GenerateObjectOptions,
-  type GenerateObjectPayload,
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatCompletionTool,
+  ChatMethodOptions,
+  ChatStreamPayload,
+  CreateImageMethodOptions,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
-import { type CreateVideoPayload, type CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';

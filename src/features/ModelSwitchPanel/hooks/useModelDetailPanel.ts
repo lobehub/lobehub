@@ -32,12 +32,7 @@ import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { formatNumber, formatShortenNumber, formatTokenNumber } from '@/utils/format';
-import {
-  formatPriceByCurrency,
-  getOriginalUnitRateByName,
-  getTextInputUnitRate,
-  getTextOutputUnitRate,
-} from '@/utils/index';
+import { formatPriceByCurrency, getOriginalUnitRateByName, getUnitRateByName } from '@/utils/index';
 
 import type { PricingMode } from '../types';
 
@@ -84,12 +79,7 @@ const getFormattedUnitPrice = (
   isCreditPricing: boolean,
 ): FormattedUnitPrice => {
   const currency = pricing.currency as ModelPriceCurrency | undefined;
-  const currentRate =
-    unitName === 'textInput'
-      ? getTextInputUnitRate(pricing)
-      : unitName === 'textOutput'
-        ? getTextOutputUnitRate(pricing)
-        : getCachedTextInputUnitRate(pricing);
+  const currentRate = getUnitRateByName(pricing, unitName);
   const originalRate = getOriginalUnitRateByName(pricing, unitName);
 
   return {
