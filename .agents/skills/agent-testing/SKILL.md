@@ -16,10 +16,10 @@ description: >
 
 One skill for all agentic end-to-end testing — local-first today, designed to
 also run as full cloud automation. Every test session follows the same
-four-step contract:
+contract:
 
 ```
-Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report
+Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report  →  Step 4: Publish to LobeHub
 ```
 
 ## Step -1 — Plan approval for non-trivial tests
@@ -359,6 +359,45 @@ Two hard rules worth front-loading:
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and embed the GIF —
   a static screenshot cannot prove the behavior.
+
+## Step 4 — Publish to LobeHub (mandatory)
+
+The local report under `.records/reports/` is the working artifact; the
+**deliverable is the report opened in LobeHub**. Do not stop at local files —
+push the session up with the CLI so the user (and later reviewers) can open it
+at a stable URL with the evidence rendered inline.
+
+```bash
+# Auth: the CLI surface must be green (setup-auth.sh status --surface cli).
+lh verify ingest-report "$DIR" --source agent-testing --open --json
+```
+
+`verify ingest-report` reads `$DIR` and, in one call, creates a standalone
+verification session and uploads everything:
+
+- `result.json.cases[]` → one check result each (verdict + key observation)
+- each case's `evidence` file(s) → uploaded to storage and attached to that result
+- `report.md` → the session's full report body, plus the `summary` stats
+
+It prints the `verifyRunId` and, with `--open`, the in-app path
+`/verify/<verifyRunId>` — the report viewer (verdict, stats, every check, and the
+inline screenshot/text evidence). **Include that `/verify/<verifyRunId>` link in
+the final chat reply** alongside the local report dir.
+
+Notes:
+
+- `result.json` cases use `{ id?, name, result, observation?, evidence? }`;
+  `evidence` is a path (or array of paths) relative to `$DIR`. `result`/`verdict`
+  map onto `passed | failed | uncertain` (pass/ok→passed, fail/error→failed,
+  else→uncertain).
+- Need finer control? The same data is reachable through the atomic commands —
+  `verify run create`, `verify result ingest`, `verify evidence upload`
+  (`--file` or `--content`), `verify report upsert` — so a session can be built
+  incrementally instead of from a report dir.
+- File evidence uploads through the app's storage (S3/R2). If a local env points
+  at a stub/unreachable bucket, the file PUT fails — fall back to inline text
+  evidence (`--content`) or run against an env with real storage; the rest of the
+  ingest still succeeds.
 
 ## Directory map
 

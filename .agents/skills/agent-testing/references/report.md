@@ -69,6 +69,19 @@ output):
    link text as the evidence caption, for example:
    `[Image #1 - observed outcome](<report-dir>/assets/case1.png)`.
 
+5. **Publish to LobeHub** (Step 4 of the skill) — upload the finished session so
+   it's viewable in-app, not just on disk:
+
+   ```bash
+   lh verify ingest-report "$DIR" --source agent-testing --open --json
+   ```
+
+   This creates a standalone verification session and uploads the cases (as check
+   results), each case's `evidence` files, and `report.md` (as the report body),
+   then prints `/verify/<verifyRunId>`. Include that link in the final reply
+   alongside the local report dir. See SKILL.md → Step 4 for the atomic commands
+   (`verify run|result|evidence|report …`) and storage caveats.
+
 ## Report language (hard rule)
 
 **`report.md` MUST be written in the language the user is conversing in** —
@@ -151,6 +164,7 @@ missing; a blocked case is not a pass).
       "name": "task tree returns nested children",
       "surface": "cli",
       "status": "pass",
+      "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
     }
   ],
@@ -172,6 +186,12 @@ missing; a blocked case is not a pass).
 `score` is optional — use it when the verdict has a subjective component (UI
 polish, copy quality); omit it for purely binary runs. `verdict` is the single
 word the user reads first: `pass`, `fail`, or `partial`.
+
+When published (Step 4), `verify ingest-report` maps each case onto a check
+result: `name`→title, `status`/`result`→verdict, `observation` (or
+`keyObservation`)→the result's key observation, and `evidence` paths→uploaded
+artifacts. `summary.{total,passed,failed,blocked}` and `verdict` become the
+report's stats + overall verdict; `report.md` becomes the report body.
 
 ## Rules
 
