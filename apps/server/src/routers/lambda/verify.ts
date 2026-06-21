@@ -244,6 +244,41 @@ export const verifyRouter = router({
     )
     .mutation(async ({ ctx, input }) => ctx.planGenerator.generateDraftPlan(input)),
 
+  /**
+   * Config-time: turn a one-sentence acceptance requirement into proposed
+   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.VerifyPlanGen),
+   * returns drafts only — nothing persisted, no operation needed.
+   */
+  generateCriteria: verifyProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+        modelConfig: modelConfigSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+
+  /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
+  createCriteria: verifyProcedure
+    .input(
+      z.object({
+        drafts: z.array(
+          z.object({
+            description: z.string().optional(),
+            instruction: z.string().optional(),
+            onFail: onFailSchema.optional(),
+            required: z.boolean().optional(),
+            title: z.string().min(1),
+            verifierConfig: z.record(z.unknown()).optional(),
+            verifierType: verifierTypeSchema.optional(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.planGenerator.createCriteriaFromDrafts(input.drafts)),
+
   getVerifierThread: verifyProcedure
     .input(z.object({ operationId: z.string() }))
     .query(async ({ ctx, input }) => {

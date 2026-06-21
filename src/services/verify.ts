@@ -45,6 +45,20 @@ export interface CreateRubricInput {
   title: string;
 }
 
+/**
+ * A proposed (or user-edited) acceptance criterion before it is persisted. The
+ * shape returned by `generateCriteria` and the shape `createCriteria` accepts.
+ */
+export interface VerifyCriterionDraft {
+  description?: string;
+  instruction?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: VerifierType;
+}
+
 export interface VerifyStateResponse {
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
@@ -135,6 +149,20 @@ export class VerifyService {
 
   submitDecision = (resultId: string, decision: VerifyUserDecision): Promise<unknown> =>
     lambdaClient.verify.submitDecision.mutate({ decision, resultId });
+
+  // ---- config-time AI generation (one-sentence → criteria) ----
+  /** Turn a one-sentence requirement into proposed criteria (traced; not persisted). */
+  generateCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+    modelConfig: { model: string; provider: string };
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
+  createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
+    lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;
 
   // ---- criteria / rubric management ----
   listCriteria = (): Promise<VerifyCriterionItem[]> =>

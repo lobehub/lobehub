@@ -30,7 +30,6 @@ const TaskDetailSections = memo(() => {
             <Flexbox horizontal align={'center'} gap={8}>
               <TaskDetailAssignee />
               <TaskModelConfig />
-              <TaskVerifyConfig />
             </Flexbox>
             <TaskDetailRunPauseAction />
           </Flexbox>
@@ -39,6 +38,7 @@ const TaskDetailSections = memo(() => {
       </Flexbox>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
+        <TaskVerifyConfig />
         <TaskSubtasks />
         <TaskArtifacts />
         <TaskActivities />

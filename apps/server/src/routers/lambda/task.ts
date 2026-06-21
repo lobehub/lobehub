@@ -926,6 +926,7 @@ export const taskRouter = router({
           verify: z.object({
             enabled: z.boolean().nullish(),
             maxIterations: z.number().min(1).max(10).nullish(),
+            requirement: z.string().nullish(),
             verifierAgentId: z.string().nullish(),
             verifyCriteriaIds: z.array(z.string()).nullish(),
             verifyRubricId: z.string().nullish(),
