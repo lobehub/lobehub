@@ -124,6 +124,9 @@ export default {
   'group.desc': 'Move a task forward with multiple Agents in one shared space.',
   'group.memberTooltip': 'There are {{count}} members in the group',
   'group.orchestratorThinking': 'Orchestrator is thinking...',
+  'group.profile.addMember.addExisting': 'Add existing assistant',
+  'group.profile.addMember.createNew': 'New member',
+  'group.profile.addMember.newMemberTitle': 'New member',
   'group.profile.contentPlaceholder':
     'Set the group objectives/work modes here. This information will be shared with all group members.',
   'group.profile.external': 'External',
