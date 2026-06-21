@@ -16,20 +16,7 @@ import NavBar from './NavBar';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 
-export const normalizeMobileNavPathname = (pathname: string, activeSlug?: string | null) => {
-  if (!activeSlug) return pathname || '/';
-
-  const activeSlugPrefix = `/${activeSlug}`;
-
-  if (pathname === activeSlugPrefix) return '/';
-
-  if (!pathname.startsWith(`${activeSlugPrefix}/`)) return pathname || '/';
-
-  return pathname.slice(activeSlugPrefix.length) || '/';
-};
-
-export const shouldShowMobileNav = (pathname: string, activeSlug?: string | null) =>
-  MOBILE_NAV_ROUTES.has(normalizeMobileNavPathname(pathname, activeSlug));
+export { shouldShowMobileNav } from './mobileNavigation';
 
 const MobileMainLayout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);

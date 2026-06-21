@@ -1,9 +1,11 @@
-import { BriefcaseBusiness, Plus, ShieldCheck, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, MonitorSmartphone, Plus, ShieldCheck, UserRound } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { type CellProps } from '@/components/Cell';
+import { openDesktopVersion } from '@/features/RouteViewSwitch/url';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useActiveWorkspaceId } from '../../hooks/useActiveWorkspaceId';
@@ -13,6 +15,7 @@ import { useWorkspaces, WORKSPACE_LIST_KEY } from '../../hooks/useWorkspaces';
 export default function useBusinessMeCells(): CellProps[] {
   const activeWorkspaceId = useActiveWorkspaceId();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const { mutate } = useSWRConfig();
   const [creating, setCreating] = useState(false);
   const { switchToPersonal, switchWorkspace } = useSwitchWorkspace();
@@ -66,6 +69,12 @@ export default function useBusinessMeCells(): CellProps[] {
       key: 'create-workspace',
       label: creating ? 'Создаём workspace...' : 'Создать workspace',
       onClick: createWorkspace,
+    },
+    {
+      icon: MonitorSmartphone,
+      key: 'desktop-version',
+      label: t('routeView.desktopVersion'),
+      onClick: openDesktopVersion,
     },
     ...(personalBilling?.isSuperAdmin
       ? [

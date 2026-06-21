@@ -1,4 +1,5 @@
 import { type CollapseProps } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,16 +11,30 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
-import { type LobeAgentSession, type LobeSessions } from '@/types/session';
-import { LobeSessionType, SessionDefaultGroup } from '@/types/session';
+import { SessionDefaultGroup } from '@/types/session';
 
 import CollapseGroup from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
+import { filterSessionsForView, getRecentChatSessions } from './helpers';
 import Inbox from './Inbox';
 import SessionList from './List';
 import MobileAgentDirectory from './MobileAgentDirectory';
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import RenameGroupModal from './Modals/RenameGroupModal';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  recentChats: css`
+    padding-block: 4px 8px;
+  `,
+  recentChatsTitle: css`
+    padding-block: 8px 6px;
+    padding-inline: 16px;
+
+    font-size: 13px;
+    font-weight: 600;
+    color: ${cssVar.colorTextDescription};
+  `,
+}));
 
 const DefaultMode = memo(() => {
   const { t } = useTranslation('chat');
@@ -36,27 +51,24 @@ const DefaultMode = memo(() => {
   const customSessionGroups = useSessionStore(sessionSelectors.customSessionGroups, isEqual);
   const pinnedSessions = useSessionStore(sessionSelectors.pinnedSessions, isEqual);
 
-  const shouldHideSession = (session: LobeSessions[0]) =>
-    !isMobile &&
-    session.type === LobeSessionType.Agent &&
-    Boolean((session as LobeAgentSession).config?.virtual);
-
-  const filterSessionsForView = (sessions: LobeSessions): LobeSessions => {
-    const filteredForDevice = isMobile
-      ? sessions.filter((session) => session.type !== LobeSessionType.Group)
-      : sessions;
-
-    if (isMobile) return filteredForDevice;
-
-    return filteredForDevice.filter((session) => !shouldHideSession(session));
-  };
-
-  const filteredDefaultSessions = filterSessionsForView(defaultSessions);
-  const filteredPinnedSessions = filterSessionsForView(pinnedSessions);
+  const filteredDefaultSessions = filterSessionsForView(defaultSessions, isMobile);
+  const filteredPinnedSessions = filterSessionsForView(pinnedSessions, isMobile);
   const filteredCustomSessionGroups = customSessionGroups?.map((group) => ({
     ...group,
-    children: filterSessionsForView(group.children),
+    children: filterSessionsForView(group.children, isMobile),
   }));
+
+  const recentChatSessions = useMemo(
+    () =>
+      getRecentChatSessions({
+        customSessionGroups,
+        defaultSessions,
+        isMobile,
+        pinnedSessions,
+      }),
+    [customSessionGroups, defaultSessions, isMobile, pinnedSessions],
+  );
+  const shouldShowRecentChats = recentChatSessions.length > 0;
 
   const [sessionGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.sessionGroupKeys(s),
@@ -113,6 +125,12 @@ const DefaultMode = memo(() => {
   return (
     <>
       <Inbox />
+      {shouldShowRecentChats && (
+        <section className={styles.recentChats}>
+          <div className={styles.recentChatsTitle}>{t('recentChats')}</div>
+          <SessionList dataSource={recentChatSessions} showAddButton={false} />
+        </section>
+      )}
       {isMobile && <MobileAgentDirectory existingSessionIds={visibleSessionIds} />}
       <CollapseGroup
         activeKey={sessionGroupKeys}

@@ -6,6 +6,12 @@ import urlJoin from 'url-join';
 
 import { auth } from '@/auth';
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
+import {
+  LOBE_ROUTE_VIEW_COOKIE,
+  LOBE_ROUTE_VIEW_QUERY,
+  parseRouteViewPreference,
+  RouteViewPreference,
+} from '@/const/routeView';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
@@ -39,6 +45,40 @@ const persistLocaleCookie = (
   response.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
     // 90 days is a balanced persistence for locale preference
     maxAge: 60 * 60 * 24 * 90,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+};
+
+export const resolveRouteViewPreference = (url: URL, cookieValue?: string) =>
+  parseRouteViewPreference(url.searchParams.get(LOBE_ROUTE_VIEW_QUERY)) ??
+  parseRouteViewPreference(cookieValue);
+
+export const resolveIsMobileVariant = ({
+  isMobileDevice,
+  isSharePath,
+  routeViewPreference,
+}: {
+  isMobileDevice: boolean;
+  isSharePath: boolean;
+  routeViewPreference?: RouteViewPreference;
+}) => {
+  if (isSharePath) return false;
+  if (routeViewPreference === RouteViewPreference.Desktop) return false;
+  if (routeViewPreference === RouteViewPreference.Mobile) return true;
+
+  return isMobileDevice;
+};
+
+const persistRouteViewPreferenceCookie = (
+  response: NextResponse,
+  routeViewPreference: RouteViewPreference | undefined,
+) => {
+  if (!routeViewPreference) return;
+
+  response.cookies.set(LOBE_ROUTE_VIEW_COOKIE, routeViewPreference, {
+    maxAge: 60 * 60 * 24 * 365,
     path: '/',
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -79,14 +119,20 @@ export function defineConfig() {
     const ua = request.headers.get('user-agent');
 
     const device = new UAParser(ua || '').getDevice();
+    const routeViewPreference = resolveRouteViewPreference(
+      url,
+      request.cookies.get(LOBE_ROUTE_VIEW_COOKIE)?.value,
+    );
 
     logDefault('User preferences: %O', {
       browserLanguage,
       deviceType: device.type,
       hasCookies: {
         locale: !!request.cookies.get(LOBE_LOCALE_COOKIE)?.value,
+        routeView: !!request.cookies.get(LOBE_ROUTE_VIEW_COOKIE)?.value,
       },
       locale,
+      routeViewPreference,
     });
 
     // Share pages are responsive on their own; always serve the desktop bundle
@@ -97,9 +143,15 @@ export function defineConfig() {
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isSharePath && device.type === 'mobile',
+      isMobile: resolveIsMobileVariant({
+        isMobileDevice: device.type === 'mobile',
+        isSharePath,
+        routeViewPreference,
+      }),
       locale: safeLocale,
     });
+
+    url.searchParams.delete(LOBE_ROUTE_VIEW_QUERY);
 
     logDefault('Serialized route variant: %s', route);
 
@@ -136,6 +188,7 @@ export function defineConfig() {
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);
+      persistRouteViewPreferenceCookie(response, routeViewPreference);
 
       return response;
     }
@@ -150,6 +203,7 @@ export function defineConfig() {
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);
+      persistRouteViewPreferenceCookie(response, routeViewPreference);
 
       return response;
     }
@@ -174,6 +228,7 @@ export function defineConfig() {
     const rewrite = NextResponse.rewrite(url, { status: 200 });
 
     persistLocaleCookie(rewrite, request, explicitlyLocale);
+    persistRouteViewPreferenceCookie(rewrite, routeViewPreference);
 
     return rewrite;
   };

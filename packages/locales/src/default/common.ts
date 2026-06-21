@@ -471,6 +471,8 @@ export default {
   'rename': 'Rename',
   'reset': 'Reset',
   'retry': 'Retry',
+  'routeView.desktopVersion': 'Desktop version',
+  'routeView.mobileVersion': 'Mobile version',
   'run': 'Run',
   'save': 'Save',
   'send': 'Send',

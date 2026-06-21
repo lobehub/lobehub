@@ -218,6 +218,7 @@ export default {
   'history.title': 'The Agent will keep only the latest {{count}} messages.',
   'historyRange': 'History Range',
   'historySummary': 'Historical Message Summary',
+  'recentChats': 'Recent chats',
   'inactive': 'Inactive',
   'inbox.desc': 'Collaborate in one Workspace and move ideas into outcomes.',
   'inbox.title': 'Lobe AI',

@@ -1,9 +1,12 @@
 import { Button, Flexbox, Input, Text } from '@lobehub/ui';
 import { createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { MonitorSmartphone } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useSWRConfig } from 'swr';
 
+import { openMobileVersion } from '@/features/RouteViewSwitch/url';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useActiveWorkspaceId } from '../../hooks/useActiveWorkspaceId';
@@ -17,6 +20,7 @@ interface UserPanelWorkspaceSectionProps {
 export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspaceSectionProps) {
   const activeWorkspaceId = useActiveWorkspaceId();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const { mutate } = useSWRConfig();
   const [creating, setCreating] = useState(false);
   const { switchToPersonal, switchWorkspace } = useSwitchWorkspace();
@@ -93,6 +97,17 @@ export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspa
       </Button>
       <Button block loading={creating} size="small" onClick={createWorkspace}>
         Создать workspace
+      </Button>
+      <Button
+        block
+        icon={<MonitorSmartphone size={14} />}
+        size="small"
+        onClick={() => {
+          openMobileVersion();
+          onSwitch?.();
+        }}
+      >
+        {t('routeView.mobileVersion')}
       </Button>
     </Flexbox>
   );

@@ -12,8 +12,11 @@ const MOBILE_NAV_ROUTES = new Set([
   '/me',
 ]);
 
-export const shouldShowMobileNav = (pathname: string, activeWorkspaceSlug?: string) => {
-  const normalizedPathname = getWorkspaceNormalizedPathname(pathname, activeWorkspaceSlug);
+export const shouldShowMobileNav = (pathname: string, activeWorkspaceSlug?: string | null) => {
+  const normalizedPathname = getWorkspaceNormalizedPathname(
+    pathname,
+    activeWorkspaceSlug ?? undefined,
+  );
 
-  return MOBILE_NAV_ROUTES.has(normalizedPathname) || normalizedPathname.startsWith('/agent/');
+  return MOBILE_NAV_ROUTES.has(normalizedPathname);
 };
