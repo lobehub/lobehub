@@ -26,6 +26,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { featureFlagsSelectors } from '@/store/serverConfig/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -75,6 +77,7 @@ const TaskVerifyConfig = memo(() => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
   const { allowed: canEditTask } = usePermission('create_content');
+  const { enableTaskVerify } = useServerConfigStore(featureFlagsSelectors);
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
@@ -311,6 +314,8 @@ const TaskVerifyConfig = memo(() => {
   );
 
   if (!taskId) return null;
+  // Gated behind the task_verify feature flag (off in prod until rollout).
+  if (!enableTaskVerify) return null;
   // The whole section is an editor surface; hide it when the user can't edit.
   if (!canEditTask) return null;
 
