@@ -178,6 +178,18 @@ export class VerifyRunModel {
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
+  /**
+   * Replace the session's generic policy/extension bag (`metadata`). Used to
+   * stamp per-run knobs like the task's `maxRepairRounds` override, and to carry
+   * them onto a repair round's run so it derives the same cap.
+   */
+  setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ metadata })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
   /** Update the denormalized rollup. Always go through the service-layer chokepoint. */
   updateStatus = async (runId: string, status: VerifyRunStatus | null): Promise<void> => {
     await this.db

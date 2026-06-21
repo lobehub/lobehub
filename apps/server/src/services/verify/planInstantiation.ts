@@ -63,6 +63,13 @@ export const instantiateVerifyPlanOnStart = async (
     // so the completion gate treats it as ready instead of a pending draft.
     const run = await runModel.findByOperation(params.operationId);
     if (run?.plan?.length) {
+      // Carry the task's repair/re-run cap (TaskVerifyConfig.maxIterations) onto
+      // the run so auto-repair honors it. Without this the repair path falls back
+      // to the source rubric's config or the default, dropping the task cap for
+      // ad-hoc-criteria or per-task-override tasks.
+      if (typeof verifyConfig.maxIterations === 'number') {
+        await runModel.setMetadata(run.id, { maxRepairRounds: verifyConfig.maxIterations });
+      }
       await runModel.confirmPlan(run.id);
       log(
         'instantiated + confirmed verify plan for op %s (%d items)',

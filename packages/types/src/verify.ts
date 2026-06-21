@@ -119,6 +119,22 @@ export interface VerifyRubricConfig {
 }
 
 /**
+ * Generic per-run extension bag (`verify_runs.metadata`) — cross-scenario knobs
+ * we don't model as columns. Kept open so new policy switches don't require a
+ * migration; the active scenario's input lives in `context`, not here.
+ */
+export interface VerifyRunMetadata {
+  /**
+   * Per-run override for the repair-round cap, taking precedence over the
+   * rubric's {@link VerifyRubricConfig.maxRepairRounds}. Set from a task's
+   * `TaskVerifyConfig.maxIterations` so a task with ad-hoc criteria or a per-task
+   * override honors its saved cap (the rubric may not carry it). Read at repair
+   * time via {@link DEFAULT_MAX_REPAIR_ROUNDS} fallback.
+   */
+  maxRepairRounds?: number;
+}
+
+/**
  * Immutable snapshot of one check item, frozen into `agent_operations.verify_plan`
  * when the plan is confirmed. The resolved content (title / verifierConfig) is
  * copied in — not just a criterion FK — so editing the source criterion / rubric
