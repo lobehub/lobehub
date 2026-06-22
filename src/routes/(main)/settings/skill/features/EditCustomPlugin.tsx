@@ -1,5 +1,5 @@
 import isEqual from 'fast-deep-equal';
-import { type ReactNode, memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import CustomConnectorModal from '@/features/Connectors/CustomConnectorModal';
 import { useToolStore } from '@/store/tool';

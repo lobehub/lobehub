@@ -5,6 +5,12 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 
+import { connectorRouter } from '../connector';
+
+// `vi.mock` is hoisted by vitest's transformer above all imports at runtime,
+// so the relative import order doesn't matter functionally — the mocks below
+// are still active when the router module is evaluated. They live below the
+// imports to satisfy `import-x/first` without disabling the rule.
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
@@ -21,8 +27,6 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) =>
     opts.next({ ctx: { ...opts.ctx, serverDB: opts.ctx.serverDB ?? {} } }),
 }));
-
-import { connectorRouter } from '../connector';
 
 describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
   let connectorModelMock: any;
@@ -121,5 +125,94 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     await expect(callerFor().syncPluginTools({ identifier: 'nope' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('connectorRouter.create — sourceType handling on existing rows', () => {
+  // Companion to the syncPluginTools guard above. The legacy customPlugin →
+  // connector migration relies on `connector.create` being idempotent on
+  // (user_id, identifier); the existing-row branch must also accept the
+  // `sourceType` from the input so a half-baked `marketplace` connector row
+  // (left behind by the pre-guard `syncPluginTools` code path) gets promoted
+  // to `custom`. Without the promotion the row stays invisible to the custom-
+  // connector list selectors and the migrated MCP disappears from the UI.
+
+  let connectorModelMock: any;
+  let pluginModelMock: any;
+  let connectorToolModelMock: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorModelMock = {
+      create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    connectorToolModelMock = { upsertMany: vi.fn() };
+    pluginModelMock = { findById: vi.fn() };
+    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
+    vi.mocked(ConnectorToolModel).mockImplementation(() => connectorToolModelMock);
+    vi.mocked(PluginModel).mockImplementation(() => pluginModelMock);
+  });
+
+  const caller = () =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: null,
+    } as any);
+
+  const baseCustomInput = {
+    identifier: 'legacy-mcp',
+    isEnabled: true,
+    mcpConnectionType: 'http' as const,
+    mcpServerUrl: 'https://mcp.example.com',
+    name: 'Legacy MCP',
+    sourceType: 'custom' as const,
+  };
+
+  it('promotes an existing marketplace row to custom when the input asks for it', async () => {
+    // Pre-existing half-baked row from the old syncPluginTools code path.
+    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
+      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'marketplace' },
+    ]);
+
+    const result = await caller().create(baseCustomInput);
+
+    expect(result).toEqual({ id: 'conn-existing' });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.update).toHaveBeenCalledTimes(1);
+    expect(connectorModelMock.update).toHaveBeenCalledWith(
+      'conn-existing',
+      expect.objectContaining({ sourceType: 'custom' }),
+    );
+  });
+
+  it('keeps sourceType consistent when the input and existing row agree', async () => {
+    // A normal re-save / re-authorize of an already-custom connector — the
+    // update still includes sourceType, but the value stays the same. This
+    // documents that the promotion path is safe for the no-op case.
+    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
+      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'custom' },
+    ]);
+
+    await caller().create(baseCustomInput);
+
+    expect(connectorModelMock.update).toHaveBeenCalledWith(
+      'conn-existing',
+      expect.objectContaining({ sourceType: 'custom' }),
+    );
+  });
+
+  it('still creates a fresh row when no existing identifier matches', async () => {
+    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([]);
+
+    const result = await caller().create(baseCustomInput);
+
+    expect(result).toEqual({ id: 'conn-new' });
+    expect(connectorModelMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: 'legacy-mcp', sourceType: 'custom' }),
+    );
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
   });
 });

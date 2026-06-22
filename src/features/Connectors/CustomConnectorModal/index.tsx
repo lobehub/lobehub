@@ -191,7 +191,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         identifier: connector.identifier,
         type: 'customPlugin' as const,
       };
-    }, [isEditMode, connector, editFetchedData]);
+    }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
     const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
       // ── Migration mode ────────────────────────────────────────────────────
@@ -358,12 +358,26 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       await syncConnectorTools(newConnectorId);
     };
 
+    // In migration mode the Delete button must actually uninstall the legacy
+    // `user_installed_plugins` row — DevModal shows a success toast either way,
+    // so leaving `onDelete` undefined here would give the user a confirmation
+    // for an action that never happened. Wired only in migration mode; the
+    // regular edit branch's Delete-button behavior is unchanged by this PR.
+    const handleDelete =
+      isMigrationMode && legacyPlugin
+        ? () => {
+            uninstallCustomPlugin(legacyPlugin.identifier);
+            onClose();
+          }
+        : undefined;
+
     return (
       <DevModal
         enableOAuth
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
+        onDelete={handleDelete}
         onSave={handleSave}
         onOpenChange={(next) => {
           if (!next) onClose();

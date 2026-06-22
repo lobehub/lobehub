@@ -171,7 +171,19 @@ export const executeLegacyMigrationSave = async (
   const built = buildConnectorPayloadFromLegacy(formValue);
   if (!built.ok) return built;
 
-  const newConnectorId = await deps.createConnector(built.payload);
+  // The identifier is the immutable join key between `agentConfig.plugins[i]`
+  // and the connector / legacy-plugin row. DevModal's edit form leaves the
+  // identifier field editable, so a user could rename it during migration —
+  // doing so would orphan every agent that had this plugin enabled (the new
+  // connector lands under a new key while the legacy row, and its old key in
+  // `agentConfig.plugins`, vanish). Force the legacy identifier here so the
+  // promoted connector keeps the same join key the agent already references.
+  const payload: MigrationCreatePayload = {
+    ...built.payload,
+    identifier: legacyPlugin.identifier,
+  };
+
+  const newConnectorId = await deps.createConnector(payload);
   await deps.syncConnectorTools(newConnectorId);
 
   try {

@@ -166,11 +166,20 @@ export const connectorRouter = router({
     // connector updates the existing row instead of violating the unique index.
     // Status resets to `disconnected` — the OAuth callback / tool sync promotes
     // it back to `connected` on success.
+    //
+    // `sourceType` is honored on update so the legacy customPlugin → connector
+    // migration can promote a half-baked `marketplace` row left behind by the
+    // older `syncPluginTools` code path into a proper `custom` row. Without
+    // this the connector would land but never appear in custom-connector
+    // listings (selector filters on sourceType === 'custom'). Safe because the
+    // other callers (`AddConnectorModal`, marketplace bootstrap) always pass
+    // the same sourceType they originally created the row with.
     const [existing] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
         isEnabled: input.isEnabled ?? true,
+        sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
       return { id: existing.id };

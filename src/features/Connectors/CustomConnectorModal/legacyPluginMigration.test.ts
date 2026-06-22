@@ -443,17 +443,22 @@ describe('executeLegacyMigrationSave', () => {
     expect(payload.sourceType).toBe('custom');
   });
 
-  it('calls uninstallCustomPlugin with the LEGACY identifier (not the form identifier)', async () => {
-    // If the user renames the identifier in the form (the form lets them), the
-    // legacy row to delete is still keyed by the original identifier; the new
-    // connector lives under the new one. This invariant is load-bearing for
-    // agent toggle continuity — the agentConfig.plugins[i] reference still
-    // matches `legacy.identifier`, so we MUST clean up that exact row.
+  it('forces the LEGACY identifier on the created connector (form rename is ignored)', async () => {
+    // DevModal's edit form lets the user retype the identifier. Allowing that
+    // through would orphan every agent that already references the legacy
+    // identifier: the new connector lands under a new key, the legacy row
+    // gets deleted under the OLD key, and `agentConfig.plugins[i]` matches
+    // neither. The orchestrator must pin the create payload to the legacy
+    // identifier regardless of what the form ended up with.
     await executeLegacyMigrationSave(legacy('legacy-id'), legacy('renamed-in-form'), {
       createConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
+
+    expect(createConnector).toHaveBeenCalledTimes(1);
+    expect(createConnector.mock.calls[0][0].identifier).toBe('legacy-id');
+    // And the legacy row to delete is the one keyed by the original identifier.
     expect(uninstallCustomPlugin).toHaveBeenCalledWith('legacy-id');
   });
 
