@@ -3,11 +3,15 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 import { useElectronStore } from '@/store/electron';
 
+import { shouldOpenTabForScopeChange } from './tabScope';
+
 export const useTabNavigation = () => {
   const location = useLocation();
+  const workspaces = useWorkspaces();
 
   const activateTab = useElectronStore((s) => s.activateTab);
   const addTab = useElectronStore((s) => s.addTab);
@@ -42,14 +46,22 @@ export const useTabNavigation = () => {
       return;
     }
 
-    if (activeTabId && tabs.some((t) => t.id === activeTabId)) {
+    const activeTab = activeTabId ? tabs.find((t) => t.id === activeTabId) : undefined;
+    const workspaceSlugs = new Set(workspaces.map((workspace) => workspace.slug));
+
+    if (activeTab) {
+      if (shouldOpenTabForScopeChange(activeTab.url, currentUrl, workspaceSlugs)) {
+        addTab(currentUrl);
+        return;
+      }
+
       updateTab(activeTabId, currentUrl);
     } else {
       // First launch (or stale activeTabId): make the current page visible as a tab,
       // so the tab bar and its "+" entry are always discoverable.
       addTab(currentUrl);
     }
-  }, [location.pathname, location.search, activateTab, addTab, updateTab]);
+  }, [location.pathname, location.search, workspaces, activateTab, addTab, updateTab]);
 
   useEffect(() => {
     if (!currentRouteMeta || !currentRouteMetaUrl) return;
