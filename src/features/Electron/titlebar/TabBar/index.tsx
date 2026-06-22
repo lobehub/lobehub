@@ -78,7 +78,7 @@ const TabBar = () => {
   const handleActivate = useCallback(
     (id: string, url: string) => {
       activateTab(id);
-      startTransition(() => navigate(url));
+      startTransition(() => navigate(url, { escape: true }));
     },
     [activateTab, navigate],
   );
@@ -87,7 +87,7 @@ const TabBar = () => {
     const { activeTabId: newActiveId, tabs: newTabs } = useElectronStore.getState();
     if (newActiveId) {
       const target = newTabs.find((tab) => tab.id === newActiveId);
-      if (target) navigate(target.url);
+      if (target) navigate(target.url, { escape: true });
     } else {
       navigate('/');
     }
@@ -101,7 +101,7 @@ const TabBar = () => {
       startTransition(() => {
         if (isActive && nextActiveId) {
           const nextTab = tabs.find((tab) => tab.tab.id === nextActiveId);
-          if (nextTab) navigate(nextTab.tab.url);
+          if (nextTab) navigate(nextTab.tab.url, { escape: true });
         }
 
         if (!nextActiveId) {
@@ -117,7 +117,7 @@ const TabBar = () => {
       closeOtherTabs(id);
       startTransition(() => {
         const target = tabs.find((tab) => tab.tab.id === id);
-        if (target) navigate(target.tab.url);
+        if (target) navigate(target.tab.url, { escape: true });
       });
     },
     [closeOtherTabs, tabs, navigate],

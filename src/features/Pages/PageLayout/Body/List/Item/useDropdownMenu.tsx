@@ -6,9 +6,11 @@ import { CopyPlus, PanelTop, Pencil, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { usePageStore } from '@/store/page';
@@ -25,6 +27,7 @@ export const useDropdownMenu = ({
   const { t } = useTranslation(['common', 'file']);
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
   const addTab = useElectronStore((s) => s.addTab);
@@ -73,9 +76,9 @@ export const useDropdownMenu = ({
                 key: 'openInNewTab',
                 label: t('pageList.actions.openInNewTab', { ns: 'file' }),
                 onClick: () => {
-                  const url = `/page/${pageId}`;
+                  const url = buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug);
                   addTab(url);
-                  navigate(url);
+                  navigate(url, { escape: true });
                 },
               },
               { type: 'divider' as const },
@@ -116,6 +119,7 @@ export const useDropdownMenu = ({
       handleDelete,
       canCreatePage,
       canEditPage,
+      activeWorkspaceSlug,
       pageId,
       addTab,
       navigate,

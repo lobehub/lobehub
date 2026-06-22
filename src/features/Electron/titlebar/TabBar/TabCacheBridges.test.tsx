@@ -43,7 +43,7 @@ vi.mock('@/store/electron', () => ({
 
 const dynamicSource: Record<string, DynamicRouteMeta> = {};
 const resolveTopicMeta = (params: Record<string, string | undefined>): DynamicRouteMeta => {
-  const key = params.topicId ?? '';
+  const key = [params.workspaceSlug ?? 'personal', params.topicId ?? params.topic ?? ''].join(':');
   return dynamicSource[key] ?? {};
 };
 
@@ -82,8 +82,8 @@ describe('TabCacheBridges', () => {
   it('pushes dynamic meta into each tab cache, including inactive tabs', async () => {
     mocks.routes.current = buildRoutes();
     mocks.setTabs([tab('/agent/a1/topic-A'), tab('/agent/a1/topic-B')]);
-    dynamicSource['topic-A'] = { title: 'Topic A' };
-    dynamicSource['topic-B'] = { title: 'Topic B' };
+    dynamicSource['personal:topic-A'] = { title: 'Topic A' };
+    dynamicSource['personal:topic-B'] = { title: 'Topic B' };
 
     render(<TabCacheBridges />);
 
@@ -95,6 +95,36 @@ describe('TabCacheBridges', () => {
       expect(mocks.updateTabCache).toHaveBeenCalledWith(
         '/agent/a1/topic-B',
         expect.objectContaining({ title: 'Topic B' }),
+      );
+    });
+  });
+
+  it('resolves dynamic meta from each tab url scope and query params', async () => {
+    mocks.routes.current = [
+      {
+        children: [
+          {
+            children: [{ handle: { meta: agentMeta }, path: 'agent/:aid' }],
+            path: ':workspaceSlug',
+          },
+        ],
+        path: '/',
+      },
+    ];
+    mocks.setTabs([tab('/acme/agent/a1?topic=topic-A'), tab('/beta/agent/a1?topic=topic-A')]);
+    dynamicSource['acme:topic-A'] = { title: 'Acme Topic' };
+    dynamicSource['beta:topic-A'] = { title: 'Beta Topic' };
+
+    render(<TabCacheBridges />);
+
+    await waitFor(() => {
+      expect(mocks.updateTabCache).toHaveBeenCalledWith(
+        '/acme/agent/a1?topic=topic-A',
+        expect.objectContaining({ title: 'Acme Topic' }),
+      );
+      expect(mocks.updateTabCache).toHaveBeenCalledWith(
+        '/beta/agent/a1?topic=topic-A',
+        expect.objectContaining({ title: 'Beta Topic' }),
       );
     });
   });

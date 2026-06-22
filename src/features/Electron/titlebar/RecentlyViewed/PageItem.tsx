@@ -34,7 +34,7 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
   const isActive = tab.id === currentId;
 
   const handleClick = () => {
-    navigate(tab.url);
+    navigate(tab.url, { escape: true });
     onClose();
   };
 
