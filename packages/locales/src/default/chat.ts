@@ -172,6 +172,14 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.modelSelector.ariaLabel': 'Model: {{model}}. Reasoning: {{reasoning}}',
+  'heteroAgent.modelSelector.model': 'Model',
+  'heteroAgent.modelSelector.reasoning': 'Reasoning',
+  'heteroAgent.modelSelector.reasoning.high': 'High',
+  'heteroAgent.modelSelector.reasoning.low': 'Low',
+  'heteroAgent.modelSelector.reasoning.max': 'Max',
+  'heteroAgent.modelSelector.reasoning.medium': 'Medium',
+  'heteroAgent.modelSelector.reasoning.xhigh': 'Extra High',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.resumeReset.resumeFailed':

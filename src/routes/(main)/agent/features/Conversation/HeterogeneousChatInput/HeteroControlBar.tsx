@@ -7,6 +7,7 @@ import { CircleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentStore } from '@/store/agent';
@@ -54,6 +55,9 @@ const styles = createStaticStyles(({ css }) => ({
       display: none;
     }
   `,
+  rightGroup: css`
+    flex: none;
+  `,
 }));
 
 const HeteroControlBar = memo(() => {
@@ -71,6 +75,9 @@ const HeteroControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
+        </Flexbox>
+        <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+          <HeteroModel />
         </Flexbox>
       </Flexbox>
     );
@@ -97,7 +104,10 @@ const HeteroControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
         <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
-      <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+      <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+        <HeteroModel />
+        <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+      </Flexbox>
     </Flexbox>
   );
 });

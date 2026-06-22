@@ -1,4 +1,21 @@
 /**
+ * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--effort <level>` flag.
+ */
+export const CLAUDE_CODE_REASONING_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+
+export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
+
+export const CLAUDE_CODE_DEFAULT_MODEL = 'sonnet';
+export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'medium' satisfies ClaudeCodeReasoningEffort;
+
+/**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
  * instead of using the built-in model runtime.
@@ -17,8 +34,22 @@ export interface HeterogeneousProviderConfig {
   args?: string[];
   /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
   command?: string;
+  /**
+   * (claude-code) Reasoning effort, surfaced through the chat-input model
+   * selector and translated into the CLI's `--effort` flag at spawn time.
+   * Omitted or legacy `'default'` values resolve to
+   * `CLAUDE_CODE_DEFAULT_REASONING_EFFORT`.
+   */
+  effort?: ClaudeCodeReasoningEffort;
   /** Custom environment variables (local CLI only). */
   env?: Record<string, string>;
+  /**
+   * (claude-code) Model, surfaced through the chat-input model selector and
+   * translated into the CLI's `--model` flag at spawn time. An alias
+   * (`'opus'` / `'sonnet'` / `'haiku'`) or a full model id. Empty / omitted
+   * values resolve to `CLAUDE_CODE_DEFAULT_MODEL`.
+   */
+  model?: string;
   /**
    * Platform-side agent identifier used by remote device runtimes.
    * - openclaw: selects the named agent (defaults to `'main'`)
@@ -35,6 +66,85 @@ export interface HeterogeneousProviderConfig {
   /** Agent runtime type. */
   type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw';
 }
+
+interface ClaudeCodeSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
+const hasCliFlag = (args: string[], flag: string): boolean =>
+  args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+
+const getCliFlagValue = (args: string[] | undefined, flag: string): string | undefined => {
+  if (!args) return undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === flag) {
+      const next = args[index + 1]?.trim();
+      if (next && !next.startsWith('-')) return next;
+    }
+
+    const prefix = `${flag}=`;
+    if (arg.startsWith(prefix)) {
+      const value = arg.slice(prefix.length).trim();
+      if (value) return value;
+    }
+  }
+
+  return undefined;
+};
+
+const isClaudeCodeReasoningEffort = (
+  value: string | undefined,
+): value is ClaudeCodeReasoningEffort =>
+  !!value && CLAUDE_CODE_REASONING_EFFORT_LEVELS.includes(value as ClaudeCodeReasoningEffort);
+
+export const resolveClaudeCodeModel = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): string => {
+  const model = (getCliFlagValue(source?.args, '--model') ?? source?.model)?.trim();
+  return model && model !== 'default' ? model : CLAUDE_CODE_DEFAULT_MODEL;
+};
+
+export const resolveClaudeCodeReasoningEffort = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): ClaudeCodeReasoningEffort => {
+  const effort = (getCliFlagValue(source?.args, '--effort') ?? source?.effort)?.trim();
+  return isClaudeCodeReasoningEffort(effort) ? effort : CLAUDE_CODE_DEFAULT_REASONING_EFFORT;
+};
+
+/**
+ * Resolve the effective CLI args for a heterogeneous spawn.
+ *
+ * For `claude-code`, the chat-input model selector persists `model` + `effort`
+ * on the provider config; this is the single place that maps those stored
+ * settings onto argv (`--model` / `--effort`). Missing settings resolve to the
+ * concrete Claude Code defaults above, so the app never has to surface a
+ * "Default" runtime choice. User-authored `args` win: when they already carry
+ * an explicit `--model` / `--effort`, the resolved setting is not appended, so
+ * there is never a duplicate flag.
+ *
+ * Returns `provider.args` unchanged (possibly `undefined`) when there is
+ * nothing to inject, preserving the prior `args: provider.args` behavior for
+ * every other provider type.
+ */
+export const buildHeteroSpawnArgs = (
+  provider: HeterogeneousProviderConfig | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (provider.type !== 'claude-code') return provider.args;
+
+  const baseArgs = provider.args ?? [];
+  const extraArgs: string[] = [];
+  if (!hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', resolveClaudeCodeModel(provider));
+  if (!hasCliFlag(baseArgs, '--effort'))
+    extraArgs.push('--effort', resolveClaudeCodeReasoningEffort(provider));
+
+  if (extraArgs.length === 0) return provider.args;
+  return [...baseArgs, ...extraArgs];
+};
 
 /**
  * Where an agent runs.
