@@ -55,6 +55,7 @@ const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
   RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
 interface ExecOptions {
+  agentArg?: string[];
   command?: string;
   cwd?: string;
   effort?: string;
@@ -89,11 +90,12 @@ interface ExecOptions {
 }
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
+const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 const buildExtraArgs = (
-  options: Pick<ExecOptions, 'effort' | 'model' | 'type'>,
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'type'>,
 ): string[] | undefined => {
-  const extraArgs =
+  const selectorArgs =
     options.type === 'codex'
       ? [
           ...(options.model ? ['--model', options.model] : []),
@@ -105,6 +107,7 @@ const buildExtraArgs = (
           ...(options.model ? ['--model', options.model] : []),
           ...(options.effort ? ['--effort', options.effort] : []),
         ];
+  const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
 };
@@ -783,6 +786,11 @@ export function registerHeteroCommand(program: Command) {
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
+    .option(
+      '--agent-arg <arg>',
+      'Forward one native agent CLI argument after wrapper parsing (repeatable)',
+      collectAgentArg,
+    )
     .option(
       '-c, --command <bin>',
       'Override the agent CLI binary name (default: `claude` or `codex`)',

@@ -109,6 +109,7 @@ interface CodexSelectionSource {
 
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
+const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -323,7 +324,9 @@ export const buildHeteroSpawnArgs = (
  * Resolve args for the `lh hetero exec` wrapper.
  *
  * Unlike `buildHeteroSpawnArgs`, these args are consumed by the LobeHub CLI
- * wrapper first, not by the native agent binary. Keep Codex selectors in the
+ * wrapper first, not by the native agent binary. Native provider args are
+ * encoded with `--agent-arg=<arg>` so wrapper flags such as `-c, --command`
+ * never collide with Codex/Claude flags. Keep selector overrides in the
  * wrapper's `--model` / `--effort` form; `lh hetero exec` translates them into
  * native Codex config immediately before `spawnAgent`.
  */
@@ -334,13 +337,14 @@ export const buildHeteroExecArgs = (
   if (provider.type !== 'claude-code' && provider.type !== 'codex') return provider.args;
 
   const baseArgs = provider.args ?? [];
-  const extraArgs: string[] = [];
+  const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
+  const selectorArgs: string[] = [];
 
   if (provider.type === 'claude-code') {
     const model = getExplicitClaudeCodeModel(provider);
-    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+    if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -350,7 +354,7 @@ export const buildHeteroExecArgs = (
       !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
       !hasCliConfigKey(baseArgs, 'model')
     ) {
-      extraArgs.push('--model', model);
+      selectorArgs.push('--model', model);
     }
 
     const effort = getExplicitCodexReasoningEffort(provider);
@@ -359,12 +363,12 @@ export const buildHeteroExecArgs = (
       !hasCliFlag(baseArgs, '--effort') &&
       !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
     ) {
-      extraArgs.push('--effort', effort);
+      selectorArgs.push('--effort', effort);
     }
   }
 
-  if (extraArgs.length === 0) return provider.args;
-  return [...baseArgs, ...extraArgs];
+  const args = [...wrapperArgs, ...selectorArgs];
+  return args.length > 0 ? args : undefined;
 };
 
 /**

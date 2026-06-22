@@ -208,7 +208,13 @@ describe('buildHeteroSpawnArgs', () => {
   });
 
   it('does not append native Codex config flags to lh hetero exec args', () => {
-    expect(buildHeteroExecArgs({ type: 'codex', effort: 'xhigh' })).toEqual(['--effort', 'xhigh']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['-c', 'model = "gpt-5.4"'],
+        effort: 'xhigh',
+        type: 'codex',
+      }),
+    ).toEqual(['--agent-arg=-c', '--agent-arg=model = "gpt-5.4"', '--effort', 'xhigh']);
   });
 
   it('keeps Claude Code lh hetero exec selector args in the same wrapper form', () => {
@@ -218,5 +224,23 @@ describe('buildHeteroSpawnArgs', () => {
       '--effort',
       'high',
     ]);
+  });
+
+  it('encodes native agent args before forwarding them to lh hetero exec', () => {
+    expect(
+      buildHeteroExecArgs({
+        args: ['--ask-for-approval', 'never'],
+        model: 'gpt-5.5',
+        type: 'codex',
+      }),
+    ).toEqual(['--agent-arg=--ask-for-approval', '--agent-arg=never', '--model', 'gpt-5.5']);
+
+    expect(
+      buildHeteroExecArgs({
+        args: ['--verbose'],
+        effort: 'high',
+        type: 'claude-code',
+      }),
+    ).toEqual(['--agent-arg=--verbose', '--effort', 'high']);
   });
 });
