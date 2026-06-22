@@ -6,6 +6,8 @@ import {
   pruneWorkingDirByDeviceDeletes,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
+  resolveCodexModel,
+  resolveCodexReasoningEffort,
 } from './agencyConfig';
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
@@ -45,15 +47,17 @@ describe('buildHeteroSpawnArgs', () => {
     expect(resolveClaudeCodeReasoningEffort(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
   });
 
+  it('resolves missing Codex selections to Default', () => {
+    expect(resolveCodexModel(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveCodexReasoningEffort(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+  });
+
   it('returns undefined when there is no provider', () => {
     expect(buildHeteroSpawnArgs(undefined)).toBeUndefined();
     expect(buildHeteroSpawnArgs(null)).toBeUndefined();
   });
 
-  it('leaves non-claude-code providers untouched', () => {
-    expect(
-      buildHeteroSpawnArgs({ args: ['-m', 'gpt-5'], type: 'codex', model: 'opus', effort: 'high' }),
-    ).toEqual(['-m', 'gpt-5']);
+  it('leaves remote providers untouched', () => {
     expect(buildHeteroSpawnArgs({ args: ['--agent', 'main'], type: 'openclaw' })).toEqual([
       '--agent',
       'main',
@@ -71,6 +75,21 @@ describe('buildHeteroSpawnArgs', () => {
         effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
         model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
         type: 'claude-code',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('preserves Codex defaults when model/effort have not been selected', () => {
+    expect(buildHeteroSpawnArgs({ type: 'codex' })).toBeUndefined();
+    expect(buildHeteroSpawnArgs({ args: ['--ask-for-approval', 'never'], type: 'codex' })).toEqual([
+      '--ask-for-approval',
+      'never',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        type: 'codex',
       }),
     ).toBeUndefined();
   });
@@ -120,5 +139,61 @@ describe('buildHeteroSpawnArgs', () => {
         effort: 'high',
       }),
     ).toEqual(['--effort=low', '--model', 'opus']);
+  });
+
+  it('resolves Codex model and reasoning effort from args before persisted selections', () => {
+    expect(
+      resolveCodexModel({
+        args: ['--model', 'gpt-5.4'],
+        model: 'gpt-5.5',
+      }),
+    ).toBe('gpt-5.4');
+    expect(
+      resolveCodexModel({
+        args: ['-c', 'model = "gpt-5.3-codex-spark"'],
+        model: 'gpt-5.5',
+      }),
+    ).toBe('gpt-5.3-codex-spark');
+    expect(
+      resolveCodexReasoningEffort({
+        args: ['--config=model_reasoning_effort="xhigh"'],
+        effort: 'low',
+      }),
+    ).toBe('xhigh');
+  });
+
+  it('appends --model and model_reasoning_effort config for Codex', () => {
+    expect(buildHeteroSpawnArgs({ type: 'codex', model: 'gpt-5.5', effort: 'high' })).toEqual([
+      '--model',
+      'gpt-5.5',
+      '-c',
+      'model_reasoning_effort="high"',
+    ]);
+  });
+
+  it('does not duplicate Codex args the user already authored', () => {
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-m', 'gpt-5.4'],
+        effort: 'high',
+        model: 'gpt-5.5',
+        type: 'codex',
+      }),
+    ).toEqual(['-m', 'gpt-5.4', '-c', 'model_reasoning_effort="high"']);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--config=model_reasoning_effort="low"'],
+        effort: 'high',
+        model: 'gpt-5.5',
+        type: 'codex',
+      }),
+    ).toEqual(['--config=model_reasoning_effort="low"', '--model', 'gpt-5.5']);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-c', 'model = "gpt-5.4"'],
+        model: 'gpt-5.5',
+        type: 'codex',
+      }),
+    ).toEqual(['-c', 'model = "gpt-5.4"']);
   });
 });

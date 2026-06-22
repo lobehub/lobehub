@@ -25,8 +25,21 @@ export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEV
 export const CLAUDE_CODE_DEFAULT_MODEL = 'sonnet';
 export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'high' satisfies ClaudeCodeReasoningEffort;
 
+/**
+ * Codex reasoning-effort levels, mirrored to the CLI config key
+ * `model_reasoning_effort`.
+ */
+export const CODEX_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
+
+export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number];
+
+export const CODEX_DEFAULT_MODEL = 'gpt-5.5';
+export const CODEX_DEFAULT_REASONING_EFFORT = 'medium' satisfies CodexReasoningEffort;
+export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
+
 export type HeterogeneousReasoningEffort =
   | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
   | HeterogeneousAgentDefaultSelection;
 
 /**
@@ -49,20 +62,20 @@ export interface HeterogeneousProviderConfig {
   /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
   command?: string;
   /**
-   * Claude Code reasoning effort, surfaced through the chat-input model selector
-   * and translated into the CLI's `--effort` flag at spawn time.
+   * Reasoning effort, surfaced through the chat-input model selector and
+   * translated into the provider-specific CLI flags/config at spawn time.
    * Omitted or `'default'` values are displayed as Default in the UI and are
-   * not passed as CLI flags, so Claude Code can keep its own settings, env
+   * not passed as CLI overrides, so the CLI can keep its own settings, env
    * vars, and account defaults.
    */
   effort?: HeterogeneousReasoningEffort;
   /** Custom environment variables (local CLI only). */
   env?: Record<string, string>;
   /**
-   * Claude Code model, surfaced through the chat-input model selector and
-   * translated into the CLI's `--model` flag at spawn time. Empty / omitted
+   * CLI model, surfaced through the chat-input model selector and translated
+   * into the provider-specific model override at spawn time. Empty / omitted
    * values are displayed as Default in the UI, but are not passed as CLI flags
-   * so Claude Code can keep its own settings, env vars, and account defaults.
+   * so the CLI can keep its own settings, env vars, and account defaults.
    */
   model?: string;
   /**
@@ -88,8 +101,20 @@ interface ClaudeCodeSelectionSource {
   model?: string | null;
 }
 
+interface CodexSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
+const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
+const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
+
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+
+const hasAnyCliFlag = (args: string[], flags: readonly string[]): boolean =>
+  flags.some((flag) => hasCliFlag(args, flag));
 
 const getCliFlagValue = (args: string[] | undefined, flag: string): string | undefined => {
   if (!args) return undefined;
@@ -111,10 +136,70 @@ const getCliFlagValue = (args: string[] | undefined, flag: string): string | und
   return undefined;
 };
 
+const getAnyCliFlagValue = (
+  args: string[] | undefined,
+  flags: readonly string[],
+): string | undefined => {
+  for (const flag of flags) {
+    const value = getCliFlagValue(args, flag);
+    if (value) return value;
+  }
+};
+
+const unquoteCliConfigValue = (value: string): string => {
+  const trimmed = value.trim();
+  const quote = trimmed[0];
+
+  if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+    return trimmed.slice(1, -1);
+  }
+
+  return trimmed;
+};
+
+const escapeRegExp = (value: string): string => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const parseCliConfigAssignment = (assignment: string, key: string): string | undefined => {
+  const match = assignment.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*(.+?)\\s*$`));
+  if (!match?.[1]) return undefined;
+
+  const value = unquoteCliConfigValue(match[1]);
+  return value || undefined;
+};
+
+const getCliConfigValue = (args: string[] | undefined, key: string): string | undefined => {
+  if (!args) return undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (CODEX_CONFIG_FLAGS.includes(arg as (typeof CODEX_CONFIG_FLAGS)[number])) {
+      const next = args[index + 1];
+      if (next) {
+        const value = parseCliConfigAssignment(next, key);
+        if (value) return value;
+        index += 1;
+      }
+      continue;
+    }
+
+    const configFlag = CODEX_CONFIG_FLAGS.find((flag) => arg.startsWith(`${flag}=`));
+    if (configFlag) {
+      const value = parseCliConfigAssignment(arg.slice(configFlag.length + 1), key);
+      if (value) return value;
+    }
+  }
+};
+
+const hasCliConfigKey = (args: string[], key: string): boolean => !!getCliConfigValue(args, key);
+
 const isClaudeCodeReasoningEffort = (
   value: string | undefined,
 ): value is ClaudeCodeReasoningEffort =>
   !!value && CLAUDE_CODE_REASONING_EFFORT_LEVELS.includes(value as ClaudeCodeReasoningEffort);
+
+const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
+  !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
 
 export const resolveClaudeCodeModel = (
   source: ClaudeCodeSelectionSource | null | undefined,
@@ -146,17 +231,52 @@ const getExplicitClaudeCodeReasoningEffort = (
   return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
 };
 
+export const resolveCodexModel = (source: CodexSelectionSource | null | undefined): string => {
+  const model = (
+    getAnyCliFlagValue(source?.args, CODEX_MODEL_FLAGS) ??
+    getCliConfigValue(source?.args, 'model') ??
+    source?.model
+  )?.trim();
+
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+    ? model
+    : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+export const resolveCodexReasoningEffort = (
+  source: CodexSelectionSource | null | undefined,
+): CodexReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliConfigValue(source?.args, CODEX_REASONING_EFFORT_CONFIG_KEY) ?? source?.effort
+  )?.trim();
+
+  return isCodexReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const getExplicitCodexModel = (
+  source: CodexSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
+};
+
+const getExplicitCodexReasoningEffort = (
+  source: CodexSelectionSource | null | undefined,
+): CodexReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
 /**
  * Resolve the effective CLI args for a heterogeneous spawn.
  *
- * For `claude-code`, the chat-input model selector persists explicit
+ * For `claude-code` and `codex`, the chat-input selector persists explicit
  * `model` + `effort` selections on the provider config; this is the single
- * place that maps those stored settings onto argv (`--model` / `--effort`).
- * Missing settings are resolved by the UI helpers for display only. They are
- * not appended here because the CLI flags override Claude Code's own
- * settings/env/account defaults. User-authored `args` win: when they already
- * carry an explicit `--model` / `--effort`, the stored setting is not appended,
- * so there is never a duplicate flag.
+ * place that maps those stored settings onto provider-specific argv.
+ * Missing/default settings are resolved by the UI helpers for display only.
+ * They are not appended here because CLI overrides must not mask each CLI's
+ * own settings/env/account defaults. User-authored `args` win, so there is
+ * never a duplicate flag/config override.
  *
  * Returns `provider.args` unchanged (possibly `undefined`) when there is
  * nothing to inject, preserving the prior `args: provider.args` behavior for
@@ -166,14 +286,33 @@ export const buildHeteroSpawnArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (provider.type !== 'claude-code') return provider.args;
+  if (provider.type !== 'claude-code' && provider.type !== 'codex') return provider.args;
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
-  const model = getExplicitClaudeCodeModel(provider);
-  if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
-  const effort = getExplicitClaudeCodeReasoningEffort(provider);
-  if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+
+  if (provider.type === 'claude-code') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      extraArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
+    }
+  }
 
   if (extraArgs.length === 0) return provider.args;
   return [...baseArgs, ...extraArgs];

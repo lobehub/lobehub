@@ -171,9 +171,12 @@ export default {
   'groupWizard.useTemplate': 'Use Template',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
-    'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
+    'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
   'heteroAgent.modelSelector.ariaLabel': 'Model: {{model}}. Reasoning: {{reasoning}}',
   'heteroAgent.modelSelector.default': 'Default',
+  'heteroAgent.modelSelector.defaultConfig': 'Default config',
+  'heteroAgent.modelSelector.defaultModel': 'Default model',
+  'heteroAgent.modelSelector.defaultReasoning': 'Default effort',
   'heteroAgent.modelSelector.model': 'Model',
   'heteroAgent.modelSelector.reasoning': 'Reasoning',
   'heteroAgent.modelSelector.reasoning.high': 'High',

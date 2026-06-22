@@ -192,6 +192,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
     heteroAgentConfig.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } } as any;
+    heteroAgentConfig.model = 'claude-code';
+    heteroAgentConfig.provider = 'anthropic';
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -282,6 +284,27 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
         args: ['--model', 'opus', '--effort', 'high'],
+      }),
+    );
+  });
+
+  it('should pass resolved Codex model and reasoning effort args to sandbox dispatch', async () => {
+    heteroAgentConfig.model = 'codex';
+    heteroAgentConfig.provider = 'codex';
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      effort: 'xhigh',
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use the selected Codex model',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--model', 'gpt-5.5', '-c', 'model_reasoning_effort="xhigh"'],
       }),
     );
   });

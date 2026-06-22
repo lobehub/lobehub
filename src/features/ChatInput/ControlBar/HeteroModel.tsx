@@ -2,14 +2,19 @@
 
 import type {
   ClaudeCodeReasoningEffort,
+  CodexReasoningEffort,
   HeterogeneousAgentDefaultSelection,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
 import {
   CLAUDE_CODE_REASONING_EFFORT_LEVELS,
+  CODEX_REASONING_EFFORT_CONFIG_KEY,
+  CODEX_REASONING_EFFORT_LEVELS,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
+  resolveCodexModel,
+  resolveCodexReasoningEffort,
 } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import {
@@ -36,7 +41,12 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 
-type HeteroReasoningEffort = ClaudeCodeReasoningEffort | HeterogeneousAgentDefaultSelection;
+type HeteroReasoningEffort =
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | HeterogeneousAgentDefaultSelection;
+
+type SelectableHeteroProviderType = 'claude-code' | 'codex';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Opus 4.8', value: 'opus' },
@@ -44,8 +54,18 @@ const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Haiku 4.5', value: 'haiku' },
 ] as const;
 
+const CODEX_MODEL_OPTIONS = [
+  { label: 'GPT-5.5', value: 'gpt-5.5' },
+  { label: 'GPT-5.4', value: 'gpt-5.4' },
+  { label: 'GPT-5.4 Mini', value: 'gpt-5.4-mini' },
+  { label: 'GPT-5.3 Codex Spark', value: 'gpt-5.3-codex-spark' },
+] as const;
+
 const MODEL_LABELS: Record<string, string> = Object.fromEntries(
-  CLAUDE_CODE_MODEL_OPTIONS.map((option) => [option.value, option.label]),
+  [...CLAUDE_CODE_MODEL_OPTIONS, ...CODEX_MODEL_OPTIONS].map((option) => [
+    option.value,
+    option.label,
+  ]),
 );
 
 const EFFORT_LABEL_KEYS = {
@@ -209,6 +229,44 @@ const stripCliFlags = (
   return next;
 };
 
+const parseCliConfigKey = (assignment: string): string | undefined => {
+  const match = assignment.match(/^\s*([\w.-]+)\s*=/);
+  return match?.[1];
+};
+
+const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] | undefined => {
+  if (!args) return undefined;
+
+  const next: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '-c' || arg === '--config') {
+      const value = args[index + 1];
+      if (value && parseCliConfigKey(value) === key) {
+        index += 1;
+        continue;
+      }
+
+      next.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-c=') || arg.startsWith('--config=')) {
+      const value = arg.slice(arg.indexOf('=') + 1);
+      if (parseCliConfigKey(value) === key) continue;
+    }
+
+    next.push(arg);
+  }
+
+  return next;
+};
+
+const isSelectableProviderType = (
+  type: HeterogeneousProviderConfig['type'] | undefined,
+): type is SelectableHeteroProviderType => type === 'claude-code' || type === 'codex';
+
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
 
@@ -220,6 +278,33 @@ const getModelLabel = (model: string, defaultLabel: string) => {
 
   const [, family, major, minor] = match;
   return `${family[0].toUpperCase()}${family.slice(1)} ${major}.${minor}`;
+};
+
+const getTriggerText = ({
+  defaultConfigLabel,
+  defaultModelLabel,
+  defaultReasoningLabel,
+  effort,
+  effortLabel,
+  model,
+  modelLabel,
+}: {
+  defaultConfigLabel: string;
+  defaultModelLabel: string;
+  defaultReasoningLabel: string;
+  effort: HeteroReasoningEffort;
+  effortLabel: string;
+  model: string;
+  modelLabel: string;
+}) => {
+  const isDefaultModel = model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const isDefaultEffort = effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+  if (isDefaultModel && isDefaultEffort) return defaultConfigLabel;
+  if (isDefaultModel) return `${defaultModelLabel} · ${effortLabel}`;
+  if (isDefaultEffort) return `${modelLabel} · ${defaultReasoningLabel}`;
+
+  return `${modelLabel} · ${effortLabel}`;
 };
 
 const HeteroModel = memo(() => {
@@ -239,19 +324,32 @@ const HeteroModel = memo(() => {
       if (!canCreateContent || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
-      if ('model' in patch) {
-        nextPatch.args = stripCliFlags(provider?.args, ['--model']);
-      }
-      if ('effort' in patch) {
-        const sourceArgs = nextPatch.args ?? provider?.args;
-        nextPatch.args = stripCliFlags(sourceArgs, ['--effort']);
+      const providerType = provider?.type;
+
+      if (providerType === 'codex') {
+        if ('model' in patch) {
+          const args = stripCliFlags(provider?.args, ['--model', '-m']);
+          nextPatch.args = stripCodexConfigKey(args, 'model');
+        }
+        if ('effort' in patch) {
+          const sourceArgs = nextPatch.args ?? provider?.args;
+          nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_REASONING_EFFORT_CONFIG_KEY);
+        }
+      } else {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(provider?.args, ['--model']);
+        }
+        if ('effort' in patch) {
+          const sourceArgs = nextPatch.args ?? provider?.args;
+          nextPatch.args = stripCliFlags(sourceArgs, ['--effort']);
+        }
       }
 
       await updateAgentConfigById(agentId, {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, updateAgentConfigById],
+    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -276,28 +374,45 @@ const HeteroModel = memo(() => {
     [closeMenu, patchProvider],
   );
 
-  if (provider?.type !== 'claude-code') return null;
+  if (!isSelectableProviderType(provider?.type)) return null;
 
-  const model = resolveClaudeCodeModel(provider);
-  const effort = resolveClaudeCodeReasoningEffort(provider);
+  const providerType = provider.type;
+  const model =
+    providerType === 'codex' ? resolveCodexModel(provider) : resolveClaudeCodeModel(provider);
+  const effort =
+    providerType === 'codex'
+      ? resolveCodexReasoningEffort(provider)
+      : resolveClaudeCodeReasoningEffort(provider);
   const defaultLabel = t('heteroAgent.modelSelector.default');
   const modelLabel = getModelLabel(model, defaultLabel);
   const effortLabel = t(EFFORT_LABEL_KEYS[effort]);
+  const reasoningLevels =
+    providerType === 'codex' ? CODEX_REASONING_EFFORT_LEVELS : CLAUDE_CODE_REASONING_EFFORT_LEVELS;
+  const providerModelOptions =
+    providerType === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_CODE_MODEL_OPTIONS;
   const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [
     { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
-    ...CLAUDE_CODE_REASONING_EFFORT_LEVELS.map((level) => ({
+    ...reasoningLevels.map((level) => ({
       label: t(EFFORT_LABEL_KEYS[level]),
       value: level,
     })),
   ];
   const baseModelOptions: { label: string; value: string }[] = [
     { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
-    ...CLAUDE_CODE_MODEL_OPTIONS,
+    ...providerModelOptions,
   ];
   const modelOptions = baseModelOptions.some((option) => option.value === model)
     ? baseModelOptions
     : [{ label: model, value: model }, ...baseModelOptions];
-  const triggerText = `${modelLabel} · ${effortLabel}`;
+  const triggerText = getTriggerText({
+    defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
+    defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
+    defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
+    effort,
+    effortLabel,
+    model,
+    modelLabel,
+  });
 
   const trigger = (
     <div

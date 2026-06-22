@@ -1326,11 +1326,11 @@ export class AiAgentService {
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
       const heteroSpawnArgs =
-        heteroType === 'claude-code'
+        heteroType === 'claude-code' || heteroType === 'codex'
           ? buildHeteroSpawnArgs(
-              agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code'
+              agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
-                : { type: 'claude-code' },
+                : { type: heteroType },
             )
           : undefined;
 
