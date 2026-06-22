@@ -219,10 +219,10 @@ export const agentSelectors = {
 
 LobeHub is an internationalized project using [react-i18next](https://github.com/i18next/react-i18next). Newly added UI text needs to:
 
-1. Add keys to the corresponding namespace file in `src/locales/default/` (default language is English):
+1. Add keys to the corresponding namespace file in `packages/locales/src/default/` (default language is English):
 
 ```typescript
-// src/locales/default/setting.ts
+// packages/locales/src/default/setting.ts
 export default {
   // ...
   'settingOpening.title': 'Opening Settings',
@@ -235,7 +235,7 @@ export default {
 };
 ```
 
-2. If a new namespace is added, export it in `src/locales/default/index.ts`
+2. If a new namespace is added, export it in `packages/locales/src/default/index.ts`
 3. For dev preview: manually translate the corresponding JSON files in `locales/zh-CN/` and `locales/en-US/`
 4. CI will automatically run `pnpm i18n` to generate translations for other languages
 
@@ -322,7 +322,7 @@ const WelcomeMessage = () => {
       <ChatItem avatar={meta} message={message} placement="left" />
       {/* Render guiding questions */}
       <OpeningQuestions questions={openingQuestions} />
-   
+
 </Flexbox>
   ) : (
     <ChatItem avatar={meta} message={message} placement="left" />
