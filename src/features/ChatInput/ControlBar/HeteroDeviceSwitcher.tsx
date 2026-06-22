@@ -11,10 +11,8 @@ import {
   BoxIcon,
   CheckIcon,
   ChevronDownIcon,
-  ExternalLinkIcon,
   InfoIcon,
   LaptopIcon,
-  MonitorDownIcon,
   MonitorIcon,
   MonitorOffIcon,
   SettingsIcon,
@@ -97,30 +95,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  downloadCard: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    text-decoration: none;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  downloadCardArrow: css`
-    flex: none;
-    margin-inline-start: auto;
     color: ${cssVar.colorTextQuaternary};
   `,
   option: css`
@@ -214,21 +188,6 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextSecondary};
     }
   `,
-  headerLink: css`
-    display: flex;
-    gap: 3px;
-    align-items: center;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: none;
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
   headerTitle: css`
     font-size: 12px;
     font-weight: 500;
@@ -245,14 +204,15 @@ const styles = createStaticStyles(({ css }) => ({
     border: none;
 
     font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
 
     background: none;
 
     transition: color 0.2s;
 
     &:hover {
-      color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorTextSecondary};
     }
   `,
   groupLabel: css`
@@ -398,13 +358,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
   const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
+  const visibleDeviceRows = currentDeviceId
+    ? deviceRows.filter((device) => device.deviceId !== currentDeviceId)
+    : deviceRows;
   const hasNoDevices = deviceRows.length === 0;
-  // On web with no device, the prominent download card below replaces the small
-  // header link — avoid showing the same CTA twice.
-  const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
+  const hasOnlineDevices = deviceRows.some((device) => device.online);
 
-  const personalDevices = (devices ?? []).filter((d) => d.scope === 'personal');
-  const workspaceDevices = (devices ?? []).filter((d) => d.scope === 'workspace');
+  const personalDevices = visibleDeviceRows.filter((d) => d.scope === 'personal');
+  const workspaceDevices = visibleDeviceRows.filter((d) => d.scope === 'workspace');
   // Only split into Personal / Workspace sections once a workspace device exists;
   // otherwise (personal mode / OSS) the list stays flat, exactly as before.
   const showDeviceGroups = workspaceDevices.length > 0;
@@ -477,29 +438,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             </span>
           </Tooltip>
         </Flexbox>
-        {isDesktop || showWebDownloadCard ? (
-          <button
-            className={styles.manageButton}
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              navigate('/settings/devices');
-            }}
-          >
-            <Icon icon={SettingsIcon} size={11} />
-            <span>{t('heteroAgent.executionTarget.manage')}</span>
-          </button>
-        ) : (
-          <a
-            className={styles.headerLink}
-            href="https://lobehub.com/downloads"
-            rel="noreferrer"
-            target="_blank"
-          >
-            <Icon icon={ExternalLinkIcon} size={11} />
-            <span>{t('heteroAgent.executionTarget.downloadDesktop')}</span>
-          </a>
-        )}
+        <button
+          className={styles.manageButton}
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            navigate('/settings/devices');
+          }}
+        >
+          <Icon icon={SettingsIcon} size={11} />
+          <span>{t('heteroAgent.executionTarget.manage')}</span>
+        </button>
       </div>
       {isHetero ? null : (
         <OptionRow
@@ -513,9 +462,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {isHetero ? null : (
         <OptionRow
           active={isActive('auto')}
-          desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<Icon icon={SparklesIcon} size={14} />}
           label={t('heteroAgent.executionTarget.auto')}
+          desc={
+            isLoading
+              ? t('heteroAgent.executionTarget.loading')
+              : hasOnlineDevices
+                ? t('heteroAgent.executionTarget.autoDesc')
+                : t('heteroAgent.executionTarget.autoUnavailableDesc')
+          }
           onClick={() => void handleSelect('auto')}
         />
       )}
@@ -564,32 +519,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
-      ) : null}
-      {/* On web with no remote device, guide the user to the desktop app (which
-          unlocks local execution + `lh connect`) rather than a muted dead-end. */}
-      {showWebDownloadCard ? (
-        <a
-          className={styles.downloadCard}
-          href="https://lobehub.com/downloads"
-          rel="noreferrer"
-          target="_blank"
-        >
-          <div className={styles.optionIcon}>
-            <Icon icon={MonitorDownIcon} size={14} />
-          </div>
-          <div className={styles.optionMeta}>
-            <div className={styles.optionTitle}>
-              {t('heteroAgent.executionTarget.downloadDesktopTitle')}
-            </div>
-            <div className={styles.desc}>
-              {t('heteroAgent.executionTarget.downloadDesktopDesc')}
-            </div>
-          </div>
-          <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
-        </a>
-      ) : null}
-      {hasNoDevices && !isLoading && isDesktop ? (
-        <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>
   );
