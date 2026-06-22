@@ -74,11 +74,16 @@ export class FlatListBuilder {
         );
         flatList.push(agentCouncilMessage);
 
-        // Continue processing children of the last member (for supervisor final reply)
-        // The last member's children should be processed next
-        const lastMemberId = children.at(-1);
-        if (lastMemberId) {
-          this.buildFlatListRecursive(lastMemberId, flatList, processedIds, allMessages);
+        // Continue from each member's children to surface the supervisor's post-council reply.
+        // The reply attaches to exactly ONE member, but which member is non-deterministic:
+        // broadcast agents finish near-simultaneously so their createdAt values tie, and the
+        // writer anchors the reply to the createdAt-last member while childrenMap preserves
+        // input-array order — the two can disagree. Walking only children.at(-1) would strand
+        // the reply (and everything after it) whenever they disagree. Members are already in
+        // processedIds, so recursing into every member only emits the reply chain; the
+        // processedIds guard keeps it from duplicating anything.
+        for (const memberId of children) {
+          this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
         }
         return;
       }

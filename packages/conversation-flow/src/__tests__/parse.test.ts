@@ -434,6 +434,29 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.withSupervisorReply);
     });
+
+    // Regression: the supervisor's post-council reply must surface no matter which council
+    // member it parents to. Broadcast agents finish near-simultaneously (tied createdAt), so
+    // the writer's createdAt-last member can differ from the array order; previously the reader
+    // only walked the last member and stranded the reply, making the supervisor message vanish.
+    it.each([['msg-agent-backend-1'], ['msg-agent-devops-1'], ['msg-agent-architect-1']])(
+      'should surface supervisor final reply when it parents to council member %s',
+      (memberId) => {
+        const messages = inputs.agentCouncil.withSupervisorReply.map((message) =>
+          message.id === 'msg-supervisor-summary'
+            ? { ...message, parentId: memberId }
+            : message,
+        );
+
+        const result = parse(messages);
+        const summary = result.flatList.find((m) => m.id === 'msg-supervisor-summary');
+
+        expect(summary).toBeDefined();
+        expect(summary!.role).toBe('supervisor');
+        // No duplication regardless of which member carries the reply
+        expect(result.flatList.filter((m) => m.id === 'msg-supervisor-summary')).toHaveLength(1);
+      },
+    );
   });
 
   describe('Assistant Group Scenarios', () => {
