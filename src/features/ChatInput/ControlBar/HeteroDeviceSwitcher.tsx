@@ -18,7 +18,7 @@ import {
   SettingsIcon,
   SparklesIcon,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -295,6 +295,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
+  const isRemoteHetero = heteroType ? isRemoteHeterogeneousType(heteroType) : false;
 
   // Heterogeneous agents (Claude Code / Codex — remote types already early-return
   // below) bring their own toolchain and must execute somewhere, so `'none'`
@@ -356,8 +357,36 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
   );
 
+  useEffect(() => {
+    if (
+      !isDesktop ||
+      isRemoteHetero ||
+      !currentDeviceId ||
+      agencyConfig?.executionTarget !== 'device' ||
+      boundDeviceId !== currentDeviceId
+    ) {
+      return;
+    }
+
+    // Historical/cross-client configs may store this desktop as an explicit
+    // `device` target. In the desktop picker we show the current machine only
+    // once as `local`, so normalize that equivalent location instead of adding
+    // a duplicate "same machine via Device Connection" row just to mark it
+    // selected.
+    void updateAgentConfigById(agentId, {
+      agencyConfig: { ...agencyConfig, boundDeviceId: currentDeviceId, executionTarget: 'local' },
+    });
+  }, [
+    agentId,
+    agencyConfig,
+    boundDeviceId,
+    currentDeviceId,
+    isRemoteHetero,
+    updateAgentConfigById,
+  ]);
+
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
-  if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
+  if (isRemoteHetero) return null;
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
