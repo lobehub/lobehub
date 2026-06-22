@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildHeteroSpawnArgs, pruneWorkingDirByDeviceDeletes } from './agencyConfig';
+import {
+  buildHeteroSpawnArgs,
+  pruneWorkingDirByDeviceDeletes,
+  resolveClaudeCodeModel,
+  resolveClaudeCodeReasoningEffort,
+} from './agencyConfig';
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
   it('deletes keys whose patch value is undefined', () => {
@@ -34,6 +39,11 @@ describe('pruneWorkingDirByDeviceDeletes', () => {
 });
 
 describe('buildHeteroSpawnArgs', () => {
+  it('resolves missing claude-code selections to concrete display defaults', () => {
+    expect(resolveClaudeCodeModel(undefined)).toBe('sonnet');
+    expect(resolveClaudeCodeReasoningEffort(undefined)).toBe('high');
+  });
+
   it('returns undefined when there is no provider', () => {
     expect(buildHeteroSpawnArgs(undefined)).toBeUndefined();
     expect(buildHeteroSpawnArgs(null)).toBeUndefined();
@@ -47,24 +57,15 @@ describe('buildHeteroSpawnArgs', () => {
     expect(buildHeteroSpawnArgs({ type: 'codex' })).toBeUndefined();
   });
 
-  it('resolves missing claude-code model/effort to concrete defaults', () => {
-    expect(buildHeteroSpawnArgs({ type: 'claude-code' })).toEqual([
-      '--model',
-      'sonnet',
-      '--effort',
-      'high',
-    ]);
+  it('preserves Claude Code defaults when model/effort have not been selected', () => {
+    expect(buildHeteroSpawnArgs({ type: 'claude-code' })).toBeUndefined();
     expect(buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code' })).toEqual([
       '--verbose',
-      '--model',
-      'sonnet',
-      '--effort',
-      'high',
     ]);
-    // Older persisted "Default" selections resolve to the same concrete values.
+    // Older persisted "Default" selections should behave like unset values.
     expect(
       buildHeteroSpawnArgs({ type: 'claude-code', model: '', effort: 'default' as never }),
-    ).toEqual(['--model', 'sonnet', '--effort', 'high']);
+    ).toBeUndefined();
   });
 
   it('appends --model and --effort for claude-code', () => {
@@ -79,21 +80,17 @@ describe('buildHeteroSpawnArgs', () => {
   it('preserves existing args and appends after them', () => {
     expect(
       buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code', model: 'sonnet' }),
-    ).toEqual(['--verbose', '--model', 'sonnet', '--effort', 'high']);
+    ).toEqual(['--verbose', '--model', 'sonnet']);
   });
 
-  it('uses concrete defaults for omitted flags', () => {
+  it('only appends explicitly selected flags', () => {
     expect(buildHeteroSpawnArgs({ type: 'claude-code', effort: 'max' })).toEqual([
-      '--model',
-      'sonnet',
       '--effort',
       'max',
     ]);
     expect(buildHeteroSpawnArgs({ type: 'claude-code', model: 'haiku' })).toEqual([
       '--model',
       'haiku',
-      '--effort',
-      'high',
     ]);
   });
 

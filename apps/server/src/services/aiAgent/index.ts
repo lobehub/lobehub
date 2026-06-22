@@ -1336,7 +1336,6 @@ export class AiAgentService {
 
       const heteroParams = {
         agentType: heteroType,
-        args: heteroSpawnArgs,
         assistantMessageId: assistantMessageRecord.id,
         githubToken,
         imageList: heteroImageList,
@@ -1643,6 +1642,7 @@ export class AiAgentService {
           spawnHeteroSandbox({
             ...heteroParams,
             agentType: heteroType as 'claude-code' | 'codex',
+            args: heteroSpawnArgs,
             marketService: this.marketService,
           }).catch((err) => {
             log('execAgent: hetero sandbox spawn failed: %O', err);

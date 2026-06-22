@@ -286,7 +286,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
-  it('should pass resolved Claude Code model and effort args to device dispatch', async () => {
+  it('should not pass selector args to device dispatch without capability gating', async () => {
     heteroAgentConfig.agencyConfig = {
       boundDeviceId: 'device-1',
       executionTarget: 'device',
@@ -302,12 +302,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       prompt: 'Use the selected Claude Code model on device',
     });
 
-    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        args: ['--model', 'opus', '--effort', 'high'],
-        deviceId: 'device-1',
-      }),
-    );
+    const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
+    expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
+    expect(dispatchParams).not.toHaveProperty('args');
   });
 
   describe('image delivery to the dispatched CLI', () => {

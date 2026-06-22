@@ -37,8 +37,9 @@ export interface HeterogeneousProviderConfig {
   /**
    * (claude-code) Reasoning effort, surfaced through the chat-input model
    * selector and translated into the CLI's `--effort` flag at spawn time.
-   * Omitted or legacy `'default'` values resolve to
-   * `CLAUDE_CODE_DEFAULT_REASONING_EFFORT`.
+   * Omitted or legacy `'default'` values are displayed as concrete defaults
+   * in the UI, but are not passed as CLI flags so Claude Code can keep its
+   * own settings/env/account defaults.
    */
   effort?: ClaudeCodeReasoningEffort;
   /** Custom environment variables (local CLI only). */
@@ -47,7 +48,8 @@ export interface HeterogeneousProviderConfig {
    * (claude-code) Model, surfaced through the chat-input model selector and
    * translated into the CLI's `--model` flag at spawn time. An alias
    * (`'opus'` / `'sonnet'` / `'haiku'`) or a full model id. Empty / omitted
-   * values resolve to `CLAUDE_CODE_DEFAULT_MODEL`.
+   * values are displayed as concrete defaults in the UI, but are not passed as
+   * CLI flags so Claude Code can keep its own settings/env/account defaults.
    */
   model?: string;
   /**
@@ -115,16 +117,31 @@ export const resolveClaudeCodeReasoningEffort = (
   return isClaudeCodeReasoningEffort(effort) ? effort : CLAUDE_CODE_DEFAULT_REASONING_EFFORT;
 };
 
+const getExplicitClaudeCodeModel = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== 'default' ? model : undefined;
+};
+
+const getExplicitClaudeCodeReasoningEffort = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): ClaudeCodeReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
+};
+
 /**
  * Resolve the effective CLI args for a heterogeneous spawn.
  *
- * For `claude-code`, the chat-input model selector persists `model` + `effort`
- * on the provider config; this is the single place that maps those stored
- * settings onto argv (`--model` / `--effort`). Missing settings resolve to the
- * concrete Claude Code defaults above, so the app never has to surface a
- * "Default" runtime choice. User-authored `args` win: when they already carry
- * an explicit `--model` / `--effort`, the resolved setting is not appended, so
- * there is never a duplicate flag.
+ * For `claude-code`, the chat-input model selector persists explicit `model`
+ * + `effort` selections on the provider config; this is the single place that
+ * maps those stored settings onto argv (`--model` / `--effort`). Missing
+ * settings are resolved by the UI helpers for display only. They are not
+ * appended here because the CLI flags override Claude Code's own
+ * settings/env/account defaults. User-authored `args` win: when they already
+ * carry an explicit `--model` / `--effort`, the stored setting is not appended,
+ * so there is never a duplicate flag.
  *
  * Returns `provider.args` unchanged (possibly `undefined`) when there is
  * nothing to inject, preserving the prior `args: provider.args` behavior for
@@ -138,9 +155,10 @@ export const buildHeteroSpawnArgs = (
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
-  if (!hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', resolveClaudeCodeModel(provider));
-  if (!hasCliFlag(baseArgs, '--effort'))
-    extraArgs.push('--effort', resolveClaudeCodeReasoningEffort(provider));
+  const model = getExplicitClaudeCodeModel(provider);
+  if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+  const effort = getExplicitClaudeCodeReasoningEffort(provider);
+  if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
 
   if (extraArgs.length === 0) return provider.args;
   return [...baseArgs, ...extraArgs];

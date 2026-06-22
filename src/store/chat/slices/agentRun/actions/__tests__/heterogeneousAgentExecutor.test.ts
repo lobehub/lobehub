@@ -1248,7 +1248,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
-    it('should pass concrete default Claude Code model and thinking effort as spawn args', async () => {
+    it('should preserve Claude Code defaults when model and effort are not selected', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
 
@@ -1263,7 +1263,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockStartSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          args: ['--verbose', '--model', 'sonnet', '--effort', 'high'],
+          args: ['--verbose'],
           agentType: 'claude-code',
         }),
       );
