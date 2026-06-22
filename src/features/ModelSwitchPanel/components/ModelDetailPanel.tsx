@@ -410,215 +410,214 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     );
     const hasAbilities = enabledAbilities.length > 0;
 
+    // nothing to display
+    if ([hasPricing, hasContext, hasAbilities].every((v) => !v)) return null;
+
     return (
       <Flexbox className={styles.container}>
         {/* Sections */}
-        {(hasPricing || hasContext || hasAbilities) && (
-          <Accordion
-            expandedKeys={expandedKeys}
-            gap={8}
-            onExpandedChange={(keys) => updateExpandedKeys(keys as ModelDetailPanelExpandedKey[])}
-          >
-            {/* Context Length */}
-            {hasContext && (
-              <AccordionItem
-                alwaysShowAction
-                hideIndicator
-                allowExpand={false}
-                itemKey="context"
-                paddingBlock={6}
-                paddingInline={8}
-                action={
-                  <span className={styles.actionText}>
-                    {model.contextWindowTokens === 0
-                      ? '∞'
-                      : `${formatTokenNumber(model.contextWindowTokens!)} tokens`}
-                  </span>
-                }
-                title={
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <div
-                      style={{
-                        background: '#1677ff',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        height: 14,
-                        width: 3,
-                      }}
-                    />
-                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
-                  </Flexbox>
-                }
-              />
-            )}
+        <Accordion
+          expandedKeys={expandedKeys}
+          gap={8}
+          onExpandedChange={(keys) => updateExpandedKeys(keys as ModelDetailPanelExpandedKey[])}
+        >
+          {/* Context Length */}
+          {hasContext && (
+            <AccordionItem
+              alwaysShowAction
+              hideIndicator
+              allowExpand={false}
+              itemKey="context"
+              paddingBlock={6}
+              paddingInline={8}
+              action={
+                <span className={styles.actionText}>
+                  {model.contextWindowTokens === 0
+                    ? '∞'
+                    : `${formatTokenNumber(model.contextWindowTokens!)} tokens`}
+                </span>
+              }
+              title={
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <div
+                    style={{
+                      background: '#1677ff',
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      height: 14,
+                      width: 3,
+                    }}
+                  />
+                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
+                </Flexbox>
+              }
+            />
+          )}
 
-            {/* Abilities */}
-            {hasAbilities && (
-              <AccordionItem
-                alwaysShowAction
-                itemKey="abilities"
-                paddingBlock={6}
-                paddingInline={8}
-                action={
-                  !expandedKeys.includes('abilities') && (
-                    <Flexbox horizontal gap={2}>
-                      {enabledAbilities.map((ability) => (
-                        <Tag
-                          color={ability.color}
-                          key={ability.key}
-                          style={{ borderRadius: 4, minWidth: 0, padding: '0 4px' }}
-                        >
-                          <Icon icon={ability.icon} style={{ fontSize: 12 }} />
-                        </Tag>
-                      ))}
+          {/* Abilities */}
+          {hasAbilities && (
+            <AccordionItem
+              alwaysShowAction
+              itemKey="abilities"
+              paddingBlock={6}
+              paddingInline={8}
+              action={
+                !expandedKeys.includes('abilities') && (
+                  <Flexbox horizontal gap={2}>
+                    {enabledAbilities.map((ability) => (
+                      <Tag
+                        color={ability.color}
+                        key={ability.key}
+                        style={{ borderRadius: 4, minWidth: 0, padding: '0 4px' }}
+                      >
+                        <Icon icon={ability.icon} style={{ fontSize: 12 }} />
+                      </Tag>
+                    ))}
+                  </Flexbox>
+                )
+              }
+              title={
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <div
+                    style={{
+                      background: '#722ed1',
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      height: 14,
+                      width: 3,
+                    }}
+                  />
+                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.abilities')}</span>
+                </Flexbox>
+              }
+            >
+              <Flexbox gap={4}>
+                {enabledAbilities.map((ability) => (
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={styles.row}
+                    justify={'space-between'}
+                    key={ability.key}
+                  >
+                    <Flexbox horizontal align={'center'} gap={6}>
+                      <Icon icon={ability.icon} style={{ fontSize: 12 }} />
+                      <span>{t(`ModelSwitchPanel.detail.abilities.${ability.key}` as any)}</span>
                     </Flexbox>
-                  )
-                }
-                title={
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <div
-                      style={{
-                        background: '#722ed1',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        height: 14,
-                        width: 3,
-                      }}
-                    />
-                    <span className={styles.titleText}>
-                      {t('ModelSwitchPanel.detail.abilities')}
+                    <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+                      {t(
+                        `ModelSelect.featureTag.${ability.key === 'files' ? 'file' : ability.key}` as any,
+                      )}
                     </span>
                   </Flexbox>
-                }
-              >
-                <Flexbox gap={4}>
-                  {enabledAbilities.map((ability) => (
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      className={styles.row}
-                      justify={'space-between'}
-                      key={ability.key}
-                    >
-                      <Flexbox horizontal align={'center'} gap={6}>
-                        <Icon icon={ability.icon} style={{ fontSize: 12 }} />
-                        <span>{t(`ModelSwitchPanel.detail.abilities.${ability.key}` as any)}</span>
-                      </Flexbox>
-                      <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-                        {t(
-                          `ModelSelect.featureTag.${ability.key === 'files' ? 'file' : ability.key}` as any,
-                        )}
-                      </span>
-                    </Flexbox>
-                  ))}
-                </Flexbox>
-              </AccordionItem>
-            )}
+                ))}
+              </Flexbox>
+            </AccordionItem>
+          )}
 
-            {/* Pricing */}
-            {hasPricing && (formatPrice || approximatePriceLabel) && (
-              <AccordionItem
-                alwaysShowAction
-                itemKey="pricing"
-                paddingBlock={6}
-                paddingInline={8}
-                action={
-                  !expandedKeys.includes('pricing') &&
-                  (approximatePriceLabel ? (
-                    <span className={styles.actionText}>{approximatePriceLabel}</span>
-                  ) : (
-                    <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
-                      {getCachedTextInputUnitRate(displayPricing) && (
-                        <Tooltip
-                          title={getPricingTooltip('cachedInput', formatPrice!.cachedInput.current)}
-                        >
-                          <Flexbox horizontal align={'center'} gap={2}>
-                            <Icon icon={CircleFadingArrowUp} size={'small'} />
-                            <PriceValue price={formatPrice!.cachedInput} />
-                          </Flexbox>
-                        </Tooltip>
-                      )}
-                      <Tooltip title={getPricingTooltip('input', formatPrice!.input.current)}>
+          {/* Pricing */}
+          {hasPricing && (formatPrice || approximatePriceLabel) && (
+            <AccordionItem
+              alwaysShowAction
+              itemKey="pricing"
+              paddingBlock={6}
+              paddingInline={8}
+              action={
+                !expandedKeys.includes('pricing') &&
+                (approximatePriceLabel ? (
+                  <span className={styles.actionText}>{approximatePriceLabel}</span>
+                ) : (
+                  <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
+                    {getCachedTextInputUnitRate(displayPricing) && (
+                      <Tooltip
+                        title={getPricingTooltip('cachedInput', formatPrice!.cachedInput.current)}
+                      >
                         <Flexbox horizontal align={'center'} gap={2}>
-                          <Icon icon={ArrowUpFromDot} size={'small'} />
-                          <PriceValue price={formatPrice!.input} />
+                          <Icon icon={CircleFadingArrowUp} size={'small'} />
+                          <PriceValue price={formatPrice!.cachedInput} />
                         </Flexbox>
                       </Tooltip>
-                      <Tooltip title={getPricingTooltip('output', formatPrice!.output.current)}>
-                        <Flexbox horizontal align={'center'} gap={2}>
-                          <Icon icon={ArrowDownToDot} size={'small'} />
-                          <PriceValue price={formatPrice!.output} />
-                        </Flexbox>
-                      </Tooltip>
-                    </Flexbox>
-                  ))
-                }
-                title={
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <div
-                      style={{
-                        background: '#fa8c16',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        height: 14,
-                        width: 3,
-                      }}
-                    />
-                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.pricing')}</span>
+                    )}
+                    <Tooltip title={getPricingTooltip('input', formatPrice!.input.current)}>
+                      <Flexbox horizontal align={'center'} gap={2}>
+                        <Icon icon={ArrowUpFromDot} size={'small'} />
+                        <PriceValue price={formatPrice!.input} />
+                      </Flexbox>
+                    </Tooltip>
+                    <Tooltip title={getPricingTooltip('output', formatPrice!.output.current)}>
+                      <Flexbox horizontal align={'center'} gap={2}>
+                        <Icon icon={ArrowDownToDot} size={'small'} />
+                        <PriceValue price={formatPrice!.output} />
+                      </Flexbox>
+                    </Tooltip>
                   </Flexbox>
-                }
-              >
-                <Flexbox gap={8}>
-                  {approximatePriceLabel && (
-                    <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
-                      {approximatePriceLabel}
-                    </Flexbox>
-                  )}
-                  {pricingGroups.map(({ group, units }) => (
-                    <Flexbox gap={4} key={group}>
-                      {pricingGroups.length > 1 && (
-                        <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
-                          {t(`ModelSwitchPanel.detail.pricing.group.${group}` as any)}
-                        </Flexbox>
-                      )}
-                      {units.map((unit) => (
-                        <Flexbox
-                          horizontal
-                          align={'center'}
-                          className={styles.row}
-                          justify={'space-between'}
-                          key={unit.name}
-                        >
-                          <Flexbox horizontal align={'center'} gap={6}>
-                            {UNIT_ICON_MAP[unit.name] && (
-                              <Icon icon={UNIT_ICON_MAP[unit.name]!} size={'small'} />
-                            )}
-                            <span>
-                              {t(`ModelSwitchPanel.detail.pricing.unit.${unit.name}` as any)}
-                            </span>
-                          </Flexbox>
-                          <PriceValue
-                            prefix={isCreditPricing ? '' : '$'}
-                            price={formatUnitRate(
-                              unit,
-                              displayPricing.currency as ModelPriceCurrency,
-                              isCreditPricing,
-                            )}
-                            suffix={
-                              isCreditPricing
-                                ? ` ${getCreditsUnitLabel(unit.unit)}`
-                                : UNIT_LABEL_MAP[unit.unit] || ''
-                            }
-                          />
-                        </Flexbox>
-                      ))}
-                    </Flexbox>
-                  ))}
+                ))
+              }
+              title={
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <div
+                    style={{
+                      background: '#fa8c16',
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      height: 14,
+                      width: 3,
+                    }}
+                  />
+                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.pricing')}</span>
                 </Flexbox>
-              </AccordionItem>
-            )}
-          </Accordion>
-        )}
+              }
+            >
+              <Flexbox gap={8}>
+                {approximatePriceLabel && (
+                  <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                    {approximatePriceLabel}
+                  </Flexbox>
+                )}
+                {pricingGroups.map(({ group, units }) => (
+                  <Flexbox gap={4} key={group}>
+                    {pricingGroups.length > 1 && (
+                      <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                        {t(`ModelSwitchPanel.detail.pricing.group.${group}` as any)}
+                      </Flexbox>
+                    )}
+                    {units.map((unit) => (
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        className={styles.row}
+                        justify={'space-between'}
+                        key={unit.name}
+                      >
+                        <Flexbox horizontal align={'center'} gap={6}>
+                          {UNIT_ICON_MAP[unit.name] && (
+                            <Icon icon={UNIT_ICON_MAP[unit.name]!} size={'small'} />
+                          )}
+                          <span>
+                            {t(`ModelSwitchPanel.detail.pricing.unit.${unit.name}` as any)}
+                          </span>
+                        </Flexbox>
+                        <PriceValue
+                          prefix={isCreditPricing ? '' : '$'}
+                          price={formatUnitRate(
+                            unit,
+                            displayPricing.currency as ModelPriceCurrency,
+                            isCreditPricing,
+                          )}
+                          suffix={
+                            isCreditPricing
+                              ? ` ${getCreditsUnitLabel(unit.unit)}`
+                              : UNIT_LABEL_MAP[unit.unit] || ''
+                          }
+                        />
+                      </Flexbox>
+                    ))}
+                  </Flexbox>
+                ))}
+              </Flexbox>
+            </AccordionItem>
+          )}
+        </Accordion>
       </Flexbox>
     );
   },

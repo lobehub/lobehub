@@ -11,6 +11,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
     overscroll-behavior: contain;
     width: 400px;
+
+    &:empty {
+      display: none;
+    }
   `,
   dropdownMenu: css`
     user-select: none;
