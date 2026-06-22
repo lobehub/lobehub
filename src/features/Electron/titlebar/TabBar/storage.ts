@@ -30,6 +30,8 @@ const reviveTabItem = (item: unknown): TabItem | null => {
   };
 };
 
+const isRevivedTabItem = (item: TabItem | null): item is TabItem => !!item;
+
 const reconstructUrlFromV1 = (type: unknown, params: unknown): string | null => {
   if (typeof type !== 'string' || !params || typeof params !== 'object') return null;
   const p = params as Record<string, string | undefined>;
@@ -135,7 +137,7 @@ export const getTabPages = (): TabPagesStorageData => {
     if (!parsed || typeof parsed !== 'object') return EMPTY;
 
     const tabs = Array.isArray(parsed.tabs)
-      ? parsed.tabs.map(reviveTabItem).filter((item): item is TabItem => !!item)
+      ? parsed.tabs.map(reviveTabItem).filter(isRevivedTabItem)
       : [];
 
     return {

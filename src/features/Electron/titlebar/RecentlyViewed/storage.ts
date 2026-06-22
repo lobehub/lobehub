@@ -19,6 +19,8 @@ const reviveTabItem = (item: unknown): TabItem | null => {
   };
 };
 
+const isRevivedTabItem = (item: TabItem | null): item is TabItem => !!item;
+
 export const getPinnedPages = (): TabItem[] => {
   if (typeof window === 'undefined') return [];
 
@@ -29,7 +31,7 @@ export const getPinnedPages = (): TabItem[] => {
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.map(reviveTabItem).filter((item): item is TabItem => !!item);
+    return parsed.map(reviveTabItem).filter(isRevivedTabItem);
   } catch {
     return [];
   }
