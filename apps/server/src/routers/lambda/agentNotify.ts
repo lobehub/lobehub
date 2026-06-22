@@ -236,9 +236,13 @@ export const agentNotifyRouter = router({
           }
 
           // Terminal signal (done or error) with empty content + existing
-          // placeholder → just finalize the run, no message update.
+          // placeholder → just finalize the run, no message update. Pass the
+          // resolved id so the finalizer can reload the agent's final reply
+          // (written in-place via earlier `lh notify` calls) into
+          // `lastAssistantContent` — bot completion callbacks and the task
+          // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
           if (isTerminal && !content) {
-            void publishRemoteHeteroEvent();
+            void publishRemoteHeteroEvent(resolvedMessageId);
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
           await ctx.messageModel.update(resolvedMessageId, { content });
