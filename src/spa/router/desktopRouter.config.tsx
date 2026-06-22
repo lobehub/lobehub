@@ -20,6 +20,7 @@ import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
@@ -759,6 +760,7 @@ export const desktopRoutes: RouteObject[] = [
           // the outer main layout (mirrors how `/` index is empty here). Adding
           // an element would render Home twice on top of `DesktopHomeLayout`.
           {
+            handle: { meta: workspaceHomeRouteMeta },
             index: true,
           },
           ...sharedMainAreaChildren,
