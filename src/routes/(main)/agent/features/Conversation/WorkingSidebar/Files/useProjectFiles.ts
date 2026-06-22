@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import type { ProjectFileIndexResult } from '@lobechat/electron-client-ipc';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { projectFileService } from '@/services/projectFile';
 
 /**
@@ -12,7 +13,7 @@ import { projectFileService } from '@/services/projectFile';
  */
 export const useProjectFiles = (deviceId: string | undefined, dirPath: string | undefined) => {
   const enabled = Boolean(dirPath) && (!!deviceId || isDesktop);
-  const key = enabled ? ['project-file-index', deviceId ?? 'local', dirPath] : null;
+  const key = enabled ? localFileKeys.projectIndex(deviceId, dirPath!) : null;
 
   return useClientDataSWR<ProjectFileIndexResult | undefined>(
     key,

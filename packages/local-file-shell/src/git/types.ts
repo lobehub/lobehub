@@ -28,6 +28,20 @@ export interface GitWorkingTreeStatus {
   total: number;
 }
 
+export interface GitWorktreeListItem {
+  bare?: boolean;
+  branch?: string;
+  current: boolean;
+  detached?: boolean;
+  head?: string;
+  locked?: boolean;
+  lockReason?: string;
+  path: string;
+  prunable?: boolean;
+  pruneReason?: string;
+  status?: GitWorkingTreeStatus;
+}
+
 export interface GitAheadBehind {
   ahead: number;
   behind: number;

@@ -18,8 +18,6 @@ import {
   AlertTriangle,
   ClockIcon,
   DownloadIcon,
-  Eye,
-  EyeOff,
   GitForkIcon,
   MoreVerticalIcon,
   Pencil,
@@ -138,9 +136,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
       { skipNull: true },
     );
 
-    const isPublished = status === 'published';
-    // Under-review groups can't be self-managed (publish is approval-gated and the
-    // market rejects it with `forbidden`), so owners get a view-only card.
+    // Under-review groups stay view-only until the group has been validated.
     const isUnderReview = isValidated === false;
 
     const handleCardClick = useCallback(() => {
@@ -152,7 +148,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     }, [identifier, navigate]);
 
     const handleStatusAction = useCallback(
-      (action: 'publish' | 'unpublish' | 'deprecate') => {
+      (action: 'deprecate') => {
         onStatusChange?.(identifier, action, 'group');
       },
       [identifier, onStatusChange],
@@ -168,14 +164,6 @@ const UserGroupCard = memo<UserGroupCardProps>(
           },
           {
             type: 'divider' as const,
-          },
-          {
-            icon: <Icon icon={isPublished ? EyeOff : Eye} />,
-            key: 'togglePublish',
-            label: isPublished
-              ? t('setting:myAgents.actions.unpublish')
-              : t('setting:myAgents.actions.publish'),
-            onClick: () => handleStatusAction(isPublished ? 'unpublish' : 'publish'),
           },
           {
             danger: true,

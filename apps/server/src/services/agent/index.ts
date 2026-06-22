@@ -10,6 +10,7 @@ import { type PartialDeep } from 'type-fest';
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
+import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
 import { getRedisConfig } from '@/envs/redis';
 import {
   getJSONFromRedis,
@@ -83,14 +84,20 @@ export class AgentService {
 
     const mergedConfig = this.mergeDefaultConfig(agent, defaultAgentConfig);
     if (!mergedConfig) return null;
+    const identity = { slug: (mergedConfig as { slug?: string | null }).slug ?? slug };
+    const normalizedConfig = {
+      ...mergedConfig,
+      avatar: normalizeInboxAgentAvatar(mergedConfig.avatar, identity),
+      title: normalizeInboxAgentTitle(mergedConfig.title, identity),
+    };
 
     // Use builtin avatar as fallback only when DB has no custom avatar
     const builtinAgent = BUILTIN_AGENTS[slug as BuiltinAgentSlug];
-    if (builtinAgent?.avatar && !mergedConfig.avatar) {
-      return { ...mergedConfig, avatar: builtinAgent.avatar };
+    if (builtinAgent?.avatar && !normalizedConfig.avatar) {
+      return { ...normalizedConfig, avatar: builtinAgent.avatar };
     }
 
-    return mergedConfig;
+    return normalizedConfig;
   }
 
   /**

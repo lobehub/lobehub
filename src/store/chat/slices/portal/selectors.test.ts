@@ -425,6 +425,30 @@ describe('chatDockSelectors', () => {
         { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
       ]);
     });
+
+    it('should keep user-approved external preview files visible across topic scopes', () => {
+      const externalFile = {
+        allowExternalFilePreview: true,
+        filePath: '/tmp/worktree-switcher-demo.html',
+        workingDirectory: '/tmp',
+      };
+      const state = createState({
+        ...createTopicState('topic-b', {
+          'topic-a': '/project-a',
+          'topic-b': '/project-b',
+        }),
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+          externalFile,
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual([
+        { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+        externalFile,
+      ]);
+    });
   });
 
   describe('activeLocalFilePath', () => {

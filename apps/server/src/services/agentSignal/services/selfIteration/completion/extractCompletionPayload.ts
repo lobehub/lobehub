@@ -49,9 +49,10 @@ const extractMemoryMutations = (finalState: AgentState): ToolResultWithKind[] =>
       apiName: 'writeMemory',
       data: {
         kind: 'mutation',
+        ...(result.target ? { target: result.target } : {}),
         resourceId: result.target?.id ?? result.target?.memoryId,
         status: 'applied',
-        summary: result.detail,
+        summary: result.detail ?? result.target?.summary,
       },
       kind: 'mutation',
     },

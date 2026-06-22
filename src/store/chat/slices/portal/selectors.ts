@@ -39,6 +39,7 @@ const showLocalFile = (s: ChatStoreState) => currentViewType(s) === PortalViewTy
 const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
+const showTaskDetail = (s: ChatStoreState) => currentViewType(s) === PortalViewType.TaskDetail;
 
 // ============== Data Extractors ==============
 
@@ -143,6 +144,8 @@ const currentLocalFileScopeKey = (s: ChatStoreState): string | undefined => {
 };
 
 const isLocalFileInCurrentScope = (s: ChatStoreState, file: OpenLocalFileEntry): boolean => {
+  if (file.allowExternalFilePreview) return true;
+
   const workingDirectory = currentLocalFileScopeWorkingDirectory(s);
   return workingDirectory ? file.workingDirectory === workingDirectory : true;
 };
@@ -184,15 +187,17 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
+// Edit buffers are keyed by tab identity (device + working directory + path),
+// so callers pass the tab id rather than a bare file path.
 const localFileBuffer =
-  (filePath: string | undefined) =>
+  (tabId: string | undefined) =>
   (s: ChatStoreState): string | undefined =>
-    filePath ? s.dirtyLocalFileContents[filePath] : undefined;
+    tabId ? s.dirtyLocalFileContents[tabId] : undefined;
 
 const isLocalFileDirty =
-  (filePath: string | undefined) =>
+  (tabId: string | undefined) =>
   (s: ChatStoreState): boolean =>
-    !!filePath && filePath in s.dirtyLocalFileContents;
+    !!tabId && tabId in s.dirtyLocalFileContents;
 
 const dirtyLocalFileContents = (s: ChatStoreState): Record<string, string> =>
   s.dirtyLocalFileContents;
@@ -201,6 +206,12 @@ const dirtyLocalFileContents = (s: ChatStoreState): Record<string, string> =>
 const messageDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.MessageDetail);
   return view?.messageId;
+};
+
+// Task Detail selectors
+const taskDetailId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.TaskDetail);
+  return view?.taskId;
 };
 
 // Tool UI / Plugin selectors
@@ -240,6 +251,7 @@ export const chatPortalSelectors = {
   showLocalFile,
   showMessageDetail,
   showPluginUI,
+  showTaskDetail,
 
   // Artifact data
   currentArtifact,
@@ -274,6 +286,9 @@ export const chatPortalSelectors = {
 
   // Message detail data
   messageDetailId,
+
+  // Task detail data
+  taskDetailId,
 
   // Tool UI data
   currentToolUI,

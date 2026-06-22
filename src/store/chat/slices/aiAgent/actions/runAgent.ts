@@ -280,7 +280,11 @@ export class AgentActionImpl {
         // Mark unread completion for background agents
         const op = this.#get().operations[operationId];
         if (op?.context.agentId) {
-          this.#get().markUnreadCompleted(op.context.agentId, op.context.topicId);
+          this.#get().markTopicUnread({
+            agentId: op.context.agentId,
+            groupId: op.context.groupId,
+            topicId: op.context.topicId,
+          });
         }
         break;
       }

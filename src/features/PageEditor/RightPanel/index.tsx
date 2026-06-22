@@ -7,6 +7,7 @@ import { type ReactNode } from 'react';
 import { memo, useMemo, useRef } from 'react';
 
 import RightPanel from '@/features/RightPanel';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -20,7 +21,6 @@ import {
 import Conversation from '../Copilot/Conversation';
 import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
-import { usePageEditable } from '../usePageEditable';
 import { usePageAgentPanelControl } from './OverrideContext';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -107,15 +107,18 @@ PageEditorRightPanelContent.displayName = 'PageEditorRightPanelContent';
 const PageEditorRightPanel = memo(() => {
   const { expand, toggle } = usePageAgentPanelControl();
   const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
-  const editable = usePageEditable();
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const [width, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
     s.updateSystemStatus,
   ]);
 
-  // The Page Agent (copilot) edits the document, so hide it in read-only mode.
-  // History stays available. Re-entering edit mode restores the saved preference.
-  const effectiveExpand = expand && (rightPanelMode === 'history' || editable);
+  // The Page Agent (copilot) stays available even while another member holds the
+  // edit lock: a conflicting write is now rejected server-side (CONFLICT) rather
+  // than clobbering their edits, so there's no reason to hide it on a locked /
+  // read-only page. We only hide it from members without edit permission (a
+  // document-editing agent is useless to them); History stays available.
+  const effectiveExpand = expand && (rightPanelMode === 'history' || hasEditPermission);
 
   return (
     <RightPanel

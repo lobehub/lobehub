@@ -12,16 +12,16 @@
 # Usage:
 #   init-dev-env.sh env              # print shell exports
 #   init-dev-env.sh write [file]     # write a source-able env file
-#   init-dev-env.sh setup-db         # start local Postgres and run migrations
+#   init-dev-env.sh setup-db         # start local Postgres/Redis and run migrations
 #   init-dev-env.sh migrate          # run DB migrations against the configured DB
 #   init-dev-env.sh seed-user        # seed the baseline test user + CLI API key
 #   init-dev-env.sh qstash           # run local Upstash QStash dev server
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
-#   init-dev-env.sh clean-db         # remove the managed Postgres container
+#   init-dev-env.sh clean-db         # remove the managed Postgres/Redis containers
 #
 # Overrides:
-#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres QSTASH_DEV_PORT=8080
+#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080
 
 set -euo pipefail
 
@@ -32,6 +32,9 @@ SERVER_PORT="${SERVER_PORT:-3010}"
 DB_PORT="${DB_PORT:-5433}"
 DB_CONTAINER="${DB_CONTAINER:-lobehub-agent-testing-postgres}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:${DB_PORT}/postgres}"
+REDIS_PORT="${REDIS_PORT:-6380}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-lobehub-agent-testing-redis}"
+REDIS_URL="${REDIS_URL:-redis://localhost:${REDIS_PORT}}"
 ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-dev.env"
 CLI_ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-cli.env"
 AGENT_TESTING_API_KEY="${AGENT_TESTING_API_KEY:-sk-lh-agenttesting0001}"
@@ -54,6 +57,7 @@ guard_no_root_env() {
 }
 
 apply_env() {
+  export AGENT_RUNTIME_MODE="${AGENT_RUNTIME_MODE:-queue}"
   export APP_URL="${APP_URL:-http://localhost:${SERVER_PORT}}"
   export AUTH_EMAIL_VERIFICATION="${AUTH_EMAIL_VERIFICATION:-0}"
   export AUTH_SECRET="${AUTH_SECRET:-agent-testing-local-auth-secret-32chars}"
@@ -69,6 +73,7 @@ apply_env() {
   export QSTASH_NEXT_SIGNING_KEY="${QSTASH_NEXT_SIGNING_KEY:-$QSTASH_LOCAL_NEXT_SIGNING_KEY}"
   export QSTASH_TOKEN="${QSTASH_TOKEN:-$QSTASH_LOCAL_TOKEN}"
   export QSTASH_URL="${QSTASH_URL:-http://127.0.0.1:${QSTASH_DEV_PORT}}"
+  export REDIS_URL
   export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-agent-testing-access-key}"
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
   export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
@@ -78,6 +83,7 @@ apply_env() {
 env_keys() {
   printf '%s\n' \
     APP_URL \
+    AGENT_RUNTIME_MODE \
     AUTH_EMAIL_VERIFICATION \
     AUTH_SECRET \
     DATABASE_DRIVER \
@@ -92,6 +98,7 @@ env_keys() {
     QSTASH_NEXT_SIGNING_KEY \
     QSTASH_TOKEN \
     QSTASH_URL \
+    REDIS_URL \
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
     S3_ENDPOINT \
@@ -137,6 +144,15 @@ wait_for_db() {
   printf '\n'
 }
 
+wait_for_redis() {
+  printf '      waiting for Redis'
+  until docker exec "$REDIS_CONTAINER" redis-cli ping > /dev/null 2>&1; do
+    printf '.'
+    sleep 1
+  done
+  printf '\n'
+}
+
 start_db() {
   require_docker
 
@@ -155,6 +171,25 @@ start_db() {
   fi
 
   wait_for_db
+}
+
+start_redis() {
+  require_docker
+
+  if docker ps --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    ok "Redis container already running: $REDIS_CONTAINER"
+  elif docker ps -a --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    docker start "$REDIS_CONTAINER" > /dev/null
+    ok "started existing Redis container: $REDIS_CONTAINER"
+  else
+    docker run -d \
+      --name "$REDIS_CONTAINER" \
+      -p "${REDIS_PORT}:6379" \
+      redis:7-alpine > /dev/null
+    ok "created Redis container: $REDIS_CONTAINER"
+  fi
+
+  wait_for_redis
 }
 
 migrate_db() {
@@ -327,15 +362,22 @@ cmd_status() {
   apply_env
   echo "agent-testing local dev env:"
   note "APP_URL=$APP_URL"
+  note "AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE"
   note "DATABASE_URL=$DATABASE_URL"
   note "PORT=$PORT"
   note "QSTASH_URL=$QSTASH_URL"
+  note "REDIS_URL=$REDIS_URL"
   if command -v docker > /dev/null 2>&1; then
     ok "docker CLI available"
     if docker ps --format '{{.Names}}' | grep -Fxq "$DB_CONTAINER"; then
       ok "managed Postgres running: $DB_CONTAINER"
     else
       note "managed Postgres is not running: $DB_CONTAINER"
+    fi
+    if docker ps --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+      ok "managed Redis running: $REDIS_CONTAINER"
+    else
+      note "managed Redis is not running: $REDIS_CONTAINER"
     fi
   else
     bad "docker CLI is not available"
@@ -373,6 +415,15 @@ cmd_clean_db() {
   else
     note "Postgres container not found: $DB_CONTAINER"
   fi
+  if docker ps --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    docker stop "$REDIS_CONTAINER" > /dev/null
+  fi
+  if docker ps -a --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    docker rm "$REDIS_CONTAINER" > /dev/null
+    ok "removed Redis container: $REDIS_CONTAINER"
+  else
+    note "Redis container not found: $REDIS_CONTAINER"
+  fi
 }
 
 usage() {
@@ -391,6 +442,7 @@ case "$COMMAND" in
   write) shift; write_env "${1:-}" ;;
   setup-db)
     start_db
+    start_redis
     migrate_db
     ;;
   migrate) migrate_db ;;

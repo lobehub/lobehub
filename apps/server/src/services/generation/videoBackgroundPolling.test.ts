@@ -123,6 +123,15 @@ describe('videoBackgroundPolling', () => {
         expect.objectContaining({
           fileHash: 'hash-abc',
           fileType: 'video/mp4',
+          metadata: expect.objectContaining({
+            dirname: '',
+            duration: 10,
+            filename: 'test-prompt-gen-456.mp4',
+            generationId: 'gen-456',
+            height: 1080,
+            path: 'video-key-789',
+            width: 1920,
+          }),
           name: 'test-prompt-gen-456.mp4',
           size: 1024,
           url: 'video-key-789',

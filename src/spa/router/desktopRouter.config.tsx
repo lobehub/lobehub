@@ -9,14 +9,17 @@ import {
   Settings,
   ShapesIcon,
 } from 'lucide-react';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
+import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import { verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
@@ -64,6 +67,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
           },
           {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/docs/[docId]'),
+                  'Desktop > Chat > Document',
+                ),
+                handle: { meta: agentDocumentRouteMeta },
+                path: ':docId',
+              },
+            ],
+            element: dynamicLayout(
+              () => import('@/routes/(main)/agent/docs/_layout'),
+              'Desktop > Chat > DocumentLayout',
+            ),
+            path: 'docs',
+          },
+          {
             element: dynamicElement(
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
@@ -86,6 +106,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/agent/tasks'),
+              'Desktop > Chat > Tasks',
+            ),
+            handle: { meta: tasksRouteMeta },
+            path: 'tasks',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/agent/task/[taskId]'),
               'Desktop > Chat > Task Detail',
             ),
@@ -102,6 +130,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
       },
     ],
     path: 'agent',
+  },
+
+  // Fleet view (side-by-side agent dashboard)
+  {
+    element: dynamicElement(() => import('@/routes/(main)/fleet'), 'Desktop > Fleet'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: fleetRouteMeta },
+    path: 'fleet',
   },
 
   // Group chat routes
@@ -831,6 +867,13 @@ export const desktopRoutes: RouteObject[] = [
                     ),
                     path: 'storage',
                   },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
+                      'Desktop > Workspace > Settings > Devices',
+                    ),
+                    path: 'devices',
+                  },
                 ],
                 element: dynamicLayout(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/_content-layout'),
@@ -918,6 +961,14 @@ export const desktopRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  // Standalone verification-report viewer (outside main layout)
+  {
+    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyRouteMeta },
+    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

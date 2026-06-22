@@ -92,6 +92,7 @@ export const useControls = ({
     label: (
       <CheckboxItem
         checked={item.enabled}
+        hasPadding={false}
         id={item.id}
         label={item.name}
         labelMaxWidth={labelMaxWidth}
@@ -108,6 +109,7 @@ export const useControls = ({
     label: (
       <CheckboxItem
         checked={item.enabled}
+        hasPadding={false}
         id={item.id}
         label={item.name}
         labelMaxWidth={labelMaxWidth}

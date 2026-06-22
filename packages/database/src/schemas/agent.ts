@@ -92,9 +92,9 @@ export const agents = pgTable(
 
 /** @deprecated Use CreateAgentSchema from @lobechat/types instead */
 export const insertAgentSchema = createInsertSchema(agents, {
-  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullable().optional(),
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullish(),
   // Override chatConfig type to use the proper schema
-  chatConfig: AgentChatConfigSchema.nullable().optional(),
+  chatConfig: AgentChatConfigSchema.nullish(),
 });
 
 export type NewAgent = typeof agents.$inferInsert;

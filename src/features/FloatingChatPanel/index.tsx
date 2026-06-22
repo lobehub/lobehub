@@ -1,10 +1,13 @@
 'use client';
 
-import { ThreadType, type UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
+import { ActionIcon } from '@lobehub/ui';
 import { FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   type ActionsBarConfig,
@@ -23,40 +26,41 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ChatBody from './ChatBody';
 import { useSingleInstanceGuard } from './guard';
+import InputRow from './InputRow';
 
-const SNAP_POINTS = [180, 320, 520, 800] as const;
+const SNAP_POINTS = [420, 800] as const;
+const MID_SNAP_POINT = SNAP_POINTS[0];
 const MAX_SNAP_POINT = SNAP_POINTS.at(-1)!;
-const REST_SNAP_POINT = SNAP_POINTS[0];
 
-const styles = createStaticStyles(({ css }) => ({
-  sheet: css`
-    overflow: hidden;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  panel: css`
     display: flex;
-    flex: 1;
     flex-direction: column;
-
-    min-height: 0;
-  `,
-  header: css`
-    display: flex;
     flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-  `,
-  title: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  body: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    align-self: stretch;
 
     width: 100%;
-    height: 100%;
-    min-height: 0;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition:
+      border-block-start-color 240ms cubic-bezier(0.32, 0.72, 0, 1),
+      background 240ms cubic-bezier(0.32, 0.72, 0, 1);
+
+    &[data-collapsed='true'] {
+      border-block-start-color: transparent;
+      background: transparent;
+    }
+  `,
+  sheetSeamless: css`
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  `,
+  titleSpacer: css`
+    flex: 1;
   `,
 }));
 
@@ -97,20 +101,15 @@ export interface FloatingChatPanelProps {
   onOpenChange?: (open: boolean) => void;
   onSnapPointChange?: (point: number) => void;
   open?: boolean;
-  /**
-   * Conversation scope. Defaults to `'thread'` for ephemeral side-chat usage.
-   * When `'thread'` and `threadId` is absent, the context is marked `isNew`
-   * so a fresh thread can be created on first send (caller must supply
-   * `sourceMessageId` + `threadType` via `hooks` / context override if real
-   * thread persistence is required).
-   */
-  scope?: 'main' | 'thread';
   snapPoints?: number[];
-  /** Opens an existing thread when set; otherwise the panel starts ephemeral. */
-  threadId?: string | null;
   title?: ReactNode;
-  /** Topic identifier. `null` means a new / unpersisted conversation. */
-  topicId: string | null;
+  /**
+   * Topic identifier. Must be the doc-anchored topic resolved through
+   * `useDocumentChatTopic` so the panel renders the conversation tied to the
+   * `(documentId, agentId)` pair instead of whatever topic happens to be
+   * active. Callers should gate on a non-null value before rendering.
+   */
+  topicId: string;
   variant?: 'elevated' | 'embedded';
   width?: number | string;
 }
@@ -119,9 +118,8 @@ export interface FloatingChatPanelProps {
  * FloatingChatPanel
  *
  * Reusable floating conversation panel — composes `ChatList` + `ChatInput`
- * inside a `FloatingSheet`. Consumers provide conversation coordinates via
- * flat `agentId` / `topicId` / `threadId` props; the panel builds its own
- * `ConversationContext` internally.
+ * inside a `FloatingSheet`. The conversation is always main-scope on the
+ * supplied `topicId`; `ConversationProvider` owns message loading.
  *
  * Single instance per page (see `./guard.ts`).
  */
@@ -129,15 +127,10 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
   ({
     agentId,
     topicId,
-    threadId = null,
     documentId,
     agentDocumentId,
-    scope = 'thread',
     actionsBar,
     hooks,
-
-    minHeight: _minHeight = 240,
-    maxHeight: _maxHeight = 0.9,
 
     width = '100%',
 
@@ -145,109 +138,66 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     headerActions,
   }) => {
     useSingleInstanceGuard();
-
-    // Adopt the global portal-thread state so streaming AI chunks (which the
-    // lifecycle writes under the persisted `_<threadId>` key the moment the
-    // server returns `createdThreadId`) become visible in this panel without
-    // waiting for the post-stream `onAfterMessageCreate` hook. `lifecycle.ts`
-    // calls `syncThreadInPortal` *before* stream chunks start arriving, so
-    // subscribing here flips this panel's chatKey from `_new` to the persisted
-    // thread in time to render the stream.
-    const storePortalThreadId = useChatStore((s) => s.portalThreadId);
-    const effectiveThreadId = threadId ?? storePortalThreadId ?? null;
-
-    // Clear any stale `portalThreadId` left by a sibling portal session so a
-    // fresh mount starts in `isNew` state. Body's `key` already remounts the
-    // panel when `(agentId, topicId, documentId)` changes; this guards the
-    // first paint of that fresh mount against a leftover thread id.
-    useEffect(() => {
-      if (threadId) return;
-      if (useChatStore.getState().portalThreadId) {
-        useChatStore.setState({ portalThreadId: undefined });
-      }
-    }, [threadId]);
-
-    // Source message for `newThread`: the latest message of the topic's main
-    // scope. Without this, `conversationLifecycle.ts:215` treats the send as a
-    // plain topic message and never creates a thread row. Falls back to
-    // ephemeral (no source) when the topic has no messages yet.
-    const isCreatingNewThread = scope === 'thread' && !effectiveThreadId;
-    const sourceMessageId = useChatStore((s) => {
-      if (!isCreatingNewThread || !topicId) return undefined;
-      const mainKey = messageMapKey({ agentId, topicId });
-      const mainMessages = s.dbMessagesMap[mainKey];
-      if (!mainMessages?.length) return undefined;
-      // Anchor on the latest main-scope message (ignore thread-scoped rows).
-      for (let i = mainMessages.length - 1; i >= 0; i -= 1) {
-        const msg = mainMessages[i]!;
-        if (!msg.threadId) return msg.id;
-      }
-      return undefined;
-    });
+    const { t } = useTranslation('chat');
 
     const context = useMemo<ConversationContext>(
       () => ({
         agentId,
         ...(agentDocumentId ? { agentDocumentId } : {}),
         ...(documentId ? { documentId } : {}),
-        ...(isCreatingNewThread && sourceMessageId
-          ? { isNew: true, sourceMessageId, threadType: ThreadType.Standalone }
-          : isCreatingNewThread
-            ? { isNew: true }
-            : {}),
-        scope,
-        threadId: effectiveThreadId,
+        scope: 'main',
+        threadId: null,
         topicId,
       }),
-      [
-        agentId,
-        agentDocumentId,
-        documentId,
-        effectiveThreadId,
-        isCreatingNewThread,
-        scope,
-        sourceMessageId,
-        topicId,
-      ],
+      [agentId, agentDocumentId, documentId, topicId],
     );
 
     const chatKey = useMemo(() => messageMapKey(context), [context]);
-    const rawMessages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+
+    // ConversationProvider runs an isolated message store per panel — read the
+    // shared chat store's `dbMessagesMap` for this key and wire the standard
+    // `messages` / `onMessagesChange` sync pattern (mirrors `ConversationArea`
+    // in the main agent route). Without this loop the lifecycle's
+    // `chatStore.replaceMessages` after a send wouldn't propagate back into
+    // the panel's local message slice and the UI would stay empty.
+    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
     const replaceMessages = useChatStore((s) => s.replaceMessages);
-
-    // Document portal chat is an isolated doc-anchored side conversation —
-    // never the continuation of the main topic. Pre-send (no thread yet) we
-    // render empty regardless of whatever the `_new` thread key may hold from
-    // a sibling flow; post-send we keep only the thread's own rows, since
-    // `lifecycle.ts:replaceMessages(data.messages, { context: { threadId } })`
-    // also dumps every main-topic parent message into the thread key for the
-    // Portal/Thread parent → divider → thread layout we don't want here.
-    const messages = useMemo(() => {
-      if (!effectiveThreadId) return [];
-      if (!rawMessages) return rawMessages;
-      return rawMessages.filter((m) => m.threadId === effectiveThreadId);
-    }, [rawMessages, effectiveThreadId]);
-
-    const operationState = useOperationState(context);
-    const defaultActionsBar = useActionsBarConfig();
-    const resolvedActionsBar = actionsBar ?? defaultActionsBar;
-
-    const handleMessagesChange = useMemo(
-      () => (next: UIChatMessage[], ctx: ConversationContext) => {
+    const handleMessagesChange = useCallback(
+      (next: UIChatMessage[], ctx: ConversationContext) => {
         replaceMessages(next, { context: ctx });
       },
       [replaceMessages],
     );
 
-    const [open, setOpen] = useState(true);
-    const [activeSnapPoint, setActiveSnapPoint] = useState<number>(REST_SNAP_POINT);
+    const operationState = useOperationState(context);
+    const defaultActionsBar = useActionsBarConfig();
+    const resolvedActionsBar = actionsBar ?? defaultActionsBar;
+
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [activeSnapPoint, setActiveSnapPoint] = useState<number>(MID_SNAP_POINT);
+
+    const expand = useCallback(() => {
+      setActiveSnapPoint(MID_SNAP_POINT);
+      setIsCollapsed(false);
+    }, []);
+
+    const collapse = useCallback(() => {
+      setIsCollapsed(true);
+      setActiveSnapPoint(MID_SNAP_POINT);
+    }, []);
+
+    const handleOpenChange = useCallback(
+      (open: boolean) => {
+        if (!open) collapse();
+      },
+      [collapse],
+    );
 
     const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
     const chatFollowUpHooks = useChatFollowUp({
       agentChatConfig,
       conversationKey: chatKey,
-      threadId: effectiveThreadId ?? undefined,
-      topicId: topicId ?? undefined,
+      topicId,
     });
 
     const mergedHooks = useMemo<ConversationHooks>(
@@ -255,61 +205,74 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         mergeConversationHooks(
           hooks,
           {
-            // Expand the sheet the moment the user presses Send, so the chat grows
-            // into view before the AI response streams in — not after it finishes.
             onBeforeSendMessage: async () => {
-              setActiveSnapPoint(MAX_SNAP_POINT);
+              expand();
             },
           },
           chatFollowUpHooks,
         ),
-      [hooks, chatFollowUpHooks],
+      [hooks, chatFollowUpHooks, expand],
+    );
+
+    const collapseAction = (
+      <ActionIcon
+        data-testid="floating-chat-panel-collapse-button"
+        icon={ChevronDown}
+        size="small"
+        title={t('floatingChatPanel.collapse', { defaultValue: 'Collapse' })}
+        onClick={collapse}
+      />
     );
 
     const sheetProps: FloatingSheetProps = {
       activeSnapPoint,
-      className: 'floating-sheet-demo-inline',
-      closeThreshold: 0.3,
-      defaultOpen: true,
-      dismissible: false,
-      headerActions,
-
+      className: styles.sheetSeamless,
+      closeThreshold: 0.5,
+      defaultOpen: false,
+      dismissible: true,
+      headerActions: (
+        <>
+          {headerActions}
+          {collapseAction}
+        </>
+      ),
       maxHeight: MAX_SNAP_POINT,
-      minHeight: SNAP_POINTS[1],
+      minHeight: MID_SNAP_POINT,
       mode: 'inline',
-      onOpenChange: setOpen,
+      onOpenChange: handleOpenChange,
       onSnapPointChange: setActiveSnapPoint,
-      open,
-      restingHeight: REST_SNAP_POINT,
+      open: !isCollapsed,
+      restingHeight: MID_SNAP_POINT,
       snapPoints: [...SNAP_POINTS],
-      title,
-
-      variant: 'embedded',
+      // Always render a title slot — `space-between` on the header pulls the
+      // single child (headerActions) to the start otherwise, putting the
+      // collapse button on the left.
+      title: title ?? <span className={styles.titleSpacer} />,
+      variant: 'elevated',
       width,
     };
 
     return (
-      <FloatingSheet {...sheetProps}>
-        <div className={styles.body}>
-          <ConversationProvider
-            // Doc-anchored side chat owns its messages via the external
-            // `messages` prop (filtered from `dbMessagesMap` above). Letting
-            // ConversationProvider fire its own `useFetchMessages` here would
-            // pull the main-topic history from the server and drop it into
-            // this panel — exactly the parent dump A-mode is meant to avoid.
-            hasInitMessages
-            skipFetch
-            actionsBar={resolvedActionsBar}
-            context={context}
-            hooks={mergedHooks}
-            messages={messages ?? []}
-            operationState={operationState}
-            onMessagesChange={handleMessagesChange}
-          >
+      <ConversationProvider
+        actionsBar={resolvedActionsBar}
+        context={context}
+        hasInitMessages={!!messages}
+        hooks={mergedHooks}
+        messages={messages}
+        operationState={operationState}
+        onMessagesChange={handleMessagesChange}
+      >
+        <div
+          className={styles.panel}
+          data-collapsed={isCollapsed}
+          data-testid="floating-chat-panel"
+        >
+          <FloatingSheet {...sheetProps}>
             <ChatBody />
-          </ConversationProvider>
+          </FloatingSheet>
+          <InputRow isCollapsed={isCollapsed} onExpand={expand} />
         </div>
-      </FloatingSheet>
+      </ConversationProvider>
     );
   },
 );

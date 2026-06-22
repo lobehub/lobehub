@@ -115,6 +115,44 @@ describe('useTopicNavigation', () => {
     expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
   });
 
+  it('switches topics in place on an exact topic route', async () => {
+    pathnameMock.mockReturnValue('/agent/agent-1/topic-1');
+    chatStoreStateMock.activeTopicId = 'topic-1';
+    focusTopicPopupMock.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useTopicNavigation());
+
+    expect(result.current.isInTopicContextRoute).toBe(true);
+    expect(result.current.isInAgentSubRoute).toBe(false);
+
+    await act(async () => {
+      await result.current.navigateToTopic('topic-2');
+    });
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(switchTopicMock).toHaveBeenCalledWith('topic-2');
+    expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
+  });
+
+  it('routes to the next topic from a topic child route instead of leaving the URL on the child route', async () => {
+    pathnameMock.mockReturnValue('/agent/agent-1/topic-1/page');
+    chatStoreStateMock.activeTopicId = 'topic-1';
+    focusTopicPopupMock.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useTopicNavigation());
+
+    expect(result.current.isInTopicContextRoute).toBe(true);
+    expect(result.current.isInAgentSubRoute).toBe(true);
+
+    await act(async () => {
+      await result.current.navigateToTopic('topic-2');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-2');
+    expect(switchTopicMock).not.toHaveBeenCalled();
+    expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
+  });
+
   it('still routes back to chat from a profile sub-route even when activeTopicId is cached', async () => {
     // regression: cached activeTopicId should not make profile look like a topic route
     pathnameMock.mockReturnValue('/agent/agent-1/profile');
@@ -147,6 +185,23 @@ describe('useTopicNavigation', () => {
     });
 
     expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-workspace');
+    expect(switchTopicMock).not.toHaveBeenCalled();
+    expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
+  });
+
+  it('preserves a detected route prefix when routing from a prefixed profile path without an active workspace slug', async () => {
+    pathnameMock.mockReturnValue('/lobehub/agent/agent-1/profile');
+    focusTopicPopupMock.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useTopicNavigation());
+
+    expect(result.current.isInAgentSubRoute).toBe(true);
+
+    await act(async () => {
+      await result.current.navigateToTopic('topic-prefixed');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/lobehub/agent/agent-1/topic-prefixed');
     expect(switchTopicMock).not.toHaveBeenCalled();
     expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
   });

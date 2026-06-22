@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 
 import { DEFAULT_WORKSPACE_SETTINGS_TAB } from '@/types/workspaceSettings';
 

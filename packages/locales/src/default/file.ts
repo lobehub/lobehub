@@ -58,10 +58,10 @@ export default {
   'library.hierarchy.empty.desc': 'Add files or create a folder to get started',
   'library.hierarchy.empty.title': 'Nothing here yet',
   'library.import.action': 'Import to workspace…',
-  'library.import.failed': 'Failed to import knowledge base.',
-  'library.import.success': 'Knowledge base imported to {{name}}.',
+  'library.import.failed': 'Failed to import library.',
+  'library.import.success': 'Library imported to {{name}}.',
   'library.import.tooltip':
-    'Fork this knowledge base into a workspace. Files are shared by reference; the original stays in your personal space.',
+    'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
   'library.list.confirmRemoveLibrary':
     'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
   'library.list.copyDescription':
@@ -109,8 +109,22 @@ export default {
   'pageEditor.editedAt': 'Last edited on {{time}}',
   'pageEditor.editedBy': 'Last edited by {{name}}',
   'pageEditor.editMode.checking': 'Checking edit availability…',
+  'pageEditor.editMode.draftRestoreCancel': 'Discard',
+  'pageEditor.editMode.draftRestoreContent':
+    'Found unsaved local changes from your last session. Restore them?',
+  'pageEditor.editMode.draftRestoreOk': 'Restore',
+  'pageEditor.editMode.draftRestoreTitle': 'Restore Unsaved Draft',
   'pageEditor.editMode.lockedByOther': '{{name}} is editing this document',
+  'pageEditor.editMode.lockedBySelf': 'You’re editing this document in another tab',
+  'pageEditor.editMode.lockedBySelfDescription':
+    'Saves will resume after the other session closes or its lock expires (~30s).',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
+  'pageEditor.editMode.lockedDescription':
+    'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.lockLostDescription':
+    'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
+  'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',
+  'pageEditor.editMode.lockUnstable': 'Reconnecting edit lock…',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',

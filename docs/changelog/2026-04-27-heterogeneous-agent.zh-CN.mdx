@@ -1,5 +1,5 @@
 ---
-title: 编程 Agent —— Claude Code 与 Codex 进入桌面端
+title: 编程 Agent：Claude Code 与 Codex 进入桌面端
 description: Claude Code 与 Codex 成为桌面端的一等运行时，全新 Agent Signal 运行时上线，并迎来一批旗舰模型。
 tags:
   - 异构 Agent
@@ -11,17 +11,20 @@ tags:
 
 ## 新功能
 
-- 话题级别记忆滚动位置
-- 用户消息固定在视口顶部，过长内容自动折叠；最后一条用户消息可直接编辑并重发；并发对话期间的后续发送会顺序排队
-- 接入 Claude Code、Codex 等第三方编程 Agent
-- 在桌面端通过 Quick Chat 与屏幕截图直接向 LobeHub 提问
-- 新模型：GPT-5.5、DeepSeek V4 Flash / Pro（带思考强度滑块）、LobeHub 托管的 gpt-image-2、Kimi K2.6、MiMo-V2.5 与 Pro
-- 新提供商：OpenCode Zen 与 OpenCode Go
+- **接入 Claude Code 与 Codex。** 可在桌面端运行 Claude Code、Codex 等第三方编程 Agent。
+- **桌面端 Quick Chat。** 截取屏幕内容并就此向 LobeHub 提问。
+- **新模型。** GPT-5.5、DeepSeek V4 Flash 与 Pro（带思考强度滑块）、LobeHub 托管的 gpt-image-2、Kimi K2.6，以及 MiMo-V2.5 与 Pro。
+- **新提供商。** OpenCode Zen 与 OpenCode Go。
 
-## 体验优化与修复
+## 体验优化
 
-- 第一条助手消息不再启用 Markdown 流式渲染，避免渲染过程中的布局抖动。
-- 手动滚动后不再重新自动钉住对话底部。
-- 修复了 Codex 与异构 Agent 后续轮次中工具检查器渲染异常的问题。
-- FileEditor 从 antd Modal 迁移到 base-ui Modal，焦点与键盘行为更一致。
-- QStash 心跳支持自我重调度，长任务运行更稳定。
+- 话题会记住各自的滚动位置。
+- 过长的用户消息会折叠并固定在视口顶部，最后一条用户消息可直接编辑并重发，运行期间的后续发送也会顺序排队。
+- 文件编辑器的焦点与键盘行为更一致。
+
+## 问题修复
+
+- 第一条助手消息在流式渲染时不再发生布局抖动。
+- 手动向上滚动后，对话不再跳回底部。
+- Codex 与后续轮次的工具检查器渲染正常。
+- 长任务能持续保活，不再中途停滞。

@@ -7,6 +7,7 @@ import isEqual from 'fast-deep-equal';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
@@ -15,7 +16,7 @@ import ImportFromGithubModal from '@/features/SkillStore/SkillList/ImportFromGit
 import ImportFromUrlModal from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import UploadSkillModal from '@/features/SkillStore/SkillList/UploadSkillModal';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
+import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
 import SkillList, { type SkillViewMode } from './features/SkillList';
@@ -86,8 +87,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
+  const [searchParams] = useSearchParams();
+  const queryViewMode: SkillViewMode =
+    searchParams.get('tab') === 'skill' || searchParams.get('view') === 'skill'
+      ? 'skill'
+      : 'connector';
+  const querySkillIdentifier = searchParams.get('skill');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
-  const [viewMode, setViewMode] = useState<SkillViewMode>('connector');
+  const [viewMode, setViewMode] = useState<SkillViewMode>(queryViewMode);
   const [showAddConnector, setShowAddConnector] = useState(false);
   const [showUrlModal, setUrlModal] = useState(false);
   const [showGithubModal, setGithubModal] = useState(false);
@@ -96,6 +103,8 @@ const Page = memo(() => {
   // Data sources for auto-select
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
+  const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
+  const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
   const installedBuiltinIds = useToolStore(
     (s) => builtinToolSelectors.installedAllMetaList(s).map((tool) => tool.identifier),
     isEqual,
@@ -106,7 +115,12 @@ const Page = memo(() => {
   }, [viewMode]);
 
   useEffect(() => {
+    setViewMode(queryViewMode);
+  }, [queryViewMode]);
+
+  useEffect(() => {
     if (selected) return;
+    if (viewMode === 'skill' && querySkillIdentifier) return;
     if (viewMode === 'connector') {
       const firstTool = builtinTools.find(
         (tool) => !tool.hidden && installedBuiltinIds.includes(tool.identifier),
@@ -120,7 +134,16 @@ const Page = memo(() => {
         setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
       }
     }
-  }, [builtinTools, builtinSkills, installedBuiltinIds, selected, viewMode]);
+  }, [builtinTools, builtinSkills, installedBuiltinIds, querySkillIdentifier, selected, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'skill' || !querySkillIdentifier) return;
+
+    const skill = [...marketAgentSkills, ...userAgentSkills].find(
+      (item) => item.identifier === querySkillIdentifier,
+    );
+    if (skill) setSelected({ identifier: skill.id, type: 'agent-skill' });
+  }, [marketAgentSkills, querySkillIdentifier, userAgentSkills, viewMode]);
 
   const handleOpenStore = useCallback(() => {
     createSkillStoreModal();

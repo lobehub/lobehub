@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 const styles = createStaticStyles(({ css }) => ({
   alert: css`
@@ -32,15 +32,20 @@ const AgentModeNotice = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
 
-  const [enableAgentMode, model, provider] = useAgentStore((s) => [
+  const [enableAgentMode, isHeterogeneousAgent, model, provider] = useAgentStore((s) => [
     agentByIdSelectors.getAgentEnableModeById(agentId)(s),
+    agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
 
-  const supportToolUse = useAiInfraStore(aiModelSelectors.isModelSupportToolUse(model, provider));
+  const [isModelConfigReady, supportToolUse] = useAiInfraStore((s) => [
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+    aiModelSelectors.isModelSupportToolUse(model, provider)(s),
+  ]);
 
-  if (!enableAgentMode || supportToolUse) return null;
+  if (isHeterogeneousAgent || !enableAgentMode || !isModelConfigReady || supportToolUse)
+    return null;
 
   return (
     <Alert

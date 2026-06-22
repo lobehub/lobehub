@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -18,6 +18,7 @@ import {
 } from '../branches';
 import { getGitAheadBehind, getGitBranch } from '../info';
 import { getGitBranchDiff, getGitWorkingTreeFiles, getGitWorkingTreePatches } from '../workingTree';
+import { listGitWorktrees, parseGitWorktreeList } from '../worktrees';
 
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -61,6 +62,67 @@ describe('branch read operations', () => {
 
   it('listGitRemoteBranches returns [] when there is no origin', async () => {
     expect(await listGitRemoteBranches(repo)).toEqual([]);
+  });
+
+  it('parseGitWorktreeList handles branch, detached, and locked records', () => {
+    expect(
+      parseGitWorktreeList(
+        [
+          'worktree /repo',
+          'HEAD 1111111111111111111111111111111111111111',
+          'branch refs/heads/main',
+          '',
+          'worktree /repo-linked',
+          'HEAD 2222222222222222222222222222222222222222',
+          'detached',
+          'locked moving patch',
+          '',
+        ].join('\0'),
+      ),
+    ).toEqual([
+      {
+        branch: 'main',
+        head: '1111111111111111111111111111111111111111',
+        path: '/repo',
+      },
+      {
+        detached: true,
+        head: '2222222222222222222222222222222222222222',
+        locked: true,
+        lockReason: 'moving patch',
+        path: '/repo-linked',
+      },
+    ]);
+  });
+
+  it('listGitWorktrees marks the current worktree and includes dirty status', async () => {
+    git(repo, 'branch', 'feature');
+    const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-parent-'));
+    cleanup.push(worktreeParent);
+    const linked = path.join(worktreeParent, 'linked');
+    git(repo, 'worktree', 'add', linked, 'feature');
+    await writeFile(path.join(linked, 'new.txt'), 'new\n');
+
+    const worktrees = await listGitWorktrees(repo);
+
+    // `git worktree list` reports paths with symlinks resolved (e.g. macOS
+    // /var -> /private/var), so compare against the realpath of each temp dir.
+    expect(worktrees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          branch: 'main',
+          current: true,
+          path: await realpath(repo),
+          status: expect.objectContaining({ clean: true }),
+        }),
+        expect.objectContaining({
+          branch: 'feature',
+          current: false,
+          path: await realpath(linked),
+          status: expect.objectContaining({ added: 1, clean: false, total: 1 }),
+        }),
+      ]),
+    );
   });
 });
 

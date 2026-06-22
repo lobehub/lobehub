@@ -32,6 +32,14 @@ const def = <A extends unknown[]>(
   build: (...args: A) => readonly unknown[],
 ): KeyFactory<A> => Object.assign(build, { root });
 
+interface LocalFilePreviewKeyParams {
+  accept?: 'image';
+  allowExternalFile?: boolean;
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}
+
 // ---- message ------------------------------------------------------------
 /**
  * Message cache schema version. Baked into the message list key so a bump
@@ -68,6 +76,12 @@ export const topicKeys = {
     agentId,
     groupId,
   ]),
+};
+
+// ---- fleet (Observation Mode board) -------------------------------------
+export const fleetKeys = {
+  /** Account-wide set of actively-running topics powering the Observation board. */
+  runningTopics: def('fleet:runningTopics', () => ['fleet:runningTopics']),
 };
 
 // ---- agent --------------------------------------------------------------
@@ -534,10 +548,10 @@ export const chatToolKeys = {
 };
 
 // =========================================================================
-// UI-layer keys (features / routes / components). Same rule as above: every
-// prefix below is deliberately kept OUT of `CACHE_TIERS` (memory-only). Names
-// avoid colliding with cached prefixes — e.g. share/topicInfo is `share:` not
-// `topic:`, portal header is `portal:` not `document:`.
+// UI-layer keys (features / routes / components). Prefixes below stay
+// memory-only unless explicitly listed in `CACHE_TIERS`. Names avoid colliding
+// with cached prefixes — e.g. share/topicInfo is `share:` not `topic:`, portal
+// header is `portal:` not `document:`.
 // =========================================================================
 
 // ---- stats (settings/stats + user header counts) ------------------------
@@ -580,12 +594,22 @@ export const messengerKeys = {
 
 // ---- verify (deliverable judging) ---------------------------------------
 export const verifyKeys = {
+  criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
     documentId,
   ]),
+  reportBundle: def('verify:reportBundle', (verifyRunId: string) => [
+    'verify:reportBundle',
+    verifyRunId,
+  ]),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
+  rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
+    'verify:rubricCriteria',
+    rubricId,
+  ]),
+  rubrics: def('verify:rubrics', () => ['verify:rubrics']),
   state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
@@ -624,6 +648,40 @@ export const portalKeys = {
   documentHeader: def('portal:documentHeader', (documentId: string) => [
     'portal:documentHeader',
     documentId,
+  ]),
+};
+
+// ---- local file ---------------------------------------------------------
+export const localFileKeys = {
+  gitWorkingTreeFiles: def(
+    'localFile:gitWorkingTreeFiles',
+    (deviceId: string | undefined, dirPath: string) => [
+      'localFile:gitWorkingTreeFiles',
+      deviceId ?? 'local',
+      dirPath,
+    ],
+  ),
+  preview: def(
+    'localFile:preview',
+    ({
+      accept,
+      allowExternalFile,
+      deviceId,
+      filePath,
+      workingDirectory,
+    }: LocalFilePreviewKeyParams) => [
+      'localFile:preview',
+      deviceId ?? 'local',
+      filePath,
+      workingDirectory,
+      accept ?? 'any',
+      allowExternalFile ? 'external' : 'workspace',
+    ],
+  ),
+  projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [
+    'localFile:projectIndex',
+    deviceId ?? 'local',
+    dirPath,
   ]),
 };
 
@@ -684,18 +742,18 @@ export const topicActionKeys = {
   openNewOrSave: def('topicAction:openNewOrSave', () => ['topicAction:openNewOrSave']),
 };
 
-// ---- misc remaining domains (memory-only; off CACHE_TIERS) --------------
+// ---- misc remaining domains ---------------------------------------------
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
 };
 export const taskTemplateKeys = {
   listDailyRecommend: def(
     'taskTemplate:listDailyRecommend',
-    (interestsKey: string, refreshSeed: unknown, recommendationCount: number) => [
+    (refreshSeed: unknown, recommendationCount: number, locale: string) => [
       'taskTemplate:listDailyRecommend',
-      interestsKey,
       refreshSeed,
       recommendationCount,
+      locale,
     ],
   ),
 };
@@ -780,6 +838,7 @@ export const swrKeys = {
   eval: evalKeys,
   favorite: favoriteKeys,
   file: fileKeys,
+  fleet: fleetKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
   global: globalKeys,
@@ -789,6 +848,7 @@ export const swrKeys = {
   imessage: imessageKeys,
   inbox: inboxKeys,
   knowledgeBase: knowledgeBaseKeys,
+  localFile: localFileKeys,
   message: messageKeys,
   messenger: messengerKeys,
   notebook: notebookSWRKeys,

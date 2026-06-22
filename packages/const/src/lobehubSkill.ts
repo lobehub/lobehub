@@ -36,6 +36,8 @@ export interface LobehubSkillProviderType {
   readme: string;
 }
 
+export type LobehubConnectorProviderType = LobehubSkillProviderType;
+
 /**
  * Predefined LobeHub Skill Provider list
  *
@@ -118,11 +120,15 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
   },
 ];
 
+export const LOBEHUB_CONNECTOR_PROVIDERS = LOBEHUB_SKILL_PROVIDERS;
+
 /**
  * Get provider config by ID
  */
 export const getLobehubSkillProviderById = (id: string) =>
   LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === id);
+
+export const getLobehubConnectorProviderById = getLobehubSkillProviderById;
 
 /**
  * Get all visible providers (for default UI display)

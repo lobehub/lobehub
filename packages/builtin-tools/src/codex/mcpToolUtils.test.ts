@@ -5,7 +5,7 @@ import { getCodexLinearMcpApiName, getMcpInputRecord } from './mcpToolUtils';
 describe('getCodexLinearMcpApiName', () => {
   it('maps Codex Apps fetch calls to entity-specific Linear APIs', () => {
     expect(
-      getCodexLinearMcpApiName({ input: { id: 'issue:LOBE-10205' }, toolName: 'linear_fetch' }),
+      getCodexLinearMcpApiName({ input: { id: 'issue:TEST-0000' }, toolName: 'linear_fetch' }),
     ).toBe('get_issue');
     expect(
       getCodexLinearMcpApiName({ input: { id: 'project:Desktop' }, toolName: 'linear_fetch' }),
@@ -41,7 +41,7 @@ describe('getCodexLinearMcpApiName', () => {
 
   it('treats bare issue identifiers as issue fetch calls', () => {
     expect(
-      getCodexLinearMcpApiName({ input: { id: 'LOBE-10205' }, toolName: 'linear_fetch' }),
+      getCodexLinearMcpApiName({ input: { id: 'TEST-0000' }, toolName: 'linear_fetch' }),
     ).toBe('get_issue');
   });
 
@@ -55,7 +55,7 @@ describe('getCodexLinearMcpApiName', () => {
     ).toBe('');
     expect(
       getCodexLinearMcpApiName({
-        input: { id: 'LOBE-10205' },
+        input: { id: 'TEST-0000' },
         server: 'github',
         toolName: 'fetch',
       }),
@@ -65,7 +65,7 @@ describe('getCodexLinearMcpApiName', () => {
   it('allows bare fetch only when the input has a Linear entity prefix', () => {
     expect(
       getCodexLinearMcpApiName({
-        input: { id: 'issue:LOBE-10205' },
+        input: { id: 'issue:TEST-0000' },
         server: 'node_repl',
         toolName: 'fetch',
       }),
@@ -92,8 +92,8 @@ describe('getCodexLinearMcpApiName', () => {
 
 describe('getMcpInputRecord', () => {
   it('parses JSON string MCP arguments', () => {
-    expect(getMcpInputRecord({ arguments: '{"id":"issue:LOBE-10205"}' })).toEqual({
-      id: 'issue:LOBE-10205',
+    expect(getMcpInputRecord({ arguments: '{"id":"issue:TEST-0000"}' })).toEqual({
+      id: 'issue:TEST-0000',
     });
   });
 });

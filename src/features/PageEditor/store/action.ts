@@ -4,6 +4,7 @@ import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
+import { type EditLockHealth } from '@/features/EditLock';
 import { useDocumentStore } from '@/store/document';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -26,9 +27,24 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
+  /**
+   * Mirror the lock health from {@link useEditLock} into the store so banners and
+   * draft persistence can observe deviations without re-deriving the state.
+   */
+  setLockHealth: (health: EditLockHealth) => void;
+  setLockOwnerId: (ownerId: string | undefined) => void;
   /** True while the lock state is still being resolved (editor read-only meanwhile). */
   setLockPending: (pending: boolean) => void;
-  setLockState: (lock: { holderId: string | null; lockedByOther: boolean }) => void;
+  /**
+   * Record who holds the edit lock. `holderId` (+ `holderOwnerId`) is the single
+   * source of truth; "locked by other" is derived against the current user/session
+   * via {@link usePageLockedByOther}, never stored separately.
+   */
+  setLockState: (
+    holderId: string | null,
+    expiresAt?: Date | string | null,
+    holderOwnerId?: string | null,
+  ) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -133,11 +149,15 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           lastSavedTitle,
           lastSavedEmoji,
           isMetaDirty,
+          metaReadOnly,
           onTitleChange,
           onEmojiChange,
         } = get();
 
-        if (!documentId || !isMetaDirty) return;
+        // Backstop: never persist meta for a read-only doc, even if something
+        // marked it dirty out-of-band. A title save also rewrites the filename
+        // (DocumentService.updateDocument), which would desync a managed skill.
+        if (!documentId || !isMetaDirty || metaReadOnly) return;
 
         set({ metaSaveStatus: 'saving' });
 
@@ -173,7 +193,9 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setEmoji: (emoji: string | undefined) => {
-        const { lastSavedEmoji, triggerDebouncedMetaSave } = get();
+        const { lastSavedEmoji, metaReadOnly, triggerDebouncedMetaSave } = get();
+
+        if (metaReadOnly) return;
 
         const isDirty = emoji !== lastSavedEmoji;
         set({ emoji, isMetaDirty: isDirty });
@@ -183,14 +205,26 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }
       },
 
+      setLockHealth: (health) => {
+        if (get().lockHealth !== health) set({ lockHealth: health });
+      },
+
       setLockPending: (pending) => {
         if (get().isLockPending !== pending) set({ isLockPending: pending });
       },
 
-      setLockState: ({ holderId, lockedByOther }) => {
-        const { isLockedByOther, lockHolderId } = get();
-        if (isLockedByOther === lockedByOther && lockHolderId === holderId) return;
-        set({ isLockedByOther: lockedByOther, lockHolderId: holderId });
+      setLockOwnerId: (ownerId) => {
+        if (get().lockOwnerId !== ownerId) set({ lockOwnerId: ownerId });
+      },
+
+      setLockState: (holderId, expiresAt = null, holderOwnerId = null) => {
+        if (
+          get().lockHolderId === holderId &&
+          get().lockExpiresAt === expiresAt &&
+          get().lockHolderOwnerId === holderOwnerId
+        )
+          return;
+        set({ lockExpiresAt: expiresAt, lockHolderId: holderId, lockHolderOwnerId: holderOwnerId });
       },
 
       setRightPanelMode: (rightPanelMode) => {
@@ -198,7 +232,12 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setTitle: (title: string) => {
-        const { lastSavedTitle, triggerDebouncedMetaSave } = get();
+        const { lastSavedTitle, metaReadOnly, triggerDebouncedMetaSave } = get();
+
+        // Ignore title writes from every source — manual UI, AI / page-agent
+        // editTitle, title extraction — when the doc's meta is read-only. The
+        // visible name is owned elsewhere (e.g. a skill bundle title).
+        if (metaReadOnly) return;
 
         const isDirty = title !== lastSavedTitle;
         set({ isMetaDirty: isDirty, title });

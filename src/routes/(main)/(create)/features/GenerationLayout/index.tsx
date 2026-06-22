@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import type { FC, ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import Sidebar from './Sidebar';
 import { styles } from './style';

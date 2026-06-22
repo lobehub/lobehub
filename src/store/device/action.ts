@@ -128,7 +128,7 @@ export class DeviceActionImpl {
     }
   };
 
-  useFetchDevices = (enabled = true): SWRResponse<DeviceListItem[]> =>
+  useFetchDevices = (enabled = false): SWRResponse<DeviceListItem[]> =>
     useClientDataSWR<DeviceListItem[]>(
       enabled ? deviceKeys.listDevices() : null,
       () => deviceService.listDevices(),

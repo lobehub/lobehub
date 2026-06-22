@@ -1,4 +1,3 @@
-export * from './const/models';
 export * from './core/BaseAI';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
@@ -35,6 +34,7 @@ export * from './helpers';
 export { LobeAkashChatAI } from './providers/akashchat';
 export { LobeAntGroupAI } from './providers/antgroup';
 export { LobeAnthropicAI } from './providers/anthropic';
+export * from './providers/anthropic/claudeModelId';
 export { LobeAzureAI } from './providers/azureai';
 export { LobeAzureOpenAI } from './providers/azureOpenai';
 export { LobeBailianCodingPlanAI } from './providers/bailianCodingPlan';
@@ -46,6 +46,7 @@ export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
 export { LobeGoogleAI } from './providers/google';
+export * from './providers/google/googleModelId';
 export { LobeGroq } from './providers/groq';
 export { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 export { LobeHubAI } from './providers/lobehub';
@@ -59,6 +60,7 @@ export { LobeNewAPIAI } from './providers/newapi';
 export { LobeOllamaAI } from './providers/ollama';
 export { LobeOllamaCloudAI } from './providers/ollamacloud';
 export { LobeOpenAI } from './providers/openai';
+export * from './providers/openai/openaiModelId';
 export { LobeOpenRouterAI } from './providers/openrouter';
 export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';
@@ -74,9 +76,14 @@ export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
 export * from './types';
 export * from './types/error';
-export * from './utils/claudeModelId';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';
 export { getModelPricing } from './utils/getModelPricing';
+export {
+  applyModelExtendParams,
+  type ApplyModelExtendParamsContext,
+  type ModelExtendParams,
+  resolveDefaultThinkingLevelForModel,
+} from './utils/modelExtendParams';
 export { parseDataUri } from './utils/uriParser';

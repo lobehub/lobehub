@@ -1,8 +1,15 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
-import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import {
+  ContextMenuTrigger,
+  Flexbox,
+  type GenericItemType,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
-import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
+import { createStaticStyles, cx } from 'antd-style';
+import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 
@@ -22,7 +29,32 @@ export interface SkillListItem {
   name: string;
 }
 
+/**
+ * A per-row action (view / rename / delete …). The same descriptor drives both
+ * the hover-revealed icon button on the right of the row and the right-click
+ * context menu, so callers wire each capability once. Disabled actions render
+ * greyed (used for not-yet-supported operations, e.g. mutating filesystem
+ * project skills).
+ */
+export interface SkillRowAction {
+  danger?: boolean;
+  disabled?: boolean;
+  icon: LucideIcon;
+  key: string;
+  label: string;
+  onClick: (item: SkillListItem) => void;
+  /** Hover-icon tooltip; falls back to `label`. Use for "coming soon" hints. */
+  tooltip?: string;
+}
+
 interface SkillsListProps {
+  /**
+   * Per-row actions. When this returns a non-empty array the row gains a
+   * hover-revealed action cluster (right side, swaps with the file count) and a
+   * right-click context menu sharing the same actions. Return `[]`/omit for
+   * read-only rows (no menu, native right-click preserved).
+   */
+  getRowActions?: (item: SkillListItem) => SkillRowAction[];
   items: SkillListItem[];
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill?: (item: SkillListItem) => void;
@@ -82,12 +114,62 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+
+    /* Swap the file count for the row actions while hovering the row. */
+    &:hover .skill-row-actions {
+      display: flex;
+    }
+
+    &:hover .skill-row-count {
+      display: none;
+    }
   `,
   itemCount: css`
     flex-shrink: 0;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
+  `,
+  rowAction: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  rowActionDanger: css`
+    &:hover {
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
+    }
+  `,
+  rowActionDisabled: css`
+    cursor: not-allowed;
+    color: ${cssVar.colorTextQuaternary};
+
+    &:hover {
+      color: ${cssVar.colorTextQuaternary};
+      background: transparent;
+    }
+  `,
+  rowActions: css`
+    display: none;
+    flex: none;
+    gap: 2px;
+    align-items: center;
   `,
   itemIcon: css`
     flex-shrink: 0;
@@ -220,6 +302,7 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
 TreeRow.displayName = 'SkillsListTreeRow';
 
 interface SkillRowProps {
+  actions: SkillRowAction[];
   expanded: boolean;
   item: SkillListItem;
   onDragStart?: (event: React.DragEvent) => void;
@@ -230,9 +313,19 @@ interface SkillRowProps {
 }
 
 const SkillRow = memo<SkillRowProps>(
-  ({ expanded, item, onDragStart, onOpenFile, onOpenSkill, onToggle, reserveChevronSlot }) => {
+  ({
+    actions,
+    expanded,
+    item,
+    onDragStart,
+    onOpenFile,
+    onOpenSkill,
+    onToggle,
+    reserveChevronSlot,
+  }) => {
     const files = item.files ?? EMPTY_ARRAY;
     const hasFiles = files.length > 0;
+    const hasActions = actions.length > 0;
     const tree = useMemo(() => buildSkillTree(files), [files]);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
 
@@ -245,52 +338,100 @@ const SkillRow = memo<SkillRowProps>(
       });
     }, []);
 
+    const contextMenuItems = useCallback(
+      (): GenericItemType[] =>
+        actions.map((action) => ({
+          danger: action.danger,
+          disabled: action.disabled,
+          icon: <Icon icon={action.icon} />,
+          key: action.key,
+          label: action.label,
+          onClick: () => action.onClick(item),
+        })),
+      [actions, item],
+    );
+
+    // The description Tooltip wraps just the name (a ref-forwarding leaf) and the
+    // ContextMenuTrigger wraps just the row Flexbox — both cloning wrappers get
+    // a clean DOM-forwarding child. Nesting them (Tooltip around the trigger, or
+    // vice versa) would drop `onContextMenu` / the ref on the way through.
+    const nameNode = (
+      <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
+        {item.name}
+      </Text>
+    );
+
+    const row = (
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.item}
+        draggable={!!onDragStart}
+        gap={6}
+        onDragStart={onDragStart}
+      >
+        {hasFiles ? (
+          <Flexbox
+            align={'center'}
+            justify={'center'}
+            style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+          >
+            <Icon
+              className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+              icon={ChevronRightIcon}
+              size={14}
+            />
+          </Flexbox>
+        ) : reserveChevronSlot ? (
+          <span style={{ flexShrink: 0, height: 20, width: 20 }} />
+        ) : null}
+        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        {item.description ? (
+          <Tooltip
+            placement={'left'}
+            title={<span className={styles.description}>{item.description}</span>}
+          >
+            {nameNode}
+          </Tooltip>
+        ) : (
+          nameNode
+        )}
+        {typeof item.fileCount === 'number' && item.fileCount > 0 && (
+          <span className={cx('skill-row-count', styles.itemCount)}>{item.fileCount}</span>
+        )}
+        {hasActions && (
+          <div className={cx('skill-row-actions', styles.rowActions)} draggable={false}>
+            {actions.map((action) => (
+              <Tooltip key={action.key} title={action.tooltip ?? action.label}>
+                <div
+                  role={'button'}
+                  className={cx(
+                    styles.rowAction,
+                    action.danger && !action.disabled && styles.rowActionDanger,
+                    action.disabled && styles.rowActionDisabled,
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (action.disabled) return;
+                    action.onClick(item);
+                  }}
+                >
+                  <Icon icon={action.icon} size={13} />
+                </div>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+      </Flexbox>
+    );
+
     return (
       <>
-        <Tooltip
-          placement={'left'}
-          title={
-            item.description ? (
-              <span className={styles.description}>{item.description}</span>
-            ) : undefined
-          }
-        >
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.item}
-            draggable={!!onDragStart}
-            gap={6}
-            onDragStart={onDragStart}
-          >
-            {hasFiles ? (
-              <Flexbox
-                align={'center'}
-                justify={'center'}
-                style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle();
-                }}
-              >
-                <Icon
-                  className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
-                  icon={ChevronRightIcon}
-                  size={14}
-                />
-              </Flexbox>
-            ) : reserveChevronSlot ? (
-              <span style={{ flexShrink: 0, height: 20, width: 20 }} />
-            ) : null}
-            <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
-            <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
-              {item.name}
-            </Text>
-            {typeof item.fileCount === 'number' && item.fileCount > 0 && (
-              <span className={styles.itemCount}>{item.fileCount}</span>
-            )}
-          </Flexbox>
-        </Tooltip>
+        {hasActions ? <ContextMenuTrigger items={contextMenuItems}>{row}</ContextMenuTrigger> : row}
         {expanded &&
           hasFiles &&
           onOpenFile &&
@@ -311,40 +452,43 @@ const SkillRow = memo<SkillRowProps>(
 
 SkillRow.displayName = 'SkillsListSkillRow';
 
-const SkillsList = memo<SkillsListProps>(({ items, onOpenFile, onOpenSkill, onSkillDragStart }) => {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+const SkillsList = memo<SkillsListProps>(
+  ({ getRowActions, items, onOpenFile, onOpenSkill, onSkillDragStart }) => {
+    const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
-  const toggle = useCallback((id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+    const toggle = useCallback((id: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }, []);
 
-  const reserveChevronSlot = useMemo(
-    () => items.some((item) => (item.files?.length ?? 0) > 0),
-    [items],
-  );
+    const reserveChevronSlot = useMemo(
+      () => items.some((item) => (item.files?.length ?? 0) > 0),
+      [items],
+    );
 
-  return (
-    <Flexbox gap={2}>
-      {items.map((item) => (
-        <SkillRow
-          expanded={expanded.has(item.id)}
-          item={item}
-          key={item.id}
-          reserveChevronSlot={reserveChevronSlot}
-          onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
-          onOpenFile={onOpenFile ? (relativePath) => onOpenFile(item, relativePath) : undefined}
-          onOpenSkill={onOpenSkill ? () => onOpenSkill(item) : undefined}
-          onToggle={() => toggle(item.id)}
-        />
-      ))}
-    </Flexbox>
-  );
-});
+    return (
+      <Flexbox gap={2}>
+        {items.map((item) => (
+          <SkillRow
+            actions={getRowActions?.(item) ?? EMPTY_ARRAY}
+            expanded={expanded.has(item.id)}
+            item={item}
+            key={item.id}
+            reserveChevronSlot={reserveChevronSlot}
+            onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
+            onOpenFile={onOpenFile ? (relativePath) => onOpenFile(item, relativePath) : undefined}
+            onOpenSkill={onOpenSkill ? () => onOpenSkill(item) : undefined}
+            onToggle={() => toggle(item.id)}
+          />
+        ))}
+      </Flexbox>
+    );
+  },
+);
 
 SkillsList.displayName = 'SkillsList';
 

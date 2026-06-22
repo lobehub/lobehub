@@ -126,8 +126,8 @@ export interface NewMessageQueryParams {
 export const UpdateMessageParamsSchema = z
   .object({
     content: z.string().optional(),
-    editorData: z.record(z.any()).nullable().optional(),
-    error: ChatMessageErrorSchema.nullable().optional(),
+    editorData: z.record(z.any()).nullish(),
+    error: ChatMessageErrorSchema.nullish(),
     imageList: z.array(ChatImageItemSchema).optional(),
     metadata: MessageMetadataSchema.optional(),
     model: z.string().optional(),
@@ -137,7 +137,7 @@ export const UpdateMessageParamsSchema = z
     role: z.string().optional(),
     search: GroundingSearchSchema.optional(),
     toolCalls: z.array(MessageToolCallSchema).optional(),
-    tools: z.array(ChatToolPayloadSchema).nullable().optional(),
+    tools: z.array(ChatToolPayloadSchema).nullish(),
     traceId: z.string().optional(),
     usage: ModelUsageSchema.optional(),
   })

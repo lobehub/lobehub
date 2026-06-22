@@ -6,6 +6,7 @@ import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
 import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayStart } from './handlers/gatewayStart';
+import { groupMemberCallback } from './handlers/groupMemberCallback';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
@@ -71,6 +72,9 @@ app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
 
 // POST /api/agent/webhooks/subagent-callback — sub-agent completion bridge (QStash)
 app.post('/webhooks/subagent-callback', qstashAuth(), subAgentCallback);
+
+// POST /api/agent/webhooks/group-member-callback — group-action member bridge (QStash)
+app.post('/webhooks/group-member-callback', qstashAuth(), groupMemberCallback);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);

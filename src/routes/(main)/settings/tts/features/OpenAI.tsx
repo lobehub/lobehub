@@ -13,7 +13,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { opeanaiSTTOptions, opeanaiTTSOptions } from './const';
+import { opeanaiTTSOptions } from './const';
 
 const OpenAI = memo(() => {
   const { t } = useTranslation('setting');
@@ -39,19 +39,6 @@ const OpenAI = memo(() => {
         ),
         label: t('settingTTS.openai.ttsModel'),
         name: ['openAI', 'ttsModel'],
-      },
-      {
-        children: (
-          <Tooltip title={reason}>
-            <Select
-              disabled={!canManageServiceModel}
-              options={opeanaiSTTOptions}
-              style={{ width: 448 }}
-            />
-          </Tooltip>
-        ),
-        label: t('settingTTS.openai.sttModel'),
-        name: ['openAI', 'sttModel'],
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,

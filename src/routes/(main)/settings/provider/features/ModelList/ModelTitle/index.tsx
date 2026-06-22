@@ -159,7 +159,12 @@ const ModelTitle = memo<ModelFetcherProps>(
                       size={'small'}
                       onClick={() => {
                         if (!canManageProvider) return;
-                        createCreateNewModelModal({ showDeployName });
+                        createCreateNewModelModal({
+                          existingModelIds: useAiInfraStore
+                            .getState()
+                            .aiProviderModelList.map((model) => model.id),
+                          showDeployName,
+                        });
                       }}
                     />
                   </Tooltip>

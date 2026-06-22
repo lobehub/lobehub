@@ -1,150 +1,147 @@
-import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { createHash } from 'node:crypto';
+
+import type { TaskTemplate, TaskTemplateConnector } from '@lobechat/const';
 import {
-  TASK_TEMPLATE_FALLBACK_CATEGORIES,
-  TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES,
+  getComposioAppByIdentifier,
+  getLobehubConnectorProviderById,
+  INTEREST_AREA_KEYS,
+  TASK_TEMPLATE_CATEGORIES,
+  TASK_TEMPLATE_ICONS,
   TASK_TEMPLATE_RECOMMEND_COUNT,
-  taskTemplates,
+  TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
 } from '@lobechat/const';
+import { z } from 'zod';
 
-import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
+import { isTrustedClientEnabled } from '@/libs/trusted-client';
+import { MarketService } from '@/server/services/market';
 
-export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
-  const sources = new Set<TaskTemplateSkillSource>();
-  if (composioEnv.COMPOSIO_API_KEY) sources.add('composio');
-  if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
-    sources.add('lobehub');
+const clampRecommendationCount = (count?: number) =>
+  Math.min(Math.max(1, count ?? TASK_TEMPLATE_RECOMMEND_COUNT), TASK_TEMPLATE_RECOMMEND_MAX_COUNT);
+
+const getInstanceSeedScope = () =>
+  process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT_PRODUCTION_URL || appEnv.APP_URL;
+
+export const createTaskTemplateRecommendationSeedKey = (
+  userId: string,
+  instanceSeedScope = getInstanceSeedScope(),
+) =>
+  createHash('sha256')
+    .update(`task-template-recommendation:v1:${instanceSeedScope}:${userId}`)
+    .digest('base64url');
+
+const isCronNumber = (value: string, max: number) => {
+  if (!/^\d+$/.test(value)) return false;
+  const parsed = Number.parseInt(value, 10);
+  return parsed >= 0 && parsed <= max;
+};
+
+const isCronStep = (value: string, max: number) => {
+  if (!/^\*\/\d+$/.test(value)) return false;
+  const parsed = Number.parseInt(value.slice(2), 10);
+  return parsed >= 1 && parsed <= max;
+};
+
+const isCronNumberList = (value: string, max: number) =>
+  value.split(',').every((item) => isCronNumber(item, max));
+
+const isSupportedTaskTemplateCronPattern = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+
+  const parts = value.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+
+  const [minute, hour, dayOfMonth, month, weekday] = parts;
+  if (
+    !(minute === '*' || isCronNumberList(minute, 59) || isCronStep(minute, 59)) ||
+    !(hour === '*' || isCronNumberList(hour, 23) || isCronStep(hour, 24))
+  ) {
+    return false;
   }
-  return sources;
-})();
+  if (dayOfMonth !== '*' || month !== '*') return false;
 
-const hashString = (str: string): number => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  return weekday === '*' || isCronNumberList(weekday, 6);
+};
+
+const taskTemplateConnectorSchema: z.ZodType<TaskTemplateConnector> = z
+  .object({
+    identifier: z.string(),
+    required: z.boolean(),
+    source: z.enum(['composio', 'lobehub']),
+  })
+  .refine(
+    (connector) =>
+      connector.source === 'lobehub'
+        ? !!getLobehubConnectorProviderById(connector.identifier)
+        : !!getComposioAppByIdentifier(connector.identifier),
+    { message: 'Unknown task template connector' },
+  );
+
+const taskTemplateSchema: z.ZodType<TaskTemplate> = z.object({
+  category: z.enum(TASK_TEMPLATE_CATEGORIES),
+  connectors: z.array(taskTemplateConnectorSchema),
+  cronPattern: z.string().refine(isSupportedTaskTemplateCronPattern, {
+    message: 'Unsupported task template cron pattern',
+  }),
+  description: z.string(),
+  icon: z.enum(TASK_TEMPLATE_ICONS).optional(),
+  id: z.number().int(),
+  identifier: z.string(),
+  instruction: z.string(),
+  interests: z.array(z.enum(INTEREST_AREA_KEYS)),
+  title: z.string(),
+});
+
+const taskTemplateRecommendationEnvelopeSchema = z.object({
+  items: z.array(z.unknown()),
+});
+
+const parseTaskTemplateRecommendations = (value: unknown): TaskTemplate[] => {
+  const envelope = taskTemplateRecommendationEnvelopeSchema.safeParse(value);
+  if (!envelope.success) {
+    throw new Error('Market recommendations returned no items array');
   }
-  return hash >>> 0;
-};
 
-/** mulberry32 — pure function of seed, used so recommendations are stable per user/day. */
-const mulberry32 = (seed: number) => {
-  let t = seed >>> 0;
-  return () => {
-    t = (t + 0x6d_2b_79_f5) | 0;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
-    return ((r ^ (r >>> 14)) >>> 0) / 4_294_967_296;
-  };
-};
-
-const seededShuffle = <T>(items: T[], seed: number): T[] => {
-  const arr = [...items];
-  const rand = mulberry32(seed);
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+  const items = z.array(taskTemplateSchema).safeParse(envelope.data.items);
+  if (!items.success) {
+    throw new Error('Market recommendations returned malformed items');
   }
-  return arr;
-};
 
-const normalize = (s: string) => s.trim().toLowerCase();
-
-const hasIntersection = (template: TaskTemplate, userInterests: string[]): boolean => {
-  if (userInterests.length === 0) return false;
-  const normalized = new Set(userInterests.map(normalize));
-  return template.interests.some((i) => normalized.has(normalize(i)));
-};
-
-const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
-
-/**
- * A template is eligible only if every `requiresSkills[].source` is enabled
- * server-side. When a template declares no skill requirement, it is always
- * eligible. When the caller passes no `enabledSkillSources` set, any template
- * with skill requirements is filtered out (conservative default).
- */
-export const isTemplateSkillSourceEligible = (
-  template: TaskTemplate,
-  enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>,
-): boolean => {
-  if (!template.requiresSkills || template.requiresSkills.length === 0) return true;
-  if (!enabledSkillSources) return false;
-  return template.requiresSkills.every((s) => enabledSkillSources.has(s.source));
+  return items.data;
 };
 
 export class TaskTemplateService {
-  constructor(private userId: string) {}
+  private marketService: MarketService;
+
+  constructor(private userId: string) {
+    this.marketService = new MarketService({ userInfo: { userId } });
+  }
 
   async listDailyRecommend(
     interestKeys: string[],
     options: {
       count?: number;
-      enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
-      excludeIds?: string[];
-      now?: Date;
+      excludeIds?: number[];
+      locale?: string;
       refreshSeed?: string;
-      /**
-       * When true, drop every template under `TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES`
-       * and use the workspace-flavored fallback pool. Used by the cloud router
-       * whenever the request is bound to a workspace context.
-       */
-      workspaceMode?: boolean;
     } = {},
   ): Promise<TaskTemplate[]> {
-    const {
-      count = TASK_TEMPLATE_RECOMMEND_COUNT,
-      enabledSkillSources,
-      excludeIds,
-      now = new Date(),
-      refreshSeed,
-      workspaceMode = false,
-    } = options;
-    const limit = Math.max(1, count);
-    const excluded = new Set(excludeIds ?? []);
-    const seedBase = workspaceMode
-      ? `${this.userId}:ws:${getUtcDateStr(now)}`
-      : `${this.userId}:${getUtcDateStr(now)}`;
-    const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
+    try {
+      const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
+        count: clampRecommendationCount(options.count),
+        excludeIds: options.excludeIds,
+        interestKeys,
+        locale: options.locale,
+        refreshSeed: options.refreshSeed,
+        ...(isTrustedClientEnabled()
+          ? {}
+          : { seedKey: createTaskTemplateRecommendationSeedKey(this.userId) }),
+      });
 
-    const personalOnly = new Set<string>(TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES);
-
-    const candidates = taskTemplates.filter(
-      (t) =>
-        !excluded.has(t.id) &&
-        isTemplateSkillSourceEligible(t, enabledSkillSources) &&
-        (!workspaceMode || !personalOnly.has(t.category)),
-    );
-    const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
-    const result: TaskTemplate[] = [];
-
-    if (matched.length >= limit) {
-      result.push(...seededShuffle(matched, seed).slice(0, limit));
-    } else {
-      // Not enough interest matches: fold the fallback pool in so refreshSeed
-      // can reorder the whole batch — otherwise a single-match interest pins
-      // that template to position 0 forever.
-      //
-      // Personal mode keeps the narrow `personal-life + learning-research`
-      // fallback (it's the existing vibe). Workspace mode uses the full
-      // non-personal candidate set — the original 2-category workspace
-      // fallback resolved to ~4 templates after skill gating and made
-      // "换一批" a no-op.
-      const matchedIds = new Set(matched.map((t) => t.id));
-      const fallback = workspaceMode
-        ? candidates.filter((t) => !matchedIds.has(t.id))
-        : candidates.filter(
-            (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
-          );
-      const pool = [...matched, ...fallback];
-      result.push(...seededShuffle(pool, seed).slice(0, limit));
+      return parseTaskTemplateRecommendations(result);
+    } catch (error) {
+      console.error('[taskTemplate:listDailyRecommend] Market recommendations failed', error);
+      throw error;
     }
-
-    if (result.length < limit) {
-      const seen = new Set(result.map((t) => t.id));
-      const remaining = candidates.filter((t) => !seen.has(t.id));
-      result.push(...seededShuffle(remaining, seed).slice(0, limit - result.length));
-    }
-
-    return result;
   }
 }

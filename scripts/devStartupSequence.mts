@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process';
+import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
@@ -34,7 +34,7 @@ const NEXT_READY_TIMEOUT_MS = 180_000;
 const NEXT_READY_RETRY_MS = 400;
 const FORCE_KILL_TIMEOUT_MS = 5_000;
 
-const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+const packageScriptCommand = 'bun';
 
 let nextPort = 3010;
 let nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;
@@ -45,13 +45,28 @@ let viteHandle: DevProcessHandle | undefined;
 let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
 let shuttingDown = false;
 
-const runNpmScript = (scriptName: string) =>
-  spawn(npmCommand, ['run', scriptName], {
+const createPackageScriptProcessConfig = ({
+  isWindows,
+  scriptName,
+}: {
+  isWindows: boolean;
+  scriptName: string;
+}): { args: string[]; command: string; options: SpawnOptions } => ({
+  args: ['run', scriptName],
+  command: packageScriptCommand,
+  options: {
     detached: !isWindows,
     env: process.env,
     stdio: 'inherit',
     shell: isWindows,
-  });
+  },
+});
+
+const runPackageScript = (scriptName: string) => {
+  const { args, command, options } = createPackageScriptProcessConfig({ isWindows, scriptName });
+
+  return spawn(command, args, options);
+};
 
 const loadEnv = () => {
   const env = process.env.NODE_ENV || 'development';
@@ -245,7 +260,7 @@ const main = async () => {
     forceKillChildren();
   });
 
-  nextProcess = spawn('npx', ['next', 'dev', '-p', String(nextPort)], {
+  nextProcess = spawn('bunx', ['next', 'dev', '-p', String(nextPort)], {
     detached: !isWindows,
     env: process.env,
     stdio: 'inherit',
@@ -254,7 +269,7 @@ const main = async () => {
   nextHandle = createDevProcessHandle({ isWindows, pid: nextProcess.pid });
   watchChildExit(nextProcess, 'next');
 
-  viteProcess = runNpmScript('dev:spa');
+  viteProcess = runPackageScript('dev:spa');
   viteHandle = createDevProcessHandle({ isWindows, pid: viteProcess.pid });
   watchChildExit(viteProcess, 'vite');
   runNextBackgroundTasks();
@@ -271,6 +286,7 @@ const isMainModule = () => {
 };
 
 export const __testing = {
+  createPackageScriptProcessConfig,
   createDevProcessHandle,
   sendSignalToDevProcess,
 };

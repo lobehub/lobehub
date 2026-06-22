@@ -52,7 +52,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
 }));
 
-vi.mock('react-router-dom', async () => {
+vi.mock('react-router', async () => {
   const React = await vi.importActual<typeof ReactModule>('react');
 
   return {

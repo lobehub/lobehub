@@ -12,6 +12,8 @@ export type RemoteAgentDeviceStatus =
   | 'platform-unavailable';
 
 interface UseRemoteAgentDeviceGuardOptions {
+  /** The conversation's agent — validate this agent's bound device, not the global active one. */
+  agentId: string;
   enabled?: boolean;
 }
 
@@ -26,9 +28,9 @@ interface UseRemoteAgentDeviceGuardResult {
  * HeterogeneousChatInput before device-dispatched hetero runs.
  */
 export const useRemoteAgentDeviceGuard = ({
+  agentId,
   enabled = true,
-}: UseRemoteAgentDeviceGuardOptions = {}): UseRemoteAgentDeviceGuardResult => {
-  const agentId = useAgentStore((s) => s.activeAgentId);
+}: UseRemoteAgentDeviceGuardOptions): UseRemoteAgentDeviceGuardResult => {
   const agencyConfig = useAgentStore((s) =>
     agentId ? s.agentMap[agentId]?.agencyConfig : undefined,
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { type AnchorHTMLAttributes, type Ref } from 'react';
-import { Link, type LinkProps } from 'react-router-dom';
+import { Link, type LinkProps } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 

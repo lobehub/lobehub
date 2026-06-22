@@ -1,4 +1,4 @@
-import type { ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
+import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
@@ -24,6 +24,7 @@ const createContext = (messages: UIChatMessage[]): PipelineContext => ({
 
 const mockIsCanUseVision = vi.fn();
 const mockIsCanUseVideo = vi.fn();
+const mockIsCanUseAudio = vi.fn();
 
 describe('MessageContentProcessor', () => {
   describe('Image processing functionality', () => {
@@ -747,6 +748,106 @@ describe('MessageContentProcessor', () => {
       expect(content[1].image_url.url).toBe('http://example.com/image.jpg');
       expect(content[2].type).toBe('video_url');
       expect(content[2].video_url.url).toBe('http://example.com/video.mp4');
+    });
+  });
+
+  describe('Audio processing functionality', () => {
+    it('should return plain text if model cannot use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'text-model',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Transcribe this',
+          audioList: [{ url: 'audio_url', alt: 'test audio', id: 'test' } as ChatAudioItem],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      // Should return plain text when audio is not supported
+      expect(result.messages[0].content).toBe('Transcribe this');
+    });
+
+    it('should process audios as audio_url parts if model can use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-3-flash',
+        provider: 'google',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            { url: 'http://example.com/a.mp3', alt: 'a1', id: 'a1' },
+            { url: 'http://example.com/b.mp3', alt: 'a2', id: 'a2' },
+          ] as ChatAudioItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(3); // text + 2 audios
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toBe('Listen');
+      expect(content[1].type).toBe('audio_url');
+      expect(content[1].audio_url.url).toBe('http://example.com/a.mp3');
+      expect(content[2].type).toBe('audio_url');
+      expect(content[2].audio_url.url).toBe('http://example.com/b.mp3');
+    });
+
+    it('should include audios in file context when enabled even if audio not supported', async () => {
+      mockIsCanUseAudio.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: true, includeFileUrl: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          audioList: [
+            { id: 'audio1', url: 'http://example.com/a.mp3', alt: 'Test audio' },
+          ] as ChatAudioItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(1);
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toContain('SYSTEM CONTEXT');
+      expect(content[0].text).toContain('<audios>');
+      // No raw audio_url part when audio understanding is unsupported
+      expect(content.some((p) => p.type === 'audio_url')).toBe(false);
     });
   });
 

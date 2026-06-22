@@ -129,6 +129,22 @@ export interface AgentExecutionParams {
   asyncToolVerifyAttempt?: number;
   context?: AgentRuntimeContext;
   externalRetryCount?: number;
+  /**
+   * Finish (rather than resume) a `waiting_for_async_tool` supervisor op after
+   * its group members have completed. Used by `skipCallSupervisor` / delegate in
+   * group orchestration: the orchestration ends without another supervisor LLM
+   * turn. Scheduled by the group-action member barrier via
+   * `tryResumeParentFromAsyncTool({ onComplete: 'finish' })`.
+   */
+  finishAfterAsyncTool?: boolean;
+  /**
+   * Watchdog payload to enforce a group member's timeout: when the member op
+   * hasn't reached a terminal state by its deadline, interrupt it and bridge a
+   * `timeout` completion so the parked supervisor resumes/finishes instead of
+   * waiting forever. Scheduled by `scheduleGroupMemberTimeout` after the member
+   * op is forked.
+   */
+  groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
   operationId: string;
   /**
@@ -187,6 +203,106 @@ export interface SubAgentBridgeParams {
   threadId: string;
   /** The parent's placeholder `role: 'tool'` message to backfill. */
   toolMessageId: string;
+}
+
+// ==================== Group Orchestration (call agent member) ====================
+
+/** Whether a group member runs in the shared group session or an isolated thread. */
+export type GroupActionMemberMode = 'in_group' | 'isolated';
+
+/** Whether the supervisor resumes or finishes once all members complete. */
+export type GroupActionOnComplete = 'resume' | 'finish';
+
+/**
+ * Params for the group-action member completion bridge — see
+ * `AgentRuntimeService.completeGroupActionMember`. Mirrors the sub-agent bridge
+ * but enforces a K=N member barrier: each member backfills its own anchor, and
+ * the supervisor's group tool message is only backfilled (which satisfies the
+ * parked op's barrier) once every member's anchor is fulfilled.
+ */
+export interface GroupActionMemberBridgeParams {
+  /**
+   * The per-member anchor `role: 'tool'` message to backfill. Equals
+   * `groupToolMessageId` when `expectedMembers === 1` (single-member actions
+   * collapse the anchor onto the group tool call itself).
+   */
+  anchorMessageId: string;
+  /** Total members forked under this group tool call — the K=N barrier target. */
+  expectedMembers: number;
+  /** Child member op's final state — passed in local mode; loaded otherwise. */
+  finalState?: AgentState;
+  /** The supervisor's parked group-management tool message (`tool_call_id` = call id). */
+  groupToolMessageId: string;
+  /** in_group → backfill a short note; isolated → backfill the member's final answer. */
+  mode: GroupActionMemberMode;
+  /** Resume the supervisor LLM, or finish the orchestration (skipCallSupervisor/delegate). */
+  onComplete: GroupActionOnComplete;
+  /** Child (member) operation ID. */
+  operationId: string;
+  parentOperationId: string;
+  reason: string;
+  /** Isolation thread id (isolated mode only). */
+  threadId?: string;
+}
+
+/**
+ * Watchdog payload that enforces a group member's timeout. Scheduled after an
+ * isolated member op is forked; when it fires, if the member op hasn't reached a
+ * terminal state it is interrupted and a `timeout` completion is bridged so the
+ * parked supervisor resumes/finishes (satisfying the K=N barrier) instead of
+ * waiting indefinitely.
+ */
+export interface GroupMemberTimeoutParams {
+  anchorMessageId: string;
+  expectedMembers: number;
+  groupToolMessageId: string;
+  /** The forked member operation id whose deadline this enforces. */
+  memberOperationId: string;
+  mode: GroupActionMemberMode;
+  onComplete: GroupActionOnComplete;
+  parentOperationId: string;
+}
+
+/**
+ * Params handed to the {@link AgentRuntimeDelegate.execGroupMember} callback —
+ * fork one group member (in-group or isolated) under a group-management tool
+ * call, installing the group-action member completion bridge.
+ */
+export interface ExecGroupMemberParams {
+  /** Member agent id. */
+  agentId: string;
+  /** Per-member anchor message id the bridge backfills. */
+  anchorMessageId: string;
+  /** Disable tools for this member (broadcast — voice opinions only). */
+  disableTools?: boolean;
+  /** K=N barrier target stored on the group tool message. */
+  expectedMembers: number;
+  /** Group id. */
+  groupId: string;
+  /** Supervisor's group-management tool message id (the parked tool call). */
+  groupToolMessageId: string;
+  /** Optional supervisor instruction guiding the member's response. */
+  instruction?: string;
+  /** in_group (non-isolated group session) or isolated (own thread). */
+  mode: GroupActionMemberMode;
+  /** Resume or finish the supervisor once all members complete. */
+  onComplete: GroupActionOnComplete;
+  /** Parent (supervisor) operation id. */
+  parentOperationId: string;
+  /** Per-member timeout (ms), isolated mode. */
+  timeout?: number;
+  /** Group topic id. */
+  topicId: string;
+}
+
+export interface ExecGroupMemberResult {
+  error?: string;
+  /** Forked member operation id (when started). */
+  operationId?: string;
+  /** Whether the member op was forked. */
+  started: boolean;
+  /** Isolation thread id (isolated mode only). */
+  threadId?: string;
 }
 
 export interface OperationCreationParams {

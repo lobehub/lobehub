@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import type * as SWRLib from '@/libs/swr';
+import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -9,7 +11,22 @@ import { type GlobalServerConfig } from '@/types/serverConfig';
 import { type UserInitializationState, type UserPreference } from '@/types/user';
 import { withSWR } from '~test-utils';
 
+import { isTaskTemplateRecommendationKey } from './action';
+
+const swrMocks = vi.hoisted(() => ({
+  mutate: vi.fn(),
+}));
+
 vi.mock('zustand/traditional');
+
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof SWRLib>();
+
+  return {
+    ...actual,
+    mutate: swrMocks.mutate,
+  };
+});
 
 vi.mock('swr', async (importOriginal) => {
   const modules = await importOriginal();
@@ -19,11 +36,25 @@ vi.mock('swr', async (importOriginal) => {
   };
 });
 
+beforeEach(() => {
+  swrMocks.mutate.mockReset();
+  swrMocks.mutate.mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('createCommonSlice', () => {
+  describe('isTaskTemplateRecommendationKey', () => {
+    it('matches every daily recommendation cache variant', () => {
+      expect(
+        isTaskTemplateRecommendationKey(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN')),
+      ).toBe(true);
+      expect(isTaskTemplateRecommendationKey(userKeys.initState())).toBe(false);
+    });
+  });
+
   describe('updateAvatar', () => {
     it('should update avatar', async () => {
       const { result } = renderHook(() => useUserStore());
@@ -68,6 +99,30 @@ describe('createCommonSlice', () => {
       });
 
       expect(updateSpy).toHaveBeenCalledWith(['new']);
+    });
+
+    it('does not fail the interest update when recommendation cache invalidation fails', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      const cacheError = new Error('cache failed');
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(userService, 'updateInterests').mockResolvedValue(undefined as any);
+      swrMocks.mutate.mockImplementation((key) => {
+        if (key === isTaskTemplateRecommendationKey) return Promise.reject(cacheError);
+
+        return Promise.resolve(undefined);
+      });
+
+      await expect(useUserStore.getState().updateInterests(['new'])).resolves.toBeUndefined();
+      await waitFor(() => {
+        expect(consoleSpy).toHaveBeenCalledWith(
+          '[taskTemplate:recommendationCache:invalidate]',
+          cacheError,
+        );
+      });
+      expect(useUserStore.getState().user?.interests).toEqual(['new']);
     });
   });
 

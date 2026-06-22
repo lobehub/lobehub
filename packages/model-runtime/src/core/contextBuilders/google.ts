@@ -176,6 +176,40 @@ export const buildGooglePart = async (
 
       throw new TypeError(`currently we don't support video url: ${content.video_url.url}`);
     }
+
+    case 'audio_url': {
+      const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+
+      if (type === 'base64') {
+        if (!base64) {
+          throw new TypeError("Audio URL doesn't contain base64 data");
+        }
+
+        return {
+          inlineData: { data: base64, mimeType: mimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      if (type === 'url') {
+        const url = content.audio_url.url;
+
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
+
+        // Fallback: convert URL to base64 (for private/local URLs or earlier model
+        // generations that don't support external fileData URIs).
+        // imageUrlToBase64 provides SSRF protection and works for any binary data.
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+
+        return {
+          inlineData: { data: urlBase64, mimeType: urlMimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      throw new TypeError(`currently we don't support audio url: ${content.audio_url.url}`);
+    }
   }
 };
 
@@ -351,6 +385,10 @@ export const buildGoogleMessages = async (
  * @see https://linear.app/lobehub/issue/
  */
 export const sanitizeGeminiSchema = (schema: any): any => {
+  // A boolean schema (`items: true`) is valid JSON Schema but rejected by
+  // Gemini's proto validator. Collapse it to the permissive empty object schema.
+  // See https://linear.app/lobehub/issue/LOBE-10066
+  if (typeof schema === 'boolean') return {};
   if (!schema || typeof schema !== 'object') return schema;
 
   const sanitized = { ...schema };
@@ -362,17 +400,26 @@ export const sanitizeGeminiSchema = (schema: any): any => {
   const isObjectType = (t: unknown): boolean =>
     typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
 
-  // Strip enum from non-STRING types and empty enums
-  // Gemini proto: "enum: only allowed for STRING type"
-  if (
-    sanitized.enum !== undefined &&
-    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
-  ) {
-    console.warn(
-      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
-      { type: sanitized.type, enumLength: sanitized.enum?.length },
-    );
-    delete sanitized.enum;
+  // Sanitize enum for Gemini proto compliance:
+  // - enum is only allowed on STRING type fields
+  // - enum members must be non-empty strings. Gemini's schema proto only accepts
+  //   STRING enum members, so a `null`/non-string sentinel gets coerced to "" and
+  //   rejected with "enum[i]: cannot be empty". Filter such members out first.
+  if (sanitized.enum !== undefined) {
+    if (Array.isArray(sanitized.enum)) {
+      sanitized.enum = sanitized.enum.filter((v: unknown) => typeof v === 'string' && v !== '');
+    }
+    if (
+      !isStringType(sanitized.type) ||
+      !Array.isArray(sanitized.enum) ||
+      sanitized.enum.length === 0
+    ) {
+      console.warn(
+        '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type, empty, or no valid string members',
+        { type: sanitized.type, enumLength: sanitized.enum?.length },
+      );
+      delete sanitized.enum;
+    }
   }
 
   // Strip required from non-OBJECT types and empty required arrays
@@ -397,9 +444,12 @@ export const sanitizeGeminiSchema = (schema: any): any => {
     }
   }
 
-  // Recursively sanitize items (for array types)
-  if (sanitized.items) {
+  // Recursively sanitize items (for array types). A node carrying `items` is an
+  // array node; backfill a missing `type` so Gemini's predicate validator
+  // (`$type == Type.ARRAY`) accepts it. See LOBE-10066.
+  if ('items' in sanitized) {
     sanitized.items = sanitizeGeminiSchema(sanitized.items);
+    if (sanitized.type === undefined) sanitized.type = 'array';
   }
 
   // Recursively sanitize anyOf/oneOf/allOf combinators

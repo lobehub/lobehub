@@ -16,10 +16,15 @@ import {
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { registerBuiltinToolSurfaces } from '@lobechat/builtin-tools/register';
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 describe('builtin tool registry', () => {
+  beforeAll(() => {
+    registerBuiltinToolSurfaces();
+  });
+
   it('includes skill store in builtin identifiers', () => {
     expect(builtinToolIdentifiers).toContain(SkillStoreIdentifier);
   });

@@ -2,7 +2,7 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover } from '@lobehub/ui';
+import { Icon, Popover, Tag } from '@lobehub/ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
@@ -79,29 +80,6 @@ const activeLabel = css`
     min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-`;
-
-const optionLabel = css`
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-  min-width: 220px;
-
-  .title {
-    line-height: 1.25;
-  }
-
-  .desc {
-    margin-block-start: 3px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-    white-space: normal;
   }
 `;
 
@@ -166,6 +144,53 @@ const countChip = css`
   background: ${cssVar.colorFillSecondary};
 `;
 
+const gatewayModeLabel = css`
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+
+  .title {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`;
+
+const gatewayModeInfoCard = css`
+  overflow: hidden;
+  width: 280px;
+  border-radius: 8px;
+
+  .cover {
+    display: block;
+
+    width: 100%;
+    height: 148px;
+
+    object-fit: cover;
+    background: ${cssVar.colorFillTertiary};
+  }
+
+  .body {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .desc {
+    margin-block-start: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  }
+`;
+
 const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
   active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
@@ -179,9 +204,13 @@ const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 interface PopoverLabelProps {
   label: ReactNode;
   popoverContent: ReactNode;
+  // Distance from the label cell's right edge. Switch-type rows reserve a
+  // trailing toggle, so bump this to push the popover clear of the toggle and
+  // out to the right of the whole menu instead of overlapping it.
+  sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
+const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffset = 10 }) => {
   const [open, setOpen] = useState(false);
   const suppressUntilRef = useRef(0);
 
@@ -208,7 +237,7 @@ const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
       mouseEnterDelay={0.25}
       open={open}
       placement={'rightTop'}
-      positionerProps={{ sideOffset: 10 }}
+      positionerProps={{ sideOffset }}
       styles={{ content: { padding: 0 } }}
       onOpenChange={handleOpenChange}
     >
@@ -258,6 +287,7 @@ const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
+  const isDark = useIsDark();
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -293,7 +323,11 @@ const PlusAction = memo(() => {
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+    agentId,
+  );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
     setDropdownOpen(false);
@@ -378,16 +412,6 @@ const PlusAction = memo(() => {
         label
       );
 
-    const renderOption = (title: string, description: string, active: boolean) => (
-      <div className={cx(optionLabel)}>
-        <div>
-          <div className="title">{title}</div>
-          {description && <div className="desc">{description}</div>}
-        </div>
-        {active && <Icon icon={CheckIcon} size={14} />}
-      </div>
-    );
-
     const renderSearchOption = (
       icon: ReactNode,
       title: string,
@@ -414,6 +438,30 @@ const PlusAction = memo(() => {
         label
       );
 
+    const renderGatewayModeLabel = () => (
+      <span className={cx(gatewayModeLabel)}>
+        {/* Brand name — same in every language, so no i18n. */}
+        <span className="title">Agent Gateway</span>
+        <Tag color={'info'} size={'small'} variant={'filled'}>
+          {t('gatewayMode.beta')}
+        </Tag>
+      </span>
+    );
+
+    const gatewayModeInfo = (
+      <div className={cx(gatewayModeInfoCard)}>
+        <img
+          alt=""
+          className="cover"
+          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+        />
+        <div className="body">
+          <div className="title">{t('gatewayMode.cardTitle')}</div>
+          <div className="desc">{t('gatewayMode.desc')}</div>
+        </div>
+      </div>
+    );
+
     const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
 
     const uploadItems: ActionDropdownMenuItems = [
@@ -429,6 +477,7 @@ const PlusAction = memo(() => {
             beforeUpload={async (file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
               if (file.type.startsWith('video') && !canUploadVideo) return false;
+              if (file.type.startsWith('audio') && !canUploadAudio) return false;
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
                 message.error(
@@ -441,7 +490,7 @@ const PlusAction = memo(() => {
               }
               setDropdownOpen(false);
               editor?.focus();
-              await upload([file]);
+              await upload([file], agentId);
               return false;
             }}
           >
@@ -559,9 +608,16 @@ const PlusAction = memo(() => {
         ? [
             {
               checked: isGatewayModeEnabled,
-              icon: activeIcon(Cloud, isGatewayModeEnabled),
+              icon: Cloud,
               key: 'gateway-mode',
-              label: t('gatewayMode.title'),
+              label: (
+                <PopoverLabel
+                  label={renderGatewayModeLabel()}
+                  popoverContent={gatewayModeInfo}
+                  // Clear the trailing toggle so the card sits to the right of the whole menu.
+                  sideOffset={64}
+                />
+              ),
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
             } as ActionDropdownMenuItems[number],
@@ -615,16 +671,17 @@ const PlusAction = memo(() => {
     activeSearchOption,
     canUploadImage,
     canUploadVideo,
+    canUploadAudio,
     editor,
     enableFC,
     enableGatewayMode,
     enableKnowledgeBase,
-    defaultDisableGatewayMode,
     handleSelectSearch,
     handleToggleGatewayMode,
     handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
+    isDark,
     isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,

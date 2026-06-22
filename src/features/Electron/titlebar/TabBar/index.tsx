@@ -19,33 +19,29 @@ import { startTransition, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
-import { type NewTabAction } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
-import { matchRouteMeta } from './resolveRouteMeta';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 
 const TAB_WIDTH = 180;
 const TAB_GAP = 0;
 
+// The "+" button always opens a fresh Home tab, regardless of the active page.
+const NEW_TAB_URL = '/';
+
 // Tabs only reorder along the horizontal axis, so lock the drag transform to X.
 const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
-
-// Fallback when the active route doesn't define createNewTab: open the home page,
-// so the "+" button stays available on every page.
-const DEFAULT_NEW_TAB_ACTION: NewTabAction = {
-  onCreate: async () => ({ url: '/' }),
-};
 
 const TabBar = () => {
   const styles = useStyles;
   const navigate = useWorkspaceAwareNavigate();
+  useRegisterDesktopTabHotkeys();
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -170,16 +166,6 @@ const TabBar = () => {
     }
   }, [activeTabId, tabs]);
 
-  const newTabAction: NewTabAction | null = useMemo(() => {
-    if (!canCreate) return null;
-    if (!activeTabId) return DEFAULT_NEW_TAB_ACTION;
-    const activeTab = tabs.find((tab) => tab.tab.id === activeTabId);
-    if (!activeTab) return DEFAULT_NEW_TAB_ACTION;
-
-    const matched = matchRouteMeta(desktopRoutes, activeTab.tab.url);
-    return matched.meta?.createNewTab?.(matched.params) ?? DEFAULT_NEW_TAB_ACTION;
-  }, [activeTabId, tabs, canCreate]);
-
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
     if (tabs.length > 1 && activeTabId) {
       handleClose(activeTabId);
@@ -188,24 +174,17 @@ const TabBar = () => {
     }
   });
 
-  const handleNewTab = useCallback(async () => {
+  const handleNewTab = useCallback(() => {
     if (!canCreate) return;
-    if (!newTabAction) return;
-    let result;
-    try {
-      result = await newTabAction.onCreate();
-    } catch (error) {
-      console.error('[TabBar] failed to create new tab:', error);
-      return;
-    }
-    if (!result) return;
 
-    addTab(result.url, result.cached, true);
-    startTransition(() => navigate(result.url));
-  }, [canCreate, newTabAction, addTab, navigate]);
+    // Always open a fresh Home tab. If a Home tab already exists, addTab just
+    // activates it instead of stacking duplicates.
+    addTab(NEW_TAB_URL, undefined, true);
+    startTransition(() => navigate(NEW_TAB_URL));
+  }, [canCreate, addTab, navigate]);
 
   useWatchBroadcast('createNewTab', () => {
-    void handleNewTab();
+    handleNewTab();
   });
 
   if (tabs.length === 0) return null;
@@ -241,16 +220,14 @@ const TabBar = () => {
           ))}
         </SortableContext>
       </DndContext>
-      {(newTabAction || !canCreate) && (
-        <ActionIcon
-          className={cx(electronStylish.nodrag, styles.newTabButton)}
-          disabled={!canCreate}
-          icon={Plus}
-          size="small"
-          title={canCreate ? t('tab.newTab') : reason}
-          onClick={canCreate ? handleNewTab : undefined}
-        />
-      )}
+      <ActionIcon
+        className={cx(electronStylish.nodrag, styles.newTabButton)}
+        disabled={!canCreate}
+        icon={Plus}
+        size="small"
+        title={canCreate ? t('tab.newTab') : reason}
+        onClick={canCreate ? handleNewTab : undefined}
+      />
     </ScrollArea>
   );
 };

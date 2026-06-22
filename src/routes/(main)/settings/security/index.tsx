@@ -1,6 +1,6 @@
 'use client';
 
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 
 const Page = () => {
   return <Navigate replace to="/settings" />;

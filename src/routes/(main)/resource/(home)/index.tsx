@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 
 import ResourceManager from '@/features/ResourceManager';
 import { FilesTabs } from '@/types/files';

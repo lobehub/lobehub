@@ -21,7 +21,7 @@ const workspaceState: WorkspaceMock = {
   workspaces: [{ id: 'workspace-1', slug: 'lobe-team' }],
 };
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useLocation: () => ({ pathname }),
 }));
 

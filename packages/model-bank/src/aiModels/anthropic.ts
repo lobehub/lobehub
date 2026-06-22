@@ -17,6 +17,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-mythos',
     generation: 'mythos-5',
     id: 'claude-fable-5',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [

@@ -263,9 +263,10 @@ describe('WechatGatewayClient', () => {
         expect.anything(), // WechatApiClient instance
         raw,
       );
-      expect(result).toEqual([
-        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-      ]);
+      expect(result).toEqual({
+        files: [{ buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined }],
+        warnings: undefined,
+      });
     });
 
     it('returns undefined when downloadMediaFromRawMessage resolves to an empty array', async () => {
@@ -274,6 +275,34 @@ describe('WechatGatewayClient', () => {
       const result = await client.extractFiles!(makeMessage({ item_list: [{ type: 99 }] }));
       expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
       expect(result).toBeUndefined();
+    });
+
+    it('warns when a FILE item has no downloadable media (e.g. oversized) and was dropped', async () => {
+      // WeChat relays oversized files as metadata only — no CDN media handle —
+      // so downloadMediaFromRawMessage returns nothing for them. We must surface
+      // a warning instead of silently passing only the `[file: name]` text.
+      mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+      const client = createClient();
+      const result = (await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            {
+              file_item: {
+                file_name: 'October 11, 2023 Alta Town Council Meeting Audio.mp3',
+                len: '132800970',
+              },
+              type: 4, // MessageItemType.FILE
+            },
+          ],
+        }),
+      )) as { files?: unknown[]; warnings?: string[] } | undefined;
+      expect(result?.files).toBeUndefined();
+      expect(result?.warnings).toHaveLength(1);
+      expect(result?.warnings?.[0]).toContain(
+        'October 11, 2023 Alta Town Council Meeting Audio.mp3',
+      );
+      expect(result?.warnings?.[0]).toContain('126.6 MB');
+      expect(result?.warnings?.[0]).toContain('could not be retrieved');
     });
 
     it('maps file attachments preserving name + size', async () => {
@@ -303,9 +332,10 @@ describe('WechatGatewayClient', () => {
           ],
         }),
       );
-      expect(result).toEqual([
-        { buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 },
-      ]);
+      expect(result).toEqual({
+        files: [{ buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 }],
+        warnings: undefined,
+      });
     });
 
     it('maps multiple attachments in a single message', async () => {
@@ -324,10 +354,13 @@ describe('WechatGatewayClient', () => {
           ],
         }),
       );
-      expect(result).toEqual([
-        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-        { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
-      ]);
+      expect(result).toEqual({
+        files: [
+          { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+          { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+        ],
+        warnings: undefined,
+      });
     });
 
     it('propagates errors from downloadMediaFromRawMessage as undefined gracefully', async () => {

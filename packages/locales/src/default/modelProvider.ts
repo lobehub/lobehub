@@ -98,7 +98,7 @@ export default {
   'createNewAiProvider.description.placeholder': 'Provider description (optional)',
   'createNewAiProvider.description.title': 'Provider Description',
   'createNewAiProvider.id.desc':
-    'Unique identifier for the service provider, which cannot be modified after creation',
+    'Unique identifier for the provider, which cannot be modified after creation',
   'createNewAiProvider.id.duplicate': 'Provider ID already exists',
   'createNewAiProvider.id.format':
     'Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ',
@@ -265,6 +265,8 @@ export default {
     'For GPT-5.2 Pro series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
     'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
+    'For GLM-5.2; controls reasoning effort with High and Max levels.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':
@@ -322,7 +324,9 @@ export default {
   'providerModels.item.modelConfig.files.title': 'File Upload Support',
   'providerModels.item.modelConfig.functionCall.extra':
     "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type skills. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
-  'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Usage',
+  'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Calling',
+  'providerModels.item.modelConfig.id.duplicate':
+    'A model with this ID already exists. Use a different model ID.',
   'providerModels.item.modelConfig.id.extra':
     'This cannot be modified after creation and will be used as the model ID when calling AI',
   'providerModels.item.modelConfig.id.placeholder':
@@ -344,11 +348,11 @@ export default {
   'providerModels.item.modelConfig.tokens.unlimited': 'Unlimited',
   'providerModels.item.modelConfig.type.extra':
     'Different model types have distinct use cases and capabilities',
+  'providerModels.item.modelConfig.type.options.asr': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.chat': 'Chat',
   'providerModels.item.modelConfig.type.options.embedding': 'Embedding',
   'providerModels.item.modelConfig.type.options.image': 'Image Generation',
   'providerModels.item.modelConfig.type.options.realtime': 'Real-time Chat',
-  'providerModels.item.modelConfig.type.options.stt': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.text2music': 'Text-to-Music',
   'providerModels.item.modelConfig.type.options.tts': 'Text-to-Speech',
   'providerModels.item.modelConfig.type.options.video': 'Video Generation',
@@ -401,10 +405,10 @@ export default {
   'providerModels.list.total': '{{count}} models available',
   'providerModels.searchNotFound': 'No search results found',
   'providerModels.tabs.all': 'All',
+  'providerModels.tabs.asr': 'ASR',
   'providerModels.tabs.chat': 'Chat',
   'providerModels.tabs.embedding': 'Embedding',
   'providerModels.tabs.image': 'Image',
-  'providerModels.tabs.stt': 'ASR',
   'providerModels.tabs.tts': 'TTS',
   'providerModels.tabs.video': 'Video',
   'sortModal.success': 'Sort update successful',

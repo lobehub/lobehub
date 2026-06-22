@@ -161,8 +161,9 @@ const TabStrip = memo(() => {
   const closeRightLocalFileTabs = useChatStore((s) => s.closeRightLocalFileTabs);
 
   const confirmClose = useCallback(
-    (filePath: string, perform: () => void) => {
-      if (!(filePath in dirtyContents)) {
+    (id: string, filePath: string, perform: () => void) => {
+      // Edit buffers are keyed by tab identity, not bare file path.
+      if (!(id in dirtyContents)) {
         perform();
         return;
       }
@@ -222,7 +223,7 @@ const TabStrip = memo(() => {
         onClick: () => {
           const filePath =
             openLocalFiles.find((file) => getLocalFileTabId(file) === id)?.filePath ?? id;
-          confirmClose(filePath, () => closeLocalFileTab(id));
+          confirmClose(id, filePath, () => closeLocalFileTab(id));
         },
       },
     ],
@@ -281,11 +282,11 @@ const TabStrip = memo(() => {
               <button
                 aria-label={`Close ${filename}`}
                 className={styles.tabClose}
-                data-dirty={filePath in dirtyContents ? 'true' : 'false'}
+                data-dirty={id in dirtyContents ? 'true' : 'false'}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  confirmClose(filePath, () => closeLocalFileTab(id));
+                  confirmClose(id, filePath, () => closeLocalFileTab(id));
                 }}
               >
                 <span className={'cm-tab-close-x'}>

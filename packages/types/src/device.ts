@@ -83,6 +83,14 @@ export interface DeviceChannel {
 }
 
 /**
+ * Where a device sits relative to the caller:
+ * - `personal`  — the caller's own machine (`devices.workspace_id IS NULL`).
+ * - `workspace` — a machine enrolled into the caller's current workspace, shared
+ *   across its members. Drives the run-device picker's Personal/Workspace groups.
+ */
+export type DeviceScope = 'personal' | 'workspace';
+
+/**
  * A device row as returned by the `device.listDevices` query — either a
  * registered device or an online-only "ghost" (connected but not yet persisted).
  * The server query is annotated to return `DeviceListItem[]`, so this type is the
@@ -99,6 +107,8 @@ export interface DeviceListItem {
   online: boolean;
   platform: string | null;
   registered: boolean;
+  /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
+  scope: DeviceScope;
   workingDirs: WorkingDirEntry[];
 }
 
@@ -144,6 +154,24 @@ export interface DeviceGitWorkingTreeStatus {
   deleted: number;
   modified: number;
   total: number;
+}
+
+/**
+ * One git worktree attached to a repository, returned by the `listGitWorktrees`
+ * device RPC. Mirrors the desktop `GitWorktreeListItem`.
+ */
+export interface DeviceGitWorktreeListItem {
+  bare?: boolean;
+  branch?: string;
+  current: boolean;
+  detached?: boolean;
+  head?: string;
+  locked?: boolean;
+  lockReason?: string;
+  path: string;
+  prunable?: boolean;
+  pruneReason?: string;
+  status?: DeviceGitWorkingTreeStatus;
 }
 
 /**
@@ -346,6 +374,40 @@ export type DeviceLocalFilePreview =
 export interface DeviceLocalFilePreviewResult {
   error?: string;
   preview?: DeviceLocalFilePreview;
+  success: boolean;
+}
+
+/** One file/folder to move within a directory on a remote device. Mirrors `MoveLocalFileParams`. */
+export interface DeviceMoveProjectFileItem {
+  newPath: string;
+  oldPath: string;
+}
+
+/**
+ * Per-item result of the `moveLocalFiles` device RPC. The move is batched and
+ * each item succeeds or fails independently. Mirrors the desktop
+ * `LocalMoveFilesResultItem`.
+ */
+export interface DeviceMoveProjectFileResultItem {
+  error?: string;
+  newPath?: string;
+  sourcePath: string;
+  success: boolean;
+}
+
+/** Result of the `renameLocalFile` device RPC. Mirrors the desktop `RenameLocalFileResult`. */
+export interface DeviceRenameProjectFileResult {
+  error?: string;
+  newPath: string;
+  success: boolean;
+}
+
+/**
+ * Result of the `writeLocalFile` device RPC — saving edited content back to a
+ * file on a remote device. Mirrors the desktop `WriteFileResult`.
+ */
+export interface DeviceWriteProjectFileResult {
+  error?: string;
   success: boolean;
 }
 

@@ -1,7 +1,7 @@
 import { type GeneralAgentCallLLMResultPayload } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
 import type { MessageToolCall } from '@lobechat/types';
-import { ChatErrorType, RequestTrigger } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
@@ -62,11 +62,10 @@ vi.mock('@/store/agent/store', () => ({
 const mockStreamResponse = (response: {
   content?: string;
   finishType?: string;
-  planUpgradeAfterFinish?: boolean;
   tool_calls?: MessageToolCall[];
   usage?: any;
 }) => {
-  const { content = '', finishType = 'stop', planUpgradeAfterFinish, tool_calls, usage } = response;
+  const { content = '', finishType = 'stop', tool_calls, usage } = response;
 
   vi.mocked(chatService.createAssistantMessageStream).mockImplementation(async (params: any) => {
     // Simulate text streaming
@@ -86,7 +85,6 @@ const mockStreamResponse = (response: {
     // Simulate finish
     if (params.onFinish) {
       await params.onFinish(content, {
-        planUpgradeAfterFinish,
         toolCalls: tool_calls,
         type: finishType,
         usage,
@@ -170,59 +168,6 @@ describe('call_llm executor', () => {
           }),
         }),
       );
-    });
-
-    it('should append a plan upgrade assistant message after successful campaign finish', async () => {
-      const mockStore = createMockStore();
-      const context = createTestContext({ agentId: 'test-session', topicId: 'test-topic' });
-      const instruction = createCallLLMInstruction({
-        messages: [createUserMessage({ content: 'Hello' })],
-        model: 'claude-fable-5',
-        provider: 'lobehub',
-      });
-      const state = createInitialState();
-
-      mockStreamResponse({ content: 'AI response', planUpgradeAfterFinish: true });
-      mockStore.dbMessagesMap[context.messageKey] = [];
-
-      await executeWithMockContext({
-        executor: 'call_llm',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
-
-      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(2);
-      const firstMessage = await vi.mocked(mockStore.optimisticCreateMessage).mock.results[0].value;
-      const planUpgradeMessage = vi
-        .mocked(mockStore.optimisticCreateMessage)
-        .mock.calls.at(-1)?.[0];
-      expect(mockStore.optimisticCreateMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          content: '',
-          error: expect.objectContaining({
-            body: {
-              budget: {
-                modelId: 'claude-fable-5',
-                pricingBasis: 'unknown',
-                providerId: 'lobehub',
-                scenario: 'chat',
-              },
-            },
-            type: ChatErrorType.FreePlanLimit,
-          }),
-          model: 'claude-fable-5',
-          parentId: firstMessage.id,
-          provider: 'lobehub',
-          role: 'assistant',
-          topicId: 'test-topic',
-        }),
-        expect.objectContaining({
-          operationId: expect.any(String),
-        }),
-      );
-      expect(planUpgradeMessage?.error).not.toHaveProperty('message');
     });
 
     it('should forward request metadata to chatService', async () => {

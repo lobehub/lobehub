@@ -7,7 +7,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
-import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { useGlobalStore } from '@/store/global';
@@ -15,16 +14,21 @@ import { globalGeneralSelectors } from '@/store/global/selectors';
 import { truncateByWeightedLength } from '@/utils/textLength';
 
 import { usePageEditorStore } from './store';
+import { usePageEditable } from './usePageEditable';
 
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   const documentId = usePageEditorStore((s) => s.documentId);
-  // Title/emoji are metadata, not the locked rich-text body — they stay editable
-  // (permission only) even while another member holds the body edit lock. The
-  // server lets metadata-only saves through the lock guard.
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  // Gate the title/emoji on the same state as the body editor: edit permission
+  // AND not locked by another member (nor pending / save-blocked). The lock makes
+  // the whole page read-only, so metadata must not stay editable behind it.
+  // `metaReadOnly` additionally locks just the meta (title + emoji) while leaving
+  // the body editable — used for managed docs like a skill's `SKILL.md` index,
+  // whose identity is renamed through skill APIs, never a plain title save.
+  const isMetaReadOnly = usePageEditorStore((s) => s.metaReadOnly);
+  const canEdit = usePageEditable() && !isMetaReadOnly;
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);

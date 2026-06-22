@@ -13,3 +13,5 @@ packages:
   - '../../packages/business/const'
   - '../../packages/file-loaders'
   - '.'
+allowBuilds:
+  esbuild: true

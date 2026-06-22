@@ -1,8 +1,10 @@
+import { isGemini3OrAbove, parseGoogleModelId } from './googleModelId';
+
 /**
  * Google Gemini Thinking Resolver
  *
  * Resolves thinking configuration for Google Gemini models.
- * Uses regex patterns for model matching instead of hardcoded strings.
+ * Uses model-id parsing instead of hardcoded model strings.
  */
 
 // ============================================================================
@@ -57,47 +59,6 @@ const THINKING_BUDGET_CONSTRAINTS = {
   FLASH_LITE_MAX: 24_576,
 } as const;
 
-/**
- * Model category patterns - evaluated in order, first match wins
- */
-const MODEL_CATEGORY_PATTERNS: Record<Exclude<GoogleThinkingModelCategory, 'other'>, RegExp[]> = {
-  robotics: [/robotics-er-1\.5-preview/i],
-  flashLite: [
-    /gemini-\d+(?:\.\d+)?-flash-lite/i, // gemini-2.5-flash-lite, gemini-3.0-flash-lite
-    /flash-lite-latest/i,
-  ],
-  flash: [
-    /gemini-\d+(?:\.\d+)?-flash(?!-lite)/i, // gemini-2.5-flash, gemini-3.0-flash (but not flash-lite)
-    /flash-latest/i,
-  ],
-  pro: [
-    /gemini-\d+(?:\.\d+)?-pro/i, // gemini-2.5-pro, gemini-3.0-pro, gemini-3-pro
-    /pro-latest/i,
-  ],
-};
-
-/**
- * Models that inherently support/enable thinking
- * These models will have includeThoughts=true even without explicit thinkingBudget
- */
-const THINKING_ENABLED_PATTERNS: RegExp[] = [
-  /gemini-\d+(?:\.\d+)?-pro(?!-image)/i, // gemini-2.5-pro, gemini-3-pro (but not pro-image, handled separately)
-  /gemini-\d+(?:\.\d+)?-flash(?!-lite)/i, // gemini-2.5-flash, gemini-3-flash (but not flash-lite)
-  /gemini-\d+-pro-image/i, // gemini-3-pro-image-preview
-  /nano-banana-pro/i,
-  /thinking/i, // Any model with "thinking" in the name
-];
-
-/**
- * Patterns to detect models that support thinkingLevel
- * - Gemini 3.0+
- * - Gemma 4
- */
-const GEMINI_3_PATTERNS: RegExp[] = [
-  /gemini-3(?:\.\d+)?-/i, // gemini-3-pro, gemini-3.0-flash
-  /gemma-4(?:-|$)/i, // gemma-4-31b-it
-];
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -108,11 +69,10 @@ const GEMINI_3_PATTERNS: RegExp[] = [
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
-/**
- * Tests if a model matches any of the given patterns
- */
-const matchesPatterns = (model: string, patterns: RegExp[]): boolean =>
-  patterns.some((pattern) => pattern.test(model));
+const hasModifier = (model: string, modifier: string): boolean => {
+  const parsed = parseGoogleModelId(model);
+  return !!parsed && parsed.modifiers.includes(modifier);
+};
 
 // ============================================================================
 // Exported Functions
@@ -126,19 +86,18 @@ const matchesPatterns = (model: string, patterns: RegExp[]): boolean =>
 export const getGoogleThinkingModelCategory = (model?: string): GoogleThinkingModelCategory => {
   if (!model) return 'other';
 
-  // Check categories in priority order
-  const categoryOrder: Exclude<GoogleThinkingModelCategory, 'other'>[] = [
-    'robotics',
-    'flashLite',
-    'flash',
-    'pro',
-  ];
+  if (/robotics-er-1\.5-preview/i.test(model)) return 'robotics';
+  if (/flash-lite-latest/i.test(model)) return 'flashLite';
+  if (/flash-latest/i.test(model)) return 'flash';
+  if (/pro-latest/i.test(model)) return 'pro';
 
-  for (const category of categoryOrder) {
-    if (matchesPatterns(model, MODEL_CATEGORY_PATTERNS[category])) {
-      return category;
-    }
-  }
+  const parsed = parseGoogleModelId(model);
+  if (!parsed || parsed.family !== 'gemini') return 'other';
+  if (parsed.majorVersion === undefined) return 'other';
+
+  if (hasModifier(model, 'flash') && hasModifier(model, 'lite')) return 'flashLite';
+  if (hasModifier(model, 'flash')) return 'flash';
+  if (hasModifier(model, 'pro')) return 'pro';
 
   return 'other';
 };
@@ -150,7 +109,13 @@ export const getGoogleThinkingModelCategory = (model?: string): GoogleThinkingMo
  */
 export const isGemini3Model = (model?: string): boolean => {
   if (!model) return false;
-  return matchesPatterns(model, GEMINI_3_PATTERNS);
+
+  const parsed = parseGoogleModelId(model);
+
+  return (
+    isGemini3OrAbove(model) ||
+    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4)
+  );
 };
 
 /**
@@ -160,7 +125,21 @@ export const isGemini3Model = (model?: string): boolean => {
  */
 export const isThinkingEnabledModel = (model?: string): boolean => {
   if (!model) return false;
-  return matchesPatterns(model, THINKING_ENABLED_PATTERNS);
+
+  const normalizedModel = model.toLowerCase();
+  if (normalizedModel.includes('thinking')) return true;
+
+  const parsed = parseGoogleModelId(model);
+  if (!parsed) return false;
+
+  if (parsed.family === 'nanoBanana') return parsed.modifiers.includes('pro');
+  if (parsed.family !== 'gemini') return false;
+  if (parsed.majorVersion === undefined) return false;
+
+  return (
+    parsed.modifiers.includes('pro') ||
+    (parsed.modifiers.includes('flash') && !parsed.modifiers.includes('lite'))
+  );
 };
 
 /**

@@ -110,13 +110,13 @@ describe('agentSelectors', () => {
       expect(agentSelectors.isAgentModeEnabled(state)).toBe(true);
     });
 
-    it('should keep fable in agent mode when agent mode is enabled', () => {
+    it('should keep the agent in agent mode when agent mode is enabled', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
           'agent-1': {
             chatConfig: { enableAgentMode: true },
-            model: 'claude-fable-5',
+            model: 'claude-opus-4-8',
             provider: 'lobehub',
           },
         },
@@ -385,50 +385,6 @@ describe('agentSelectors', () => {
       });
 
       expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
-    });
-  });
-
-  describe('canCurrentAgentPublishToCommunity', () => {
-    it('should allow publishing normal agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: { 'agent-1': { id: 'agent-1' } },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(true);
-    });
-
-    it('should prevent publishing local heterogeneous agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-            id: 'agent-1',
-          },
-        },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
-    });
-
-    it('should prevent publishing platform agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            agencyConfig: {
-              boundDeviceId: 'device-1',
-              heterogeneousProvider: { type: 'openclaw' },
-            },
-            id: 'agent-1',
-          },
-        },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
     });
   });
 

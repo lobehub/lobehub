@@ -15,6 +15,7 @@ import type {
   GitWorkingTreeFiles,
   GitWorkingTreePatches,
   GitWorkingTreeStatus,
+  GitWorktreeListItem,
 } from '@lobechat/electron-client-ipc';
 import {
   checkoutGitBranch as runCheckoutGitBranch,
@@ -30,6 +31,7 @@ import {
   gitInfo as computeGitInfo,
   listGitBranches as computeListGitBranches,
   listGitRemoteBranches as computeListGitRemoteBranches,
+  listGitWorktrees as computeListGitWorktrees,
   pullGitBranch as runPullGitBranch,
   pushGitBranch as runPushGitBranch,
   renameGitBranch as runRenameGitBranch,
@@ -81,6 +83,11 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async listGitRemoteBranches(dirPath: string): Promise<GitRemoteBranchListItem[]> {
     return computeListGitRemoteBranches(dirPath);
+  }
+
+  @IpcMethod()
+  async listGitWorktrees(dirPath: string): Promise<GitWorktreeListItem[]> {
+    return computeListGitWorktrees(dirPath);
   }
 
   @IpcMethod()

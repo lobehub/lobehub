@@ -26,6 +26,7 @@ services:
     environment:
       - 'POSTGRES_DB=${LOBE_DB_NAME}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s

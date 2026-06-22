@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createCompletionPolicy } from '../../../../policies/completionPolicy';
@@ -149,7 +150,18 @@ describe('S2 completion loop (policy → handler → projection → persist)', (
         mutations: [
           {
             apiName: 'writeMemory',
-            data: { resourceId: 'mem_1', status: 'applied', summary: 'Saved tone preference' },
+            data: {
+              resourceId: 'pref_1',
+              status: 'applied',
+              summary: 'Saved tone preference',
+              target: {
+                id: 'pref_1',
+                memoryId: 'mem_1',
+                memoryLayer: LayersEnum.Preference,
+                title: 'Tone preference',
+                type: 'memory',
+              },
+            },
             kind: 'mutation',
           },
         ],
@@ -169,7 +181,12 @@ describe('S2 completion loop (policy → handler → projection → persist)', (
     expect(memory.anchorMessageId).toBe('assistant_msg_1');
     expect(memory.triggerMessageId).toBe('user_msg_1');
     expect(memory.topicId).toBe('topic_1');
-    expect(memory.target).toMatchObject({ id: 'mem_1', type: 'memory' });
+    expect(memory.target).toMatchObject({
+      id: 'pref_1',
+      memoryId: 'mem_1',
+      memoryLayer: LayersEnum.Preference,
+      type: 'memory',
+    });
   });
 
   it('no-ops when the completion carries no self-iteration payload (no marker stamped)', async () => {

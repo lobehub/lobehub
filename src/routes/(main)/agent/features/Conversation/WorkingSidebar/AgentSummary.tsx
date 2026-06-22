@@ -7,6 +7,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 
 const styles = createStaticStyles(({ css }) => ({
   header: css`
@@ -33,8 +34,11 @@ const styles = createStaticStyles(({ css }) => ({
 const AgentSummary = memo(() => {
   const { t } = useTranslation(['chat', 'discover']);
   const navigate = useWorkspaceAwareNavigate();
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  // WorkingSidebar renders outside the ConversationProvider, so take the routed
+  // agent from the chat store (set by AgentIdSync, not the hijack-prone agent
+  // store) and read its meta by id.
+  const activeAgentId = useChatStore((s) => s.activeAgentId) || '';
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(activeAgentId));
   const { data: providers = [] } = useAgentStore((s) => s.useFetchBotProviders(activeAgentId));
   const { data: platforms = [] } = useAgentStore((s) => s.useFetchPlatformDefinitions());
   const title = meta.title || t('untitledAgent');

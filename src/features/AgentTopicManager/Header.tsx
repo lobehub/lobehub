@@ -5,7 +5,7 @@ import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavHeader from '@/features/NavHeader';
@@ -20,8 +20,9 @@ interface HeaderProps {
 
 const Header = memo<HeaderProps>(({ agentId }) => {
   const { t } = useTranslation(['topic', 'chat', 'common']);
-  const agentTitle = useAgentStore(agentSelectors.currentAgentTitle);
-  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox
     ? agentTitle || t('inbox.title', { ns: 'chat' })
     : agentTitle || t('defaultSession', { ns: 'common' });

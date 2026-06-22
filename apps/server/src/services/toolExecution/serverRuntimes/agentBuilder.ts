@@ -152,7 +152,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {
@@ -240,7 +240,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdatePromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {
@@ -272,7 +272,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.agentId;
+        const agentId = ctx.editingAgentId ?? ctx.agentId;
 
         if (!agentId) {
           return {

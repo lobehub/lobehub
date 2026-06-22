@@ -21,6 +21,7 @@ const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
 
 const logger = createLogger('core:LocalFileProtocolManager');
 const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
+const EXTERNAL_PREVIEW_APPROVAL_TTL_MS = 10 * 60 * 1000;
 
 const normalizeAbsolutePath = (filePath: string): string | null => {
   const normalized = path.normalize(filePath);
@@ -59,10 +60,7 @@ type PreviewFileAccept = 'image';
 const normalizeContentType = (contentType: string): string =>
   contentType.split(';')[0].trim().toLowerCase();
 
-const isAcceptedPreviewContentType = (
-  contentType: string,
-  accept?: PreviewFileAccept,
-): boolean => {
+const isAcceptedPreviewContentType = (contentType: string, accept?: PreviewFileAccept): boolean => {
   if (!accept) return true;
 
   const normalizedContentType = normalizeContentType(contentType);
@@ -83,6 +81,8 @@ const isAcceptedPreviewContentType = (
  */
 export class LocalFileProtocolManager {
   private readonly approvedWorkspaceRoots = new Set<string>();
+
+  private readonly externalPreviewApprovals = new Map<string, number>();
 
   private readonly indexedProjectRoots = new Set<string>();
 
@@ -229,10 +229,12 @@ export class LocalFileProtocolManager {
 
   async createPreviewUrl({
     accept,
+    allowExternalFile,
     filePath,
     workspaceRoot,
   }: {
     accept?: PreviewFileAccept;
+    allowExternalFile?: boolean;
     filePath: string;
     workspaceRoot: string;
   }): Promise<string | null> {
@@ -243,11 +245,12 @@ export class LocalFileProtocolManager {
       ? (
           await this.readPreviewFile({
             accept,
+            allowExternalFile,
             filePath,
             workspaceRoot,
           })
         )?.realPath
-      : await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
+      : await this.resolveApprovedPreviewPath({ allowExternalFile, filePath, workspaceRoot });
     if (!realFilePath) return null;
 
     this.cleanupExpiredTokens();
@@ -263,14 +266,21 @@ export class LocalFileProtocolManager {
 
   async readPreviewFile({
     accept,
+    allowExternalFile,
     filePath,
     workspaceRoot,
   }: {
     accept?: PreviewFileAccept;
+    allowExternalFile?: boolean;
     filePath: string;
     workspaceRoot: string;
   }): Promise<PreviewFileReadResult | null> {
-    const realFilePath = await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
     if (!realFilePath) return null;
 
     const fileStat = await stat(realFilePath);
@@ -279,6 +289,10 @@ export class LocalFileProtocolManager {
     const buffer = await readFile(realFilePath);
     const contentType = resolveLocalFileMimeType(realFilePath, buffer);
     if (!isAcceptedPreviewContentType(contentType, accept)) return null;
+
+    if (allowExternalFile) {
+      this.grantExternalPreviewApproval(realFilePath);
+    }
 
     return {
       buffer,
@@ -327,10 +341,14 @@ export class LocalFileProtocolManager {
   }
 
   private async resolveApprovedPreviewPath({
+    allowExternalFile,
     filePath,
+    persistExternalApproval = true,
     workspaceRoot,
   }: {
+    allowExternalFile?: boolean;
     filePath: string;
+    persistExternalApproval?: boolean;
     workspaceRoot: string;
   }): Promise<string | null> {
     const normalizedFilePath = normalizeAbsolutePath(filePath);
@@ -345,15 +363,44 @@ export class LocalFileProtocolManager {
     const normalizedRealWorkspaceRoot = normalizeAbsolutePath(realWorkspaceRoot);
 
     if (!normalizedRealFilePath || !normalizedRealWorkspaceRoot) return null;
+    const workspaceRootApproved =
+      this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) ||
+      this.indexedProjectRoots.has(normalizedRealWorkspaceRoot);
     if (
-      !this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) &&
-      !this.indexedProjectRoots.has(normalizedRealWorkspaceRoot)
+      workspaceRootApproved &&
+      isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)
     ) {
-      return null;
+      return normalizedRealFilePath;
     }
-    if (!isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) return null;
 
-    return normalizedRealFilePath;
+    if (this.hasExternalPreviewApproval(normalizedRealFilePath)) return normalizedRealFilePath;
+
+    if (allowExternalFile) {
+      return this.approveExternalPreviewFile(normalizedRealFilePath, {
+        persist: persistExternalApproval,
+      });
+    }
+
+    return null;
+  }
+
+  private async approveExternalPreviewFile(
+    realFilePath: string,
+    { persist = true }: { persist?: boolean } = {},
+  ): Promise<string | null> {
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return null;
+
+    if (persist) {
+      this.grantExternalPreviewApproval(realFilePath);
+    }
+
+    return realFilePath;
+  }
+
+  private grantExternalPreviewApproval(realFilePath: string) {
+    this.cleanupExpiredExternalPreviewApprovals();
+    this.externalPreviewApprovals.set(realFilePath, Date.now() + EXTERNAL_PREVIEW_APPROVAL_TTL_MS);
   }
 
   private cleanupExpiredTokens() {
@@ -361,6 +408,15 @@ export class LocalFileProtocolManager {
     for (const [token, record] of this.previewTokens) {
       if (record.expiresAt <= now) {
         this.previewTokens.delete(token);
+      }
+    }
+  }
+
+  private cleanupExpiredExternalPreviewApprovals() {
+    const now = Date.now();
+    for (const [realPath, expiresAt] of this.externalPreviewApprovals) {
+      if (expiresAt <= now) {
+        this.externalPreviewApprovals.delete(realPath);
       }
     }
   }
@@ -382,5 +438,17 @@ export class LocalFileProtocolManager {
     if (!record) return false;
 
     return record.realPath === realResolvedPath;
+  }
+
+  private hasExternalPreviewApproval(realFilePath: string): boolean {
+    const expiresAt = this.externalPreviewApprovals.get(realFilePath);
+    if (!expiresAt) return false;
+
+    if (expiresAt <= Date.now()) {
+      this.externalPreviewApprovals.delete(realFilePath);
+      return false;
+    }
+
+    return true;
   }
 }

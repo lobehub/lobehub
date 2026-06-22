@@ -27,9 +27,6 @@ export const getBudgetContextFromErrorBody = (
   return budget as PlanLimitBudgetContext;
 };
 
-export const isFableCampaignLimitContext = (context?: PlanLimitBudgetContext): boolean =>
-  context?.modelId === 'claude-fable-5' && context.providerId === 'lobehub';
-
 const PLAN_VALUES = new Set<string>(Object.values(Plans));
 
 export const isKnownPlan = (plan?: string): plan is Plans => !!plan && PLAN_VALUES.has(plan);

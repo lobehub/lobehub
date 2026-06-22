@@ -2,13 +2,15 @@ import type { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/t
 import type { Pricing } from 'model-bank';
 
 import { parseToolCalls } from '../../helpers';
-import type { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks, OnFinishData, UsageMissingDiagnostics } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 
 export type ChatPayloadForTransformStream = {
+  apiMode?: UsageMissingDiagnostics['apiMode'];
+  includeUsageRequested?: boolean;
   model?: string;
   pricing?: Pricing;
   pricingOptions?: ComputeChatCostOptions;
@@ -66,7 +68,33 @@ export interface StreamContext {
    */
   tools?: Record<number, { id: string; index: number; name: string }>;
   usage?: ModelUsage;
+  usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
+
+export const setOpenAIChatCompletionUsageMissingDiagnostics = (
+  streamContext: StreamContext,
+  payload: ChatPayloadForTransformStream | undefined,
+  {
+    finishReason,
+    responseId,
+  }: {
+    finishReason?: string | null;
+    responseId?: string;
+  },
+) => {
+  streamContext.usageMissingDiagnostics = {
+    apiMode: 'chat_completions',
+    chunkIndex: streamContext.chunkIndex,
+    finishReason,
+    hasUsageMetadata: false,
+    includeUsageRequested: payload?.includeUsageRequested,
+    model: payload?.model,
+    provider: payload?.provider,
+    responseId,
+    source: 'openai_chat_completions',
+    terminalEventType: 'chat.completion.chunk',
+  };
+};
 
 export interface StreamProtocolChunk {
   data: any;
@@ -401,7 +429,10 @@ export const createSSEProtocolTransformer = (
   });
 };
 
-export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) {
+export function createCallbacksTransformer(
+  cb: ChatStreamCallbacks | undefined,
+  options?: { streamStack?: StreamContext },
+) {
   const textEncoder = new TextEncoder();
   let aggregatedText = '';
   let aggregatedThinking: string | undefined = undefined;
@@ -419,7 +450,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
 
   return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
-      const data = {
+      const data: OnFinishData = {
         error: streamError,
         finishReason,
         grounding,
@@ -429,6 +460,10 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
         toolsCalling,
         usage,
       };
+      const usageMissingDiagnostics = usage
+        ? undefined
+        : options?.streamStack?.usageMissingDiagnostics;
+      if (usageMissingDiagnostics) data.usageMissingDiagnostics = usageMissingDiagnostics;
 
       if (callbacks.onCompletion) {
         await callbacks.onCompletion(data);

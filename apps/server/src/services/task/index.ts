@@ -691,7 +691,6 @@ export class TaskService {
       name: task.name,
       parent,
       priority: task.priority,
-      review: this.taskModel.getReviewConfig(task),
       schedule:
         task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
           ? {
@@ -702,6 +701,7 @@ export class TaskService {
           : undefined,
       status: task.status,
       userId: task.assigneeUserId,
+      verify: this.taskModel.getVerifyConfig(task),
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,

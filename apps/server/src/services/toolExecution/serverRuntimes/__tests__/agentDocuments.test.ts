@@ -2,6 +2,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
@@ -12,7 +13,11 @@ const agentDocumentToolOutcomeMocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentDocuments');
 vi.mock('@/database/models/task');
+vi.mock('@/database/models/workspace');
 vi.mock('@/server/services/agentDocuments/toolOutcome', () => agentDocumentToolOutcomeMocks);
+vi.mock('@/envs/app', () => ({
+  appEnv: { APP_URL: 'https://app.example.com' },
+}));
 
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
@@ -48,6 +53,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     renameDocumentById: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
+  let findWorkspaceById: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
@@ -59,12 +65,14 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       renameDocumentById: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
+    findWorkspaceById = vi.fn().mockResolvedValue({ slug: 'lobe-team' });
 
     vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
     vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument }) as any);
+    vi.mocked(WorkspaceModel).mockImplementation(() => ({ findById: findWorkspaceById }) as any);
   });
 
-  const buildContext = (taskId?: string) => {
+  const buildContext = (taskId?: string, workspaceId?: string) => {
     // Mock the workspace lookup chain that `pinToTask` runs against the task
     // row. Returning `workspaceId: null` reproduces personal-mode behavior.
     const limit = vi.fn().mockResolvedValue([{ workspaceId: null }]);
@@ -76,6 +84,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       taskId,
       toolManifestMap: {},
       userId: 'user-1',
+      workspaceId,
     };
   };
 
@@ -187,6 +196,34 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     expect(pinDocument).not.toHaveBeenCalled();
   });
+
+  it('includes the workspace slug in generated document URLs', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(findWorkspaceById).toHaveBeenCalledWith('workspace-1');
+    expect(result.content).toContain(
+      'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
+    );
+  });
+
+  it('omits document URLs for workspace-scoped runs when the workspace slug cannot be resolved', async () => {
+    findWorkspaceById.mockResolvedValueOnce(undefined);
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.content).toBe(
+      'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
+  });
 });
 
 describe('AgentDocumentsExecutionRuntime.createDocument', () => {
@@ -224,6 +261,33 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
       agentDocumentId: 'agent-doc-assoc-id',
       documentId: 'documents-row-id',
     });
+  });
+
+  it('includes a document URL when a URL builder is configured', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'docs_document-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub, {
+      getDocumentUrl: ({ agentId, documentId }) =>
+        `https://app.example.com/agent/${agentId}/docs/${documentId}`,
+    });
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain(
+      'https://app.example.com/agent/agent-1/docs/docs_document-row-id',
+    );
+    expect(result.content).toContain('clickable markdown link');
+    expect(result.content).toContain('Internal id agent-doc-assoc-id');
+    expect(result.content).toContain('never show it to the user');
   });
 
   it('refuses to run without agentId', async () => {

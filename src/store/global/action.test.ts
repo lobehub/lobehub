@@ -253,28 +253,6 @@ describe('createPreferenceSlice', () => {
     });
   });
 
-  describe('toggleZenMode', () => {
-    it('should toggle zen mode', () => {
-      const { result } = renderHook(() => useGlobalStore());
-
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        // 初始值应该是 false
-        expect(result.current.status.zenMode).toBe(false);
-
-        result.current.toggleZenMode();
-      });
-
-      expect(result.current.status.zenMode).toBe(true);
-
-      act(() => {
-        result.current.toggleZenMode();
-      });
-
-      expect(result.current.status.zenMode).toBe(false);
-    });
-  });
-
   describe('toggleSystemRole', () => {
     it('should toggle system role', () => {
       const { result } = renderHook(() => useGlobalStore());

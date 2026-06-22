@@ -23,65 +23,41 @@ COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2> /dev/null || echo "unknow
 DATE_HUMAN=$(date '+%Y-%m-%d %H:%M')
 DATE_ISO=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
+# report.md is rendered as the verify page's "Details" tail — free-form COMMENT.
+# The scope (范围), per-case table (用例), overall conclusion, and the score are
+# all STRUCTURED on the page now (result.json scenario/context + cases +
+# summary.conclusion + summary.score), so DON'T repeat any of them here or they
+# double up. Keep only non-duplicate detail: repro commands, caveats, follow-ups.
 cat > "$DIR/report.md" << EOF
-# 测试报告：$TITLE
+<!-- Rendered as the verify page's "Details" tail. The page already shows the
+     title / scope / checks / conclusion / score, so DON'T add an H1 title or
+     repeat them here — write only the non-duplicate comment below. -->
 
-## 范围
+## 备注 / 说明
 
-<!-- 测试目标 / 变更范围 / 重点风险 -->
-
-- 分支：\`$BRANCH\`
-- 当前提交：\`$COMMIT\`
-- 日期：$DATE_HUMAN
-- 表面：<!-- CLI / Electron + CDP / Web / Bot:<platform> -->
-- 测试页 / 入口：<!-- e.g. /settings or http://localhost:3010 -->
-- 重点：<!-- 本轮最关心的体验、功能或回归点 -->
-
-## 用例
-
-| # | 用例 | 结果 | 关键现象 | 证据 |
-| - | ---- | ---- | -------- | ---- |
-| 1 |      | 待测 |          | ![用例 1](assets/case1.png) |
-
-## 结论
-
-整体结论：\`pending\`。
-
-<!-- 用 1-2 段概括用户最需要知道的结果；失败和阻塞必须明确说明影响。 -->
-
-仍需处理 / 跟进：
-
-- <!-- TODO -->
-
-## 本轮验证
-
-<!-- 如有自动化或命令行验证，保留精简命令与结果；没有则写“未运行额外自动化验证”。 -->
+<!-- 复现命令、注意事项、仍需跟进项；没有则写“无”。 -->
 
 \`\`\`bash
 # command
 \`\`\`
-
-结果：
-
-- <!-- TODO -->
-
-## 评分
-
-- 通过：0
-- 失败：0
-- 阻塞：0
-- 评分：— / 100
 EOF
 
+# result.json drives the structured page. \`summary.conclusion\` is the overall
+# conclusion shown at the top (under the scope block); \`summary.score\` (0-100)
+# becomes the \`score\` stat; \`scenario\`/\`context\` fields
+# (branch/commit/surfaces/entry/focus) render the scope header.
 cat > "$DIR/result.json" << EOF
 {
   "title": "$TITLE",
+  "scenario": "coding",
   "createdAt": "$DATE_ISO",
   "branch": "$BRANCH",
   "commit": "$COMMIT",
   "surfaces": [],
+  "entry": "",
+  "focus": "",
   "cases": [],
-  "summary": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "verdict": "pending" }
+  "summary": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "verdict": "pending", "conclusion": "", "score": null }
 }
 EOF
 

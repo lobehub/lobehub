@@ -177,26 +177,38 @@ const LinkList = memo<{ links: LinearLink[] }>(({ links }) => {
 LinkList.displayName = 'LinearRenderLinkList';
 
 const EntityCard = memo<{ entity: LinearEntity }>(({ entity }) => {
-  const title = entity.title || entity.id || 'Linear item';
+  // Comments / attachments have no human-readable title — only a UUID `id`.
+  // Never promote that UUID into the card title; keep the id as a secondary tag
+  // (linked when a url exists) and let the description carry the card.
+  const { title, id, url } = entity;
 
   return (
     <Block gap={10} padding={10} variant={'outlined'} width={'100%'}>
       <div className={styles.entityHeader}>
         <Flexbox gap={4} style={{ minWidth: 0 }}>
-          {entity.url ? (
-            <a className={styles.titleLink} href={entity.url} rel={'noreferrer'} target={'_blank'}>
+          {title &&
+            (url ? (
+              <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
+                <Text ellipsis={{ rows: 2 }} weight={600}>
+                  {title}
+                </Text>
+                <Icon icon={ExternalLink} size={12} />
+              </a>
+            ) : (
               <Text ellipsis={{ rows: 2 }} weight={600}>
                 {title}
               </Text>
-              <Icon icon={ExternalLink} size={12} />
-            </a>
-          ) : (
-            <Text ellipsis={{ rows: 2 }} weight={600}>
-              {title}
-            </Text>
-          )}
+            ))}
           <Flexbox horizontal gap={4} wrap={'wrap'}>
-            {entity.id && <Tag size={'small'}>{entity.id}</Tag>}
+            {id &&
+              (url && !title ? (
+                <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
+                  <Tag size={'small'}>{id}</Tag>
+                  <Icon icon={ExternalLink} size={12} />
+                </a>
+              ) : (
+                <Tag size={'small'}>{id}</Tag>
+              ))}
             {entity.state && (
               <Tag size={'small'} variant={'outlined'}>
                 {entity.state}
@@ -225,46 +237,35 @@ const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, u
       () => buildLinearRenderModel({ apiName, args, content, pluginError }),
       [apiName, args, content, pluginError],
     );
-    const hasRequest = hasItems(model.requestFields) || hasItems(model.requestLinks);
     const hasResult =
       hasItems(model.resultEntities) || Boolean(model.resultText) || Boolean(model.rawResultJson);
 
-    if (!hasRequest && !hasResult && !model.errorText) return null;
+    // Request args are intentionally not rendered here — the Inspector already
+    // surfaces the tool inputs, so duplicating them in the render is redundant.
+    if (!hasResult && !model.errorText) return null;
 
     return (
       <Flexbox className={styles.container} gap={12}>
-        {hasRequest && (
-          <Section title={model.actionLabel || 'Request'}>
-            <Block gap={8} padding={10} variant={'outlined'} width={'100%'}>
-              <FieldGrid fields={model.requestFields} />
-              <LinkList links={model.requestLinks} />
-            </Block>
-          </Section>
-        )}
         {hasItems(model.resultEntities) && (
-          <Section title={'Result'}>
-            <Flexbox gap={8}>
-              {model.resultEntities.map((entity, index) => (
-                <EntityCard
-                  entity={entity}
-                  key={`${entity.id || entity.title || 'entity'}:${index}`}
-                />
-              ))}
-            </Flexbox>
-          </Section>
+          <Flexbox gap={8}>
+            {model.resultEntities.map((entity, index) => (
+              <EntityCard
+                entity={entity}
+                key={`${entity.id || entity.title || 'entity'}:${index}`}
+              />
+            ))}
+          </Flexbox>
         )}
         {model.resultText && (
-          <Section title={'Result'}>
-            <Highlighter
-              wrap
-              language={'text'}
-              showLanguage={false}
-              style={{ maxHeight: 220, overflow: 'auto', paddingInline: 8 }}
-              variant={'filled'}
-            >
-              {model.resultText}
-            </Highlighter>
-          </Section>
+          <Highlighter
+            wrap
+            language={'text'}
+            showLanguage={false}
+            style={{ maxHeight: 220, overflow: 'auto', paddingInline: 8 }}
+            variant={'filled'}
+          >
+            {model.resultText}
+          </Highlighter>
         )}
         {model.rawResultJson && (
           <details className={styles.rawDetails}>

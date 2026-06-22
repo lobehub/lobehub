@@ -418,29 +418,33 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
       ? entries
       : [...entries].sort(([, a], [, b]) => b.count - a.count).slice(0, WORKFLOW_SUMMARY_TOP_N);
 
-  const segments: string[] = [displayedEntries.map(formatToolPart).join(', ')];
+  // The tool list, e.g. "Task Create (5), Edit (4), Read (2)".
+  let toolsText = displayedEntries.map(formatToolPart).join(', ');
 
-  // Only show "N tool kinds" when the list is truncated — otherwise it duplicates the visible list.
+  // Append "across N tools" when the list is truncated — otherwise it duplicates the visible list.
   if (displayedEntries.length < totalKinds) {
-    segments.push(
-      t('workflow.summaryMoreTools', {
-        count: totalKinds,
-        defaultValue: '{{count}} tool kinds',
-        ns: 'chat',
-      }),
-    );
+    toolsText += ` ${t('workflow.summaryAcrossTools', {
+      count: totalKinds,
+      defaultValue: 'across {{count}} tools',
+      ns: 'chat',
+    })}`;
   }
-  // Only show total calls when a tool was called more than once — otherwise totalCalls
-  // equals totalKinds and the suffix duplicates info already in the list.
-  if (totalKinds > 1 && totalCalls > totalKinds) {
-    segments.push(
-      t('workflow.summaryTotalCalls', {
-        count: totalCalls,
-        defaultValue: '{{count}} calls total',
-        ns: 'chat',
-      }),
-    );
-  }
+
+  // Lead with the total call count when a tool was called more than once — it's the most
+  // useful signal, so it goes first ("15 calls: …"). When totalCalls equals totalKinds the
+  // count is redundant with the list, so we just show the list.
+  const segments: string[] =
+    totalKinds > 1 && totalCalls > totalKinds
+      ? [
+          t('workflow.summaryCallsLead', {
+            count: totalCalls,
+            defaultValue: '{{count}} calls: {{tools}}',
+            ns: 'chat',
+            tools: toolsText,
+          }),
+        ]
+      : [toolsText];
+
   if (totalErrors > 0) {
     segments.push(
       t('workflow.summaryFailed', {

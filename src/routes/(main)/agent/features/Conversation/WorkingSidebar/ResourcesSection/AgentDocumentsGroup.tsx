@@ -11,26 +11,31 @@ import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';
-import { FileTextIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
+import { EyeIcon, FileTextIcon, GlobeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties, MouseEvent } from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  openRenameSkillModal,
   type SkillListItem,
+  type SkillRowAction,
   SkillSection,
   SkillsList,
   useProjectSkills,
 } from '@/features/SkillsList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { standardizeIdentifier } from '@/utils/identifier';
 
 import ProjectLevelSkills from './ProjectLevelSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
@@ -38,6 +43,7 @@ import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
 dayjs.extend(relativeTime);
 
 type ResourceFilter = 'skills' | 'documents' | 'web';
+type DocumentOpenMode = 'portal' | 'route';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -105,23 +111,36 @@ const FILTER_OPTIONS = [
   { labelKey: 'workingPanel.resources.filter.web', value: 'web' },
 ] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
 
+const DOCUMENT_MODE_FILTER_OPTIONS = [
+  { labelKey: 'workingPanel.resources.filter.documents', value: 'documents' },
+  { labelKey: 'workingPanel.resources.filter.skills', value: 'skills' },
+] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
+
 type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.listDocuments>>[number];
 
 interface DocumentItemProps {
+  activeDocumentIdentifier?: string;
   agentId: string;
   document: AgentDocumentListItem;
   hideDelete?: boolean;
   mutate: () => Promise<unknown>;
+  onCurrentDeleted?: () => void;
+  onOpenDocument: (documentId: string, agentDocumentId?: string) => void;
 }
 
 const DocumentItem = memo<DocumentItemProps>(
-  ({ agentId, document, hideDelete = false, mutate }) => {
+  ({
+    activeDocumentIdentifier,
+    agentId,
+    document,
+    hideDelete = false,
+    mutate,
+    onCurrentDeleted,
+    onOpenDocument,
+  }) => {
     const { t } = useTranslation(['chat', 'common']);
     const { message } = App.useApp();
     const [deleting, setDeleting] = useState(false);
-    const openDocument = useChatStore((s) => s.openDocument);
-    const closeDocument = useChatStore((s) => s.closeDocument);
-    const portalDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
 
     const title = document.title || document.filename || '';
     const description = document.description ?? undefined;
@@ -134,11 +153,11 @@ const DocumentItem = memo<DocumentItemProps>(
         })
       : null;
 
-    const isActive = portalDocumentId === document.documentId;
+    const isActive = activeDocumentIdentifier === standardizeIdentifier(document.documentId);
 
     const handleOpen = () => {
       if (!document.documentId) return;
-      openDocument(document.documentId, document.id);
+      onOpenDocument(document.documentId, document.id);
     };
 
     const handleDelete = (e: MouseEvent) => {
@@ -151,13 +170,13 @@ const DocumentItem = memo<DocumentItemProps>(
         onOk: async () => {
           setDeleting(true);
           try {
-            if (isActive) closeDocument();
             await agentDocumentService.removeDocument({
               agentId,
               documentId: document.documentId,
               id: document.id,
             });
             await mutate();
+            if (isActive) onCurrentDeleted?.();
             message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
           } catch (error) {
             message.error(
@@ -252,24 +271,56 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 };
 
 interface AgentDocumentsGroupProps {
+  activeFilter?: ResourceFilter;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
+  openMode?: DocumentOpenMode;
+  showFilterTabs?: boolean;
+  showLocalProjectSkills?: boolean;
   style?: CSSProperties;
   workingDirectory?: string;
 }
 
 const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
-  ({ deviceId, style, workingDirectory }) => {
+  ({
+    activeFilter: controlledFilter,
+    deviceId,
+    openMode,
+    showFilterTabs = true,
+    showLocalProjectSkills = false,
+    style,
+    workingDirectory,
+  }) => {
     const { t } = useTranslation('chat');
+    const { t: tCommon } = useTranslation('common');
+    const { message } = App.useApp();
     const agentId = useAgentStore((s) => s.activeAgentId);
+    const { docId } = useParams<{ docId?: string }>();
+    const navigate = useWorkspaceAwareNavigate();
+    const openDocument = useChatStore((s) => s.openDocument);
+    const isDocumentMode = !!docId;
+    const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
     const isLocalEnabled = useAgentStore((s) =>
       agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
     );
-    const openDocument = useChatStore((s) => s.openDocument);
-    const [filter, setFilter] = useState<ResourceFilter>('skills');
+    const [filter, setFilter] = useState<ResourceFilter>(() =>
+      isDocumentMode ? 'documents' : 'skills',
+    );
+    const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
+    const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
+    const resolvedFilter = controlledFilter ?? filter;
+    const activeFilter = filterOptions.some((option) => option.value === resolvedFilter)
+      ? resolvedFilter
+      : filterOptions[0].value;
+
+    useEffect(() => {
+      if (controlledFilter) return;
+      setFilter(isDocumentMode ? 'documents' : 'skills');
+    }, [controlledFilter, isDocumentMode]);
 
     // Local desktop reads skills over IPC; a bound device reads over RPC.
-    const showProjectSkills = (isLocalEnabled || !!deviceId) && !!workingDirectory;
+    const showProjectSkills =
+      (showLocalProjectSkills || isLocalEnabled || !!deviceId) && !!workingDirectory;
 
     // Mirror what each child component reads so the parent can decide the
     // section layout (flat when a single source has items, sectioned otherwise).
@@ -331,24 +382,113 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       );
     }
 
+    const openAgentDocument = (documentId: string, agentDocumentId?: string) => {
+      if (!agentId) return;
+      if (resolvedOpenMode === 'portal') {
+        openDocument(
+          documentId,
+          agentDocumentId ?? data.find((doc) => doc.documentId === documentId)?.id,
+        );
+        return;
+      }
+      navigate(buildAgentDocumentPath(agentId, documentId));
+    };
+
+    const backToChat = () => {
+      if (!agentId) return;
+      navigate(`/agent/${agentId}`);
+    };
+
+    // Open the SKILL.md (skills/index child) when present; fall back to the
+    // bundle itself (orphan bundles surface for recovery).
+    const openAgentSkill = (item: SkillListItem) => {
+      const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+      const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
+      const targetDocId = indexChild?.documentId ?? view?.bundle.documentId ?? item.id;
+      openAgentDocument(targetDocId);
+    };
+
+    // Agent skills are document bundles, so view / rename / delete map onto the
+    // agent-document service (`item.id` is the bundle's documentId; the service
+    // keys off the row id carried on the bundle).
+    const getAgentSkillActions = (item: SkillListItem): SkillRowAction[] => {
+      const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+      const rowId = view?.bundle.id;
+      return [
+        {
+          icon: EyeIcon,
+          key: 'view',
+          label: t('workingPanel.skills.actions.view'),
+          onClick: openAgentSkill,
+        },
+        {
+          disabled: !rowId,
+          icon: PencilIcon,
+          key: 'rename',
+          label: t('workingPanel.skills.actions.rename'),
+          onClick: () => {
+            if (!rowId) return;
+            openRenameSkillModal({
+              currentName: item.name,
+              onSubmit: async (newName) => {
+                try {
+                  await agentDocumentService.renameDocument({
+                    agentId: agentId!,
+                    id: rowId,
+                    newTitle: newName,
+                  });
+                  await mutate();
+                  return undefined;
+                } catch (error) {
+                  return error instanceof Error
+                    ? error.message
+                    : t('workingPanel.skills.rename.error');
+                }
+              },
+            });
+          },
+        },
+        {
+          danger: true,
+          disabled: !rowId,
+          icon: Trash2Icon,
+          key: 'delete',
+          label: t('workingPanel.skills.actions.delete'),
+          onClick: () => {
+            if (!rowId) return;
+            confirmModal({
+              cancelText: tCommon('cancel'),
+              content: t('workingPanel.skills.delete.agentConfirm', { name: item.name }),
+              okButtonProps: { danger: true },
+              okText: tCommon('delete'),
+              onOk: async () => {
+                try {
+                  await agentDocumentService.removeDocument({ agentId: agentId!, id: rowId });
+                  await mutate();
+                  message.success(t('workingPanel.skills.delete.success'));
+                } catch (error) {
+                  message.error(
+                    error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
+                  );
+                }
+              },
+              title: t('workingPanel.skills.delete.title'),
+            });
+          },
+        },
+      ];
+    };
+
     const renderAgentSkillsList = () => (
       <SkillsList
+        getRowActions={getAgentSkillActions}
         items={skillItems}
+        onOpenSkill={openAgentSkill}
         onOpenFile={(item, relativePath) => {
           const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
           const docId = view?.pathToDocumentId.get(relativePath);
           if (!docId) return;
-          const row = data.find((d) => d.documentId === docId);
-          openDocument(docId, row?.id);
-        }}
-        onOpenSkill={(item) => {
-          // Open the SKILL.md (skills/index child) when present; fall back to
-          // the bundle itself (orphan bundles surface for recovery).
-          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-          const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
-          const targetDocId = indexChild?.documentId ?? view?.bundle.documentId ?? item.id;
-          const targetRow = data.find((d) => d.documentId === targetDocId);
-          openDocument(targetDocId, targetRow?.id);
+          openAgentDocument(docId);
         }}
         onSkillDragStart={(item, event) => {
           // The runtime resolves these via the `agent-skills:<filename>`
@@ -434,6 +574,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           data={documentsData}
           mutate={mutate}
           style={{ height: '100%' }}
+          onOpenDocument={openAgentDocument}
         />
       </Flexbox>
     );
@@ -449,7 +590,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       return (
         <Flexbox gap={8}>
           {webData.map((doc) => (
-            <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
+            <DocumentItem
+              activeDocumentIdentifier={activeDocumentIdentifier}
+              agentId={agentId}
+              document={doc}
+              key={doc.id}
+              mutate={mutate}
+              onCurrentDeleted={backToChat}
+              onOpenDocument={openAgentDocument}
+            />
           ))}
         </Flexbox>
       );
@@ -457,25 +606,27 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
     return (
       <Flexbox gap={12} style={style}>
-        <Flexbox horizontal gap={4} role={'tablist'}>
-          {FILTER_OPTIONS.map((option) => {
-            const active = filter === option.value;
-            return (
-              <div
-                aria-selected={active}
-                className={cx(styles.pillTab, active && styles.pillActive)}
-                key={option.value}
-                role={'tab'}
-                onClick={() => setFilter(option.value)}
-              >
-                {t(option.labelKey)}
-              </div>
-            );
-          })}
-        </Flexbox>
-        {filter === 'skills' && renderSkills()}
-        {filter === 'documents' && renderDocuments()}
-        {filter === 'web' && renderWeb()}
+        {showFilterTabs && (
+          <Flexbox horizontal gap={4} role={'tablist'}>
+            {filterOptions.map((option) => {
+              const active = activeFilter === option.value;
+              return (
+                <div
+                  aria-selected={active}
+                  className={cx(styles.pillTab, active && styles.pillActive)}
+                  key={option.value}
+                  role={'tab'}
+                  onClick={() => setFilter(option.value)}
+                >
+                  {t(option.labelKey)}
+                </div>
+              );
+            })}
+          </Flexbox>
+        )}
+        {activeFilter === 'skills' && renderSkills()}
+        {activeFilter === 'documents' && renderDocuments()}
+        {activeFilter === 'web' && renderWeb()}
       </Flexbox>
     );
   },

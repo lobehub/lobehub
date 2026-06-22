@@ -659,6 +659,59 @@ describe('createServerAgentToolsEngine', () => {
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
 
+    it('should disable RemoteDevice when a device is explicitly bound (locked to the selection)', () => {
+      // A user-selected (bound) device locks the run to that device — the
+      // activate-device tool is never offered, so the model cannot switch.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: {
+          autoActivated: true,
+          boundDeviceId: 'device-001',
+          deviceOnline: true,
+          gatewayConfigured: true,
+        },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('should disable RemoteDevice when the bound device is OFFLINE — no silent hop to another machine', () => {
+      // The bound device going offline makes the plan device-unrouted, so
+      // `autoActivated` is false. Without the `boundDeviceId` gate the tool
+      // would resurface and let the model activate a *different* online device.
+      // The explicit selection must keep the run locked instead.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: {
+          boundDeviceId: 'device-001',
+          deviceOnline: true,
+          gatewayConfigured: true,
+        },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
     it('should enable RemoteDevice in bot conversations when caller is trusted (canUseDevice=true)', () => {
       // The `!isBotConversation` clause was dropped in — the
       // confused-deputy concern that motivated it is now handled at a

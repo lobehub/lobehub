@@ -109,17 +109,24 @@ export class TaskConfigSliceActionImpl {
     id: string,
     review: Parameters<typeof taskService.updateReview>[0]['review'],
   ): Promise<void> => {
-    this.#get().internal_dispatchTaskDetail({
-      id,
-      type: 'updateTaskDetail',
-      value: { review },
-    });
-
     try {
       await taskService.updateReview({ id, review });
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update review:', error);
+      await this.#get().internal_refreshTaskDetail(id);
+    }
+  };
+
+  updateVerifyConfig = async (
+    id: string,
+    verify: Parameters<typeof taskService.updateVerifyConfig>[0]['verify'],
+  ): Promise<void> => {
+    try {
+      await taskService.updateVerifyConfig({ id, verify });
+      await this.#get().internal_refreshTaskDetail(id);
+    } catch (error) {
+      console.error('[TaskStore] Failed to update verify config:', error);
       await this.#get().internal_refreshTaskDetail(id);
     }
   };

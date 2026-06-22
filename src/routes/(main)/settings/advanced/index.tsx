@@ -48,6 +48,8 @@ const Page = memo(() => {
     enableInputMarkdown,
     enablePlatformAgent,
     enableImessage,
+    enableFleet,
+    enableTaskVerify,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -55,6 +57,8 @@ const Page = memo(() => {
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
+    labPreferSelectors.enableFleet(s),
+    labPreferSelectors.enableTaskVerify(s),
     s.updateLab,
   ]);
 
@@ -163,6 +167,19 @@ const Page = memo(() => {
       label: tLabs('features.inputMarkdown.title'),
       minWidth: undefined,
     },
+    {
+      children: (
+        <Switch
+          checked={enableTaskVerify}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableTaskVerify: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.taskVerify.desc'),
+      label: tLabs('features.taskVerify.title'),
+      minWidth: undefined,
+    },
     ...(isDesktop
       ? [
           {
@@ -176,6 +193,19 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.imessage.desc'),
             label: tLabs('features.imessage.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+          {
+            children: (
+              <Switch
+                checked={enableFleet}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableFleet: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.fleet.desc'),
+            label: tLabs('features.fleet.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]

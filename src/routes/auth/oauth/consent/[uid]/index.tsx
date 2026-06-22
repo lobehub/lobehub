@@ -1,3 +1,1 @@
-import OAuthConsent from '@/features/Auth/OAuthConsent';
-
-export default OAuthConsent;
+export { default } from '@/features/Auth/OAuthConsent';

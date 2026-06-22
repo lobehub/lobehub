@@ -30,7 +30,7 @@ export default {
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
   'channel.disabled': 'Disabled',
   'channel.discord.description':
-    'Connect this assistant to Discord server for channel chat and direct messages.',
+    'Connect this agent to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
   'channel.messengerPromo.action': 'Try Messenger',
   'channel.messengerPromo.desc': 'No bot setup. Chat with LobeHub on Slack, Discord, Telegram.',
@@ -53,12 +53,12 @@ export default {
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
-  'channel.feishu.description': 'Connect this assistant to Feishu for private and group chats.',
+  'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.imessage.description':
-    'Connect this assistant to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+    'Connect this agent to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'channel.imessage.applicationIdHint':
     'A stable identifier shared by the cloud channel and the Desktop bridge.',
   'channel.imessage.applicationIdPlaceholder': 'e.g. home-mac-mini',
@@ -110,9 +110,9 @@ export default {
   'channel.imessage.webhookSecret': 'Webhook Secret',
   'channel.imessage.webhookSecretHint':
     'A shared secret used between LobeHub Desktop and the cloud webhook. Use the same value in the Desktop bridge config.',
-  'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.lark.description': 'Connect this agent to Lark for private and group chats.',
   'channel.line.description':
-    'Connect this assistant to LINE Messaging API for direct and group chats.',
+    'Connect this agent to LINE Messaging API for direct and group chats.',
   'channel.line.destinationUserId': 'Destination User ID',
   'channel.line.destinationUserIdHint':
     'The bot\'s own user ID (`U` + 32 chars) — click "Fetch from LINE" below to auto-fill. Not the personal "Your user ID" shown in LINE\'s Basic settings.',
@@ -136,12 +136,12 @@ export default {
   'channel.publicKeyHint': 'Optional. Used to verify interaction requests from Discord.',
   'channel.publicKeyPlaceholder': 'Required for interaction verification',
   'channel.qq.appIdHint': 'Your QQ Bot App ID from QQ Open Platform',
-  'channel.qq.description': 'Connect this assistant to QQ for group chats and direct messages.',
+  'channel.qq.description': 'Connect this agent to QQ for group chats and direct messages.',
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.wechat.description':
-    'Connect this assistant to WeChat via iLink Bot for private and group chats.',
+    'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
   'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
@@ -174,13 +174,13 @@ export default {
   'channel.slack.appTokenHint':
     'Required for Socket Mode (WebSocket). Generate an app-level token (xapp-...) under Basic Information in your Slack app settings.',
   'channel.slack.description':
-    'Connect this assistant to Slack for channel conversations and direct messages.',
+    'Connect this agent to Slack for channel conversations and direct messages.',
   'channel.slack.webhookMigrationTitle': 'Consider migrating to Socket Mode (WebSocket)',
   'channel.slack.webhookMigrationDesc':
     'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
-  'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
+  'channel.telegram.description': 'Connect this agent to Telegram for private and group chats.',
   'channel.testConnection': 'Test Connection',
   'channel.testFailed': 'Connection test failed',
   'channel.testSuccess': 'Connection test passed',
@@ -304,21 +304,21 @@ export default {
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
 
-  'transfer.title': 'Transfer',
-  'transfer.copyTo': 'Copy To',
-  'transfer.desc': 'Transfer this agent to another workspace or your personal account.',
-  'transfer.button': 'Transfer',
-  'transfer.selectTarget': 'Transfer Agent To',
+  'transfer.title': 'Move',
+  'transfer.copyTo': 'Copy to...',
+  'transfer.desc': 'Move this Agent to another Workspace or your personal account.',
+  'transfer.button': 'Move',
+  'transfer.selectTarget': 'Move Agent to',
   'transfer.searchWorkspace': 'Search workspaces...',
   'transfer.personalAccount': 'Personal Account',
-  'transfer.confirm.title': 'Transfer Agent',
+  'transfer.confirm.title': 'Move Agent',
   'transfer.confirm.desc':
     'This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.',
-  'transfer.confirm.warning': "Some features don't transfer:",
+  'transfer.confirm.warning': "Some links won't move:",
   'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
-  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after transfer',
-  'transfer.success': 'Agent transferred successfully',
-  'transfer.transferTo': 'Transfer To',
-  'transfer.error': 'Failed to transfer agent',
+  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after moving',
+  'transfer.success': 'Agent moved successfully',
+  'transfer.transferTo': 'Move to...',
+  'transfer.error': 'Failed to move agent',
 } as const;

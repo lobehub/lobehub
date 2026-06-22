@@ -234,7 +234,7 @@ Before updating documentation, create a summary of what was accomplished:
 **Example Summary:**
 
 ```
-Store: chat/slices/aiChat
+Store: chat/slices/agentRun
 Coverage: 65% → 82% (+17%)
 Tests Added: 52 new tests
 Features Tested:
@@ -577,7 +577,7 @@ bunx eslint src/store/[domain]/
 
 ### Store-Specific Notes
 
-- **chat/aiChat**: Complex streaming logic, requires careful mocking of chatService
+- **chat/agentRun**: Complex streaming logic, requires careful mocking of chatService
 - **chat/thread**: ✅ Comprehensive tests complete (39 tests, \~80 LOC)
 - **tool/mcpStore**: ✅ Comprehensive tests complete (41 tests, 624 LOC)
 - **file/fileManager**: ✅ Comprehensive tests complete (35 tests, 205 LOC)

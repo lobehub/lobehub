@@ -1,8 +1,7 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
@@ -37,6 +36,9 @@ export const useSignIn = () => {
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
+  );
+  const enableBusinessFeatures = useAuthServerConfigStore(
+    (s) => s.serverConfig.enableBusinessFeatures || false,
   );
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
@@ -222,7 +224,7 @@ export const useSignIn = () => {
     });
 
     try {
-      if (ENABLE_BUSINESS_FEATURES && !(await preSocialSigninCheck())) {
+      if (enableBusinessFeatures && !(await preSocialSigninCheck())) {
         setSocialLoading(null);
         return;
       }
@@ -296,7 +298,7 @@ export const useSignIn = () => {
     }
   };
 
-  const resolvedProviders = ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders;
+  const resolvedProviders = enableBusinessFeatures ? ssoProviders : oAuthSSOProviders;
   const sortedProviders = lastAuthProvider
     ? [...resolvedProviders].sort((a, b) => {
         if (a === lastAuthProvider) return -1;
@@ -319,7 +321,7 @@ export const useSignIn = () => {
     lastAuthProvider,
     loading,
     oAuthSSOProviders: sortedProviders,
-    serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
+    serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
     socialLoading,
     step,
   };

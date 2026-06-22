@@ -22,6 +22,15 @@ export class ConnectorActionImpl {
     this.#set({ connectors: data as any, isConnectorsInit: true }, false, 'fetchConnectors');
   };
 
+  /**
+   * Fetch the connector with its decrypted user-set credentials for the edit
+   * form. Does NOT update the store — caller uses the result directly.
+   * Machine-managed OAuth tokens are excluded server-side.
+   */
+  getConnectorForEdit = async (id: string) => {
+    return lambdaClient.connector.getForEdit.query({ id });
+  };
+
   createConnector = async (
     params: Parameters<typeof lambdaClient.connector.create.mutate>[0],
   ): Promise<string> => {
@@ -53,7 +62,10 @@ export class ConnectorActionImpl {
   updateConnector = async (
     id: string,
     patch: {
-      credentials?: null;
+      credentials?:
+        | { token: string; type: 'bearer' }
+        | { headers: Record<string, string>; type: 'header' }
+        | null;
       isEnabled?: boolean;
       mcpServerUrl?: string;
       name?: string;
@@ -132,9 +144,10 @@ export class ConnectorActionImpl {
   /**
    * Bootstrap connector entry for an installed marketplace plugin.
    * Idempotent — safe to call whenever the detail panel opens.
-   * Returns the connectorId.
+   * Returns the connectorId, or `null` for legacy customPlugin rows that own
+   * an MCP endpoint (those go through the frontend migration flow instead).
    */
-  syncPluginTools = async (identifier: string): Promise<string> => {
+  syncPluginTools = async (identifier: string): Promise<string | null> => {
     const result = await lambdaClient.connector.syncPluginTools.mutate({ identifier });
     await this.fetchConnectors();
     return result.connectorId;

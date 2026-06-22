@@ -74,7 +74,12 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
             icon={PlusIcon}
             onClick={() => {
               if (!canManageProvider) return;
-              createCreateNewModelModal({ showDeployName });
+              createCreateNewModelModal({
+                existingModelIds: useAiInfraStore
+                  .getState()
+                  .aiProviderModelList.map((model) => model.id),
+                showDeployName,
+              });
             }}
           >
             {t('providerModels.list.addNew')}

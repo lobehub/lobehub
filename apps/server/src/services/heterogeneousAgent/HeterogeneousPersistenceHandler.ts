@@ -470,26 +470,11 @@ export class HeterogeneousPersistenceHandler {
     return toolState;
   }
 
-  private getLastSnapshotToolMessageId(
-    snapshot: AssistantDbSnapshot,
-    toolMsgIdByCallId: Map<string, string>,
-  ): string | undefined {
-    for (const tool of [...snapshot.tools].reverse()) {
-      const toolMessageId = tool.result_msg_id ?? toolMsgIdByCallId.get(tool.id);
-      if (toolMessageId) return toolMessageId;
-    }
-    return undefined;
-  }
-
   private async refreshToolMessageIndex(state: OperationState): Promise<void> {
     const toolPlugins = await this.deps.messageModel.listMessagePluginsByTopic(state.topicId);
     for (const plugin of toolPlugins) {
       if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
     }
-  }
-
-  private async getLastChildToolMessageId(assistantMessageId: string): Promise<string | undefined> {
-    return await this.deps.messageModel.getLastChildToolMessageId?.(assistantMessageId);
   }
 
   /**
@@ -544,23 +529,16 @@ export class HeterogeneousPersistenceHandler {
     if (snapshot.model) state.main.turnModel = snapshot.model;
     if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
-    // Prefer the authoritative child tool row over the assistant.tools[] JSONB
-    // mirror. During multi-tool batches, an earlier tool may already have
-    // result_msg_id backfilled while a later tool row exists but Phase 3 has not
-    // rewritten the JSONB payload yet; anchoring from the snapshot would pick
-    // the earlier tool and fork the main wire.
-    const currentTurnToolId =
-      (await this.getLastChildToolMessageId(state.main.currentAssistantId)) ??
-      this.getLastSnapshotToolMessageId(snapshot, state.toolMsgIdByCallId);
-    if (currentTurnToolId) {
-      state.main.lastToolMsgIdEver = currentTurnToolId;
-      return;
-    }
-
-    const toolMessageIds = new Set(state.toolMsgIdByCallId.values());
-    if (snapshot.parentId && toolMessageIds.has(snapshot.parentId)) {
-      state.main.lastToolMsgIdEver = snapshot.parentId;
-    }
+    // Recover the chain spine from the DB. The next normal
+    // turn parents off the run's latest NON-tool / NON-signal main-thread
+    // message; reading it straight from the DB (independent of
+    // `currentAssistantId`, which can regress to the seed placeholder on a cold
+    // / non-sticky replica — see the multi-replica caveat on the class) keeps
+    // consecutive cold-replica steps chained linearly instead of forking onto a
+    // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
+    // maintained in-memory across the run's tool batches.
+    const spineId = await this.deps.messageModel.getLastMainThreadSpineMessageId?.(state.topicId);
+    if (spineId) state.main.lastSpineMessageId = spineId;
   }
 
   /**
@@ -671,8 +649,11 @@ export class HeterogeneousPersistenceHandler {
     if (!currentAssistant) return undefined;
 
     const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
-    const childTools = toolRows.filter((m) => m.parentId === currentAssistant.id);
-    const lastChainParentId = childTools.at(-1)?.id ?? currentAssistant.id;
+    // Chain rule: the next turn's assistant parents off the
+    // prior assistant (the spine), not its last child tool — recover the anchor
+    // as the current assistant itself (matches the subagent reducer, and is
+    // fork-resistant since it reads the thread's real latest assistant from DB).
+    const lastChainParentId = currentAssistant.id;
     // Recover the in-flight turn's CC message.id so a continuation event is
     // recognized as the SAME turn (no spurious boundary → no fragmentation).
     const currentSubagentMessageId =

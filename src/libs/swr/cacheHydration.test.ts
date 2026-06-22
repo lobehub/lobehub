@@ -1,47 +1,78 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheHydration } from './cacheHydration';
-import { buildCacheScope } from './useCacheScope';
+import { cacheHydration, isCacheHydrationBlocked } from './cacheHydration';
 
 describe('cacheHydration', () => {
-  it('tracks readiness per scope and notifies subscribers', () => {
-    const scope = 'cacheHydration-test-1';
+  const scopes = ['anon:personal', 'u1:personal'];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    scopes.forEach((scope) => cacheHydration.markPending(scope));
+  });
+
+  it('marks a ready scope as pending before reload completes', () => {
     const listener = vi.fn();
     const unsubscribe = cacheHydration.subscribe(listener);
 
-    expect(cacheHydration.isReady(scope)).toBe(false);
+    cacheHydration.markReady('anon:personal');
+    expect(cacheHydration.isReady('anon:personal')).toBe(true);
 
-    cacheHydration.markReady(scope);
-    expect(cacheHydration.isReady(scope)).toBe(true);
-    expect(listener).toHaveBeenCalledTimes(1);
+    cacheHydration.markPending('anon:personal');
 
-    // marking again is a no-op (no extra emit)
-    cacheHydration.markReady(scope);
-    expect(listener).toHaveBeenCalledTimes(1);
-
-    cacheHydration.reset(scope);
-    expect(cacheHydration.isReady(scope)).toBe(false);
+    expect(cacheHydration.isReady('anon:personal')).toBe(false);
     expect(listener).toHaveBeenCalledTimes(2);
 
     unsubscribe();
-    cacheHydration.markReady(scope);
-    expect(listener).toHaveBeenCalledTimes(2); // unsubscribed
-  });
-});
-
-describe('buildCacheScope', () => {
-  it('falls back to anon/personal', () => {
-    expect(buildCacheScope(undefined, undefined)).toBe('anon:personal');
-    expect(buildCacheScope(null, null)).toBe('anon:personal');
   });
 
-  it('combines user and workspace', () => {
-    expect(buildCacheScope('u1', 'w1')).toBe('u1:w1');
-    expect(buildCacheScope('u1', null)).toBe('u1:personal');
+  it('blocks a returned scope until it is released after the latest hydration', () => {
+    cacheHydration.markReady('anon:personal');
+    cacheHydration.markReady('u1:personal');
+
+    cacheHydration.markPending('anon:personal');
+
+    expect(
+      isCacheHydrationBlocked({
+        isAuthLoaded: true,
+        ready: cacheHydration.isReady('anon:personal'),
+        released: false,
+        scope: 'anon:personal',
+        timedOutScope: null,
+      }),
+    ).toBe(true);
+
+    cacheHydration.markReady('anon:personal');
+
+    expect(
+      isCacheHydrationBlocked({
+        isAuthLoaded: true,
+        ready: cacheHydration.isReady('anon:personal'),
+        released: true,
+        scope: 'anon:personal',
+        timedOutScope: null,
+      }),
+    ).toBe(false);
   });
 
-  it('isolates different users and workspaces', () => {
-    expect(buildCacheScope('u1', 'w1')).not.toBe(buildCacheScope('u2', 'w1'));
-    expect(buildCacheScope('u1', 'w1')).not.toBe(buildCacheScope('u1', 'w2'));
+  it('does not let a timeout from another scope release the current scope', () => {
+    expect(
+      isCacheHydrationBlocked({
+        isAuthLoaded: true,
+        ready: false,
+        released: true,
+        scope: 'u1:personal',
+        timedOutScope: 'anon:personal',
+      }),
+    ).toBe(true);
+
+    expect(
+      isCacheHydrationBlocked({
+        isAuthLoaded: true,
+        ready: false,
+        released: true,
+        scope: 'u1:personal',
+        timedOutScope: 'u1:personal',
+      }),
+    ).toBe(false);
   });
 });

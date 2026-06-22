@@ -34,9 +34,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
     gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
 
     padding-block: 20px 16px;
     padding-inline: 24px;

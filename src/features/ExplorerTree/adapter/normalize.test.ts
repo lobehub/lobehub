@@ -21,6 +21,42 @@ describe('normalizeTree', () => {
     ).toEqual(['folder-b', 'file-a']);
   });
 
+  it('disambiguates a folder and a file that share a name', () => {
+    // @pierre/trees keys nodes by bare name within a parent, so `foo/` and
+    // `foo` would collide into one ambiguous node without a directory index
+    // (the "Unknown directory child index" crash). They must stay distinct.
+    const nodes: ExplorerTreeNode[] = [
+      { id: 'folder', isFolder: true, name: 'foo', parentId: null },
+      { id: 'file', name: 'foo', parentId: null },
+    ];
+
+    const tree = normalizeTree(nodes);
+
+    expect(tree.pathById.get('folder')).toBe('foo/');
+    expect(tree.pathById.get('file')).toBe('foo (2)');
+    // no two nodes share a bare path segment
+    expect(new Set(tree.paths.map((p) => (p.endsWith('/') ? p.slice(0, -1) : p))).size).toBe(
+      tree.paths.length,
+    );
+  });
+
+  it('replaces empty names with a fallback instead of emitting a blank segment', () => {
+    // A blank segment makes a child path equal to its parent's path, which the
+    // path store cannot represent and crashes the panel.
+    const nodes: ExplorerTreeNode[] = [
+      { id: 'blank-folder', isFolder: true, name: '', parentId: null },
+      { id: 'blank-file', name: '   ', parentId: null },
+      { id: 'child', name: 'a.md', parentId: 'blank-folder' },
+    ];
+
+    const tree = normalizeTree(nodes);
+
+    expect(tree.pathById.get('blank-folder')).toBe('Untitled/');
+    expect(tree.pathById.get('blank-file')).toBe('Untitled (2)');
+    expect(tree.pathById.get('child')).toBe('Untitled/a.md');
+    expect(tree.paths.every((p) => p.replaceAll('/', '') !== '')).toBe(true);
+  });
+
   it('detects descendants by parent id mapping', () => {
     const tree = normalizeTree([
       {

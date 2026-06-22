@@ -548,6 +548,50 @@ describe('AgentManagerRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
     });
+
+    it('should describe a heterogeneous (Claude Code) agent runtime', async () => {
+      vi.mocked(mockAgentService.getAgentConfigById).mockResolvedValue({
+        agencyConfig: {
+          boundDeviceId: 'device-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        chatConfig: {} as any,
+        model: 'gpt-4o',
+        params: {} as any,
+        plugins: [],
+        provider: 'openai',
+        title: 'CC 2号机',
+      } as any);
+
+      const result = await runtime.getAgentDetail('cc-agent');
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Claude Code');
+      expect(result.content).toContain('deviceId: device-1');
+      expect((result.state as any).config.runtime).toMatchObject({
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        kind: 'cli',
+        type: 'claude-code',
+      });
+    });
+
+    it('should not add runtime descriptor for a normal model-backed agent', async () => {
+      vi.mocked(mockAgentService.getAgentConfigById).mockResolvedValue({
+        chatConfig: {} as any,
+        model: 'gpt-4o',
+        params: {} as any,
+        plugins: [],
+        provider: 'openai',
+        title: 'Plain Agent',
+      } as any);
+
+      const result = await runtime.getAgentDetail('plain-agent');
+
+      expect(result.success).toBe(true);
+      expect((result.state as any).config.runtime).toBeUndefined();
+    });
   });
 
   describe('duplicateAgent', () => {

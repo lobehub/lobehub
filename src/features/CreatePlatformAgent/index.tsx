@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';

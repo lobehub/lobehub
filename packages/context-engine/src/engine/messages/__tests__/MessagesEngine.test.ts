@@ -114,6 +114,35 @@ describe('MessagesEngine', () => {
       expect(result.messages[0].content).toBe(systemRole);
     });
 
+    it('should inject model knowledge cutoff when provided', async () => {
+      const params = createBasicParams({
+        modelKnowledgeCutoff: '2024-06',
+        systemRole: 'You are a helpful assistant',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0]).toEqual({
+        content: 'You are a helpful assistant\n\nModel knowledge cutoff: 2024-06',
+        role: 'system',
+      });
+      expect(result.metadata.modelKnowledgeCutoffInjected).toBe(true);
+    });
+
+    it('should skip model knowledge cutoff injection when unknown', async () => {
+      const params = createBasicParams({ systemRole: 'You are a helpful assistant' });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0]).toEqual({
+        content: 'You are a helpful assistant',
+        role: 'system',
+      });
+      expect(result.metadata.modelKnowledgeCutoffInjected).toBeUndefined();
+    });
+
     it('should inject history summary when provided', async () => {
       const historySummary = 'We discussed AI and machine learning';
       const params = createBasicParams({ historySummary });

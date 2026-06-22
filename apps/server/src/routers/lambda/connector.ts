@@ -116,6 +116,32 @@ export const connectorRouter = router({
   }),
 
   /**
+   * Return the connector record with decrypted user-set credentials so the
+   * edit form can pre-fill accurately. Only the connector owner can call this
+   * (enforced by connectorProcedure ownership check).
+   *
+   * Machine-managed secrets are intentionally excluded:
+   * - OAuth access/refresh tokens (type 'oauth2') → stripped, returned as null
+   * - oidcConfig.clientSecret (DCR-registered secret)  → stripped
+   * User-set credentials (bearer token, custom headers) are returned as-is so
+   * the edit form can display them.
+   */
+  getForEdit: connectorProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      const connector = await ctx.connectorModel.findById(input.id);
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+
+      const { oidcConfig, credentials, ...rest } = connector;
+      const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+      // OAuth tokens are machine-managed — don't return them; the UI only needs
+      // to know an OAuth flow is configured (reflected via oidcConfig presence).
+      const safeCredentials = credentials?.type === 'oauth2' ? null : credentials;
+
+      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig };
+    }),
+
+  /**
    * The exact redirect URI the server will send to the OAuth/DCR endpoints.
    * The Add modal must display THIS value (not a client-derived origin) so the
    * URI the user registers matches the one used at authorize time.
@@ -140,11 +166,20 @@ export const connectorRouter = router({
     // connector updates the existing row instead of violating the unique index.
     // Status resets to `disconnected` — the OAuth callback / tool sync promotes
     // it back to `connected` on success.
+    //
+    // `sourceType` is honored on update so the legacy customPlugin → connector
+    // migration can promote a half-baked `marketplace` row left behind by the
+    // older `syncPluginTools` code path into a proper `custom` row. Without
+    // this the connector would land but never appear in custom-connector
+    // listings (selector filters on sourceType === 'custom'). Safe because the
+    // other callers (`AddConnectorModal`, marketplace bootstrap) always pass
+    // the same sourceType they originally created the row with.
     const [existing] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
         isEnabled: input.isEnabled ?? true,
+        sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
       return { id: existing.id };
@@ -260,7 +295,7 @@ export const connectorRouter = router({
           .partial()
           .omit({ identifier: true, sourceType: true })
           // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullable().optional() }),
+          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -446,6 +481,15 @@ export const connectorRouter = router({
    * Bootstrap a connector entry for an installed marketplace plugin.
    * Reads tool list from user_installed_plugins.manifest.api.
    * Idempotent — safe to call on every open of the detail panel.
+   *
+   * Skips `type='customPlugin'` rows that carry an MCP endpoint: those are
+   * legacy custom MCPs and now go through the frontend migration flow
+   * (CustomConnectorModal in `legacyPlugin` mode), which produces a fully
+   * populated `user_connectors` row (with `mcpServerUrl` / `credentials`).
+   * Letting this procedure build a half-baked marketplace row for them would
+   * be filtered out by the runtime (`buildConnectorManifests` requires a
+   * transport endpoint) and would also collide on the unique `(user_id,
+   * identifier)` index when the migration later tries to upsert.
    */
   syncPluginTools: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
@@ -457,6 +501,14 @@ export const connectorRouter = router({
           code: 'NOT_FOUND',
           message: `Plugin '${input.identifier}' not found or has no manifest`,
         });
+      }
+
+      if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
+        // Hand off to the frontend migration flow. Returning null tells the
+        // caller "no connector row produced"; the SkillDetail panel falls back
+        // to the legacy plugin display, and the "Configure" button surfaces
+        // CustomConnectorModal in migration mode.
+        return { connectorId: null, toolCount: 0 };
       }
 
       const connectorId = await upsertConnectorEntry(ctx.connectorModel, {

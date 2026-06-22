@@ -6,12 +6,14 @@ import {
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { type LobeChatDatabase } from '@/database/type';
+import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
-import { runVerifyOnCompletion } from '@/server/services/verify';
+import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher } from './hooks';
 
@@ -45,6 +47,13 @@ export class CompletionLifecycle {
   private readonly messageModel: MessageModel;
   private readonly agentOperationModel: AgentOperationModel;
   private readonly workspaceId?: string;
+  /**
+   * In-flight verify-plan instantiations started in {@link recordStart}, keyed by
+   * operationId. `dispatchHooks` awaits the matching one before running the
+   * completion gate so a very short / no-op task run can't race past its own plan
+   * (instantiation is fire-and-forget at start and may not have settled yet).
+   */
+  private readonly verifyPlanInstantiations = new Map<string, Promise<void>>();
 
   constructor(
     private readonly serverDB: LobeChatDatabase,
@@ -66,6 +75,25 @@ export class CompletionLifecycle {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
       log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
+    }
+
+    // Auto-instantiate the task's verify plan at run start so the completion gate
+    // fires. Only for a top-level task operation — repair / verifier sub-agents
+    // (which carry a parentOperationId) get their plan from the repair path, not
+    // here. Fire-and-forget; never blocks startup. We keep the promise (instead of
+    // void-ing it) so `dispatchHooks` can await it before the completion gate runs
+    // — a fast run can otherwise complete first and the gate would no-op on a plan
+    // that lands moments later. (instantiateVerifyPlanOnStart never rejects.)
+    if (params.taskId && !params.parentOperationId) {
+      this.verifyPlanInstantiations.set(
+        params.operationId,
+        instantiateVerifyPlanOnStart(
+          this.serverDB,
+          this.userId,
+          { operationId: params.operationId, taskId: params.taskId },
+          this.workspaceId,
+        ),
+      );
     }
   }
 
@@ -277,17 +305,17 @@ export class CompletionLifecycle {
     userId: string,
   ): Promise<void> {
     try {
-      const operationModel = new AgentOperationModel(this.serverDB, userId);
-      const state = await operationModel.getVerifyState(operationId);
-      if (!state?.verifyPlan?.length) return;
+      const run = await new VerifyRunModel(this.serverDB, userId).findByOperation(operationId);
+      if (!run?.plan?.length) return;
 
-      const op = await operationModel.findById(operationId);
+      const op = await new AgentOperationModel(this.serverDB, userId).findById(operationId);
       if (!op?.topicId) return;
 
       const messageModel = new MessageModel(this.serverDB, userId);
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
+        groupId: op.chatGroupId ?? undefined,
         metadata: { verifyOperationId: operationId },
         parentId: assistantMessageId,
         role: 'verify',
@@ -329,6 +357,12 @@ export class CompletionLifecycle {
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.
       if (reason === 'done') {
+        // The task's verify plan is instantiated fire-and-forget at run start; a
+        // fast or no-op run can reach completion before it settles. Await the
+        // in-flight instantiation (if any) so the gate sees the confirmed plan
+        // instead of racing past it and leaving a planned run with no results/card.
+        await this.verifyPlanInstantiations.get(operationId);
+
         const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
         const firstUserMessage = messages.find((m) => m?.role === 'user');
         const goal = firstUserMessage
@@ -361,13 +395,20 @@ export class CompletionLifecycle {
 
         const assistantMessageId = metadata?.assistantMessageId;
         if (assistantMessageId && state?.error) {
-          const errorMessage = this.extractErrorMessage(state.error) || String(state.error);
+          // Preserve the semantic error type written by the runtime. Rebuilding
+          // this as a generic AgentRuntimeError would lose UI routing data such
+          // as quota context and force the client into the fallback card.
+          const messageError = formatErrorForState(state.error);
+          const errorMessage =
+            this.extractErrorMessage(messageError) ||
+            this.extractErrorMessage(state.error) ||
+            String(state.error);
           try {
             await this.messageModel.update(assistantMessageId, {
               error: {
-                body: { message: errorMessage },
+                ...messageError,
+                body: messageError.body ?? { message: errorMessage },
                 message: errorMessage,
-                type: 'AgentRuntimeError',
               },
             });
           } catch (updateError) {
@@ -384,7 +425,13 @@ export class CompletionLifecycle {
     } finally {
       // Keep hooks registered across an async-tool park so the eventual resume
       // (same operationId) can still fire onComplete/onError.
-      if (!isAsyncToolPark) hookDispatcher.unregister(operationId);
+      if (!isAsyncToolPark) {
+        hookDispatcher.unregister(operationId);
+        // The instantiation has settled (awaited above) or this op never opted in
+        // — drop the entry so the map doesn't grow across the service's lifetime.
+        // Kept across an async-tool park: the op resumes under the same id.
+        this.verifyPlanInstantiations.delete(operationId);
+      }
     }
   }
 
@@ -414,14 +461,24 @@ export class CompletionLifecycle {
       ? Date.now() - new Date(state.createdAt).getTime()
       : undefined;
 
+    // On the error path, normalize the runtime error once so the lifecycle
+    // event carries the stable taxonomy fields (errorType + attribution). Bot
+    // reply renderers switch on these to surface a perceivable cause (network /
+    // quota / provider outage …) instead of an opaque Operation ID. Mirrors the
+    // same normalization dispatchHooks runs before writing the error onto the
+    // assistant message row.
+    const formattedError = state?.error ? formatErrorForState(state.error) : undefined;
+
     return {
       event: {
         agentId: metadata?.agentId || '',
         attachments: attachments.length > 0 ? attachments : undefined,
         cost: state?.cost?.total,
         duration,
+        errorAttribution: formattedError?.attribution,
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage(state?.error) || String(state?.error || ''),
+        errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),
         finalState: state,
         lastAssistantContent,
         llmCalls: state?.usage?.llm?.apiCalls,

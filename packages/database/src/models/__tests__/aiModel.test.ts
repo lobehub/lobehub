@@ -42,6 +42,50 @@ describe('AiModelModel', () => {
       });
       expect(group).toMatchObject({ ...params, userId });
     });
+
+    it('should reject creating the same model id twice', async () => {
+      await aiProviderModel.create({
+        displayName: 'Old Name',
+        enabled: false,
+        id: 'qvq',
+        providerId: 'openai',
+        releasedAt: '2025-01-01',
+      });
+
+      await expect(
+        aiProviderModel.create({
+          contextWindowTokens: 4096,
+          displayName: 'New Name',
+          id: 'qvq',
+          providerId: 'openai',
+          releasedAt: '2025-02-01T00:00:00.000Z',
+        }),
+      ).rejects.toThrow();
+
+      const models = await aiProviderModel.query();
+      expect(models).toHaveLength(1);
+      expect(models[0]).toMatchObject({
+        displayName: 'Old Name',
+        releasedAt: '2025-01-01',
+      });
+    });
+
+    it('should heal the legacy `stt` type to `asr` on write', async () => {
+      // The model type was renamed `stt` → `asr`. A deprecated `stt` input
+      // (e.g. from the OpenAPI back-compat path) must be persisted as `asr`,
+      // so writes lazily migrate the value without a bulk DB migration.
+      const result = await aiProviderModel.create({
+        id: 'my-transcribe',
+        providerId: 'openai',
+        type: 'stt' as NewAiModelItem['type'],
+      });
+      expect(result.type).toBe('asr');
+
+      const persisted = await serverDB.query.aiModels.findFirst({
+        where: eq(aiModels.id, 'my-transcribe'),
+      });
+      expect(persisted!.type).toBe('asr');
+    });
   });
   describe('delete', () => {
     it('should delete a ai provider by id', async () => {
@@ -99,11 +143,17 @@ describe('AiModelModel', () => {
 
   describe('query', () => {
     it('should query ai providers for the user', async () => {
-      await aiProviderModel.create({ organization: 'Qwen', providerId: 'openai', id: 'qvq' });
+      await aiProviderModel.create({
+        organization: 'Qwen',
+        providerId: 'openai',
+        id: 'qvq',
+        updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+      });
       await aiProviderModel.create({
         organization: 'Qwen',
         providerId: 'openai',
         id: 'aihubmix-2',
+        updatedAt: new Date('2025-01-02T00:00:00.000Z'),
       });
 
       const userGroups = await aiProviderModel.query();
@@ -263,6 +313,21 @@ describe('AiModelModel', () => {
       // Verify no models were created
       const allModels = await aiProviderModel.query();
       expect(allModels).toHaveLength(0);
+    });
+
+    it('should normalize ISO releasedAt values before inserting remote models', async () => {
+      const models = [
+        {
+          displayName: 'Remote Model',
+          enabled: true,
+          id: 'remote-model',
+          releasedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ] as AiProviderModelListItem[];
+
+      const [result] = await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      expect(result.releasedAt).toBe('2025-01-01');
     });
   });
 

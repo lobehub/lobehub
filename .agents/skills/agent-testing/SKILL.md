@@ -16,10 +16,10 @@ description: >
 
 One skill for all agentic end-to-end testing — local-first today, designed to
 also run as full cloud automation. Every test session follows the same
-four-step contract:
+contract:
 
 ```
-Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report
+Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report  →  Step 4: Publish to LobeHub
 ```
 
 ## Step -1 — Plan approval for non-trivial tests
@@ -111,7 +111,7 @@ First check the repo root for `.env`:
 Do not start the standalone e2e server as the product under test.
 
 Use `scripts/init-dev-env.sh`. It follows the e2e setup pattern — Postgres,
-migrations, auth/key-vault/S3 test env, seed user — but it is owned by this
+Redis, migrations, auth/key-vault/S3 test env, seed user — but it is owned by this
 skill and starts the repo's dev server (`pnpm run dev:next` / `bun run dev`),
 not `e2e/scripts/setup.ts --start`. The script hard-blocks when root `.env`
 exists, so it cannot accidentally override a user's local config. When `.env`
@@ -132,19 +132,19 @@ fi
 Bootstrap flow when no `.env` exists:
 
 ```bash
-# From repo root. Managed DB flow requires Docker Desktop.
+# From repo root. Managed Postgres/Redis flow requires Docker Desktop.
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh setup-db
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 ```
 
 If using an existing Postgres instead of the managed Docker DB, set
-`DATABASE_URL` and skip `setup-db`:
+`DATABASE_URL` and `REDIS_URL`, then skip `setup-db`:
 
 ```bash
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 ```
 
 For backend-only checks, `dev-next` is available, but Web smoke needs the
@@ -170,6 +170,9 @@ Default script env:
 - `APP_URL=http://localhost:3010`
 - `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`
 - `DATABASE_DRIVER=node`
+- `AGENT_RUNTIME_MODE=queue` so backend-only agent runtime checks use the
+  same queued execution path as production
+- `REDIS_URL=redis://localhost:6380` for queue-mode agent runtime state
 - `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
 - Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported;
   run `init-dev-env.sh qstash` in a separate terminal when the path under test
@@ -177,6 +180,7 @@ Default script env:
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
 - S3 mock vars
 - Managed DB container: `lobehub-agent-testing-postgres`
+- Managed Redis container: `lobehub-agent-testing-redis`
 
 `seed-user` creates `agent-testing@lobehub.com` / `TestPassword123!` with
 onboarding already completed, plus a local API key in
@@ -322,24 +326,28 @@ not a chat-only summary. Scaffold it up front and fill it as you test:
 ```bash
 DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
-# fill $DIR/report.md (scope, case table with inline evidence, verdict, score) and $DIR/result.json
+# fill $DIR/result.json (scenario, context, cases[], summary.conclusion) — the report;
+# $DIR/report.md holds only the narrative tail (跟进 / 本轮验证 / 评分)
 ```
 
-Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `report.md`
-(human-readable, with screenshots/GIFs embedded directly in the case table),
-`result.json` (machine-readable pass/fail + score), `assets/` (evidence).
-Format spec and evidence rules:
+Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `result.json`
+(the structured report — scenario/context/cases/summary), `report.md` (narrative
+tail), `assets/` (evidence). Format spec and evidence rules:
 [references/report.md](./references/report.md).
 
 Two hard rules worth front-loading:
 
-- **Report language = the user's conversation language.** Write the ENTIRE
-  `report.md` (headings included) in the language the user is conversing in —
-  no mixed English. `result.json` keys/status values stay English.
-- **The case table is the main reading surface.** Prefer the compact
-  `# | case | result | key observation | evidence` shape and embed the
-  screenshot/GIF in the evidence cell. Use separate evidence sections only for
-  long CLI transcripts, HAR summaries, or supplemental detail.
+- **Report language = the user's conversation language.** Write `report.md` and
+  every human-facing string in `result.json` (case `name`/`observation`,
+  `summary.conclusion`, scope `focus`/`entry`) in the language the user is
+  conversing in. `result.json` keys/status values stay English.
+- **`result.json` is the report; the verify page renders it.** Each tested
+  behavior is one entry in `cases[]` (`{ name, result, observation, evidence }`);
+  the published `/verify/<id>` page builds the scope header from
+  `scenario`+`context`, the check list from `cases[]`, and the headline verdict
+  from `summary.conclusion`. So do NOT hand-build a 用例 table or a 范围 block in
+  `report.md` — they double up on the page. `report.md` is the narrative tail
+  only (跟进 / 本轮验证 / 评分).
 - **Visual evidence must render inline.** Screenshots and GIFs in `report.md`
   must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
   use bare file paths, Markdown links, or local file links as the primary
@@ -355,6 +363,74 @@ Two hard rules worth front-loading:
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and embed the GIF —
   a static screenshot cannot prove the behavior.
+
+## Step 4 — Publish to LobeHub (mandatory)
+
+The local report under `.records/reports/` is the working artifact; the
+**deliverable is the report opened in LobeHub**. Do not stop at local files —
+push the session up with the CLI so the user (and later reviewers) can open it
+at a stable URL with the evidence rendered inline.
+
+**Publish targets PRODUCTION (`https://app.lobehub.com`), not the local dev
+server.** The product-under-test usually runs against a local env whose seeded
+CLI profile (`.records/env/agent-testing-cli.env`) points the CLI at
+`http://localhost:3010` via `LOBEHUB_SERVER` / `LOBE_API_KEY` /
+`LOBEHUB_CLI_HOME=.lobehub-dev`. Those overrides are for _running_ the backend
+test — they are wrong for _publishing_: a localhost run yields a URL nobody else
+can open, and a local env's stub S3 makes file-evidence uploads fail
+(`fetch failed`). The deliverable must live on production, with the user's real
+login (`~/.lobehub`) and real storage.
+
+So run the publish in a CLEAN environment that strips the local dev overrides,
+which falls back to the CLI defaults (`https://app.lobehub.com` + `~/.lobehub`):
+
+```bash
+# Publish to PRODUCTION — strip the local dev CLI overrides so `lh` uses its
+# production defaults (app.lobehub.com + the user's real ~/.lobehub login).
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh verify ingest-report "$DIR" --source agent-testing --open --json
+```
+
+Production auth is the user's own device-code login, not the seeded local key.
+Verify it first in the same clean env; if it returns "No authentication found",
+have the user log in (the flow prints a URL + code to authorize in the browser),
+then re-run the publish:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify run list --json # [] = authed
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh login                  # only if not authed
+```
+
+`verify ingest-report` reads `$DIR` and, in one call, creates a standalone
+verification session and uploads everything:
+
+- `result.json.cases[]` → one check result each (verdict + key observation)
+- each case's `evidence` file(s) → uploaded to storage and attached to that result
+- `report.md` → the session's full report body, plus the `summary` stats
+
+It prints the `verifyRunId` and, with `--open`, the in-app path
+`/verify/<verifyRunId>` — the report viewer (verdict, stats, every check, and the
+inline screenshot/text evidence). On production that resolves to
+`https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
+link in the final chat reply** alongside the local report dir.
+
+Notes:
+
+- `result.json` cases use `{ id?, name, result, observation?, evidence? }`;
+  `evidence` is a path (or array of paths) relative to `$DIR`. `result`/`verdict`
+  map onto `passed | failed | uncertain` (pass/ok→passed, fail/error→failed,
+  else→uncertain).
+- Need finer control? The same data is reachable through the atomic commands —
+  `verify run create`, `verify result ingest`, `verify evidence upload`
+  (`--file` or `--content`), `verify report upsert` — so a session can be built
+  incrementally instead of from a report dir.
+- File evidence uploads through the app's storage (S3/R2). Against a stub or
+  unreachable bucket (common in local dev) the file PUT fails; `ingest-report`
+  logs a warning, **skips that one artifact**, and still finishes the session,
+  results, and report. So the published session is real and openable — but it is
+  **missing the skipped evidence**, which is easy to mistake for a complete
+  report. If the evidence must appear, publish against an env with real storage
+  (e.g. production) or attach it inline with `verify evidence upload --content`.
 
 ## Directory map
 

@@ -18,6 +18,8 @@ import {
 import type {
   AgentDocument,
   AgentDocumentContextRow,
+  AgentDocumentListItem,
+  AgentDocumentListSourceType,
   AgentDocumentPolicy,
   AgentDocumentSourceType,
   AgentDocumentWithRules,
@@ -68,6 +70,20 @@ interface ConvertAgentDocumentToSkillIndexParams {
   source: string;
   sourceType: AgentDocumentSourceType;
   title: string;
+}
+
+interface AgentDocumentListQueryRow {
+  description: string | null;
+  documentId: string;
+  filename: string | null;
+  fileType: string;
+  id: string;
+  parentId: string | null;
+  policy: unknown;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string | null;
+  updatedAt: Date;
 }
 
 export class AgentDocumentModel {
@@ -161,6 +177,29 @@ export class AgentDocumentModel {
       title: doc.title ?? doc.filename ?? '',
       updatedAt: settings.updatedAt,
       userId: settings.userId,
+    };
+  }
+
+  private toAgentDocumentListItem(row: AgentDocumentListQueryRow): AgentDocumentListItem {
+    const filename = row.filename ?? '';
+    const policy = (row.policy as AgentDocumentPolicy | null) ?? null;
+    const item = {
+      description: row.description ?? null,
+      documentId: row.documentId,
+      fileType: row.fileType,
+      filename,
+      id: row.id,
+      loadPosition: policy?.context?.position,
+      parentId: row.parentId ?? null,
+      sourceType: row.sourceType,
+      templateId: row.templateId ?? null,
+      title: row.title ?? filename,
+      updatedAt: row.updatedAt,
+    };
+
+    return {
+      ...item,
+      ...deriveAgentDocumentFields(item),
     };
   }
 
@@ -910,6 +949,40 @@ export class AgentDocumentModel {
     });
   }
 
+  async listByAgent(
+    agentId: string,
+    options?: { sourceType?: AgentDocumentListSourceType },
+  ): Promise<AgentDocumentListItem[]> {
+    const sourceType = options?.sourceType;
+    const results = await this.db
+      .select({
+        description: documents.description,
+        documentId: agentDocuments.documentId,
+        fileType: documents.fileType,
+        filename: documents.filename,
+        id: agentDocuments.id,
+        parentId: documents.parentId,
+        policy: agentDocuments.policy,
+        sourceType: documents.sourceType,
+        templateId: agentDocuments.templateId,
+        title: documents.title,
+        updatedAt: agentDocuments.updatedAt,
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          this.agentDocOwnership(),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map((row) => this.toAgentDocumentListItem(row));
+  }
+
   async findSkillDocsByAgent(agentId: string): Promise<AgentDocumentWithRules[]> {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
@@ -1051,6 +1124,44 @@ export class AgentDocumentModel {
         loadRules: parseLoadRules(item),
       };
     });
+  }
+
+  async listByDocumentIds(
+    agentId: string,
+    documentIds: string[],
+    options?: { sourceType?: AgentDocumentListSourceType },
+  ): Promise<AgentDocumentListItem[]> {
+    if (documentIds.length === 0) return [];
+
+    const sourceType = options?.sourceType;
+    const results = await this.db
+      .select({
+        description: documents.description,
+        documentId: agentDocuments.documentId,
+        fileType: documents.fileType,
+        filename: documents.filename,
+        id: agentDocuments.id,
+        parentId: documents.parentId,
+        policy: agentDocuments.policy,
+        sourceType: documents.sourceType,
+        templateId: agentDocuments.templateId,
+        title: documents.title,
+        updatedAt: agentDocuments.updatedAt,
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          this.agentDocOwnership(),
+          eq(agentDocuments.agentId, agentId),
+          inArray(agentDocuments.documentId, documentIds),
+          isNull(agentDocuments.deletedAt),
+          ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map((row) => this.toAgentDocumentListItem(row));
   }
 
   async hasByAgent(agentId: string): Promise<boolean> {

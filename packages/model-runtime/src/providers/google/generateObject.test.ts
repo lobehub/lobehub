@@ -400,8 +400,8 @@ describe('Google generateObject', () => {
       expect(sanitizeGeminiSchema(undefined)).toBeUndefined();
     });
 
-    // nullable string enums should be preserved
-    it('should preserve enum on nullable STRING types (type: array with string)', () => {
+    // nullable string enums should keep string members but drop the null sentinel
+    it('should strip null members from enum on nullable STRING types (type: array with string)', () => {
       const schema = {
         properties: {
           status: {
@@ -414,10 +414,12 @@ describe('Google generateObject', () => {
 
       const result = sanitizeGeminiSchema(schema);
 
+      // Gemini proto only accepts STRING enum members; null is filtered out while
+      // nullability stays expressed via type: ['string', 'null'].
       expect(result).toEqual({
         properties: {
           status: {
-            enum: ['active', 'inactive', null],
+            enum: ['active', 'inactive'],
             type: ['string', 'null'],
           },
         },
@@ -1396,8 +1398,8 @@ describe('Google generateObject', () => {
       warnSpy.mockRestore();
     });
 
-    // buildGoogleTool should preserve nullable string enum
-    it('should preserve enum on nullable STRING type in tool parameters', () => {
+    // buildGoogleTool should keep string enum members but drop the null sentinel
+    it('should strip null members from enum on nullable STRING type in tool parameters', () => {
       const tool: any = {
         function: {
           description: 'A tool with nullable enum',
@@ -1419,11 +1421,11 @@ describe('Google generateObject', () => {
 
       const result = buildGoogleTool(tool);
 
-      // nullable types and null enum values should be passed through as-is
+      // nullable type is passed through, but the null enum member is filtered out
       expect(result.parametersJsonSchema).toEqual({
         properties: {
           status: {
-            enum: ['active', 'inactive', null],
+            enum: ['active', 'inactive'],
             type: ['string', 'null'],
           },
         },

@@ -129,6 +129,25 @@ const readDisplayString = (value: unknown, key?: string): string | undefined => 
   }
 };
 
+const DATE_FIELD_KEYS = new Set([
+  'createdAt',
+  'updatedAt',
+  'completedAt',
+  'startedAt',
+  'canceledAt',
+  'archivedAt',
+  'dueDate',
+]);
+
+// Linear timestamps arrive as ISO strings (`2026-06-16T02:14:32.612Z`); show the
+// concrete date + time as `YYYY-MM-DD HH:mm:ss` (dropping the millisecond / `Z`
+// noise) instead of the raw ISO string. Date-only values (e.g. `dueDate`) are
+// left untouched.
+const formatIsoDate = (value: string): string => {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/u.exec(value);
+  return match ? `${match[1]} ${match[2]}` : value;
+};
+
 const pickField = (record: Record<PropertyKey, unknown>, key: string): LinearField | undefined => {
   const value = readDisplayString(record[key], key);
   if (!value) return;
@@ -136,7 +155,7 @@ const pickField = (record: Record<PropertyKey, unknown>, key: string): LinearFie
   return {
     key,
     label: key === 'id' ? 'ID' : key === 'url' ? 'URL' : toLabel(key),
-    value,
+    value: DATE_FIELD_KEYS.has(key) ? formatIsoDate(value) : value,
   };
 };
 
@@ -232,7 +251,7 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
     readDisplayString(record.body) ||
     readDisplayString(record.content);
   const fields = collectFields(record, ENTITY_FIELD_KEYS).filter(
-    (field) => field.key !== 'state' || field.value !== state,
+    (field) => !((field.key === 'state' || field.key === 'status') && field.value === state),
   );
   const links = getLinearLinks(record.links);
 
@@ -250,13 +269,34 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
   };
 };
 
+// Identity fields that mark a record as a single entity (issue / comment /
+// document / …) rather than a list/search wrapper. buildEntity reads the id from
+// `id | identifier` and the title from `title | name | subject`, so the same
+// keys decide whether an object "is" an entity.
+const ENTITY_IDENTITY_KEYS = ['id', 'identifier', 'title', 'name', 'subject'] as const;
+
+const looksLikeEntity = (record: Record<PropertyKey, unknown>): boolean =>
+  ENTITY_IDENTITY_KEYS.some((key) => Boolean(readDisplayString(record[key])));
+
 const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] => {
   if (Array.isArray(value)) return value.filter(isRecord);
   if (!isRecord(value)) return [];
 
-  for (const key of RESULT_ARRAY_KEYS) {
-    const nested = value[key];
-    if (Array.isArray(nested)) return nested.filter(isRecord);
+  // Wrapper responses (`list_*`, `search`, fetch-collection) carry their payload
+  // in a nested collection (`{ issues: [...] }`, `{ results: [...] }`) and have
+  // no identity of their own. A single entity (`get_*` / `save_*` / `create_*` /
+  // fetch-one) has its own id/title and may merely *embed* sub-collections
+  // (`documents: []`, `attachments: []`) whose keys overlap RESULT_ARRAY_KEYS —
+  // those must not hijack the entity (an empty `documents: []` would otherwise
+  // yield zero records → raw JSON fallback). So only unwrap nested collections
+  // when the object itself doesn't look like an entity. This is verb-agnostic on
+  // purpose: Codex routes Linear `search` through a bare `search` apiName that
+  // parses to `verb: 'other'`, so keying off the verb would miss it.
+  if (!looksLikeEntity(value)) {
+    for (const key of RESULT_ARRAY_KEYS) {
+      const nested = value[key];
+      if (Array.isArray(nested)) return nested.filter(isRecord);
+    }
   }
 
   return [value];

@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { type PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { type Cache, SWRConfig } from 'swr';
 
@@ -19,30 +19,25 @@ const QueryProvider = ({ children }: PropsWithChildren) => {
     typeof lambdaQuery.Provider
   >['queryClient'];
 
-  // The persistence namespace follows the live identity scope. `getCacheScope`
-  // is read lazily on every load/save, so we don't recreate the provider (and
-  // remount the tree) when the scope changes — instead we re-hydrate in place.
-  // `cacheHydration.markReady` lets the boot gate wait for the IndexedDB tier.
+  // Keep the SWR cache provider inside SWRConfig's lifecycle. SWR registers
+  // global state for the returned Map during Provider render, so creating and
+  // hydrating that same Map from SPA bootstrap can leave hooks with an
+  // unregistered cache after remounts.
   const [provider] = useState(() => swrCacheProvider(getCacheScope, cacheHydration.markReady));
 
-  // Re-hydrate the cache from the new scope's namespace whenever the signed-in
-  // user or active workspace changes (e.g. once async auth resolves), so data
-  // never leaks across scopes and the correct local data is surfaced.
-  //
-  // Clear the new scope's hydration readiness *before* reloading: a scope we
-  // visited earlier is still marked ready, so without this the boot gate would
-  // render children immediately while `reloadScope()` has just dropped the
-  // persisted entries and the IndexedDB re-load is still in flight — surfacing
-  // empty/stale data that then flashes. Reset → reload → `markReady` (fired by
-  // the provider once IDB finishes) keeps the gate blocking through the reload.
-  // Run in a layout effect so the reset lands before paint, avoiding the flash.
   const scope = useCacheScope();
   const lastScope = useRef(scope);
   useLayoutEffect(() => {
     if (lastScope.current === scope) return;
+
     lastScope.current = scope;
-    cacheHydration.reset(scope);
-    provider.reloadScope?.();
+    cacheHydration.markPending(scope);
+    const reloadScope = provider.reloadScope;
+    if (!reloadScope) return;
+
+    void reloadScope().catch((error) => {
+      console.error('[SWR Cache] failed to reload scope', error);
+    });
   }, [scope, provider]);
 
   return (

@@ -27,6 +27,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
@@ -87,7 +88,14 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
-import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import type {
+  ExecGroupMemberParams,
+  ExecGroupMemberResult,
+  GroupActionMemberBridgeParams,
+  GroupActionMemberMode,
+  GroupActionOnComplete,
+  StepLifecycleCallbacks,
+} from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import {
   isAgentSignalEnabledForUser,
@@ -99,10 +107,7 @@ import { ComposioService } from '@/server/services/composio';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
-import {
-  resolveAttachmentMetadata,
-  resolveAttachmentsByFileIds,
-} from '@/server/services/file/resolveAttachments';
+import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { MarketService } from '@/server/services/market';
@@ -190,6 +195,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
+  /**
+   * Inject a user-role message into the LLM context for this turn WITHOUT
+   * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
+   * instructions — e.g. a group supervisor's `<speaker>` instruction to a member —
+   * so it drives the member's response without polluting the group conversation.
+   * Requires `suppressUserMessage` (the turn runs off existing history).
+   */
+  ephemeralUserMessage?: string;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
   /** External files to upload to S3 and attach to the user message */
@@ -265,6 +278,22 @@ interface InternalExecAgentParams extends ExecAgentParams {
 }
 
 /**
+ * Result of {@link AiAgentService.resolveWorkspaceInit}: the cacheable scan
+ * (`workspace`) plus the per-run resolved bound directory (`boundCwd`).
+ *
+ * `boundCwd` is deliberately kept OUT of {@link WorkspaceInitResult}: that type
+ * is persisted into `devices.workingDirs[].workspace` and read by the web UI,
+ * and its scanned root is always the enclosing `WorkingDirEntry.path` — not a
+ * field on the scan. Surfacing it here lets the caller fill the system prompt's
+ * `{{workingDirectory}}` (and the tool cwd/scope downstream) without re-loading
+ * the device + topic the scan already read.
+ */
+interface ResolvedWorkspaceInit {
+  boundCwd?: string;
+  workspace: WorkspaceInitResult;
+}
+
+/**
  * AI Agent Service
  *
  * Encapsulates agent execution logic that can be triggered via:
@@ -323,6 +352,7 @@ export class AiAgentService {
       delegate: {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
+        execGroupMember: this.execGroupMember,
       },
       workspaceId: wsId,
     });
@@ -342,6 +372,24 @@ export class AiAgentService {
   }
 
   /**
+   * If `deviceId` is a device enrolled into the caller's current workspace,
+   * return that workspaceId so device-gateway calls route to the
+   * `workspace:<id>` principal. Returns undefined for a personal device (or no
+   * workspace context), keeping the personal path byte-identical.
+   */
+  private async resolveDeviceWorkspaceId(
+    deviceId: string | undefined,
+  ): Promise<string | undefined> {
+    if (!deviceId || !this.workspaceId) return undefined;
+    const row = await new DeviceModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findWorkspaceDeviceById(deviceId);
+    return row ? this.workspaceId : undefined;
+  }
+
+  /**
    * Resolve the "workspace init" scan (project skills + AGENTS.md) for a run
    * bound to a device's project directory. Reads the cache on
    * `devices.workingDirs[].workspace`, reusing it within {@link WORKSPACE_INIT_TTL_MS};
@@ -356,18 +404,36 @@ export class AiAgentService {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
     topicId: string;
-  }): Promise<WorkspaceInitResult> {
+  }): Promise<ResolvedWorkspaceInit> {
     const empty: WorkspaceInitResult = { instructions: [], skills: [] };
     const { activeDeviceId, agencyConfig, topicId } = params;
-    if (!activeDeviceId) return empty;
+    if (!activeDeviceId) return { workspace: empty };
 
     try {
-      const deviceModel = new DeviceModel(this.db, this.userId);
-      const device = await deviceModel.findByDeviceId(activeDeviceId);
-      if (!device) return empty;
+      // The active device may be personal (userId-scoped) or workspace-owned
+      // (workspace-scoped) — look up both pools so the bound cwd, project
+      // skills, and AGENTS/CLAUDE instructions still resolve for a workspace
+      // device. Mirrors the dispatch-side lookup (see `deviceModelForCwd`).
+      const deviceModel = new DeviceModel(this.db, this.userId, this.workspaceId);
+      const personalDevice = await deviceModel.findByDeviceId(activeDeviceId);
+      const workspaceDevice = personalDevice
+        ? undefined
+        : await deviceModel.findWorkspaceDeviceById(activeDeviceId);
+      const device = personalDevice ?? workspaceDevice;
+      if (!device) return { workspace: empty };
+
+      // For a workspace-owned device, route the gateway RPC to the
+      // `workspace:<id>` principal and persist the scan via the workspace
+      // update path — otherwise the scan goes through the personal pool
+      // (empty result) and the writeback misses the row.
+      const deviceWorkspaceId = workspaceDevice ? this.workspaceId : undefined;
 
       // The bound project root we scan — resolved via the shared precedence
-      // helper so it cannot drift from hetero dispatch / topic backfill.
+      // helper so it cannot drift from hetero dispatch / topic backfill. Read
+      // from the persisted `device.defaultCwd` (not a live device query, which
+      // only reports the daemon's process.cwd = `/`); also returned to the
+      // caller so the system prompt's {{workingDirectory}} reflects the same
+      // bound directory the workspace scan used.
       const topic = await this.topicModel.findById(topicId);
       const boundCwd = resolveDeviceWorkingDirectory({
         deviceDefaultCwd: device.defaultCwd,
@@ -375,41 +441,48 @@ export class AiAgentService {
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         workingDirByDevice: agencyConfig?.workingDirByDevice,
       });
-      if (!boundCwd) return empty;
+      if (!boundCwd) return { workspace: empty };
 
       const workingDirs = device.workingDirs ?? [];
       const cached = workingDirs.find((dir) => dir.path === boundCwd);
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
-        return cached.workspace;
+        return { boundCwd, workspace: cached.workspace };
       }
 
       const scanned = await deviceGateway.initWorkspace({
         deviceId: activeDeviceId,
         scope: boundCwd,
         userId: this.userId,
+        workspaceId: deviceWorkspaceId,
       });
       if (!scanned) {
         // Scan failed (offline mid-run / parse error). Fall back to a stale
         // cache rather than dropping the project's skills + instructions.
         if (cached?.workspace) {
           log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-          return cached.workspace;
+          return { boundCwd, workspace: cached.workspace };
         }
-        return empty;
+        return { boundCwd, workspace: empty };
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
-      // a new MRU entry), keeping the JSONB payload bounded.
+      // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
+      // are owned by the workspace, not a userId — use the workspace-scoped
+      // update path so the writeback actually lands.
       const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
-      await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      if (deviceWorkspaceId) {
+        await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
+      } else {
+        await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      }
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
-      return scanned;
+      return { boundCwd, workspace: scanned };
     } catch (error) {
       log('execAgent: resolveWorkspaceInit failed: %O', error);
-      return empty;
+      return { workspace: empty };
     }
   }
 
@@ -437,6 +510,198 @@ export class AiAgentService {
    */
   completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
     return this.agentRuntimeService.completeSubAgentBridge(params);
+  }
+
+  /**
+   * Resolve a run's attachments into the lists the message + context layers
+   * consume. This is the single standard ingestion path shared by BOTH branches
+   * of {@link execAgent} — the heterogeneous-agent branch (which returns early)
+   * and the normal agent branch — so neither hand-rolls its own upload.
+   *
+   * Two sources are merged:
+   * - `files`: raw buffers / URLs delivered by bot/IM channels (Slack, Telegram,
+   *   …). These have never touched our storage, so they're uploaded to S3 here.
+   * - `attachedFileIds`: already-uploaded ids (the SPA gateway path). Resolved to
+   *   signed URLs and classified via {@link resolveAttachmentsByFileIds}.
+   *
+   * Per-file ingestion failures are collected into `warnings` and never thrown,
+   * so a single bad attachment can't block the run (the text prompt still works).
+   */
+  private async resolveRunAttachments({
+    attachedFileIds,
+    files,
+    throwIfAborted,
+  }: {
+    attachedFileIds?: string[];
+    files?: InternalExecAgentParams['files'];
+    throwIfAborted: (stage: string) => Promise<void>;
+  }): Promise<{
+    audioList?: ChatAudioItem[];
+    fileIds?: string[];
+    fileList?: ChatFileItem[];
+    imageList?: Array<{ alt: string; id: string; url: string }>;
+    videoList?: ChatVideoItem[];
+    warnings: string[];
+  }> {
+    const warnings: string[] = [];
+    let fileIds: string[] | undefined;
+    let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+    let videoList: ChatVideoItem[] | undefined;
+    let audioList: ChatAudioItem[] | undefined;
+    let fileList: ChatFileItem[] | undefined;
+
+    // Upload raw bot/IM files to S3 and classify them (image / video / audio / document).
+    if (files && files.length > 0) {
+      fileIds = [];
+      imageList = [];
+      videoList = [];
+      audioList = [];
+      fileList = [];
+      const fileService = new FileService(this.db, this.userId, this.workspaceId);
+      const documentService = new DocumentService(this.db, this.userId, this.workspaceId);
+
+      for (const file of files) {
+        await throwIfAborted('file upload');
+
+        try {
+          const result = await ingestAttachment(file, fileService, this.userId);
+          fileIds.push(result.fileId);
+
+          if (result.isImage) {
+            imageList.push({
+              alt: file.name || 'image',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          if (result.isVideo) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          if (result.isAudio) {
+            audioList.push({
+              alt: file.name || 'audio',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video / non-audio: parse file content into the documents table so
+          // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
+          // what the web upload path does, ensuring bot-uploaded PDFs / text /
+          // JSON / .skill files are actually visible to the LLM (instead of
+          // being silently uploaded but never read).
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(result.fileId);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for %s (fileId=%s): %O',
+              file.name,
+              result.fileId,
+              parseError,
+            );
+            warnings.push(
+              `File "${file.name || 'unknown'}" was uploaded but its contents could not be extracted.`,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: file.mimeType ?? 'application/octet-stream',
+            id: result.fileId,
+            name: file.name ?? 'file',
+            size: file.size ?? 0,
+            url: result.resolvedUrl || '',
+          });
+        } catch (error) {
+          log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
+          warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
+        }
+      }
+
+      if (fileIds.length > 0) {
+        log(
+          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d audios, %d documents)',
+          fileIds.length,
+          imageList.length,
+          videoList.length,
+          audioList.length,
+          fileList.length,
+        );
+      }
+      if (imageList.length === 0) imageList = undefined;
+      if (videoList.length === 0) videoList = undefined;
+      if (audioList.length === 0) audioList = undefined;
+      if (fileList.length === 0) fileList = undefined;
+    }
+
+    // Attach already-uploaded files referenced by fileIds (e.g. SPA Gateway mode).
+    // These files are already in the `files` table; resolve URLs + classify, and
+    // merge into the imageList/videoList/fileList passed to the LLM and stored
+    // as message relations via messagesFiles.
+    if (attachedFileIds && attachedFileIds.length > 0) {
+      await throwIfAborted('file resolution');
+
+      try {
+        const resolved = await resolveAttachmentsByFileIds({
+          db: this.db,
+          fileIds: attachedFileIds,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+
+        warnings.push(...resolved.warnings);
+
+        if (resolved.orderedFileIds.length > 0) {
+          fileIds = [...(fileIds ?? []), ...resolved.orderedFileIds];
+
+          if (resolved.imageList.length > 0) {
+            imageList = [...(imageList ?? []), ...resolved.imageList];
+          }
+          if (resolved.videoList.length > 0) {
+            videoList = [...(videoList ?? []), ...resolved.videoList];
+          }
+          if (resolved.audioList.length > 0) {
+            audioList = [...(audioList ?? []), ...resolved.audioList];
+          }
+          if (resolved.fileList.length > 0) {
+            fileList = [...(fileList ?? []), ...resolved.fileList];
+          }
+        }
+      } catch (err) {
+        // Non-fatal: a resolver hiccup (S3 / DB blip) must not block the run —
+        // the text prompt still works. Persist the file→message relation anyway
+        // so the attachment isn't lost; only its preview / parsed content is.
+        log('execAgent: attachment resolution failed, continuing without previews: %O', err);
+        fileIds = Array.from(new Set([...(fileIds ?? []), ...attachedFileIds]));
+      }
+    }
+
+    // Normalize an empty (all-failed) upload to undefined so callers don't attach
+    // an empty messagesFiles relation.
+    if (fileIds && fileIds.length === 0) fileIds = undefined;
+
+    return { audioList, fileIds, fileList, imageList, videoList, warnings };
+  }
+
+  /**
+   * Group-action member completion bridge entry point — driven by the QStash
+   * `group-member-callback` webhook (queue mode). Forwards to the workspace-scoped
+   * runtime so the member-anchor backfill + K=N barrier + resume/finish read the
+   * same workspace rows. See `AgentRuntimeService.completeGroupActionMember`.
+   */
+  completeGroupActionMember(params: GroupActionMemberBridgeParams): Promise<boolean> {
+    return this.agentRuntimeService.completeGroupActionMember(params);
   }
 
   /**
@@ -490,6 +755,7 @@ export class AiAgentService {
       resume,
       resumeApproval,
       suppressUserMessage,
+      ephemeralUserMessage,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -874,55 +1140,106 @@ export class AiAgentService {
     const HETERO_AGENT_MODELS = new Set<string>(['claude-code', 'codex']);
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
-    if (isHeteroAgent) {
-      const heteroType = (heteroProviderType ?? model) as
-        | 'claude-code'
-        | 'codex'
-        | 'hermes'
-        | 'openclaw';
-      const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
-      const operationId = nanoid();
+    const heteroType = (heteroProviderType ?? model) as
+      | 'claude-code'
+      | 'codex'
+      | 'hermes'
+      | 'openclaw';
 
-      // Create user message so the conversation is visible in the UI immediately.
-      // Attach already-uploaded files (`fileIds` from the SPA gateway path) the
-      // same way `sendMessageInServer` does on the local-mode path — without
-      // the messagesFiles relation the attachment disappears as soon as the
-      // optimistic client message is replaced by the server snapshot.
-      const userMsg = runFromHistory
-        ? undefined
-        : await this.messageModel.create({
+    // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
+    // Everything up to and including persisting the turn is identical for both
+    // execution modes, so it lives here, before the fork, and both branches
+    // consume the same records. Keeping it in one place is what guarantees the
+    // hetero path can't drift from the standard path again (the bot-image bug
+    // came from the hetero branch re-implementing — and skipping — this step).
+    const requestTriggerMetadata =
+      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+        ? { trigger: trigger as RequestTrigger }
+        : undefined;
+
+    // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
+    // `attachedFileIds` → signed URLs + classification.
+    const runAttachments = await this.resolveRunAttachments({
+      attachedFileIds,
+      files,
+      throwIfAborted: throwIfExecutionAborted,
+    });
+
+    await throwIfExecutionAborted('message creation');
+
+    // Persist the user turn. `selfMessageIds` lets the normal-path history loader
+    // exclude this freshly-created turn — history must be the PRIOR turns only,
+    // otherwise the new prompt is double-counted in the LLM context.
+    const selfMessageIds = new Set<string>();
+    const userMessageRecord = runFromHistory
+      ? undefined
+      : await this.messageModel.create({
+          agentId: persistAgentId,
+          content: prompt,
+          files: runAttachments.fileIds,
+          metadata: requestTriggerMetadata,
+          role: 'user',
+          threadId: appContext?.threadId ?? undefined,
+          topicId,
+        });
+    if (userMessageRecord) {
+      selfMessageIds.add(userMessageRecord.id);
+      log('execAgent: created user message %s', userMessageRecord.id);
+    }
+
+    // Assistant placeholder (shows the spinner in the UI). A hetero run seeds
+    // ONLY the provider — the CLI reports the real model later via `stream_start`
+    // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
+    // seeding the agent's chat model would leak it into the model tag. A normal
+    // run seeds model + provider as usual.
+    const assistantMessageRecord = await this.messageModel.create({
+      agentId: persistAgentId,
+      content: LOADING_FLAT,
+      model: isHeteroAgent ? undefined : model,
+      parentId: parentMessageId ?? userMessageRecord?.id,
+      provider: isHeteroAgent ? heteroType : provider,
+      role: 'assistant',
+      threadId: appContext?.threadId ?? undefined,
+      topicId,
+    });
+    selfMessageIds.add(assistantMessageRecord.id);
+    assistantMessageRef.current = assistantMessageRecord.id;
+    log('execAgent: created assistant message %s', assistantMessageRecord.id);
+
+    // Agent Signal is a governance side-channel (feedback / self-iteration). It
+    // only applies to the server-side LLM pipeline, so it is intentionally NOT
+    // enqueued for hetero runs (which hand off to an external CLI). Skip when this
+    // invocation is itself an Agent Signal background run to avoid recursion.
+    if (
+      userMessageRecord &&
+      !isHeteroAgent &&
+      !shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })
+    ) {
+      void enqueueAgentSignalSourceEvent(
+        {
+          payload: {
             agentId: resolvedAgentId,
-            content: prompt,
-            files:
-              attachedFileIds && attachedFileIds.length > 0
-                ? Array.from(new Set(attachedFileIds))
-                : undefined,
-            role: 'user',
+            message: prompt,
+            messageId: userMessageRecord.id,
             threadId: appContext?.threadId ?? undefined,
             topicId,
-          });
-
-      // Create an assistant message placeholder (shows spinner in the UI).
-      // Use the hetero type as the provider so the frontend can identify the
-      // platform and render the correct name in the model tag — for ALL hetero
-      // agents, not just remote ones. The agent's configured chat model/provider
-      // (e.g. deepseek) is meaningless for a CLI run: the real model is reported
-      // by the CLI via `stream_start` / `turn_metadata` and backfilled by
-      // `HeterogeneousPersistenceHandler`. Seeding the placeholder with the agent
-      // model leaked it into the model tag (and got re-applied at terminal) on
-      // the device / sandbox path; mirror the client (`conversationLifecycle`),
-      // which sets only the provider and leaves the model empty until the CLI
-      // reports it.
-      const assistantMsg = await this.messageModel.create({
-        agentId: resolvedAgentId,
-        content: LOADING_FLAT,
-        parentId: parentMessageId ?? userMsg?.id,
-        provider: heteroType,
-        role: 'assistant',
-        threadId: appContext?.threadId ?? undefined,
-        topicId,
+            trigger,
+          },
+          sourceId: userMessageRecord.id,
+          sourceType: 'agent.user.message',
+        },
+        {
+          agentId: resolvedAgentId,
+          userId: this.userId,
+        },
+      ).catch((error) => {
+        log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
       });
-      assistantMessageRef.current = assistantMsg.id;
+    }
+
+    if (isHeteroAgent) {
+      const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
+      const operationId = nanoid();
 
       // Read resume session id for next-turn continuity.
       const heteroService = new HeterogeneousAgentService(this.db, this.userId, {
@@ -1000,32 +1317,18 @@ export class AiAgentService {
         repos: topicRepos,
       });
 
-      // Resolve image attachments into signed URLs for the dispatched CLI —
+      // Feed the resolved images (signed URLs) to the dispatched CLI for vision —
       // mirrors the local-mode path, where the client feeds the persisted
-      // message's imageList into `sendPrompt` for vision. Metadata-only
-      // (no document parsing) and non-fatal: a resolution failure must not
-      // block the run, the text prompt still works without the images.
-      let heteroImageList: Array<{ id: string; url: string }> | undefined;
-      if (attachedFileIds && attachedFileIds.length > 0) {
-        try {
-          const attachmentMeta = await resolveAttachmentMetadata({
-            db: this.db,
-            fileIds: attachedFileIds,
-            userId: this.userId,
-            workspaceId: this.workspaceId,
-          });
-          const images = attachmentMeta
-            .filter((file) => (file.fileType || '').startsWith('image'))
-            .map((file) => ({ id: file.id, url: file.url }));
-          if (images.length > 0) heteroImageList = images;
-        } catch (err) {
-          log('execAgent: failed to resolve hetero image attachments: %O', err);
-        }
-      }
+      // message's imageList into `sendPrompt`. Reuses the shared resolution above
+      // so bot/IM and SPA gateway attachments are handled identically.
+      const heteroImageList =
+        runAttachments.imageList && runAttachments.imageList.length > 0
+          ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
+          : undefined;
 
       const heteroParams = {
         agentType: heteroType,
-        assistantMessageId: assistantMsg.id,
+        assistantMessageId: assistantMessageRecord.id,
         githubToken,
         imageList: heteroImageList,
         jwt: operationJwt,
@@ -1046,7 +1349,7 @@ export class AiAgentService {
       // endpoint even though the hetero path bypasses the normal hook registration flow.
       await this.topicModel.updateMetadata(topicId, {
         runningOperation: {
-          assistantMessageId: assistantMsg.id,
+          assistantMessageId: assistantMessageRecord.id,
           completionWebhook: hooks?.find((h) => h.type === 'onComplete')?.webhook,
           // Store deviceId + heteroType so interruptTask can cancel remote processes
           ...(isRemoteHetero && remoteDeviceId
@@ -1072,7 +1375,7 @@ export class AiAgentService {
             'execAgent: device access denied for remote hetero dispatch (reason=%s)',
             deviceAccessReason,
           );
-          await this.messageModel.update(assistantMsg.id, {
+          await this.messageModel.update(assistantMessageRecord.id, {
             content: '',
             error: {
               body: { detail: 'This sender is not allowed to run agents on a bound device.' },
@@ -1082,7 +1385,7 @@ export class AiAgentService {
           });
           return {
             agentId: resolvedAgentId,
-            assistantMessageId: assistantMsg.id,
+            assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: 'Device access denied',
@@ -1092,12 +1395,12 @@ export class AiAgentService {
             success: false,
             timestamp: new Date().toISOString(),
             topicId,
-            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+            userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
         if (!remoteDeviceId) {
           log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
-          await this.messageModel.update(assistantMsg.id, {
+          await this.messageModel.update(assistantMessageRecord.id, {
             content: '',
             error: {
               body: { detail: 'No device bound to this agent. Configure boundDeviceId.' },
@@ -1107,7 +1410,7 @@ export class AiAgentService {
           });
           return {
             agentId: resolvedAgentId,
-            assistantMessageId: assistantMsg.id,
+            assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: 'No bound device',
@@ -1117,7 +1420,7 @@ export class AiAgentService {
             success: false,
             timestamp: new Date().toISOString(),
             topicId,
-            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+            userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
 
@@ -1128,7 +1431,7 @@ export class AiAgentService {
         await streamManager
           .publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
-            assistantMessageId: assistantMsg.id,
+            assistantMessageId: assistantMessageRecord.id,
             heteroType,
             topicId,
             userId: this.userId,
@@ -1137,8 +1440,9 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
+        const remoteDeviceWorkspaceId = await this.resolveDeviceWorkspaceId(remoteDeviceId);
         const result = await deviceGateway.executeToolCall(
-          { deviceId: remoteDeviceId, userId: this.userId },
+          { deviceId: remoteDeviceId, userId: this.userId, workspaceId: remoteDeviceWorkspaceId },
           {
             apiName: 'runHeteroTask',
             arguments: JSON.stringify({
@@ -1149,6 +1453,11 @@ export class AiAgentService {
               prompt,
               taskId: operationId,
               topicId,
+              // Scope notify callbacks to the same workspace as the dispatched
+              // topic so agentNotify can resolve the workspace-owned topic.
+              // Without this the device's notify call falls back to personal
+              // mode and TopicModel.findById returns NOT_FOUND.
+              workspaceId: remoteDeviceWorkspaceId,
             }),
             identifier: 'runHeteroTask',
           },
@@ -1165,7 +1474,7 @@ export class AiAgentService {
               stepIndex: 0,
             })
             .catch(() => {});
-          await this.messageModel.update(assistantMsg.id, {
+          await this.messageModel.update(assistantMessageRecord.id, {
             content: '',
             error: {
               body: { detail: result.error },
@@ -1175,7 +1484,7 @@ export class AiAgentService {
           });
           return {
             agentId: resolvedAgentId,
-            assistantMessageId: assistantMsg.id,
+            assistantMessageId: assistantMessageRecord.id,
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: result.error,
@@ -1185,7 +1494,7 @@ export class AiAgentService {
             success: false,
             timestamp: new Date().toISOString(),
             topicId,
-            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+            userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
       } else {
@@ -1206,16 +1515,17 @@ export class AiAgentService {
         const heteroPlan = resolveExecutionPlan({
           agencyConfig: agentConfig.agencyConfig,
           canUseDevice,
-          isDesktop: false,
           isHetero: true,
+          clientExecutionAvailable: false,
           requestedDeviceId,
+          trigger: requestTriggerMetadata?.trigger,
         });
 
         if (heteroPlan.kind !== 'sandbox') {
           const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
           if (!dispatchDeviceId) {
             log('execAgent: hetero executionTarget=device but no boundDeviceId set');
-            await this.messageModel.update(assistantMsg.id, {
+            await this.messageModel.update(assistantMessageRecord.id, {
               content: '',
               error: {
                 body: {
@@ -1228,7 +1538,7 @@ export class AiAgentService {
             });
             return {
               agentId: resolvedAgentId,
-              assistantMessageId: assistantMsg.id,
+              assistantMessageId: assistantMessageRecord.id,
               autoStarted: false,
               createdAt: new Date().toISOString(),
               error: 'No bound device',
@@ -1238,16 +1548,20 @@ export class AiAgentService {
               success: false,
               timestamp: new Date().toISOString(),
               topicId,
-              userMessageId: userMsg?.id ?? parentMessageId ?? '',
+              userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
             };
           }
           // Resolve the working directory for the run: a topic-level override
           // wins, else the device's user-configured defaultCwd. The device row
           // lives in the DB (the gateway only knows live connections), so read
           // it directly rather than via deviceGateway.
-          const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
-            dispatchDeviceId,
-          );
+          // The bound device may be personal (userId-scoped) or a workspace
+          // device (workspace-scoped) — look up both so its defaultCwd resolves.
+          const deviceModelForCwd = new DeviceModel(this.db, this.userId, this.workspaceId);
+          const boundDevice =
+            (await deviceModelForCwd.findByDeviceId(dispatchDeviceId)) ??
+            (await deviceModelForCwd.findWorkspaceDeviceById(dispatchDeviceId));
+          const dispatchWorkspaceId = await this.resolveDeviceWorkspaceId(dispatchDeviceId);
           // Resolve via the shared precedence helper so dispatch, workspace-init,
           // and the new-topic backfill below all agree on the cwd.
           const deviceCwd = resolveDeviceWorkingDirectory({
@@ -1283,10 +1597,13 @@ export class AiAgentService {
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
             systemContext: deviceSystemContext,
+            // Route to the workspace pool when this is a workspace device; the
+            // operation JWT stays member-scoped (the run belongs to the member).
+            workspaceId: dispatchWorkspaceId,
           });
           if (!result.success) {
             log('execAgent: hetero device dispatch failed: %s', result.error);
-            await this.messageModel.update(assistantMsg.id, {
+            await this.messageModel.update(assistantMessageRecord.id, {
               content: '',
               error: {
                 body: { detail: result.error },
@@ -1296,7 +1613,7 @@ export class AiAgentService {
             });
             return {
               agentId: resolvedAgentId,
-              assistantMessageId: assistantMsg.id,
+              assistantMessageId: assistantMessageRecord.id,
               autoStarted: false,
               createdAt: new Date().toISOString(),
               error: result.error,
@@ -1306,7 +1623,7 @@ export class AiAgentService {
               success: false,
               timestamp: new Date().toISOString(),
               topicId,
-              userMessageId: userMsg?.id ?? parentMessageId ?? '',
+              userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
             };
           }
         } else {
@@ -1333,7 +1650,7 @@ export class AiAgentService {
 
       return {
         agentId: resolvedAgentId,
-        assistantMessageId: assistantMsg.id,
+        assistantMessageId: assistantMessageRecord.id,
         autoStarted: true,
         createdAt: new Date().toISOString(),
         message: 'Hetero agent dispatched successfully',
@@ -1343,7 +1660,7 @@ export class AiAgentService {
         timestamp: new Date().toISOString(),
         token: gatewayToken,
         topicId,
-        userMessageId: userMsg?.id ?? parentMessageId ?? '',
+        userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     }
 
@@ -1421,7 +1738,10 @@ export class AiAgentService {
         historyMessagesCache = messages.filter((msg) => idSet.has(msg.id));
       } else if (appContext?.topicId) {
         // Follow-up message in existing topic: load all history for context.
-        historyMessagesCache = await this.messageModel.query(
+        // Exclude the turn we just persisted above (`selfMessageIds`) — history
+        // must be the PRIOR turns only; the current prompt is appended separately
+        // as the in-memory `userMessage`, so leaving it in would double-count it.
+        const messages = await this.messageModel.query(
           {
             sessionId: appContext?.sessionId,
             threadId: appContext?.threadId,
@@ -1429,6 +1749,7 @@ export class AiAgentService {
           },
           { postProcessUrl },
         );
+        historyMessagesCache = messages.filter((msg) => !selfMessageIds.has(msg.id));
       } else {
         historyMessagesCache = [];
       }
@@ -1602,7 +1923,16 @@ export class AiAgentService {
       const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
-          onlineDevices = await deviceGateway.queryDeviceList(this.userId);
+          // Personal pool (user principal) ∪ the current workspace's shared pool
+          // (workspace principal). Workspace devices are absent for non-workspace
+          // runs, so this is identical to the personal-only fetch there.
+          const [personalOnline, workspaceOnline] = await Promise.all([
+            deviceGateway.queryDeviceList(this.userId),
+            this.workspaceId
+              ? deviceGateway.queryDeviceList(this.userId, this.workspaceId)
+              : Promise.resolve([]),
+          ]);
+          onlineDevices = [...personalOnline, ...workspaceOnline];
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);
@@ -1665,15 +1995,24 @@ export class AiAgentService {
       // engine's enabledToolIds exclusion — resolving the plan here closes
       // that bypass at the source.
       //
-      // `isDesktop` uses `gatewayConfigured` as a proxy: a device-gateway
-      // deployment serves desktop-class users, so the unset-target default
-      // resolves to `local` there and `none` otherwise.
+      // `clientExecutionAvailable` is `gatewayConfigured` here: a server with a
+      // device gateway can tunnel a `local` target to the user's device, so the
+      // unset-target default resolves to `local` there and `none` otherwise.
+      //
+      // Chat mode is orthogonal to `executionTarget` (the UI toggle only writes
+      // `enableAgentMode`), so a default/stored `local` target would otherwise
+      // resolve a device and `buildStepToolDelta` would re-inject local-system.
+      // Pass `chatConfig` so the plan degrades to `none` in chat mode — the
+      // chat-mode derivation lives in `resolveExecutionPlan` (`resolveToolMode`),
+      // the same source of truth the tools engine uses.
       executionPlan = resolveExecutionPlan({
         agencyConfig: agentConfig.agencyConfig,
         canUseDevice,
-        isDesktop: gatewayConfigured,
+        chatConfig: agentConfig.chatConfig ?? undefined,
+        clientExecutionAvailable: gatewayConfigured,
         onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
         requestedDeviceId,
+        trigger: requestTriggerMetadata?.trigger,
       });
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
@@ -1687,7 +2026,11 @@ export class AiAgentService {
       );
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
-        additionalManifests: [...lobehubSkillManifests, ...composioManifests, ...connectorManifests],
+        additionalManifests: [
+          ...lobehubSkillManifests,
+          ...composioManifests,
+          ...connectorManifests,
+        ],
         agentConfig: {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
@@ -1704,7 +2047,6 @@ export class AiAgentService {
         disableLocalSystem,
         executionPlan,
         globalMemoryEnabled,
-        hasAgentDocuments,
         hasEnabledKnowledgeBases,
         isBotConversation,
         model,
@@ -1973,7 +2315,11 @@ export class AiAgentService {
           platform: device?.platform ?? 'unknown',
           userDataPath: systemInfo.userDataPath,
           videosPath: systemInfo.videosPath,
-          workingDirectory: systemInfo.workingDirectory,
+          // `workingDirectory` is intentionally NOT taken from the live device
+          // query — it only reports the daemon's process.cwd() (= `/` for a
+          // Finder/Dock-launched app). The bound directory is resolved from the
+          // persisted device row in resolveWorkspaceInit and written onto
+          // deviceSystemInfo.workingDirectory at the call site below.
         };
       } catch (error) {
         log('execAgent: failed to fetch device system info: %O', error);
@@ -2169,220 +2515,36 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('message history loading');
 
-    // 12. Collect Phase 2 warnings (ingestion/parsing errors) alongside Phase 1 warnings
-    // Phase 1 warnings (e.g. file too large) are already in botPlatformContext.warnings
-    const warnings: string[] = [];
-
-    // 13. Upload external files to S3 and collect file IDs
-    let fileIds: string[] | undefined;
-    let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
-    let videoList: ChatVideoItem[] | undefined;
-    let fileList: ChatFileItem[] | undefined;
-
-    if (files && files.length > 0) {
-      fileIds = [];
-      imageList = [];
-      videoList = [];
-      fileList = [];
-      const documentService = new DocumentService(this.db, this.userId, this.workspaceId);
-
-      for (const file of files) {
-        await throwIfExecutionAborted('file upload');
-
-        try {
-          const result = await ingestAttachment(file, fileService, this.userId);
-          fileIds.push(result.fileId);
-
-          if (result.isImage) {
-            imageList.push({
-              alt: file.name || 'image',
-              id: result.fileId,
-              url: result.resolvedUrl,
-            });
-            continue;
-          }
-
-          if (result.isVideo) {
-            videoList.push({
-              alt: file.name || 'video',
-              id: result.fileId,
-              url: result.resolvedUrl,
-            });
-            continue;
-          }
-
-          // Non-image / non-video: parse file content into the documents table so
-          // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
-          // what the web upload path does, ensuring bot-uploaded PDFs / text /
-          // JSON / .skill files are actually visible to the LLM (instead of
-          // being silently uploaded but never read).
-          let content: string | undefined;
-          try {
-            const document = await documentService.parseFile(result.fileId);
-            content = document.content ?? undefined;
-          } catch (parseError) {
-            log(
-              'execAgent: parseFile failed for %s (fileId=%s): %O',
-              file.name,
-              result.fileId,
-              parseError,
-            );
-            warnings.push(
-              `File "${file.name || 'unknown'}" was uploaded but its contents could not be extracted.`,
-            );
-          }
-
-          fileList.push({
-            content,
-            fileType: file.mimeType ?? 'application/octet-stream',
-            id: result.fileId,
-            name: file.name ?? 'file',
-            size: file.size ?? 0,
-            url: result.resolvedUrl || '',
-          });
-        } catch (error) {
-          log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
-          warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
-        }
-      }
-
-      if (fileIds.length > 0) {
-        log(
-          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d documents)',
-          fileIds.length,
-          imageList.length,
-          videoList.length,
-          fileList.length,
-        );
-      }
-      if (imageList.length === 0) imageList = undefined;
-      if (videoList.length === 0) videoList = undefined;
-      if (fileList.length === 0) fileList = undefined;
-    }
-
-    // 13b. Attach already-uploaded files referenced by fileIds (e.g. SPA Gateway mode).
-    // These files are already in the `files` table; resolve URLs + classify, and
-    // merge into the imageList/videoList/fileList passed to the LLM and stored
-    // as message relations via messagesFiles.
-    if (attachedFileIds && attachedFileIds.length > 0) {
-      await throwIfExecutionAborted('file resolution');
-
-      const resolved = await resolveAttachmentsByFileIds({
-        db: this.db,
-        fileIds: attachedFileIds,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-
-      warnings.push(...resolved.warnings);
-
-      if (resolved.orderedFileIds.length > 0) {
-        fileIds = [...(fileIds ?? []), ...resolved.orderedFileIds];
-
-        if (resolved.imageList.length > 0) {
-          imageList = [...(imageList ?? []), ...resolved.imageList];
-        }
-        if (resolved.videoList.length > 0) {
-          videoList = [...(videoList ?? []), ...resolved.videoList];
-        }
-        if (resolved.fileList.length > 0) {
-          fileList = [...(fileList ?? []), ...resolved.fileList];
-        }
-      }
-    }
-
-    await throwIfExecutionAborted('message creation');
-
-    const requestTriggerMetadata =
-      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
-        ? { trigger: trigger as RequestTrigger }
-        : undefined;
-
-    // 13. Create user message in database
-    // Include threadId if provided (for isolated agent execution)
-    const userMessageRecord = runFromHistory
-      ? undefined
-      : await this.messageModel.create({
-          agentId: persistAgentId,
-          content: prompt,
-          files: fileIds,
-          metadata: requestTriggerMetadata,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
-    if (userMessageRecord) {
-      log('execAgent: created user message %s', userMessageRecord.id);
-      // Agent Signal is a governance side-channel for feedback and self-iteration.
-      // It must not block the primary agent execution path; local Workflow/QStash
-      // stalls would otherwise leave the conversation with only the user message
-      // persisted and no assistant placeholder or operation row.
-      //
-      // Skip when this execAgent invocation is itself an Agent Signal background run
-      // (e.g. memory writer, self-iteration reviewer). Otherwise the analyzeIntent
-      // policy would re-analyze the synthesised user prompt and recursively trigger
-      // another Agent Signal pass.
-      if (!shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })) {
-        void enqueueAgentSignalSourceEvent(
-          {
-            payload: {
-              agentId: resolvedAgentId,
-              message: prompt,
-              threadId: appContext?.threadId ?? undefined,
-              topicId,
-              trigger,
-              messageId: userMessageRecord.id,
-            },
-            sourceId: userMessageRecord.id,
-            sourceType: 'agent.user.message',
-          },
-          {
-            agentId: resolvedAgentId,
-            userId: this.userId,
-          },
-        ).catch((error) => {
-          log('execAgent: failed to enqueue user message Agent Signal source event: %O', error);
-        });
-      }
-    }
-
-    // 14. Create assistant message placeholder in database
-    // Include threadId if provided (for isolated agent execution)
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: persistAgentId,
-      content: LOADING_FLAT,
-      model,
-      parentId: parentMessageId ?? userMessageRecord?.id,
-      provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
-    log('execAgent: created assistant message %s', assistantMessageRecord.id);
-    assistantMessageRef.current = assistantMessageRecord.id;
-
-    // Append Phase 2 warnings (ingestion/parsing errors) to botPlatformContext
-    // so the context engine can inject them alongside Phase 1 warnings
-    if (warnings.length > 0 && botPlatformContext) {
+    // 12. Surface Phase 2 warnings (attachment ingestion/parsing errors) from the
+    // shared turn-setup block to the context engine, alongside Phase 1 warnings
+    // already on botPlatformContext. The DB user/assistant rows + Agent Signal
+    // enqueue all happened in that shared block, before the hetero fork.
+    if (runAttachments.warnings.length > 0 && botPlatformContext) {
       const existing = (botPlatformContext as any).warnings as string[] | undefined;
-      (botPlatformContext as any).warnings = [...(existing ?? []), ...warnings];
+      (botPlatformContext as any).warnings = [...(existing ?? []), ...runAttachments.warnings];
     }
 
-    // Create user message object for processing.
+    // Build the in-memory user message for the LLM context (separate from the DB
+    // row created above).
     // - imageList: vision models render these as image_url parts
     // - videoList: video-capable models render these as video parts
+    // - audioList: audio-capable models render these as audio parts
     // - fileList: MessageContentProcessor injects content via filesPrompts() XML
     const userMessage = {
-      content: prompt,
-      fileList,
+      audioList: runAttachments.audioList,
+      content: ephemeralUserMessage ?? prompt,
+      fileList: runAttachments.fileList,
       id: userMessageRecord?.id,
-      imageList,
+      imageList: runAttachments.imageList,
       role: 'user' as const,
-      videoList,
+      videoList: runAttachments.videoList,
     };
 
-    // Combine history messages with user message
-    const allMessages = runFromHistory ? historyMessages : [...historyMessages, userMessage];
+    // Combine history messages with the user message. An ephemeral message is
+    // injected into the LLM context even under runFromHistory (suppressUserMessage)
+    // — it drives this turn but was never persisted (id is undefined).
+    const allMessages =
+      runFromHistory && !ephemeralUserMessage ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -2398,7 +2560,10 @@ export class AiAgentService {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: runFromHistory ? [{ content: '' }] : [{ content: prompt }],
+        message:
+          runFromHistory && !ephemeralUserMessage
+            ? [{ content: '' }]
+            : [{ content: ephemeralUserMessage ?? prompt }],
         // Pass user message ID as parentMessageId for reference
         parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call
@@ -2576,7 +2741,17 @@ export class AiAgentService {
         topicId,
       });
 
-      const projectMetas = workspaceInit.skills.map((s) => ({
+      // Feed the bound directory (resolved from the persisted device row) into
+      // the local-system tool's {{workingDirectory}} placeholder — the channel
+      // the model uses to know where it is and reach for absolute paths — and,
+      // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
+      // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+      // existing deviceSystemInfo plumbing (computeDeviceContext).
+      if (workspaceInit.boundCwd) {
+        deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
+      }
+
+      const projectMetas = workspaceInit.workspace.skills.map((s) => ({
         description: s.description ?? '',
         identifier: `project:${s.name}`,
         location: s.path,
@@ -2596,8 +2771,8 @@ export class AiAgentService {
       // trailing blocks on the system role — after the agent's persona and any
       // page/task/additional instructions. `agentConfig` is read by
       // `createOperation` below, so appending here still reaches the LLM.
-      if (workspaceInit.instructions.length) {
-        const block = workspaceInit.instructions
+      if (workspaceInit.workspace.instructions.length) {
+        const block = workspaceInit.workspace.instructions
           .map(
             ({ content, source }) =>
               `<project_instructions source="${source}">\n${content}\n</project_instructions>`,
@@ -2608,8 +2783,8 @@ export class AiAgentService {
           : block;
         log(
           'execAgent: injected %d project instruction file(s): %s',
-          workspaceInit.instructions.length,
-          workspaceInit.instructions.map((i) => i.source).join(', '),
+          workspaceInit.workspace.instructions.length,
+          workspaceInit.workspace.instructions.map((i) => i.source).join(', '),
         );
       }
 
@@ -2662,6 +2837,13 @@ export class AiAgentService {
           // context (state.metadata.agentId) targets the reviewed agent; ordinary
           // runs (no marker) fall back to the resolved executing agent.
           agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+          // When scope === 'agent_builder', agentId stays as the builder builtin so
+          // message ownership and queryUiMessages remain correct. editingAgentId
+          // carries the actual editing target separately; only the AgentBuilder server
+          // runtime reads it, keeping the rest of the pipeline unaffected.
+          ...(appContext?.scope === 'agent_builder' && appContext?.editingAgentId
+            ? { editingAgentId: appContext.editingAgentId }
+            : {}),
           // Run-scoped Agent Signal marker for background self-iteration / memory
           // runs — lands in state.metadata.agentSignal so the completion path can
           // project receipts/briefs. Undefined for ordinary chat runs.
@@ -2885,9 +3067,195 @@ export class AiAgentService {
       resumeParentOnComplete: true,
     });
 
+  /**
+   * Fork a single group member ("call agent member") under a `lobe-group-management`
+   * tool call. Dispatches to the in-group (non-isolated, shared group session)
+   * or isolated (own thread) path, installing the group-action member completion
+   * bridge. Invoked once per member by the runtime's `agentMember` runner.
+   *
+   * Arrow field (not a method) so it stays bound when handed to the runtime
+   * delegate.
+   */
+  execGroupMember = async (params: ExecGroupMemberParams): Promise<ExecGroupMemberResult> => {
+    if (params.mode === 'isolated') {
+      // Isolated members reuse the sub-agent isolation-thread machinery, swapping
+      // in the group-action member bridge (K=N barrier + resume/finish).
+      const result = await this.execAgentThreadRun(
+        {
+          agentId: params.agentId,
+          groupId: params.groupId,
+          instruction: params.instruction ?? 'Please complete the assigned task.',
+          parentMessageId: params.anchorMessageId,
+          parentOperationId: params.parentOperationId,
+          timeout: params.timeout,
+          title: params.instruction?.slice(0, 50),
+          topicId: params.topicId,
+        },
+        {
+          bridgeHookFactory: (threadId) =>
+            this.createGroupActionMemberBridgeHook({
+              anchorMessageId: params.anchorMessageId,
+              expectedMembers: params.expectedMembers,
+              groupToolMessageId: params.groupToolMessageId,
+              mode: 'isolated',
+              onComplete: params.onComplete,
+              parentOperationId: params.parentOperationId,
+              threadId,
+            }),
+          isSubAgent: true,
+          logScope: 'execVirtualSubAgent',
+          resumeParentOnComplete: true,
+        },
+      );
+
+      // Enforce the requested timeout: if the member op is still running when the
+      // deadline passes, the watchdog interrupts it and bridges a `timeout`
+      // completion so the supervisor doesn't stay parked indefinitely.
+      if (result.success && result.operationId && params.timeout && params.timeout > 0) {
+        await this.agentRuntimeService.scheduleGroupMemberTimeout(
+          {
+            anchorMessageId: params.anchorMessageId,
+            expectedMembers: params.expectedMembers,
+            groupToolMessageId: params.groupToolMessageId,
+            memberOperationId: result.operationId,
+            mode: 'isolated',
+            onComplete: params.onComplete,
+            parentOperationId: params.parentOperationId,
+          },
+          params.timeout,
+        );
+      }
+
+      return {
+        error: result.error,
+        operationId: result.operationId,
+        started: result.success ?? false,
+        threadId: result.threadId,
+      };
+    }
+
+    return this.execAgentMember(params);
+  };
+
+  /**
+   * Run a group member in the shared group session (non-isolated). The member's
+   * turns land directly in the group conversation; the supervisor's instruction
+   * is injected as a `<speaker name="Supervisor" />`-tagged prompt. Registers the
+   * group-action member bridge that backfills the member anchor and
+   * resumes/finishes the parked supervisor once the K=N member barrier passes.
+   */
+  private async execAgentMember(params: ExecGroupMemberParams): Promise<ExecGroupMemberResult> {
+    const {
+      agentId,
+      anchorMessageId,
+      disableTools,
+      expectedMembers,
+      groupId,
+      groupToolMessageId,
+      instruction,
+      onComplete,
+      parentOperationId,
+      topicId,
+    } = params;
+
+    log(
+      'execAgentMember: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
+      agentId,
+      groupId,
+      topicId,
+      (instruction ?? '').slice(0, 50),
+    );
+
+    // Dispatch beforeCallAgent hook on the supervisor operation.
+    hookDispatcher
+      .dispatch(parentOperationId, 'beforeCallAgent', {
+        agentId,
+        instruction: (instruction ?? '').slice(0, 200),
+        operationId: parentOperationId,
+        userId: this.userId,
+      })
+      .catch(() => {});
+
+    // Inherit the supervisor op's trigger so member rows stay attributable.
+    let inheritedTrigger: string | undefined;
+    try {
+      const parentOp = await new AgentOperationModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findById(parentOperationId);
+      inheritedTrigger = parentOp?.trigger ?? undefined;
+    } catch (error) {
+      log('execAgentMember: failed to read parent operation trigger: %O', error);
+    }
+
+    const speakerInstruction = instruction
+      ? `<speaker name="Supervisor" />\n${instruction}`
+      : 'Please respond to the group conversation based on the current context.';
+
+    const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
+      groupId,
+      scope: 'group',
+      topicId,
+    };
+
+    // The member runs as a child op of the supervisor and lands its turns in the
+    // shared group conversation (no isolation thread). The bridge backfills the
+    // member anchor (a short receipt) and resumes/finishes the supervisor.
+    //
+    // The supervisor instruction is injected as an EPHEMERAL user message
+    // (`suppressUserMessage` + `ephemeralUserMessage`): it drives the member's
+    // response but is NOT persisted as a `role: 'user'` row, mirroring the
+    // client orchestration where the supervisor instruction is virtual. Without
+    // this, every server-side speak/broadcast/delegate would leak the
+    // orchestration prompt into the group conversation as a real message.
+    const result = await this.execAgent({
+      agentId,
+      appContext,
+      autoStart: true,
+      disableTools,
+      ephemeralUserMessage: speakerInstruction,
+      hooks: [
+        this.createGroupActionMemberBridgeHook({
+          anchorMessageId,
+          expectedMembers,
+          groupToolMessageId,
+          mode: 'in_group',
+          onComplete,
+          parentOperationId,
+        }),
+      ],
+      parentMessageId: anchorMessageId,
+      parentOperationId,
+      prompt: speakerInstruction,
+      suppressUserMessage: true,
+      trigger: inheritedTrigger,
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
+
+    log(
+      'execAgentMember: delegated to execAgent, operationId=%s, success=%s',
+      result.operationId,
+      result.success,
+    );
+
+    return {
+      error: result.error,
+      operationId: result.operationId,
+      started: result.success ?? false,
+    };
+  }
+
   private async execAgentThreadRun(
     params: ExecSubAgentParams | ExecVirtualSubAgentParams,
     options: {
+      /**
+       * Override the default sub-agent completion bridge with a custom hook
+       * (e.g. the group-action member bridge for isolated executeAgentTask(s)).
+       * Receives the freshly-created isolation thread id. Only used when
+       * `resumeParentOnComplete` is set.
+       */
+      bridgeHookFactory?: (threadId: string) => AgentHook;
       isSubAgent: boolean;
       logScope: 'execSubAgent' | 'execVirtualSubAgent';
       resumeParentOnComplete?: boolean;
@@ -2955,7 +3323,9 @@ export class AiAgentService {
       options.resumeParentOnComplete && parentOperationId
         ? [
             ...threadHooks,
-            this.createSubAgentBridgeHook(parentOperationId, parentMessageId, thread.id),
+            options.bridgeHookFactory
+              ? options.bridgeHookFactory(thread.id)
+              : this.createSubAgentBridgeHook(parentOperationId, parentMessageId, thread.id),
           ]
         : threadHooks;
 
@@ -3371,6 +3741,76 @@ export class AiAgentService {
   }
 
   /**
+   * Completion bridge for the group orchestration "call agent member" path.
+   *
+   * Fires on a member op's completion and delegates to
+   * `AgentRuntimeService.completeGroupActionMember`: backfill the member anchor,
+   * enforce the K=N member barrier, then resume/finish the parked supervisor.
+   * Transport mirrors {@link createSubAgentBridgeHook} — in-process in local
+   * mode, QStash → `/api/agent/webhooks/group-member-callback` in queue mode.
+   */
+  private createGroupActionMemberBridgeHook(params: {
+    anchorMessageId: string;
+    expectedMembers: number;
+    groupToolMessageId: string;
+    mode: GroupActionMemberMode;
+    onComplete: GroupActionOnComplete;
+    parentOperationId: string;
+    threadId?: string;
+  }): AgentHook {
+    const {
+      anchorMessageId,
+      expectedMembers,
+      groupToolMessageId,
+      mode,
+      onComplete,
+      parentOperationId,
+      threadId,
+    } = params;
+    return {
+      handler: async (event) => {
+        try {
+          await this.agentRuntimeService.completeGroupActionMember({
+            anchorMessageId,
+            expectedMembers,
+            finalState: event.finalState,
+            groupToolMessageId,
+            mode,
+            onComplete,
+            operationId: event.operationId,
+            parentOperationId,
+            reason: event.reason ?? 'done',
+            threadId,
+          });
+        } catch (error) {
+          console.error(
+            'Group-member bridge: failed to complete bridge for parent %s: %O',
+            parentOperationId,
+            error,
+          );
+        }
+      },
+      id: 'group-member-bridge',
+      type: 'onComplete' as const,
+      webhook: {
+        body: {
+          anchorMessageId,
+          expectedMembers,
+          groupToolMessageId,
+          mode,
+          onComplete,
+          parentOperationId,
+          threadId,
+        },
+        delivery: 'qstash' as const,
+        eventFields: ['operationId', 'reason', 'status'],
+        fallback: 'none' as const,
+        url: '/api/agent/webhooks/group-member-callback',
+      },
+    };
+  }
+
+  /**
    * Calculate total tokens from AgentState usage object
    * AgentState.usage is of type Usage from @lobechat/agent-runtime
    */
@@ -3432,9 +3872,14 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
+        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
         await deviceGateway
           .executeToolCall(
-            { deviceId: runningOp.deviceId, userId: this.userId },
+            {
+              deviceId: runningOp.deviceId,
+              userId: this.userId,
+              workspaceId: cancelWorkspaceId,
+            },
             {
               apiName: 'cancelHeteroTask',
               arguments: JSON.stringify({ signal: 'SIGINT', taskId }),

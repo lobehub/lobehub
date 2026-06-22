@@ -1,5 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import type { DeviceGitAheadBehind, DeviceGitWorkingTreeStatus } from '@lobechat/types';
+import type {
+  DeviceGitAheadBehind,
+  DeviceGitWorkingTreeStatus,
+  DeviceGitWorktreeListItem,
+} from '@lobechat/types';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
@@ -45,5 +49,17 @@ export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: stri
   useClientDataSWR<DeviceGitAheadBehind | undefined>(
     isEnabled(deviceId, path) ? deviceKeys.gitAheadBehind(deviceId ?? 'local', path) : null,
     () => gitService.getGitAheadBehind({ deviceId, path: path! }),
+    { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
+  );
+
+/**
+ * Worktrees attached to the same repository as the current working directory.
+ * Revalidates on focus so temp PR worktrees created outside the app appear
+ * without restarting the conversation.
+ */
+export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string) =>
+  useClientDataSWR<DeviceGitWorktreeListItem[]>(
+    isEnabled(deviceId, path) ? ['git-worktrees', deviceId ?? 'local', path] : null,
+    () => gitService.listGitWorktrees({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );

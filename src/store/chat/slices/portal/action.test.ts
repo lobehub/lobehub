@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
@@ -408,6 +409,31 @@ describe('chatDockSlice', () => {
       expect(result.current.activeLocalFilePath).toBe('/path/a.ts');
     });
 
+    it('should keep user-approved external preview context when opening a local file', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          allowExternalFilePreview: true,
+          filePath: '/tmp/worktree-switcher-demo.html',
+          workingDirectory: '/tmp',
+        });
+      });
+
+      expect(result.current.openLocalFiles).toEqual([
+        {
+          allowExternalFilePreview: true,
+          filePath: '/tmp/worktree-switcher-demo.html',
+          id: localFileTabId({
+            filePath: '/tmp/worktree-switcher-demo.html',
+            workingDirectory: '/tmp',
+          }),
+          workingDirectory: '/tmp',
+        },
+      ]);
+      expect(result.current.activeLocalFilePath).toBe('/tmp/worktree-switcher-demo.html');
+    });
+
     it('should keep same file path from different device context as separate tabs', () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -600,6 +626,7 @@ describe('chatDockSlice', () => {
 
     it('should not clear local dirty buffer when closing a remote tab with the same file path', () => {
       const { result } = renderHook(() => useChatStore());
+      const localId = localFileTabId({ filePath: '/path/a.ts', workingDirectory: '/path' });
       const remoteId = localFileTabId({
         deviceId: 'device-1',
         filePath: '/path/a.ts',
@@ -608,12 +635,15 @@ describe('chatDockSlice', () => {
 
       act(() => {
         result.current.openLocalFile({ filePath: '/path/a.ts', workingDirectory: '/path' });
-        result.current.setLocalFileBuffer('/path/a.ts', 'dirty content');
+        // Buffers are keyed by tab identity, so the local and remote tabs holding
+        // the same absolute path each own an independent buffer.
+        result.current.setLocalFileBuffer(localId, 'dirty content');
         result.current.openLocalFile({
           deviceId: 'device-1',
           filePath: '/path/a.ts',
           workingDirectory: '/remote/path',
         });
+        result.current.setLocalFileBuffer(remoteId, 'remote edits');
       });
 
       act(() => {
@@ -621,7 +651,81 @@ describe('chatDockSlice', () => {
       });
 
       expect(result.current.openLocalFiles).toHaveLength(1);
-      expect(result.current.dirtyLocalFileContents['/path/a.ts']).toBe('dirty content');
+      // Closing the remote tab drops only its buffer; the local tab's stays.
+      expect(result.current.dirtyLocalFileContents[remoteId]).toBeUndefined();
+      expect(result.current.dirtyLocalFileContents[localId]).toBe('dirty content');
+    });
+  });
+
+  describe('saveLocalFile', () => {
+    const target = {
+      deviceId: 'device-1',
+      filePath: '/remote/proj/a.ts',
+      workingDirectory: '/remote/proj',
+    };
+
+    it('reads the buffer for the matching tab and writes through the chokepoint', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const writeSpy = vi
+        .spyOn(projectFileService, 'writeProjectFile')
+        .mockResolvedValue({ success: true });
+
+      act(() => {
+        result.current.setLocalFileBuffer(localFileTabId(target), 'edited');
+      });
+
+      let saved: string | undefined;
+      await act(async () => {
+        saved = await result.current.saveLocalFile(target);
+      });
+
+      expect(saved).toBe('edited');
+      expect(writeSpy).toHaveBeenCalledWith({
+        content: 'edited',
+        deviceId: 'device-1',
+        path: '/remote/proj/a.ts',
+        workingDirectory: '/remote/proj',
+      });
+      writeSpy.mockRestore();
+    });
+
+    it('does not read another tab/device buffer for the same path', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const writeSpy = vi
+        .spyOn(projectFileService, 'writeProjectFile')
+        .mockResolvedValue({ success: true });
+
+      act(() => {
+        // A different device holds an edit buffer at the same absolute path.
+        result.current.setLocalFileBuffer(
+          localFileTabId({ ...target, deviceId: 'device-2' }),
+          'other device edits',
+        );
+      });
+
+      let saved: string | undefined;
+      await act(async () => {
+        saved = await result.current.saveLocalFile(target);
+      });
+
+      // device-1 has no buffer, so the save is a no-op and never writes.
+      expect(saved).toBeUndefined();
+      expect(writeSpy).not.toHaveBeenCalled();
+      writeSpy.mockRestore();
+    });
+
+    it('throws when the write reports failure so the buffer stays dirty', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const writeSpy = vi
+        .spyOn(projectFileService, 'writeProjectFile')
+        .mockResolvedValue({ error: 'EACCES', success: false });
+
+      act(() => {
+        result.current.setLocalFileBuffer(localFileTabId(target), 'edited');
+      });
+
+      await expect(result.current.saveLocalFile(target)).rejects.toThrow('EACCES');
+      writeSpy.mockRestore();
     });
   });
 

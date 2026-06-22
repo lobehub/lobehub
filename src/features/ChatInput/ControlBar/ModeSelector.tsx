@@ -106,6 +106,15 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.4;
     color: ${cssVar.colorText};
   `,
+  popoverPopup: css`
+    /* The popup pads its option rows by 4px, so its corner must be one step larger
+       than the rows' radius (borderRadius 8 → borderRadiusLG 12 = 8 + 4) to wrap them
+       concentrically instead of looking tighter than them. &&& outranks the base
+       popup style's border-radius. */
+    &&& {
+      border-radius: ${cssVar.borderRadiusLG};
+    }
+  `,
 }));
 
 const AGENT_CAPS = [
@@ -226,12 +235,19 @@ const ModeSelector = memo(() => {
 
   return (
     <Popover
+      className={styles.popoverPopup}
       content={popoverContent}
       open={canCreateContent && open}
       placement="topLeft"
       trigger="click"
       styles={{
-        content: { border: `1px solid ${cssVar.colorBorderSecondary}`, padding: 4 },
+        // Match the inner viewport's corner to the enlarged popup radius so its
+        // border corners don't poke through the rounded popup.
+        content: {
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
+          borderRadius: cssVar.borderRadiusLG,
+          padding: 4,
+        },
       }}
       onOpenChange={handleOpenChange}
     >

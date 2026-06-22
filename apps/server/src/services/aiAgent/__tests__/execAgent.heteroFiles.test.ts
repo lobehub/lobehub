@@ -2,13 +2,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockMessageCreate, mockResolveAttachmentMetadata, mockSpawnHeteroSandbox } = vi.hoisted(
-  () => ({
-    mockMessageCreate: vi.fn(),
-    mockResolveAttachmentMetadata: vi.fn(),
-    mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
-  }),
-);
+const {
+  mockMessageCreate,
+  mockResolveAttachmentsByFileIds,
+  mockSpawnHeteroSandbox,
+  mockIngestAttachment,
+} = vi.hoisted(() => ({
+  mockIngestAttachment: vi.fn(),
+  mockMessageCreate: vi.fn(),
+  mockResolveAttachmentsByFileIds: vi.fn(),
+  mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
+}));
+
+const emptyResolvedAttachments = {
+  fileList: [],
+  imageList: [],
+  orderedFileIds: [],
+  videoList: [],
+  warnings: [],
+};
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('../ingestAttachment', () => ({
+  ingestAttachment: mockIngestAttachment,
+}));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -100,14 +120,13 @@ vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
 }));
 
 vi.mock('@/server/services/file/resolveAttachments', () => ({
-  resolveAttachmentMetadata: mockResolveAttachmentMetadata,
-  resolveAttachmentsByFileIds: vi.fn().mockResolvedValue({
-    fileList: [],
-    imageList: [],
-    orderedFileIds: [],
-    videoList: [],
-    warnings: [],
-  }),
+  resolveAttachmentsByFileIds: mockResolveAttachmentsByFileIds,
+}));
+
+vi.mock('@/server/services/document', () => ({
+  DocumentService: vi.fn().mockImplementation(() => ({
+    parseFile: vi.fn().mockResolvedValue({ content: '' }),
+  })),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
@@ -147,8 +166,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
-    mockResolveAttachmentMetadata.mockResolvedValue([]);
+    mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
+    mockIngestAttachment.mockReset();
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -165,6 +185,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     // without `files`, so images attached in device mode were never linked
     // via messagesFiles and disappeared after the optimistic message was
     // replaced by the server snapshot.
+    mockResolveAttachmentsByFileIds.mockResolvedValue({
+      ...emptyResolvedAttachments,
+      orderedFileIds: ['file-1', 'file-2'],
+    });
+
     await service.execAgent({
       agentId: 'agent-1',
       fileIds: ['file-1', 'file-2'],
@@ -176,13 +201,23 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
 
-  it('should dedupe repeated fileIds (messagesFiles PK is fileId+messageId)', async () => {
+  it('should attach the resolver-deduped fileIds (dedup lives in resolveAttachmentsByFileIds)', async () => {
+    // resolveAttachmentsByFileIds dedupes internally and returns orderedFileIds;
+    // execAgent attaches exactly what it returns (messagesFiles PK is fileId+messageId).
+    mockResolveAttachmentsByFileIds.mockResolvedValue({
+      ...emptyResolvedAttachments,
+      orderedFileIds: ['file-1', 'file-2'],
+    });
+
     await service.execAgent({
       agentId: 'agent-1',
       fileIds: ['file-1', 'file-1', 'file-2'],
       prompt: 'Look at this image',
     });
 
+    expect(mockResolveAttachmentsByFileIds).toHaveBeenCalledWith(
+      expect.objectContaining({ fileIds: ['file-1', 'file-1', 'file-2'] }),
+    );
     const userCall = findUserMessageCreate();
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
@@ -211,22 +246,21 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
   describe('image delivery to the dispatched CLI', () => {
     it('should resolve image attachments and pass imageList to the sandbox dispatch', async () => {
-      mockResolveAttachmentMetadata.mockResolvedValue([
-        {
-          fileType: 'image/png',
-          id: 'file-1',
-          name: 'screenshot.png',
-          size: 100,
-          url: 'https://signed/file-1.png',
-        },
-        {
-          fileType: 'application/pdf',
-          id: 'file-2',
-          name: 'doc.pdf',
-          size: 200,
-          url: 'https://signed/file-2.pdf',
-        },
-      ]);
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        fileList: [
+          {
+            content: '',
+            fileType: 'application/pdf',
+            id: 'file-2',
+            name: 'doc.pdf',
+            size: 200,
+            url: 'https://signed/file-2.pdf',
+          },
+        ],
+        imageList: [{ alt: 'screenshot.png', id: 'file-1', url: 'https://signed/file-1.png' }],
+        orderedFileIds: ['file-1', 'file-2'],
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -242,15 +276,20 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('should pass imageList undefined when attachments contain no images', async () => {
-      mockResolveAttachmentMetadata.mockResolvedValue([
-        {
-          fileType: 'application/pdf',
-          id: 'file-2',
-          name: 'doc.pdf',
-          size: 200,
-          url: 'https://signed/file-2.pdf',
-        },
-      ]);
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        fileList: [
+          {
+            content: '',
+            fileType: 'application/pdf',
+            id: 'file-2',
+            name: 'doc.pdf',
+            size: 200,
+            url: 'https://signed/file-2.pdf',
+          },
+        ],
+        orderedFileIds: ['file-2'],
+      });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -264,7 +303,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('should not block the run when attachment resolution fails', async () => {
-      mockResolveAttachmentMetadata.mockRejectedValue(new Error('S3 down'));
+      mockResolveAttachmentsByFileIds.mockRejectedValue(new Error('S3 down'));
 
       const result = await service.execAgent({
         agentId: 'agent-1',
@@ -287,7 +326,90 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         prompt: 'No attachments here',
       });
 
-      expect(mockResolveAttachmentMetadata).not.toHaveBeenCalled();
+      expect(mockResolveAttachmentsByFileIds).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('raw bot/IM file ingestion (files param)', () => {
+    // regression: bot/IM channels deliver attachments as raw `files` buffers
+    // (not pre-uploaded `fileIds`). The hetero branch returns before the main
+    // ingestion block, so images sent through a bot were silently dropped and
+    // the CLI received text only.
+    it('should ingest raw files, attach them to the user message and forward images', async () => {
+      mockIngestAttachment.mockResolvedValue({
+        fileId: 'uploaded-1',
+        isImage: true,
+        isVideo: false,
+        resolvedUrl: 'https://signed/uploaded-1.png',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        files: [{ mimeType: 'image/png', name: 'shot.png', url: 'https://im/shot.png' }],
+        prompt: 'What is this image?',
+      });
+
+      expect(mockIngestAttachment).toHaveBeenCalledTimes(1);
+
+      const userCall = findUserMessageCreate();
+      expect(userCall![0].files).toEqual(['uploaded-1']);
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          imageList: [{ id: 'uploaded-1', url: 'https://signed/uploaded-1.png' }],
+        }),
+      );
+    });
+
+    it('should merge ingested files with pre-uploaded fileIds (both images forwarded)', async () => {
+      mockIngestAttachment.mockResolvedValue({
+        fileId: 'uploaded-1',
+        isImage: true,
+        isVideo: false,
+        resolvedUrl: 'https://signed/uploaded-1.png',
+      });
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        imageList: [{ alt: 'pre.jpg', id: 'file-1', url: 'https://signed/file-1.jpg' }],
+        orderedFileIds: ['file-1'],
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-1'],
+        files: [{ mimeType: 'image/png', name: 'shot.png', url: 'https://im/shot.png' }],
+        prompt: 'Compare these images',
+      });
+
+      // Raw `files` are ingested first, then pre-uploaded `attachedFileIds`.
+      const userCall = findUserMessageCreate();
+      expect(userCall![0].files).toEqual(['uploaded-1', 'file-1']);
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          imageList: [
+            { id: 'uploaded-1', url: 'https://signed/uploaded-1.png' },
+            { id: 'file-1', url: 'https://signed/file-1.jpg' },
+          ],
+        }),
+      );
+    });
+
+    it('should not block the run when a raw file fails to ingest', async () => {
+      mockIngestAttachment.mockRejectedValue(new Error('S3 down'));
+
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        files: [{ mimeType: 'image/png', name: 'shot.png', url: 'https://im/shot.png' }],
+        prompt: 'What is this image?',
+      });
+
+      expect(result.success).toBe(true);
+      const userCall = findUserMessageCreate();
+      expect(userCall![0].files).toBeUndefined();
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({ imageList: undefined }),
+      );
     });
   });
 });

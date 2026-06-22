@@ -12,6 +12,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
+import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
@@ -19,6 +20,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
@@ -263,11 +265,27 @@ const TopicItem = memo<TopicItemProps>(
       </span>
     );
 
+    // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
+    // input. Drafts live in localStorage keyed by messageMapKey; the default
+    // topic (no id) maps to the new-topic draft. `useHasDraft` re-renders the
+    // row only when the draft appears or clears.
+    const draftKey = useMemo(
+      () => (activeAgentId ? messageMapKey({ agentId: activeAgentId, topicId: id }) : undefined),
+      [activeAgentId, id],
+    );
+    const hasDraft = useHasDraft(draftKey);
+    const draftPrefix = hasDraft ? (
+      <Text fontSize={12} style={{ color: cssVar.colorError, flex: 'none' }}>
+        {t('draft')}
+      </Text>
+    ) : undefined;
+
     // For default topic (no id)
     if (!id) {
       return (
         <NavItem
           active={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
+          slots={{ titlePrefix: draftPrefix }}
           titleColor={cssVar.colorText}
           icon={
             isLoading ? (
@@ -309,6 +327,7 @@ const TopicItem = memo<TopicItemProps>(
           disabled={editing}
           extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
           href={href}
+          slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           icon={(() => {

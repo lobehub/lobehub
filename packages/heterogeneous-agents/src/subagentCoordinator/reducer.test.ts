@@ -164,8 +164,10 @@ describe('subagent reducer', () => {
       payload: { id: 'tc-2' },
     });
 
-    // next assistant chains off the LAST tool message of the batch
-    expect(state.runs.get('task-1')!.lastChainParentId).toBe('msg_4');
+    // Chain rule (phase 2): the next assistant chains off the prior assistant
+    // (the spine), NOT the batch's last tool — so lastChainParentId stays at the
+    // current assistant (msg_2) and the tools are inline children.
+    expect(state.runs.get('task-1')!.lastChainParentId).toBe('msg_2');
     expect([...state.runs.get('task-1')!.lifetimeToolCallIds]).toEqual(['tc-1', 'tc-2']);
   });
 
@@ -181,17 +183,18 @@ describe('subagent reducer', () => {
     ]);
   });
 
-  it('cuts a new turn on subagentMessageId change: flush prior + new assistant chained off last tool', () => {
+  it('cuts a new turn on subagentMessageId change: flush prior + new assistant chained off the prior assistant', () => {
     const { steps, state } = run([
       textEvent('task-1', 'm1', 'first turn text'),
-      toolsEvent('task-1', 'm1', [tool('tc-1')]), // lastChainParentId → msg_3
+      toolsEvent('task-1', 'm1', [tool('tc-1')]), // tool is an inline child of msg_2
       textEvent('task-1', 'm2', 'second turn'), // turn boundary
     ]);
 
-    // boundary flushes prior turn content, opens a new assistant off the last tool msg (msg_3)
+    // boundary flushes prior turn content, opens a new assistant off the prior
+    // assistant (the spine, msg_2) — NOT the last tool — with the tool inline
     expect(kinds(steps[2])).toEqual(['persistContent', 'createMessage', 'streamContent']);
     expect(steps[2][0]).toMatchObject({ content: 'first turn text', messageId: 'msg_2' });
-    expect(steps[2][1]).toMatchObject({ messageId: 'msg_4', parentId: 'msg_3', role: 'assistant' });
+    expect(steps[2][1]).toMatchObject({ messageId: 'msg_4', parentId: 'msg_2', role: 'assistant' });
     expect(steps[2][2]).toMatchObject({ content: 'second turn', messageId: 'msg_4' });
 
     const r = state.runs.get('task-1')!;

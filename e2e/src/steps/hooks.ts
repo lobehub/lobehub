@@ -1,6 +1,7 @@
 import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@cucumber/cucumber';
 import { chromium, type Cookie } from 'playwright';
 
+import { mockManager } from '../mocks';
 import { seedTestUser, TEST_USER } from '../support/seedTestUser';
 import { startWebServer, stopWebServer } from '../support/webServer';
 import type { CustomWorld } from '../support/world';
@@ -106,8 +107,16 @@ Before(async function (this: CustomWorld, { pickle }) {
   );
   console.log(`\n📝 Running: ${pickle.name}${testId ? ` (${testId.name.replace('@', '')})` : ''}`);
 
-  // Setup API mocks before any page navigation
-  // await mockManager.setup(this.page);
+  // Setup Community API mocks before any page navigation. These PR E2E scenarios
+  // are the user-experience baseline for Community UI flows (list/search/filter/
+  // detail navigation), not a live marketplace availability check. The live
+  // marketplace rate-limits anonymous CI traffic, so Community scenarios use
+  // deterministic fixtures while the rest of the E2E suite keeps real app APIs.
+  // If we need to validate the real marketplace contract, cover that in a
+  // separate integration/nightly suite with dedicated credentials and SLA.
+  if (pickle.tags.some((tag) => tag.name === '@community')) {
+    await mockManager.setup(this.page);
+  }
 
   // Set cached session cookies to skip login
   if (sessionCookies.length > 0) {

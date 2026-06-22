@@ -41,9 +41,9 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router-dom', async () => {
+vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await vi.importActual('react-router-dom')) as typeof import('react-router-dom');
+  const actual = (await vi.importActual('react-router')) as typeof import('react-router');
 
   return {
     ...actual,

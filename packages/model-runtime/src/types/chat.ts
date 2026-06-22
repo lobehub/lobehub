@@ -37,11 +37,16 @@ interface UserMessageContentPartVideo {
   type: 'video_url';
   video_url: { url: string };
 }
+interface UserMessageContentPartAudio {
+  audio_url: { url: string };
+  type: 'audio_url';
+}
 
 export type UserMessageContentPart =
   | UserMessageContentPartText
   | UserMessageContentPartImage
   | UserMessageContentPartVideo
+  | UserMessageContentPartAudio
   | UserMessageContentPartThinking;
 
 export interface OpenAIChatMessage {
@@ -240,6 +245,25 @@ export interface OnFinishData {
   thinking?: string;
   toolsCalling?: MessageToolCall[];
   usage?: ModelUsage;
+  usageMissingDiagnostics?: UsageMissingDiagnostics;
+}
+
+export interface UsageMissingDiagnostics {
+  apiMode?: 'chat_completions' | 'messages' | 'responses';
+  chunkIndex?: number;
+  finishReason?: string | null;
+  hasUsageMetadata: boolean;
+  includeUsageRequested?: boolean;
+  model?: string;
+  provider?: string;
+  responseId?: string;
+  source:
+    | 'anthropic_messages'
+    | 'google_generative_ai'
+    | 'openai_chat_completions'
+    | 'openai_responses';
+  terminalEventType: string;
+  terminalStatus?: string;
 }
 
 /**

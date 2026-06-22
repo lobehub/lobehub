@@ -3,26 +3,11 @@ import useSWR from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
-/**
- * Append the active workspace id to the SWR cache key so workspace-scoped
- * fetches never collide across contexts. Personal mode (no active workspace)
- * leaves the key unchanged so existing personal caches keep their identity.
- *
- * - `null` / `undefined` / `false` keys (SWR's "skip" signals) pass through.
- * - String / number keys are wrapped into a tuple `[key, wsId]`.
- * - Array keys get `wsId` appended.
- * - Other shapes (object keys, etc.) are wrapped into a tuple too.
- *
- * Combined with the `key={activeWorkspaceId}` remount at the top of the SPA
- * tree, this gives true SWR isolation per workspace without per-feature
- * registration.
- */
-export const augmentKey = (key: unknown, workspaceId: string | null | undefined): unknown => {
-  if (workspaceId == null) return key;
-  if (key == null || key === false) return key;
-  if (Array.isArray(key)) return [...key, workspaceId];
-  return [key, workspaceId];
-};
+import { augmentKey } from './augmentKey';
+
+export { augmentKey };
+
+const CLIENT_POLLING_SWR_DEDUPING_INTERVAL = 30_000;
 
 /**
  * This type of request method is for relatively flexible data, which will be triggered on the first time.
@@ -43,7 +28,10 @@ export const useClientDataSWR: SWRHook = (key, fetch, config) => {
     dedupingInterval: 0,
     focusThrottleInterval: 5 * 60 * 1000,
     // Custom error retry logic: don't retry on 401 errors
-    onErrorRetry: (error: any, key: any, config: any, revalidate: any, { retryCount }: any) => {
+    onErrorRetry: (error: any, ...args: any[]) => {
+      const revalidate = args[2];
+      const { retryCount } = args[3];
+
       // Check if error is marked as non-retryable (e.g., 401 authentication errors)
       if (error?.meta?.shouldRetry === false) {
         return;
@@ -61,6 +49,21 @@ export const useClientDataSWR: SWRHook = (key, fetch, config) => {
     ...config,
   });
 };
+
+/**
+ * Polling-friendly variant of useClientDataSWR.
+ *
+ * Keeps the global zero-deduping behavior untouched for interactive data while
+ * giving polling call sites a request-dedupe window. Call sites can tune the
+ * interval based on whether they want to preserve every poll tick or collapse
+ * repeated ticks into fewer network requests.
+ */
+// @ts-ignore
+export const useClientPollingSWR: SWRHook = (key, fetch, config) =>
+  useClientDataSWR(key, fetch, {
+    dedupingInterval: CLIENT_POLLING_SWR_DEDUPING_INTERVAL,
+    ...config,
+  });
 
 /**
  * This type of request method is a relatively "static" request mode, which will only be triggered on the first request.

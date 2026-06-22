@@ -11,7 +11,7 @@ describe('handleOpenAIError', () => {
         472,
         { error: { message: 'API error', type: 'invalid_request' } },
         'test-message',
-        { status: 400 } as any,
+        undefined,
       );
 
       const result = handleOpenAIError(apiError);
@@ -25,9 +25,7 @@ describe('handleOpenAIError', () => {
 
     it('should handle OpenAI APIError with cause', () => {
       const cause = { message: 'Network error', code: 'ECONNRESET' };
-      const apiError = new OpenAI.APIError(472, null as any, 'test-message', {
-        status: 500,
-      } as any);
+      const apiError = new OpenAI.APIError(472, null as any, 'test-message', undefined);
       (apiError as any).cause = cause;
 
       const result = handleOpenAIError(apiError);
@@ -38,16 +36,13 @@ describe('handleOpenAIError', () => {
     });
 
     it('should handle OpenAI APIError without error or cause', () => {
-      const headers = { 'content-type': 'application/json' };
-      const apiError = new OpenAI.APIError(472, null as any, 'test-message', {
-        status: 401,
-        headers,
-      } as any);
+      const headers = new Headers({ 'content-type': 'application/json' });
+      const apiError = new OpenAI.APIError(472, null as any, 'test-message', headers);
 
       const result = handleOpenAIError(apiError);
 
       expect(result.errorResult).toEqual({
-        headers: { headers, status: 401 },
+        headers: apiError.headers,
         status: 472,
       });
       expect(result.message).toBe(apiError.message);
@@ -57,9 +52,7 @@ describe('handleOpenAIError', () => {
     it('should handle OpenAI APIError with both error and cause', () => {
       const errorObject = { message: 'API error', type: 'rate_limit' };
       const cause = { message: 'Rate limit exceeded' };
-      const apiError = new OpenAI.APIError(472, { error: errorObject }, 'test-message', {
-        status: 429,
-      } as any);
+      const apiError = new OpenAI.APIError(472, { error: errorObject }, 'test-message', undefined);
       (apiError as any).cause = cause;
 
       const result = handleOpenAIError(apiError);

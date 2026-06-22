@@ -1,13 +1,27 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { executeLegacyMigrationSave } from './legacyPluginMigration';
+
 interface CustomConnectorModalProps {
   connectorId?: string;
+  /**
+   * Legacy `user_installed_plugins` record being upgraded to a connector. When
+   * set (and `connectorId` is not), the modal opens in **migration mode**: the
+   * form is pre-filled from the legacy `customParams.mcp` blob, and on save we
+   * create the connector + sync its tools + delete the legacy plugin row.
+   *
+   * The legacy row is left untouched until BOTH create and tool-sync succeed,
+   * so a transient failure (MCP server unreachable, etc.) leaves the user with
+   * their working legacy plugin and a "retry" path on the next save.
+   */
+  legacyPlugin?: LobeToolCustomPlugin;
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
@@ -81,34 +95,70 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
  * - Clears credentials when the server URL changes
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
-  ({ open, onClose, connectorId, onEditSuccess }) => {
+  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
+    const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    const uninstallCustomPlugin = useToolStore((s) => s.uninstallCustomPlugin);
 
     const connector = useToolStore(
       connectorId ? connectorSelectors.connectorById(connectorId) : () => undefined,
     );
 
     const isEditMode = Boolean(connectorId);
+    const isMigrationMode = !isEditMode && Boolean(legacyPlugin);
 
-    // Build the pre-fill value for edit mode from the stored connector.
+    // Full connector data (with decrypted credentials) fetched for the edit form.
+    // null = not yet loaded; object = loaded (credentials may still be null if none set).
+    type EditFetchedData = {
+      credentials: Exclude<ConnectorCredentials, { type: 'oauth2' }> | null;
+      oidcConfig: Omit<OIDCConfig, 'clientSecret'> | null | undefined;
+    };
+    const [editFetchedData, setEditFetchedData] = useState<EditFetchedData | null>(null);
+    const editFetchController = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      if (!open || !connectorId) {
+        setEditFetchedData(null);
+        return;
+      }
+      // Cancel any in-flight fetch from a previous open
+      editFetchController.current?.abort();
+      const controller = new AbortController();
+      editFetchController.current = controller;
+
+      setEditFetchedData(null);
+      getConnectorForEdit(connectorId).then((data) => {
+        if (controller.signal.aborted) return;
+        setEditFetchedData({
+          credentials: (data?.credentials ?? null) as EditFetchedData['credentials'],
+          oidcConfig: (data?.oidcConfig ?? null) as EditFetchedData['oidcConfig'],
+        });
+      });
+
+      return () => {
+        controller.abort();
+      };
+    }, [open, connectorId]);
+
+    // Build the pre-fill value for edit mode once the credentials fetch completes.
+    // Returns undefined while loading so DevModal defers seeding the form.
+    //
+    // Migration mode skips the fetch — the legacy `customParams.mcp` blob is
+    // already in the shape DevModal expects, so we hand it through unchanged.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
-      if (!isEditMode || !connector) return undefined;
+      if (isMigrationMode) return legacyPlugin;
+      if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
         mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
-        oidcConfig?: { clientId?: string; clientSecret?: string; scheme?: string };
       };
-
-      const oidcConfig = c.oidcConfig;
       const mcpStdioConfig = c.mcpStdioConfig;
 
-      const credentials = (c as typeof c & {
-        credentials?: { headers?: Record<string, string>; token?: string; type?: string };
-      }).credentials;
+      const { credentials, oidcConfig } = editFetchedData;
 
       const authType = oidcConfig
         ? 'oauth2'
@@ -125,12 +175,15 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             args: mcpStdioConfig?.args,
             auth: {
               clientId: oidcConfig?.clientId,
-              token: authType === 'bearer' ? credentials?.token : undefined,
+              token: authType === 'bearer' ? (credentials as { token: string })?.token : undefined,
               type: authType === 'header' ? 'none' : authType,
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
-            headers: authType === 'header' ? credentials?.headers : undefined,
+            headers:
+              authType === 'header'
+                ? (credentials as { headers: Record<string, string> })?.headers
+                : undefined,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -138,9 +191,43 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         identifier: connector.identifier,
         type: 'customPlugin' as const,
       };
-    }, [isEditMode, connector]);
+    }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
     const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+      // ── Migration mode ────────────────────────────────────────────────────
+      // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
+      // a `user_connectors` row. Server `connector.create` is idempotent on
+      // `(user_id, identifier)` — a same-name half-baked connector from the
+      // old `syncPluginTools` path becomes an UPDATE here, no collision branch
+      // needed.
+      //
+      // Order matters: create → sync tools → uninstall legacy. If sync fails
+      // we bail BEFORE uninstall so the legacy plugin still serves the agent
+      // and the user can retry by re-opening the modal. After uninstall, the
+      // runtime sees a single connector row keyed by the same identifier, and
+      // `agentConfig.plugins[i]` already matches.
+      if (isMigrationMode && legacyPlugin) {
+        // `value` is the full form state — DevModal seeded itself from
+        // `legacyPlugin` via `editValue`, so anything the user edited (or left
+        // alone) is already inside `value`. Hand it to the orchestrator.
+        const result = await executeLegacyMigrationSave(legacyPlugin, value, {
+          createConnector,
+          syncConnectorTools,
+          uninstallCustomPlugin,
+        });
+        if (!result.ok) {
+          throw new Error(
+            result.reason === 'no-mcp'
+              ? 'This custom plugin has no MCP configuration to migrate.'
+              : result.reason === 'no-endpoint'
+                ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
+                : 'This custom plugin uses an unsupported transport.',
+          );
+        }
+        onEditSuccess?.();
+        return;
+      }
+
       const mcp = (value.customParams?.mcp ?? {}) as {
         args?: string[];
         auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
@@ -168,11 +255,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           patch.credentials = null;
         } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
           patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
-        } else if (authType === 'header') {
+        } else if (authType !== 'oauth2') {
+          // Auth radio 'none' covers both "no auth" and "header auth" (headers live in
+          // the Advanced section, not the auth radio). Mirror the create-mode logic:
+          // any filled headers → header credentials; empty → clear credentials.
           const headers = cleanRecord(mcp.headers);
-          if (headers) patch.credentials = { headers, type: 'header' as const };
-        } else if (authType === 'none') {
-          patch.credentials = null;
+          if (headers) {
+            patch.credentials = { headers, type: 'header' as const };
+          } else {
+            patch.credentials = null;
+          }
         }
 
         if (authType === 'oauth2') {
@@ -266,12 +358,26 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       await syncConnectorTools(newConnectorId);
     };
 
+    // In migration mode the Delete button must actually uninstall the legacy
+    // `user_installed_plugins` row — DevModal shows a success toast either way,
+    // so leaving `onDelete` undefined here would give the user a confirmation
+    // for an action that never happened. Wired only in migration mode; the
+    // regular edit branch's Delete-button behavior is unchanged by this PR.
+    const handleDelete =
+      isMigrationMode && legacyPlugin
+        ? () => {
+            uninstallCustomPlugin(legacyPlugin.identifier);
+            onClose();
+          }
+        : undefined;
+
     return (
       <DevModal
         enableOAuth
-        mode={isEditMode ? 'edit' : 'create'}
+        mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
+        onDelete={handleDelete}
         onSave={handleSave}
         onOpenChange={(next) => {
           if (!next) onClose();

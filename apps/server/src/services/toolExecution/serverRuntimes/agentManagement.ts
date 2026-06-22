@@ -43,20 +43,60 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       ): Promise<ToolExecutionResult> => {
         const { agentId, instruction, taskTitle, timeout } = params;
 
-        // Server runtime always uses the legacy async invocation path because
-        // there is no client-side `registerAfterCompletion` callback available
-        // to execute synchronous agent calls.
-        return {
-          content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
-          state: {
-            parentMessageId: ctx.messageId,
-            task: {
-              description: taskTitle || `Call agent ${agentId}`,
-              instruction,
-              targetAgentId: agentId,
-              timeout: timeout || 1_800_000,
+        if (ctx.isSubAgent) {
+          return {
+            content: 'Agent calls cannot be triggered from within another sub-agent.',
+            error: {
+              code: 'NESTED_AGENT_CALL_NOT_ALLOWED',
+              message: 'Agent calls cannot be triggered from within another sub-agent.',
             },
-            type: 'execSubAgent',
+            success: false,
+          };
+        }
+
+        if (!ctx.subAgent) {
+          return {
+            content: 'Agent execution is not available in this runtime.',
+            error: { code: 'AGENT_CALL_UNAVAILABLE' },
+            success: false,
+          };
+        }
+
+        if (!instruction || typeof instruction !== 'string') {
+          return {
+            content: 'instruction is required.',
+            error: { code: 'INVALID_ARGUMENTS', message: 'instruction is required.' },
+            success: false,
+          };
+        }
+
+        const description = taskTitle || `Call agent ${agentId}`;
+        const { started, subOperationId, threadId } = await ctx.subAgent.run({
+          agentId,
+          description,
+          instruction,
+          timeout: timeout || 1_800_000,
+        });
+
+        if (!started) {
+          return {
+            content: `Agent "${agentId}" failed to start.`,
+            error: {
+              code: 'AGENT_CALL_START_FAILED',
+              message: `Agent "${agentId}" failed to start.`,
+            },
+            success: false,
+          };
+        }
+
+        return {
+          content: '',
+          deferred: true,
+          state: {
+            status: 'pending',
+            subOperationId,
+            targetAgentId: agentId,
+            threadId,
           },
           success: true,
         };

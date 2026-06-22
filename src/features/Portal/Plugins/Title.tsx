@@ -1,4 +1,4 @@
-import { BuiltinToolsPortalTitles } from '@lobechat/builtin-tools/portals';
+import { getBuiltinPortalTitle } from '@lobechat/builtin-tools/portals';
 import type { BuiltinPortalTitle } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -23,7 +23,7 @@ const Title = () => {
   // A tool may ship its own portal header content; otherwise fall back to the
   // generic plugin avatar + title. The back/close chrome is owned by the header
   // wrapper (HeaderChrome), so the title slot must not add its own back arrow.
-  const CustomTitle = BuiltinToolsPortalTitles[toolUIIdentifier] as BuiltinPortalTitle | undefined;
+  const CustomTitle = getBuiltinPortalTitle(toolUIIdentifier) as BuiltinPortalTitle | undefined;
 
   if (CustomTitle) {
     return (

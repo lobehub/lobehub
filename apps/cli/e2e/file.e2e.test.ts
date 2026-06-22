@@ -1,4 +1,7 @@
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -74,6 +77,40 @@ describe('lh file - E2E', () => {
 
     it('should error for nonexistent file', () => {
       expect(() => run('file view nonexistent-file-xyz')).toThrow();
+    });
+  });
+
+  // ── upload (local file) ───────────────────────────────
+
+  describe('upload', () => {
+    it('should upload a local file passed as a positional argument', () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-e2e-upload-${Date.now()}.txt`);
+      fs.writeFileSync(tmpFile, 'hello from lh e2e upload');
+
+      try {
+        const result = runJson<{ id: string }>(`file upload ${tmpFile} --json id`);
+        expect(result).toHaveProperty('id');
+        if (result.id) run(`file delete ${result.id} --yes`);
+      } finally {
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should upload a local file passed via --file', () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-e2e-upload-f-${Date.now()}.txt`);
+      fs.writeFileSync(tmpFile, 'hello from lh e2e --file upload');
+
+      try {
+        const result = runJson<{ id: string }>(`file upload --file ${tmpFile} --json id`);
+        expect(result).toHaveProperty('id');
+        if (result.id) run(`file delete ${result.id} --yes`);
+      } finally {
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should error when the local file does not exist', () => {
+      expect(() => run('file upload -f /no/such/lh-file.txt')).toThrow();
     });
   });
 

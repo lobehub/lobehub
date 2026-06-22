@@ -4,8 +4,9 @@ import { Alert, Button } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 
 /**
  * Surfaces an agent-config fetch failure above the chat input with a retry
@@ -14,8 +15,9 @@ import { agentSelectors } from '@/store/agent/selectors';
  */
 const AgentConfigError = memo(() => {
   const { t } = useTranslation('chat');
-  const errorMessage = useAgentStore(agentSelectors.currentAgentConfigError);
-  const isConfigMissing = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const agentId = useConversationStore(contextSelectors.agentId);
+  const errorMessage = useAgentStore(agentByIdSelectors.getAgentConfigErrorById(agentId));
+  const isConfigMissing = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
 
   if (!errorMessage || !isConfigMissing) return null;
@@ -28,7 +30,7 @@ const AgentConfigError = memo(() => {
       style={{ marginBlockEnd: 8 }}
       type={'error'}
       action={
-        <Button size={'small'} onClick={() => retryAgentConfigFetch()}>
+        <Button size={'small'} onClick={() => retryAgentConfigFetch(agentId)}>
           {t('agentConfigError.retry')}
         </Button>
       }

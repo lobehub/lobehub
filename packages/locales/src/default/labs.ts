@@ -3,11 +3,14 @@ export default {
     'Show the floating chat panel in agent document preview only when this lab feature is enabled.',
   'features.agentDocumentFloatingChatPanel.title': 'Agent Document Floating Chat Panel',
   'features.agentSelfIteration.desc':
-    'Allow the assistant to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
+    'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.fleet.desc':
+    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
+  'features.fleet.title': 'Fleet View',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -19,5 +22,8 @@ export default {
   'features.platformAgent.desc':
     'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
   'features.platformAgent.title': 'Connect Agent',
+  'features.taskVerify.desc':
+    'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
+  'features.taskVerify.title': 'Task Delivery Acceptance',
   'title': 'Labs',
 };

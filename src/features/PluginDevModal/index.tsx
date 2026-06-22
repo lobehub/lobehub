@@ -4,7 +4,7 @@ import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { Button, Drawer, Flexbox } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPManifestForm from './MCPManifestForm';
@@ -45,9 +45,20 @@ const DevModal = memo<DevModalProps>(
     const { mobile } = useResponsive();
     const [form] = Form.useForm();
     const authType = Form.useWatch(['customParams', 'mcp', 'auth', 'type'], form);
+
+    // Seed the form once per modal open, waiting for `value` to arrive (it may
+    // be undefined initially while edit-mode credentials are being fetched).
+    const seededRef = useRef(false);
     useEffect(() => {
-      form.setFieldsValue(value);
-    }, []);
+      if (!open) {
+        seededRef.current = false;
+        return;
+      }
+      if (value !== undefined && !seededRef.current) {
+        form.setFieldsValue(value);
+        seededRef.current = true;
+      }
+    }, [open, value]);
 
     const doSave = async (values: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
       if (!onSave) {

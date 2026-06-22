@@ -140,6 +140,10 @@ export default {
   'credits.topUp.unitPrice': 'Unit Price',
   'credits.topUp.unitPriceFormat': '${{price}} / 1M {{creditLabel}}',
   'credits.topUp.unitPriceSuffix': '/ 1M {{creditLabel}}',
+  'credits.topUp.bestValue.cta': 'View Ultimate annual',
+  'credits.topUp.bestValue.savings': 'Save ${{savings}} on this purchase',
+  'credits.topUp.bestValue.title':
+    '{{plan}} annual unlocks the lowest top-up rate: ${{price}} / 1M {{creditLabel}}',
   'credits.topUp.upgradePrefix': 'Upgrade to',
   'credits.topUp.upgradeSuffix': 'to save ${{savings}}',
   'credits.topUp.validityInfo': '{{months}} months validity',
@@ -163,11 +167,6 @@ export default {
   'limitation.expired.desc':
     'Your {{plan}} credits expired on {{expiredAt}}. Upgrade your plan now to get credits.',
   'limitation.expired.title': 'Credits Expired',
-  'limitation.fableCampaign.desc':
-    'Claude Fable 5 is a high-cost model. The campaign trial credits have been used up. Upgrade your plan to keep using Fable.',
-  'limitation.fableCampaign.title': 'Fable Trial Credits Used Up',
-  'limitation.fableCampaign.upgrade': 'Upgrade Plan',
-  'limitation.fableCampaign.upgradeToPlan': 'Upgrade to {{plan}}',
   'limitation.insufficientBudget.approximateDesc':
     'This request may need more credits. Top up credits or upgrade your plan.',
   'limitation.insufficientBudget.available': 'Available Credits',
@@ -386,7 +385,17 @@ export default {
   'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
-  'promoBanner.fableYearly': 'Annual subscribers get {{percent}}% usage off for a limited time',
+  'plansModal.creditLimit.desc':
+    'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
+  'plansModal.creditLimit.title': 'You’re out of credits',
+  'plansModal.default.desc': 'Unlock more capacity and advanced features.',
+  'plansModal.default.title': 'Upgrade your plan',
+  'plansModal.fileStorageLimit.desc':
+    'Your file storage is full. Upgrade to keep uploading and managing files.',
+  'plansModal.fileStorageLimit.title': 'Storage limit reached',
+  'plansModal.modelAccess.desc':
+    'This model is available on paid plans. Upgrade to use the full model lineup.',
+  'plansModal.modelAccess.title': 'Unlock all models',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
@@ -458,9 +467,12 @@ export default {
     'Invalid referral code format, please enter 2-8 letters, numbers or underscores',
   'referral.errors.selfReferral': 'You cannot use your own invite code',
   'referral.errors.updateFailed': 'Update failed, please try again later',
+  'referral.hero.description':
+    'Share your referral link below. After your friend makes their first payment, you each earn {{reward}}M credits.',
+  'referral.hero.title': 'Invite friends, you both earn <0>{{reward}}M credits</0>',
   'referral.inviteCode.description':
     'Share your exclusive referral code to invite friends to register',
-  'referral.inviteCode.title': 'My Referral Code',
+  'referral.inviteCode.title': 'My Exclusive Referral Code',
   'referral.inviteLink.description':
     'Copy the link and share with friends. Both of you earn credits after your friend makes a payment',
   'referral.inviteLink.title': 'Referral Link',
@@ -478,21 +490,19 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 7 days of registration. After backfilling, you still need to perform a valid action and complete a payment to receive rewards',
+    'Missed invite code: You can <0>backfill</0> within 7 days of registration. If you have already made a real payment and pass verification, rewards are processed after binding; otherwise they are processed after your first real payment',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':
     'Registration method: Invited users register via referral link or enter referral code on registration page',
   'referral.rules.reward': 'Reward: Referrer and invitee each receive {{reward}}M credits',
   'referral.rules.rewardDelay':
-    'Reward processing: Credits will be distributed within 1 hour after the invitee completes a payment and passes verification',
+    'Reward processing: Credits are granted after the invitee completes a real payment and passes verification',
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
-    'Valid invitation: Invitee registers with your referral code, performs one valid action, and completes a payment (subscription or credit top-up)',
+    'Valid invitation: Invitee registers with your referral code and completes a real payment (subscription or personal credit top-up)',
   'referral.rules.antiAbuse':
     'If fraudulent activity is detected (e.g., mass registration of disposable email accounts), the associated accounts will be permanently banned',
-  'referral.rules.validOperation':
-    'Valid action criteria: Send one message on Chat page, or generate one image on image page',
   'referral.stats.availableBalance': 'Available Balance',
   'referral.stats.description': 'View your referral statistics',
   'referral.stats.title': 'Referral Overview',

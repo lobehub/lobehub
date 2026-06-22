@@ -53,13 +53,80 @@ export interface ServerSubAgentRunner {
   run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
 }
 
+export interface ServerAgentMemberRunItem {
+  /** Target group member agent id. */
+  agentId: string;
+  /** Optional supervisor instruction to guide the member's response. */
+  instruction?: string;
+}
+
+export interface ServerAgentMemberRunParams {
+  /** Disable tools for the members (used by broadcast — members only voice opinions). */
+  disableTools?: boolean;
+  /** Members to run under the current group-management tool call. */
+  members: ServerAgentMemberRunItem[];
+  /**
+   * Execution mode:
+   * - `in_group`: member runs in the shared group session (non-isolated); its
+   *   turns land directly in the group conversation. Used by speak/broadcast/delegate.
+   * - `isolated`: member runs in its own isolation thread. Used by
+   *   executeAgentTask(s).
+   */
+  mode: 'in_group' | 'isolated';
+  /**
+   * Whether, once all members complete, the parked supervisor op should
+   * `resume` (re-enter the supervisor LLM) or `finish` (end the orchestration
+   * without another supervisor turn — for `skipCallSupervisor` / delegate).
+   */
+  onComplete: 'resume' | 'finish';
+  /** Per-member execution timeout (ms), applied to isolated tasks. */
+  timeout?: number;
+}
+
+export interface ServerAgentMemberRunResult {
+  /**
+   * Whether at least one member op was forked. `false` means every member
+   * failed to start — no completion bridge will fire, so the caller must
+   * surface an inline tool error instead of parking the parent.
+   */
+  started: boolean;
+  /** Number of member ops successfully forked. */
+  startedCount: number;
+}
+
+/**
+ * Server-side "call agent member" runner injected per tool call by the agent
+ * runtime for group orchestration. Distinct from {@link ServerSubAgentRunner}:
+ * a sub-agent is an isolated child run, whereas a group member can run inside
+ * the shared group session. The runner creates the per-member anchor messages
+ * under the group tool call, forks the member op(s), and returns immediately;
+ * the K=N member barrier backfills the group tool message and resumes/finishes
+ * the parked supervisor once all members complete.
+ */
+export interface ServerAgentMemberRunner {
+  run: (params: ServerAgentMemberRunParams) => Promise<ServerAgentMemberRunResult>;
+}
+
 export interface ToolExecutionContext {
   /** Target device ID for device proxy tool calls */
   activeDeviceId?: string;
   /** Agent ID executing the tool call */
   agentId?: string;
+  /**
+   * Server-side "call agent member" runner, injected per tool call by the agent
+   * runtime for group orchestration. The `lobe-group-management` server tool
+   * calls `agentMember.run(...)` to fork member op(s) and returns a `deferred`
+   * result; the member barrier backfills + resumes/finishes the parked supervisor.
+   */
+  agentMember?: ServerAgentMemberRunner;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
+  /**
+   * When scope is 'agent_builder', the ID of the agent being edited. Kept
+   * separate from agentId so message ownership and queryUiMessages remain
+   * bound to the builder builtin; only AgentBuilder tool methods read this.
+   */
+  editingAgentId?: string;
   /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
@@ -118,6 +185,17 @@ export interface ToolExecutionContext {
   /** Topic ID for sandbox session management */
   topicId?: string;
   userId?: string;
+  /**
+   * Device-bound working directory resolved when the operation was created
+   * (`resolveDeviceWorkingDirectory`: topic override > workingDirByDevice >
+   * device default). Injected by device-proxy runtimes as the tool call's
+   * cwd/scope so commands and file ops land in the bound directory instead of
+   * the daemon's `process.cwd()` (= `/` for a Finder/Dock-launched app).
+   *
+   * NOT the conversation `scope` above — that is the operation's thread/group
+   * scope and is unrelated to the filesystem working directory.
+   */
+  workingDirectory?: string;
   /**
    * Workspace ID that scopes ownership for any model/service the runtime
    * instantiates. When unset the runtime falls back to personal mode

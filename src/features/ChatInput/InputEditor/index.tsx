@@ -156,7 +156,7 @@ const InputEditor = memo<{
     isMentionEnabled &&
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
 
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handleUploadFiles);

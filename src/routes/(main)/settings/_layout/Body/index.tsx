@@ -2,7 +2,7 @@
 
 import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

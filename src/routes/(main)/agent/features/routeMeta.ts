@@ -1,7 +1,5 @@
-import { t } from 'i18next';
 import { MessageSquare } from 'lucide-react';
 
-import { lambdaClient } from '@/libs/trpc/client';
 import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -18,35 +16,6 @@ const useTopicTitle = (topicId: string | undefined): string | undefined =>
   });
 
 export const agentRouteMeta = routeMeta({
-  createNewTab: (params) => {
-    const agentId = params.aid;
-    if (!agentId) return null;
-
-    return {
-      onCreate: async () => {
-        const meta = agentSelectors.getAgentMetaById(agentId)(useAgentStore.getState());
-        if (!meta || Object.keys(meta).length === 0) return null;
-
-        const defaultTitle = t('defaultTitle', { ns: 'topic' });
-        const topicId = await lambdaClient.topic.createTopic.mutate({
-          agentId,
-          messages: [],
-          title: defaultTitle,
-        });
-
-        await useChatStore.getState().refreshTopic();
-
-        return {
-          cached: {
-            avatar: meta.avatar,
-            backgroundColor: meta.backgroundColor,
-            title: defaultTitle,
-          },
-          url: `/agent/${agentId}/${topicId}`,
-        };
-      },
-    };
-  },
   icon: MessageSquare,
   titleKey: 'navigation.chat',
   useDynamicMeta: (params): DynamicRouteMeta => {

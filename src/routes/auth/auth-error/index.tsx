@@ -1,3 +1,1 @@
-import AuthError from '@/features/Auth/AuthError';
-
-export default AuthError;
+export { default } from '@/features/Auth/AuthError';

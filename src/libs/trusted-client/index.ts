@@ -18,6 +18,19 @@ export interface TrustedClientUserInfo {
 export { getSessionUser } from './getSessionUser';
 
 /**
+ * Synthetic user ids used by local agent-evals / smoke scripts (e.g. `eval_*`,
+ * `qstash_smoke_*`). These are never real platform accounts — no real userId
+ * carries these prefixes — so Market rejects any trusted-client token built
+ * from them with `invalid_trust_token / Invalid userId format`. We skip token
+ * generation for them to avoid the doomed round-trip and the noisy prep drag it
+ * causes during evals.
+ */
+const SYNTHETIC_USER_ID_PATTERN = /^(?:eval|qstash_smoke)_/;
+
+export const isSyntheticTrustedClientUserId = (userId: string): boolean =>
+  SYNTHETIC_USER_ID_PATTERN.test(userId);
+
+/**
  * Check if trusted client authentication is enabled
  */
 export const isTrustedClientEnabled = (): boolean => {
@@ -35,6 +48,12 @@ export const generateTrustedClientToken = (userInfo: TrustedClientUserInfo): str
   const { MARKET_TRUSTED_CLIENT_SECRET, MARKET_TRUSTED_CLIENT_ID } = appEnv;
 
   if (!MARKET_TRUSTED_CLIENT_SECRET || !MARKET_TRUSTED_CLIENT_ID) {
+    return undefined;
+  }
+
+  // Synthetic eval/smoke userIds can never be valid Market accounts; skip
+  // signing a token Market is guaranteed to reject.
+  if (isSyntheticTrustedClientUserId(userInfo.userId)) {
     return undefined;
   }
 

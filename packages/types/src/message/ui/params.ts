@@ -197,24 +197,24 @@ export const CreateNewMessageParamsSchema = z
     /**
      * @deprecated Use agentId instead. Will be resolved to agentId in the router.
      */
-    sessionId: z.string().nullable().optional(),
+    sessionId: z.string().nullish(),
     // Tool related
     tool_call_id: z.string().optional(),
     plugin: ChatPluginPayloadSchema.optional(),
     // Grouping
     parentId: z.string().optional(),
-    groupId: z.string().nullable().optional(),
+    groupId: z.string().nullish(),
     // Context
-    topicId: z.string().nullable().optional(),
-    threadId: z.string().nullable().optional(),
-    targetId: z.string().nullable().optional(),
+    topicId: z.string().nullish(),
+    threadId: z.string().nullish(),
+    targetId: z.string().nullish(),
     // Model info
-    model: z.string().nullable().optional(),
-    provider: z.string().nullable().optional(),
+    model: z.string().nullish(),
+    provider: z.string().nullish(),
     // Content
     files: z.array(z.string()).optional(),
     // Error handling
-    error: ChatMessageErrorSchema.nullable().optional(),
+    error: ChatMessageErrorSchema.nullish(),
     // Metadata
     traceId: z.string().optional(),
     fileChunks: z.array(SemanticSearchChunkSchema).optional(),

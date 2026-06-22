@@ -1,3 +1,5 @@
+import { LayersEnum } from '@lobechat/types';
+
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 
 import type { AgentSignalReceipt } from '../../receiptService';
@@ -52,6 +54,9 @@ const str = (value: unknown): string | undefined =>
 /** A `skipped_unsupported` / `skipped_stale` tool status collapses to `skipped`. */
 const isSkippedStatus = (status: unknown): boolean =>
   typeof status === 'string' && status.startsWith('skipped');
+
+const isMemoryLayer = (value: unknown): value is LayersEnum =>
+  Object.values(LayersEnum).includes(value as LayersEnum);
 
 export interface BuildSelfIterationReceiptsInput {
   agentId: string;
@@ -151,9 +156,15 @@ export const buildSelfIterationReceipts = (
       ? 'skipped'
       : (SUCCESS_STATUS_BY_API[apiName] ?? 'applied');
 
+    const target = isRecord(data.target) ? data.target : undefined;
+    const targetId = str(target?.id) ?? str(data.resourceId);
+    const memoryId = kind === 'memory' ? str(target?.memoryId) : undefined;
+    const memoryLayer =
+      kind === 'memory' && isMemoryLayer(target?.memoryLayer) ? target.memoryLayer : undefined;
     const summaryText = str(data.summary);
-    const resourceId = str(data.resourceId);
-    const title = summaryText ?? DEFAULT_TITLE_BY_API[apiName] ?? 'Agent Signal action';
+    const targetTitle = str(target?.title);
+    const title =
+      targetTitle ?? summaryText ?? DEFAULT_TITLE_BY_API[apiName] ?? 'Agent Signal action';
 
     return [
       {
@@ -172,7 +183,9 @@ export const buildSelfIterationReceipts = (
           ? {}
           : {
               target: {
-                ...(resourceId ? { id: resourceId } : {}),
+                ...(targetId ? { id: targetId } : {}),
+                ...(memoryId ? { memoryId } : {}),
+                ...(memoryLayer ? { memoryLayer } : {}),
                 ...(summaryText ? { summary: summaryText } : {}),
                 title,
                 type: kind,

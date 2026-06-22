@@ -6,7 +6,6 @@ import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
-import { useGlobalStore } from '@/store/global';
 
 import { useHotkeyById } from './useHotkeyById';
 
@@ -14,11 +13,6 @@ export const useSaveTopicHotkey = () => {
   const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   return useHotkeyById(HotkeyEnum.SaveTopic, () => mutate(), { enableOnContentEditable: true });
-};
-
-export const useToggleZenModeHotkey = () => {
-  const toggleZenMode = useGlobalStore((s) => s.toggleZenMode);
-  return useHotkeyById(HotkeyEnum.ToggleZenMode, toggleZenMode, { enableOnContentEditable: true });
 };
 
 export const useOpenChatSettingsHotkey = () => {
@@ -49,9 +43,6 @@ export const useRegisterChatHotkeys = () => {
 
   // System
   useOpenChatSettingsHotkey();
-
-  // Layout
-  useToggleZenModeHotkey();
 
   // Conversation
   // Note: Regenerate and delete hotkeys have been moved to ConversationStore

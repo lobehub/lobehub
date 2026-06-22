@@ -11,6 +11,7 @@ import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
+import { isToolStreamSupportedGLMModel } from './glmModelId';
 
 export interface ZhipuModelCard {
   description: string;
@@ -112,7 +113,7 @@ export const params = {
         model,
         stream,
         thinking: resolvedThinking,
-        tool_stream: stream && /^glm-(?:4\.(?:6|7)|5(?:\.1)?)$/.test(model) ? true : undefined,
+        tool_stream: stream && isToolStreamSupportedGLMModel(model) ? true : undefined,
         tools: zhipuTools,
       } as any;
     },

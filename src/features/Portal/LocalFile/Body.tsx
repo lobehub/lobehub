@@ -20,9 +20,11 @@ import CodeEditorPane from '@/components/CodeEditorPane';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownFrontmatterFields,
@@ -164,7 +166,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       [contentType, filePath],
     );
     const canRender = isMarkdown || isHtml;
-    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(filePath));
+    // Edit buffers are scoped by tab identity (device + working directory + path)
+    // so the same path opened on two devices/workspaces keeps independent edits.
+    const tabId = useMemo(
+      () => createLocalFileTabId({ deviceId, filePath, workingDirectory }),
+      [deviceId, filePath, workingDirectory],
+    );
+    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(tabId));
     const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
     const saveLocalFile = useChatStore((s) => s.saveLocalFile);
 
@@ -175,29 +183,38 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
         if (readOnly) return;
 
         if (next === content) {
-          setLocalFileBuffer(filePath, undefined);
+          setLocalFileBuffer(tabId, undefined);
         } else {
-          setLocalFileBuffer(filePath, next);
+          setLocalFileBuffer(tabId, next);
         }
       },
-      [content, filePath, readOnly, setLocalFileBuffer],
+      [content, tabId, readOnly, setLocalFileBuffer],
     );
 
     const handleSave = useCallback(async () => {
       if (readOnly) return;
 
       try {
-        const saved = await saveLocalFile(filePath);
+        const saved = await saveLocalFile({ deviceId, filePath, workingDirectory });
         if (saved === undefined) return;
         // Update SWR cache BEFORE clearing the buffer, otherwise React will
         // briefly render with buffer cleared but content still stale, causing
         // CodeMirror to setValue and reset the cursor.
         onSaved?.(saved);
-        setLocalFileBuffer(filePath, undefined);
+        setLocalFileBuffer(tabId, undefined);
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
       }
-    }, [filePath, onSaved, readOnly, saveLocalFile, setLocalFileBuffer]);
+    }, [
+      deviceId,
+      filePath,
+      onSaved,
+      readOnly,
+      saveLocalFile,
+      setLocalFileBuffer,
+      tabId,
+      workingDirectory,
+    ]);
 
     const { body, frontmatter } = useMemo(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
@@ -326,13 +343,14 @@ TextPreviewPane.displayName = 'TextPreviewPane';
 
 interface ActiveFileViewProps {
   activeTopicId?: string | null;
+  allowExternalFilePreview?: boolean;
   deviceId?: string;
   filePath: string;
   workingDirectory: string;
 }
 
 const ActiveFileView = memo<ActiveFileViewProps>(
-  ({ activeTopicId, deviceId, filePath, workingDirectory }) => {
+  ({ activeTopicId, allowExternalFilePreview, deviceId, filePath, workingDirectory }) => {
     const { t } = useTranslation('chat');
 
     const filename = filePath.split('/').at(-1) ?? '';
@@ -344,9 +362,17 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       isValidating,
       mutate,
     } = useClientDataSWR<LocalFilePreview>(
-      enabled ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory] : null,
+      enabled
+        ? localFileKeys.preview({
+            allowExternalFile: allowExternalFilePreview,
+            deviceId,
+            filePath,
+            workingDirectory,
+          })
+        : null,
       () =>
         projectFileService.getLocalFilePreview({
+          allowExternalFile: allowExternalFilePreview,
           deviceId,
           path: filePath,
           workingDirectory,
@@ -397,7 +423,9 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         deviceId={deviceId}
         ext={ext}
         filePath={filePath}
-        readOnly={!!deviceId}
+        // Remote files are now editable: saveLocalFile routes the write to the
+        // device over RPC (writeProjectFile) just as local files go through IPC.
+        readOnly={false}
         reloading={isValidating}
         workingDirectory={workingDirectory}
         onReload={handleReload}
@@ -430,6 +458,7 @@ const Body = memo(() => {
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
       <ActiveFileView
         activeTopicId={activeTopicId}
+        allowExternalFilePreview={activeFile.allowExternalFilePreview}
         deviceId={activeFile.deviceId}
         filePath={activeFile.filePath}
         workingDirectory={activeFile.workingDirectory}

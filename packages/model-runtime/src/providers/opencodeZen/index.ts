@@ -1,9 +1,9 @@
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
-import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { responsesAPIModels } from '../openai/openaiModelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 const ZEN_BASE_URL = 'https://opencode.ai/zen/v1';

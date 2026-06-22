@@ -9,6 +9,20 @@ import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
 import { type GroundingSearch } from '@/types/search';
 
+// Resolve the favicon host defensively: some providers (e.g. OpenRouter built-in
+// web search) may emit citations with an empty/invalid url, and `new URL(undefined)`
+// would throw and crash the whole message render.
+// See https://github.com/lobehub/lobehub/issues/15043
+const getFaviconHost = (favicon?: string, url?: string): string => {
+  if (favicon) return favicon;
+  if (!url) return '';
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+};
+
 const stripHtml = (html: string) =>
   html
     .replaceAll(/<[^>]*>/g, '')
@@ -114,11 +128,14 @@ const SearchGrounding = memo<GroundingSearch>(
 
     const [showDetail, setShowDetail] = useState(false);
 
-    const hasWebResults = !!citations?.length;
+    // Drop citations without a valid url so a malformed entry can't crash the render
+    const validCitations = citations?.filter((item) => !!item.url);
+
+    const hasWebResults = !!validCitations?.length;
     const hasImageResults = !!imageResults?.length;
     const titleIcon = !hasWebResults && hasImageResults ? Images : Globe;
     const titleText = hasWebResults
-      ? t('search.grounding.title', { count: citations?.length })
+      ? t('search.grounding.title', { count: validCitations?.length })
       : t('search.grounding.imageTitle', { count: imageResults?.length });
 
     return (
@@ -146,13 +163,13 @@ const SearchGrounding = memo<GroundingSearch>(
             <Flexbox horizontal>{titleText}</Flexbox>
             {!showDetail && hasWebResults && (
               <Flexbox horizontal>
-                {citations?.slice(0, 8).map((item, index) => (
+                {validCitations?.slice(0, 8).map((item, index) => (
                   <Image
                     unoptimized
                     alt={item.title || item.url}
                     height={16}
                     key={`${item.url}-${index}`}
-                    src={`https://icons.duckduckgo.com/ip3/${item.favicon || new URL(item.url).host}.ico`}
+                    src={`https://icons.duckduckgo.com/ip3/${getFaviconHost(item.favicon, item.url)}.ico`}
                     width={16}
                     style={{
                       background: cssVar.colorBgContainer,
@@ -220,9 +237,9 @@ const SearchGrounding = memo<GroundingSearch>(
                     </Flexbox>
                   </Flexbox>
                 )}
-                {citations && (
+                {validCitations && (
                   <SearchResultCards
-                    dataSource={citations.map((c) => ({
+                    dataSource={validCitations.map((c) => ({
                       ...c,
                       // Pass the original redirect URL as href to preserve the actual link
                       href: c.url,

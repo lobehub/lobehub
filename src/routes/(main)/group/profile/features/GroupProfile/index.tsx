@@ -6,6 +6,7 @@ import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
@@ -20,7 +21,6 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
-import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
 import GroupStatusTag from './GroupStatusTag';
@@ -40,8 +40,9 @@ const GroupProfile = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const theme = useTheme();
   const [showAgentSetting, setShowAgentSetting] = useState(false);
+  const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
+  const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
@@ -148,7 +149,6 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <GroupPublishButton />
           {!!transferMenuItems?.length && (
             <DropdownMenu items={transferMenuItems}>
               <ActionIcon

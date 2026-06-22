@@ -1,11 +1,24 @@
+import { Modal } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { memo, useMemo } from 'react';
+import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import { lazy, memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
-import { type SkillListItem, SkillSection, SkillsList } from '@/features/SkillsList';
+import {
+  openRenameSkillModal,
+  type SkillListItem,
+  type SkillRowAction,
+  SkillSection,
+  SkillsList,
+} from '@/features/SkillsList';
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+
+const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
 /**
  * Reads user-installed skills (entries in the `agent_skill` table — market
@@ -46,13 +59,96 @@ interface UserLevelSkillsProps {
 
 const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
   const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
+  const { message } = App.useApp();
   const items = useUserSkills();
+  // The row shape keys off `identifier`, but the store mutations key off the DB
+  // id — resolve one from the other through the raw skill list.
+  const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const updateAgentSkill = useToolStore((s) => s.updateAgentSkill);
+  const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
+  const { allowed: canEdit } = usePermission('edit_own_content');
+  const [detailSkillId, setDetailSkillId] = useState<string>();
+
+  const getRowActions = (item: SkillListItem): SkillRowAction[] => {
+    const skill = agentSkills.find((s) => s.identifier === item.id);
+    if (!skill) return [];
+
+    const actions: SkillRowAction[] = [
+      {
+        icon: EyeIcon,
+        key: 'view',
+        label: t('workingPanel.skills.actions.view'),
+        onClick: () => setDetailSkillId(skill.id),
+      },
+    ];
+
+    // Only user-authored skills carry an editable name; market imports are
+    // pinned to their source manifest.
+    if (skill.source === 'user') {
+      actions.push({
+        disabled: !canEdit,
+        icon: PencilIcon,
+        key: 'rename',
+        label: t('workingPanel.skills.actions.rename'),
+        onClick: () => {
+          openRenameSkillModal({
+            currentName: skill.name,
+            onSubmit: async (newName) => {
+              try {
+                await updateAgentSkill({ id: skill.id, name: newName });
+                return undefined;
+              } catch (error) {
+                return error instanceof Error
+                  ? error.message
+                  : t('workingPanel.skills.rename.error');
+              }
+            },
+          });
+        },
+      });
+    }
+
+    actions.push({
+      danger: true,
+      disabled: !canEdit,
+      icon: Trash2Icon,
+      key: 'delete',
+      label: t('workingPanel.skills.actions.delete'),
+      onClick: () => {
+        confirmModal({
+          cancelText: tCommon('cancel'),
+          content: t('workingPanel.skills.delete.userConfirm', { name: skill.name }),
+          okButtonProps: { danger: true },
+          okText: tCommon('delete'),
+          onOk: async () => {
+            try {
+              await deleteAgentSkill(skill.id);
+              message.success(t('workingPanel.skills.delete.success'));
+            } catch (error) {
+              message.error(
+                error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
+              );
+            }
+          },
+          title: t('workingPanel.skills.delete.title'),
+        });
+      },
+    });
+
+    return actions;
+  };
 
   if (items.length === 0) return null;
 
   const list = (
     <SkillsList
+      getRowActions={getRowActions}
       items={items}
+      onOpenSkill={(item) => {
+        const skill = agentSkills.find((s) => s.identifier === item.id);
+        if (skill) setDetailSkillId(skill.id);
+      }}
       onSkillDragStart={(item, event) => {
         startSkillDrag(event, {
           category: 'skill',
@@ -63,17 +159,42 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
     />
   );
 
-  if (hideHeader) return list;
+  const detailModal = (
+    <Modal
+      destroyOnHidden
+      footer={null}
+      open={!!detailSkillId}
+      styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
+      title={t('workingPanel.skills.detail.title')}
+      width={960}
+      onCancel={() => setDetailSkillId(undefined)}
+    >
+      <Suspense fallback={<div style={{ height: '100%' }} />}>
+        {detailSkillId && <AgentSkillDetail skillId={detailSkillId} />}
+      </Suspense>
+    </Modal>
+  );
+
+  if (hideHeader)
+    return (
+      <>
+        {list}
+        {detailModal}
+      </>
+    );
 
   return (
-    <SkillSection
-      sectionHeader={{
-        count: items.length,
-        title: t('workingPanel.skills.section.user'),
-      }}
-    >
-      {list}
-    </SkillSection>
+    <>
+      <SkillSection
+        sectionHeader={{
+          count: items.length,
+          title: t('workingPanel.skills.section.user'),
+        }}
+      >
+        {list}
+      </SkillSection>
+      {detailModal}
+    </>
   );
 });
 

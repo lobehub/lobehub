@@ -33,11 +33,11 @@ import type {
   GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../utils/claudeModelId';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/claudeModelId';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
 
 /**

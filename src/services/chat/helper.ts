@@ -1,17 +1,25 @@
+import type { EnabledAiModel } from 'model-bank';
 import { ModelProvider } from 'model-bank';
 
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 
-const getModelAbilities = (model: string, provider: string) => {
+export const getEnabledRuntimeModel = (
+  model: string,
+  provider: string,
+): EnabledAiModel | undefined => {
   const state = getAiInfraStoreState();
   const exactModel = state.enabledAiModels?.find(
     (item) => item.id === model && item.providerId === provider,
   );
 
-  if (exactModel || provider !== ModelProvider.LobeHub) return exactModel?.abilities;
+  if (exactModel || provider !== ModelProvider.LobeHub) return exactModel;
 
-  return state.enabledAiModels?.find((item) => item.id === model)?.abilities;
+  return state.enabledAiModels?.find((item) => item.id === model);
+};
+
+const getModelAbilities = (model: string, provider: string) => {
+  return getEnabledRuntimeModel(model, provider)?.abilities;
 };
 
 export const isCanUseVision = (model: string, provider: string): boolean => {
@@ -21,6 +29,15 @@ export const isCanUseVision = (model: string, provider: string): boolean => {
 export const isCanUseVideo = (model: string, provider: string): boolean => {
   return getModelAbilities(model, provider)?.video || false;
 };
+
+export const isCanUseAudio = (model: string, provider: string): boolean => {
+  return getModelAbilities(model, provider)?.audio || false;
+};
+
+export const getRuntimeModelKnowledgeCutoff = (
+  model: string,
+  provider: string,
+): string | undefined => getEnabledRuntimeModel(model, provider)?.knowledgeCutoff;
 
 /**
  * TODO: we need to update this function to auto find deploymentName with provider setting config

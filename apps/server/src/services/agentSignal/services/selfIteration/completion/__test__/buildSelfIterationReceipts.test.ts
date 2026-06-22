@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
@@ -65,6 +66,42 @@ describe('buildSelfIterationReceipts', () => {
       id: 'mem_1',
       summary: 'Saved tone preference',
       title: 'Saved tone preference',
+      type: 'memory',
+    });
+  });
+
+  it('preserves structured memory target metadata for layer-specific navigation', () => {
+    const [, memory] = buildSelfIterationReceipts({
+      ...baseInput,
+      mutations: [
+        {
+          apiName: 'writeMemory',
+          data: {
+            kind: 'mutation',
+            resourceId: 'pref_1',
+            status: 'applied',
+            summary: 'Use concise implementation notes.',
+            target: {
+              id: 'pref_1',
+              memoryId: 'mem_1',
+              memoryLayer: LayersEnum.Preference,
+              title: 'Prefers concise implementation notes',
+              type: 'memory',
+            },
+          },
+          kind: 'mutation',
+          toolCallId: 'call_pref',
+        },
+      ],
+    });
+
+    expect(memory.title).toBe('Prefers concise implementation notes');
+    expect(memory.target).toEqual({
+      id: 'pref_1',
+      memoryId: 'mem_1',
+      memoryLayer: LayersEnum.Preference,
+      summary: 'Use concise implementation notes.',
+      title: 'Prefers concise implementation notes',
       type: 'memory',
     });
   });

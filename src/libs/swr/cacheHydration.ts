@@ -1,17 +1,13 @@
 /**
- * Cache hydration readiness store
- *
- * A tiny external store (consumable via `useSyncExternalStore`) that tracks
- * which identity scopes have finished hydrating their IndexedDB cache tier.
- *
- * The unified SWR cache provider marks a scope ready once its async IndexedDB
- * load completes; the boot `CacheHydrationGate` waits on this before mounting
- * the routed app, so local-first data (messages, topics, …) is present in the
- * cache synchronously by the time components mount — even on a deep-link cold
- * load. Decoupling through a module singleton lets the provider (high in the
- * tree) and the gate (around the routed children) communicate without prop or
- * context threading.
+ * Tracks which identity scopes have finished hydrating the IndexedDB SWR tier.
  */
+interface CacheHydrationBlockState {
+  isAuthLoaded: boolean;
+  ready: boolean;
+  released: boolean;
+  scope: string;
+  timedOutScope: string | null;
+}
 
 const readyScopes = new Set<string>();
 const listeners = new Set<() => void>();
@@ -20,21 +16,37 @@ const emit = () => {
   for (const listener of listeners) listener();
 };
 
+const markPending = (scope: string): void => {
+  if (!readyScopes.delete(scope)) return;
+
+  emit();
+};
+
+export const isCacheHydrationBlocked = ({
+  isAuthLoaded,
+  ready,
+  released,
+  scope,
+  timedOutScope,
+}: CacheHydrationBlockState) => {
+  if (!released) return true;
+
+  return !(isAuthLoaded && ready) && timedOutScope !== scope;
+};
+
 export const cacheHydration = {
   isReady: (scope: string): boolean => readyScopes.has(scope),
 
-  /** Mark a scope's IndexedDB tier as hydrated. */
   markReady: (scope: string): void => {
     if (readyScopes.has(scope)) return;
+
     readyScopes.add(scope);
     emit();
   },
 
-  /** Clear readiness for a scope (e.g. before re-hydrating on scope change). */
-  reset: (scope: string): void => {
-    if (!readyScopes.delete(scope)) return;
-    emit();
-  },
+  markPending,
+
+  reset: markPending,
 
   subscribe: (listener: () => void): (() => void) => {
     listeners.add(listener);

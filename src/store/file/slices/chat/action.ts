@@ -9,6 +9,8 @@ import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
+import { getAgentStoreState } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { type UploadFileListDispatch } from '@/store/file/reducers/uploadFileList';
 import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
@@ -140,11 +142,25 @@ export class FileActionImpl {
     }
   };
 
-  uploadChatFiles = async (rawFiles: File[]): Promise<void> => {
+  uploadChatFiles = async (rawFiles: File[], agentId: string): Promise<void> => {
     const { dispatchChatUploadFileList } = this.#get();
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
-    const { supportedFiles, unsupportedFiles } = filterSupportedChatUploadFiles(filteredFiles);
+
+    // The file-type whitelist only makes sense in plain chat mode, where files are fed
+    // directly to the model. In agent mode (tool calls) or heterogeneous agents (Claude
+    // Code / Codex, etc.) the agent can parse any file via scripts/terminal, so the
+    // whitelist must not apply there. We key off the conversation's own agent id rather
+    // than the global current agent, because the chat input can be scoped to a different
+    // agent than activeAgentId (e.g. another desktop tab). See lobehub/lobehub#15770.
+    const agentState = getAgentStoreState();
+    const enforceFileTypeWhitelist =
+      !agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
+      !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState);
+
+    const { supportedFiles, unsupportedFiles } = enforceFileTypeWhitelist
+      ? filterSupportedChatUploadFiles(filteredFiles)
+      : { supportedFiles: filteredFiles, unsupportedFiles: [] as File[] };
 
     if (unsupportedFiles.length > 0) {
       toast.error(

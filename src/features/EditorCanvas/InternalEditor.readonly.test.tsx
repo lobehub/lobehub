@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { type IEditor } from '@lobehub/editor';
+import { type IEditor, ReactToolbarPlugin } from '@lobehub/editor';
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,5 +66,23 @@ describe('InternalEditor readonly state', () => {
     render(<InternalEditor disabled editor={editor} />);
 
     expect(editorProps.last?.editable).toBe(false);
+  });
+
+  it('registers the floating toolbar when editable', () => {
+    render(<InternalEditor editor={editor} />);
+
+    expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+  });
+
+  it('does not register the floating toolbar when not editable (locked page)', () => {
+    render(<InternalEditor editable={false} editor={editor} />);
+
+    expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+  });
+
+  it('does not register the floating toolbar when disabled', () => {
+    render(<InternalEditor disabled editor={editor} />);
+
+    expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
   });
 });
