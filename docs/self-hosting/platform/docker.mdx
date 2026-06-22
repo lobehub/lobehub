@@ -40,14 +40,16 @@ Here is the process for deploying the LobeHub server database version on a Linux
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17 -c shared_preload_libraries=pg_search
   ```
 
-  The above command will create a PG instance named `my-postgres` on the network `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with pgvector and pg\_search plugins installed by default.
+  The above command will create a Postgres instance named `my-postgres` with the network set to `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with the `pgvector` and `pg_search` extensions installed and enabled by default.
 
   <Callout type="info">
     The ParadeDB image includes pgvector (vector search) and pg\_search (full-text search) plugins, which are important
     components for LobeHub to implement RAG and knowledge base search.
+    
+    It should be noted that the new version of ParadeDB requires explicitly enabling the pg_search extension in order to be used by LobeHub. Here we explicitly enable pg_search.
   </Callout>
 
   <Callout type="warning">
