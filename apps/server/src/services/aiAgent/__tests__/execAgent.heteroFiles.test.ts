@@ -309,6 +309,28 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('should encode native Codex args before forwarding them to sandbox lh hetero exec', async () => {
+    heteroAgentConfig.model = 'codex';
+    heteroAgentConfig.provider = 'codex';
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      args: ['-c', 'model = "gpt-5.4"'],
+      effort: 'xhigh',
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use existing native Codex args',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--agent-arg=-c', '--agent-arg=model = "gpt-5.4"', '--effort', 'xhigh'],
+      }),
+    );
+  });
+
   it('should not pass selector args to device dispatch without capability gating', async () => {
     heteroAgentConfig.agencyConfig = {
       boundDeviceId: 'device-1',
