@@ -176,14 +176,16 @@ const ChromeTabs = memo<ChromeTabsProps>(
             <DropdownMenu
               disabled={addDisabled}
               items={addMenuItems}
+              nativeButton={false}
               placement="bottomLeft"
               trigger={['click']}
             >
-              <Tooltip title={addDisabled ? addDisabledReason : undefined}>
-                <div className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}>
-                  <Plus size={16} />
-                </div>
-              </Tooltip>
+              <div
+                className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
+                title={addDisabled ? addDisabledReason : undefined}
+              >
+                <Plus size={16} />
+              </div>
             </DropdownMenu>
           ) : (
             <Tooltip title={addDisabled ? addDisabledReason : undefined}>
