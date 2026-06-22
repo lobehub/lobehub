@@ -8,6 +8,7 @@ import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
@@ -27,7 +28,11 @@ const GroupHeader = memo(() => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   // Get group meta from agentGroup store
-  const groupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta, isEqual);
+  const { gid } = useParams<{ gid: string }>();
+  const groupMeta = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s),
+    isEqual,
+  );
   const updateGroupMeta = useAgentGroupStore((s) => s.updateGroupMeta);
 
   // File upload

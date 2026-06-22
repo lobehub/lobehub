@@ -201,6 +201,7 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.agentState.systemRole = 'You are helpful.';
     mocks.profileState.editor = undefined;
   });
 
@@ -244,5 +245,23 @@ describe('Agent profile Header', () => {
     expect(exportedMarkdown).toContain('# Test Agent');
     expect(exportedMarkdown).not.toContain('You are helpful.');
     expect(exportedMarkdown).not.toContain('settingAgent.prompt.title');
+  });
+
+  it('should ignore the hidden editor when exporting heterogeneous agent markdown', async () => {
+    const getDocument = vi.fn().mockReturnValue('');
+    mocks.agentState.isCurrentAgentHeterogeneous = true;
+    mocks.profileState.editor = { getDocument };
+
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = getLatestExportedBlob();
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(getDocument).not.toHaveBeenCalled();
+    expect(exportedMarkdown).toContain('You are helpful.');
   });
 });

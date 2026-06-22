@@ -19,6 +19,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -40,6 +41,7 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y
 const TabBar = () => {
   const styles = useStyles;
   const navigate = useWorkspaceAwareNavigate();
+  useRegisterDesktopTabHotkeys();
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const viewportRef = useRef<HTMLDivElement>(null);

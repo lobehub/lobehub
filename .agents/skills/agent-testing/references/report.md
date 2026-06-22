@@ -11,10 +11,19 @@ output):
 
 ```
 .records/reports/<YYYYMMDD-HHMMSS>-<slug>/
-├── report.md      # human-readable report (case table with inline screenshots, verdict)
-├── result.json    # machine-readable results (pass/fail counts, score)
+├── report.md      # narrative TAIL only (跟进 / 本轮验证 / 评分) — rendered as the page's "Details"
+├── result.json    # the structured source: scenario + context + cases + summary.conclusion
 └── assets/        # evidence: screenshots, HAR files, CLI transcripts
 ```
+
+**`result.json` is the report — `report.md` is just its tail.** The published
+verify page (`/verify/<id>`) renders itself from `result.json`: the scope header
+from `scenario` + `context` (branch / commit / surfaces / entry / focus), the
+per-check table from `cases[]`, the overall conclusion from `summary.conclusion`
+(shown at the top under the scope block), and the stats from `summary`. So
+`report.md` must NOT repeat the scope block or a 用例 table — those double up on
+the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验证 /
+评分), rendered as the page's collapsible "Details".
 
 ## Workflow
 
@@ -56,18 +65,37 @@ output):
 
    - Network: `agent-browser network requests` dumps or HAR files.
 
-3. **Fill `report.md` as you go** — don't reconstruct from memory at the end.
-   The primary evidence belongs in the case table itself: each row should pair
-   the assertion with the screenshot/GIF or non-visual artifact that proves it,
-   so readers can scan the result without jumping between sections. UI evidence
-   must render inline with Markdown image syntax; a plain link or file path is
-   not acceptable as primary visual evidence.
+3. **Fill `result.json` as you go** — it is the report. Each tested behavior is
+   one entry in `cases[]` (`{ id, name, result, observation, evidence }`), where
+   `evidence` is a path under `assets/` (screenshot / GIF / transcript). Set the
+   scope fields (`scenario: "coding"`, `branch`, `commit`, `surfaces`, `entry`,
+   `focus`) and write the one-paragraph verdict into `summary.conclusion`. The
+   page pairs each check with its evidence inline, so you don't hand-build a
+   table. `report.md` holds only the narrative tail (跟进 / 本轮验证 / 评分).
 
 4. **Set the verdict** in both `report.md` and `result.json`, then link the
    report directory in your final answer to the user. If UI evidence exists,
    list the key screenshot/GIF links in the final chat response. Use Markdown
    link text as the evidence caption, for example:
    `[Image #1 - observed outcome](<report-dir>/assets/case1.png)`.
+
+5. **Publish to LobeHub** (Step 4 of the skill) — upload the finished session so
+   it's viewable in-app, not just on disk. **Publish to PRODUCTION
+   (`app.lobehub.com`) with the user's real login, NOT the local dev CLI** —
+   strip the local dev overrides so `lh` uses its production defaults:
+
+   ```bash
+   env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+     lh verify ingest-report "$DIR" --source agent-testing --open --json
+   ```
+
+   This creates a standalone verification session and uploads the cases (as check
+   results), each case's `evidence` files, and `report.md` (as the report body),
+   then prints `/verify/<verifyRunId>` (→ `https://app.lobehub.com/verify/<id>`).
+   Include that full production link in the final reply alongside the local
+   report dir. See SKILL.md → Step 4 for why production (a localhost URL isn't
+   shareable and a local stub S3 fails file-evidence uploads), the production
+   login check, and the atomic commands (`verify run|result|evidence|report …`).
 
 ## Report language (hard rule)
 
@@ -151,6 +179,7 @@ missing; a blocked case is not a pass).
       "name": "task tree returns nested children",
       "surface": "cli",
       "status": "pass",
+      "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
     }
   ],
@@ -172,6 +201,12 @@ missing; a blocked case is not a pass).
 `score` is optional — use it when the verdict has a subjective component (UI
 polish, copy quality); omit it for purely binary runs. `verdict` is the single
 word the user reads first: `pass`, `fail`, or `partial`.
+
+When published (Step 4), `verify ingest-report` maps each case onto a check
+result: `name`→title, `status`/`result`→verdict, `observation` (or
+`keyObservation`)→the result's key observation, and `evidence` paths→uploaded
+artifacts. `summary.{total,passed,failed,blocked}` and `verdict` become the
+report's stats + overall verdict; `report.md` becomes the report body.
 
 ## Rules
 

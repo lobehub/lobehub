@@ -41,11 +41,19 @@ export interface GeneratePlanParams {
 export interface CriterionDraft {
   /** One-sentence summary; stored on the `verify_criteria.description` column. */
   description?: string;
+  /**
+   * Reuse an existing instruction document instead of creating one from
+   * `instruction`. Set when re-persisting a hydrated criterion so its detailed
+   * rubric (the doc body) is preserved rather than dropped to null.
+   */
+  documentId?: string | null;
   /** The detailed judging rubric; stored as the linked document's content. */
   instruction?: string;
   onFail?: VerifyCheckItem['onFail'];
   required?: boolean;
   title: string;
+  /** Verifier knobs (e.g. `requiredEvidence`) — attached when the user adds them. */
+  verifierConfig?: Record<string, unknown>;
   verifierType?: VerifyCheckItem['verifierType'];
 }
 
@@ -167,6 +175,100 @@ export class VerifyPlanGeneratorService {
       params.operationId,
     );
     return { items, rubricId: rubric.id };
+  }
+
+  /**
+   * Config-time AI generation: turn a one-sentence acceptance requirement into a
+   * set of proposed criteria for the user to review/edit before saving. Runs the
+   * SAME traced generation as the run-time plan path (`buildPlanPrompt` +
+   * `GENERATED_CRITERIA_JSON_SCHEMA` + `TRACING_SCENARIOS.VerifyPlanGen`), so each
+   * call lands in `llm_generation_tracing` for later precision work. Returns
+   * drafts only — nothing is persisted and no operation is required.
+   */
+  async generateCriteria(params: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+    modelConfig: { model: string; provider: string };
+  }): Promise<CriterionDraft[]> {
+    const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
+    const { system, user } = buildPlanPrompt({
+      context: params.context,
+      goal: params.goal,
+      maxCriteria,
+    });
+
+    const ai = new AiGenerationService(this.db, this.userId);
+    const raw = await ai.generateObject(
+      {
+        messages: [
+          { content: system, role: 'system' as const },
+          { content: user, role: 'user' as const },
+        ],
+        model: params.modelConfig.model,
+        provider: params.modelConfig.provider,
+        schema: GENERATED_CRITERIA_JSON_SCHEMA,
+      },
+      {
+        tracing: {
+          promptVersion: VERIFY_PLAN_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.VerifyPlanGen,
+          schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = RawGeneratedCriteriaSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('config criteria-gen output did not match schema: %O', parsed.error.flatten());
+      return [];
+    }
+    return parsed.data.criteria.slice(0, maxCriteria).map((c) => ({
+      description: c.description,
+      instruction: c.instruction,
+      onFail: c.onFail ?? 'manual',
+      required: c.required ?? true,
+      title: c.title,
+      verifierType: c.verifierType,
+    }));
+  }
+
+  /**
+   * Persist a list of (possibly user-edited) drafts as standalone `verify_criteria`
+   * rows and return their ids in order — the "ad-hoc criteria" a task mounts via
+   * `TaskVerifyConfig.verifyCriteriaIds`. The detailed instruction (if any) lands
+   * in a linked document, mirroring the rubric path.
+   */
+  async createCriteriaFromDrafts(drafts: CriterionDraft[]): Promise<string[]> {
+    const ids: string[] = [];
+    for (const [index, draft] of drafts.entries()) {
+      // Reuse the existing instruction doc when re-persisting a hydrated criterion;
+      // only create a fresh doc for a genuinely new draft that carries inline text.
+      let documentId: string | null = draft.documentId ?? null;
+      if (!documentId && draft.instruction) {
+        const doc = await this.documentModel.create({
+          content: draft.instruction,
+          fileType: VERIFY_INSTRUCTION_FILE_TYPE,
+          source: `verify-criterion:adhoc:${index}`,
+          sourceType: 'agent',
+          title: draft.title,
+          totalCharCount: draft.instruction.length,
+          totalLineCount: draft.instruction.split('\n').length,
+        });
+        documentId = doc.id;
+      }
+      const criterion = await this.criterionModel.create({
+        description: draft.description,
+        documentId,
+        onFail: draft.onFail ?? 'manual',
+        required: draft.required ?? true,
+        title: draft.title,
+        verifierConfig: draft.verifierConfig ?? {},
+        verifierType: draft.verifierType ?? 'llm',
+      });
+      ids.push(criterion.id);
+    }
+    return ids;
   }
 
   /**

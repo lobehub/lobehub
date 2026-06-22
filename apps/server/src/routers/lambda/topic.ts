@@ -153,7 +153,7 @@ export const topicRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
-        id: z.string().nullable().optional(),
+        id: z.string().nullish(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -193,7 +193,7 @@ export const topicRouter = router({
       z
         .object({
           agentId: z.string().optional(),
-          containerId: z.string().nullable().optional(),
+          containerId: z.string().nullish(),
           endDate: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
@@ -210,7 +210,7 @@ export const topicRouter = router({
       z
         .object({
           favorite: z.boolean().optional(),
-          groupId: z.string().nullable().optional(),
+          groupId: z.string().nullish(),
           messages: z.array(z.string()).optional(),
           title: z.string(),
           trigger: z.string().optional(),
@@ -278,15 +278,15 @@ export const topicRouter = router({
   getTopics: topicProcedure
     .input(
       z.object({
-        agentId: z.string().nullable().optional(),
+        agentId: z.string().nullish(),
         current: z.number().optional(),
         excludeStatuses: z.array(z.string()).optional(),
         excludeTriggers: z.array(z.string()).optional(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().max(100).optional(),
-        sessionId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
         /**
          * Server-side ordering. Defaults to `updatedAt`; `status` orders by
          * status priority for the sidebar "group by status" mode.
@@ -390,7 +390,7 @@ export const topicRouter = router({
       z.object({
         agentId: z.string(),
         data: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -556,9 +556,9 @@ export const topicRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         keywords: z.string(),
-        sessionId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -604,7 +604,7 @@ export const topicRouter = router({
         id: z.string(),
         value: z.object({
           agentId: z.string().optional(),
-          completedAt: z.date().nullable().optional(),
+          completedAt: z.date().nullish(),
           favorite: z.boolean().optional(),
           historySummary: z.string().optional(),
           messages: z.array(z.string()).optional(),
@@ -615,7 +615,7 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
-          status: chatTopicStatusSchema.nullable().optional(),
+          status: chatTopicStatusSchema.nullish(),
           title: z.string().optional(),
         }),
       }),
@@ -692,7 +692,7 @@ export const topicRouter = router({
                 .optional(),
               operationId: z.string(),
               scope: z.string().optional(),
-              threadId: z.string().nullable().optional(),
+              threadId: z.string().nullish(),
             })
             .nullable()
             .optional(),

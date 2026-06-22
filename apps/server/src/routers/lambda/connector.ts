@@ -286,7 +286,7 @@ export const connectorRouter = router({
           .partial()
           .omit({ identifier: true, sourceType: true })
           // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullable().optional() }),
+          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
       }),
     )
     .mutation(async ({ input, ctx }) => {

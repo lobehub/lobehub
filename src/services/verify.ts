@@ -28,6 +28,39 @@ export interface UpdateCriterionValue {
   verifierType?: VerifierType;
 }
 
+/** Fields for authoring a new delivery-check criterion. */
+export interface CreateCriterionInput {
+  documentId?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType: VerifierType;
+}
+
+/** Fields for authoring a new rubric (named criteria group). */
+export interface CreateRubricInput {
+  config?: VerifyRubricConfig;
+  description?: string;
+  title: string;
+}
+
+/**
+ * A proposed (or user-edited) acceptance criterion before it is persisted. The
+ * shape returned by `generateCriteria` and the shape `createCriteria` accepts.
+ */
+export interface VerifyCriterionDraft {
+  description?: string;
+  /** Reuse an existing instruction doc (preserves the rubric on re-save). */
+  documentId?: string | null;
+  instruction?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: VerifierType;
+}
+
 export interface VerifyStateResponse {
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
@@ -119,15 +152,48 @@ export class VerifyService {
   submitDecision = (resultId: string, decision: VerifyUserDecision): Promise<unknown> =>
     lambdaClient.verify.submitDecision.mutate({ decision, resultId });
 
+  // ---- config-time AI generation (one-sentence → criteria) ----
+  /** Turn a one-sentence requirement into proposed criteria (traced; not persisted). */
+  generateCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+    modelConfig: { model: string; provider: string };
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
+  createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
+    lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;
+
   // ---- criteria / rubric management ----
   listCriteria = (): Promise<VerifyCriterionItem[]> =>
     lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;
 
+  createCriterion = (input: CreateCriterionInput): Promise<VerifyCriterionItem> =>
+    lambdaClient.verify.createCriterion.mutate(input) as Promise<VerifyCriterionItem>;
+
   updateCriterion = (id: string, value: UpdateCriterionValue): Promise<unknown> =>
     lambdaClient.verify.updateCriterion.mutate({ id, value });
 
+  deleteCriterion = (id: string): Promise<unknown> =>
+    lambdaClient.verify.deleteCriterion.mutate({ id });
+
   listRubrics = (): Promise<VerifyRubricItem[]> =>
     lambdaClient.verify.listRubrics.query() as Promise<VerifyRubricItem[]>;
+
+  createRubric = (input: CreateRubricInput): Promise<VerifyRubricItem> =>
+    lambdaClient.verify.createRubric.mutate(input) as Promise<VerifyRubricItem>;
+
+  /** Get the criteria mounted on a rubric (in rubric order). */
+  getRubricCriteria = (rubricId: string): Promise<VerifyCriterionItem[]> =>
+    lambdaClient.verify.getRubricCriteria.query({ rubricId }) as Promise<VerifyCriterionItem[]>;
+
+  /** Replace the set of criteria a rubric groups (with optional ordering). */
+  setRubricCriteria = (
+    rubricId: string,
+    criteria: { criterionId: string; sortOrder?: number }[],
+  ): Promise<unknown> => lambdaClient.verify.setRubricCriteria.mutate({ criteria, rubricId });
 
   getRubric = (id: string): Promise<VerifyRubricItem | undefined> =>
     lambdaClient.verify.getRubric.query({ id }) as Promise<VerifyRubricItem | undefined>;

@@ -50,6 +50,12 @@ export interface TaskVerifyConfig {
   /** Task-level cap on verify repair / re-run iterations. */
   maxIterations?: number;
   /**
+   * The one-sentence acceptance requirement the user typed — the source the
+   * acceptance criteria were AI-generated from. Kept so the UI can show it and
+   * offer "regenerate", distinct from the resolved criteria themselves.
+   */
+  requirement?: string;
+  /**
    * Which agent executes the verify run (the Push-model review agent). When
    * omitted, falls back to the built-in verify agent. The execution target /
    * bound device is inherited from the chosen agent's `agencyConfig`, not

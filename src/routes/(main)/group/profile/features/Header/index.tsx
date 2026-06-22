@@ -5,6 +5,7 @@ import { createStaticStyles } from 'antd-style';
 import { Crown, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { usePermission } from '@/hooks/usePermission';
@@ -48,7 +49,8 @@ const Header = memo(() => {
 
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const members = useAgentGroupStore(agentGroupSelectors.currentGroupAgents);
+  const { gid } = useParams<{ gid: string }>();
+  const members = useAgentGroupStore((s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s));
   const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);

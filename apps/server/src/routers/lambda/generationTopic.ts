@@ -26,8 +26,8 @@ const generationTopicProcedure = wsCompatProcedure.use(serverDatabase).use(async
 const updateTopicSchema = z.object({
   id: z.string(),
   value: z.object({
-    coverUrl: z.string().nullable().optional(),
-    title: z.string().nullable().optional(),
+    coverUrl: z.string().nullish(),
+    title: z.string().nullish(),
   }),
 });
 

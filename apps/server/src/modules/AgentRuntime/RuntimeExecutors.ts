@@ -368,6 +368,7 @@ const buildServerVirtualSubAgentRunner = (
       const placeholder = await ctx.messageModel.create({
         agentId,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { status: 'pending' },
@@ -459,6 +460,7 @@ const buildServerAgentMemberRunner = (
       const groupTool = await ctx.messageModel.create({
         agentId,
         content: '',
+        groupId,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { expectedMembers, onComplete, status: 'pending' },
@@ -479,6 +481,7 @@ const buildServerAgentMemberRunner = (
           const anchor = await ctx.messageModel.create({
             agentId,
             content: '',
+            groupId,
             parentId: groupTool.id,
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
@@ -852,6 +855,7 @@ export const createRuntimeExecutors = (
       assistantMessageItem = await ctx.messageModel.create({
         agentId: state.metadata!.agentId!,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         model,
         parentId,
         provider,
@@ -2833,6 +2837,7 @@ export const createRuntimeExecutors = (
             const toolMessage = await ctx.messageModel.create({
               agentId: state.metadata!.agentId!,
               content: executionResult.content,
+              groupId: state.metadata?.groupId ?? undefined,
               metadata: { toolExecutionTimeMs: executionTime },
               parentId: payload.parentMessageId,
               plugin: chatToolPayload as any,
@@ -3368,6 +3373,7 @@ export const createRuntimeExecutors = (
               const toolMessage = await ctx.messageModel.create({
                 agentId: state.metadata!.agentId!,
                 content: executionResult.content,
+                groupId: state.metadata?.groupId ?? undefined,
                 metadata: { toolExecutionTimeMs: executionTime },
                 parentId: parentMessageId,
                 plugin: chatToolPayload as any,
@@ -3680,6 +3686,7 @@ export const createRuntimeExecutors = (
       const taskMessage = await ctx.messageModel.create({
         agentId: agentId!,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         metadata: {
           instruction: task.instruction,
           taskTitle: task.description,
@@ -3808,6 +3815,7 @@ export const createRuntimeExecutors = (
         const taskMessage = await ctx.messageModel.create({
           agentId: agentId!,
           content: '',
+          groupId: state.metadata?.groupId ?? undefined,
           metadata: {
             instruction: task.instruction,
             taskTitle: task.description,
@@ -4060,6 +4068,7 @@ export const createRuntimeExecutors = (
           const toolMessage = await ctx.messageModel.create({
             agentId: state.metadata!.agentId!,
             content: '',
+            groupId: state.metadata?.groupId ?? undefined,
             parentId: parentAssistantId,
             plugin: toolPayload as any,
             pluginIntervention: { status: 'pending' },
@@ -4170,6 +4179,7 @@ export const createRuntimeExecutors = (
         const toolMessage = await ctx.messageModel.create({
           agentId: state.metadata!.agentId!,
           content: result.content,
+          groupId: state.metadata?.groupId ?? undefined,
           metadata: { toolExecutionTimeMs: 0 },
           parentId: parentMessageId,
           plugin: toolPayload as any,
@@ -4263,6 +4273,7 @@ export const createRuntimeExecutors = (
         const toolMessage = await ctx.messageModel.create({
           agentId: state.metadata!.agentId!,
           content: 'Tool execution was aborted by user.',
+          groupId: state.metadata?.groupId ?? undefined,
           parentId: parentMessageId,
           plugin: toolPayload as any,
           pluginIntervention: { status: 'aborted' },

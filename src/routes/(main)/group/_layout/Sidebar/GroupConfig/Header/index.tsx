@@ -3,6 +3,7 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -11,7 +12,8 @@ import Avatar from './Avatar';
 
 const HeaderInfo = memo(() => {
   const { t } = useTranslation('chat');
-  const groupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
+  const { gid } = useParams<{ gid: string }>();
+  const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
 
   const displayTitle = groupMeta.title || t('untitledGroup');
 

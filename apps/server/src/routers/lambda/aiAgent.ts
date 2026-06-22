@@ -138,21 +138,21 @@ const ExecAgentSchema = z
     appContext: z
       .object({
         defaultTaskAssigneeAgentId: z.string().optional(),
-        documentId: z.string().optional().nullable(),
+        documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
         editingAgentId: z.string().optional(),
-        groupId: z.string().optional().nullable(),
+        groupId: z.string().nullish(),
         initialTopicMetadata: z
           .object({
             repos: z.array(z.string()).optional(),
             workingDirectory: z.string().optional(),
           })
           .optional(),
-        scope: z.string().optional().nullable(),
+        scope: z.string().nullish(),
         sessionId: z.string().optional(),
-        taskId: z.string().optional().nullable(),
-        threadId: z.string().optional().nullable(),
-        topicId: z.string().optional().nullable(),
+        taskId: z.string().nullish(),
+        threadId: z.string().nullish(),
+        topicId: z.string().nullish(),
       })
       .optional(),
     /** Whether to auto-start execution after creating operation */
@@ -225,7 +225,7 @@ const ExecGroupAgentSchema = z.object({
     })
     .optional(),
   /** Existing topic ID */
-  topicId: z.string().optional().nullable(),
+  topicId: z.string().nullish(),
 });
 
 /**

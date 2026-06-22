@@ -220,6 +220,58 @@ class AgentDocumentService {
     return result;
   };
 
+  convertDocumentToSkill = async (params: {
+    agentId: string;
+    description: string;
+    name: string;
+    sourceAgentDocumentId: string;
+    title: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.convertDocumentToSkill.mutate(params);
+    // The conversion reparents the same row into a skill bundle, preserving its
+    // documents.id / agent_documents.id. An editor that still has the document
+    // open is cached as plain markdown, so invalidate its editor caches too —
+    // otherwise the next autosave from that stale editor would overwrite the
+    // generated SKILL.md frontmatter/body via the document save path.
+    await invalidateDocumentMutation({
+      agentDocumentId: result.index.agentDocumentId,
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: result.index.documentId,
+    });
+
+    return result;
+  };
+
+  generateSkillMeta = async (params: { agentId: string; sourceAgentDocumentId: string }) => {
+    return lambdaClient.agentDocument.generateSkillMeta.mutate(params);
+  };
+
+  /**
+   * Records implicit feedback on an auto-generated skill-meta generation: when
+   * the user saves without editing the generated values it's a positive signal,
+   * otherwise negative. Best-effort — never block the save on a feedback write.
+   */
+  recordSkillMetaFeedback = async (params: {
+    data?: Record<string, unknown>;
+    edited: boolean;
+    tracingId: string;
+  }) => {
+    try {
+      await lambdaClient.llmGenerationTracing.recordFeedback.mutate(
+        {
+          data: params.data,
+          signal: params.edited ? 'negative' : 'positive',
+          source: 'convert_to_skill',
+          tracingId: params.tracingId,
+        },
+        { context: { showNotification: false } },
+      );
+    } catch (error) {
+      console.warn('[agentDocument] Failed to record skill-meta feedback:', error);
+    }
+  };
+
   createFolder = async (params: { agentId: string; path: string; recursive?: boolean }) => {
     const result = await lambdaClient.agentDocument.mkdirDocumentByPath.mutate(params);
     await revalidateAgentDocuments(params.agentId);

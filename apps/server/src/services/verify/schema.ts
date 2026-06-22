@@ -126,3 +126,32 @@ export const BATCH_VERDICT_JSON_SCHEMA: GenerateObjectSchema = {
   },
   strict: false,
 };
+
+// ============================================
+// Report — LLM narrative over a run's check results + evidence
+// ============================================
+
+/**
+ * Only the narrative is LLM-authored; the verdict + statistics are computed
+ * deterministically from the results, so the report card can never disagree with
+ * the underlying rollup.
+ */
+export const ReportNarrativeSchema = z.object({
+  content: z.string(),
+  summary: z.string(),
+});
+export type ReportNarrative = z.infer<typeof ReportNarrativeSchema>;
+
+export const REPORT_NARRATIVE_JSON_SCHEMA: GenerateObjectSchema = {
+  name: 'verify_report',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      content: { type: 'string' },
+      summary: { maxLength: 600, type: 'string' },
+    },
+    required: ['summary', 'content'],
+    type: 'object',
+  },
+  strict: true,
+};

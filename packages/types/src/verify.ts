@@ -61,6 +61,47 @@ export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
 export const verifyRunSources = ['agent', 'agent-testing'] as const;
 export type VerifyRunSource = (typeof verifyRunSources)[number];
 
+/**
+ * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * records what *produced* the run): `scenario` drives how the report renders its
+ * scope header and scenario-specific detail. Open-ended — new scenarios add a
+ * value here plus their own {@link VerifyRunContext} shape.
+ * - coding: verifying a software change (branch / commit / surfaces under test).
+ */
+export const verifyRunScenarios = ['coding'] as const;
+export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
+
+/**
+ * Coding-scenario scope: where the code under test came from and how it ran.
+ * Rendered as the report's scope header so the verify page reads as the final
+ * report.
+ */
+export interface VerifyCodingScope {
+  /** Git branch the report was produced against. */
+  branch?: string;
+  /** Git commit (short sha) of the code under test. */
+  commit?: string;
+  /** Entry point / command exercised, e.g. "lh verify ingest-report". */
+  entry?: string;
+  /** The focus / key risk of this round (free text). */
+  focus?: string;
+  /** Test surfaces exercised, e.g. ["cli", "web"]. */
+  surfaces?: string[];
+  /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */
+  testedAt?: string;
+}
+
+/**
+ * The scenario's context — its scope/provenance, discriminated by the run's
+ * `scenario`. Kept in one jsonb (not columns) so each scenario can carry its own
+ * shape and the viewer can render per scenario without a migration. Today only
+ * `coding`; as scenarios grow this becomes a union (`VerifyCodingScope | …`).
+ *
+ * Distinct from a future generic `metadata` bag (reserved for cross-scenario
+ * extension) — `context` is specifically the active scenario's input.
+ */
+export type VerifyRunContext = VerifyCodingScope;
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
@@ -73,6 +114,22 @@ export interface VerifyRubricConfig {
   /**
    * Max automatic repair rounds (parent-chain depth) before giving up, to cap
    * runaway repair loops. Defaults to {@link DEFAULT_MAX_REPAIR_ROUNDS}.
+   */
+  maxRepairRounds?: number;
+}
+
+/**
+ * Generic per-run extension bag (`verify_runs.metadata`) — cross-scenario knobs
+ * we don't model as columns. Kept open so new policy switches don't require a
+ * migration; the active scenario's input lives in `context`, not here.
+ */
+export interface VerifyRunMetadata {
+  /**
+   * Per-run override for the repair-round cap, taking precedence over the
+   * rubric's {@link VerifyRubricConfig.maxRepairRounds}. Set from a task's
+   * `TaskVerifyConfig.maxIterations` so a task with ad-hoc criteria or a per-task
+   * override honors its saved cap (the rubric may not carry it). Read at repair
+   * time via {@link DEFAULT_MAX_REPAIR_ROUNDS} fallback.
    */
   maxRepairRounds?: number;
 }
@@ -146,6 +203,21 @@ export const verifyEvidenceCapturedBy = [
   'llm_judge',
 ] as const;
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
+
+/**
+ * Declares that a criterion is evidence-driven: it cannot pass on the
+ * deliverable text alone — the run must capture and upload an artifact of each
+ * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
+ * structural gate marks a required item `uncertain` when any listed type is
+ * missing, independent of the LLM judge.
+ */
+export interface RequiredEvidenceSpec {
+  /** What the capturer should produce — guidance only, not validated. */
+  hint?: string;
+  /** The evidence medium that must be present for this criterion. */
+  type: VerifyEvidenceType;
+}
 
 /**
  * One evidence artifact produced while judging a check. Carries existence +

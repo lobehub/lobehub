@@ -683,9 +683,9 @@ export const deviceRouter = router({
     .input(
       z.object({
         deviceId: z.string().min(1).max(64),
-        hostname: z.string().nullable().optional(),
+        hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
-        platform: z.string().max(20).nullable().optional(),
+        platform: z.string().max(20).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -702,9 +702,9 @@ export const deviceRouter = router({
     .use(serverDatabase)
     .input(
       z.object({
-        defaultCwd: z.string().nullable().optional(),
+        defaultCwd: z.string().nullish(),
         deviceId: z.string(),
-        friendlyName: z.string().max(100).nullable().optional(),
+        friendlyName: z.string().max(100).nullish(),
         workingDirs: z
           .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
           .max(20)
@@ -743,9 +743,9 @@ export const deviceRouter = router({
     .input(
       z.object({
         deviceId: z.string().min(1).max(64),
-        hostname: z.string().nullable().optional(),
+        hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
-        platform: z.string().max(20).nullable().optional(),
+        platform: z.string().max(20).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -767,9 +767,9 @@ export const deviceRouter = router({
   updateDevice: deviceProcedure
     .input(
       z.object({
-        defaultCwd: z.string().nullable().optional(),
+        defaultCwd: z.string().nullish(),
         deviceId: z.string(),
-        friendlyName: z.string().max(100).nullable().optional(),
+        friendlyName: z.string().max(100).nullish(),
         workingDirs: z
           .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
           .max(20)

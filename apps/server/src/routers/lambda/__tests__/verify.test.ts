@@ -32,6 +32,7 @@ vi.mock('@/server/services/verify', () => ({
   VerifyExecutorService: class VerifyExecutorService {},
   VerifyFeedbackService: class VerifyFeedbackService {},
   VerifyPlanGeneratorService: class VerifyPlanGeneratorService {},
+  VerifyReporterService: class VerifyReporterService {},
 }));
 
 vi.mock('@/server/services/file', () => ({

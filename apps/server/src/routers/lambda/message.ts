@@ -71,9 +71,9 @@ export const messageRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -139,9 +139,9 @@ export const messageRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageIds: z.array(z.string()),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -184,9 +184,9 @@ export const messageRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -209,13 +209,13 @@ export const messageRouter = router({
     .use(serverDatabase)
     .input(
       z.object({
-        agentId: z.string().nullable().optional(),
+        agentId: z.string().nullish(),
         current: z.number().optional(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         pageSize: z.number().optional(),
-        sessionId: z.string().nullable().optional(),
-        threadId: z.string().nullable().optional(),
-        topicId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
+        threadId: z.string().nullish(),
+        topicId: z.string().nullish(),
         topicShareId: z.string().optional(),
       }),
     )
@@ -320,7 +320,7 @@ export const messageRouter = router({
     .input(
       z
         .object({
-          groupId: z.string().nullable().optional(),
+          groupId: z.string().nullish(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -345,7 +345,7 @@ export const messageRouter = router({
     .input(
       z.object({
         groupId: z.string(),
-        topicId: z.string().nullable().optional(),
+        topicId: z.string().nullish(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -418,8 +418,8 @@ export const messageRouter = router({
       z.object({
         context: z.object({
           agentId: z.string(),
-          groupId: z.string().nullable().optional(),
-          threadId: z.string().nullable().optional(),
+          groupId: z.string().nullish(),
+          threadId: z.string().nullish(),
           topicId: z.string(),
         }),
         expanded: z.boolean().optional(),

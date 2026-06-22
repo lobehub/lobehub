@@ -606,21 +606,13 @@ export default {
   'settingAgent.export.untitledFileName': 'agent-profile',
   'settingAgent.name.placeholder': 'Enter agent name',
   'settingAgent.name.title': 'Name',
-  'settingAgent.prompt.placeholder': 'Enter agent settings, press / to open the command menu',
-  'settingAgent.prompt.templatePlaceholder':
-    '#### Goal\n' +
-    'Describe the main purpose and objective of this agent.\n\n' +
-    '#### Skills\n' +
-    '- List the key capabilities\n' +
-    '- And specialized knowledge areas\n\n' +
-    '#### Workflow\n' +
-    '1. Step-by-step process\n' +
-    '2. How the agent should approach tasks\n' +
-    '3. Expected interactions with users\n\n' +
-    '#### Constraints\n' +
-    '- Important limitations to follow\n' +
-    '- Guidelines for behavior',
-  'settingAgent.prompt.title': 'Agent Profile',
+  'settingAgent.prompt.desc':
+    'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
+  'settingAgent.prompt.editorPlaceholder':
+    'Enter core instructions, press / to open the Slash Menu',
+  'settingAgent.prompt.placeholder': 'Enter agent instructions',
+  'settingAgent.prompt.title': 'Core Instructions',
+  'settingAgent.runtimeConfig.title': 'Model & Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
   'settingAgent.tag.placeholder': 'Enter tag',

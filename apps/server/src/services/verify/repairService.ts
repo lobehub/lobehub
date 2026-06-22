@@ -1,4 +1,4 @@
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -15,16 +15,22 @@ import { VerifyStatusService } from './statusService';
 const log = debug('lobe-server:verify-repair');
 
 /**
- * Resolve the run's repair-round cap from the rubric the plan was instantiated
- * from (live read via the plan items' `sourceRubricId`). Falls back to
- * {@link DEFAULT_MAX_REPAIR_ROUNDS} for agent-generated / rubric-less plans.
+ * Resolve the run's repair-round cap. A per-run override on the session metadata
+ * (set from the task's `TaskVerifyConfig.maxIterations`) wins, since a task with
+ * ad-hoc criteria or a per-task cap may not carry it on a rubric. Otherwise read
+ * it live from the rubric the plan was instantiated from (via the plan items'
+ * `sourceRubricId`), falling back to {@link DEFAULT_MAX_REPAIR_ROUNDS} for
+ * agent-generated / rubric-less plans.
  */
 const resolveMaxRepairRounds = async (
   db: LobeChatDatabase,
   userId: string,
   plan: VerifyCheckItem[],
+  metadata: VerifyRunMetadata | null | undefined,
   workspaceId?: string,
 ): Promise<number> => {
+  if (typeof metadata?.maxRepairRounds === 'number') return metadata.maxRepairRounds;
+
   const rubricId = plan.find((i) => i.sourceRubricId)?.sourceRubricId;
   if (!rubricId) return DEFAULT_MAX_REPAIR_ROUNDS;
 
@@ -123,6 +129,10 @@ export const createRepairRunner = (params: {
     if (plan.length > 0) {
       const repairRun = await runModel.ensureForOperation(repairOperationId);
       await runModel.setPlan(repairRun.id, plan);
+      // Carry the source run's policy bag (e.g. the task's maxRepairRounds
+      // override) onto this round so its own auto-repair derives the same cap
+      // instead of falling back to the rubric/default.
+      if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
       await runModel.confirmPlan(repairRun.id);
     }
 
@@ -166,7 +176,13 @@ export const maybeAutoRepair = async (
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
-    maxRepairRounds: await resolveMaxRepairRounds(db, userId, plan, workspaceId),
+    maxRepairRounds: await resolveMaxRepairRounds(
+      db,
+      userId,
+      plan,
+      run.metadata as VerifyRunMetadata | null,
+      workspaceId,
+    ),
     model: op?.model,
     provider: op?.provider,
     topicId: op?.topicId,

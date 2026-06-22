@@ -58,6 +58,7 @@ import {
 } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
+import { normalizeToolsParameters } from '../contextBuilders/normalizeToolSchema';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
 import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
@@ -506,6 +507,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const inputStartAt = Date.now();
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
+
+        // Normalize tool parameter schemas before they fan out to the
+        // Chat-Completions / Responses paths. User MCP tools may emit boolean
+        // sub-schemas (`items: true`) or array properties missing `type`, which
+        // upstream validators (OpenAI/DeepSeek, Gemini) reject. See LOBE-10066.
+        if (payload.tools) payload.tools = normalizeToolsParameters(payload.tools as any) as any;
 
         let processedPayload: any = payload;
         const userApiMode = (payload as any).apiMode as string | undefined;

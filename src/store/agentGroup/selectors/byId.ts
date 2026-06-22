@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { type AgentGroupDetail, type AgentGroupMember, type AgentItem } from '@lobechat/types';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG, DEFAULT_CHAT_GROUP_META_CONFIG } from '@/const/settings';
@@ -46,6 +47,24 @@ const groupMembers =
     return agents.filter((agent) => !agent.isSupervisor);
   };
 
+const groupMemberAvatars =
+  (groupId: string) =>
+  (s: ChatGroupStore): { avatar: string; background?: string }[] =>
+    groupMembers(groupId)(s).map((agent) => ({
+      avatar: agent.avatar || DEFAULT_AVATAR,
+      background: agent.backgroundColor || undefined,
+    }));
+
+const groupOpeningMessage =
+  (groupId: string) =>
+  (s: ChatGroupStore): string | undefined =>
+    groupConfig(groupId)(s)?.openingMessage;
+
+const groupOpeningQuestions =
+  (groupId: string) =>
+  (s: ChatGroupStore): string[] =>
+    groupConfig(groupId)(s)?.openingQuestions || [];
+
 const groupAgentCount =
   (groupId: string) =>
   (s: ChatGroupStore): number =>
@@ -80,7 +99,10 @@ export const agentGroupByIdSelectors = {
   groupById,
   groupBySupervisorAgentId,
   groupConfig,
+  groupMemberAvatars,
   groupMemberCount,
   groupMembers,
   groupMeta,
+  groupOpeningMessage,
+  groupOpeningQuestions,
 };

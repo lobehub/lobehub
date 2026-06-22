@@ -25,6 +25,7 @@ import {
   VerifyExecutorService,
   VerifyFeedbackService,
   VerifyPlanGeneratorService,
+  VerifyReporterService,
 } from '@/server/services/verify';
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
@@ -64,8 +65,8 @@ const checkItemSchema = z.object({
   index: z.number(),
   onFail: onFailSchema,
   required: z.boolean(),
-  sourceCriterionId: z.string().nullable().optional(),
-  sourceRubricId: z.string().nullable().optional(),
+  sourceCriterionId: z.string().nullish(),
+  sourceRubricId: z.string().nullish(),
   title: z.string(),
   verifierConfig: z.record(z.unknown()),
   verifierType: verifierTypeSchema,
@@ -100,6 +101,7 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
       operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
       reportModel: new VerifyReportModel(ctx.serverDB, ctx.userId, workspaceId),
+      reporterService: new VerifyReporterService(ctx.serverDB, ctx.userId, workspaceId),
       resultModel: new VerifyCheckResultModel(ctx.serverDB, ctx.userId, workspaceId),
       rubricModel: new VerifyRubricModel(ctx.serverDB, ctx.userId, workspaceId),
       runModel: new VerifyRunModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -158,8 +160,8 @@ export const verifyRouter = router({
       z.object({
         id: z.string(),
         value: z.object({
-          description: z.string().nullable().optional(),
-          documentId: z.string().nullable().optional(),
+          description: z.string().nullish(),
+          documentId: z.string().nullish(),
           onFail: onFailSchema.optional(),
           required: z.boolean().optional(),
           title: z.string().optional(),
@@ -212,7 +214,7 @@ export const verifyRouter = router({
         id: z.string(),
         value: z.object({
           config: rubricConfigSchema.optional(),
-          description: z.string().nullable().optional(),
+          description: z.string().nullish(),
           title: z.string().optional(),
         }),
       }),
@@ -237,10 +239,46 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema.optional(),
         operationId: z.string(),
         verifyCriteriaIds: z.array(z.string()).optional(),
-        verifyRubricId: z.string().nullable().optional(),
+        verifyRubricId: z.string().nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => ctx.planGenerator.generateDraftPlan(input)),
+
+  /**
+   * Config-time: turn a one-sentence acceptance requirement into proposed
+   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.VerifyPlanGen),
+   * returns drafts only — nothing persisted, no operation needed.
+   */
+  generateCriteria: verifyProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+        modelConfig: modelConfigSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+
+  /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
+  createCriteria: verifyProcedure
+    .input(
+      z.object({
+        drafts: z.array(
+          z.object({
+            description: z.string().optional(),
+            documentId: z.string().nullable().optional(),
+            instruction: z.string().optional(),
+            onFail: onFailSchema.optional(),
+            required: z.boolean().optional(),
+            title: z.string().min(1),
+            verifierConfig: z.record(z.unknown()).optional(),
+            verifierType: verifierTypeSchema.optional(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.planGenerator.createCriteriaFromDrafts(input.drafts)),
 
   getVerifierThread: verifyProcedure
     .input(z.object({ operationId: z.string() }))
@@ -324,16 +362,30 @@ export const verifyRouter = router({
   createRun: verifyProcedure
     .input(
       z.object({
+        // The active scenario's context, rendered as the report's scope header.
+        context: z
+          .object({
+            branch: z.string().optional(),
+            commit: z.string().optional(),
+            entry: z.string().optional(),
+            focus: z.string().optional(),
+            surfaces: z.array(z.string()).optional(),
+            testedAt: z.string().optional(),
+          })
+          .optional(),
         goal: z.string().optional(),
         operationId: z.string().optional(),
+        scenario: z.enum(['coding']).optional(),
         source: runSourceSchema.optional(),
         title: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
       ctx.runModel.create({
+        context: input.context,
         goal: input.goal,
         operationId: input.operationId,
+        scenario: input.scenario,
         source: input.source ?? 'agent-testing',
         title: input.title,
       }),
@@ -444,6 +496,30 @@ export const verifyRouter = router({
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
     return ctx.reportModel.findByRun(run.id);
   }),
+
+  /**
+   * Server-side LLM report: generate the narrative from the session's results +
+   * evidence (verdict / stats computed deterministically). Distinct from
+   * `upsertReport`, which stores a report a standalone harness computed itself.
+   */
+  regenerateReport: verifyProcedure
+    .input(
+      z.object({
+        deliverable: z.string(),
+        goal: z.string(),
+        modelConfig: modelConfigSchema,
+        verifyRunId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+      return ctx.reporterService.generateReport({
+        deliverable: input.deliverable,
+        goal: input.goal,
+        modelConfig: input.modelConfig,
+        verifyRunId: run.id,
+      });
+    }),
 
   /**
    * One-shot payload for the standalone report viewer: the session, its report,

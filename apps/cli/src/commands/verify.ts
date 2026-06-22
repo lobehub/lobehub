@@ -781,12 +781,33 @@ export function registerVerifyCommand(program: Command) {
         const reportMdPath = path.join(dir, 'report.md');
         const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
 
+        // The scenario's context for the report's scope header, lifted from
+        // result.json's top-level fields. Drop empty keys so the bag stays clean.
+        const surfaces = Array.isArray(result.surfaces)
+          ? result.surfaces.filter((s: unknown) => typeof s === 'string')
+          : undefined;
+        const contextEntries = Object.entries({
+          branch: typeof result.branch === 'string' ? result.branch : undefined,
+          commit: typeof result.commit === 'string' ? result.commit : undefined,
+          entry: typeof result.entry === 'string' ? result.entry : undefined,
+          focus: typeof result.focus === 'string' ? result.focus : options.goal,
+          surfaces: surfaces && surfaces.length > 0 ? surfaces : undefined,
+          testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
+        }).filter(([, v]) => v !== undefined);
+        const context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+
+        // The harness verifies software changes; tag the run so the viewer renders
+        // the coding scope header. Overridable via result.json `scenario`.
+        const scenario = result.scenario === 'coding' ? 'coding' : ('coding' as const);
+
         const client = await getTrpcClient();
 
         // 1. Create the verification session.
         const run = await client.verify.createRun.mutate({
-          goal: options.goal,
+          context,
+          goal: options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined),
           operationId: options.operation,
+          scenario,
           source: options.source as any,
           title: options.title ?? result.title,
         });
@@ -817,24 +838,47 @@ export function registerVerifyCommand(program: Command) {
               log.warn(`evidence not found, skipping: ${rel}`);
               continue;
             }
-            const file = await uploadLocalFile(client, abs);
-            await client.verify.uploadEvidence.mutate({
-              capturedBy: 'cli',
-              checkResultId: checkResult.id,
-              description: c.name ?? path.basename(abs),
-              fileId: file.id,
-              type: evidenceTypeForFile(abs),
-            });
-            uploaded += 1;
+            try {
+              const file = await uploadLocalFile(client, abs);
+              await client.verify.uploadEvidence.mutate({
+                capturedBy: 'cli',
+                checkResultId: checkResult.id,
+                // The filename, not the case title — the title already heads the
+                // check card, so reusing it here just triples the same text.
+                description: path.basename(abs),
+                fileId: file.id,
+                type: evidenceTypeForFile(abs),
+              });
+              uploaded += 1;
+            } catch (e) {
+              // A stub/unreachable storage bucket (common in local dev) fails the
+              // file PUT — don't abort the whole ingest over one artifact; the
+              // session, results, and report are the deliverable.
+              log.warn(`evidence upload failed, skipping ${path.basename(abs)}: ${String(e)}`);
+            }
           }
         }
 
-        // 3. Write the report (full markdown + stats snapshot).
+        // 3. Write the report. `summary` is the overall conclusion (rendered at
+        //    the top of the report page); `content` is the full markdown detail.
+        const conclusion =
+          typeof summary.conclusion === 'string'
+            ? summary.conclusion
+            : typeof summary.note === 'string'
+              ? summary.note
+              : undefined;
+        // A 0-100 quality score lands on overallConfidence (0-1); the report page
+        // surfaces it as the `score` stat.
+        const score =
+          typeof summary.score === 'number'
+            ? Math.max(0, Math.min(1, summary.score / 100))
+            : undefined;
         await client.verify.upsertReport.mutate({
           content,
           failedChecks: summary.failed,
+          overallConfidence: score,
           passedChecks: summary.passed,
-          summary: typeof summary.note === 'string' ? summary.note : undefined,
+          summary: conclusion,
           totalChecks: summary.total ?? cases.length,
           uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
           verdict: summary.verdict ? toVerdict(summary.verdict) : undefined,
