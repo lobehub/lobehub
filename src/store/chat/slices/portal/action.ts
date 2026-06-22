@@ -433,6 +433,13 @@ export class ChatPortalActionImpl {
     }
   };
 
+  closeTaskDetail = (): void => {
+    const { portalStack } = this.#get();
+    if (getCurrentViewType(portalStack) === PortalViewType.TaskDetail) {
+      this.#get().popPortalView();
+    }
+  };
+
   closeToolUI = (): void => {
     const { portalStack } = this.#get();
     if (getCurrentViewType(portalStack) === PortalViewType.ToolUI) {
@@ -573,6 +580,10 @@ export class ChatPortalActionImpl {
 
   openNotebook = (): void => {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
+  };
+
+  openTaskDetail = (taskId: string): void => {
+    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };
 
   openToolUI = (messageId: string, identifier: string, params?: Record<string, any>): void => {

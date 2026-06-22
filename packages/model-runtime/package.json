@@ -33,7 +33,7 @@
     "model-bank": "workspace:*",
     "nanoid": "^5.1.6",
     "ollama": "^0.6.2",
-    "openai": "^4.104.0",
+    "openai": "^6.42.0",
     "replicate": "^1.4.0",
     "tokenx": "^1.3.0",
     "type-fest": "^5.2.0",

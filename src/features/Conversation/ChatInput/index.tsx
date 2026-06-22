@@ -6,7 +6,7 @@ import { Alert, Button, Flexbox, type MenuProps } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import {
   getBusinessChatInputSendAreaPrefix,

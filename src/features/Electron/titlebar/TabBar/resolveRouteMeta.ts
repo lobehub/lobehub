@@ -1,5 +1,5 @@
 import { Circle } from 'lucide-react';
-import { matchRoutes, type RouteObject } from 'react-router-dom';
+import { matchRoutes, type RouteObject } from 'react-router';
 
 import { mergeSearchParams } from '@/features/RouteMeta/params';
 import {

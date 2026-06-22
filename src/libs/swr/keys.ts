@@ -594,12 +594,22 @@ export const messengerKeys = {
 
 // ---- verify (deliverable judging) ---------------------------------------
 export const verifyKeys = {
+  criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
     documentId,
   ]),
+  reportBundle: def('verify:reportBundle', (verifyRunId: string) => [
+    'verify:reportBundle',
+    verifyRunId,
+  ]),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
+  rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
+    'verify:rubricCriteria',
+    rubricId,
+  ]),
+  rubrics: def('verify:rubrics', () => ['verify:rubrics']),
   state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
@@ -736,11 +746,20 @@ export const topicActionKeys = {
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
 };
+
+/**
+ * Daily task-template recommendation cache schema version. Bump this when the
+ * persisted recommendation row shape changes incompatibly so desktop clients
+ * stop reading stale localStorage SWR entries.
+ */
+export const TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION = 2;
+const TASK_TEMPLATE_DAILY_RECOMMEND_ROOT = `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`;
+
 export const taskTemplateKeys = {
   listDailyRecommend: def(
-    'taskTemplate:listDailyRecommend',
+    TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
     (refreshSeed: unknown, recommendationCount: number, locale: string) => [
-      'taskTemplate:listDailyRecommend',
+      TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
       refreshSeed,
       recommendationCount,
       locale,

@@ -26,6 +26,11 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 interface CreateTaskInlineEntryProps {
   agentId?: string;
   autoFocus?: boolean;
+  /**
+   * Locks the assignee to `agentId` and hides the agent picker. Used on the
+   * agent-scoped task list where every task belongs to that agent.
+   */
+  lockAssignee?: boolean;
   onCollapse?: () => void;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
@@ -41,6 +46,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const {
     agentId,
     autoFocus,
+    lockAssignee,
     onCollapse,
     onCreated,
     parentTaskId,
@@ -63,6 +69,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const editor = useEditor();
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+
+  // When the assignee is locked to a scoped agent, keep it in sync with the
+  // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
+  // /agent/B/tasks, so without this the hidden assignee would stay on A.
+  useEffect(() => {
+    if (lockAssignee) setAssigneeAgentId(agentId);
+  }, [agentId, lockAssignee]);
 
   useEffect(() => {
     if (!canCreateTask) return;
@@ -220,31 +233,41 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             </Block>
           </TaskPriorityTag>
 
-          <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
-            <Block
-              clickable
-              horizontal
-              align="center"
-              gap={6}
-              paddingBlock={4}
-              paddingInline={8}
-              variant={'borderless'}
-            >
-              {assigneeAgentId ? (
-                <>
-                  <AssigneeAvatar agentId={assigneeAgentId} size={18} />
-                  <Text fontSize={12}>{assigneeMeta?.title}</Text>
-                </>
-              ) : (
-                <>
-                  <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
-                  <Text color={cssVar.colorTextDescription} fontSize={12}>
-                    {t('createTask.assignee')}
-                  </Text>
-                </>
-              )}
-            </Block>
-          </AssigneeAgentSelector>
+          {(() => {
+            const assigneeChip = (
+              <Block
+                horizontal
+                align="center"
+                clickable={!lockAssignee}
+                gap={6}
+                paddingBlock={4}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {assigneeAgentId ? (
+                  <>
+                    <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                    <Text fontSize={12}>{assigneeMeta?.title}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                    <Text color={cssVar.colorTextDescription} fontSize={12}>
+                      {t('createTask.assignee')}
+                    </Text>
+                  </>
+                )}
+              </Block>
+            );
+
+            return lockAssignee ? (
+              assigneeChip
+            ) : (
+              <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
+                {assigneeChip}
+              </AssigneeAgentSelector>
+            );
+          })()}
 
           <ActionIcon
             icon={Paperclip}

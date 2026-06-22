@@ -1,12 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import {
-  type NavigateFunction,
-  type NavigateOptions,
-  type To,
-  useNavigate,
-} from 'react-router-dom';
+import { type NavigateFunction, type NavigateOptions, type To, useNavigate } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 

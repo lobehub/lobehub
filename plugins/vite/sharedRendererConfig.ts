@@ -127,7 +127,6 @@ function sharedManualChunks(id: string): string | undefined {
     isNodePackage(id, 'react') ||
     isNodePackage(id, 'react-dom') ||
     isNodePackage(id, 'react-router') ||
-    isNodePackage(id, 'react-router-dom') ||
     isNodePackage(id, 'scheduler')
   ) {
     return 'vendor-react';
@@ -255,7 +254,8 @@ export const sharedOptimizeDeps = {
     'react',
     'react-dom',
     'react-dom/client',
-    'react-router-dom',
+    'react-router',
+    'react-router/dom',
     'antd',
     '@ant-design/icons',
     '@lobehub/ui',

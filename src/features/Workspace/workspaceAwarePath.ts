@@ -1,4 +1,4 @@
-import type { NavigateOptions } from 'react-router-dom';
+import type { NavigateOptions } from 'react-router';
 
 export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
   /** When true, navigate to the literal `to` path without applying the workspace prefix. */

@@ -3,7 +3,6 @@ import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { responsesAPIModels } from '../../const/models';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
@@ -20,6 +19,7 @@ import { debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { assertToolLimits } from '../../utils/validateToolLimits';
+import { isResponsesAPIModel } from '../openai/openaiModelId';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
 const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
@@ -223,7 +223,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           },
         );
 
-        const pricing = await getModelPricing(model, ModelProvider.GithubCopilot);
+        const pricing = await getModelPricing(
+          model,
+          ModelProvider.GithubCopilot,
+          options?.pricingContext,
+        );
 
         const streamResponse = response as any;
         const [prod, useForDebug] = streamResponse.tee();
@@ -260,7 +264,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       });
 
       if (
-        responsesAPIModels.has(model) ||
+        isResponsesAPIModel(model) ||
         model.toLowerCase().includes('oswe') ||
         (payload as any).apiMode === 'responses'
       ) {

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
@@ -190,14 +192,30 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
-export type ChatTopicStatus =
-  | 'active'
-  | 'running'
-  | 'paused'
-  | 'waitingForHuman'
-  | 'failed'
-  | 'completed'
-  | 'archived';
+/**
+ * Canonical, ordered list of topic statuses. Single source of truth for both
+ * the {@link ChatTopicStatus} type and the {@link chatTopicStatusSchema} zod
+ * validator (consumed by the topic TRPC router). Add new statuses here.
+ *
+ * - `unread`: a completed generation the user hasn't read yet. Persisted so the
+ *   unread indicator survives reload and syncs across devices; cleared back to
+ *   `active` when the user opens the topic. See operation slice unread actions.
+ */
+export const TOPIC_STATUSES = [
+  'active',
+  'running',
+  'paused',
+  'waitingForHuman',
+  'failed',
+  'completed',
+  'archived',
+  'unread',
+] as const;
+
+/** Zod validator for {@link ChatTopicStatus}, derived from {@link TOPIC_STATUSES}. */
+export const chatTopicStatusSchema = z.enum(TOPIC_STATUSES);
+
+export type ChatTopicStatus = z.infer<typeof chatTopicStatusSchema>;
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;

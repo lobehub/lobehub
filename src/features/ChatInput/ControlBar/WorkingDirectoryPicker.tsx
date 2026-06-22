@@ -14,6 +14,7 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
 import {
   resolveAgentWorkingDirectory,
   resolveTargetDeviceId,
@@ -29,7 +30,6 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import { openAddWorkingDirModal } from './AddWorkingDirModal';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';

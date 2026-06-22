@@ -12,7 +12,7 @@
     "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
     "lucide-react": "*",
-    "react-router-dom": "*"
+    "react-router": "*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

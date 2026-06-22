@@ -215,6 +215,8 @@ export interface MessagesEngineParams {
   messages: UIChatMessage[];
   /** Model ID */
   model: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
   /** Provider ID */
   provider: string;
 

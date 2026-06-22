@@ -61,6 +61,13 @@ export interface AgentHookEvent {
   duration?: number;
   /** Elapsed time since operation started in ms (afterStep only) */
   elapsedMs?: number;
+  /**
+   * Error ownership from the model-runtime error taxonomy (`who should fix it`):
+   * `user` | `provider` | `harness` | `system`. Lets consumers pick a
+   * user-facing message tier (and decide whether to keep the Operation ID
+   * prominent) without re-deriving the error spec themselves.
+   */
+  errorAttribution?: string;
   // Content
   errorDetail?: string;
 

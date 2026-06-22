@@ -14,6 +14,7 @@ interface TestModel {
 
 const testState = vi.hoisted(() => ({
   agent: {
+    agencyConfig: undefined as { heterogeneousProvider?: { type: string } } | undefined,
     enableAgentMode: true,
     model: 'gpt-4o',
     provider: 'openai',
@@ -51,6 +52,8 @@ vi.mock('@/store/agent', () => ({
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgentEnableModeById: () => (s: typeof testState.agent) => s.enableAgentMode,
+    isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
+      Boolean(s.agencyConfig?.heterogeneousProvider),
     getAgentModelById: () => (s: typeof testState.agent) => s.model,
     getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
   },
@@ -71,6 +74,7 @@ vi.mock('@/store/aiInfra', () => ({
 
 describe('AgentModeNotice', () => {
   beforeEach(() => {
+    testState.agent.agencyConfig = undefined;
     testState.agent.enableAgentMode = true;
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
@@ -108,6 +112,18 @@ describe('AgentModeNotice', () => {
 
   it('does not render when agent mode is disabled', () => {
     testState.agent.enableAgentMode = false;
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.enabledAiModels = [
+      { abilities: { functionCall: false }, id: 'gpt-4o', providerId: 'openai' },
+    ];
+
+    render(<AgentModeNotice />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not render for heterogeneous agents', () => {
+    testState.agent.agencyConfig = { heterogeneousProvider: { type: 'codex' } };
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.enabledAiModels = [
       { abilities: { functionCall: false }, id: 'gpt-4o', providerId: 'openai' },

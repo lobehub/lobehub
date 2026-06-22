@@ -9,7 +9,7 @@ import {
   Settings,
   ShapesIcon,
 } from 'lucide-react';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
 import {
   BusinessDesktopRoutesWithMainLayout,
@@ -19,6 +19,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import { verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
@@ -102,6 +103,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Topics',
             ),
             path: 'topics',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/tasks'),
+              'Desktop > Chat > Tasks',
+            ),
+            handle: { meta: tasksRouteMeta },
+            path: 'tasks',
           },
           {
             element: dynamicElement(
@@ -858,6 +867,13 @@ export const desktopRoutes: RouteObject[] = [
                     ),
                     path: 'storage',
                   },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
+                      'Desktop > Workspace > Settings > Devices',
+                    ),
+                    path: 'devices',
+                  },
                 ],
                 element: dynamicLayout(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/_content-layout'),
@@ -945,6 +961,14 @@ export const desktopRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  // Standalone verification-report viewer (outside main layout)
+  {
+    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyRouteMeta },
+    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

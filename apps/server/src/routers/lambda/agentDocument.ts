@@ -3,13 +3,15 @@ import {
   DocumentLoadFormat,
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
+import matter from 'gray-matter';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { TopicTrigger } from '@/const/topic';
-import { AgentDocumentModel } from '@/database/models/agentDocuments';
+import { AgentDocumentModel, deriveAgentDocumentFields } from '@/database/models/agentDocuments';
 import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { router } from '@/libs/trpc/lambda';
@@ -19,6 +21,8 @@ import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocum
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { SkillManagementDocumentService } from '@/server/services/skillManagement';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 const MAX_METADATA_BYTES = 16 * 1024;
 const MAX_RULE_REGEXP_LENGTH = 512;
@@ -91,7 +95,7 @@ const mountedSkillNamespaceSchema = z.literal('agent');
 const agentDocumentToolContextSchema = z.object({
   messageId: z.string(),
   operationId: z.string().optional(),
-  taskId: z.string().nullable().optional(),
+  taskId: z.string().nullish(),
   toolCallId: z.string(),
   topicId: z.string().optional(),
 });
@@ -160,6 +164,8 @@ const agentDocumentProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       agentDocumentModel: new AgentDocumentModel(ctx.serverDB, ctx.userId, wsId),
       agentDocumentService: new AgentDocumentsService(ctx.serverDB, ctx.userId, wsId),
       agentDocumentVfsService: new AgentDocumentVfsService(ctx.serverDB, ctx.userId, wsId),
+      skillManagementService: new SkillManagementDocumentService(ctx.serverDB, ctx.userId, wsId),
+      systemAgentService: new SystemAgentService(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -208,6 +214,76 @@ const emitCreateDocumentToolOutcome = async (input: {
     topicId: input.topicId ?? toolContext.topicId,
     userId: input.userId,
   });
+};
+
+/**
+ * Strips a leading YAML frontmatter block from Markdown so it can be re-fed as
+ * `bodyMarkdown` to the skill-management service (which renders its own
+ * frontmatter and rejects bodies that already contain one).
+ */
+const stripLeadingFrontmatter = (content: string): string => {
+  try {
+    const parsed = matter(content);
+    return parsed.matter ? parsed.content.trimStart() : content;
+  } catch {
+    return content;
+  }
+};
+
+const convertSkillErrorToTRPC = (error: unknown): never => {
+  if (error instanceof TRPCError) throw error;
+
+  if (error instanceof Error) {
+    if (/already exists/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+    }
+    if (/invalid skill name|required|frontmatter/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+    }
+  }
+
+  throw error;
+};
+
+/**
+ * Resolve the markdown body of a document that is eligible to become a skill.
+ *
+ * Shared by `convertDocumentToSkill` and `generateSkillMeta`. Rejects missing
+ * documents, and — same as the convert path — folders, web sources, and
+ * managed skill bundle/index rows. `createSkill` reparents the source row under
+ * a new bundle, so converting an existing skill index would strip its original
+ * bundle of its SKILL.md and corrupt it. The UI hides the action for these, but
+ * a stale/scripted client could still call through, so enforce it server-side.
+ */
+const resolveConvertibleDocumentBody = async (
+  service: AgentDocumentsService,
+  agentId: string,
+  sourceAgentDocumentId: string,
+): Promise<string> => {
+  const source = await service.getDocumentById(sourceAgentDocumentId, agentId);
+
+  if (!source) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Source document not found' });
+  }
+
+  const { category, isFolder } = deriveAgentDocumentFields(source);
+  if (category !== AGENT_DOCUMENT_CATEGORY || isFolder) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Only a plain agent document can be converted into a skill',
+    });
+  }
+
+  const bodyMarkdown = stripLeadingFrontmatter(source.content ?? '').trim();
+
+  if (!bodyMarkdown) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Cannot convert an empty document into a skill',
+    });
+  }
+
+  return bodyMarkdown;
 };
 
 export const agentDocumentRouter = router({
@@ -577,6 +653,71 @@ export const agentDocumentRouter = router({
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }
+    }),
+
+  /**
+   * Converts an existing agent document into a managed skill (direct migration).
+   *
+   * The source document row is reused as the skill's `SKILL.md` index (its
+   * `documents.id` / `agent_documents.id` are preserved), and a new
+   * `skills/bundle` parent is created to hold it. After this call the original
+   * document no longer appears at its previous location in the tree.
+   */
+  convertDocumentToSkill: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        description: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+        sourceAgentDocumentId: z.string(),
+        title: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const bodyMarkdown = await resolveConvertibleDocumentBody(
+        ctx.agentDocumentService,
+        input.agentId,
+        input.sourceAgentDocumentId,
+      );
+
+      try {
+        return await ctx.skillManagementService.createSkill({
+          agentId: input.agentId,
+          bodyMarkdown,
+          description: input.description,
+          name: input.name,
+          sourceAgentDocumentId: input.sourceAgentDocumentId,
+          title: input.title,
+        });
+      } catch (error) {
+        return convertSkillErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * Generates skill metadata (name / title / description) from a document's
+   * content, used to prefill the convert-to-skill form. Does not mutate the
+   * document; returns `null` when generation fails so the caller can fall back
+   * to its own defaults.
+   */
+  generateSkillMeta: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        sourceAgentDocumentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const bodyMarkdown = await resolveConvertibleDocumentBody(
+        ctx.agentDocumentService,
+        input.agentId,
+        input.sourceAgentDocumentId,
+      );
+
+      return ctx.systemAgentService.generateSkillMeta({
+        agentId: input.agentId,
+        content: bodyMarkdown,
+      });
     }),
 
   updateSkillByPath: agentDocumentProcedureWrite

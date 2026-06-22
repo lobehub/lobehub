@@ -6,7 +6,7 @@ import { Avatar, Block, Flexbox, Markdown, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import type { CreateAgentParams, CreateAgentState } from '../../../types';
 

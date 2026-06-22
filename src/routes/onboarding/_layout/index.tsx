@@ -8,7 +8,7 @@ import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type MouseEvent, type PropsWithChildren, useCallback, useEffect } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';

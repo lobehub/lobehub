@@ -27,8 +27,8 @@ import type { ExternalSignalContext, ToolCallPayload } from '../types';
  * by delegating subagent-scoped events to `reduceSubagentRuns`, so a single
  * `reduce` call is the only entry point both engines need.
  *
- * The CHAIN RULE lives here and is authoritative for both engines (LOBE-10445
- * phase 2): the next turn's assistant parents off the most recent NON-tool,
+ * The CHAIN RULE lives here and is authoritative for both engines:
+ * the next turn's assistant parents off the most recent NON-tool,
  * NON-signal main-thread message — the run's "spine" (`lastSpineMessageId`) —
  * so the persisted shape is `user → asst → asst …` with tools as inline
  * children. The read side (`conversation-flow`) reconstructs the
@@ -82,7 +82,7 @@ export interface MainAgentRunState {
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
   /**
-   * Chain rule (LOBE-10445 phase 2): the most recent NON-tool, NON-signal
+   * Chain rule: the most recent NON-tool, NON-signal
    * main-thread message — the run's spine. The next NORMAL turn's assistant
    * parents off this (signal-tagged reactive turns parent off `lastToolMsgIdEver`
    * instead). Advances on every normal turn; a signal turn does NOT advance it,
@@ -95,7 +95,7 @@ export interface MainAgentRunState {
   lastTextSnapshotSeq: number;
   /**
    * Run-lifetime id of the most recent main-agent tool message. Since
-   * LOBE-10445 phase 2 this anchors ONLY signal-tagged reactive turns (Monitor
+   * this anchors ONLY signal-tagged reactive turns (Monitor
    * stdout pushes) onto a tool, so the reader renders them as tool-child
    * callbacks; normal turns parent off `lastSpineMessageId`. Only advances on
    * tool batches; never reset across turns.

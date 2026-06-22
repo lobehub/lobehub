@@ -366,14 +366,14 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async readFiles({ paths }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
+  async readFiles({ paths, cwd }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
     logger.debug('Starting batch file reading:', { count: paths.length });
 
     const results: LocalReadFileResult[] = [];
 
     for (const filePath of paths) {
       logger.debug('Reading single file:', { filePath });
-      const result = await readLocalFile({ path: filePath });
+      const result = await readLocalFile({ cwd, path: filePath });
       results.push(result);
     }
 
@@ -400,9 +400,9 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async handleMoveFiles({ items }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
+  async handleMoveFiles({ items, cwd }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
     logger.debug('Starting batch file move:', { itemsCount: items?.length });
-    return moveLocalFiles({ items });
+    return moveLocalFiles({ cwd, items });
   }
 
   @IpcMethod()
@@ -418,9 +418,9 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async handleWriteFile({ path: filePath, content }: WriteLocalFileParams) {
+  async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
-    return writeLocalFile({ content, path: filePath });
+    return writeLocalFile({ content, cwd, path: filePath });
   }
 
   @IpcMethod()

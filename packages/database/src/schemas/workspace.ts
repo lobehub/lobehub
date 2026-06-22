@@ -1,4 +1,13 @@
-import { index, jsonb, pgTable, primaryKey, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
 import { createdAt, timestamptz, updatedAt } from './_helpers';
@@ -23,6 +32,12 @@ export const workspaces = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     settings: jsonb('settings').default({}),
+    // Freeze state, mirrors the `users.banned` / `banReason` / `banExpires`
+    // trio. Driven by cloud risk control (abnormal spend) and admin tooling;
+    // OSS column with no desktop/open-source behavior attached.
+    frozen: boolean('frozen').default(false),
+    frozenReason: text('frozen_reason'),
+    frozenAt: timestamptz('frozen_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

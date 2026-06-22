@@ -1,3 +1,4 @@
+import type { HeteroAgentRuntimeDescriptor } from '@lobechat/agent-manager-runtime';
 import type { LobeAgentConfig, MetaData } from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
@@ -323,6 +324,12 @@ export interface GetAgentDetailState {
     openingQuestions?: string[];
     plugins?: string[];
     provider?: string;
+    /**
+     * Present only for heterogeneous agents (external CLI/runtime such as Claude
+     * Code or Codex). Describes what the external runtime is and what it can do;
+     * such agents ignore the `model`/`plugins` fields above.
+     */
+    runtime?: HeteroAgentRuntimeDescriptor;
     systemRole?: string;
   };
   /**

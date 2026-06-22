@@ -3,12 +3,13 @@
 ## Contents
 
 1. Pipeline map
-2. Capture raw CLI traces first
+2. Capture raw CLI traces first (incl. in-app live traces)
 3. Compare raw and adapted events
 4. Check step boundaries before persistence
 5. Check tool persistence invariants
 6. Focused tests
 7. Repro-to-fix workflow
+8. Verify a structured-field classifier against a real trace
 
 ## 1. Pipeline Map
 
@@ -26,6 +27,54 @@ CLI raw stdout
 Start at the leftmost broken layer. Do not jump straight to UI rendering unless raw and adapted events already look correct.
 
 ## 2. Capture Raw CLI Traces First
+
+### In-app live traces (the faithful capture — prefer this)
+
+The running app already records every CLI session it spawns. This is the most
+faithful trace you can get, because it captures the **exact** spawn args, env
+keys, cwd, `--resume`/`--mcp-config` flags, model, and stdin that the app used —
+things a hand-rolled `claude -p` / `codex exec` repro will not reproduce. Reach
+for this before reproducing manually. The recorder lives in
+`apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts`
+(`createCliTraceSession`, `shouldTraceCliOutput`, `resolveTraceRootDir`).
+
+When it records:
+
+- **Dev build** (`!app.isPackaged`): always.
+- **Packaged build**: only when the user flips the Help-menu developer toggle
+  (`heteroTracingEnabled`). Off by default so normal runs aren't polluted.
+- Never under `NODE_ENV=test`.
+
+Where it writes:
+
+- Toggle **off** (plain dev run): `<cwd>/.heerogeneous-tracing/` — i.e. inside
+  the repo you're running against. (Yes, the dir name is misspelled
+  `heerogeneous`; it is the real path.)
+- Toggle **on**: `<appStoragePath>/heteroAgent/tracing/` — keeps traces out of
+  the user's project. This is the only path packaged builds ever use.
+
+Layout per session — `.../<agentType>/<YYYYMMDD-HHMMSS>-<sessionId>/`:
+
+- `meta.json` — spawn `args`, `command`, `cwd`, `envKeys`, `model`,
+  `resumeSessionId`/`agentSessionId`, attachment summaries. **Read this first**
+  to know exactly how the CLI was invoked.
+- `stdin.txt` — the stream-json request fed to the CLI.
+- `stdout.jsonl` — the raw provider NDJSON (the trace you actually read).
+- `stderr.log` — CLI stderr.
+- `exit.json` — `{ code, signal, finishedAt }`.
+
+`.heerogeneous-tracing/.last-live-trace` always points at the most recent
+session dir, so the fast path to "what just happened" is:
+
+```bash
+dir=$(cat .heerogeneous-tracing/.last-live-trace)
+cat "$dir/meta.json"      # how the CLI was spawned
+wc -l "$dir/stdout.jsonl" # raw event count
+```
+
+Reproduce the same session yourself by reusing the recorded `meta.json` `args`
+together with `stdin.txt` (the args already include `--resume <sessionId>`),
+instead of guessing flags.
 
 ### Codex raw JSONL
 
@@ -244,3 +293,55 @@ When the bug comes from a real trace, distill it into the closest existing test 
 6. Only then do an Electron smoke test with the `agent-testing` skill if UI confirmation is still needed.
 
 Do not start with a broad Electron repro if a raw trace or adapter test can prove the fault zone faster.
+
+## 8. Verify A Structured-Field Classifier Against A Real Trace
+
+Whenever the adapter **branches on a structured field** from the raw stream —
+`status`, `usage`, `rateLimitType`, `stop_reason`, `parent_tool_use_id`,
+`subtype`, etc. — do not trust your mental model of the wire format. The field
+you key on almost always also appears on **benign / non-target** events, and a
+classifier that ignores the surrounding state will misfire on those.
+
+The procedure (recurring — run it every time):
+
+1. Pull the most recent real session: `dir=$(cat .heerogeneous-tracing/.last-live-trace)`.
+
+2. Grep the field across **every** event state, not just the failing one, and
+   count by co-occurring state. Example:
+
+   ```bash
+   # Which event statuses carry a rate_limit_info block?
+   grep -o '"status":"[a-z]*"' "$dir/stdout.jsonl" | sort | uniq -c
+   grep -c 'rate_limit_info' "$dir/stdout.jsonl"
+   ```
+
+3. If the field rides on states you did not account for, the classifier needs an
+   extra gate. Add the trace as a fixture/assertion to the adapter test so the
+   regression can't come back.
+
+### Worked example: CC usage-limit vs. transient throttle (`fix/cc-rate-limit-quota-misclassify`)
+
+- **Symptom:** an unrelated terminal failure (e.g. an `ECONNRESET` network drop)
+  rendered a bogus "usage limit reached, resets at X" guide.
+- **What the trace showed:** Anthropic stamps a `rate_limit_info` block —
+  carrying `resetsAt` and `rateLimitType` (e.g. `seven_day`) — onto events even
+  when the request **goes through** (`status: "allowed"`). In real traces those
+  reset-window fields appear on \~all `rate_limit_info` blocks, the vast majority
+  of which are `allowed`, not `rejected`. So the window is rolling-window
+  _metadata for an allowed call_, NOT evidence the limit was hit.
+- **The bug:** `isUserQuotaRateLimit` keyed only on the presence of a reset
+  window (`info.resetsAt != null || info.rateLimitType != null`). A later
+  terminal error inherited the last allowed event's window → false positive.
+- **The fix:** require `status === 'rejected'` **and** a concrete reset window.
+  A bare `rejected` with no window is the transient server throttle → leave it
+  to the overloaded (retry) classifier. Status codes (429 / 529) and message
+  text are deliberately not consulted — only this structured signal decides the
+  guide.
+  - `packages/heterogeneous-agents/src/adapters/claudeCode.ts` →
+    `isUserQuotaRateLimit`
+  - regression assertions in
+    `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
+
+The general lesson: a field's **presence** is not its **meaning**. Confirm which
+event states a discriminator field co-occurs with in a real recorded trace
+before branching on it.

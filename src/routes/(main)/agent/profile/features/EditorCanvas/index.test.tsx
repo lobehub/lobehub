@@ -98,4 +98,11 @@ describe('Agent profile EditorCanvas', () => {
 
     expect(editorProps.last?.editable).toBe(false);
   });
+
+  it('uses the rich-editor placeholder key', () => {
+    render(<EditorCanvas />);
+
+    expect(editorProps.last?.lineEmptyPlaceholder).toBe('settingAgent.prompt.editorPlaceholder');
+    expect(editorProps.last?.placeholder).toBe('settingAgent.prompt.editorPlaceholder');
+  });
 });

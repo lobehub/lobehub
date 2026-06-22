@@ -295,6 +295,27 @@ describe('QQAdapter', () => {
       expect(message?.attachments[0].type).toBe('file');
     });
 
+    it('should infer mime type from filename when content_type is the bare "file" label', async () => {
+      // QQ delivers c2c file attachments with content_type === 'file' (a coarse
+      // category, not a real MIME type). It must be recovered from the filename
+      // so an .m4a is classified as audio instead of an unreadable document.
+      const attachment = makeAttachment({
+        content_type: 'file',
+        filename: 'Broadstone Amelia 5.m4a',
+      });
+      const payload = makeWebhookPayload(QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE, {
+        attachments: [attachment],
+        content: 'audio file',
+      });
+      await adapter.handleWebhook(makeRequest(payload));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments[0].mimeType).toBe('audio/mp4');
+      expect(message?.attachments[0].type).toBe('audio');
+    });
+
     it('should map multiple attachments', async () => {
       const attachments = [
         makeAttachment({ content_type: 'image/png', filename: 'a.png' }),

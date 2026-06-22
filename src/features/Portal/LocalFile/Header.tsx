@@ -5,7 +5,7 @@ import { ActionIcon } from '@lobehub/ui';
 import { ArrowLeft, FolderOpen, X } from 'lucide-react';
 import { Fragment, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 
 import { SESSION_CHAT_TOPIC_PAGE_URL, SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import NavHeader from '@/features/NavHeader';

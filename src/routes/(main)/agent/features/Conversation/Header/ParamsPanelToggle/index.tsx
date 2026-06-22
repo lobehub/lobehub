@@ -4,7 +4,7 @@ import { ActionIcon } from '@lobehub/ui';
 import { Settings2Icon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useAgentStore } from '@/store/agent';

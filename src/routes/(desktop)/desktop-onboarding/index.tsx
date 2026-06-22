@@ -3,7 +3,7 @@
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { electronSystemService } from '@/services/electron/system';

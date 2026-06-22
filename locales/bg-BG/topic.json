@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Отбележи като активна",
   "defaultTitle": "Тема по подразбиране",
   "displayItems": "Показване на елементи",
+  "draft": "[Чернова]",
   "duplicateLoading": "Копиране на тема...",
   "duplicateSuccess": "Темата беше успешно копирана",
   "failedStatusTip": "Този процес срещна грешка — отворете го, за да разгледате.",

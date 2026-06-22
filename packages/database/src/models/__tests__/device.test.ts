@@ -3,18 +3,20 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { devices, users } from '../../schemas';
+import { devices, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DeviceModel } from '../device';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'device-model-test-user-id';
+const otherUserId = 'device-model-other-user';
+const wsId = 'device-model-ws-1';
 const deviceModel = new DeviceModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: userId }, { id: 'device-model-other-user' }]);
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
 });
 
 afterEach(async () => {
@@ -110,6 +112,82 @@ describe('DeviceModel', () => {
 
       const list = await deviceModel.query();
       expect(list.map((d) => d.deviceId)).toEqual(['dev-new', 'dev-old']);
+    });
+  });
+
+  describe('workspace devices', () => {
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: wsId, name: 'WS 1', primaryOwnerId: userId, slug: 'device-model-ws-1-slug' });
+    });
+
+    it('queryPersonal excludes workspace-enrolled rows', async () => {
+      await deviceModel.register({ deviceId: 'p1', identitySource: 'machine-id' });
+      // an admin-enrolled workspace device owned by this user
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'w1', identitySource: 'machine-id', userId, workspaceId: wsId });
+
+      const personal = await deviceModel.queryPersonal();
+      expect(personal.map((d) => d.deviceId)).toEqual(['p1']);
+    });
+
+    it('queryWorkspaceDevices returns every enrolled device (any owner), scoped to the workspace', async () => {
+      // enrolled by two different admins into the same workspace
+      await serverDB.insert(devices).values([
+        { deviceId: 'w1', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'w2', identitySource: 'machine-id', userId: otherUserId, workspaceId: wsId },
+      ]);
+      // a personal device must not appear
+      await deviceModel.register({ deviceId: 'p1', identitySource: 'machine-id' });
+
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      const ids = (await wsModel.queryWorkspaceDevices()).map((d) => d.deviceId).sort();
+      expect(ids).toEqual(['w1', 'w2']);
+    });
+
+    it('queryWorkspaceDevices returns [] without workspace context', async () => {
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'w1', identitySource: 'machine-id', userId, workspaceId: wsId });
+      expect(await deviceModel.queryWorkspaceDevices()).toEqual([]);
+    });
+
+    it('dedupes a machine enrolled into one workspace by different admins to a single row', async () => {
+      // admin A enrolls machine "wdev" into the workspace
+      await new DeviceModel(serverDB, userId, wsId).registerWorkspaceDevice({
+        deviceId: 'wdev',
+        hostname: 'A-host',
+        identitySource: 'machine-id',
+        workspaceId: wsId,
+      });
+      // admin B enrolls the SAME machine (same deviceId) into the SAME workspace
+      await new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice({
+        deviceId: 'wdev',
+        hostname: 'B-host',
+        identitySource: 'machine-id',
+        workspaceId: wsId,
+      });
+
+      const rows = (await new DeviceModel(serverDB, userId, wsId).queryWorkspaceDevices()).filter(
+        (d) => d.deviceId === 'wdev',
+      );
+      // one row, not two — (workspace_id, device_id) is unique
+      expect(rows).toHaveLength(1);
+      // the original enroller is preserved; only machine fields are refreshed
+      expect(rows[0].userId).toBe(userId);
+      expect(rows[0].hostname).toBe('B-host');
+    });
+
+    it('findWorkspaceDeviceById is scoped to the workspace', async () => {
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'w1', identitySource: 'machine-id', userId, workspaceId: wsId });
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      expect((await wsModel.findWorkspaceDeviceById('w1'))?.deviceId).toBe('w1');
+      // a non-workspace model never resolves it
+      expect(await deviceModel.findWorkspaceDeviceById('w1')).toBeUndefined();
     });
   });
 

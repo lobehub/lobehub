@@ -10,10 +10,10 @@ import { flattenActions } from '../utils/flattenActions';
 import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type ChatStoreState } from './initialState';
 import { initialState } from './initialState';
+import { type ChatAgentRunAction } from './slices/agentRun/actions';
+import { chatAgentRun } from './slices/agentRun/actions';
 import { type ChatAIAgentAction } from './slices/aiAgent/actions';
 import { chatAiAgent } from './slices/aiAgent/actions';
-import { type ChatAIChatAction } from './slices/aiChat/actions';
-import { chatAiChat } from './slices/aiChat/actions';
 import { type ChatBuiltinToolAction } from './slices/builtinTool/actions';
 import { chatToolSlice } from './slices/builtinTool/actions';
 import { type ChatMessageAction } from './slices/message/actions';
@@ -35,7 +35,7 @@ import { ChatTTSActionImpl } from './slices/tts/action';
 
 export type ChatStoreAction = ChatMessageAction &
   ChatThreadAction &
-  ChatAIChatAction &
+  ChatAgentRunAction &
   ChatTopicAction &
   ChatTranslateAction &
   ChatTTSAction &
@@ -62,7 +62,7 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
     ...(flattenActions<ChatStoreAction>([
       chatMessage(...params),
       new ChatThreadActionImpl(...params),
-      chatAiChat(...params),
+      chatAgentRun(...params),
       new ChatTopicActionImpl(...params),
       new ChatTranslateActionImpl(...params),
       new ChatTTSActionImpl(...params),

@@ -12,6 +12,11 @@ describe('pathToMarketAuthScene', () => {
     expect(pathToMarketAuthScene('market.installCloudMcp')).toBe('mcp');
   });
 
+  it('maps Market connector paths to the connector scene', () => {
+    expect(pathToMarketAuthScene('market.connectGetAuthorizeUrl')).toBe('connector');
+    expect(pathToMarketAuthScene('market.connectCallTool')).toBe('connector');
+  });
+
   it('falls back to the default scene for unknown paths', () => {
     expect(pathToMarketAuthScene('market.followUser')).toBe('default');
     expect(pathToMarketAuthScene('market.getUserProfile')).toBe('default');

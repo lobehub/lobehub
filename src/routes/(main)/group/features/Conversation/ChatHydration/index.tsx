@@ -3,6 +3,7 @@
 import { memo, useLayoutEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 
@@ -15,6 +16,10 @@ const ChatHydration = memo(() => {
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
   useStoreUpdater('activeTopicId', topic!);
   useStoreUpdater('activeThreadId', thread!);
+
+  // Hydration sets activeTopicId directly (not via switchTopic), so clear any
+  // lingering persisted unread once the topic loads.
+  useClearActiveTopicUnread();
 
   useLayoutEffect(() => {
     const unsubscribeTopic = useChatStore.subscribe(

@@ -1,3 +1,4 @@
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { formatErrorEventData } from '../formatErrorEventData';
@@ -62,6 +63,75 @@ describe('formatErrorEventData', () => {
   });
 
   describe('business-typed errors (must not be overridden)', () => {
+    it('preserves traceable runtime payload body for gateway error events', () => {
+      const out = formatErrorEventData(
+        {
+          error: { message: 'Upstream failed', traceId: 'trace-123' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: 'openai',
+        },
+        'llm_execution',
+      );
+
+      expect(out).toMatchObject({
+        body: {
+          message: 'Upstream failed',
+          provider: 'openai',
+          traceId: 'trace-123',
+        },
+        error: 'Upstream failed',
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        phase: 'llm_execution',
+      });
+    });
+
+    it('uses the normalized runtime type for gateway error events', () => {
+      const out = formatErrorEventData(
+        {
+          error: { message: 'Payment required', status: 402, traceId: 'trace-402' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: 'lobehub',
+        },
+        'llm_execution',
+      );
+
+      expect(out).toMatchObject({
+        body: {
+          message: 'Payment required',
+          provider: 'lobehub',
+          status: 402,
+          traceId: 'trace-402',
+        },
+        error: 'Payment required',
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+        phase: 'llm_execution',
+      });
+    });
+
+    it('uses the normalized runtime message when the payload message is a placeholder', () => {
+      const out = formatErrorEventData(
+        {
+          error: { message: 'Payment required', status: 402, traceId: 'trace-402' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          message: 'error',
+          provider: 'lobehub',
+        },
+        'llm_execution',
+      );
+
+      expect(out).toMatchObject({
+        body: {
+          message: 'Payment required',
+          provider: 'lobehub',
+          status: 402,
+          traceId: 'trace-402',
+        },
+        error: 'Payment required',
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+        phase: 'llm_execution',
+      });
+    });
+
     it('preserves ConversationParentMissing errorType and message even when .cause has PG info', () => {
       // Mirrors createConversationParentMissingError from messagePersistErrors.ts:
       // the user-facing errorType lives on the error object directly, and the

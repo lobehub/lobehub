@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Đánh dấu là đang hoạt động",
   "defaultTitle": "Chủ đề mặc định",
   "displayItems": "Hiển thị mục",
+  "draft": "[Bản thảo]",
   "duplicateLoading": "Đang sao chép chủ đề...",
   "duplicateSuccess": "Sao chép chủ đề thành công",
   "failedStatusTip": "Lần chạy này gặp lỗi — mở để xem chi tiết.",

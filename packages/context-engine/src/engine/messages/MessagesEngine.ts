@@ -41,6 +41,7 @@ import {
   HistorySummaryProvider,
   KnowledgeInjector,
   LocalSystemToolSnapshotInjector,
+  ModelKnowledgeCutoffProvider,
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
@@ -136,6 +137,7 @@ export class MessagesEngine {
   private buildProcessors(): ContextProcessor[] {
     const {
       model,
+      modelKnowledgeCutoff,
       provider,
       systemRole,
       inputTemplate,
@@ -244,6 +246,8 @@ export class MessagesEngine {
       }),
       // System date
       new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      // Model knowledge cutoff
+      new ModelKnowledgeCutoffProvider({ knowledgeCutoff: modelKnowledgeCutoff }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
       // sees neither the manifests nor the discovery prompt.

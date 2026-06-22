@@ -135,18 +135,20 @@ export interface ListTopicsForMemoryExtractorCursor {
 // higher in the list. A NULL / unknown status falls through to `active` (3),
 // matching the client which treats a missing status as active. Keep this in
 // sync with `STATUS_GROUP_ORDER` / `resolveStatusBucket` in `@lobechat/utils`
-// (client-side bucketing): `waitingForHuman` and `failed` both collapse into the
-// top `pending` bucket, so they must float to the top here too — otherwise a
-// failed topic could fall off the first page and vanish from the pending group.
+// (client-side bucketing): `waitingForHuman`, `failed` and `unread` all collapse
+// into the top `pending` bucket, so they must float to the top here too —
+// otherwise such a topic could fall off the first page and vanish from the
+// pending group.
 const STATUS_SORT_RANK = sql`CASE ${topics.status}
   WHEN 'waitingForHuman' THEN 0
   WHEN 'failed' THEN 1
-  WHEN 'running' THEN 2
-  WHEN 'active' THEN 3
-  WHEN 'paused' THEN 4
-  WHEN 'completed' THEN 5
-  WHEN 'archived' THEN 6
-  ELSE 3 END`;
+  WHEN 'unread' THEN 2
+  WHEN 'running' THEN 3
+  WHEN 'active' THEN 4
+  WHEN 'paused' THEN 5
+  WHEN 'completed' THEN 6
+  WHEN 'archived' THEN 7
+  ELSE 4 END`;
 
 // Favorites always float to the top; the rest are ordered by the requested
 // strategy. `status` adds the priority bucket before the recency tiebreaker.

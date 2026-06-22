@@ -1,7 +1,7 @@
 import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';

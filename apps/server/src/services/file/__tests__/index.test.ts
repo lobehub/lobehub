@@ -301,6 +301,34 @@ describe('FileService', () => {
     expect(result).toBe(expectedResult);
   });
 
+  describe('uploadBase64', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });
+      mockFileModel.create = vi.fn().mockResolvedValue({ id: 'new-file-id' });
+      vi.mocked(service['impl'].uploadMedia).mockResolvedValue({
+        key: 'assets/generations/2026-06-19/generated.png',
+      });
+    });
+
+    it('should write metadata compatible with UI upload path', async () => {
+      await service.uploadBase64(
+        Buffer.from('test content').toString('base64'),
+        'assets/generations/2026-06-19/generated.png',
+      );
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            dirname: 'assets/generations/2026-06-19',
+            filename: 'generated.png',
+            path: 'assets/generations/2026-06-19/generated.png',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+  });
+
   describe('uploadFromBuffer', () => {
     beforeEach(() => {
       mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });

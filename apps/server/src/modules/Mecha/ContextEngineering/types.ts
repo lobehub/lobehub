@@ -132,6 +132,8 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
 
   /** Page content context (optional, for document editing) */
   pageContentContext?: PageContentContext;

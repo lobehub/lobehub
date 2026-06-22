@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
 import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/overlayCaptureUploadPool';

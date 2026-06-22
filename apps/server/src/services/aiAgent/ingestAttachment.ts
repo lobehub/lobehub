@@ -129,8 +129,14 @@ export async function ingestAttachment(
     throw new Error('AttachmentSource must have either buffer or url');
   }
 
-  // 2. MIME correction from filename
-  if (mimeType === 'application/octet-stream' && source.name) {
+  // 2. MIME correction from filename.
+  // Recover whenever we don't have a usable MIME type — both the generic
+  // `application/octet-stream` and bogus non-MIME values some platforms send
+  // (e.g. QQ labels c2c file attachments as `"file"`). Without the `includes('/')`
+  // guard, a value like `"file"` slips through and an `.m4a` never gets
+  // classified as audio, so it's parsed as a document instead of passed to
+  // audio-capable models.
+  if ((mimeType === 'application/octet-stream' || !mimeType.includes('/')) && source.name) {
     const inferred = mime.getType(source.name);
     if (inferred) {
       log('ingestAttachment: inferred mimeType from filename: %s -> %s', source.name, inferred);

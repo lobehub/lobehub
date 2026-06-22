@@ -24,6 +24,7 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
   const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
     model,
     provider,
+    agentId,
   );
   const uploadFiles = useFileStore((s) => s.uploadChatFiles);
   const { allowed: canUpload } = usePermission('create_content');

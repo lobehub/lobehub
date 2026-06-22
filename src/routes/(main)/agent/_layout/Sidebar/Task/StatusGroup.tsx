@@ -5,7 +5,7 @@ import { cssVar } from 'antd-style';
 import { CircleDashed, CircleDot, HandIcon, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 

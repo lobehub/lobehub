@@ -3,7 +3,7 @@
 import { Button, Center } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router';
 
 import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
 

@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.2.7](https://github.com/lobehub/lobe-chat/compare/v2.2.7-canary.14...v2.2.7)
+
+<sup>Released on **2026-06-20**</sup>
+
+#### 🐛 Bug Fixes
+
+- **chat**: treat parked runs as non-terminal in client run-lifecycle.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **chat**: treat parked runs as non-terminal in client run-lifecycle, closes [#16072](https://github.com/lobehub/lobe-chat/issues/16072) ([db2a62d](https://github.com/lobehub/lobe-chat/commit/db2a62d))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.2.6](https://github.com/lobehub/lobe-chat/compare/v2.2.6-canary.8...v2.2.6)
 
 <sup>Released on **2026-06-17**</sup>

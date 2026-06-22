@@ -1,3 +1,5 @@
+import { TRPCError } from '@trpc/server';
+
 import { authedProcedure } from '@/libs/trpc/lambda';
 import { trpc } from '@/libs/trpc/lambda/init';
 
@@ -17,6 +19,13 @@ export const wsProcedure = authedProcedure;
 
 export const wsMemberProcedure = authedProcedure;
 
-export const wsOwnerProcedure = authedProcedure;
+const requireWorkspaceId = trpc.middleware(async ({ ctx, next }) => {
+  if (!ctx.workspaceId) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'workspaceId is required' });
+  }
+  return next({ ctx: { workspaceId: ctx.workspaceId } });
+});
+
+export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceId);
 
 export const wsCompatProcedure = authedProcedure;

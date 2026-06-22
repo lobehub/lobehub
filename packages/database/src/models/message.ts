@@ -2363,7 +2363,7 @@ export class MessageModel {
    * Id of the latest main-thread (`threadId IS NULL`) "spine" message in a
    * topic: the most recent message that is NOT a tool and NOT a signal-tagged
    * reactive turn (Monitor stdout callbacks etc.). This is the chain anchor for
-   * the heterogeneous-agent write side (LOBE-10445 phase 2): the next normal
+   * the heterogeneous-agent write side: the next normal
    * turn parents off it, producing a `user → asst → asst …` spine with tools as
    * inline children.
    *

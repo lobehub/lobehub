@@ -1,7 +1,7 @@
 import type * as BusinessConst from '@lobechat/business-const';
 import type * as Const from '@lobechat/const';
 import { cleanup, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import OnBoardingContainer from './index';
@@ -46,13 +46,7 @@ vi.mock('@/hooks/useIsDark', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  Trans: ({
-    i18nKey,
-    values,
-  }: {
-    i18nKey?: string;
-    values?: { mode?: string; skip?: string };
-  }) => {
+  Trans: ({ i18nKey, values }: { i18nKey?: string; values?: { mode?: string; skip?: string } }) => {
     const modeText = values?.mode ?? '';
 
     if (i18nKey === 'agent.layout.switchMessageClassic') {
@@ -122,9 +116,7 @@ describe('OnBoardingContainer', () => {
   it('shows the switch footer without a skip link on /onboarding/classic', () => {
     renderAt('/onboarding/classic');
     expect(hasSkipFooter()).toBe(false);
-    expect(
-      screen.getByText((content) => content.includes('Switch to')),
-    ).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('Switch to'))).toBeInTheDocument();
   });
 
   it('hides footer when AGENT_ONBOARDING_ENABLED master switch is off', () => {

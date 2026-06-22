@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 import { useElectronStore } from '@/store/electron';

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { useMatches, useParams } from 'react-router-dom';
+import { useMatches, useParams } from 'react-router';
 
 import { SettingsTabs } from '@/store/global/initialState';
 

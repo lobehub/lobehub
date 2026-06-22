@@ -5,7 +5,7 @@ import { cx } from 'antd-style';
 import NextLink from 'next/link';
 import { type PropsWithChildren } from 'react';
 import { memo, Suspense } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';

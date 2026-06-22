@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
-import { SkillAuthRow } from './SkillAuthRow';
 import { styles } from './style';
 import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
@@ -26,7 +26,7 @@ interface TaskTemplateCardProps {
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
   ({ template, onCreated, onDismiss }) => {
-    const { t } = useTranslation('taskTemplate');
+    const { t } = useTranslation('common');
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
     const visibleAuthSpecs = useVisibleAuthSpecs(template, { hideMainIconProvider: true });
@@ -112,7 +112,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
                 title={
                   <Center>
                     <span>{scheduleText}</span>
-                    {t('schedule.editableAfterCreateTooltip')}
+                    {t('taskTemplate.schedule.editableAfterCreateTooltip')}
                   </Center>
                 }
               />
@@ -124,7 +124,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
               className={`${styles.dismissBtn} task-template-dismiss`}
               icon={X}
               size={'small'}
-              title={t('action.dismiss.tooltip')}
+              title={t('taskTemplate.action.dismiss.tooltip')}
               onClick={handleDismiss}
             />
           </Flexbox>
@@ -134,7 +134,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>
             {visibleAuthSpecs.map((spec) => (
-              <SkillAuthRow
+              <ConnectorAuthRow
                 disabled={disabled}
                 key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
@@ -146,7 +146,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag size={'small'} variant={'outlined'}>
-              {t('card.templateTag')}
+              {t('taskTemplate.card.templateTag')}
             </Tag>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>

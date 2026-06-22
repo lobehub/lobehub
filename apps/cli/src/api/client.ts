@@ -12,7 +12,8 @@ import { log } from '../utils/logger';
 export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
 export type ToolsTrpcClient = ReturnType<typeof createTRPCClient<ToolsRouter>>;
 
-let _client: TrpcClient | undefined;
+const PERSONAL_KEY = '__personal__';
+const _clients = new Map<string, TrpcClient>();
 let _toolsClient: ToolsTrpcClient | undefined;
 
 async function getAuthAndServer() {
@@ -53,21 +54,40 @@ async function getAuthAndServer() {
   };
 }
 
-export async function getTrpcClient(): Promise<TrpcClient> {
-  if (_client) return _client;
+/**
+ * Resolve the workspace scope for outbound tRPC calls.
+ *
+ * Precedence: explicit caller arg → `LOBEHUB_WORKSPACE_ID` env (inherited
+ * from a workspace-dispatched parent process, e.g. openclaw spawned by the
+ * device's `runHeteroTask`) → personal mode. Without this, agentNotify
+ * callbacks on workspace topics would resolve through personal-mode
+ * TopicModel and 404.
+ */
+function resolveWorkspaceId(explicit?: string): string | undefined {
+  if (explicit) return explicit;
+  const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
+  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
+}
+
+export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
+  const wsId = resolveWorkspaceId(workspaceId);
+  const cacheKey = wsId ?? PERSONAL_KEY;
+  const cached = _clients.get(cacheKey);
+  if (cached) return cached;
 
   const { headers, serverUrl } = await getAuthAndServer();
-  _client = createTRPCClient<LambdaRouter>({
+  const client = createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
-        headers,
+        headers: wsId ? { ...headers, 'X-Workspace-Id': wsId } : headers,
         transformer: superjson,
         url: `${serverUrl}/trpc/lambda`,
       }),
     ],
   });
+  _clients.set(cacheKey, client);
 
-  return _client;
+  return client;
 }
 
 /**
@@ -77,13 +97,19 @@ export async function getTrpcClient(): Promise<TrpcClient> {
  * via env/stored creds and `process.exit(1)` when none exist, which would
  * abort an otherwise-valid explicit-token session.
  */
-export function createLambdaClient(auth: {
-  serverUrl: string;
-  token: string;
-  tokenType: 'apiKey' | 'jwt' | 'serviceToken';
-}): TrpcClient {
-  const headers =
-    auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token };
+export function createLambdaClient(
+  auth: {
+    serverUrl: string;
+    token: string;
+    tokenType: 'apiKey' | 'jwt' | 'serviceToken';
+  },
+  /** When set, scopes the request to a workspace (e.g. workspace-device enrollment). */
+  workspaceId?: string,
+): TrpcClient {
+  const headers: Record<string, string> = {
+    ...(auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token }),
+    ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+  };
 
   return createTRPCClient<LambdaRouter>({
     links: [httpLink({ headers, transformer: superjson, url: `${auth.serverUrl}/trpc/lambda` })],

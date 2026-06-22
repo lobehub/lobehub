@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Marcar como Ativa",
   "defaultTitle": "Tópico Padrão",
   "displayItems": "Exibir Itens",
+  "draft": "[Rascunho]",
   "duplicateLoading": "Copiando Tópico...",
   "duplicateSuccess": "Tópico Copiado com Sucesso",
   "failedStatusTip": "Esta execução encontrou um erro — abra para dar uma olhada.",

@@ -32,8 +32,9 @@ const AgentModeNotice = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
 
-  const [enableAgentMode, model, provider] = useAgentStore((s) => [
+  const [enableAgentMode, isHeterogeneousAgent, model, provider] = useAgentStore((s) => [
     agentByIdSelectors.getAgentEnableModeById(agentId)(s),
+    agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
@@ -43,7 +44,8 @@ const AgentModeNotice = memo(() => {
     aiModelSelectors.isModelSupportToolUse(model, provider)(s),
   ]);
 
-  if (!enableAgentMode || !isModelConfigReady || supportToolUse) return null;
+  if (isHeterogeneousAgent || !enableAgentMode || !isModelConfigReady || supportToolUse)
+    return null;
 
   return (
     <Alert

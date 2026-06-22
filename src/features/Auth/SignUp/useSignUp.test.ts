@@ -10,7 +10,7 @@ const mockSignUpEmail = vi.hoisted(() => vi.fn());
 const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
 const mockPreSocialSignupCheck = vi.hoisted(() => vi.fn(async () => true));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));

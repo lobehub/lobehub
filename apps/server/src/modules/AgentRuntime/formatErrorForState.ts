@@ -1,5 +1,6 @@
 import { getErrorCodeSpec, refineErrorCode } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils';
 
 /** Pull a usable HTTP status out of the nested upstream error object. */
 const extractHttpStatus = (body: unknown): number | undefined => {
@@ -17,6 +18,80 @@ const extractProvider = (body: unknown): string | undefined => {
   if (!body || typeof body !== 'object') return undefined;
   const p = (body as { provider?: unknown }).provider;
   return typeof p === 'string' ? p : undefined;
+};
+
+const extractMessage = (value: unknown): string | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const message = value.message;
+  if (typeof message === 'string' && message) return message;
+
+  const nestedError = value.error;
+  if (isRecord(nestedError)) {
+    const nestedMessage = nestedError.message;
+    if (typeof nestedMessage === 'string' && nestedMessage) return nestedMessage;
+  }
+};
+
+interface ChatCompletionErrorPayloadLike {
+  _responseBody?: unknown;
+  budget?: unknown;
+  error?: unknown;
+  errorType: ChatMessageError['type'];
+  message?: string;
+  provider?: unknown;
+}
+
+const mergePayloadError = (
+  sourceBody: Record<string, unknown>,
+  payload: ChatCompletionErrorPayloadLike,
+): unknown | undefined => {
+  if (payload._responseBody === undefined || payload.error === undefined) return undefined;
+  if (!('error' in sourceBody)) return payload.error;
+  if (isRecord(sourceBody.error) && isRecord(payload.error)) {
+    return { ...payload.error, ...sourceBody.error };
+  }
+};
+
+const buildPayloadBody = (
+  payload: ChatCompletionErrorPayloadLike,
+  originalError: unknown,
+  message: string,
+): unknown => {
+  // Runtime payloads often keep UI context (for example quota hints) next to
+  // `error`, while `error` itself only carries the display message. Merge both
+  // layers so normalizing `{ errorType, error }` does not drop the fields the
+  // chat error renderer needs later.
+  const sourceBody = payload._responseBody ?? payload.error ?? originalError;
+  const context: Record<string, unknown> = {};
+
+  if (payload.budget !== undefined) context.budget = payload.budget;
+  if (typeof payload.provider === 'string') context.provider = payload.provider;
+
+  if (isRecord(sourceBody)) {
+    const payloadError = mergePayloadError(sourceBody, payload);
+
+    return {
+      ...sourceBody,
+      // `_responseBody` is the display-facing body, but gateway/model-runtime
+      // still carries status/provider details in `error` for some failures:
+      // `{ _responseBody: { error: { message } }, error: { status: 402 } }`.
+      ...(payloadError === undefined ? {} : { error: payloadError }),
+      ...(payload.budget !== undefined && !('budget' in sourceBody)
+        ? { budget: payload.budget }
+        : {}),
+      ...(typeof payload.provider === 'string' && !('provider' in sourceBody)
+        ? { provider: payload.provider }
+        : {}),
+      ...('message' in sourceBody ? {} : { message }),
+    };
+  }
+
+  return {
+    ...context,
+    ...(sourceBody === undefined ? {} : { error: sourceBody }),
+    message,
+  };
 };
 
 /**
@@ -79,14 +154,16 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
  */
 export const formatErrorForState = (error: unknown): ChatMessageError => {
   if (error && typeof error === 'object' && 'errorType' in error) {
-    const payload = error as {
-      error?: unknown;
-      errorType: ChatMessageError['type'];
-      message?: string;
-    };
+    const payload = error as ChatCompletionErrorPayloadLike;
+    const message =
+      (payload.message && payload.message !== 'error' ? payload.message : undefined) ??
+      extractMessage(payload._responseBody) ??
+      extractMessage(payload.error) ??
+      String(payload.errorType);
+
     return enrichWithSpec({
-      body: payload.error || error,
-      message: payload.message || String(payload.errorType),
+      body: buildPayloadBody(payload, error, message),
+      message,
       type: payload.errorType,
     });
   }

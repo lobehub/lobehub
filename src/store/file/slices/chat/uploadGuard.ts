@@ -103,6 +103,31 @@ const SUPPORTED_CHAT_DOCUMENT_MIME_TYPES = new Set([
 
 const getExtension = (filename: string) => filename.split('.').pop()?.toLowerCase() || '';
 
+// Canonical audio mime for each supported extension. Audio containers like .m4a share the
+// ISO-BMFF box layout with .mp4, so the browser often reports an empty mime and byte-sniffing
+// (file-type) can report `video/mp4`. We trust the extension for these to keep them classified
+// and rendered as audio.
+const AUDIO_EXTENSION_MIME_TYPES: Record<string, string> = {
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  m4b: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+};
+
+/**
+ * Returns the canonical audio mime for a filename whose extension is a known audio container,
+ * or `undefined` otherwise. Use this to backfill/override an empty or mis-detected mime so the
+ * file is classified and rendered as audio. See lobehub/lobehub#15988.
+ */
+export const audioMimeFromExtension = (filename: string): string | undefined =>
+  AUDIO_EXTENSION_MIME_TYPES[getExtension(filename)];
+
 export const isSupportedChatUploadFile = (file: File) => {
   const fileType = file.type.toLowerCase();
   const extension = getExtension(file.name);

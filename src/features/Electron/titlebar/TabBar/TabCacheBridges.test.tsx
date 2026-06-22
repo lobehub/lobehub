@@ -1,6 +1,6 @@
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { MessageSquare } from 'lucide-react';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type DynamicRouteMeta, type RouteMeta } from '@/spa/router/routeMeta';

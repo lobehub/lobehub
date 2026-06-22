@@ -10,6 +10,7 @@ export enum WorkspaceSettingsTabs {
   Billing = 'billing',
   Credits = 'credits',
   Creds = 'creds',
+  Devices = 'devices',
   General = 'general',
   Members = 'members',
   Plans = 'plans',

@@ -18,8 +18,8 @@ Periodic review of the project-local skill set under `.agents/skills/`. The goal
 Build a fresh census of all SKILL.md files. Do NOT trust any prior cached list.
 
 ```bash
-find .agents/skills -name SKILL.md | wc -l                      # total count
-find .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body length
+find -L .agents/skills -name SKILL.md | wc -l                      # total count, including symlinked skills
+find -L .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body length, including symlinked skills
 ```
 
 Group by domain in a mental table (DB / state / UI / agent / testing / workflow / docs / etc.). Note new arrivals since last audit (`git log --since="1 week ago" -- .agents/skills/`).

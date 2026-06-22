@@ -4,7 +4,7 @@ import { Accordion, Flexbox } from '@lobehub/ui';
 import { LayoutDashboard } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

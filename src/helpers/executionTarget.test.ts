@@ -1,4 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,75 +14,152 @@ const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig =
 
 describe('resolveExecutionTarget', () => {
   it('returns the stored target verbatim when set', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), { isDesktop: true })).toBe(
-      'device',
-    );
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), { isDesktop: true })).toBe(
-      'sandbox',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+        clientExecutionAvailable: true,
+      }),
+    ).toBe('device');
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), {
+        clientExecutionAvailable: true,
+      }),
+    ).toBe('sandbox');
   });
 
   it('defaults to local on desktop, none on web when unset', () => {
-    expect(resolveExecutionTarget(undefined, { isDesktop: true })).toBe('local');
-    expect(resolveExecutionTarget(undefined, { isDesktop: false })).toBe('none');
-    expect(resolveExecutionTarget(cfg(), { isDesktop: true })).toBe('local');
-    expect(resolveExecutionTarget(cfg(), { isDesktop: false })).toBe('none');
+    expect(resolveExecutionTarget(undefined, { clientExecutionAvailable: true })).toBe('local');
+    expect(resolveExecutionTarget(undefined, { clientExecutionAvailable: false })).toBe('none');
+    expect(resolveExecutionTarget(cfg(), { clientExecutionAvailable: true })).toBe('local');
+    expect(resolveExecutionTarget(cfg(), { clientExecutionAvailable: false })).toBe('none');
   });
 
   it('coerces a stored `local` to `sandbox` on web (no local filesystem)', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: false })).toBe(
-      'sandbox',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+        clientExecutionAvailable: false,
+      }),
+    ).toBe('sandbox');
     // …but keeps it on desktop
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: true })).toBe(
-      'local',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'local' }), { clientExecutionAvailable: true }),
+    ).toBe('local');
   });
 
   it('routes hetero desktop-local bindings to the bound device on web', () => {
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
         isHetero: true,
       }),
     ).toBe('device');
 
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
       }),
     ).toBe('sandbox');
   });
 
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), { isDesktop: false })).toBe(
-      'device',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+        clientExecutionAvailable: false,
+      }),
+    ).toBe('device');
   });
 
   it('keeps an explicit `none` on both platforms', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: true })).toBe(
-      'none',
-    );
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: false })).toBe(
-      'none',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { clientExecutionAvailable: true }),
+    ).toBe('none');
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { clientExecutionAvailable: false }),
+    ).toBe('none');
   });
 
   it('coerces `none` for hetero agents — they must execute somewhere', () => {
     // stored none → desktop local, web sandbox
     expect(
-      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: true, isHetero: true }),
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), {
+        clientExecutionAvailable: true,
+        isHetero: true,
+      }),
     ).toBe('local');
     expect(
       resolveExecutionTarget(cfg({ executionTarget: 'none' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
         isHetero: true,
       }),
     ).toBe('sandbox');
     // unset → platform default, then the same coercion on web
-    expect(resolveExecutionTarget(undefined, { isDesktop: true, isHetero: true })).toBe('local');
-    expect(resolveExecutionTarget(undefined, { isDesktop: false, isHetero: true })).toBe('sandbox');
+    expect(
+      resolveExecutionTarget(undefined, { clientExecutionAvailable: true, isHetero: true }),
+    ).toBe('local');
+    expect(
+      resolveExecutionTarget(undefined, { clientExecutionAvailable: false, isHetero: true }),
+    ).toBe('sandbox');
+  });
+
+  describe('trigger=bot — upgrades a local target (bound → device, unbound → auto)', () => {
+    it('coerces an UNBOUND desktop `local` (and the unset desktop default) to auto', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('auto');
+      // unset desktop default is `local`, so it coerces too
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('auto');
+    });
+
+    it('routes a BOUND `local` to `device` — honours the pinned machine, not auto', () => {
+      // the switcher persists the desktop's own deviceId as boundDeviceId for a
+      // `local` pick; a bot run must reach THAT machine, not auto-grab another.
+      expect(
+        resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('device');
+    });
+
+    it('leaves `none` / `sandbox` / `device` untouched — explicit intent', () => {
+      for (const executionTarget of ['none', 'sandbox', 'device'] as const) {
+        expect(
+          resolveExecutionTarget(cfg({ executionTarget }), {
+            clientExecutionAvailable: true,
+            trigger: RequestTrigger.Bot,
+          }),
+        ).toBe(executionTarget);
+      }
+    });
+
+    it('does not resurrect a device on web — `local` still coerces to sandbox first', () => {
+      // the web→sandbox coercion runs before the bot rule, so a web `local`
+      // never becomes auto (there is no in-process local on web anyway).
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          clientExecutionAvailable: false,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('only fires for the bot trigger — other triggers keep `local`', () => {
+      for (const trigger of [RequestTrigger.Chat, RequestTrigger.Cron, undefined]) {
+        expect(
+          resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+            clientExecutionAvailable: true,
+            trigger,
+          }),
+        ).toBe('local');
+      }
+    });
   });
 });
 
@@ -126,14 +204,14 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'none' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'none' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -145,7 +223,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'sandbox' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -156,7 +234,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           canUseDevice: false,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -168,7 +246,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
@@ -178,43 +256,119 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-x', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
     });
 
-    it('auto-activates only when exactly one device is online and nothing is bound', () => {
+    it('NEVER auto-activates a `local` target with nothing bound (no silent grab)', () => {
       const local = cfg({ executionTarget: 'local' });
+      // a single online device used to be auto-activated for `local`; now only
+      // `auto` does that — `local` stays unrouted until a device is bound.
       expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_A }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+        resolveExecutionPlan({
+          agencyConfig: local,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
       expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'local' });
-      expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: [] }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'local' });
+        resolveExecutionPlan({
+          agencyConfig: local,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
-    it('treats the desktop default (unset target) as device-capable', () => {
+    it('treats the desktop default (unset target) as `local` but never auto-grabs a device', () => {
+      // unset → `local` on desktop; device-capable but unrouted until bound.
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
     it('resolves the unset web target to none', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
+    });
+  });
+
+  describe('auto — the only mode that auto-activates an unbound device', () => {
+    const auto = cfg({ executionTarget: 'auto' });
+
+    it('activates the single online device', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('stays unrouted (model picks) when several devices are online', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('stays unrouted when no device is online', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: [],
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'auto' });
+    });
+
+    it('works on web too (auto can pick a remote device)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: false,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('ignores a stale stored boundDeviceId (auto is not an explicit selection)', () => {
+      // a leftover binding from a previous `device` selection must not pin the
+      // run — auto picks fresh from the online set.
+      const staleBound = cfg({ boundDeviceId: 'device-a', executionTarget: 'auto' });
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: staleBound,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('still honours an explicit requestedDeviceId over auto-pick', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          requestedDeviceId: 'device-b',
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'auto' });
     });
   });
 
@@ -223,7 +377,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
@@ -234,11 +388,145 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
       ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+  });
+
+  describe('trigger=bot — upgrades a local target to auto', () => {
+    it('upgrades a stored `local` target to auto and activates the single online device', () => {
+      // a bot conversation can't pick a device, and `local` in-process IPC is
+      // unreachable from the cloud bot server — so `local` auto-activates.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('upgrades the unset desktop default (local) to auto', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: undefined,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('stays unrouted (model picks) when several devices are online', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('routes a BOUND `local` to its pinned device, even with several online (no auto-grab)', () => {
+      // regression: the bot upgrade used to relabel bound `local` → auto, which
+      // ignores boundDeviceId and would auto-pick / go ambiguous. A pinned
+      // machine must win — here device-b is bound and stays selected.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-b', executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+
+    it('keeps a BOUND `local` on its pinned device when offline (no silent fallback)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-x', executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
+    });
+
+    it('does NOT upgrade `none` — an explicit opt-out stays plain chat', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'none' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('does NOT upgrade `sandbox` — an explicit cloud choice stays', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'sandbox' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+
+    it('does NOT touch an explicitly bound `device` target (binding wins over auto)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-b', executionTarget: 'device' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+
+    it('still routes a requestedDeviceId-pinned local run to that device (now under auto)', () => {
+      // the local→auto coercion lives in resolveExecutionTarget, so it applies
+      // before requestedDeviceId is considered. The explicit device still wins
+      // the routing; only the target label is `auto` (gateway routing) rather
+      // than `local` (in-process) — correct for a server-side bot run.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          requestedDeviceId: 'device-b',
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'auto' });
+    });
+
+    it('still honours chat mode — a bot on a chat-mode agent stays plain chat', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          chatConfig: { enableAgentMode: false },
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('only fires for bot triggers — a chat trigger leaves `local` unrouted', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Chat,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
   });
 
@@ -249,7 +537,7 @@ describe('resolveExecutionPlan', () => {
           resolveExecutionPlan({
             agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
             canUseDevice: false,
-            isDesktop: true,
+            clientExecutionAvailable: true,
             onlineDeviceIds: ONLINE_A,
             requestedDeviceId: 'device-a',
           }),
@@ -271,7 +559,7 @@ describe('resolveExecutionPlan', () => {
             resolveExecutionPlan({
               agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
               chatConfig,
-              isDesktop: true,
+              clientExecutionAvailable: true,
               onlineDeviceIds: ONLINE_A,
             }),
           ).toEqual({ kind: 'none', target: 'none' });
@@ -284,7 +572,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: undefined,
           chatConfig: { enableAgentMode: false },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -292,7 +580,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           chatConfig: { enableAgentMode: false },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -300,15 +588,17 @@ describe('resolveExecutionPlan', () => {
 
     it('does not degrade agent mode (toolMode wins over enableAgentMode)', () => {
       // explicit toolMode='agent' must keep device routing even if
-      // enableAgentMode is somehow false
+      // enableAgentMode is somehow false. Uses `auto` so a single online device
+      // is still activated — proving the device track survives agent mode (only
+      // `auto` auto-activates; `local`'s no-grab behaviour is covered above).
       expect(
         resolveExecutionPlan({
-          agencyConfig: cfg({ executionTarget: 'local' }),
+          agencyConfig: cfg({ executionTarget: 'auto' }),
           chatConfig: { enableAgentMode: false, toolMode: 'agent' },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
     });
 
     it('ignores chat mode for hetero agents (they always need a runtime)', () => {
@@ -316,7 +606,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
           chatConfig: { enableAgentMode: false },
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
           onlineDeviceIds: ONLINE_A,
         }),
@@ -334,7 +624,7 @@ describe('resolveExecutionPlan', () => {
           resolveExecutionPlan({
             agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
             canUseDevice: false,
-            isDesktop: false,
+            clientExecutionAvailable: false,
             isHetero: true,
           }),
         ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -344,7 +634,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           canUseDevice: false,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
           requestedDeviceId: 'device-a',
         }),
@@ -357,14 +647,14 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' });
@@ -374,7 +664,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
@@ -386,7 +676,7 @@ describe('resolveExecutionPlan', () => {
       for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
         const plan: ExecutionPlan = resolveExecutionPlan({
           agencyConfig: executionTarget ? cfg({ executionTarget }) : undefined,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         });
         expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });

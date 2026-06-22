@@ -22,7 +22,7 @@ export const apiKeyRouter = router({
     .use(withScopedPermission('api_key:create'))
     .input(
       z.object({
-        expiresAt: z.date().optional().nullable(),
+        expiresAt: z.date().nullish(),
         name: z.string(),
       }),
     )
@@ -67,7 +67,7 @@ export const apiKeyRouter = router({
         value: z.object({
           description: z.string().optional(),
           enabled: z.boolean().optional(),
-          expiresAt: z.date().optional().nullable(),
+          expiresAt: z.date().nullish(),
           name: z.string().optional(),
         }),
       }),
