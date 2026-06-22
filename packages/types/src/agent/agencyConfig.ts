@@ -268,11 +268,12 @@ const getExplicitCodexReasoningEffort = (
 };
 
 /**
- * Resolve the effective CLI args for a heterogeneous spawn.
+ * Resolve the effective native CLI args for a heterogeneous spawn.
  *
  * For `claude-code` and `codex`, the chat-input selector persists explicit
  * `model` + `effort` selections on the provider config; this is the single
- * place that maps those stored settings onto provider-specific argv.
+ * place that maps those stored settings onto provider-specific argv for direct
+ * local desktop spawns.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -311,6 +312,54 @@ export const buildHeteroSpawnArgs = (
     const effort = getExplicitCodexReasoningEffort(provider);
     if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
       extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
+    }
+  }
+
+  if (extraArgs.length === 0) return provider.args;
+  return [...baseArgs, ...extraArgs];
+};
+
+/**
+ * Resolve args for the `lh hetero exec` wrapper.
+ *
+ * Unlike `buildHeteroSpawnArgs`, these args are consumed by the LobeHub CLI
+ * wrapper first, not by the native agent binary. Keep Codex selectors in the
+ * wrapper's `--model` / `--effort` form; `lh hetero exec` translates them into
+ * native Codex config immediately before `spawnAgent`.
+ */
+export const buildHeteroExecArgs = (
+  provider: HeterogeneousProviderConfig | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (provider.type !== 'claude-code' && provider.type !== 'codex') return provider.args;
+
+  const baseArgs = provider.args ?? [];
+  const extraArgs: string[] = [];
+
+  if (provider.type === 'claude-code') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      extraArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (
+      effort &&
+      !hasCliFlag(baseArgs, '--effort') &&
+      !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
+    ) {
+      extraArgs.push('--effort', effort);
     }
   }
 

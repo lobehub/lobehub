@@ -43,7 +43,7 @@ import type {
   UserInterventionConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
-import { buildHeteroSpawnArgs, RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
+import { buildHeteroExecArgs, RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -1325,9 +1325,9 @@ export class AiAgentService {
         runAttachments.imageList && runAttachments.imageList.length > 0
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
-      const heteroSpawnArgs =
+      const heteroExecArgs =
         heteroType === 'claude-code' || heteroType === 'codex'
-          ? buildHeteroSpawnArgs(
+          ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
                 : { type: heteroType },
@@ -1642,7 +1642,7 @@ export class AiAgentService {
           spawnHeteroSandbox({
             ...heteroParams,
             agentType: heteroType as 'claude-code' | 'codex',
-            args: heteroSpawnArgs,
+            args: heteroExecArgs,
             marketService: this.marketService,
           }).catch((err) => {
             log('execAgent: hetero sandbox spawn failed: %O', err);

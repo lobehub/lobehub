@@ -18,6 +18,7 @@ import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
+const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -89,11 +90,21 @@ interface ExecOptions {
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
 
-const buildExtraArgs = (options: Pick<ExecOptions, 'effort' | 'model'>): string[] | undefined => {
-  const extraArgs = [
-    ...(options.model ? ['--model', options.model] : []),
-    ...(options.effort ? ['--effort', options.effort] : []),
-  ];
+const buildExtraArgs = (
+  options: Pick<ExecOptions, 'effort' | 'model' | 'type'>,
+): string[] | undefined => {
+  const extraArgs =
+    options.type === 'codex'
+      ? [
+          ...(options.model ? ['--model', options.model] : []),
+          ...(options.effort
+            ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+            : []),
+        ]
+      : [
+          ...(options.model ? ['--model', options.model] : []),
+          ...(options.effort ? ['--effort', options.effort] : []),
+        ];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
 };

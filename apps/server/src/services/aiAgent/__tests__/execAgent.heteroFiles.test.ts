@@ -304,7 +304,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['--model', 'gpt-5.5', '-c', 'model_reasoning_effort="xhigh"'],
+        args: ['--model', 'gpt-5.5', '--effort', 'xhigh'],
       }),
     );
   });

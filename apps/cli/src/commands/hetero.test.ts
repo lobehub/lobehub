@@ -192,7 +192,7 @@ describe('hetero exec command', () => {
     expect(call.operationId).toBe('op-server-allocated');
   });
 
-  it('passes --model and --effort through as spawnAgent extraArgs', async () => {
+  it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
     await runCmd([
@@ -211,6 +211,28 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
       extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
+  it('translates Codex --effort to native model_reasoning_effort config', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.5',
+      '--effort',
+      'xhigh',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'gpt-5.5', '-c', 'model_reasoning_effort="xhigh"'],
     });
   });
 

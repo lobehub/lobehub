@@ -200,7 +200,7 @@ export class GatewayHttpClient {
 
   async dispatchAgentRun(params: {
     agentType: string;
-    /** Resolved native agent CLI args forwarded through `lh hetero exec`. */
+    /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
     deviceId?: string;

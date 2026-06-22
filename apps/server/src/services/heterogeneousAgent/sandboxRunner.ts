@@ -18,7 +18,7 @@ const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")
 
 export interface SandboxRunParams {
   agentType: 'claude-code' | 'codex';
-  /** Resolved native agent CLI args forwarded through `lh hetero exec`. */
+  /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
   /** Initial assistant placeholder message id — injected as LOBEHUB_ASSISTANT_MESSAGE_ID so
    * the CLI can pass it through the heteroIngest payload, removing the need for the server

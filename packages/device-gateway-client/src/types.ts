@@ -196,8 +196,8 @@ export interface RpcResponseMessage {
 export interface AgentRunRequestMessage {
   agentType: string;
   /**
-   * Resolved native agent CLI args forwarded through `lh hetero exec`, e.g.
-   * Claude Code's `--model` / `--effort`. Optional for protocol
+   * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.
+   * Optional for protocol
    * compatibility with older servers.
    */
   args?: string[];

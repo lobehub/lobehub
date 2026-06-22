@@ -930,7 +930,7 @@ export class DeviceGateway {
 
   async dispatchAgentRun(params: {
     agentType: HeterogeneousAgentType;
-    /** Resolved native agent CLI args forwarded through `lh hetero exec`. */
+    /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
     deviceId?: string;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
@@ -195,5 +196,27 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'codex',
       }),
     ).toEqual(['-c', 'model = "gpt-5.4"']);
+  });
+
+  it('builds lh hetero exec wrapper args for Codex selectors', () => {
+    expect(buildHeteroExecArgs({ type: 'codex', model: 'gpt-5.5', effort: 'high' })).toEqual([
+      '--model',
+      'gpt-5.5',
+      '--effort',
+      'high',
+    ]);
+  });
+
+  it('does not append native Codex config flags to lh hetero exec args', () => {
+    expect(buildHeteroExecArgs({ type: 'codex', effort: 'xhigh' })).toEqual(['--effort', 'xhigh']);
+  });
+
+  it('keeps Claude Code lh hetero exec selector args in the same wrapper form', () => {
+    expect(buildHeteroExecArgs({ type: 'claude-code', model: 'opus', effort: 'high' })).toEqual([
+      '--model',
+      'opus',
+      '--effort',
+      'high',
+    ]);
   });
 });

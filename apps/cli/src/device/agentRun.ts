@@ -7,7 +7,7 @@ import {
 
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
-  /** Resolved native agent CLI args forwarded through `lh hetero exec`. */
+  /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
