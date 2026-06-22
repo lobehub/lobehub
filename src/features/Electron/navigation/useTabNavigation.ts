@@ -55,7 +55,7 @@ export const useTabNavigation = () => {
         return;
       }
 
-      updateTab(activeTabId, currentUrl);
+      updateTab(activeTab.id, currentUrl);
     } else {
       // First launch (or stale activeTabId): make the current page visible as a tab,
       // so the tab bar and its "+" entry are always discoverable.
