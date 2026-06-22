@@ -314,6 +314,25 @@ describe('useDailyBriefRecommendationsUI', () => {
     expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
   });
 
+  it('drops recommendations with unknown connector identifiers', () => {
+    const templateWithUnknownConnector = {
+      ...template,
+      connectors: [{ identifier: 'nonexistent-x', required: true, source: 'lobehub' }],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithUnknownConnector], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
   it('normalizes cached rows before removing a card', () => {
     mockUseSWR.mockReturnValue({
       data: { data: [template, null], success: true },

@@ -19,6 +19,7 @@ import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { getProviderMeta } from './providerMeta';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
 const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
@@ -47,10 +48,11 @@ const isTaskTemplateConnectorSource = (value: unknown): value is TaskTemplateCon
 
 const isTaskTemplateConnector = (value: unknown): value is TaskTemplateConnector => {
   if (!isRecord(value)) return false;
+  if (typeof value.identifier !== 'string') return false;
+  if (!isTaskTemplateConnectorSource(value.source)) return false;
   return (
-    typeof value.identifier === 'string' &&
     typeof value.required === 'boolean' &&
-    isTaskTemplateConnectorSource(value.source)
+    Boolean(getProviderMeta({ identifier: value.identifier, source: value.source }))
   );
 };
 
