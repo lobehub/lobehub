@@ -314,6 +314,32 @@ describe('useDailyBriefRecommendationsUI', () => {
     expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
   });
 
+  it('normalizes cached rows before removing a card', () => {
+    mockUseSWR.mockReturnValue({
+      data: { data: [template, null], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current.mode).toBe('cards');
+    if (result.current.mode !== 'cards') return;
+
+    result.current.onCreated(template.id);
+
+    const updater = mockMutate.mock.calls[0][0] as (current?: {
+      data: unknown[];
+      success: boolean;
+    }) => unknown;
+    expect(updater({ data: [template, null], success: true })).toEqual({
+      data: [],
+      success: true,
+    });
+    expect(mockMutate.mock.calls[0][1]).toEqual({ revalidate: false });
+  });
+
   it('drops legacy recommendations from pre-Market task-template servers', () => {
     const legacyServerTemplate = {
       category: 'engineering',

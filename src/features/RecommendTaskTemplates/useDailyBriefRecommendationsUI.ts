@@ -79,6 +79,12 @@ const normalizeTaskTemplateRecommendation = (template: unknown): TaskTemplate | 
   return template;
 };
 
+const normalizeTaskTemplateRecommendations = (templates: unknown[]): TaskTemplate[] =>
+  templates.flatMap((template) => {
+    const normalized = normalizeTaskTemplateRecommendation(template);
+    return normalized ? [normalized] : [];
+  });
+
 interface ResolveDailyBriefRecommendationRequestParams {
   interestKeys: string[] | null;
   isLogin: boolean | undefined;
@@ -220,7 +226,12 @@ export function useDailyBriefRecommendationsUI(
       mutate(
         (current) =>
           current
-            ? { ...current, data: current.data.filter((tmpl) => tmpl.id !== templateId) }
+            ? {
+                ...current,
+                data: normalizeTaskTemplateRecommendations(current.data).filter(
+                  (tmpl) => tmpl.id !== templateId,
+                ),
+              }
             : current,
         { revalidate: false },
       );
@@ -249,14 +260,7 @@ export function useDailyBriefRecommendationsUI(
     [message, mutate, removeTemplateFromList, t],
   );
 
-  const templates = useMemo(
-    () =>
-      (data?.data ?? []).flatMap((template) => {
-        const normalized = normalizeTaskTemplateRecommendation(template);
-        return normalized ? [normalized] : [];
-      }),
-    [data],
-  );
+  const templates = useMemo(() => normalizeTaskTemplateRecommendations(data?.data ?? []), [data]);
   const requiredSources = useMemo(() => {
     const sources = new Set<TaskTemplateConnectorSource>();
     for (const tmpl of templates) {
