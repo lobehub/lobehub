@@ -45,19 +45,19 @@ describe('resolveExecutionTarget', () => {
     ).toBe('local');
   });
 
-  it('routes hetero desktop-local bindings to the bound device on web', () => {
+  it('routes desktop-local bindings to the bound device on web', () => {
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
-        isHetero: true,
       }),
     ).toBe('device');
 
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
+        isHetero: true,
       }),
-    ).toBe('sandbox');
+    ).toBe('device');
   });
 
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
@@ -139,9 +139,9 @@ describe('resolveExecutionTarget', () => {
       }
     });
 
-    it('does not resurrect a device on web — `local` still coerces to sandbox first', () => {
-      // the web→sandbox coercion runs before the bot rule, so a web `local`
-      // never becomes auto (there is no in-process local on web anyway).
+    it('does not auto-activate an unbound local target on web', () => {
+      // the web→sandbox coercion runs before the bot rule, so an unbound web
+      // `local` never becomes auto (there is no in-process local on web anyway).
       expect(
         resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
           clientExecutionAvailable: false,
@@ -188,7 +188,7 @@ describe('resolveRuntimeMode', () => {
   });
 
   it('applies the web `local`→`sandbox` coercion before mapping to runtime mode', () => {
-    // executionTarget=local synced from desktop, resolved on web → sandbox → cloud
+    // unbound executionTarget=local synced from desktop, resolved on web → sandbox → cloud
     expect(resolveRuntimeMode(cfg({ executionTarget: 'local' }), false)).toBe('cloud');
   });
 });
@@ -660,12 +660,11 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' });
     });
 
-    it('uses the bound desktop device for hetero local runs entered from web', () => {
+    it('uses the bound desktop device for local runs entered from web', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
           clientExecutionAvailable: false,
-          isHetero: true,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
     });

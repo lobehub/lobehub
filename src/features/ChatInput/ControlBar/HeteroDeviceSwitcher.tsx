@@ -306,16 +306,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     staleTime: 30_000,
   });
 
-  // The current machine's own gateway deviceId (desktop only), used to badge the
-  // matching device row with a "This device" tag and show the local-process
-  // description instead of the generic online/offline status.
+  // The current machine's Device Connection id (desktop only). The desktop
+  // picker shows this machine once as the dedicated local option, but we still
+  // persist the id with that local choice so web/mobile can resolve it back to
+  // this concrete connected device instead of falling back to the sandbox.
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: shared with server dispatch. In particular, a hetero
-  // desktop "local" selection that carries this desktop's boundDeviceId becomes
-  // a device target when the same agent is opened from web.
+  // Effective target: shared with server dispatch. In particular, a desktop
+  // "local" selection that carries this desktop's boundDeviceId becomes a
+  // device target when the same agent is opened from web.
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero,
     clientExecutionAvailable: isDesktop,
@@ -329,6 +330,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
       let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
       if (target === 'local') {
+        // Desktop local execution is selected by location ("this machine"), not
+        // by transport. Store the machine's connected-device id anyway so the
+        // same agent opened outside desktop knows which device "local" referred
+        // to and can display/route that selection as `device` there.
         nextBoundDeviceId = currentDeviceId;
         if (!nextBoundDeviceId) {
           try {
@@ -358,6 +363,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
   const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
+  // Avoid showing the same execution location twice on desktop. The current
+  // machine is already represented by the local option above; the connected
+  // device list is for other machines. Cross-client continuity is handled by the
+  // `boundDeviceId` stored with local selections, not by exposing a duplicate
+  // "same machine through Device Connection" row here.
   const visibleDeviceRows = currentDeviceId
     ? deviceRows.filter((device) => device.deviceId !== currentDeviceId)
     : deviceRows;
@@ -391,6 +401,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipLabel =
       boundDevice?.friendlyName ??
       boundDevice?.hostname ??
+      (isLoading ? t('heteroAgent.executionTarget.loading') : undefined) ??
       t('heteroAgent.executionTarget.unknownDevice');
   }
 
@@ -413,16 +424,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => (
     <OptionRow
       active={isActive('device', d.deviceId)}
+      desc={renderDeviceStatus(d)}
       disabled={!d.online}
       icon={getDeviceIcon(d.platform)}
       key={d.deviceId}
       label={d.friendlyName || d.hostname || d.deviceId}
-      tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.gateway') : undefined}
-      desc={
-        d.deviceId === currentDeviceId
-          ? t('heteroAgent.executionTarget.gatewayDesc')
-          : renderDeviceStatus(d)
-      }
       onClick={() => void handleSelect('device', d.deviceId)}
     />
   );

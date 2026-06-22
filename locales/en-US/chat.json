@@ -238,8 +238,6 @@
   "heteroAgent.executionTarget.auto": "Auto",
   "heteroAgent.executionTarget.autoDesc": "Use any available connected device automatically",
   "heteroAgent.executionTarget.autoUnavailableDesc": "No connected device is online yet",
-  "heteroAgent.executionTarget.gateway": "Device Connection",
-  "heteroAgent.executionTarget.gatewayDesc": "Use this desktop through Device Connection so other clients can follow progress",
   "heteroAgent.executionTarget.infoTooltip": "Choose where the agent runs tools. Connected devices use configured folders and terminal access; Cloud Sandbox runs in an isolated temporary cloud environment.",
   "heteroAgent.executionTarget.loading": "Loading devices…",
   "heteroAgent.executionTarget.local": "This device",
