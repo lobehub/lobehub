@@ -455,6 +455,21 @@ describe('parse', () => {
         expect(summary!.role).toBe('supervisor');
         // No duplication regardless of which member carries the reply
         expect(result.flatList.filter((m) => m.id === 'msg-supervisor-summary')).toHaveLength(1);
+
+        // contextTree must stay in agreement with flatList — the reply has to surface in
+        // both exported views, otherwise a contextTree consumer still sees the chain vanish.
+        const collectIds = (nodes: any[], acc: string[] = []): string[] => {
+          for (const node of nodes) {
+            if (node.id) acc.push(node.id);
+            if (Array.isArray(node.members)) collectIds(node.members, acc);
+            if (Array.isArray(node.children)) collectIds(node.children, acc);
+            if (Array.isArray(node.columns)) collectIds(node.columns, acc);
+          }
+          return acc;
+        };
+        const contextIds = collectIds(result.contextTree as any[]);
+        expect(contextIds).toContain('msg-supervisor-summary');
+        expect(contextIds.filter((id) => id === 'msg-supervisor-summary')).toHaveLength(1);
       },
     );
   });
