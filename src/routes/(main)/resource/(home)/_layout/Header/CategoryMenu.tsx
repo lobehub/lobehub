@@ -55,7 +55,9 @@ const CategoryMenu = memo(() => {
       ...businessCategories.map((category) => ({
         icon: category.icon,
         key: category.key,
-        title: t(category.titleKey),
+        // Business categories carry a chat-namespace key but the type narrows to a
+        // string at this seam; cast so t() accepts the dynamic key.
+        title: t(category.titleKey as never) as string,
         url: category.url,
       })),
     ],
