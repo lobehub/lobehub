@@ -3,6 +3,16 @@ import type { FC } from 'react';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
+import MatrixIcon from './platform/matrix/Icon';
+
+/**
+ * Local fallback icons for platforms `@lobehub/ui/icons` doesn't ship (e.g.
+ * Matrix). Keyed by lowercase platform id.
+ */
+const LOCAL_PLATFORM_ICONS: Record<string, FC<any>> = {
+  matrix: MatrixIcon,
+};
+
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
   'Discord',
@@ -28,6 +38,9 @@ const ICON_ALIASES: Record<string, string> = {
  * Accepts either a platform display name (e.g. "Feishu / Lark") or id (e.g. "discord").
  */
 export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
+  const local = LOCAL_PLATFORM_ICONS[nameOrId.toLowerCase()];
+  if (local) return local;
+
   const alias = ICON_ALIASES[nameOrId.toLowerCase()];
   if (alias) return (Icons as Record<string, any>)[alias];
 
