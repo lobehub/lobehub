@@ -5,7 +5,7 @@ import type { TaskTemplate } from '@lobechat/const';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { taskTemplateKeys } from '@/libs/swr/keys';
+import { TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION, taskTemplateKeys } from '@/libs/swr/keys';
 import { taskTemplateService } from '@/services/taskTemplate';
 
 import {
@@ -142,6 +142,9 @@ describe('resolveDailyBriefRecommendationRequest', () => {
 
     expect(ai.key).toEqual(research.key);
     expect(ai.key).toEqual(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN'));
+    expect(ai.key?.[0]).toBe(
+      `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`,
+    );
   });
 
   it('keeps refresh seed, count, and locale in the cache key', () => {

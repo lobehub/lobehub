@@ -746,11 +746,20 @@ export const topicActionKeys = {
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
 };
+
+/**
+ * Daily task-template recommendation cache schema version. Bump this when the
+ * persisted recommendation row shape changes incompatibly so desktop clients
+ * stop reading stale localStorage SWR entries.
+ */
+export const TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION = 2;
+const TASK_TEMPLATE_DAILY_RECOMMEND_ROOT = `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`;
+
 export const taskTemplateKeys = {
   listDailyRecommend: def(
-    'taskTemplate:listDailyRecommend',
+    TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
     (refreshSeed: unknown, recommendationCount: number, locale: string) => [
-      'taskTemplate:listDailyRecommend',
+      TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
       refreshSeed,
       recommendationCount,
       locale,
