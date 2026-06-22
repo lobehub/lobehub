@@ -52,6 +52,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
             status={topic.status}
             threadId={activeThreadId}
             title={topic.title}
+            userId={topic.userId}
           />
         ))}
       </Flexbox>

@@ -14,6 +14,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -83,9 +84,11 @@ interface TopicItemProps {
   status?: ChatTopicStatus | null;
   threadId?: string;
   title: string;
+  /** Creator of the topic; drives the workspace creator avatar. */
+  userId?: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, status }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, status, userId }) => {
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   // Same live-running ring as the agent sidebar topic rows (see List/Item there).
@@ -311,7 +314,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         })()}
         slots={{
           iconPostfix: unreadNode,
-          titlePrefix: draftPrefix,
+          titlePrefix: (
+            <>
+              <TopicCreatorAvatar userId={userId} />
+              {draftPrefix}
+            </>
+          ),
         }}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}
