@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+.pnpm
+.git
+
+# Build outputs
+dist
+.build
+.next
+public/_spa
+
+# Development
+.gitignore
+*.md
+README*
+LICENSE
+.eslintrc.js
+.prettierrc*
+.vscode
+.idea
+
+# Tests
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+e2e
+
+# Desktop app
+apps/desktop
+
+# Docker
+docker-compose
+*.dockerfile
+Dockerfile*
+
+# Documentation
+docs
+*.mdx
+
+# Scripts that aren't needed for build
+scripts/*Workflow
+scripts/*workflow
+scripts/hotfixWorkflow
+scripts/releaseWorkflow
+scripts/electronWorkflow
