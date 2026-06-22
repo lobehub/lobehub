@@ -167,6 +167,9 @@ describe('verify init command', () => {
   it('writes SKILL.md and resource files into .claude/skills/verify', async () => {
     await run(['init', '--dir', dir]);
 
+    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
+      identifier: 'verify',
+    });
     const skillDir = path.join(dir, '.claude', 'skills', 'verify');
     expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Verify SKILL');
     expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');

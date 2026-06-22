@@ -29,6 +29,17 @@ import {
   VerifyReporterService,
 } from '@/server/services/verify';
 
+/**
+ * Skills that `verify.getSkillBundle` will materialize to a builder's disk via
+ * `lh verify init`. Keyed by identifier; add future pullable skills here. The
+ * portable verify skill lives in @lobechat/builtin-skills but is intentionally
+ * NOT in its `builtinSkills` runtime array (kept out of the homogeneous agent
+ * runtime / tool picker), so it is referenced directly here.
+ */
+const PULLABLE_SKILLS: Record<string, typeof VerifySkill> = {
+  [VerifySkill.identifier]: VerifySkill,
+};
+
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
 const onFailSchema = z.enum(['manual', 'auto_repair']);
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
@@ -308,20 +319,29 @@ export const verifyRouter = router({
     }),
 
   /**
-   * Serve the portable verify skill bundle (`SKILL.md` + inline resource files)
-   * so `lh verify init` can materialize it into a builder's working directory.
-   * Dynamic-by-design: the source is the server's deployed `@lobechat/builtin-skills`,
-   * so updating the skill + redeploying reaches every builder on the next pull —
-   * no CLI re-release. Static content, no DB/auth context needed.
+   * Serve a pullable skill bundle (`SKILL.md` + inline resource files) by
+   * identifier so `lh verify init` can materialize it into a builder's working
+   * directory. Dynamic-by-design: the source is the server's deployed
+   * `@lobechat/builtin-skills`, so updating the skill + redeploying reaches every
+   * builder on the next pull — no CLI re-release. Auth-gated (verifyProcedure);
+   * returns NOT_FOUND for any identifier not in the pullable registry.
    */
-  getSkillBundle: publicProcedure.query(() => ({
-    content: VerifySkill.content,
-    files: Object.fromEntries(
-      Object.entries(VerifySkill.resources ?? {}).map(([path, meta]) => [path, meta.content ?? '']),
-    ),
-    identifier: VerifySkill.identifier,
-    name: VerifySkill.name,
-  })),
+  getSkillBundle: verifyProcedure.input(z.object({ identifier: z.string() })).query(({ input }) => {
+    const skill = PULLABLE_SKILLS[input.identifier];
+    if (!skill)
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: `No pullable skill with identifier "${input.identifier}"`,
+      });
+    return {
+      content: skill.content,
+      files: Object.fromEntries(
+        Object.entries(skill.resources ?? {}).map(([path, meta]) => [path, meta.content ?? '']),
+      ),
+      identifier: skill.identifier,
+      name: skill.name,
+    };
+  }),
 
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))

@@ -78,49 +78,57 @@ export function registerVerifyCommand(program: Command) {
     .command('init')
     .description('Write the portable verify skill into a working dir (.claude/skills/verify)')
     .option('--dir <path>', 'Target working directory (default: current dir)')
+    .option('--skill <id>', 'Skill identifier to pull', 'verify')
     .option('--force', 'Overwrite existing skill files')
     .option('--json [fields]', 'Output JSON')
-    .action(async (options: { dir?: string; force?: boolean; json?: boolean | string }) => {
-      const client = await getTrpcClient();
-      // Pulled live from the server's deployed builtin-skills — always the latest.
-      const bundle = await client.verify.getSkillBundle.query();
+    .action(
+      async (options: {
+        dir?: string;
+        force?: boolean;
+        json?: boolean | string;
+        skill: string;
+      }) => {
+        const client = await getTrpcClient();
+        // Pulled live from the server's deployed builtin-skills — always the latest.
+        const bundle = await client.verify.getSkillBundle.query({ identifier: options.skill });
 
-      const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
-      const skillDir = path.join(baseDir, '.claude', 'skills', bundle.identifier);
+        const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
+        const skillDir = path.join(baseDir, '.claude', 'skills', bundle.identifier);
 
-      // path → content for SKILL.md plus every resource file.
-      const entries: [string, string][] = [
-        ['SKILL.md', bundle.content],
-        ...Object.entries(bundle.files),
-      ];
+        // path → content for SKILL.md plus every resource file.
+        const entries: [string, string][] = [
+          ['SKILL.md', bundle.content],
+          ...Object.entries(bundle.files),
+        ];
 
-      const written: string[] = [];
-      const skipped: string[] = [];
-      for (const [rel, content] of entries) {
-        const dest = path.join(skillDir, rel);
-        if (existsSync(dest) && !options.force) {
-          skipped.push(rel);
-          continue;
+        const written: string[] = [];
+        const skipped: string[] = [];
+        for (const [rel, content] of entries) {
+          const dest = path.join(skillDir, rel);
+          if (existsSync(dest) && !options.force) {
+            skipped.push(rel);
+            continue;
+          }
+          mkdirSync(path.dirname(dest), { recursive: true });
+          writeFileSync(dest, content, 'utf8');
+          written.push(rel);
         }
-        mkdirSync(path.dirname(dest), { recursive: true });
-        writeFileSync(dest, content, 'utf8');
-        written.push(rel);
-      }
 
-      const result = { dir: skillDir, skill: bundle.identifier, skipped, written };
-      if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
-        return;
-      }
-      console.log(
-        `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
-      );
-      console.log(
-        `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`,
-      );
-      if (skipped.length > 0)
-        console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
-    });
+        const result = { dir: skillDir, skill: bundle.identifier, skipped, written };
+        if (options.json !== undefined) {
+          outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
+        );
+        console.log(
+          `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`,
+        );
+        if (skipped.length > 0)
+          console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
+      },
+    );
 
   // ════════════ criteria ════════════
   const criterion = verify.command('criterion').description('Reusable pass/fail standards');
