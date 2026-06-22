@@ -73,7 +73,7 @@ import {
 } from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
-import type { ExtendParamsType } from 'model-bank';
+import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -369,6 +369,7 @@ const buildServerVirtualSubAgentRunner = (
       const placeholder = await ctx.messageModel.create({
         agentId,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { status: 'pending' },
@@ -460,6 +461,7 @@ const buildServerAgentMemberRunner = (
       const groupTool = await ctx.messageModel.create({
         agentId,
         content: '',
+        groupId,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { expectedMembers, onComplete, status: 'pending' },
@@ -480,6 +482,7 @@ const buildServerAgentMemberRunner = (
           const anchor = await ctx.messageModel.create({
             agentId,
             content: '',
+            groupId,
             parentId: groupTool.id,
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
@@ -853,6 +856,7 @@ export const createRuntimeExecutors = (
       assistantMessageItem = await ctx.messageModel.create({
         agentId: state.metadata!.agentId!,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         model,
         parentId,
         provider,
@@ -912,6 +916,12 @@ export const createRuntimeExecutors = (
             item.providerId === provider &&
             (item.id === model || item.config?.deploymentName === model),
         );
+        const canonicalModelCard = builtinModels.find(
+          (item) => item.id === model || item.config?.deploymentName === model,
+        );
+        const modelKnowledgeCutoff =
+          modelCard?.knowledgeCutoff ??
+          (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
 
         let modelExtendParams = readExtendParams(modelCard);
 
@@ -921,10 +931,7 @@ export const createRuntimeExecutors = (
         // `thinkingLevel` still reach the model. Mirrors the client-side
         // `transformToAiModelList` re-namespacing behavior.
         if (!modelExtendParams || modelExtendParams.length === 0) {
-          const canonicalCard = builtinModels.find(
-            (item) => item.id === model || item.config?.deploymentName === model,
-          );
-          modelExtendParams = readExtendParams(canonicalCard);
+          modelExtendParams = readExtendParams(canonicalModelCard);
         }
 
         const modelSupportsPreserveThinkingFromCard =
@@ -1309,6 +1316,7 @@ export const createRuntimeExecutors = (
           },
           messages: messagesForContext,
           model,
+          modelKnowledgeCutoff,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
           toolDiscoveryConfig,
@@ -2709,6 +2717,10 @@ export const createRuntimeExecutors = (
                 toolResultMaxLength,
                 topicId: ctx.topicId,
                 userId: ctx.userId,
+                // Device-bound cwd folded into deviceSystemInfo at operation
+                // creation; resume-safe via computeDeviceContext (recovers it
+                // from the prior tool message's pluginState.metadata).
+                workingDirectory: state.metadata?.deviceSystemInfo?.workingDirectory,
                 workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
               }),
             {
@@ -2834,6 +2846,7 @@ export const createRuntimeExecutors = (
             const toolMessage = await ctx.messageModel.create({
               agentId: state.metadata!.agentId!,
               content: executionResult.content,
+              groupId: state.metadata?.groupId ?? undefined,
               metadata: { toolExecutionTimeMs: executionTime },
               parentId: payload.parentMessageId,
               plugin: chatToolPayload as any,
@@ -3369,6 +3382,7 @@ export const createRuntimeExecutors = (
               const toolMessage = await ctx.messageModel.create({
                 agentId: state.metadata!.agentId!,
                 content: executionResult.content,
+                groupId: state.metadata?.groupId ?? undefined,
                 metadata: { toolExecutionTimeMs: executionTime },
                 parentId: parentMessageId,
                 plugin: chatToolPayload as any,
@@ -3681,6 +3695,7 @@ export const createRuntimeExecutors = (
       const taskMessage = await ctx.messageModel.create({
         agentId: agentId!,
         content: '',
+        groupId: state.metadata?.groupId ?? undefined,
         metadata: {
           instruction: task.instruction,
           taskTitle: task.description,
@@ -3809,6 +3824,7 @@ export const createRuntimeExecutors = (
         const taskMessage = await ctx.messageModel.create({
           agentId: agentId!,
           content: '',
+          groupId: state.metadata?.groupId ?? undefined,
           metadata: {
             instruction: task.instruction,
             taskTitle: task.description,
@@ -4061,6 +4077,7 @@ export const createRuntimeExecutors = (
           const toolMessage = await ctx.messageModel.create({
             agentId: state.metadata!.agentId!,
             content: '',
+            groupId: state.metadata?.groupId ?? undefined,
             parentId: parentAssistantId,
             plugin: toolPayload as any,
             pluginIntervention: { status: 'pending' },
@@ -4171,6 +4188,7 @@ export const createRuntimeExecutors = (
         const toolMessage = await ctx.messageModel.create({
           agentId: state.metadata!.agentId!,
           content: result.content,
+          groupId: state.metadata?.groupId ?? undefined,
           metadata: { toolExecutionTimeMs: 0 },
           parentId: parentMessageId,
           plugin: toolPayload as any,
@@ -4264,6 +4282,7 @@ export const createRuntimeExecutors = (
         const toolMessage = await ctx.messageModel.create({
           agentId: state.metadata!.agentId!,
           content: 'Tool execution was aborted by user.',
+          groupId: state.metadata?.groupId ?? undefined,
           parentId: parentMessageId,
           plugin: toolPayload as any,
           pluginIntervention: { status: 'aborted' },

@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "刪除文件？",
   "workingPanel.resources.deleteTitleMulti": "刪除 {{count}} 項目？",
   "workingPanel.resources.empty": "尚無文件。與此代理相關的文件將顯示在此處。",
+  "workingPanel.resources.emptyDocuments": "目前尚無文件。請使用上方的 + 建立一份文件。",
   "workingPanel.resources.error": "資源載入失敗",
   "workingPanel.resources.filter.documents": "文件",
   "workingPanel.resources.filter.skills": "技能",

@@ -1,4 +1,8 @@
-import type { TaskTemplate, TaskTemplateConnectorSource } from '@lobechat/const';
+import type {
+  TaskTemplate,
+  TaskTemplateConnector,
+  TaskTemplateConnectorSource,
+} from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
@@ -15,6 +19,7 @@ import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { getProviderMeta } from './providerMeta';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
 const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
@@ -34,6 +39,60 @@ export type DailyBriefRecommendationsUIState =
 interface UseDailyBriefRecommendationsUIOptions {
   count?: number;
 }
+
+const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isTaskTemplateConnectorSource = (value: unknown): value is TaskTemplateConnectorSource =>
+  value === 'composio' || value === 'lobehub';
+
+const isTaskTemplateConnector = (value: unknown): value is TaskTemplateConnector => {
+  if (!isRecord(value)) return false;
+  if (typeof value.identifier !== 'string') return false;
+  if (!isTaskTemplateConnectorSource(value.source)) return false;
+  return (
+    typeof value.required === 'boolean' &&
+    Boolean(getProviderMeta({ identifier: value.identifier, source: value.source }))
+  );
+};
+
+const isTaskTemplateRecommendationCandidate = (value: unknown): value is TaskTemplate => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.category === 'string' &&
+    Array.isArray(value.connectors) &&
+    value.connectors.every(isTaskTemplateConnector) &&
+    typeof value.cronPattern === 'string' &&
+    typeof value.description === 'string' &&
+    typeof value.id === 'number' &&
+    typeof value.identifier === 'string' &&
+    typeof value.instruction === 'string' &&
+    Array.isArray(value.interests) &&
+    typeof value.title === 'string'
+  );
+};
+
+/**
+ * v2.2.6 returned legacy recommendation rows before `connectors` and text fields existed.
+ * Drop legacy rows from version-skewed self-host servers so they cannot crash the home screen.
+ */
+const normalizeTaskTemplateRecommendation = (template: unknown): TaskTemplate | undefined => {
+  if (!isTaskTemplateRecommendationCandidate(template)) return undefined;
+  return template;
+};
+
+/**
+ * Persisted SWR data can be stale or corrupted, for example `{ data: { ... } }`.
+ * Treat non-array payloads as empty so home rendering and cache mutations stay defensive.
+ */
+const normalizeTaskTemplateRecommendations = (templates: unknown): TaskTemplate[] => {
+  if (!Array.isArray(templates)) return [];
+
+  return templates.flatMap((template) => {
+    const normalized = normalizeTaskTemplateRecommendation(template);
+    return normalized ? [normalized] : [];
+  });
+};
 
 interface ResolveDailyBriefRecommendationRequestParams {
   interestKeys: string[] | null;
@@ -99,7 +158,7 @@ export function useDailyBriefRecommendationsUI(
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
   const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
-  const { i18n, t } = useTranslation('taskTemplate');
+  const { i18n, t } = useTranslation('common');
   const locale = i18n.resolvedLanguage || i18n.language;
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -112,6 +171,7 @@ export function useDailyBriefRecommendationsUI(
   const [refreshSeed, setRefreshSeed] = useSessionStorageState<string>(REFRESH_SEED_STORAGE_KEY, {
     defaultValue: '',
   });
+
   const recommendationRequest = useMemo(
     () =>
       resolveDailyBriefRecommendationRequest({
@@ -133,7 +193,7 @@ export function useDailyBriefRecommendationsUI(
         })
     : null;
 
-  const { data, isLoading, isValidating, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     recommendationRequest.key,
     recommendationFetcher,
     {
@@ -162,6 +222,10 @@ export function useDailyBriefRecommendationsUI(
     void mutate();
   }, [interestKeys, mutate, recommendationRequest.key]);
 
+  useEffect(() => {
+    if (error) console.error('[taskTemplate:listDailyRecommend]', error);
+  }, [error]);
+
   const handleRefresh = useCallback(() => {
     setRefreshSeed(nextRefreshSeed());
   }, [setRefreshSeed]);
@@ -171,7 +235,12 @@ export function useDailyBriefRecommendationsUI(
       mutate(
         (current) =>
           current
-            ? { ...current, data: current.data.filter((tmpl) => tmpl.id !== templateId) }
+            ? {
+                ...current,
+                data: normalizeTaskTemplateRecommendations(current.data).filter(
+                  (tmpl) => tmpl.id !== templateId,
+                ),
+              }
             : current,
         { revalidate: false },
       );
@@ -193,14 +262,14 @@ export function useDailyBriefRecommendationsUI(
         await taskTemplateService.dismiss(templateId);
       } catch (error) {
         console.error('[taskTemplate:dismiss]', error);
-        message.error(t('action.dismiss.error'));
+        message.error(t('taskTemplate.action.dismiss.error'));
         mutate();
       }
     },
     [message, mutate, removeTemplateFromList, t],
   );
 
-  const templates = useMemo(() => data?.data ?? [], [data]);
+  const templates = useMemo(() => normalizeTaskTemplateRecommendations(data?.data ?? []), [data]);
   const requiredSources = useMemo(() => {
     const sources = new Set<TaskTemplateConnectorSource>();
     for (const tmpl of templates) {
@@ -209,9 +278,11 @@ export function useDailyBriefRecommendationsUI(
     return sources;
   }, [templates]);
   const useFetchUserComposioConnections = useToolStore((s) => s.useFetchUserComposioConnections);
-  const useFetchLobehubSkillConnections = useToolStore((s) => s.useFetchLobehubSkillConnections);
+  const useFetchLobehubConnectorConnections = useToolStore(
+    (s) => s.useFetchLobehubSkillConnections,
+  );
   useFetchUserComposioConnections(requiredSources.has('composio'));
-  useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
+  useFetchLobehubConnectorConnections(requiredSources.has('lobehub'));
 
   const displayMode = resolveDailyBriefRecommendationDisplayMode({
     canFetchRecommendations,
@@ -222,6 +293,7 @@ export function useDailyBriefRecommendationsUI(
     isValidating,
     isWaitingForInterestsFetch: interestKeys !== null && waitedForInterestsRef.current,
   });
+  if (error) return { mode: 'hidden' };
   if (displayMode === 'hidden') return { mode: 'hidden' };
   if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 

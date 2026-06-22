@@ -326,6 +326,7 @@ const PlusAction = memo(() => {
   const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
     model,
     provider,
+    agentId,
   );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {

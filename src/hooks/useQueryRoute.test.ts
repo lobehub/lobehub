@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQueryRoute } from './useQueryRoute';
 
 // Mocks
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: vi.fn(() => vi.fn((href) => href)),
 }));
 

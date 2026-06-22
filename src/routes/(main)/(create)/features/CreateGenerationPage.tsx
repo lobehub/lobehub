@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { AnimatePresence, m as motion } from 'motion/react';
 import type { ComponentType } from 'react';
 import { memo } from 'react';
-import { useMatch } from 'react-router-dom';
+import { useMatch } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';

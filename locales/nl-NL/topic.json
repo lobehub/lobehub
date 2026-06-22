@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Markeren als actief",
   "defaultTitle": "Standaardonderwerp",
   "displayItems": "Items weergeven",
+  "draft": "[Concept]",
   "duplicateLoading": "Onderwerp wordt gekopieerd...",
   "duplicateSuccess": "Onderwerp succesvol gekopieerd",
   "failedStatusTip": "Deze run heeft een fout opgelopen — open het om te bekijken.",

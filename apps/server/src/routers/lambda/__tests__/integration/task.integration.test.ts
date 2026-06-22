@@ -348,6 +348,72 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('verify config', () => {
+    it('should set and retrieve verify config (round-trip)', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: {
+          enabled: true,
+          maxIterations: 3,
+          verifierAgentId: 'agt_codex',
+          verifyCriteriaIds: ['c1', 'c2'],
+          verifyRubricId: 'rub_1',
+        },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyCriteriaIds: ['c1', 'c2'],
+        verifyRubricId: 'rub_1',
+      });
+
+      // task.detail must surface the saved verify config (not leave it undefined).
+      const detail = await caller.detail({ id: task.data.id });
+      expect(detail.data!.verify).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyCriteriaIds: ['c1', 'c2'],
+        verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('should clear a saved field when passed null', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { enabled: true, verifierAgentId: 'agt_codex', verifyRubricId: 'rub_1' },
+      });
+
+      // Switch the verifier back to default + drop the rubric.
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { verifierAgentId: null, verifyRubricId: null },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({ enabled: true });
+    });
+
+    it('getVerifyConfig falls back to the legacy review key', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      await caller.updateReview({
+        id: task.data.id,
+        review: { autoRetry: true, enabled: true, maxIterations: 4, rubrics: [] },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({ enabled: true, maxIterations: 4 });
+    });
+  });
+
   describe('run idempotency', () => {
     it('should reject run when a topic is already running', async () => {
       const task = await caller.create({

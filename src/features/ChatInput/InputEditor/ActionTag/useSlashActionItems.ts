@@ -69,7 +69,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
-  const effectiveTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+    isHetero,
+    clientExecutionAvailable: isDesktop,
+  });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
 

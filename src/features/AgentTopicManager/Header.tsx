@@ -5,7 +5,7 @@ import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavHeader from '@/features/NavHeader';

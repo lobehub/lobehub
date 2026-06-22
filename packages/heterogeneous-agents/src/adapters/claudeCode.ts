@@ -218,18 +218,27 @@ const CLI_OVERLOADED_PATTERNS = [
 ] as const;
 
 /**
- * The one reliable discriminator between a user-side plan/quota limit and a
- * transient server throttle: only the genuine user limit carries a concrete
- * reset window in the structured `rate_limit_event` — `resetsAt` (epoch
- * seconds) and/or a named `rateLimitType` (e.g. `seven_day`). Anthropic's
- * transient throttle emits a rate_limit_event too, but with just
- * `status: 'rejected'` and no reset info. Status codes (429 / 529) alone are
- * ambiguous, so this structured signal — not the HTTP status, not the message
- * text — is what decides whether we show the "usage limit reached, resets at
- * X" guide vs the "temporarily overloaded, retry" guide.
+ * Discriminates a user-side plan/quota limit from everything else.
+ *
+ * Two signals must BOTH hold:
+ *  1. The request was actually `status: 'rejected'`. Anthropic stamps a
+ *     `rate_limit_info` onto its events even when the request goes through
+ *     (`status: 'allowed'`) — that block is just the rolling-window metadata
+ *     (`resetsAt`, `rateLimitType`) for an *allowed* call, NOT evidence the
+ *     limit was hit. Leaning on the presence of a reset window alone made a
+ *     later unrelated terminal failure (e.g. an `ECONNRESET` network drop)
+ *     inherit the last allowed event's window and render a bogus "usage limit
+ *     reached, resets at X" guide. The `status` is the gate.
+ *  2. A concrete reset window (`resetsAt` epoch seconds and/or a named
+ *     `rateLimitType` such as `seven_day`). A bare `rejected` with no window is
+ *     Anthropic's transient server throttle — left to the overloaded (retry)
+ *     classifier, not the usage-limit guide.
+ *
+ * Status codes (429 / 529) and message text are deliberately not consulted
+ * here — only this structured signal decides the "usage limit reached" guide.
  */
 const isUserQuotaRateLimit = (info?: HeterogeneousRateLimitInfo): boolean =>
-  !!info && (info.resetsAt != null || info.rateLimitType != null);
+  !!info && info.status === 'rejected' && (info.resetsAt != null || info.rateLimitType != null);
 
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
@@ -465,6 +474,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private sawStreamEvent = false;
   /** Track current message.id to detect step boundaries */
   private currentMessageId: string | undefined;
+  /**
+   * Whether the current turn (the in-flight `currentMessageId`) has already
+   * emitted a `tool_use`. When CC reuses the SAME `message.id` to stream the
+   * model's post-tool answer (it continues after the `tool_result` without
+   * minting a fresh id — seen on device/batch `lh hetero exec` runs), that
+   * trailing text must NOT coalesce onto the tool-issuing assistant. We force a
+   * step boundary so the answer anchors to its own assistant, chained after the
+   * tool results — otherwise text + `tool_use` share one message and the
+   * renderer drops the tool block below the answer.
+   */
+  private currentTurnHadToolUse = false;
   /** message.id of the stream_event delta flow currently in flight */
   private currentStreamEventMessageId: string | undefined;
   /**
@@ -663,8 +683,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // task-ended notification) can be tagged with `task-completion`.
       // Last-task-wins if multiple tasks end before a summary fires — in
       // practice CC summarizes once per LLM call.
+      //
+      // Gate on `callbackCount > 0`: only a task that actually fired out-of-band
+      // callback turns while alive is a genuine long-running task whose ending
+      // produces a post-task summary (the summary "keeps it inside the same
+      // AssistantGroup as the preceding callbacks" — so there must BE preceding
+      // callbacks). A task that fires `task_started` and `task_notification`
+      // back-to-back with no intervening callback turn was an inline synchronous
+      // tool that CC merely tracked as a task (e.g. a slow `git commit` running a
+      // lint-staged hook); its `tool_result` is consumed by the next turn in the
+      // normal main chain. Tagging that turn `task-completion` mis-anchors it and
+      // drops it from the rendered chain — so leave it untagged.
       const ending = this.activeTasks.get(raw.task_id);
-      if (ending) {
+      if (ending && ending.callbackCount > 0) {
         this.pendingTaskCompletion = {
           sourceToolCallId: ending.toolUseId,
           sourceToolName: ending.sourceToolName,
@@ -711,7 +742,22 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const events: HeterogeneousAgentEvent[] = [];
     const messageId = raw.message?.id;
 
-    events.push(...this.openMainMessage(messageId, raw.message?.model));
+    // Detect a post-tool answer that REUSES the tool turn's message.id: a
+    // text-only continuation (no tool_use of its own) on the in-flight id that
+    // already emitted a tool_use. CC does this on device/batch runs where the
+    // model keeps the same id after a tool_result; left unsplit, the answer text
+    // lands on the tool-issuing assistant. An event carrying its OWN tool_use is
+    // a normal preamble-then-tool turn and must stay on the same step.
+    const hasTextBlock = content.some((b: any) => b?.type === 'text' && b.text);
+    const hasToolUseBlock = content.some((b: any) => b?.type === 'tool_use');
+    const isPostToolTextReusingId =
+      hasTextBlock &&
+      !hasToolUseBlock &&
+      messageId !== undefined &&
+      messageId === this.currentMessageId &&
+      this.currentTurnHadToolUse;
+
+    events.push(...this.openMainMessage(messageId, raw.message?.model, isPostToolTextReusingId));
 
     // Track the latest model — emitted alongside authoritative usage on the
     // matching `message_delta`. We deliberately do NOT emit turn_metadata
@@ -790,7 +836,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // (since it fires on `message_start`, before tool_use blocks
     // arrive); MessageCollector ignores `metadata.signal` on messages
     // with `tools.length > 0` so that mismatch is benign.
-    if (newToolCalls.length > 0) this.pendingExternalSignal = undefined;
+    if (newToolCalls.length > 0) {
+      this.pendingExternalSignal = undefined;
+      // Mark the in-flight turn so a later same-id text-only event is recognized
+      // as a post-tool answer and split into its own step (see openMainMessage).
+      this.currentTurnHadToolUse = true;
+    }
 
     // Under `--include-partial-messages`, CC may emit deltas first and then a
     // final full assistant block for the SAME message.id. If the full block is
@@ -1392,24 +1443,63 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private openMainMessage(
     messageId: string | undefined,
     model: string | undefined,
+    forcePostToolBoundary = false,
   ): HeterogeneousAgentEvent[] {
     if (!messageId) return [];
 
     if (!this.started) {
       this.started = true;
       this.currentMessageId = messageId;
+      this.currentTurnHadToolUse = false;
       return [this.makeEvent('stream_start', { model, provider: 'claude-code' })];
     }
 
-    if (messageId === this.currentMessageId) return [];
+    if (messageId === this.currentMessageId) {
+      // Same message.id ⇒ normally the same step (CC streams a turn's blocks
+      // across several assistant events). EXCEPT when the model answers AFTER
+      // its tools while reusing the id: that post-tool text must get its own
+      // step, or it coalesces onto the tool-issuing assistant and the renderer
+      // drops the tool block below the answer. This is a natural main-chain
+      // continuation, NOT a signal callback, so emit a plain boundary without
+      // the task-callback / external-signal tagging below.
+      if (!forcePostToolBoundary) return [];
+      this.stepIndex++;
+      this.currentTurnHadToolUse = false;
+      // The post-tool answer is the natural follow-up to the preceding
+      // tool_result — consume the user-input flag exactly like the normal turn
+      // boundary does (below), or a later signal callback (e.g. a Monitor stdout
+      // turn opened while a task is active) would see a stale `true` and skip
+      // its external-signal tag.
+      this.hasUnhandledUserInput = false;
+      this.pendingExternalSignal = undefined;
+      // Reusing the tool turn's message.id as the newStep id would make the
+      // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
+      // id === currentMainMessageId). For any tool turn opened by a prior
+      // newStep that id already IS currentMainMessageId, so the split would be
+      // dropped and the text would coalesce anyway. Stamp a DISTINCT,
+      // replay-stable idempotency key — suffixed by stepIndex, so it is unique
+      // per split and deterministic across cold-replica reprocessing — so a
+      // fresh assistant is actually opened.
+      return [
+        this.makeEvent('stream_end', {}),
+        this.makeEvent('stream_start', {
+          messageId: `${messageId}:s${this.stepIndex}`,
+          model,
+          newStep: true,
+          provider: 'claude-code',
+        }),
+      ];
+    }
 
     if (this.currentMessageId === undefined) {
       // First assistant/delta after system init — record without step boundary.
       this.currentMessageId = messageId;
+      this.currentTurnHadToolUse = false;
       return [];
     }
 
     this.currentMessageId = messageId;
+    this.currentTurnHadToolUse = false;
     this.stepIndex++;
     // Signal-callback detection (): if this turn opened
     // WITHOUT a preceding `user` event AND a long-running task is

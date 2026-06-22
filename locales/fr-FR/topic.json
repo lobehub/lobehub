@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Marquer comme actif",
   "defaultTitle": "Sujet par défaut",
   "displayItems": "Afficher les éléments",
+  "draft": "[Brouillon]",
   "duplicateLoading": "Copie du sujet en cours...",
   "duplicateSuccess": "Sujet copié avec succès",
   "failedStatusTip": "Cette exécution a rencontré une erreur — ouvrez-la pour en savoir plus.",

@@ -178,24 +178,6 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
     lines.push('Checkpoint: (not configured, default: onAgentRequest=true)');
   }
 
-  // Review
-  lines.push('');
-  if (t.review && Object.keys(t.review).length > 0) {
-    const rubrics = (t.review as any).rubrics as
-      | Array<{ name: string; threshold?: number; type: string }>
-      | undefined;
-    lines.push(`Review (maxIterations: ${(t.review as any).maxIterations || 3}):`);
-    if (rubrics) {
-      for (const r of rubrics) {
-        lines.push(
-          `  - ${r.name} [${r.type}]${r.threshold ? ` ≥ ${Math.round(r.threshold * 100)}%` : ''}`,
-        );
-      }
-    }
-  } else {
-    lines.push('Review: (not configured)');
-  }
-
   // Workspace
   if (t.workspace && t.workspace.length > 0) {
     const countNodes = (nodes: TaskDetailWorkspaceNode[]): number =>

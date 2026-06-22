@@ -28,9 +28,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const EmptyState = memo(() => {
+interface EmptyStateProps {
+  /** When set, scopes task creation to this agent and locks the assignee. */
+  agentId?: string;
+}
+
+const EmptyState = memo<EmptyStateProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
-  const { t: tTaskTemplate } = useTranslation('taskTemplate');
+  const { t: tCommon } = useTranslation('common');
   const templatesState = useDailyBriefRecommendationsUI({ count: EMPTY_STATE_RECOMMEND_COUNT });
 
   return (
@@ -49,7 +54,7 @@ const EmptyState = memo(() => {
         </Text>
       </Flexbox>
 
-      <CreateTaskInlineEntry variant={'hero'} />
+      <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} variant={'hero'} />
 
       {templatesState.mode !== 'hidden' && (
         <Flexbox gap={12}>
@@ -66,7 +71,7 @@ const EmptyState = memo(() => {
                 onClick={templatesState.onRefresh}
               >
                 <Icon icon={RefreshCw} size={12} />
-                <Text fontSize={12}>{tTaskTemplate('action.refresh.button')}</Text>
+                <Text fontSize={12}>{tCommon('taskTemplate.action.refresh.button')}</Text>
               </Flexbox>
             )}
           </Flexbox>

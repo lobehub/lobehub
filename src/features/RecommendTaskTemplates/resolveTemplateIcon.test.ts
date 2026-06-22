@@ -28,7 +28,7 @@ describe('resolveTemplateIcon', () => {
     expect(spec).toEqual({ Comp: SiGithub, kind: 'component' });
   });
 
-  it('falls back to a required skill provider icon (component form)', () => {
+  it('falls back to a required connector provider icon (component form)', () => {
     const spec = resolveTemplateIcon(
       make({
         connectors: [{ identifier: 'github', required: true, source: 'lobehub' }],
@@ -39,7 +39,7 @@ describe('resolveTemplateIcon', () => {
     expect(spec).toEqual({ Comp: SiGithub, kind: 'component' });
   });
 
-  it('falls back to a required skill provider icon (URL form)', () => {
+  it('falls back to a required connector provider icon (URL form)', () => {
     const spec = resolveTemplateIcon(
       make({
         connectors: [{ identifier: 'gmail', required: true, source: 'composio' }],
@@ -64,7 +64,7 @@ describe('resolveTemplateIcon', () => {
     expect(spec).toEqual({ Comp: SiGithub, kind: 'component' });
   });
 
-  it('falls back to optional skill icon when required is absent', () => {
+  it('falls back to optional connector icon when required is absent', () => {
     const spec = resolveTemplateIcon(
       make({
         connectors: [{ identifier: 'notion', required: false, source: 'lobehub' }],
@@ -90,7 +90,7 @@ describe('resolveTemplateIcon', () => {
     if (spec.kind === 'url') expect(spec.src).toMatch(/notion/);
   });
 
-  it('uses interest icon when self and skill icons are absent', () => {
+  it('uses interest icon when self and connector icons are absent', () => {
     const spec = resolveTemplateIcon(make({ interests: ['coding'] }), interestMap);
     expect(spec).toEqual({ Comp: BookOpen, kind: 'component' });
   });

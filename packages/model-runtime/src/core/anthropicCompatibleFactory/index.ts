@@ -21,6 +21,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -32,12 +34,17 @@ import {
 import { resolveModelSamplingParameters } from '../parameterResolver';
 import { AnthropicStream, type AnthropicStreamOptions } from '../streams';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
-import { createAnthropicGenerateObject } from './generateObject';
+import {
+  type AnthropicGenerateObjectConfig,
+  createAnthropicGenerateObject,
+} from './generateObject';
 import { handleAnthropicError } from './handleAnthropicError';
 import { resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
+  ModelIdMappingOptions &
+  T;
 
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
@@ -109,6 +116,7 @@ export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any>
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
     pricing?: Pricing,
+    config?: AnthropicGenerateObjectConfig,
   ) => Promise<any>;
   models?: (params: {
     apiKey?: string;
@@ -451,21 +459,28 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
     private id: string;
     private logPrefix: string;
+    private modelIdMappingOptions: ModelIdMappingOptions = {};
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
 
     constructor(options: ClientOptions & Record<string, any> = {}) {
-      const apiKey = typeof options.apiKey === 'string' ? options.apiKey.trim() : options.apiKey;
+      const { modelIdMapping, ...inputOptions } = options as ClientOptions &
+        Record<string, any> &
+        ModelIdMappingOptions;
+      const apiKey =
+        typeof inputOptions.apiKey === 'string' ? inputOptions.apiKey.trim() : inputOptions.apiKey;
       const inputBaseURL =
-        typeof options.baseURL === 'string' ? options.baseURL.trim() : options.baseURL;
+        typeof inputOptions.baseURL === 'string'
+          ? inputOptions.baseURL.trim()
+          : inputOptions.baseURL;
       // Anthropic SDK appends `/v1/messages`; normalize gateway URLs that already
       // include that SDK-managed path segment before constructing any client.
       const baseURL = normalizeAnthropicCompatibleBaseURL(inputBaseURL);
       const defaultBaseURL = normalizeAnthropicCompatibleBaseURL(DEFAULT_BASE_URL);
 
       const resolvedOptions = {
-        ...options,
+        ...inputOptions,
         apiKey: apiKey || DEFAULT_API_KEY,
         baseURL: baseURL || defaultBaseURL,
       };
@@ -475,6 +490,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         ...rest
       } = resolvedOptions;
       this._options = resolvedOptions as ConstructorOptions<T>;
+      this.modelIdMappingOptions = { modelIdMapping };
 
       if (!finalApiKey) throw AgentRuntimeError.createError(ErrorType.invalidAPIKey);
 
@@ -497,6 +513,20 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       this.logPrefix = `lobe-model-runtime:${this.id}`;
     }
 
+    private withMappedRequestModel<TPayload extends { model?: string }>(
+      requestPayload: TPayload,
+      logicalModel: string,
+    ): TPayload {
+      if (!requestPayload.model) return requestPayload;
+
+      const mappedModel = resolveMappedModelId(logicalModel, this.modelIdMappingOptions);
+      if (requestPayload.model !== logicalModel || mappedModel === requestPayload.model) {
+        return requestPayload;
+      }
+
+      return { ...requestPayload, model: mappedModel };
+    }
+
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
         if (!chatCompletion?.handlePayload) {
@@ -511,17 +541,18 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const postPayload = await chatCompletion.handlePayload(payload, this._options);
         const shouldStream = postPayload.stream ?? payload.stream ?? true;
         const finalPayload = { ...postPayload, stream: shouldStream };
+        const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
         if (debugParams?.chatCompletion?.()) {
           // eslint-disable-next-line no-console
           console.log('[requestPayload]');
           // eslint-disable-next-line no-console
-          console.log(JSON.stringify(finalPayload), '\n');
+          console.log(JSON.stringify(requestPayload), '\n');
         }
 
         const response = await this.client.messages.create(
           {
-            ...finalPayload,
+            ...requestPayload,
             metadata: options?.user ? { user_id: options.user } : undefined,
           },
           {
@@ -664,7 +695,9 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
       try {
         const pricing = await getModelPricing(payload.model, this.id);
-        return await generateObject(this.client, payload, options, pricing);
+        return await generateObject(this.client, payload, options, pricing, {
+          requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+        });
       } catch (error) {
         throw this.handleError(error);
       }

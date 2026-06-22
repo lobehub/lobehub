@@ -1,6 +1,6 @@
 import { usePrevious, useUnmount } from 'ahooks';
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';

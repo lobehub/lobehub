@@ -159,7 +159,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
 
     {
       description:
-        'Get the detailed configuration and metadata of an agent, including its system prompt, model, provider, plugins, and other settings.',
+        'Get the detailed configuration and metadata of an agent, including its system prompt, model, provider, plugins, and other settings. For heterogeneous agents (external CLI/runtime such as Claude Code or Codex) the result also describes the external runtime and its capabilities (filesystem/shell access, where it runs) — use this to judge whether the agent can carry out coding/software-engineering tasks.',
       name: AgentManagementApiName.getAgentDetail,
       parameters: {
         properties: {

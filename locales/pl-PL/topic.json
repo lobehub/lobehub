@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Oznacz jako aktywne",
   "defaultTitle": "Domyślny temat",
   "displayItems": "Wyświetl elementy",
+  "draft": "[Szkic]",
   "duplicateLoading": "Kopiowanie tematu...",
   "duplicateSuccess": "Temat skopiowany pomyślnie",
   "failedStatusTip": "Ten przebieg napotkał błąd — otwórz go, aby zobaczyć szczegóły.",

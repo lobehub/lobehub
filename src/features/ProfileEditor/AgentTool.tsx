@@ -38,6 +38,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
@@ -136,6 +137,14 @@ const AgentTool = memo<AgentToolProps>(
 
     // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+
+    // Custom connectors (user-added OAuth MCP servers) from the connector store
+    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+    const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    useEffect(() => {
+      if (!isConnectorsInit) fetchConnectors();
+    }, [isConnectorsInit, fetchConnectors]);
 
     // Toggle web browsing via searchMode - use byId action
     const toggleWebBrowsing = useCallback(async () => {
@@ -584,10 +593,43 @@ const AgentTool = memo<AgentToolProps>(
       [marketAgentSkillItems, communityPluginItems],
     );
 
-    // Custom group children (User Agent Skills + custom plugins)
+    // Custom connector list items (user-added OAuth MCP servers)
+    const customConnectorItems = useMemo(
+      () =>
+        customConnectors.map((connector) => {
+          return {
+            icon: <Icon icon={McpIcon} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+            key: connector.identifier,
+            label: (
+              <ToolItem
+                checked={plugins.includes(connector.identifier)}
+                id={connector.identifier}
+                label={connector.name || connector.identifier}
+                onUpdate={async () => {
+                  setUpdating(true);
+                  await togglePlugin(connector.identifier);
+                  setUpdating(false);
+                }}
+              />
+            ),
+            popoverContent: (
+              <ToolItemDetailPopover
+                description={connector.mcpServerUrl ?? ''}
+                icon={<Icon icon={McpIcon} size={36} />}
+                identifier={connector.identifier}
+                sourceLabel={t('skillStore.tabs.custom')}
+                title={connector.name || connector.identifier}
+              />
+            ),
+          };
+        }),
+      [customConnectors, plugins, togglePlugin, t],
+    );
+
+    // Custom group children (User Agent Skills + custom plugins + custom connectors)
     const customGroupChildren = useMemo(
-      () => [...userAgentSkillItems, ...customPluginItems],
-      [userAgentSkillItems, customPluginItems],
+      () => [...userAgentSkillItems, ...customPluginItems, ...customConnectorItems],
+      [userAgentSkillItems, customPluginItems, customConnectorItems],
     );
 
     // All tab items (marketplace tab)
@@ -675,6 +717,9 @@ const AgentTool = memo<AgentToolProps>(
       // 7. User agent skills
       for (const skill of userAgentSkills) all.add(skill.identifier);
 
+      // 8. Custom connectors
+      for (const connector of customConnectors) all.add(connector.identifier);
+
       return all;
     }, [
       builtinList,
@@ -684,6 +729,7 @@ const AgentTool = memo<AgentToolProps>(
       installedBuiltinSkills,
       marketAgentSkills,
       userAgentSkills,
+      customConnectors,
     ]);
 
     // Track whether initial cleanup has been performed
@@ -695,6 +741,10 @@ const AgentTool = memo<AgentToolProps>(
       if (cleanupDoneRef.current) return;
       if (validIdentifiers.size === 0) return;
       if (plugins.length === 0) return;
+      // Don't prune until the connector store has loaded — connector identifiers
+      // are absent from validIdentifiers until fetchConnectors() resolves, so
+      // running cleanup before that would incorrectly mark enabled connectors as stale.
+      if (!isConnectorsInit) return;
 
       // Defer cleanup to avoid race with async data loading (SWR, Composio, etc.)
       const timer = setTimeout(() => {

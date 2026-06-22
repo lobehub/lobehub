@@ -22,14 +22,25 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorErrorBg};
     }
   `,
+  content: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  `,
   icon: css`
     position: relative;
 
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
 
     width: 18px;
     height: 18px;
     border-radius: 4px;
+
+    line-height: 0;
 
     img,
     video {
@@ -45,6 +56,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
+    line-height: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -83,17 +95,25 @@ const ContextItem = memo<FileItemProps>((props) => {
   });
   return (
     <Tag closable size={'large'} onClick={handleClick} onClose={handleClose}>
-      <Flexbox className={styles.icon}>
-        <Content {...props} />
-        {isUploading && (
-          <div className={styles.progress}>
-            <Progress percent={progress} showInfo={false} size={14} strokeWidth={2} type="circle" />
-          </div>
-        )}
+      <Flexbox horizontal align={'center'} className={styles.content}>
+        <Flexbox className={styles.icon}>
+          <Content {...props} />
+          {isUploading && (
+            <div className={styles.progress}>
+              <Progress
+                percent={progress}
+                showInfo={false}
+                size={14}
+                strokeWidth={2}
+                type="circle"
+              />
+            </div>
+          )}
+        </Flexbox>
+        <Tooltip title={file.name}>
+          <span className={styles.name}>{basename}</span>
+        </Tooltip>
       </Flexbox>
-      <Tooltip title={file.name}>
-        <span className={styles.name}>{basename}</span>
-      </Tooltip>
     </Tag>
   );
 });

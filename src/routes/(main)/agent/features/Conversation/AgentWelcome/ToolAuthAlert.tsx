@@ -342,6 +342,11 @@ const ToolAuthAlert = memo(() => {
   const agentId = useConversationStore(contextSelectors.agentId);
   const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
   const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  // Connections load asynchronously via `useFetchUserComposioConnections` (fired by
+  // ChatInput on the same page). Until they arrive, `composioServers` is the empty
+  // fallback — don't treat a missing server as "needs auth" or the card flashes a
+  // false unauthorized state on refresh before the real status loads.
+  const isComposioServersInit = useToolStore((s) => s.isComposioServersInit);
   const { isAuthenticated: isMarketAuthenticated } = useMarketAuth();
 
   // Filter out tools that need authorization
@@ -353,8 +358,16 @@ const ToolAuthAlert = memo(() => {
       const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === pluginId);
       if (composioType) {
         const server = composioServers.find((s) => s.identifier === pluginId);
-        // Not installed or pending auth
-        if (!server || server.status === ComposioServerStatus.PENDING_AUTH) {
+        // A missing server only means "not installed" once connections have loaded;
+        // before that, skip it to avoid flashing a false unauthorized state.
+        if (!server) {
+          if (isComposioServersInit) {
+            result.push({ ...composioType, authType: 'composio', server });
+          }
+          continue;
+        }
+        // Pending auth
+        if (server.status === ComposioServerStatus.PENDING_AUTH) {
           result.push({ ...composioType, authType: 'composio', server });
         }
         continue;
@@ -368,7 +381,7 @@ const ToolAuthAlert = memo(() => {
     }
 
     return result;
-  }, [plugins, composioServers, isMarketAuthenticated]);
+  }, [plugins, composioServers, isComposioServersInit, isMarketAuthenticated]);
 
   // Don't render if no pending auth tools
   if (pendingAuthTools.length === 0) {

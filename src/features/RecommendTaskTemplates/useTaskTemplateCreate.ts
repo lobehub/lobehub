@@ -11,7 +11,11 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from './useConnectorConnection';
 
 interface UseTaskTemplateCreateOptions {
   description: string;
@@ -30,13 +34,26 @@ export interface UseTaskTemplateCreateResult {
   primaryButtonLabel: string;
 }
 
+type ConnectErrorMessageKey =
+  | 'taskTemplate.action.connect.error'
+  | 'taskTemplate.action.connect.popupBlocked';
+
+export const resolveTaskTemplateConnectErrorMessageKey = (
+  error: unknown,
+): ConnectErrorMessageKey | undefined => {
+  if (error instanceof ConnectorConnectionMarketAuthRequiredError) return undefined;
+  if (error instanceof ConnectorConnectionPopupBlockedError)
+    return 'taskTemplate.action.connect.popupBlocked';
+  return 'taskTemplate.action.connect.error';
+};
+
 export const useTaskTemplateCreate = ({
   description,
   onCreated,
   template,
   title,
 }: UseTaskTemplateCreateOptions): UseTaskTemplateCreateResult => {
-  const { t } = useTranslation('taskTemplate');
+  const { t } = useTranslation('common');
   const { message } = App.useApp();
   const { allowed: canCreateTask } = usePermission('create_content');
   const [loading, setLoading] = useState(false);
@@ -48,7 +65,7 @@ export const useTaskTemplateCreate = ({
     () => template.connectors.filter((connector) => connector.required),
     [template.connectors],
   );
-  const requiredConnection = useSkillConnection(requiredConnectors);
+  const requiredConnection = useConnectorConnection(requiredConnectors);
 
   const handleCreate = useCallback(async () => {
     if (!canCreateTask) return;
@@ -76,7 +93,7 @@ export const useTaskTemplateCreate = ({
       }
     } catch (error) {
       console.error('[taskTemplate:create]', error);
-      message.error(t('action.create.error'));
+      message.error(t('taskTemplate.action.create.error'));
     } finally {
       setLoading(false);
     }
@@ -97,17 +114,15 @@ export const useTaskTemplateCreate = ({
 
   const handleConnectError = useCallback(
     (error: unknown) => {
-      message.error(
-        error instanceof SkillConnectionPopupBlockedError
-          ? t('action.connect.popupBlocked')
-          : t('action.connect.error'),
-      );
+      const messageKey = resolveTaskTemplateConnectErrorMessageKey(error);
+      if (!messageKey) return;
+      message.error(t(messageKey));
     },
     [message, t],
   );
 
   // Drive the "click Add task -> chain OAuth popups -> create task" flow via a
-  // pending flag instead of awaiting connect(): useSkillConnection returns as
+  // pending flag instead of awaiting connect(): useConnectorConnection returns as
   // soon as the popup opens, with real status arriving through store polling.
   const [pendingCreate, setPendingCreate] = useState(false);
   const requiredConnectionRef = useRef(requiredConnection);
@@ -142,10 +157,10 @@ export const useTaskTemplateCreate = ({
   }, [canCreateTask, created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
 
   const primaryButtonLabel = loading
-    ? t('action.creating')
+    ? t('taskTemplate.action.creating')
     : pendingCreate
-      ? t('action.connecting')
-      : t('action.createButton');
+      ? t('taskTemplate.action.connecting')
+      : t('taskTemplate.action.createButton');
 
   return {
     created,

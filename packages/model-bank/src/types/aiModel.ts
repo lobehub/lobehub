@@ -519,8 +519,8 @@ export const UpdateAiModelSchema = z.object({
       deploymentName: z.string().optional(),
     })
     .optional(),
-  contextWindowTokens: z.number().nullable().optional(),
-  displayName: z.string().nullable().optional(),
+  contextWindowTokens: z.number().nullish(),
+  displayName: z.string().nullish(),
   settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });

@@ -37,15 +37,19 @@ export interface HeterogeneousProviderConfig {
 }
 
 /**
- * Where a hetero agent runs.
+ * Where an agent runs.
  * - `none`    : no execution environment — plain chat, no built-in run tools
+ * - `auto`    : auto-pick a device — when exactly one is online it is activated
+ *               automatically; with several online the model selects one via the
+ *               remote-device tool. The ONLY mode that touches a device the user
+ *               did not explicitly select. Opt-in: never a silent default.
  * - `local`   : in-process spawn on the user's Electron desktop (desktop only)
  * - `device`  : dispatched to an `lh connect` device identified by `boundDeviceId`
  * - `sandbox` : server-spawned cloud sandbox
  *
  * Remote hetero agents (`openclaw` | `hermes`) are always `device`.
  */
-export type DeviceExecutionTarget = 'device' | 'local' | 'none' | 'sandbox';
+export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
 
 /**
  * Agent agency configuration.
@@ -92,3 +96,28 @@ export interface LobeAgentAgencyConfig {
    */
   workingDirByDevice?: Record<string, string>;
 }
+
+/**
+ * Apply "undefined means delete" semantics to a `workingDirByDevice` patch.
+ *
+ * Deep-merge (used by both the client optimistic store and the server persist
+ * path) can only add/overwrite keys — it silently skips `undefined` sources, so
+ * it can never *remove* a per-device entry. To clear a device's cwd the patch
+ * carries `{ [deviceId]: undefined }`; this prunes those keys from the merged
+ * map after the merge has run.
+ *
+ * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
+ * patch touches no device entries.
+ */
+export const pruneWorkingDirByDeviceDeletes = (
+  merged: { workingDirByDevice?: Record<string, string | undefined> } | null | undefined,
+  patch: { workingDirByDevice?: Record<string, string | undefined> } | null | undefined,
+): void => {
+  const incoming = patch?.workingDirByDevice;
+  const target = merged?.workingDirByDevice;
+  if (!incoming || !target) return;
+
+  for (const key of Object.keys(incoming)) {
+    if (incoming[key] === undefined) delete target[key];
+  }
+};

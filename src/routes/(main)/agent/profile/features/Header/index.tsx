@@ -114,7 +114,9 @@ const Header = memo(() => {
 
   const handleExportMarkdown = useCallback(async () => {
     try {
-      const editorMarkdown = editor?.getDocument('markdown') as string | null | undefined;
+      const editorMarkdown = isHeterogeneous
+        ? undefined
+        : (editor?.getDocument('markdown') as string | null | undefined);
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config.model,
@@ -155,7 +157,7 @@ const Header = memo(() => {
       console.error('Failed to export agent profile markdown:', error);
       message.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
-  }, [config.model, config.plugins, config.provider, editor, meta, systemRole, t]);
+  }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined);

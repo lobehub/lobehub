@@ -1,4 +1,4 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
 
 import type { TaskStoreState } from '../initialState';
 
@@ -60,7 +60,13 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
-const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
+// Read the RESOLVED verify config that getTaskDetail populates via
+// TaskModel.getVerifyConfig (which includes the legacy `config.review` fallback
+// during migration) — not the raw `config.verify`. Reading raw config.verify
+// would return undefined for a legacy review-only task, so the panel would open
+// as unconfigured and the first autosave could clobber the old settings.
+const activeTaskVerifyConfig = (s: TaskStoreState): TaskVerifyConfig | undefined =>
+  activeTaskDetail(s)?.verify ?? undefined;
 
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 
@@ -109,13 +115,13 @@ export const taskDetailSelectors = {
   activeTaskPeriodicInterval,
   activeTaskPriority,
   activeTaskProvider,
-  activeTaskReview,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
+  activeTaskVerifyConfig,
   activeTaskWorkspace,
   activeTaskWorkspaceId,
   activeTopicDrawerTopicId,

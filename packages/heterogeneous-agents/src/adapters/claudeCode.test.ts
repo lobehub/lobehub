@@ -176,6 +176,38 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
+    it('does not treat an allowed rate_limit_event window as a quota limit on a later network error', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // CC stamps a rate_limit_info onto an *allowed* request — it carries the
+      // rolling-window metadata (resetsAt / rateLimitType) even though nothing
+      // was rejected. A later ECONNRESET must surface as a generic error, NOT
+      // inherit this window and render a bogus "usage limit reached" guide.
+      const rawError = 'API Error: Unable to connect to API (ECONNRESET)';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: {
+          isUsingOverage: false,
+          rateLimitType: 'five_hour',
+          resetsAt: 1_781_853_000,
+          status: 'allowed',
+        },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: null,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({ error: rawError, message: rawError });
+      expect(events[1].data).not.toHaveProperty('code', 'rate_limit');
+      expect(events[1].data).not.toHaveProperty('rateLimitInfo');
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
@@ -1287,6 +1319,113 @@ describe('ClaudeCodeAdapter', () => {
       const types = events.map((e) => e.type);
       expect(types).not.toContain('stream_end');
       expect(types).not.toContain('stream_start');
+    });
+
+    // ── Regression: post-tool text must not coalesce onto the tool-issuing turn ──
+    // Observed on a DEVICE (batch / `lh hetero exec`) Claude Code run — topic
+    // tpc_58GZ5d8NGPLx, assistant msg_orSJYzAH9HEL9Gb4k3. That run persisted the
+    // final answer text AND the 2 Bash `tool_use` blocks onto a SINGLE assistant
+    // message (the tool-issuing seed, no `metadata.mainMessageId`), while a
+    // trailing EMPTY assistant shell (msg_MUtsnMCWkbtBwcLlAH — content_len=0,
+    // `metadata.mainMessageId` set) was spawned. Downstream the renderer then
+    // drops the "Bash (2)" block BELOW the answer because text + tool_use share
+    // one message.
+    //
+    // Proximate cause: when CC reuses a `message.id` to stream the post-tool
+    // continuation (the model answering after a `tool_result`), the
+    // `messageId === this.currentMessageId` short-circuit in `openMainMessage`
+    // returns `[]` → no `newStep` → the text anchors to the same assistant that
+    // issued the tool calls. A turn that has ALREADY emitted `tool_use` must open
+    // a new step before absorbing post-tool text, so the answer lands on its own
+    // assistant (chained after the tool results).
+    //
+    // Fixed in `openMainMessage` / `handleAssistant`: a text-only event on the
+    // in-flight message.id that already emitted a tool_use now forces a step
+    // boundary so the answer anchors to its own assistant.
+    it('opens a new step for post-tool text that reuses the tool_use message.id (regression: tpc_58GZ5d8NGPLx)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // 1. Assistant issues a tool_use under msg_1.
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      // 2. Tool returns.
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // 3. Model continues with the final answer — CC REUSES msg_1 for this
+      //    post-tool text instead of minting a fresh message.id.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Desired: a step boundary precedes the post-tool text so it anchors to a
+      // NEW assistant, not the tool-issuing turn.
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+    });
+
+    // The forced split above must NOT reuse the tool turn's message.id as the
+    // newStep id: the main-agent reducer drops a `newStep` whose id equals the
+    // already-open turn's `currentMainMessageId` (replay idempotency). For any
+    // tool turn that was itself opened by a prior newStep, that id IS
+    // currentMainMessageId — reusing it would get the split dropped and the text
+    // would coalesce anyway. The first reused-id regression above only escaped
+    // this because the seed turn has no mainMessageId. Here the tool turn (msg_2)
+    // is opened by a real newStep, so the split must carry a DISTINCT key.
+    it('uses a key distinct from the tool turn id when forcing a post-tool split on a non-seed turn', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First turn after init (records msg_1, no step boundary).
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock first turn', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second turn (NEW id) — opened by a real newStep, so the reducer's
+      // currentMainMessageId becomes msg_2. This turn issues a tool_use.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // Post-tool answer reuses msg_2.
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+      // Distinct from the reused id (else the reducer drops it as a replay)…
+      expect(newStep!.data.messageId).not.toBe('msg_2');
+      // …but derived from it, so the key stays traceable + replay-stable.
+      expect(newStep!.data.messageId).toMatch(/^msg_2:/);
     });
   });
 
@@ -2485,6 +2624,60 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
+    // Regression (P2): on the BATCH path, when the post-tool confirmation REUSES
+    // the Monitor tool's message.id, the forced split must still consume
+    // `hasUnhandledUserInput` (armed by the tool_result). Otherwise the stale
+    // flag survives and the next callback turn — opened while the task is active
+    // with no new user input — fails the `!hasUnhandledUserInput` signal check,
+    // leaving the first stdout callback untagged.
+    it('still tags the next callback after a forced post-tool split reuses the tool id (batch Monitor flow)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      // Monitor tool_use under msg_01 (batch: an `assistant` event, not a delta).
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
+      // tool_result → arms hasUnhandledUserInput.
+      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
+
+      // Confirmation turn REUSES msg_01 → forced post-tool split. It is the
+      // natural follow-up to the tool_result, so it carries no signal AND must
+      // consume hasUnhandledUserInput.
+      const confirm = adapter.adapt({
+        message: {
+          id: 'msg_01',
+          content: [{ text: 'mock monitoring confirmation', type: 'text' }],
+        },
+        type: 'assistant',
+      });
+      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(confirmStart).toBeDefined();
+      expect(confirmStart!.data.externalSignal).toBeUndefined();
+
+      // Monitor pushes an event → CC re-invokes with a NEW id and no new user
+      // input. This callback must be signal-tagged — only true once the forced
+      // split cleared the stale flag.
+      const cb1 = adapter.adapt({
+        message: { id: 'msg_02', content: [{ text: 'mock callback turn', type: 'text' }] },
+        type: 'assistant',
+      });
+      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(cb1Start!.data.externalSignal).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+    });
+
     it('keeps tagging consecutive signal callbacks with incrementing sequence', () => {
       const adapter = new ClaudeCodeAdapter();
       init(adapter);
@@ -2558,6 +2751,51 @@ describe('ClaudeCodeAdapter', () => {
       ).toBeUndefined();
     });
 
+    /**
+     * Real-world regression (recorded on tpc_joZS2mksoY5L): a slow `git commit`
+     * (running a lint-staged hook) makes CC track the Bash call as a task and
+     * emit `task_started` + `task_notification` back-to-back, with NO out-of-band
+     * callback turn in between, immediately followed by the tool_result. That is
+     * an inline synchronous tool, not a Monitor-style long-running task — the next
+     * turn is the normal main-chain continuation and must NOT be tagged
+     * `task-completion` (doing so mis-anchors it and drops it from the rendered
+     * chain).
+     */
+    it('does NOT tag the next turn when a task started and ended with no callbacks (inline tool)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      init(adapter);
+
+      // A Bash `git commit` tool_use.
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_commit',
+              input: { command: 'git commit' },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+
+      // CC tracks the slow commit as a task, then notifies completion
+      // back-to-back — NO callback turn opened while it was alive.
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_commit'));
+      adapter.adapt(ccTaskNotification('task_1'));
+
+      // The commit's tool_result is consumed inline by the next turn.
+      adapter.adapt(ccUser('toolu_commit', 'committed'));
+
+      // Next turn is plain continuation — must carry NO externalSignal.
+      const next = adapter.adapt(ccMessageStart('msg_02'));
+      expect(
+        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toBeUndefined();
+    });
+
     it('clears unconsumed task-completion lineage on `result`', () => {
       const adapter = new ClaudeCodeAdapter();
       init(adapter);
@@ -2572,13 +2810,18 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
       adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
       adapter.adapt(ccMessageStart('msg_02'));
+      // A signal callback fires while the task is alive (callbackCount > 0), so
+      // `task_notification` genuinely arms pendingTaskCompletion — otherwise (an
+      // inline tool with no callbacks) nothing is armed and this test would pass
+      // vacuously, no longer guarding the `result` clear path.
+      adapter.adapt(ccMessageStart('msg_03'));
       adapter.adapt(ccTaskNotification('task_1'));
       // Run ends before the summary turn fires (unusual but possible).
       adapter.adapt({ result: 'ok', type: 'result', usage: undefined });
 
       // A later turn (e.g. follow-up user message) must NOT inherit
-      // the unconsumed task-completion lineage.
-      const next = adapter.adapt(ccMessageStart('msg_03'));
+      // the unconsumed task-completion lineage — `result` dropped it.
+      const next = adapter.adapt(ccMessageStart('msg_04'));
       expect(
         next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();

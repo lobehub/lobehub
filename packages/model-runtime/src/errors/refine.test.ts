@@ -168,4 +168,40 @@ describe('refineErrorCode', () => {
       }),
     ).toBeUndefined();
   });
+
+  describe('re-refines the fallback buckets themselves', () => {
+    // formatErrorForState is idempotent: an inner pass can demote a
+    // ProviderBizError to UpstreamHttpError (4xx + no recognized message), then
+    // an outer pass re-enriches. UpstreamHttpError must stay refinable so the
+    // later pass can still upgrade it once the message is recognizable.
+    it('upgrades an UpstreamHttpError once its message matches a pattern', () => {
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.UpstreamHttpError,
+          message: 'Hệ thống đang bận, vui lòng thử lại sau ít phút.',
+        }),
+      ).toBe(AgentRuntimeErrorType.ProviderServiceUnavailable);
+    });
+
+    it('leaves an UpstreamHttpError untouched when nothing matches', () => {
+      // No status fallback for UpstreamHttpError (status-refinable is
+      // ProviderBizError only), so an unrecognized 4xx residual stays put.
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.UpstreamHttpError,
+          httpStatus: 409,
+          message: 'conflict, no details',
+        }),
+      ).toBeUndefined();
+    });
+
+    it('upgrades a bare-500 (InternalServerError) once its message matches', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: '参数错误超过100个',
+        }),
+      ).toBe(AgentRuntimeErrorType.InvalidRequestFormat);
+    });
+  });
 });

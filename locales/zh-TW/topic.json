@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "標記為進行中",
   "defaultTitle": "預設話題",
   "displayItems": "顯示項目",
+  "draft": "[草稿]",
   "duplicateLoading": "話題複製中...",
   "duplicateSuccess": "話題複製成功",
   "failedStatusTip": "此執行遇到錯誤 — 點擊查看詳細資訊。",

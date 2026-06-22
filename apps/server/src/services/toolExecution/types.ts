@@ -186,6 +186,17 @@ export interface ToolExecutionContext {
   topicId?: string;
   userId?: string;
   /**
+   * Device-bound working directory resolved when the operation was created
+   * (`resolveDeviceWorkingDirectory`: topic override > workingDirByDevice >
+   * device default). Injected by device-proxy runtimes as the tool call's
+   * cwd/scope so commands and file ops land in the bound directory instead of
+   * the daemon's `process.cwd()` (= `/` for a Finder/Dock-launched app).
+   *
+   * NOT the conversation `scope` above — that is the operation's thread/group
+   * scope and is unrelated to the filesystem working directory.
+   */
+  workingDirectory?: string;
+  /**
    * Workspace ID that scopes ownership for any model/service the runtime
    * instantiates. When unset the runtime falls back to personal mode
    * (`workspace_id IS NULL`). Threaded from the chat/task router through

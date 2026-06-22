@@ -680,7 +680,9 @@ export class GroupAgentBuilderExecutionRuntime {
 
   private async resolveGroupTarget(groupId?: string) {
     const state = getChatGroupStoreState();
-    const currentGroup = agentGroupSelectors.currentGroup(state);
+    const currentGroup = state.activeGroupId
+      ? agentGroupSelectors.getGroupById(state.activeGroupId)(state)
+      : undefined;
     const targetGroupId = groupId ?? currentGroup?.id;
 
     if (!targetGroupId) {

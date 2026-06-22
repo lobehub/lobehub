@@ -10,7 +10,7 @@ import { useOpenChatSettings } from './useInterceptingRoutes';
 const mockNavigate = vi.fn();
 const mockUseNavigate = vi.fn(() => mockNavigate);
 const mockUseLocation = vi.fn(() => ({ pathname: '/' }));
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mockUseNavigate(),
   useLocation: () => mockUseLocation(),
 }));

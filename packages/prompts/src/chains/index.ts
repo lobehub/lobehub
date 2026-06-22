@@ -3,6 +3,7 @@ export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
 export * from './compressContext';
 export * from './generateBrief';
+export * from './generateSkillMeta';
 export * from './inputCompletion';
 export * from './judgeBriefEmit';
 export * from './langDetect';

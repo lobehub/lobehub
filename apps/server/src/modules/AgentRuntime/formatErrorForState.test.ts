@@ -16,7 +16,35 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
       expect(result.message).toBe('Invalid API key');
-      expect(result.body).toEqual({ detail: 'Unauthorized' });
+      expect(result.body).toEqual({
+        detail: 'Unauthorized',
+        message: 'Invalid API key',
+        provider: 'openai',
+      });
+    });
+
+    it('preserves top-level context from ChatCompletionErrorPayload', () => {
+      const budget = { required: 12 };
+
+      const result = formatErrorForState({
+        budget,
+        error: { message: 'Budget exceeded' },
+        errorType: ChatErrorType.FreePlanLimit,
+        provider: 'lobehub',
+      });
+
+      expect(result).toMatchObject({
+        attribution: 'user',
+        body: {
+          budget,
+          message: 'Budget exceeded',
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        httpStatus: 402,
+        message: 'Budget exceeded',
+        type: ChatErrorType.FreePlanLimit,
+      });
     });
 
     it('wraps standard Error as InternalServerError', () => {
@@ -178,6 +206,43 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(AgentRuntimeErrorType.InsufficientQuota);
       expect(result.category).toBe('quota');
+    });
+
+    it('keeps payload.error available when _responseBody is present', () => {
+      const result = formatErrorForState({
+        _responseBody: { provider: 'lobehub' },
+        error: { status: 402 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'opaque upstream message',
+      });
+
+      expect(result).toMatchObject({
+        body: {
+          error: { status: 402 },
+          message: 'opaque upstream message',
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        type: AgentRuntimeErrorType.InsufficientQuota,
+      });
+    });
+
+    it('merges payload status into an existing _responseBody error object', () => {
+      const result = formatErrorForState({
+        _responseBody: { error: { message: 'Payment required' }, provider: 'lobehub' },
+        error: { status: 402 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'opaque upstream message',
+      });
+
+      expect(result).toMatchObject({
+        body: {
+          error: { message: 'Payment required', status: 402 },
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        type: AgentRuntimeErrorType.InsufficientQuota,
+      });
     });
 
     it('keeps a genuine residual as ProviderBizError (E8002)', () => {

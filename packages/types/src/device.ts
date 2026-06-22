@@ -83,6 +83,14 @@ export interface DeviceChannel {
 }
 
 /**
+ * Where a device sits relative to the caller:
+ * - `personal`  — the caller's own machine (`devices.workspace_id IS NULL`).
+ * - `workspace` — a machine enrolled into the caller's current workspace, shared
+ *   across its members. Drives the run-device picker's Personal/Workspace groups.
+ */
+export type DeviceScope = 'personal' | 'workspace';
+
+/**
  * A device row as returned by the `device.listDevices` query — either a
  * registered device or an online-only "ghost" (connected but not yet persisted).
  * The server query is annotated to return `DeviceListItem[]`, so this type is the
@@ -99,6 +107,8 @@ export interface DeviceListItem {
   online: boolean;
   platform: string | null;
   registered: boolean;
+  /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
+  scope: DeviceScope;
   workingDirs: WorkingDirEntry[];
 }
 

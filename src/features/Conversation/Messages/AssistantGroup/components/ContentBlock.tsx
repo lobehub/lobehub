@@ -50,25 +50,25 @@ const ContentBlock = memo<ContentBlockProps>(
       continueGeneration(assistantId);
     }, [assistantId, continueGeneration, deleteMessage, id]);
 
+    const errorBlock = error ? (
+      <ErrorContent
+        error={errorContent && error ? errorContent : undefined}
+        id={id}
+        customErrorRender={(alertError) => (
+          <ErrorMessageExtra
+            data={{ error, id }}
+            error={alertError}
+            onRegenerate={handleRegenerate}
+          />
+        )}
+        onRegenerate={handleRegenerate}
+      />
+    ) : null;
+
+    // Nothing was streamed before the turn died: the error stands in for the
+    // whole block.
     if (error && (content === LOADING_FLAT || !content)) {
-      return (
-        <ErrorContent
-          id={id}
-          customErrorRender={(alertError) => (
-            <ErrorMessageExtra
-              data={{ error, id }}
-              error={alertError}
-              onRegenerate={handleRegenerate}
-            />
-          )}
-          error={
-            errorContent && error && (content === LOADING_FLAT || !content)
-              ? errorContent
-              : undefined
-          }
-          onRegenerate={handleRegenerate}
-        />
-      );
+      return errorBlock;
     }
 
     return (
@@ -101,6 +101,11 @@ const ContentBlock = memo<ContentBlockProps>(
             <Tools disableEditing={disableEditing} messageId={id} />
           </SafeBoundary>
         )}
+
+        {/* A terminal error (e.g. upstream overload) can land on a turn that
+            already streamed content + a successful tool call. Surface it below
+            the content instead of silently dropping it. */}
+        {errorBlock && <SafeBoundary>{errorBlock}</SafeBoundary>}
       </Flexbox>
     );
   },

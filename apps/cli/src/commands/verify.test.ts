@@ -88,3 +88,45 @@ describe('verify rubric config commands', () => {
     expect(printed).toContain('4');
   });
 });
+
+describe('verify evidence upload command', () => {
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mockGetTrpcClient.mockReset();
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit ${code}`);
+    }) as any);
+  });
+
+  afterEach(() => {
+    exitSpy.mockRestore();
+  });
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommand(program);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('rejects evidence with both file and inline content', async () => {
+    await expect(
+      run([
+        'evidence',
+        'upload',
+        '--check',
+        'result-1',
+        '--type',
+        'text',
+        '--file',
+        'artifact.txt',
+        '--content',
+        'inline payload',
+      ]),
+    ).rejects.toThrow('process.exit 1');
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(mockGetTrpcClient).not.toHaveBeenCalled();
+  });
+});

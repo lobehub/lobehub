@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import CategoryContainer from '../../../components/CategoryContainer';
 import Category from '../features/Category';

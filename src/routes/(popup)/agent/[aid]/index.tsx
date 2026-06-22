@@ -2,7 +2,7 @@
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { memo, useLayoutEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { WelcomeExtraProvider } from '@/features/AgentHome/WelcomeExtraContext';

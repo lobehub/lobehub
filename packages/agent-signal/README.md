@@ -80,7 +80,7 @@ Use the browser service facade for:
 - Sending events through tRPC
 - Keeping UI paths non-blocking
 
-See [src/services/agentSignal.ts](../../src/services/agentSignal.ts) and [src/store/chat/slices/aiChat/actions/agentSignalBridge.ts](../../src/store/chat/slices/aiChat/actions/agentSignalBridge.ts).
+See [src/services/agentSignal.ts](../../src/services/agentSignal.ts) and [src/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge.ts](../../src/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge.ts).
 
 Use server services for:
 
@@ -101,12 +101,12 @@ See [src/server/services/agentSignal/emitter.ts](../../src/server/services/agent
 | `agent.execution.failed`       | `AGENT_SIGNAL_SOURCE_TYPES.agentExecutionFailed`      | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server agent execution failed with operation, reason, error, topic, and context metadata.                 |
 | `agent.user.message`           | `AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage`          | [Workflow bridge](../../src/server/workflows/agentSignal/run.ts), [Bot router](../../src/server/services/bot/BotMessageRouter.ts) | User feedback/message content that policies can analyze for memory, prompt, document, or skill changes.   |
 | `bot.message.merged`           | `AGENT_SIGNAL_SOURCE_TYPES.botMessageMerged`          | [Bot router](../../src/server/services/bot/BotMessageRouter.ts)                                                                   | Bot-platform message content merged into a conversation scope.                                            |
-| `client.gateway.error`         | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError`        | [Gateway event handler](../../src/store/chat/slices/aiChat/actions/gatewayEventHandler.ts)                                        | Browser gateway error for a client-side runtime operation.                                                |
-| `client.gateway.runtime_end`   | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd`   | [Gateway event handler](../../src/store/chat/slices/aiChat/actions/gatewayEventHandler.ts)                                        | Browser gateway runtime finished for a client-side operation.                                             |
-| `client.gateway.step_complete` | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete` | [Gateway event handler](../../src/store/chat/slices/aiChat/actions/gatewayEventHandler.ts)                                        | Browser gateway step completed with operation and step index metadata.                                    |
-| `client.gateway.stream_start`  | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart`  | [Gateway event handler](../../src/store/chat/slices/aiChat/actions/gatewayEventHandler.ts)                                        | Browser gateway stream started with operation and first step metadata.                                    |
-| `client.runtime.complete`      | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete`     | [Chat streaming executor](../../src/store/chat/slices/aiChat/actions/streamingExecutor.ts)                                        | Browser chat runtime completed with operation, topic, thread, and status metadata.                        |
-| `client.runtime.start`         | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart`        | [Chat streaming executor](../../src/store/chat/slices/aiChat/actions/streamingExecutor.ts)                                        | Browser chat runtime started; workflow may bridge this into `agent.user.message` with serialized context. |
+| `client.gateway.error`         | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError`        | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway error for a client-side runtime operation.                                                |
+| `client.gateway.runtime_end`   | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd`   | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway runtime finished for a client-side operation.                                             |
+| `client.gateway.step_complete` | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete` | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway step completed with operation and step index metadata.                                    |
+| `client.gateway.stream_start`  | `AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart`  | [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts)                   | Browser gateway stream started with operation and first step metadata.                                    |
+| `client.runtime.complete`      | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete`     | [Chat streaming executor](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts)                    | Browser chat runtime completed with operation, topic, thread, and status metadata.                        |
+| `client.runtime.start`         | `AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart`        | [Chat streaming executor](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts)                    | Browser chat runtime started; workflow may bridge this into `agent.user.message` with serialized context. |
 | `runtime.after_step`           | `AGENT_SIGNAL_SOURCE_TYPES.runtimeAfterStep`          | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step finished with operation, step index, topic, and context metadata.                     |
 | `runtime.before_step`          | `AGENT_SIGNAL_SOURCE_TYPES.runtimeBeforeStep`         | [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts)                                                    | Server runtime step is about to run with operation, step index, topic, and context metadata.              |
 
@@ -118,7 +118,7 @@ See [src/server/services/agentSignal/emitter.ts](../../src/server/services/agent
 - [Source type catalog](src/source/sourceTypes.ts): constants, payload map, source variants, and the client allow-list.
 - [Scope-key helpers](src/source/scopeKey.ts): topic, bot thread, task, agent/user, and user scope-key builders.
 - [Browser service facade](../../src/services/agentSignal.ts): tRPC client wrapper for browser code.
-- [Browser bridge](../../src/store/chat/slices/aiChat/actions/agentSignalBridge.ts): feature-gated non-blocking browser emission helper.
+- [Browser bridge](../../src/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge.ts): feature-gated non-blocking browser emission helper.
 - [Lambda router](../../src/server/routers/lambda/agentSignal.ts): authenticated browser ingress and client source type validation.
 - [Server emitter](../../src/server/services/agentSignal/emitter.ts): feature-gated immediate execution or workflow handoff.
 - [Server orchestrator](../../src/server/services/agentSignal/orchestrator.ts): source event execution through policies, runtime, and observability.
@@ -126,8 +126,8 @@ See [src/server/services/agentSignal/emitter.ts](../../src/server/services/agent
 - [Workflow trigger](../../src/server/workflows/agentSignal/index.ts): async Upstash Workflow handoff.
 - [Workflow runner](../../src/server/workflows/agentSignal/run.ts): workflow execution and client runtime bridge.
 - [Agent Runtime](../../src/server/services/agentRuntime/AgentRuntimeService.ts): server runtime source event producers.
-- [Chat](../../src/store/chat/slices/aiChat/actions/streamingExecutor.ts): browser chat runtime source event producer.
-- [Gateway event handler](../../src/store/chat/slices/aiChat/actions/gatewayEventHandler.ts): browser gateway source event producer.
+- [Chat](../../src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts): browser chat runtime source event producer.
+- [Gateway event handler](../../src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts): browser gateway source event producer.
 - [Bot router](../../src/server/services/bot/BotMessageRouter.ts): bot-platform source event producer.
 
 ## Adding A Source Event

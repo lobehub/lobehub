@@ -21,7 +21,7 @@ export interface RecentDbItem {
 // Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts` plus the
 // legacy `task_manager` trigger from the previous Task Manager panel.
 // System-trigger topics live in their own surfaces and would clutter Recent.
-const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task'];
+const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
 
 // Excluded so tool-owned document rows don't surface as generic recent docs;
 // only user-authored pages ('api') and legacy 'topic' rows remain.

@@ -19,7 +19,6 @@ vi.mock('@lobechat/business-const', async (importOriginal) => {
 
   return {
     ...actual,
-    ENABLE_BUSINESS_FEATURES: false,
   };
 });
 
@@ -67,7 +66,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => navigateMock,
 }));
 

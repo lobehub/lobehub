@@ -16,6 +16,10 @@ testProvider({
   },
 });
 
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
+
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -51,6 +55,32 @@ describe('LobeZhipuAI - custom features', () => {
   });
 
   describe('handlePayload', () => {
+    it('should send mapped model id when modelIdMapping is configured', async () => {
+      const mappedInstance = new LobeZhipuAI({
+        apiKey: 'test',
+        modelIdMapping: { 'glm-4-alltools': 'upstream-glm-deployment' },
+      });
+      vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await mappedInstance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'glm-4-alltools',
+        temperature: 2,
+        top_p: 2,
+      });
+
+      expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'upstream-glm-deployment',
+          temperature: 0.99,
+          top_p: 0.99,
+        }),
+        expect.anything(),
+      );
+    });
+
     describe('Web Search Feature', () => {
       it('should add web_search tool when enabledSearch is true', async () => {
         await instance.chat({

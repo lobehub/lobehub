@@ -62,6 +62,11 @@ describe('loadModels', () => {
 
 describe('knowledgeCutoff backfill', () => {
   it('fills knowledgeCutoff from the canonical map for builtin models', () => {
+    const fable = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'anthropic' && m.id === 'claude-fable-5',
+    );
+    expect(fable?.knowledgeCutoff).toBe('2026-01');
+
     const opus = LOBE_DEFAULT_MODEL_LIST.find(
       (m) => m.providerId === 'anthropic' && m.id === 'claude-opus-4-8',
     );
@@ -72,6 +77,11 @@ describe('knowledgeCutoff backfill', () => {
       (m) => m.providerId === 'bedrock' && m.id === 'global.anthropic.claude-opus-4-7',
     );
     expect(bedrockOpus?.knowledgeCutoff).toBe('2026-01');
+
+    const vertexGemini3Pro = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'vertexai' && m.id === 'gemini-3-pro-preview',
+    );
+    expect(vertexGemini3Pro?.knowledgeCutoff).toBe('2025-01');
   });
 
   it('keeps an explicit knowledgeCutoff over the map value', async () => {

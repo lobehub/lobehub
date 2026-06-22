@@ -29,6 +29,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { CustomConnectorModal } from '@/features/Connectors';
 import DevModal from '@/features/PluginDevModal';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -417,6 +418,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     installCustomPlugin,
     updateNewCustomPlugin,
     uninstallBuiltinTool,
+    deleteConnector,
   ] = useToolStore((s) => [
     s.uninstallCustomPlugin,
     s.removeComposioConnection,
@@ -424,8 +426,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.installCustomPlugin,
     s.updateNewCustomPlugin,
     s.uninstallBuiltinTool,
+    s.deleteConnector,
   ]);
   const [editingPluginId, setEditingPluginId] = useState<string | null>(null);
+  const [editingConnectorDbId, setEditingConnectorDbId] = useState<string | null>(null);
   const editingCustomPlugin = useToolStore(
     pluginSelectors.getCustomPluginById(editingPluginId ?? ''),
     isEqual,
@@ -512,7 +516,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           }}
         >
           <span className={cx(styles.policyItemIcon)}>{icon}</span>
-          <span className={cx(styles.policyText)}>{t(`tools.activation.${value}`)}</span>
+          <span className={cx(styles.policyText)}>
+            {t(value === 'pinned' ? 'tools.activation.pin' : `tools.activation.${value}`)}
+          </span>
           {renderCheck(value)}
         </button>
       );
@@ -1267,6 +1273,20 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={McpIcon} size={12} />,
+          configureConfig: { onConfigure: () => setEditingConnectorDbId(connector.id) },
+          deleteConfig: {
+            displayName: title,
+            onDelete: async () => {
+              await deleteConnector(connector.id);
+              // Mirror removeComposioServer: drop the identifier from agent.plugins so
+              // no orphaned pin survives the connector deletion.
+              try {
+                await togglePlugin(connector.identifier, false);
+              } catch (error) {
+                console.error('[Connector] Failed to unpin plugin after delete:', error);
+              }
+            },
+          },
           icon,
           id: connector.identifier,
           popoverContent,
@@ -1274,7 +1294,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, togglePlugin],
   );
 
   // Skills list items (including LobeHub Skill and Composio)
@@ -1916,25 +1936,33 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   ]);
 
   const editPluginDrawer = (
-    <DevModal
-      mode={'edit'}
-      open={!!editingPluginId}
-      value={editingCustomPlugin}
-      onValueChange={updateNewCustomPlugin}
-      onDelete={() => {
-        if (!canEdit) return;
-        if (editingPluginId) uninstallPlugin(editingPluginId);
-        setEditingPluginId(null);
-      }}
-      onOpenChange={(open) => {
-        if (!open) setEditingPluginId(null);
-      }}
-      onSave={async (devPlugin) => {
-        if (!canEdit) return;
-        await installCustomPlugin(devPlugin);
-        setEditingPluginId(null);
-      }}
-    />
+    <>
+      <DevModal
+        mode={'edit'}
+        open={!!editingPluginId}
+        value={editingCustomPlugin}
+        onValueChange={updateNewCustomPlugin}
+        onDelete={() => {
+          if (!canEdit) return;
+          if (editingPluginId) uninstallPlugin(editingPluginId);
+          setEditingPluginId(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setEditingPluginId(null);
+        }}
+        onSave={async (devPlugin) => {
+          if (!canEdit) return;
+          await installCustomPlugin(devPlugin);
+          setEditingPluginId(null);
+        }}
+      />
+      <CustomConnectorModal
+        connectorId={editingConnectorDbId ?? undefined}
+        open={!!editingConnectorDbId}
+        onClose={() => setEditingConnectorDbId(null)}
+        onEditSuccess={() => setEditingConnectorDbId(null)}
+      />
+    </>
   );
 
   return {

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { TaskDetailPage } from '@/features/AgentTasks';
 

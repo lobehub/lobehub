@@ -36,6 +36,7 @@ import type {
 } from '../../types';
 import { AgentRuntimeError } from '../../utils/createError';
 import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestError';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -57,6 +58,7 @@ interface ProviderIniOptions extends Record<string, any> {
   baseURL?: string;
   baseURLOrAccountID?: string;
   dangerouslyAllowBrowser?: boolean;
+  modelIdMapping?: Record<string, string>;
   region?: string;
   sdkType?: string;
   sessionToken?: string;
@@ -84,12 +86,15 @@ interface RouterInstance {
   runtime?: RuntimeClass;
 }
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+// OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
+// passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
+type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
+type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions & T;
 
 type Routers =
   | RouterInstance[]
   | ((
-      options: ClientOptions & Record<string, any>,
+      options: LobeClientOptions & Record<string, any>,
       runtimeContext: {
         model?: string;
       },
@@ -199,7 +204,7 @@ export const createRouterRuntime = ({
   ...params
 }: CreateRouterRuntimeOptions) => {
   return class UniformRuntime implements LobeRuntimeAI {
-    public _options: ClientOptions & Record<string, any>;
+    public _options: LobeClientOptions & Record<string, any>;
     private _routers: Routers;
     private _params: any;
     private _id: string;
@@ -213,7 +218,7 @@ export const createRouterRuntime = ({
       metadata.routeAttempt = routeAttempt;
     }
 
-    constructor(options: ClientOptions & Record<string, any> = {}) {
+    constructor(options: LobeClientOptions & Record<string, any> = {}) {
       const startedAt = Date.now();
       this._options = {
         ...options,
@@ -380,7 +385,7 @@ export const createRouterRuntime = ({
       if (resolvedApiType === 'vertexai') {
         const { apiKey, googleAuthOptions, project, location, ...restOptions } = finalOptions;
         const credentials = safeParseJSON<Record<string, any>>(apiKey);
-        const vertexOptions: GoogleGenAIOptions = {
+        const vertexOptions: GoogleGenAIOptions & ModelIdMappingOptions = {
           ...(restOptions as GoogleGenAIOptions),
           vertexai: true,
         };

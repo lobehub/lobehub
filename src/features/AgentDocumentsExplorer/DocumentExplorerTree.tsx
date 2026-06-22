@@ -21,7 +21,9 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { agentDocumentService } from '@/services/agentDocument';
 
+import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
@@ -178,6 +180,54 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [focusNewRowForRename, ops],
   );
 
+  const handleConvertToSkill = useCallback(
+    (doc: AgentDocumentItem) => {
+      const fallbackTitle = doc.title || doc.filename || '';
+      openConvertToSkillModal({
+        defaultDescription: doc.description ?? '',
+        defaultName: slugifySkillName(fallbackTitle),
+        defaultTitle: fallbackTitle,
+        generateCacheKey: ['document-to-skill-meta', agentId, doc.id],
+        onGenerate: async () => {
+          const meta = await agentDocumentService.generateSkillMeta({
+            agentId,
+            sourceAgentDocumentId: doc.id,
+          });
+          return meta ?? undefined;
+        },
+        onSubmit: async ({ name, description, title, generation }) => {
+          try {
+            await agentDocumentService.convertDocumentToSkill({
+              agentId,
+              description,
+              name,
+              sourceAgentDocumentId: doc.id,
+              title,
+            });
+            // Record implicit feedback: saving the generated values unchanged is
+            // a positive signal, editing them is negative. Best-effort.
+            if (generation) {
+              void agentDocumentService.recordSkillMetaFeedback({
+                data: {
+                  editedFields: generation.editedFields,
+                  final: { description, name, title },
+                  generated: generation.generated,
+                },
+                edited: generation.edited,
+                tracingId: generation.tracingId,
+              });
+            }
+            await mutate();
+            return undefined;
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        },
+      });
+    },
+    [agentId, mutate],
+  );
+
   const handleNodeClick = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
@@ -285,6 +335,18 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         });
       }
 
+      // Only plain agent documents (not folders, web sources, or existing
+      // skills) can be migrated into a managed skill.
+      const isConvertibleToSkill =
+        !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
+      if (isConvertibleToSkill && !isMulti) {
+        items.push({
+          key: 'convert-to-skill',
+          label: t('workingPanel.resources.tree.convertToSkill'),
+          onClick: () => handleConvertToSkill(node.data!),
+        });
+      }
+
       items.push({
         danger: true,
         icon: <Trash2Icon size={14} />,
@@ -299,6 +361,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     },
     [
       agentId,
+      handleConvertToSkill,
       handleCreateDocument,
       handleCreateFolder,
       isRecoverableSkillBundle,

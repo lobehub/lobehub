@@ -2360,69 +2360,36 @@ export class MessageModel {
   };
 
   /**
-   * Id of the most recently-created main-agent `role:'tool'` message under an
-   * assistant message, or `undefined` when the assistant produced no tools.
+   * Id of the latest main-thread (`threadId IS NULL`) "spine" message in a
+   * topic: the most recent message that is NOT a tool and NOT a signal-tagged
+   * reactive turn (Monitor stdout callbacks etc.). This is the chain anchor for
+   * the heterogeneous-agent write side: the next normal
+   * turn parents off it, producing a `user → asst → asst …` spine with tools as
+   * inline children.
    *
-   * Heterogeneous step boundaries chain the next assistant off the previous
-   * step's final tool message (the wire is `asst → tool → … → asst → tool`).
-   * The persistence handler normally derives that anchor from its in-memory
-   * tool state, but on a warm replica that did NOT drain the prior step's
-   * `tools_calling` (or before the assistant's `tools[]` JSONB has its
-   * `result_msg_id` backfilled) that state is empty — so it falls back here.
+   * Read straight from the DB and ordered by `createdAt`, it is independent of
+   * the in-memory current-assistant pointer — which can regress to the run's
+   * seed placeholder on a cold / non-sticky serverless replica. Anchoring here
+   * instead keeps consecutive cold-replica steps chained linearly rather than
+   * forking onto a stale node (the remote "断链" bug). No `createdAt` floor is
+   * needed: a topic runs at most one operation at a time, so the latest spine
+   * message IS this run's continuation point.
    *
-   * The `role:'tool'` rows are the authoritative anchor: they are created
-   * (Phase 2) with `parentId` = their step's assistant, earlier than and
-   * independent of the JSONB mirror's `result_msg_id` backfill (Phase 3).
-   * `threadId IS NULL` excludes subagent tool rows, which live on their own
-   * thread and must not anchor the main-agent wire.
+   * Excludes `role:'tool'` (inline children) and signal-tagged assistants
+   * (`metadata->'signal'`), which are tool-child callbacks — anchoring a normal
+   * turn onto a callback would orphan it under the read side's tool-only signal
+   * collection.
    */
-  getLastChildToolMessageId = async (assistantMessageId: string): Promise<string | undefined> => {
-    const [row] = await this.db
-      .select({ id: messages.id })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.parentId, assistantMessageId),
-          eq(messages.role, 'tool'),
-          isNull(messages.threadId),
-          this.ownership(),
-        ),
-      )
-      .orderBy(desc(messages.createdAt))
-      .limit(1);
-
-    return row?.id;
-  };
-
-  /**
-   * Latest main-thread (`threadId IS NULL`) tool message in a topic created on
-   * or after `sinceMessageId`. The hetero persistence handler passes the running
-   * operation's seed assistant as `sinceMessageId`, so the `createdAt` floor
-   * scopes the lookup to that run (a topic runs at most one operation at a time)
-   * and the chain anchor stays correct even when the in-memory current-assistant
-   * pointer has regressed on a cold replica.
-   */
-  getLastMainThreadToolMessageIdSince = async (
-    topicId: string,
-    sinceMessageId: string,
-  ): Promise<string | undefined> => {
-    const [seed] = await this.db
-      .select({ createdAt: messages.createdAt })
-      .from(messages)
-      .where(and(eq(messages.id, sinceMessageId), this.ownership()))
-      .limit(1);
-
-    if (!seed?.createdAt) return undefined;
-
+  getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> => {
     const [row] = await this.db
       .select({ id: messages.id })
       .from(messages)
       .where(
         and(
           eq(messages.topicId, topicId),
-          eq(messages.role, 'tool'),
+          not(eq(messages.role, 'tool')),
           isNull(messages.threadId),
-          gte(messages.createdAt, seed.createdAt),
+          sql`${messages.metadata} -> 'signal' IS NULL`,
           this.ownership(),
         ),
       )

@@ -16,6 +16,7 @@ export enum PortalViewType {
   LocalFile = 'localFile',
   MessageDetail = 'messageDetail',
   Notebook = 'notebook',
+  TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
   VerifyResult = 'verifyResult',
@@ -54,6 +55,7 @@ export type PortalViewData =
     }
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { agentId: string; type: PortalViewType.GroupThread }
+  | { taskId: string; type: PortalViewType.TaskDetail }
   | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============

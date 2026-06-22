@@ -210,6 +210,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                           agentId={agent.id}
                           agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
                           avatar={agent.avatar}
+                          heterogeneousType={agent.heterogeneousType}
                           onAgentChange={handleAgentChange}
                           onClose={() => setKey((k) => k + 1)}
                         />

@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
 import { useChatStore } from '@/store/chat';

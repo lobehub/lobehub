@@ -5,6 +5,7 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
@@ -16,9 +17,10 @@ import SwitchPanel from './SwitchPanel';
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
+  const { gid } = useParams<{ gid: string }>();
   const [isGroupsInit, groupMeta] = useAgentGroupStore((s) => [
     agentGroupSelectors.isGroupsInit(s),
-    agentGroupSelectors.currentGroupMeta(s),
+    agentGroupSelectors.getGroupMeta(gid ?? '')(s),
   ]);
 
   const displayTitle = groupMeta?.title || t('untitledGroup', { ns: 'chat' });

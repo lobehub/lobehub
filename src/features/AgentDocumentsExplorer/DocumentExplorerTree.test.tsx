@@ -6,7 +6,7 @@ import {
 } from '@lobechat/const';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';

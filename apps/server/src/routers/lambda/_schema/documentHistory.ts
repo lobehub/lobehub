@@ -43,7 +43,7 @@ export const updateDocumentInputSchema = z.object({
   id: z.string(),
   lockOwnerId: z.string().optional(),
   metadata: z.record(z.any()).optional(),
-  parentId: z.string().nullable().optional(),
+  parentId: z.string().nullish(),
   restoreFromHistoryId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema.optional(),
   title: z.string().optional(),

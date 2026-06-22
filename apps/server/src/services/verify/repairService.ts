@@ -1,4 +1,4 @@
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -6,6 +6,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -14,16 +15,22 @@ import { VerifyStatusService } from './statusService';
 const log = debug('lobe-server:verify-repair');
 
 /**
- * Resolve the run's repair-round cap from the rubric the plan was instantiated
- * from (live read via the plan items' `sourceRubricId`). Falls back to
- * {@link DEFAULT_MAX_REPAIR_ROUNDS} for agent-generated / rubric-less plans.
+ * Resolve the run's repair-round cap. A per-run override on the session metadata
+ * (set from the task's `TaskVerifyConfig.maxIterations`) wins, since a task with
+ * ad-hoc criteria or a per-task cap may not carry it on a rubric. Otherwise read
+ * it live from the rubric the plan was instantiated from (via the plan items'
+ * `sourceRubricId`), falling back to {@link DEFAULT_MAX_REPAIR_ROUNDS} for
+ * agent-generated / rubric-less plans.
  */
 const resolveMaxRepairRounds = async (
   db: LobeChatDatabase,
   userId: string,
   plan: VerifyCheckItem[],
+  metadata: VerifyRunMetadata | null | undefined,
   workspaceId?: string,
 ): Promise<number> => {
+  if (typeof metadata?.maxRepairRounds === 'number') return metadata.maxRepairRounds;
+
   const rubricId = plan.find((i) => i.sourceRubricId)?.sourceRubricId;
   if (!rubricId) return DEFAULT_MAX_REPAIR_ROUNDS;
 
@@ -114,13 +121,19 @@ export const createRepairRunner = (params: {
     });
     const repairOperationId = result.operationId;
 
-    // Re-snapshot the same plan onto the repair op + confirm, so the repair run
-    // re-verifies (round N+1) against its corrected deliverable on completion.
-    const state = await operationModel.getVerifyState(operationId);
-    const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
+    // Re-snapshot the same plan onto the repair op's session + confirm, so the
+    // repair run re-verifies (round N+1) against its corrected deliverable.
+    const runModel = new VerifyRunModel(db, userId, workspaceId);
+    const sourceRun = await runModel.findByOperation(operationId);
+    const plan = (sourceRun?.plan ?? []) as VerifyCheckItem[];
     if (plan.length > 0) {
-      await operationModel.setVerifyPlan(repairOperationId, plan);
-      await operationModel.confirmVerifyPlan(repairOperationId);
+      const repairRun = await runModel.ensureForOperation(repairOperationId);
+      await runModel.setPlan(repairRun.id, plan);
+      // Carry the source run's policy bag (e.g. the task's maxRepairRounds
+      // override) onto this round so its own auto-repair derives the same cap
+      // instead of falling back to the rubric/default.
+      if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
+      await runModel.confirmPlan(repairRun.id);
     }
 
     log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
@@ -143,13 +156,11 @@ export const maybeAutoRepair = async (
   workspaceId?: string,
 ): Promise<void> => {
   const operationModel = new AgentOperationModel(db, userId, workspaceId);
-  const state = await operationModel.getVerifyState(operationId);
-  const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
-  if (plan.length === 0) return;
+  const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
+  const plan = (run?.plan ?? []) as VerifyCheckItem[];
+  if (!run || plan.length === 0) return;
 
-  const results = await new VerifyCheckResultModel(db, userId, workspaceId).listByOperation(
-    operationId,
-  );
+  const results = await new VerifyCheckResultModel(db, userId, workspaceId).listByRun(run.id);
   const byItem = new Map(results.map((r) => [r.checkItemId, r]));
 
   // Wait until every required check has a terminal result (don't repair early).
@@ -165,7 +176,13 @@ export const maybeAutoRepair = async (
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
-    maxRepairRounds: await resolveMaxRepairRounds(db, userId, plan, workspaceId),
+    maxRepairRounds: await resolveMaxRepairRounds(
+      db,
+      userId,
+      plan,
+      run.metadata as VerifyRunMetadata | null,
+      workspaceId,
+    ),
     model: op?.model,
     provider: op?.provider,
     topicId: op?.topicId,
@@ -193,22 +210,23 @@ const buildInstruction = (
 
 export class VerifyRepairService {
   private readonly messageModel: MessageModel;
-  private readonly operationModel: AgentOperationModel;
+  private readonly runModel: VerifyRunModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
-    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
   }
 
   /** Collect the auto-repairable failures for a run. */
   async collectRepairable(operationId: string) {
-    const state = await this.operationModel.getVerifyState(operationId);
-    const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
-    const results = await this.resultModel.listByOperation(operationId);
+    const run = await this.runModel.findByOperation(operationId);
+    if (!run) return [];
+    const plan = (run.plan ?? []) as VerifyCheckItem[];
+    const results = await this.resultModel.listByRun(run.id);
     const byItem = new Map(results.map((r) => [r.checkItemId, r]));
 
     return plan
@@ -254,10 +272,13 @@ export class VerifyRepairService {
     if (!spawned) return null;
 
     // Link the repair operation onto each failed result and flip the rollup.
-    for (const { item } of failures) {
-      await this.resultModel.updateByCheckItem(operationId, item.id, {
-        repairOperationId: spawned.repairOperationId,
-      });
+    const run = await this.runModel.findByOperation(operationId);
+    if (run) {
+      for (const { item } of failures) {
+        await this.resultModel.updateByCheckItem(run.id, item.id, {
+          repairOperationId: spawned.repairOperationId,
+        });
+      }
     }
     await this.statusService.markRepairing(operationId);
     log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);

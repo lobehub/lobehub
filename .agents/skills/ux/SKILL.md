@@ -46,6 +46,13 @@ Every data surface has **four** states — design all of them, not just "has dat
       over skeleton rows or a blank body. _(Meaningful)_
 - [ ] **Distinguish the empty variants** — "no data yet" (onboarding CTA) vs
       "no match for filters" (clear-filters affordance) are different screens. _(Certainty)_
+- [ ] **Always-rendered chrome still needs a body empty state.** When a surface
+      keeps its toolbar / header mounted even with no data (so a create / `+`
+      affordance stays reachable), the **body** below it must still render an empty
+      placeholder — persistent chrome is not an excuse to leave the content area
+      blank. ✅ The agent **Documents** tab keeps its new-folder / new-doc toolbar
+      and renders an `Empty` below it when there are no documents — ❌ not a toolbar
+      over dead space. _(Meaningful)_
 - [ ] **Loading state** designed (skeleton / NeuralNetworkLoading), not a flash of
       blank or layout shift. _(Natural)_
 - [ ] **Error state** designed — surface the reason and a retry/back path. _(Meaningful)_
@@ -95,6 +102,33 @@ the selection is restored rather than freshly clicked.
       ✅ The default "LobeAI" (inbox) agent is `virtual` and excluded from the
       sidebar list, so the move picker re-adds it. An empty picker must mean
       "genuinely none", never "we filtered out the only option". _(Meaningful)_
+
+### 1.5 Default view reflects entry intent & data state・Certainty・Meaningful
+
+A surface with multiple tabs / views / panels has a **landing** selection. Don't
+hardcode it to "the first tab" — derive it from **(a) how the user got here** (the
+intent their navigation carried) and **(b) which views actually have data**. A
+static default that lands the user on an empty tab while a sibling holds exactly
+what they came for reads as broken. This pairs with §1.1: the empty state is the
+fallback _within_ a view; this rule is about not landing on that empty view in the
+first place when a better one exists.
+
+- [ ] **Open on the tab the entry implies.** When navigation carries intent — the
+      user clicked a Skill, a file, a record of a specific type — land on the view
+      that shows it, not the static first tab. ✅ Opening a document page by clicking
+      a **skill** lands the right panel on the **Skills** tab; opening a plain
+      document lands on **Documents**. _(Meaningful)_
+- [ ] **Fall back to a populated view when the default would be empty.** If the
+      default tab has no data but a sibling does, default to the populated one so
+      the surface opens on content. ✅ An agent with only skills (no documents)
+      opens the panel on **Skills** instead of an empty **Documents** tab. _(Certainty)_
+- [ ] **Decide from resolved state, not mid-load.** Compute the default once the
+      data has loaded — choosing off an empty _in-flight_ list flips the tab as data
+      arrives. Hold the static default while loading, switch on resolved-empty. _(Certainty)_
+- [ ] **A manual choice wins and sticks.** Once the user picks a tab, stop
+      auto-selecting — track "user-picked" separately (e.g. a nullable `pickedTab`
+      that overrides the derived default) so later data changes don't yank them off
+      their choice. _(Natural)_
 
 ---
 
@@ -250,10 +284,11 @@ The product should grow with the user — deeper power shows up as needs deepen.
 
 **Read — viewing data & lists**
 
-- [ ] Empty / loading / error states are all designed; empty is a real page with a CTA.
+- [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state.
 - [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
 - [ ] Capped/scrollable/virtualized list scrolls the restored active item into view on mount (`block: 'nearest'`, re-run after async rows mount).
 - [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
+- [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
 
 **Edit — entering & changing content**
 

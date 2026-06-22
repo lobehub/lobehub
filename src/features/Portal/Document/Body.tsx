@@ -11,12 +11,12 @@ import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
+import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { useAgentStore } from '@/store/agent';
-import { useChatStore } from '@/store/chat';
 import { useDocumentStore } from '@/store/document';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -324,10 +324,14 @@ const DocumentBody = memo(() => {
   const agentDocumentId = useResolvedAgentDocumentId();
   const fullPage = useDocumentViewFullPage();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
   const enableFloatingChatPanel = useUserStore(
     labPreferSelectors.enableAgentDocumentFloatingChatPanel,
   );
+  const panelEligible = !fullPage && enableFloatingChatPanel && !!activeAgentId && !!documentId;
+  const { topicId: docChatTopicId } = useDocumentChatTopic({
+    agentId: panelEligible ? activeAgentId : undefined,
+    documentId: panelEligible ? documentId : undefined,
+  });
   const [skillFrontmatter, contentFormat] = useDocumentStore((s) =>
     documentId
       ? [s.documents[documentId]?.skillFrontmatter ?? '', s.documents[documentId]?.contentFormat]
@@ -377,15 +381,17 @@ const DocumentBody = memo(() => {
         {fullPage ? <WideScreenContainer>{editorContent}</WideScreenContainer> : editorContent}
       </div>
       <TodoList />
-      {/* The full-page route surfaces chat through the working sidebar, so the
-          floating panel only belongs to the compact in-chat portal. */}
-      {!fullPage && enableFloatingChatPanel && activeAgentId && (
+      {/* The full-page route hosts its own panel through `AgentDocumentPage`, so
+          the in-portal panel only renders for the compact view. Both call sites
+          drive a doc-anchored chat topic via `useDocumentChatTopic`, so the panel
+          renders once that topic id resolves. */}
+      {panelEligible && docChatTopicId && (
         <FloatingChatPanel
           agentDocumentId={agentDocumentId}
           agentId={activeAgentId}
           documentId={documentId ?? undefined}
-          key={`${activeAgentId}:${activeTopicId ?? 'none'}:${documentId ?? 'none'}`}
-          topicId={activeTopicId ?? null}
+          key={`${activeAgentId}:${docChatTopicId}:${documentId ?? 'none'}`}
+          topicId={docChatTopicId}
         />
       )}
     </Flexbox>

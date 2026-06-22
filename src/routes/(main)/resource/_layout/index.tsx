@@ -1,7 +1,7 @@
 'use client';
 
 import { type FC } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import RegisterHotkeys from './RegisterHotkeys';
 

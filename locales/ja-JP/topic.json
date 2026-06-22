@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "アクティブに戻す",
   "defaultTitle": "デフォルトトピック",
   "displayItems": "項目を表示",
+  "draft": "［ドラフト］",
   "duplicateLoading": "トピックをコピー中...",
   "duplicateSuccess": "トピックのコピーに成功しました",
   "failedStatusTip": "この実行中にエラーが発生しました — 詳細を確認してください。",

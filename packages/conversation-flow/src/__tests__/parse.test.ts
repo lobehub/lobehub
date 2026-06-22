@@ -442,6 +442,149 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.assistantGroup.toolsWithBranches);
     });
+
+    // Regression: a hetero-agent (e.g. Claude Code) turn often opens with a
+    // TOOLLESS narration step streamed in reply to the user BEFORE the first
+    // tool call, with the tool-using step as its direct child. Previously the
+    // toolless head fell through to "Priority 4: regular message" and rendered
+    // as its own standalone bubble, while the tool step opened a SEPARATE
+    // assistantGroup — so the UI showed two disconnected assistant cards (a
+    // visually broken chain). The head must instead seed the single
+    // assistantGroup.
+    it('should fold a toolless turn-head into the following tool chain (single group)', () => {
+      const messages: Message[] = [
+        {
+          content: 'Can you check the build status?',
+          createdAt: 0,
+          id: 'u1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Sure — let me first find where the CI config lives.',
+          createdAt: 1,
+          id: 'a-head', // toolless narration, parent is the user message
+          parentId: 'u1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          content: 'Found it. Reading the workflow file now.',
+          createdAt: 2,
+          id: 'a-tool',
+          parentId: 'a-head', // direct child of the toolless head
+          role: 'assistant',
+          tools: [
+            { apiName: 'readFile', arguments: '{}', id: 't1', identifier: 'fs', type: 'default' },
+          ],
+          updatedAt: 2,
+        },
+        {
+          content: 'name: CI\non: [push]',
+          createdAt: 3,
+          id: 't1',
+          parentId: 'a-tool',
+          role: 'tool',
+          tool_call_id: 't1',
+          updatedAt: 3,
+        },
+        {
+          content: 'The build runs on every push and is currently green.',
+          createdAt: 4,
+          id: 'a-final',
+          parentId: 't1',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+      ] as Message[];
+
+      const result = parse(messages);
+
+      // user + ONE assistantGroup (not user + standalone assistant + group)
+      expect(result.flatList).toHaveLength(2);
+      expect(result.flatList[0].id).toBe('u1');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+
+      // The toolless head is the first child of the group, with its prose intact,
+      // followed by the tool step and the final answer — all in one card.
+      const children = (result.flatList[1] as any).children;
+      expect(children.map((c: any) => c.id)).toEqual(['a-head', 'a-tool', 'a-final']);
+      expect(children[0].content).toBe('Sure — let me first find where the CI config lives.');
+      expect(children[0].tools).toBeUndefined();
+      expect(children[1].tools[0].result_msg_id).toBe('t1');
+    });
+
+    // Guard for the narrow scope above: when MORE than one toolless prose step
+    // precedes the first tool call, the head is NOT folded. collectAssistantChain
+    // stops at the first toolless continuation, so folding here would emit a
+    // tools-less assistantGroup and still leave the tool step split. The multi-
+    // prose prelude must instead stay as plain assistant bubbles — and crucially
+    // we must never produce an assistantGroup with no tools.
+    it('should not fold a multi-step toolless prelude (no tools-less assistantGroup)', () => {
+      const messages: Message[] = [
+        {
+          content: 'Can you check the build status?',
+          createdAt: 0,
+          id: 'u1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Sure, let me think about where to look.',
+          createdAt: 1,
+          id: 'a-head', // toolless, parent is the user message
+          parentId: 'u1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          content: 'The CI config is probably under .github/workflows.',
+          createdAt: 2,
+          id: 'a-prose', // SECOND toolless prose step before any tool
+          parentId: 'a-head',
+          role: 'assistant',
+          updatedAt: 2,
+        },
+        {
+          content: 'Reading it now.',
+          createdAt: 3,
+          id: 'a-tool',
+          parentId: 'a-prose',
+          role: 'assistant',
+          tools: [
+            { apiName: 'readFile', arguments: '{}', id: 't1', identifier: 'fs', type: 'default' },
+          ],
+          updatedAt: 3,
+        },
+        {
+          content: 'name: CI',
+          createdAt: 4,
+          id: 't1',
+          parentId: 'a-tool',
+          role: 'tool',
+          tool_call_id: 't1',
+          updatedAt: 4,
+        },
+      ] as Message[];
+
+      const result = parse(messages);
+
+      // No assistantGroup may exist without tools in any of its children.
+      const toollessGroups = result.flatList.filter(
+        (m) =>
+          m.role === 'assistantGroup' &&
+          ((m as any).children ?? []).every((c: any) => !c.tools || c.tools.length === 0),
+      );
+      expect(toollessGroups).toHaveLength(0);
+
+      // The two prose steps render as plain assistant bubbles; the tool step
+      // forms its own (well-formed) assistantGroup.
+      const head = result.flatList.find((m) => m.id === 'a-head');
+      expect(head?.role).toBe('assistant');
+      const toolGroup = result.flatList.find((m) => m.id === 'a-tool');
+      expect(toolGroup?.role).toBe('assistantGroup');
+      expect((toolGroup as any).children[0].tools[0].result_msg_id).toBe('t1');
+    });
   });
 
   describe('Agent Group Scenarios', () => {

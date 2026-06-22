@@ -68,14 +68,30 @@ describe('aiProvider action helpers', () => {
       const model = {
         ...createChatModel({ id: 'online-chat-model', providerId: 'lobehub' }),
         description: 'Inline description',
+        knowledgeCutoff: '2024-06',
         pricing,
       };
 
       const result = await normalizeChatModel(model);
 
       expect(result.description).toBe('Inline description');
+      expect(result.knowledgeCutoff).toBe('2024-06');
       expect(result.pricing).toBe(pricing);
       expect(fallbackSpy).not.toHaveBeenCalled();
+    });
+
+    it('fetches fallback model knowledge cutoff when missing', async () => {
+      const fallbackSpy = vi
+        .mocked(runtimeModule.getModelPropertyWithFallback)
+        .mockImplementation(async (_id, key) => {
+          if (key === 'knowledgeCutoff') return '2024-06';
+          return undefined;
+        });
+
+      const result = await normalizeChatModel(createChatModel({ id: 'gpt-4o' }));
+
+      expect(result.knowledgeCutoff).toBe('2024-06');
+      expect(fallbackSpy).toHaveBeenCalledWith('gpt-4o', 'knowledgeCutoff', 'openai');
     });
   });
 

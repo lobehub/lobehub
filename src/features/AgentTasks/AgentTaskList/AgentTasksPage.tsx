@@ -46,13 +46,21 @@ export const getTaskCreateActionBehavior = ({
   } as const;
 };
 
-const AgentTasksPage = memo(() => {
+interface AgentTasksPageProps {
+  /**
+   * When provided, the page is scoped to a single agent's tasks; otherwise it
+   * shows tasks across all agents.
+   */
+  agentId?: string;
+}
+
+const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList({ allAgents: true });
+  useFetchTaskList(agentId ? { agentId } : { allAgents: true });
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
@@ -88,11 +96,13 @@ const AgentTasksPage = memo(() => {
 
     if (!canCreateTask) return;
     createTaskModal({
+      agentId,
+      lockAssignee: !!agentId,
       onCreated: (task) => {
         navigate(taskDetailPath(task.identifier, task.agentId));
       },
     });
-  }, [canCreateTask, createActionBehavior.mode, navigate, updateSystemStatus]);
+  }, [agentId, canCreateTask, createActionBehavior.mode, navigate, updateSystemStatus]);
 
   const handleShowHiddenCompleted = useCallback(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
@@ -133,10 +143,10 @@ const AgentTasksPage = memo(() => {
         }}
       />
       {isEmptyHero ? (
-        <EmptyState />
+        <EmptyState agentId={agentId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard />
+          <KanbanBoard agentId={agentId} />
         </Flexbox>
       ) : (
         <WideScreenContainer
@@ -144,7 +154,7 @@ const AgentTasksPage = memo(() => {
           paddingBlock={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
-          {!inlineCollapsed && <CreateTaskInlineEntry />}
+          {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} />}
           <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
         </WideScreenContainer>
       )}

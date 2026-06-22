@@ -24,7 +24,7 @@ const modifiedRegistryDiff = `diff --git a/packages/builtin-tools/src/renders.ts
 const linearIssueResult = {
   description:
     '## 背景\n\n当前客户端侧有三种 agent runtime 路径，它们都在处理同一类 agent run 生命周期，但生命周期控制点不一致。\n\n## 目标\n\n建立一套共享的 post-complete hooks，让 queue message、topic title、Agent Signal、unread completion 和 notification 都通过同一入口收敛。',
-  id: 'LOBE-10205',
+  id: 'TEST-0000',
   links: [
     {
       title: 'PR #15766: refactor(chat): unify agent run lifecycle',
@@ -33,7 +33,7 @@ const linearIssueResult = {
   ],
   state: { name: 'In Review' },
   title: '统一三种客户端 Agent Runtime 的 run 生命周期 hooks',
-  url: 'https://linear.app/lobehub/issue/LOBE-10205',
+  url: 'https://linear.app/lobehub/issue/TEST-0000',
 };
 
 export default defineFixtures({
@@ -155,7 +155,7 @@ export default defineFixtures({
       {
         args: {
           arguments: {
-            id: 'LOBE-10205',
+            id: 'TEST-0000',
             links: linearIssueResult.links,
             state: 'In Review',
           },
@@ -166,7 +166,7 @@ export default defineFixtures({
         label: 'Linear update issue',
         pluginState: {
           arguments: {
-            id: 'LOBE-10205',
+            id: 'TEST-0000',
             links: linearIssueResult.links,
             state: 'In Review',
           },

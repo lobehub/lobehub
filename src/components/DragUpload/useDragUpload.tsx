@@ -77,7 +77,8 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
 
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const agentId = useAgentStore((s) => s.activeAgentId ?? undefined);
+  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider, agentId);
 
   const warnIfVisualUploadUnsupported = useCallback(
     (files: File[]) => {

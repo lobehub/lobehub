@@ -62,6 +62,7 @@ describe('LobeAzureOpenAI', () => {
       const mockResponse = Promise.resolve(mockStream);
 
       (instance['client'].chat.completions.create as Mock).mockResolvedValue(mockResponse);
+      vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
 
       // Act
       const result = await instance.chat({
@@ -442,6 +443,30 @@ describe('LobeAzureOpenAI', () => {
       const args = vi.mocked(generateSpy).mock.calls[0][0] as any;
       expect(args).not.toHaveProperty('image');
       expect(res).toEqual({ imageUrl: url });
+    });
+
+    it('should use mapped model id for image generation requests', async () => {
+      instance = new LobeAzureOpenAI({
+        apiKey: 'test_key',
+        baseURL: 'https://test.openai.azure.com/',
+        modelIdMapping: { 'gpt-image-1': 'azure-image-deployment' },
+      });
+      const editSpy = vi
+        .spyOn(instance['client'].images, 'edit')
+        .mockResolvedValue({ data: [{ url: 'https://example.com/mapped.png' }] } as any);
+      const helpers = await import('../../core/contextBuilders/openai');
+      vi.spyOn(helpers, 'convertImageUrlToFile').mockResolvedValue({} as any);
+
+      await instance.createImage({
+        model: 'gpt-image-1',
+        params: { imageUrl: 'https://example.com/source.png', prompt: 'mapped cat' },
+      });
+
+      expect(vi.mocked(editSpy).mock.calls[0][0]).toMatchObject({
+        input_fidelity: 'high',
+        model: 'azure-image-deployment',
+        prompt: 'mapped cat',
+      });
     });
 
     it('should parse string JSON response from images.generate', async () => {
