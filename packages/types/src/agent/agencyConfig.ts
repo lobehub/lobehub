@@ -13,7 +13,7 @@ export const CLAUDE_CODE_REASONING_EFFORT_LEVELS = [
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
 export const CLAUDE_CODE_DEFAULT_MODEL = 'sonnet';
-export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'medium' satisfies ClaudeCodeReasoningEffort;
+export const CLAUDE_CODE_DEFAULT_REASONING_EFFORT = 'high' satisfies ClaudeCodeReasoningEffort;
 
 /**
  * Heterogeneous agent provider configuration.

@@ -43,7 +43,7 @@ import type {
   UserInterventionConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
-import { RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
+import { buildHeteroSpawnArgs, RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -1325,9 +1325,18 @@ export class AiAgentService {
         runAttachments.imageList && runAttachments.imageList.length > 0
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
+      const heteroSpawnArgs =
+        heteroType === 'claude-code'
+          ? buildHeteroSpawnArgs(
+              agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code'
+                ? agentConfig.agencyConfig.heterogeneousProvider
+                : { type: 'claude-code' },
+            )
+          : undefined;
 
       const heteroParams = {
         agentType: heteroType,
+        args: heteroSpawnArgs,
         assistantMessageId: assistantMessageRecord.id,
         githubToken,
         imageList: heteroImageList,

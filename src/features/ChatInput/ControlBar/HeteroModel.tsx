@@ -41,13 +41,13 @@ const MODEL_LABELS: Record<string, string> = Object.fromEntries(
   MODEL_OPTIONS.map((option) => [option.value, option.label]),
 );
 
-const EFFORT_LABEL_KEYS: Record<ClaudeCodeReasoningEffort, string> = {
+const EFFORT_LABEL_KEYS = {
   high: 'heteroAgent.modelSelector.reasoning.high',
   low: 'heteroAgent.modelSelector.reasoning.low',
   max: 'heteroAgent.modelSelector.reasoning.max',
   medium: 'heteroAgent.modelSelector.reasoning.medium',
   xhigh: 'heteroAgent.modelSelector.reasoning.xhigh',
-};
+} as const satisfies Record<ClaudeCodeReasoningEffort, string>;
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`

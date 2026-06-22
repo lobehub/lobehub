@@ -297,6 +297,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // Same command as spawnHeteroSandbox() on the server side.
       this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
+        args: request.args,
         cwd: request.cwd,
         imageList: request.imageList,
         jwt: request.jwt,

@@ -56,8 +56,10 @@ const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
 interface ExecOptions {
   command?: string;
   cwd?: string;
+  effort?: string;
   image?: string[];
   inputJson?: string;
+  model?: string;
   operationId?: string;
   prompt?: string;
   /**
@@ -86,6 +88,15 @@ interface ExecOptions {
 }
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
+
+const buildExtraArgs = (options: Pick<ExecOptions, 'effort' | 'model'>): string[] | undefined => {
+  const extraArgs = [
+    ...(options.model ? ['--model', options.model] : []),
+    ...(options.effort ? ['--effort', options.effort] : []),
+  ];
+
+  return extraArgs.length > 0 ? extraArgs : undefined;
+};
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -638,11 +649,13 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // ─── First run (with --resume if provided) ───────────────────────────────
 
   const interceptResume = !!options.resume;
+  const extraArgs = buildExtraArgs(options);
   const first = await runOneAgent(
     {
       agentType: options.type,
       command: options.command,
       cwd: options.cwd || process.cwd(),
+      extraArgs,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -672,6 +685,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         agentType: options.type,
         command: options.command,
         cwd: options.cwd || process.cwd(),
+        extraArgs,
         operationId,
         prompt: resolved.prompt,
         // No resumeSessionId — start fresh
@@ -756,6 +770,8 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
+    .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(
       '-c, --command <bin>',
       'Override the agent CLI binary name (default: `claude` or `codex`)',

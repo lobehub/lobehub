@@ -52,19 +52,19 @@ describe('buildHeteroSpawnArgs', () => {
       '--model',
       'sonnet',
       '--effort',
-      'medium',
+      'high',
     ]);
     expect(buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code' })).toEqual([
       '--verbose',
       '--model',
       'sonnet',
       '--effort',
-      'medium',
+      'high',
     ]);
     // Older persisted "Default" selections resolve to the same concrete values.
     expect(
       buildHeteroSpawnArgs({ type: 'claude-code', model: '', effort: 'default' as never }),
-    ).toEqual(['--model', 'sonnet', '--effort', 'medium']);
+    ).toEqual(['--model', 'sonnet', '--effort', 'high']);
   });
 
   it('appends --model and --effort for claude-code', () => {
@@ -79,7 +79,7 @@ describe('buildHeteroSpawnArgs', () => {
   it('preserves existing args and appends after them', () => {
     expect(
       buildHeteroSpawnArgs({ args: ['--verbose'], type: 'claude-code', model: 'sonnet' }),
-    ).toEqual(['--verbose', '--model', 'sonnet', '--effort', 'medium']);
+    ).toEqual(['--verbose', '--model', 'sonnet', '--effort', 'high']);
   });
 
   it('uses concrete defaults for omitted flags', () => {
@@ -93,7 +93,7 @@ describe('buildHeteroSpawnArgs', () => {
       '--model',
       'haiku',
       '--effort',
-      'medium',
+      'high',
     ]);
   });
 

@@ -16,6 +16,8 @@ const log = debug('lobe-server:hetero-sandbox-runner');
 
 export interface SandboxRunParams {
   agentType: 'claude-code' | 'codex';
+  /** Resolved native agent CLI args forwarded through `lh hetero exec`. */
+  args?: string[];
   /** Initial assistant placeholder message id — injected as LOBEHUB_ASSISTANT_MESSAGE_ID so
    * the CLI can pass it through the heteroIngest payload, removing the need for the server
    * to re-read topic.metadata.runningOperation on every cold Lambda start. */
@@ -124,6 +126,7 @@ function buildRepoSetupScript(repos: string[], githubToken?: string): string | n
 export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void> {
   const {
     agentType,
+    args: extraArgs,
     assistantMessageId,
     githubToken,
     jwt,
@@ -164,6 +167,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     args.push('--resume', resumeSessionId);
   }
   args.push('--cwd', cwd);
+  args.push(...(extraArgs ?? []));
 
   // Encode the prompt as base64 to avoid all shell quoting issues.
   // echo + shell quoting mangled inner JSON quotes; base64 is quote-safe.
@@ -189,7 +193,8 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${JSON.stringify(githubToken)}`] : []),
   ].join(' ');
-  const mainCommand = `echo ${base64Payload} | base64 -d | ${envVars} ${args.join(' ')}`;
+  const shellArgs = args.map((arg) => JSON.stringify(arg)).join(' ');
+  const mainCommand = `echo ${base64Payload} | base64 -d | ${envVars} ${shellArgs}`;
   // Creds first (writes ~/.creds/env + authenticates gh CLI), then repo clone.
   const credsScript = buildCredsSetupScript(githubToken);
   const repoScript = buildRepoSetupScript(repos ?? [], githubToken);

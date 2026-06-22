@@ -1263,7 +1263,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockStartSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          args: ['--verbose', '--model', 'sonnet', '--effort', 'medium'],
+          args: ['--verbose', '--model', 'sonnet', '--effort', 'high'],
           agentType: 'claude-code',
         }),
       );

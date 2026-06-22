@@ -192,6 +192,28 @@ describe('hetero exec command', () => {
     expect(call.operationId).toBe('op-server-allocated');
   });
 
+  it('passes --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--model',
+      'opus',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
   it('streams events to stdout as JSONL, one line per event', async () => {
     const events = [
       { data: { foo: 1 }, operationId: 'op-1', stepIndex: 0, timestamp: 1, type: 'stream_start' },
