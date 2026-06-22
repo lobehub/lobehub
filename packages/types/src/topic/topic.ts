@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { SerializedAgentHook } from '../agentHook';
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
@@ -171,16 +172,7 @@ export interface ChatTopicMetadata {
      * can't cross a process boundary); queue mode delivers these webhooks while
      * local mode dispatches the in-memory handlers registered at dispatch time.
      */
-    hooks?: {
-      id: string;
-      type: string;
-      webhook: {
-        body?: Record<string, unknown>;
-        delivery?: 'fetch' | 'qstash';
-        eventFields?: string[];
-        url: string;
-      };
-    }[];
+    hooks?: SerializedAgentHook[];
     operationId: string;
     scope?: string;
     threadId?: string | null;
