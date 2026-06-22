@@ -8,6 +8,27 @@ const glmCodingPlanChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 1_024_000,
+    description:
+      "GLM-5.2 is Zhipu's flagship model built for the era of long-horizon tasks. With a solid 1M-token context, it stably sustains project-scale engineering work and delivers stronger coding capabilities with flexible thinking effort levels (High and Max) to balance performance and latency. A single task can complete the full development workflow — from requirements to deployable products across multiple platforms.",
+    displayName: 'GLM-5.2',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'GLM-5.2',
+    maxOutput: 131_072,
+    organization: 'Zhipu',
+    releasedAt: '2026-06-17',
+    settings: {
+      extendParams: ['enableReasoning', 'glm5_2ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 204_800,
     description:
       "GLM-5.1 is Zhipu's latest flagship model, an enhanced iteration of GLM-5 with improved agentic engineering capabilities for complex systems engineering and long-horizon tasks.",
