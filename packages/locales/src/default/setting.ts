@@ -380,7 +380,7 @@ export default {
   'devices.connectWizard.method.desktop': 'Via Desktop',
   'devices.connectWizard.title': 'Connect Device',
   'devices.empty.desc':
-    'Connect a trusted computer or server so agents can work in its configured directories, run commands, and use local tools.',
+    'Connect a trusted computer or server so agents can work in configured directories, run commands, and use command-line tools available on that device.',
   'devices.empty.methodCli.desc':
     'Install the CLI in your terminal — great for servers or headless machines.',
   'devices.empty.methodCli.title': 'Connect via CLI',
@@ -394,10 +394,10 @@ export default {
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
   'devices.lastSeen': 'Last active {{time}}',
   'devices.overview.personal.desc':
-    'After you select a device, agents can use its configured directories, terminal, and local tools.',
+    'After you select a device, agents can use its configured directories, terminal, and installed command-line tools.',
   'devices.overview.personal.title': 'Run agents on local devices',
   'devices.overview.workspace.desc':
-    'Enroll a trusted machine so workspace members can run agents there with access to shared project folders, commands, and local tools.',
+    'Enroll a trusted machine so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
   'devices.overview.workspace.title': 'Run agents on shared workspace devices',
   'devices.placeholder.connection':
     'Check whether LobeHub Desktop is open with Device Connection on, or whether the CLI daemon is running.',
@@ -2127,7 +2127,7 @@ When I am ___, I need ___
     'Run this on the machine you want to share (workspace owners only):',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
   'workspaceSetting.devices.heroDesc':
-    'Enroll a trusted shared machine — such as a build server or team Mac — so workspace members can run agents there with access to shared project folders, commands, and local tools.',
+    'Enroll a trusted shared machine — such as a build server or team Mac — so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
   'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',

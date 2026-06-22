@@ -238,7 +238,7 @@
   "heteroAgent.executionTarget.auto": "自动",
   "heteroAgent.executionTarget.autoDesc": "自动使用可用的已连接设备",
   "heteroAgent.executionTarget.autoUnavailableDesc": "暂无在线的已连接设备",
-  "heteroAgent.executionTarget.infoTooltip": "选择助理运行工具的位置。已连接设备可使用已配置目录和终端；云端沙箱会在隔离的临时云端环境中运行。",
+  "heteroAgent.executionTarget.infoTooltip": "选择助理运行的位置。已连接设备可使用已配置目录、终端访问，以及该设备上已安装的命令行工具；云端沙箱会在隔离的临时云端环境中运行。",
   "heteroAgent.executionTarget.loading": "正在加载设备…",
   "heteroAgent.executionTarget.local": "本机",
   "heteroAgent.executionTarget.localDesc": "在当前桌面端本地运行",
