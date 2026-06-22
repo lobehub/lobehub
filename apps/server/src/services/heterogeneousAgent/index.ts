@@ -7,8 +7,8 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
-import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
-import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
+import { dispatchTerminalHooks } from '@/server/services/agentRuntime/hooks';
+import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 
 import {
   HeterogeneousPersistenceHandler,
@@ -181,27 +181,27 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
-    // Fire the IM bot-callback completion webhook if one was registered.
-    // The hetero path bypasses the normal AgentHook registration flow, so
-    // we persist the webhook config in topic.metadata.runningOperation and
-    // deliver it here instead.
+    // Drive the run's lifecycle hooks (onComplete / onError) through the same
+    // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
+    // (onTopicComplete → task done/failed) and any IM bot completion callback
+    // fire uniformly. The hooks were registered in-memory (local mode) and
+    // serialized onto runningOperation (queue mode) at dispatch time.
     //
     // Skip on `cancelled` — heteroFinish may be called twice: first with
     // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation on cancelled
-    // so the subsequent success/error call can still find completionWebhook
-    // and assistantMessageId. runningOperation is only cleared on the
-    // delivering call (success/error) so reconnect doesn't retrigger after
-    // completion — mirrors RuntimeExecutors cleanup for the normal LLM path.
-    // Transport-level retries of the same result are accepted: BotCallbackService
-    // reads the latest DB content each time, so duplicates are idempotent.
+    // (normal process exit). We must NOT clear runningOperation or fire hooks on
+    // cancelled so the subsequent success/error call still finds the hooks +
+    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
+    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
+    // branch — and suppresses a spurious bot "stopped" message before the real
+    // result lands.)
     if (result === 'cancelled') return;
 
-    let completionWebhook: AgentHookWebhook | undefined;
+    let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
-      completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
@@ -217,37 +217,31 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    if (completionWebhook?.url) {
+    // Read the final assistant content + owning agent so the bot-callback
+    // handler has lastAssistantContent to render and the event carries agentId.
+    let lastAssistantContent: string | undefined;
+    let agentId: string | undefined;
+    if (assistantMessageId) {
       try {
-        // Read the final assistant message content so BotCallbackService.handleCompletion
-        // has lastAssistantContent to render.  Without it the handler skips delivery.
-        let lastAssistantContent: string | undefined;
-        if (assistantMessageId) {
-          const msg = await this.messageModel.findById(assistantMessageId);
-          lastAssistantContent = msg?.content as string | undefined;
-        }
-
-        // Map hetero result → reason expected by handleCompletion
-        const reason = result === 'success' ? 'done' : 'error';
-
-        await deliverWebhook(completionWebhook, {
-          // Dynamic completion fields (event-like payload)
-          ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
-          hookId: 'bot-completion',
-          hookType: 'onComplete',
-          lastAssistantContent,
-          operationId,
-          reason,
-          // Static IM context stored at hook registration time — spread last so
-          // platform fields (applicationId, platformThreadId, type, userPrompt)
-          // are authoritative, matching HookDispatcher's { ...event, ...body } order.
-          ...completionWebhook.body,
-        });
-        log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
+        const msg = await this.messageModel.findById(assistantMessageId);
+        lastAssistantContent = msg?.content as string | undefined;
+        agentId = msg?.agentId ?? undefined;
       } catch (err) {
-        log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
+        log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
     }
+
+    await dispatchTerminalHooks({
+      agentId,
+      ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
+      lastAssistantContent,
+      operationId,
+      reason: result === 'success' ? 'done' : 'error',
+      serializedHooks,
+      topicId,
+      userId: this.userId,
+    });
+    log('heteroFinish: dispatched terminal hooks for op=%s result=%s', operationId, result);
   }
 
   /**

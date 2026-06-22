@@ -16,10 +16,9 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
-import { TaskModel } from '@/database/models/task';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { taskTopics, topics } from '@/database/schemas';
+import { topics } from '@/database/schemas';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -27,7 +26,6 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
-import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -1258,6 +1256,11 @@ export const aiAgentRouter = router({
         workspaceId: wsId,
       });
 
+      // heteroFinish now owns the full terminal transition: it fires the run's
+      // onComplete/onError hooks through the shared hookDispatcher, which drives
+      // the task lifecycle (onTopicComplete) and any IM bot completion callback —
+      // the same mechanism the normal LLM runtime uses. No bespoke lifecycle call
+      // here anymore; this is just the server-to-server ack endpoint.
       await heteroService.heteroFinish({
         agentType,
         error,
@@ -1266,51 +1269,6 @@ export const aiAgentRouter = router({
         sessionId,
         topicId,
       });
-
-      // Trigger task lifecycle transition — mirrors the onComplete hook that the
-      // normal LLM execAgent path dispatches after AgentRuntimeService finishes.
-      // The hetero path spawns the sandbox fire-and-forget and returns early, so
-      // the hook is never registered or dispatched; we must call onTopicComplete
-      // explicitly here when the CLI signals process exit.
-      //
-      // Guard: heteroFinish can be called more than once for the same operation
-      // (signal path sends cancelled, normal exit sends the real result, and
-      // transient transport failures can replay). onTopicComplete is NOT
-      // idempotent (reason='error' creates briefs), so skip the call when the
-      // topic is already in a terminal state.
-      const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
-      try {
-        // System-level lookup: heteroFinish is a server-to-server callback from
-        // the CLI and doesn't carry a workspace context. Resolve the task topic
-        // (and downstream models) using the row's own `workspaceId`.
-        const [taskTopicRow] = await ctx.serverDB
-          .select()
-          .from(taskTopics)
-          .where(and(eq(taskTopics.topicId, topicId), eq(taskTopics.userId, ctx.userId)))
-          .limit(1);
-        if (taskTopicRow && !TERMINAL_TOPIC_STATUSES.has(taskTopicRow.status)) {
-          const wsId = taskTopicRow.workspaceId ?? undefined;
-          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, wsId);
-          const task = await taskModel.findById(taskTopicRow.taskId);
-          if (task) {
-            const reason =
-              result === 'success' ? 'done' : result === 'cancelled' ? 'interrupted' : 'error';
-            const taskLifecycle = new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId);
-            await taskLifecycle.onTopicComplete({
-              errorMessage: error?.message,
-              operationId,
-              reason,
-              taskId: task.id,
-              taskIdentifier: task.identifier,
-              topicId,
-            });
-          }
-        }
-      } catch (lifecycleErr: any) {
-        // Non-fatal: log but do not fail the heteroFinish ack. The CLI has
-        // already finished; failing here would cause it to retry unnecessarily.
-        log('heteroFinish: task lifecycle update failed (non-fatal): %s', lifecycleErr?.message);
-      }
 
       return { ack: true as const };
     } catch (err: any) {

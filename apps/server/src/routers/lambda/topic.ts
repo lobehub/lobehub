@@ -683,12 +683,19 @@ export const topicRouter = router({
           runningOperation: z
             .object({
               assistantMessageId: z.string(),
-              completionWebhook: z
-                .object({
-                  body: z.record(z.unknown()).optional(),
-                  delivery: z.enum(['fetch', 'qstash']).optional(),
-                  url: z.string(),
-                })
+              hooks: z
+                .array(
+                  z.object({
+                    id: z.string(),
+                    type: z.string(),
+                    webhook: z.object({
+                      body: z.record(z.unknown()).optional(),
+                      delivery: z.enum(['fetch', 'qstash']).optional(),
+                      eventFields: z.array(z.string()).optional(),
+                      url: z.string(),
+                    }),
+                  }),
+                )
                 .optional(),
               operationId: z.string(),
               scope: z.string().optional(),
