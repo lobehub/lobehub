@@ -496,19 +496,31 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const plugin = await ctx.pluginModel.findById(input.identifier);
 
-      if (!plugin || !plugin.manifest) {
+      if (!plugin) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: `Plugin '${input.identifier}' not found or has no manifest`,
+          message: `Plugin '${input.identifier}' not found`,
         });
       }
 
+      // The customPlugin migration guard MUST run before the manifest check.
+      // The users hit by #15674 are the ones whose legacy custom MCP never
+      // successfully reported a `tools/list` after the v2.2.3 break, so their
+      // `user_installed_plugins.manifest` is NULL / empty. If we threw
+      // NOT_FOUND here the SkillDetail fallback would never render and the
+      // migration modal would never surface — exactly the users we are
+      // trying to rescue. Hand off to the frontend migration flow first;
+      // returning null tells the caller "no connector row produced" and the
+      // "Configure" button opens CustomConnectorModal in migration mode.
       if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
-        // Hand off to the frontend migration flow. Returning null tells the
-        // caller "no connector row produced"; the SkillDetail panel falls back
-        // to the legacy plugin display, and the "Configure" button surfaces
-        // CustomConnectorModal in migration mode.
         return { connectorId: null, toolCount: 0 };
+      }
+
+      if (!plugin.manifest) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Plugin '${input.identifier}' has no manifest`,
+        });
       }
 
       const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
