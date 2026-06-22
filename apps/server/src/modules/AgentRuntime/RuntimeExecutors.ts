@@ -931,7 +931,8 @@ export const createRuntimeExecutors = (
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
         // Kimi K2.7+ Code has preserved thinking always active and cannot opt out.
         const modelForcesPreserveThinking =
-          provider === 'moonshot' && isKimiAlwaysPreserveThinkingModel(model);
+          (provider === 'moonshot' || provider === BRANDING_PROVIDER) &&
+          isKimiAlwaysPreserveThinkingModel(model);
         const providerSupportsPreserveThinkingFallback =
           provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
         const modelSupportsPreserveThinking =
