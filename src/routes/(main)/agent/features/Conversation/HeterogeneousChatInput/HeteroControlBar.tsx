@@ -13,6 +13,8 @@ import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
+
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
     container: runtimebar / inline-size;
@@ -66,6 +68,12 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  const showModelSelector = shouldShowHeteroModelSelector({
+    boundDeviceId: agencyConfig?.boundDeviceId,
+    executionTarget: agencyConfig?.executionTarget,
+    isDesktopClient: isDesktop,
+  });
 
   // On web there's no full-access badge / skeleton — just the workspace controls
   // (the cloud repo switcher is rendered inside WorkspaceControls).
@@ -77,7 +85,7 @@ const HeteroControlBar = memo(() => {
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
         <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
-          <HeteroModel />
+          {showModelSelector && <HeteroModel />}
         </Flexbox>
       </Flexbox>
     );
@@ -105,7 +113,7 @@ const HeteroControlBar = memo(() => {
         <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
-        <HeteroModel />
+        {showModelSelector && <HeteroModel />}
         <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
       </Flexbox>
     </Flexbox>

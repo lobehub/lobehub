@@ -173,6 +173,7 @@ export default {
   'heteroAgent.fullAccess.tooltip':
     'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
   'heteroAgent.modelSelector.ariaLabel': 'Model: {{model}}. Reasoning: {{reasoning}}',
+  'heteroAgent.modelSelector.default': 'Default',
   'heteroAgent.modelSelector.model': 'Model',
   'heteroAgent.modelSelector.reasoning': 'Reasoning',
   'heteroAgent.modelSelector.reasoning.high': 'High',

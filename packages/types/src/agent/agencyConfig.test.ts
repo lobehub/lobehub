@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildHeteroSpawnArgs,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
@@ -39,9 +40,9 @@ describe('pruneWorkingDirByDeviceDeletes', () => {
 });
 
 describe('buildHeteroSpawnArgs', () => {
-  it('resolves missing claude-code selections to concrete display defaults', () => {
-    expect(resolveClaudeCodeModel(undefined)).toBe('sonnet');
-    expect(resolveClaudeCodeReasoningEffort(undefined)).toBe('high');
+  it('resolves missing Claude Code selections to Default', () => {
+    expect(resolveClaudeCodeModel(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveClaudeCodeReasoningEffort(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
   });
 
   it('returns undefined when there is no provider', () => {
@@ -53,8 +54,10 @@ describe('buildHeteroSpawnArgs', () => {
     expect(
       buildHeteroSpawnArgs({ args: ['-m', 'gpt-5'], type: 'codex', model: 'opus', effort: 'high' }),
     ).toEqual(['-m', 'gpt-5']);
-    // codex with no args returns its args unchanged (undefined)
-    expect(buildHeteroSpawnArgs({ type: 'codex' })).toBeUndefined();
+    expect(buildHeteroSpawnArgs({ args: ['--agent', 'main'], type: 'openclaw' })).toEqual([
+      '--agent',
+      'main',
+    ]);
   });
 
   it('preserves Claude Code defaults when model/effort have not been selected', () => {
@@ -64,7 +67,11 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
     // Older persisted "Default" selections should behave like unset values.
     expect(
-      buildHeteroSpawnArgs({ type: 'claude-code', model: '', effort: 'default' as never }),
+      buildHeteroSpawnArgs({
+        effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        type: 'claude-code',
+      }),
     ).toBeUndefined();
   });
 

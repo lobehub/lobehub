@@ -38,8 +38,27 @@ describe('spawnHeteroSandbox', () => {
     expect(mockCallTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({
-        command: expect.stringContaining('"--model" "opus" "--effort" "high"'),
+        command: expect.stringContaining("'--model' 'opus' '--effort' 'high'"),
       }),
     );
+  });
+
+  it('shell-escapes selector args before interpolating the sandbox command', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      args: ['--model', '$(touch /tmp/pwned)', '--effort', "hi'there"],
+      assistantMessageId: 'msg-1',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const command = mockCallTool.mock.calls[0][1].command;
+    expect(command).toContain("'$(touch /tmp/pwned)'");
+    expect(command).toContain("'hi'\\''there'");
+    expect(command).not.toContain('"$(touch /tmp/pwned)"');
   });
 });

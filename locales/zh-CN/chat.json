@@ -259,6 +259,7 @@
   "heteroAgent.fullAccess.label": "完全访问权限",
   "heteroAgent.fullAccess.tooltip": "Claude Code 在本地运行，对工作目录拥有完全的读写权限。当前暂不支持切换权限模式。",
   "heteroAgent.modelSelector.ariaLabel": "模型：{{model}}。思考强度：{{reasoning}}",
+  "heteroAgent.modelSelector.default": "默认",
   "heteroAgent.modelSelector.model": "模型",
   "heteroAgent.modelSelector.reasoning": "思考强度",
   "heteroAgent.modelSelector.reasoning.high": "高",

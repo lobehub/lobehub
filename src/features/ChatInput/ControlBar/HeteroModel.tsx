@@ -1,8 +1,13 @@
 'use client';
 
-import type { ClaudeCodeReasoningEffort, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ClaudeCodeReasoningEffort,
+  HeterogeneousAgentDefaultSelection,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
 import {
   CLAUDE_CODE_REASONING_EFFORT_LEVELS,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
 } from '@lobechat/types';
@@ -31,23 +36,26 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 
-const MODEL_OPTIONS = [
+type HeteroReasoningEffort = ClaudeCodeReasoningEffort | HeterogeneousAgentDefaultSelection;
+
+const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Opus 4.8', value: 'opus' },
   { label: 'Sonnet 4.6', value: 'sonnet' },
   { label: 'Haiku 4.5', value: 'haiku' },
 ] as const;
 
 const MODEL_LABELS: Record<string, string> = Object.fromEntries(
-  MODEL_OPTIONS.map((option) => [option.value, option.label]),
+  CLAUDE_CODE_MODEL_OPTIONS.map((option) => [option.value, option.label]),
 );
 
 const EFFORT_LABEL_KEYS = {
+  [HETEROGENEOUS_AGENT_DEFAULT_SELECTION]: 'heteroAgent.modelSelector.default',
   high: 'heteroAgent.modelSelector.reasoning.high',
   low: 'heteroAgent.modelSelector.reasoning.low',
   max: 'heteroAgent.modelSelector.reasoning.max',
   medium: 'heteroAgent.modelSelector.reasoning.medium',
   xhigh: 'heteroAgent.modelSelector.reasoning.xhigh',
-} as const satisfies Record<ClaudeCodeReasoningEffort, string>;
+} as const satisfies Record<HeteroReasoningEffort, string>;
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`
@@ -179,18 +187,21 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const stripCliFlag = (args: string[] | undefined, flag: string): string[] | undefined => {
+const stripCliFlags = (
+  args: string[] | undefined,
+  flags: readonly string[],
+): string[] | undefined => {
   if (!args) return undefined;
 
   const next: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === flag) {
+    if (flags.includes(arg)) {
       const value = args[index + 1];
       if (value && !value.startsWith('-')) index += 1;
       continue;
     }
-    if (arg.startsWith(`${flag}=`)) continue;
+    if (flags.some((flag) => arg.startsWith(`${flag}=`))) continue;
 
     next.push(arg);
   }
@@ -198,7 +209,9 @@ const stripCliFlag = (args: string[] | undefined, flag: string): string[] | unde
   return next;
 };
 
-const getModelLabel = (model: string) => {
+const getModelLabel = (model: string, defaultLabel: string) => {
+  if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
+
   const aliasLabel = MODEL_LABELS[model];
   if (aliasLabel) return aliasLabel;
 
@@ -226,9 +239,12 @@ const HeteroModel = memo(() => {
       if (!canCreateContent || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
-      if ('model' in patch) nextPatch.args = stripCliFlag(provider?.args, '--model');
+      if ('model' in patch) {
+        nextPatch.args = stripCliFlags(provider?.args, ['--model']);
+      }
       if ('effort' in patch) {
-        nextPatch.args = stripCliFlag(nextPatch.args ?? provider?.args, '--effort');
+        const sourceArgs = nextPatch.args ?? provider?.args;
+        nextPatch.args = stripCliFlags(sourceArgs, ['--effort']);
       }
 
       await updateAgentConfigById(agentId, {
@@ -253,7 +269,7 @@ const HeteroModel = memo(() => {
     [closeMenu, patchProvider],
   );
   const selectReasoningEffort = useCallback(
-    (value: ClaudeCodeReasoningEffort) => {
+    (value: HeteroReasoningEffort) => {
       closeMenu();
       void patchProvider({ effort: value });
     },
@@ -264,15 +280,23 @@ const HeteroModel = memo(() => {
 
   const model = resolveClaudeCodeModel(provider);
   const effort = resolveClaudeCodeReasoningEffort(provider);
-  const modelLabel = getModelLabel(model);
+  const defaultLabel = t('heteroAgent.modelSelector.default');
+  const modelLabel = getModelLabel(model, defaultLabel);
   const effortLabel = t(EFFORT_LABEL_KEYS[effort]);
-  const effortOptions = CLAUDE_CODE_REASONING_EFFORT_LEVELS.map((level) => ({
-    label: t(EFFORT_LABEL_KEYS[level]),
-    value: level,
-  }));
-  const modelOptions = MODEL_OPTIONS.some((option) => option.value === model)
-    ? MODEL_OPTIONS
-    : [{ label: model, value: model }, ...MODEL_OPTIONS];
+  const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [
+    { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
+    ...CLAUDE_CODE_REASONING_EFFORT_LEVELS.map((level) => ({
+      label: t(EFFORT_LABEL_KEYS[level]),
+      value: level,
+    })),
+  ];
+  const baseModelOptions: { label: string; value: string }[] = [
+    { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
+    ...CLAUDE_CODE_MODEL_OPTIONS,
+  ];
+  const modelOptions = baseModelOptions.some((option) => option.value === model)
+    ? baseModelOptions
+    : [{ label: model, value: model }, ...baseModelOptions];
   const triggerText = `${modelLabel} · ${effortLabel}`;
 
   const trigger = (
