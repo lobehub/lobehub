@@ -1,4 +1,8 @@
-import type { TaskTemplate, TaskTemplateConnectorSource } from '@lobechat/const';
+import type {
+  TaskTemplate,
+  TaskTemplateConnector,
+  TaskTemplateConnectorSource,
+} from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
@@ -38,11 +42,24 @@ interface UseDailyBriefRecommendationsUIOptions {
 const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
   typeof value === 'object' && value !== null;
 
+const isTaskTemplateConnectorSource = (value: unknown): value is TaskTemplateConnectorSource =>
+  value === 'composio' || value === 'lobehub';
+
+const isTaskTemplateConnector = (value: unknown): value is TaskTemplateConnector => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.identifier === 'string' &&
+    typeof value.required === 'boolean' &&
+    isTaskTemplateConnectorSource(value.source)
+  );
+};
+
 const isTaskTemplateRecommendationCandidate = (value: unknown): value is TaskTemplate => {
   if (!isRecord(value)) return false;
   return (
     typeof value.category === 'string' &&
     Array.isArray(value.connectors) &&
+    value.connectors.every(isTaskTemplateConnector) &&
     typeof value.cronPattern === 'string' &&
     typeof value.description === 'string' &&
     typeof value.id === 'number' &&

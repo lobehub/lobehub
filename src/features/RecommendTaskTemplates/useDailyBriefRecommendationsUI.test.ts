@@ -295,6 +295,25 @@ describe('useDailyBriefRecommendationsUI', () => {
     expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
   });
 
+  it('drops recommendations with malformed connector entries', () => {
+    const templateWithMalformedConnectors = {
+      ...template,
+      connectors: [null],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithMalformedConnectors], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
   it('drops legacy recommendations from pre-Market task-template servers', () => {
     const legacyServerTemplate = {
       category: 'engineering',
