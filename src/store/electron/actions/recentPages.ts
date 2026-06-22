@@ -3,8 +3,13 @@ import {
   savePinnedPages,
 } from '@/features/Electron/titlebar/RecentlyViewed/storage';
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import {
+  isSameTabTarget,
+  normalizeTabScope,
+  resolveTabScope,
+  tabTargetId,
+} from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
-import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 import { type DynamicRouteMeta } from '@/spa/router/routeMeta';
 import { type StoreSetter } from '@/store/types';
 
@@ -47,9 +52,10 @@ export class RecentPagesActionImpl {
 
   addRecentPage = (url: string, cached?: DynamicRouteMeta): void => {
     const { pinnedPages, recentPages } = this.#get();
-    const id = normalizeTabUrl(url);
+    const scope = resolveTabScope(url);
+    const id = tabTargetId(url);
 
-    const pinnedIndex = pinnedPages.findIndex((p) => p.id === id);
+    const pinnedIndex = pinnedPages.findIndex((p) => isSameTabTarget(p, url, scope));
     if (pinnedIndex >= 0) {
       const merged = guardedMergeCache(pinnedPages[pinnedIndex].cached, cached);
       if (merged === pinnedPages[pinnedIndex].cached) return;
@@ -61,13 +67,14 @@ export class RecentPagesActionImpl {
       return;
     }
 
-    const existingIndex = recentPages.findIndex((p) => p.id === id);
+    const existingIndex = recentPages.findIndex((p) => isSameTabTarget(p, url, scope));
     const existingEntry = existingIndex >= 0 ? recentPages[existingIndex] : null;
 
     const newEntry: TabItem = {
       cached: guardedMergeCache(existingEntry?.cached, cached),
       id,
       lastVisited: Date.now(),
+      scope,
       url,
       visitCount: (existingEntry?.visitCount || 0) + 1,
     };
@@ -92,29 +99,40 @@ export class RecentPagesActionImpl {
     const pinned = getPinnedPages();
     const { recentPages } = this.#get();
 
-    const pinnedIds = new Set(pinned.map((p) => p.id));
-    const filteredRecent = recentPages.filter((p) => !pinnedIds.has(p.id));
+    const filteredRecent = recentPages.filter(
+      (recentPage) =>
+        !pinned.some((pinnedPage) =>
+          isSameTabTarget(
+            recentPage,
+            pinnedPage.url,
+            normalizeTabScope(pinnedPage.scope, pinnedPage.url),
+          ),
+        ),
+    );
 
     this.#set({ pinnedPages: pinned, recentPages: filteredRecent }, false, 'loadPinnedPages');
   };
 
   pinPage = (page: TabItem): void => {
     const { pinnedPages, recentPages } = this.#get();
-    const { id } = page;
+    const scope = normalizeTabScope(page.scope, page.url);
+    const id = tabTargetId(page.url);
 
-    if (pinnedPages.some((p) => p.id === id)) return;
+    if (pinnedPages.some((p) => isSameTabTarget(p, page.url, scope))) return;
     if (pinnedPages.length >= PINNED_PAGES_LIMIT) return;
 
-    const existingRecent = recentPages.find((p) => p.id === id);
+    const existingRecent = recentPages.find((p) => isSameTabTarget(p, page.url, scope));
 
     const newEntry: TabItem = {
       ...page,
       cached: page.cached ?? existingRecent?.cached,
+      id,
       lastVisited: Date.now(),
+      scope,
     };
 
     const newPinned = [...pinnedPages, newEntry];
-    const newRecent = recentPages.filter((p) => p.id !== id);
+    const newRecent = recentPages.filter((p) => !isSameTabTarget(p, page.url, scope));
 
     this.#set({ pinnedPages: newPinned, recentPages: newRecent }, false, 'pinPage');
     savePinnedPages(newPinned);

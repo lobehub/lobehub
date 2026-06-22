@@ -5,11 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type DynamicRouteMeta, type RouteMeta } from '@/spa/router/routeMeta';
 
+import { resolveTabScope } from './scope';
 import TabCacheBridges from './TabCacheBridges';
 import { type TabItem } from './types';
 
 const mocks = vi.hoisted(() => {
-  const tabs: { current: { id: string; lastVisited: number; url: string }[] } = { current: [] };
+  const tabs: { current: TabItem[] } = { current: [] };
 
   return {
     getTabs: () => tabs.current,
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => {
       tabs.current = [];
       mocks.routes.current = next;
     },
-    setTabs: (next: { id: string; lastVisited: number; url: string }[]) => {
+    setTabs: (next: TabItem[]) => {
       tabs.current = next;
     },
     updateTabCache: vi.fn<(id: string, cached: DynamicRouteMeta) => void>(),
@@ -68,7 +69,12 @@ const buildRoutes = (): RouteObject[] => [
   },
 ];
 
-const tab = (url: string): TabItem => ({ id: url, lastVisited: 1, url });
+const tab = (url: string): TabItem => ({
+  id: url,
+  lastVisited: 1,
+  scope: resolveTabScope(url),
+  url,
+});
 
 describe('TabCacheBridges', () => {
   afterEach(() => {

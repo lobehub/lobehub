@@ -3,15 +3,13 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
-import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
-import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
+import { isSameTabTarget } from '@/features/Electron/titlebar/TabBar/scope';
 import { useElectronStore } from '@/store/electron';
 
-import { shouldOpenTabForScopeChange } from './tabScope';
+import { resolveTabNavigationAction } from './tabNavigation';
 
 export const useTabNavigation = () => {
   const location = useLocation();
-  const workspaces = useWorkspaces();
 
   const activateTab = useElectronStore((s) => s.activateTab);
   const addTab = useElectronStore((s) => s.addTab);
@@ -37,38 +35,24 @@ export const useTabNavigation = () => {
     if (prevLocationRef.current === currentUrl) return;
     prevLocationRef.current = currentUrl;
 
-    const normalized = normalizeTabUrl(currentUrl);
     const { tabs, activeTabId } = useElectronStore.getState();
+    const action = resolveTabNavigationAction({ activeTabId, currentUrl, tabs });
 
-    const activeTab = activeTabId ? tabs.find((t) => t.id === activeTabId) : null;
-    if (activeTab && normalizeTabUrl(activeTab.url) === normalized) {
-      // Keep the active tab's url in sync (e.g. query/hash variations that
-      // normalize the same) without re-activating.
-      if (activeTab.url !== currentUrl) updateTab(activeTab.id, currentUrl);
-      return;
-    }
-
-    const existing = tabs.find((t) => normalizeTabUrl(t.url) === normalized);
-    if (existing) {
-      activateTab(existing.id);
-      return;
-    }
-
-    const workspaceSlugs = new Set(workspaces.map((workspace) => workspace.slug));
-
-    if (activeTab) {
-      if (shouldOpenTabForScopeChange(activeTab.url, currentUrl, workspaceSlugs)) {
-        addTab(currentUrl);
-        return;
+    switch (action.type) {
+      case 'activate': {
+        activateTab(action.id);
+        break;
       }
-
-      updateTab(activeTab.id, currentUrl);
-    } else {
-      // First launch (or stale activeTabId): make the current page visible as a tab,
-      // so the tab bar and its "+" entry are always discoverable.
-      addTab(currentUrl);
+      case 'add': {
+        addTab(action.url);
+        break;
+      }
+      case 'update': {
+        updateTab(action.id, action.url);
+        break;
+      }
     }
-  }, [location.pathname, location.search, workspaces, activateTab, addTab, updateTab]);
+  }, [location.pathname, location.search, activateTab, addTab, updateTab]);
 
   useEffect(() => {
     if (!currentRouteMeta || !currentRouteMetaUrl) return;
@@ -77,7 +61,7 @@ export const useTabNavigation = () => {
     if (!activeTabId) return;
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab) return;
-    if (normalizeTabUrl(activeTab.url) !== normalizeTabUrl(currentRouteMetaUrl)) return;
+    if (!isSameTabTarget(activeTab, currentRouteMetaUrl)) return;
 
     updateTabCache(activeTabId, currentRouteMeta);
   }, [currentRouteMeta, currentRouteMetaUrl, updateTabCache]);

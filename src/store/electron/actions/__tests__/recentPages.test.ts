@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveTabScope } from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
@@ -13,6 +14,7 @@ const buildTab = (url: string, cached?: TabItem['cached']): TabItem => ({
   cached,
   id: url,
   lastVisited: 1,
+  scope: resolveTabScope(url),
   url,
 });
 
@@ -36,6 +38,10 @@ describe('recentPages actions', () => {
         '/acme/agent/abc',
         '/agent/abc',
       ]);
+      expect(result.current.recentPages.map((page) => page.scope)).toEqual([
+        { slug: 'acme', type: 'workspace' },
+        { type: 'personal' },
+      ]);
     });
 
     it('dedupes only within the same normalized workspace URL', () => {
@@ -48,6 +54,10 @@ describe('recentPages actions', () => {
 
       expect(result.current.recentPages).toHaveLength(1);
       expect(result.current.recentPages[0].id).toBe('/acme/agent/abc?a=1&b=2');
+      expect(result.current.recentPages[0].scope).toEqual({
+        slug: 'acme',
+        type: 'workspace',
+      });
       expect(result.current.recentPages[0].visitCount).toBe(2);
     });
   });

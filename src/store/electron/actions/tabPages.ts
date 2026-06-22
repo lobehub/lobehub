@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import {
+  isSameTabScope,
+  isSameTabTarget,
+  normalizeTabScope,
+  resolveTabScope,
+} from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
@@ -50,9 +56,9 @@ export class TabPagesActionImpl {
   };
 
   addTab = (url: string, cached?: DynamicRouteMeta, activate = true): string => {
-    const normalized = normalizeTabUrl(url);
+    const scope = resolveTabScope(url);
     const { tabs } = this.#get();
-    const existing = tabs.find((t) => normalizeTabUrl(t.url) === normalized);
+    const existing = tabs.find((t) => isSameTabTarget(t, url, scope));
 
     if (existing) {
       if (activate) {
@@ -62,11 +68,11 @@ export class TabPagesActionImpl {
       return existing.id;
     }
 
-    return this.#createTab(url, cached, activate);
+    return this.#createTab(url, cached, activate, scope);
   };
 
   addNewTab = (url: string, cached?: DynamicRouteMeta): string => {
-    return this.#createTab(url, cached, true);
+    return this.#createTab(url, cached, true, resolveTabScope(url));
   };
 
   getActiveTab = (): TabItem | null => {
@@ -156,13 +162,17 @@ export class TabPagesActionImpl {
     if (index < 0) return id;
 
     const prev = tabs[index];
-    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
+    const scope = resolveTabScope(url);
+    const previousScope = normalizeTabScope(prev.scope, prev.url);
+    const sameTarget =
+      normalizeTabUrl(url) === normalizeTabUrl(prev.url) && isSameTabScope(scope, previousScope);
 
     const newTabs = [...tabs];
     newTabs[index] = {
       ...prev,
       cached: sameTarget ? prev.cached : undefined,
       lastVisited: Date.now(),
+      scope,
       url,
     };
 
@@ -186,13 +196,19 @@ export class TabPagesActionImpl {
     this.#persist();
   };
 
-  #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
+  #createTab = (
+    url: string,
+    cached: DynamicRouteMeta | undefined,
+    activate: boolean,
+    scope = resolveTabScope(url),
+  ): string => {
     const { tabs, activeTabId } = this.#get();
     const id = generateTabId();
     const newTab: TabItem = {
       cached,
       id,
       lastVisited: Date.now(),
+      scope,
       url,
     };
 

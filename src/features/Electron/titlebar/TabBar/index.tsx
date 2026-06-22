@@ -17,8 +17,10 @@ import { cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
@@ -26,6 +28,7 @@ import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
+import { resolveTabScope } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 
@@ -40,6 +43,7 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y
 const TabBar = () => {
   const styles = useStyles;
   const navigate = useWorkspaceAwareNavigate();
+  const location = useLocation();
   useRegisterDesktopTabHotkeys();
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -61,6 +65,12 @@ const TabBar = () => {
   );
 
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
+  const newTabUrl = useMemo(() => {
+    const scope = resolveTabScope(location.pathname + location.search);
+    const activeSlug = scope.type === 'workspace' ? scope.slug : null;
+
+    return buildWorkspaceAwarePath(NEW_TAB_URL, activeSlug);
+  }, [location.pathname, location.search]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -177,9 +187,9 @@ const TabBar = () => {
     if (!canCreate) return;
 
     // Always open a fresh Home tab, even if a Home tab already exists.
-    addNewTab(NEW_TAB_URL);
-    startTransition(() => navigate(NEW_TAB_URL));
-  }, [canCreate, addNewTab, navigate]);
+    addNewTab(newTabUrl);
+    startTransition(() => navigate(newTabUrl, { escape: true }));
+  }, [canCreate, addNewTab, navigate, newTabUrl]);
 
   useWatchBroadcast('createNewTab', () => {
     handleNewTab();
