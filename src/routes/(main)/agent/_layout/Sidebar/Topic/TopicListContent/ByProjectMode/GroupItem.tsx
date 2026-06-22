@@ -10,16 +10,22 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import RingLoadingIcon from '@/components/RingLoading';
+import { SESSION_CHAT_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { usePathname } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
+import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import {
@@ -212,20 +218,44 @@ const GroupItem = memo<GroupItemComponentProps>(
     );
 
     const agentId = useAgentStore((s) => s.activeAgentId);
-    const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId ?? ''));
-    const isHeterogeneous = useAgentStore((s) =>
-      agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+    const { aid: routeAgentId } = useParams<{ aid?: string }>();
+    const pathname = usePathname();
+    const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
+    const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
+    const currentAgentId = targetAgentId ?? agentId;
+    const router = useQueryRoute();
+    const activeWorkspaceSlug = useActiveWorkspaceSlug();
+    const agencyConfig = useAgentStore(
+      agentByIdSelectors.getAgencyConfigById(currentAgentId ?? ''),
     );
-    const { commitAgentDefault } = useCommitWorkingDirectory(agentId ?? '');
+    const isHeterogeneous = useAgentStore((s) =>
+      currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
+    );
+    const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
 
     const handleAddTopic = useCallback(async () => {
-      if (!workingDirectory || !agentId) return;
+      if (!workingDirectory || !currentAgentId || !targetAgentId) return;
       // Write the agent's per-device default so the new topic inherits this
       // directory at creation time — the same high-precedence slot the picker
       // uses, not the legacy per-agent fallback that gets shadowed by it.
       await commitAgentDefault(workingDirectory);
       useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-    }, [workingDirectory, agentId, commitAgentDefault]);
+      router.push(
+        buildPrefixedAgentRoutePath(
+          SESSION_CHAT_URL(targetAgentId),
+          agentRoute,
+          activeWorkspaceSlug,
+        ),
+      );
+    }, [
+      workingDirectory,
+      currentAgentId,
+      targetAgentId,
+      commitAgentDefault,
+      router,
+      agentRoute,
+      activeWorkspaceSlug,
+    ]);
 
     // Web can add a topic in a directory too when the agent targets a bound
     // device — the write goes to `workingDirByDevice`, no Electron dependency.

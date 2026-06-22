@@ -1,14 +1,15 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+
+import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../utils/agentPathname';
 
 /**
  * Hook to handle topic navigation with automatic route detection
@@ -20,58 +21,40 @@ interface NavigateToTopicOptions {
 
 export const useTopicNavigation = () => {
   const pathname = usePathname();
+  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
   const params = useParams<{ aid?: string; topicId?: string }>();
   const [activeAgentId, activeTopicId] = useChatStore((s) => [s.activeAgentId, s.activeTopicId]);
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const routeAgentId = params.aid ?? activeAgentId;
+  const routeAgentId = params.aid ?? agentRoute?.agentId ?? activeAgentId;
   // URL is the source of truth. Sidebar mounts at `/agent/:aid` so `params.topicId`
   // is undefined here — fall back to parsing pathname directly so consumers can compare
   // their item id against the URL's topic id without waiting for store hydration.
   const urlTopicId = params.topicId;
   const routeTopicId = params.topicId ?? activeTopicId ?? undefined;
-  const topicBasePath =
-    routeAgentId && routeTopicId
-      ? buildWorkspaceAwarePath(
-          SESSION_CHAT_TOPIC_URL(routeAgentId, routeTopicId),
-          activeWorkspaceSlug,
-        )
-      : undefined;
-
-  const urlTopicBasePath =
-    routeAgentId && params.topicId
-      ? buildWorkspaceAwarePath(
-          SESSION_CHAT_TOPIC_URL(routeAgentId, params.topicId),
-          activeWorkspaceSlug,
-        )
-      : undefined;
   const focusTopicPopup = useFocusTopicPopup({ agentId: activeAgentId });
 
   const isInTopicContextRoute = useCallback(() => {
-    if (!topicBasePath) return false;
+    if (!routeAgentId || !routeTopicId || agentRoute?.agentId !== routeAgentId) return false;
 
-    return (
-      pathname === topicBasePath ||
-      pathname === `${topicBasePath}/` ||
-      pathname.startsWith(`${topicBasePath}/`)
-    );
-  }, [pathname, topicBasePath]);
+    return agentRoute.segmentsAfterAgent[0] === routeTopicId;
+  }, [agentRoute, routeAgentId, routeTopicId]);
 
   const isInAgentSubRoute = useCallback(() => {
     if (!routeAgentId) return false;
-    const agentBasePath =
-      urlTopicBasePath ??
-      buildWorkspaceAwarePath(SESSION_CHAT_URL(routeAgentId), activeWorkspaceSlug);
+    if (agentRoute?.agentId !== routeAgentId) return false;
 
-    // If pathname has more segments after /agent/:aid (or the active topic), it's a sub-route
-    return (
-      pathname.startsWith(agentBasePath) &&
-      pathname !== agentBasePath &&
-      pathname !== `${agentBasePath}/`
-    );
-  }, [activeWorkspaceSlug, pathname, routeAgentId, urlTopicBasePath]);
+    const { segmentsAfterAgent } = agentRoute;
+    if (segmentsAfterAgent.length === 0) return false;
+
+    const isExactTopicRoute =
+      routeTopicId && segmentsAfterAgent.length === 1 && segmentsAfterAgent[0] === routeTopicId;
+
+    // If pathname has more segments after /agent/:aid (or the active topic), it's a sub-route.
+    return !isExactTopicRoute;
+  }, [agentRoute, routeAgentId, routeTopicId]);
 
   const navigateToTopic = useCallback(
     async (topicId?: string, options?: NavigateToTopicOptions) => {
@@ -84,9 +67,10 @@ export const useTopicNavigation = () => {
         const basePath = topicId
           ? SESSION_CHAT_TOPIC_URL(routeAgentId, topicId)
           : SESSION_CHAT_URL(routeAgentId);
+        const targetPath = buildPrefixedAgentRoutePath(basePath, agentRoute, activeWorkspaceSlug);
 
         // Include topicId in URL when navigating from sub-route
-        router.push(basePath);
+        router.push(targetPath);
         toggleConfig(false);
         return;
       }
@@ -94,7 +78,16 @@ export const useTopicNavigation = () => {
       switchTopic(topicId);
       toggleConfig(false);
     },
-    [focusTopicPopup, isInAgentSubRoute, routeAgentId, router, switchTopic, toggleConfig],
+    [
+      activeWorkspaceSlug,
+      agentRoute,
+      focusTopicPopup,
+      isInAgentSubRoute,
+      routeAgentId,
+      router,
+      switchTopic,
+      toggleConfig,
+    ],
   );
 
   return {
