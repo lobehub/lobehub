@@ -3,6 +3,15 @@
   "cloud": [],
   "community": [
     {
+      "image": "/blog/assets0a5cad3a54ab5bd637a85db37d04a840.webp",
+      "id": "2026-06-22-delivery-checks",
+      "date": "2026-06-22",
+      "versionRange": [
+        "2.2.5",
+        "2.2.6"
+      ]
+    },
+    {
       "image": "/blog/assets6aebb8b5341dc37202ffecb363b9b906.webp",
       "id": "2026-06-15-browser-pairing",
       "date": "2026-06-15",
