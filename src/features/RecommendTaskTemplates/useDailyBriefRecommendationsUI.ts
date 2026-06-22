@@ -81,11 +81,18 @@ const normalizeTaskTemplateRecommendation = (template: unknown): TaskTemplate | 
   return template;
 };
 
-const normalizeTaskTemplateRecommendations = (templates: unknown[]): TaskTemplate[] =>
-  templates.flatMap((template) => {
+/**
+ * Persisted SWR data can be stale or corrupted, for example `{ data: { ... } }`.
+ * Treat non-array payloads as empty so home rendering and cache mutations stay defensive.
+ */
+const normalizeTaskTemplateRecommendations = (templates: unknown): TaskTemplate[] => {
+  if (!Array.isArray(templates)) return [];
+
+  return templates.flatMap((template) => {
     const normalized = normalizeTaskTemplateRecommendation(template);
     return normalized ? [normalized] : [];
   });
+};
 
 interface ResolveDailyBriefRecommendationRequestParams {
   interestKeys: string[] | null;

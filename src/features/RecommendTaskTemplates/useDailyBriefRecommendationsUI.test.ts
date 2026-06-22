@@ -336,6 +336,21 @@ describe('useDailyBriefRecommendationsUI', () => {
     expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
   });
 
+  it('treats non-array recommendation payloads as empty data', () => {
+    mockUseSWR.mockReturnValue({
+      data: { data: { ...template }, success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
   it('normalizes cached rows before removing a card', () => {
     mockUseSWR.mockReturnValue({
       data: { data: [template, null], success: true },
@@ -352,10 +367,14 @@ describe('useDailyBriefRecommendationsUI', () => {
     result.current.onCreated(template.id);
 
     const updater = mockMutate.mock.calls[0][0] as (current?: {
-      data: unknown[];
+      data: unknown;
       success: boolean;
     }) => unknown;
     expect(updater({ data: [template, null], success: true })).toEqual({
+      data: [],
+      success: true,
+    });
+    expect(updater({ data: { ...template }, success: true })).toEqual({
       data: [],
       success: true,
     });
