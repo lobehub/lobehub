@@ -32,7 +32,6 @@ import TabItem from './TabItem';
 const TAB_WIDTH = 180;
 const TAB_GAP = 0;
 
-// The "+" button always opens a fresh Home tab, regardless of the active page.
 const NEW_TAB_URL = '/';
 
 // Tabs only reorder along the horizontal axis, so lock the drag transform to X.
@@ -48,7 +47,7 @@ const TabBar = () => {
   const scrolledActiveTabIdRef = useRef<string | null>(null);
   const { tabs, activeTabId } = useResolvedTabs();
   const activateTab = useElectronStore((s) => s.activateTab);
-  const addTab = useElectronStore((s) => s.addTab);
+  const addNewTab = useElectronStore((s) => s.addNewTab);
   const removeTab = useElectronStore((s) => s.removeTab);
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
   const closeLeftTabs = useElectronStore((s) => s.closeLeftTabs);
@@ -177,11 +176,10 @@ const TabBar = () => {
   const handleNewTab = useCallback(() => {
     if (!canCreate) return;
 
-    // Always open a fresh Home tab. If a Home tab already exists, addTab just
-    // activates it instead of stacking duplicates.
-    addTab(NEW_TAB_URL, undefined, true);
+    // Always open a fresh Home tab, even if a Home tab already exists.
+    addNewTab(NEW_TAB_URL);
     startTransition(() => navigate(NEW_TAB_URL));
-  }, [canCreate, addTab, navigate]);
+  }, [canCreate, addNewTab, navigate]);
 
   useWatchBroadcast('createNewTab', () => {
     handleNewTab();

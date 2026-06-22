@@ -23,16 +23,18 @@ describe('tabPages actions', () => {
   });
 
   describe('addTab', () => {
-    it('uses the normalized URL as the tab id', () => {
+    it('creates a tab with a stable generated id and activates it', () => {
       const { result } = renderHook(() => useElectronStore());
 
+      let createdId = '';
       act(() => {
-        result.current.addTab('/agent/abc?b=2&a=1');
+        createdId = result.current.addTab('/agent/abc?b=2&a=1');
       });
 
       expect(result.current.tabs).toHaveLength(1);
-      expect(result.current.tabs[0].id).toBe('/agent/abc?a=1&b=2');
-      expect(result.current.activeTabId).toBe('/agent/abc?a=1&b=2');
+      expect(result.current.tabs[0].id).toBe(createdId);
+      expect(result.current.tabs[0].url).toBe('/agent/abc?b=2&a=1');
+      expect(result.current.activeTabId).toBe(createdId);
     });
 
     it('dedupes tabs that resolve to the same normalized URL', () => {
@@ -58,8 +60,26 @@ describe('tabPages actions', () => {
     });
   });
 
+  describe('addNewTab', () => {
+    it('always creates a fresh tab even when the URL already has a tab', () => {
+      const { result } = renderHook(() => useElectronStore());
+
+      act(() => {
+        result.current.addNewTab('/');
+        result.current.addNewTab('/');
+        result.current.addNewTab('/');
+      });
+
+      expect(result.current.tabs).toHaveLength(3);
+      const ids = result.current.tabs.map((t) => t.id);
+      expect(new Set(ids).size).toBe(3);
+      expect(result.current.tabs.every((t) => t.url === '/')).toBe(true);
+      expect(result.current.activeTabId).toBe(result.current.tabs[2].id);
+    });
+  });
+
   describe('updateTab', () => {
-    it('drops cached data when the tab navigates to a different page', () => {
+    it('drops cached data when the tab navigates to a different page but keeps the id stable', () => {
       const { result } = renderHook(() => useElectronStore());
       const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
 
@@ -72,9 +92,10 @@ describe('tabPages actions', () => {
       });
 
       const updatedTab = result.current.tabs[0];
-      expect(updatedTab.id).toBe('/');
+      expect(updatedTab.id).toBe(agentTab.id);
+      expect(updatedTab.url).toBe('/');
       expect(updatedTab.cached).toBeUndefined();
-      expect(result.current.activeTabId).toBe('/');
+      expect(result.current.activeTabId).toBe(agentTab.id);
     });
 
     it('keeps cached data when the normalized URL is unchanged', () => {
