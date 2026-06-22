@@ -270,6 +270,53 @@ describe('useDailyBriefRecommendationsUI', () => {
     });
   });
 
+  it('drops recommendations that are missing connectors', () => {
+    const templateWithoutConnectors = {
+      category: 'engineering',
+      cronPattern: '0 9 * * *',
+      description: 'Description',
+      id: 102,
+      identifier: 'legacy-daily-engineering',
+      instruction: 'Instruction',
+      interests: ['coding'],
+      title: 'Legacy title',
+    } satisfies Omit<TaskTemplate, 'connectors'>;
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithoutConnectors], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
+  it('drops legacy recommendations from pre-Market task-template servers', () => {
+    const legacyServerTemplate = {
+      category: 'engineering',
+      cronPattern: '0 9 * * *',
+      id: 'oss-intel-daily',
+      interests: ['coding'],
+      requiresSkills: [{ provider: 'github', source: 'lobehub' }],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [legacyServerTemplate], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
   it('logs recommendation request errors instead of treating them as normal empty data', async () => {
     const error = new Error('market down');
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

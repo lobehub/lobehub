@@ -35,6 +35,33 @@ interface UseDailyBriefRecommendationsUIOptions {
   count?: number;
 }
 
+const isRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isTaskTemplateRecommendationCandidate = (value: unknown): value is TaskTemplate => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.category === 'string' &&
+    Array.isArray(value.connectors) &&
+    typeof value.cronPattern === 'string' &&
+    typeof value.description === 'string' &&
+    typeof value.id === 'number' &&
+    typeof value.identifier === 'string' &&
+    typeof value.instruction === 'string' &&
+    Array.isArray(value.interests) &&
+    typeof value.title === 'string'
+  );
+};
+
+/**
+ * v2.2.6 returned legacy recommendation rows before `connectors` and text fields existed.
+ * Drop legacy rows from version-skewed self-host servers so they cannot crash the home screen.
+ */
+const normalizeTaskTemplateRecommendation = (template: unknown): TaskTemplate | undefined => {
+  if (!isTaskTemplateRecommendationCandidate(template)) return undefined;
+  return template;
+};
+
 interface ResolveDailyBriefRecommendationRequestParams {
   interestKeys: string[] | null;
   isLogin: boolean | undefined;
@@ -205,7 +232,14 @@ export function useDailyBriefRecommendationsUI(
     [message, mutate, removeTemplateFromList, t],
   );
 
-  const templates = useMemo(() => data?.data ?? [], [data]);
+  const templates = useMemo(
+    () =>
+      (data?.data ?? []).flatMap((template) => {
+        const normalized = normalizeTaskTemplateRecommendation(template);
+        return normalized ? [normalized] : [];
+      }),
+    [data],
+  );
   const requiredSources = useMemo(() => {
     const sources = new Set<TaskTemplateConnectorSource>();
     for (const tmpl of templates) {
