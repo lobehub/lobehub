@@ -193,4 +193,29 @@ describe('ModelDetailPanel pricing', () => {
     expect(videoResult.container).toHaveTextContent('~ 800.0K credits / video');
     expect(videoResult.container).not.toHaveTextContent('$0.80');
   });
+
+  it('should render nothing when model has no pricing, context, or abilities', () => {
+    const emptyList: EnabledProviderWithModels[] = [
+      {
+        children: [
+          {
+            abilities: {},
+            displayName: 'Empty Model',
+            id: 'empty-model',
+            pricing: undefined,
+            type: 'chat',
+          } as any,
+        ],
+        id: 'empty-provider',
+        name: 'empty-provider',
+        source: 'builtin',
+      },
+    ];
+
+    const { container } = render(
+      <ModelDetailPanel enabledList={emptyList} model="empty-model" provider="empty-provider" />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
 });
