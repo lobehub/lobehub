@@ -472,6 +472,15 @@ export const connectorRouter = router({
    * Bootstrap a connector entry for an installed marketplace plugin.
    * Reads tool list from user_installed_plugins.manifest.api.
    * Idempotent — safe to call on every open of the detail panel.
+   *
+   * Skips `type='customPlugin'` rows that carry an MCP endpoint: those are
+   * legacy custom MCPs and now go through the frontend migration flow
+   * (CustomConnectorModal in `legacyPlugin` mode), which produces a fully
+   * populated `user_connectors` row (with `mcpServerUrl` / `credentials`).
+   * Letting this procedure build a half-baked marketplace row for them would
+   * be filtered out by the runtime (`buildConnectorManifests` requires a
+   * transport endpoint) and would also collide on the unique `(user_id,
+   * identifier)` index when the migration later tries to upsert.
    */
   syncPluginTools: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
@@ -483,6 +492,14 @@ export const connectorRouter = router({
           code: 'NOT_FOUND',
           message: `Plugin '${input.identifier}' not found or has no manifest`,
         });
+      }
+
+      if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
+        // Hand off to the frontend migration flow. Returning null tells the
+        // caller "no connector row produced"; the SkillDetail panel falls back
+        // to the legacy plugin display, and the "Configure" button surfaces
+        // CustomConnectorModal in migration mode.
+        return { connectorId: null, toolCount: 0 };
       }
 
       const connectorId = await upsertConnectorEntry(ctx.connectorModel, {

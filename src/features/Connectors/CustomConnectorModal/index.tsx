@@ -7,8 +7,21 @@ import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { executeLegacyMigrationSave } from './legacyPluginMigration';
+
 interface CustomConnectorModalProps {
   connectorId?: string;
+  /**
+   * Legacy `user_installed_plugins` record being upgraded to a connector. When
+   * set (and `connectorId` is not), the modal opens in **migration mode**: the
+   * form is pre-filled from the legacy `customParams.mcp` blob, and on save we
+   * create the connector + sync its tools + delete the legacy plugin row.
+   *
+   * The legacy row is left untouched until BOTH create and tool-sync succeed,
+   * so a transient failure (MCP server unreachable, etc.) leaves the user with
+   * their working legacy plugin and a "retry" path on the next save.
+   */
+  legacyPlugin?: LobeToolCustomPlugin;
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
@@ -82,19 +95,21 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
  * - Clears credentials when the server URL changes
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
-  ({ open, onClose, connectorId, onEditSuccess }) => {
+  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    const uninstallCustomPlugin = useToolStore((s) => s.uninstallCustomPlugin);
 
     const connector = useToolStore(
       connectorId ? connectorSelectors.connectorById(connectorId) : () => undefined,
     );
 
     const isEditMode = Boolean(connectorId);
+    const isMigrationMode = !isEditMode && Boolean(legacyPlugin);
 
     // Full connector data (with decrypted credentials) fetched for the edit form.
     // null = not yet loaded; object = loaded (credentials may still be null if none set).
@@ -131,7 +146,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     // Build the pre-fill value for edit mode once the credentials fetch completes.
     // Returns undefined while loading so DevModal defers seeding the form.
+    //
+    // Migration mode skips the fetch — the legacy `customParams.mcp` blob is
+    // already in the shape DevModal expects, so we hand it through unchanged.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
+      if (isMigrationMode) return legacyPlugin;
       if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
@@ -175,6 +194,40 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     }, [isEditMode, connector, editFetchedData]);
 
     const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+      // ── Migration mode ────────────────────────────────────────────────────
+      // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
+      // a `user_connectors` row. Server `connector.create` is idempotent on
+      // `(user_id, identifier)` — a same-name half-baked connector from the
+      // old `syncPluginTools` path becomes an UPDATE here, no collision branch
+      // needed.
+      //
+      // Order matters: create → sync tools → uninstall legacy. If sync fails
+      // we bail BEFORE uninstall so the legacy plugin still serves the agent
+      // and the user can retry by re-opening the modal. After uninstall, the
+      // runtime sees a single connector row keyed by the same identifier, and
+      // `agentConfig.plugins[i]` already matches.
+      if (isMigrationMode && legacyPlugin) {
+        // `value` is the full form state — DevModal seeded itself from
+        // `legacyPlugin` via `editValue`, so anything the user edited (or left
+        // alone) is already inside `value`. Hand it to the orchestrator.
+        const result = await executeLegacyMigrationSave(legacyPlugin, value, {
+          createConnector,
+          syncConnectorTools,
+          uninstallCustomPlugin,
+        });
+        if (!result.ok) {
+          throw new Error(
+            result.reason === 'no-mcp'
+              ? 'This custom plugin has no MCP configuration to migrate.'
+              : result.reason === 'no-endpoint'
+                ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
+                : 'This custom plugin uses an unsupported transport.',
+          );
+        }
+        onEditSuccess?.();
+        return;
+      }
+
       const mcp = (value.customParams?.mcp ?? {}) as {
         args?: string[];
         auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
@@ -308,7 +361,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     return (
       <DevModal
         enableOAuth
-        mode={isEditMode ? 'edit' : 'create'}
+        mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
         onSave={handleSave}
