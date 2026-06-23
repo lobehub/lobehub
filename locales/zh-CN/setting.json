@@ -1221,6 +1221,7 @@
   "tools.lobehubSkill.providers.twitter.readme": "连接 X（原 Twitter）以发布推文、管理时间线并与受众互动。创建内容、安排发布、监控提及，并通过对话式 AI 构建社交媒体影响力。",
   "tools.lobehubSkill.providers.vercel.description": "Vercel 是一个面向前端开发者的云平台，提供托管服务和无服务器函数，可轻松部署 Web 应用。",
   "tools.lobehubSkill.providers.vercel.readme": "连接 Vercel 以管理部署、监控项目状态并控制基础设施。通过对话式 AI 部署应用、查看构建日志、管理环境变量并扩展项目。",
+  "tools.noConfigurablePermissions": "此技能未提供可配置的工具权限。",
   "tools.notInstalled": "未安装",
   "tools.notInstalledWarning": "当前技能暂未安装，可能会影响助理使用",
   "tools.plugins.enabled": "已启用 {{num}}",

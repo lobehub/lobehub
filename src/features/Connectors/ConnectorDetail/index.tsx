@@ -1,3 +1,4 @@
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
@@ -19,6 +20,7 @@ interface ConnectorDetailProps {
 
 const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) => {
   const { t } = useTranslation('tool');
+  const { t: ts } = useTranslation('setting');
   const [customModalOpen, setCustomModalOpen] = useState(false);
 
   const connector = useToolStore(connectorSelectors.connectorById(connectorId));
@@ -72,6 +74,37 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
 
   if (!connector) return null;
 
+  const rawDescription =
+    typeof connector.metadata?.description === 'string'
+      ? connector.metadata.description
+      : undefined;
+  const lobehubProvider = isMarketplace
+    ? getLobehubSkillProviderById(connector.identifier)
+    : undefined;
+  const composioApp = isMarketplace ? getComposioAppByIdentifier(connector.identifier) : undefined;
+
+  let connectorName = connector.name;
+  let connectorDescription = rawDescription;
+
+  if (isBuiltin) {
+    connectorName = ts(`tools.builtins.${connector.identifier}.title`, {
+      defaultValue: connector.name,
+    });
+    connectorDescription = ts(`tools.builtins.${connector.identifier}.description`, {
+      defaultValue: rawDescription || '',
+    });
+  } else if (lobehubProvider) {
+    connectorName = lobehubProvider.label;
+    connectorDescription = ts(`tools.lobehubSkill.providers.${connector.identifier}.description`, {
+      defaultValue: lobehubProvider.description || rawDescription || '',
+    });
+  } else if (composioApp) {
+    connectorName = composioApp.label;
+    connectorDescription = ts(`tools.composio.servers.${connector.identifier}.description`, {
+      defaultValue: composioApp.description || rawDescription || '',
+    });
+  }
+
   // Sync button label: re-sync tool list from manifest (does NOT reset permissions)
   const syncLabel =
     connector?.sourceType === ConnectorSourceType.custom
@@ -100,7 +133,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
           marginBottom: 16,
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{connectorName}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           {/* Reset permissions: restore all tools to auto (fully open) */}
           <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
@@ -152,12 +185,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
           )}
           {/* Uninstall for builtin and marketplace tools */}
           {(isBuiltin || isMarketplace) && (
-            <Button
-              danger
-              icon={<Trash2 size={14} />}
-              size="small"
-              onClick={handleUninstall}
-            >
+            <Button danger icon={<Trash2 size={14} />} size="small" onClick={handleUninstall}>
               {t('connector.uninstall', 'Uninstall')}
             </Button>
           )}
@@ -165,7 +193,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
       </div>
 
       {/* Description */}
-      {typeof connector.metadata?.description === 'string' && connector.metadata.description && (
+      {connectorDescription && (
         <div
           style={{
             color: 'var(--ant-color-text-secondary)',
@@ -174,7 +202,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
             marginBottom: 16,
           }}
         >
-          {connector.metadata.description}
+          {connectorDescription}
         </div>
       )}
 

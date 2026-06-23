@@ -1221,6 +1221,7 @@
   "tools.lobehubSkill.providers.twitter.readme": "Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.",
   "tools.lobehubSkill.providers.vercel.description": "Vercel is a cloud platform for frontend developers, providing hosting and serverless functions to deploy web applications with ease.",
   "tools.lobehubSkill.providers.vercel.readme": "Connect to Vercel to manage your deployments, monitor project status, and control your infrastructure. Deploy applications, check build logs, manage environment variables, and scale your projects through conversational AI.",
+  "tools.noConfigurablePermissions": "This skill does not expose configurable tool permissions.",
   "tools.notInstalled": "Not Installed",
   "tools.notInstalledWarning": "This skill is not currently installed, which may affect agent functionality.",
   "tools.plugins.enabled": "Enabled: {{num}}",

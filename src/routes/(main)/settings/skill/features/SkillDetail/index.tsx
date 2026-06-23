@@ -69,6 +69,7 @@ interface SkillDetailProps {
  */
 const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const { t } = useTranslation('plugin');
+  const { t: ts } = useTranslation('setting');
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
 
@@ -99,6 +100,19 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     type === 'plugin' ||
     type === 'mcp-connector' ||
     type === 'lobehub-connector';
+
+  const builtinSkillTitle = builtinSkill
+    ? ts(`tools.builtins.${builtinSkill.identifier}.title`, { defaultValue: builtinSkill.name })
+    : identifier;
+  const builtinSkillDescription = builtinSkill?.description
+    ? ts(`tools.builtins.${builtinSkill.identifier}.description`, {
+        defaultValue: builtinSkill.description,
+      })
+    : undefined;
+  const noPermissionsTitle =
+    type === 'builtin'
+      ? ts(`tools.builtins.${identifier}.title`, { defaultValue: identifier })
+      : identifier;
 
   useEffect(() => {
     if (!isConnectorType) return;
@@ -210,9 +224,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <div style={{ alignItems: 'flex-start', display: 'flex', gap: 12 }}>
             {builtinSkill?.avatar && <Avatar avatar={builtinSkill.avatar} size={40} />}
             <div>
-              <div className={styles.name}>{builtinSkill?.name || identifier}</div>
-              {builtinSkill?.description && (
-                <div className={styles.description}>{builtinSkill.description}</div>
+              <div className={styles.name}>{builtinSkillTitle}</div>
+              {builtinSkillDescription && (
+                <div className={styles.description}>{builtinSkillDescription}</div>
               )}
             </div>
           </div>
@@ -254,8 +268,8 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (noManifest || !connector) {
     return (
       <div className={styles.noPermissions}>
-        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{identifier}</div>
-        This skill does not expose configurable tool permissions.
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{noPermissionsTitle}</div>
+        {ts('tools.noConfigurablePermissions')}
       </div>
     );
   }

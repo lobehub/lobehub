@@ -2162,6 +2162,7 @@ When I am ___, I need ___
   'workspaceSetting.tab.usage': 'Usage',
   'tools.add': 'Add Skill',
   'tools.addSkillOrConnector': 'Add Skills / Connectors',
+  'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
   'tools.builtins.groupName': 'Built-ins',
   'tools.builtins.install': 'Install',
   'tools.builtins.installed': 'Installed',
