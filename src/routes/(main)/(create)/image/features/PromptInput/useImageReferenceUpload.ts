@@ -6,8 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { message } from '@/components/AntdStaticMethods';
 import { usePermission } from '@/hooks/usePermission';
 import type { UploadData } from '@/routes/(main)/(create)/features/GenerationInput/UploadCard';
+import {
+  type ReferenceUploadSlot,
+  useReferenceImageUpload,
+} from '@/routes/(main)/(create)/features/GenerationInput/useReferenceImageUpload';
 import { useAutoDimensions } from '@/routes/(main)/(create)/image/features/ConfigPanel';
-import { useFileStore } from '@/store/file';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
@@ -15,14 +18,12 @@ import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;
 
 /**
- * Shared image reference upload logic for the image creation page.
+ * Image-page binding for the shared {@link useReferenceImageUpload} core.
  *
- * Centralizes "which params the model supports", the derived upload limits, and
- * the add/remove/batch-upload handlers so both the inline reference cards
- * (PromptInput) and the page-level drag-and-drop zone stay in sync.
- *
- * `handleUploadFiles` lands all dropped files in a single state update to avoid
- * the stale-closure race that calling `handleAddImage` in a loop would cause.
+ * Describes the image model's reference slots (`imageUrl` then `imageUrls`),
+ * wires the store-backed in-flight preview state, and auto-sets dimensions from
+ * the first dropped image. Also keeps the single add/remove handlers used by the
+ * inline reference cards.
  */
 export const useImageReferenceUpload = () => {
   const { t } = useTranslation('image');
@@ -44,32 +45,56 @@ export const useImageReferenceUpload = () => {
   } = useGenerationConfigParam('imageUrls');
 
   const { autoSetDimensions, extractUrlAndDimensions } = useAutoDimensions();
-  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
 
-  // Object-URL previews shown with a spinner while a batch upload is in flight,
-  // so dropped images appear instantly instead of only on completion. Kept in
-  // the store so the inline cards and the page-level drag zone (two separate
-  // hook instances) reflect the same in-flight uploads.
   const uploadingPreviews = useImageStore(imageGenerationConfigSelectors.uploadingImagePreviews);
   const addUploadingImagePreviews = useImageStore((s) => s.addUploadingImagePreviews);
   const removeUploadingImagePreviews = useImageStore((s) => s.removeUploadingImagePreviews);
 
-  /** Whether the current model accepts any reference image at all. */
-  const canDropImage = isSupportImageUrl || isSupportImageUrls;
+  const slots = useMemo<ReferenceUploadSlot[]>(() => {
+    const list: ReferenceUploadSlot[] = [];
+    if (isSupportImageUrl) {
+      list.push({
+        capacity: 1,
+        set: (urls) => setImageUrl((urls[0] ?? null) as any),
+        values: imageUrl ? [imageUrl] : [],
+      });
+    }
+    if (isSupportImageUrls) {
+      list.push({
+        capacity: imageUrlsMaxCount ?? 4,
+        set: (urls) => setImageUrls(urls as any),
+        values: imageUrls ?? [],
+      });
+    }
+    return list;
+  }, [
+    isSupportImageUrl,
+    isSupportImageUrls,
+    imageUrl,
+    imageUrls,
+    imageUrlsMaxCount,
+    setImageUrl,
+    setImageUrls,
+  ]);
 
-  const maxFileSize = imageUrlsMaxFileSize ?? imageUrlMaxFileSize;
-
-  const maxCount = useMemo(() => {
-    let count = 0;
-    if (isSupportImageUrl) count += 1;
-    if (isSupportImageUrls) count += imageUrlsMaxCount ?? 4;
-    return count;
-  }, [isSupportImageUrl, isSupportImageUrls, imageUrlsMaxCount]);
-
-  const imagePreviewUrls = useMemo(
-    () => [imageUrl, ...(imageUrls ?? [])].filter(Boolean) as string[],
-    [imageUrl, imageUrls],
+  const onLimitExceeded = useCallback(
+    (maxCount: number) => {
+      message.warning(t('config.imageUpload.maxCountReached', { count: maxCount }));
+    },
+    [t],
   );
+
+  const { canDropImage, handleUploadFiles, imagePreviewUrls, maxCount, maxFileSize } =
+    useReferenceImageUpload({
+      addUploadingPreviews: addUploadingImagePreviews,
+      canCreate,
+      maxFileSize: imageUrlsMaxFileSize ?? imageUrlMaxFileSize,
+      onFirstDimensions: autoSetDimensions,
+      onLimitExceeded,
+      removeUploadingPreviews: removeUploadingImagePreviews,
+      slots,
+      uploadingPreviews,
+    });
 
   const handleAddImage = useCallback(
     (data: UploadData) => {
@@ -114,95 +139,6 @@ export const useImageReferenceUpload = () => {
       }
     },
     [canCreate, imageUrl, imageUrls, setImageUrl, setImageUrls],
-  );
-
-  const handleUploadFiles = useCallback(
-    async (files: File[]) => {
-      if (!canCreate) return;
-
-      const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-      if (imageFiles.length === 0) return;
-
-      // Account for both landed images and any in-flight uploads.
-      const remaining = maxCount - imagePreviewUrls.length - uploadingPreviews.length;
-      if (remaining <= 0) {
-        message.warning(t('config.imageUpload.maxCountReached', { count: maxCount }));
-        return;
-      }
-
-      // Only take as many as the model still has room for, and warn when truncating.
-      const accepted = imageFiles.slice(0, remaining);
-      if (imageFiles.length > remaining) {
-        message.warning(t('config.imageUpload.maxCountReached', { count: maxCount }));
-      }
-
-      // Show instant local previews (with spinner) for the whole batch.
-      const previews = accepted.map((file) => URL.createObjectURL(file));
-      addUploadingImagePreviews(previews);
-
-      try {
-        const results = await Promise.all(
-          accepted.map(async (file): Promise<UploadData | null> => {
-            if (maxFileSize && file.size > maxFileSize) return null;
-
-            const result = await uploadWithProgress({
-              file,
-              onStatusUpdate: () => {},
-              skipCheckFileType: true,
-            });
-
-            if (!result?.url) return null;
-            return result.dimensions
-              ? { dimensions: result.dimensions, url: result.url }
-              : result.url;
-          }),
-        );
-
-        // Land all uploads in one state update to avoid a stale-closure race.
-        let nextImageUrl = imageUrl;
-        const nextImageUrls = [...(imageUrls ?? [])];
-        let firstDimensions: { height: number; width: number } | undefined;
-
-        for (const data of results) {
-          if (!data) continue;
-          const { url, dimensions } = extractUrlAndDimensions(data);
-          if (!url) continue;
-
-          if (!firstDimensions && dimensions) firstDimensions = dimensions;
-
-          if (isSupportImageUrl && !nextImageUrl) nextImageUrl = url;
-          else if (isSupportImageUrls) nextImageUrls.push(url);
-          else if (isSupportImageUrl) nextImageUrl = url;
-        }
-
-        if (firstDimensions) autoSetDimensions(firstDimensions);
-        if (nextImageUrl !== imageUrl) setImageUrl(nextImageUrl as any);
-        if (nextImageUrls.length !== (imageUrls?.length ?? 0)) setImageUrls(nextImageUrls as any);
-      } finally {
-        // Drop this batch's placeholders, then release the object URLs.
-        removeUploadingImagePreviews(previews);
-        previews.forEach((url) => URL.revokeObjectURL(url));
-      }
-    },
-    [
-      canCreate,
-      maxCount,
-      maxFileSize,
-      imagePreviewUrls,
-      uploadingPreviews,
-      imageUrl,
-      imageUrls,
-      isSupportImageUrl,
-      isSupportImageUrls,
-      setImageUrl,
-      setImageUrls,
-      uploadWithProgress,
-      addUploadingImagePreviews,
-      removeUploadingImagePreviews,
-      autoSetDimensions,
-      extractUrlAndDimensions,
-      t,
-    ],
   );
 
   return {
