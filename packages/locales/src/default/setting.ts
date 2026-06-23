@@ -2481,6 +2481,10 @@ When I am ___, I need ___
     'Notion is a collaborative productivity and note-taking application.',
   'tools.lobehubSkill.providers.notion.readme':
     'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
+  'tools.lobehubSkill.providers.posthog.description':
+    'PostHog is an open-source product analytics platform for analyzing events, funnels, cohorts, feature flags, experiments, and user behavior.',
+  'tools.lobehubSkill.providers.posthog.readme':
+    'Connect to PostHog to query product analytics, inspect dashboards, review feature flags and experiments, and understand user behavior through natural conversation with your AI assistant.',
   'tools.lobehubSkill.providers.twitter.description':
     'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
   'tools.lobehubSkill.providers.twitter.readme':

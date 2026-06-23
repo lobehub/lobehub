@@ -138,6 +138,29 @@ const callCloudMcpEndpointSchema = z.object({
   toolName: z.string(),
 });
 
+const listSkillToolsWithLiveFallback = async (
+  skills: {
+    listLiveTools?: (provider: string) => Promise<any>;
+    listTools: (provider: string) => Promise<any>;
+  },
+  provider: string,
+) => {
+  if (typeof skills.listLiveTools === 'function') {
+    try {
+      const response = await skills.listLiveTools(provider);
+      if (response) return response;
+    } catch (error) {
+      log(
+        'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+        provider,
+        error,
+      );
+    }
+  }
+
+  return skills.listTools(provider);
+};
+
 // ============================== Type Exports ==============================
 export type ExecInSandboxInput = z.infer<typeof execInSandboxSchema>;
 /** @deprecated Use ExecInSandboxInput */
@@ -425,6 +448,7 @@ export const marketRouter = router({
 
         return {
           data: response.data,
+          error: (response as any).error,
           success: response.success,
         };
       } catch (error) {
@@ -594,7 +618,7 @@ export const marketRouter = router({
       log('connectListTools: provider=%s', input.provider);
 
       try {
-        const response = await ctx.marketSDK.skills.listTools(input.provider);
+        const response = await listSkillToolsWithLiveFallback(ctx.marketSDK.skills, input.provider);
         return {
           provider: input.provider,
           tools: response.tools || [],

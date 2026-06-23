@@ -75,6 +75,41 @@ describe('lobehubSkillStore actions', () => {
       });
     });
 
+    it('should return failure when the tool response is unsuccessful', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: null,
+        error: { code: 'POSTHOG_QUERY_FAILED', message: 'Query failed' },
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: { query: 'select * from events' },
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: null,
+        error: 'Query failed',
+        errorCode: 'POSTHOG_QUERY_FAILED',
+        success: false,
+      });
+      expect(result.current.lobehubSkillExecutingToolIds.has('posthog:query')).toBe(false);
+    });
+
     it('should track executing state during tool call', async () => {
       const { result } = renderHook(() => useToolStore());
 

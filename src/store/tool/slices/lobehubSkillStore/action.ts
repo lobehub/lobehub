@@ -68,6 +68,19 @@ export class LobehubSkillStoreActionImpl {
         n('callLobehubSkillTool/success'),
       );
 
+      if (response.success === false) {
+        const responseError = (response as any).error;
+
+        return {
+          data: response.data,
+          error:
+            responseError?.message ||
+            (typeof response.data === 'string' ? response.data : 'LobeHub Skill call failed'),
+          errorCode: responseError?.code,
+          success: false,
+        };
+      }
+
       return { data: response.data, success: true };
     } catch (error) {
       console.error('[LobehubSkill] Failed to call tool:', error);

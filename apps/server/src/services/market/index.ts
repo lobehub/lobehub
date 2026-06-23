@@ -257,7 +257,7 @@ export class MarketService {
    * List available tools for a provider
    */
   async listSkillTools(providerId: string) {
-    return this.market.skills.listTools(providerId);
+    return this.listSkillToolsWithLiveFallback(providerId);
   }
 
   /**
@@ -265,6 +265,28 @@ export class MarketService {
    */
   async callSkillTool(provider: string, params: { args: Record<string, any>; tool: string }) {
     return this.market.skills.callTool(provider, params);
+  }
+
+  private async listSkillToolsWithLiveFallback(providerId: string) {
+    const skills = this.market.skills as {
+      listLiveTools?: (providerId: string) => Promise<any>;
+      listTools: (providerId: string) => Promise<any>;
+    };
+
+    if (typeof skills.listLiveTools === 'function') {
+      try {
+        const response = await skills.listLiveTools(providerId);
+        if (response) return response;
+      } catch (error) {
+        log(
+          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+          providerId,
+          error,
+        );
+      }
+    }
+
+    return skills.listTools(providerId);
   }
 
   /**
@@ -489,9 +511,26 @@ export class MarketService {
 
       log('executeLobehubSkill: response: %O', response);
 
+      if (!response.success) {
+        const responseError = (response as any).error;
+        const message =
+          responseError?.message ||
+          (typeof response.data === 'string' ? response.data : undefined) ||
+          'LobeHub Skill call failed';
+
+        return {
+          content: message,
+          error: {
+            code: responseError?.code || 'LOBEHUB_SKILL_ERROR',
+            message,
+          },
+          success: false,
+        };
+      }
+
       return {
         content: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
-        success: response.success,
+        success: true,
       };
     } catch (error) {
       const err = error as Error;
@@ -555,12 +594,13 @@ export class MarketService {
             linear: 'Linear',
             microsoft: 'Outlook Calendar',
             notion: 'Notion',
+            posthog: 'PostHog',
             twitter: 'X (Twitter)',
             vercel: 'Vercel',
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
-          const { tools, instruction } = await this.market.skills.listTools(providerId);
+          const { tools, instruction } = await this.listSkillToolsWithLiveFallback(providerId);
           if (!tools || tools.length === 0) continue;
 
           const manifest: LobeToolManifest = {

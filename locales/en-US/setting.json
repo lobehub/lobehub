@@ -1215,6 +1215,8 @@
   "tools.lobehubSkill.providers.microsoft.readme": "Integrate with Outlook Calendar to view, create, and manage your events seamlessly. Schedule meetings, check availability, set reminders, and coordinate your time—all through natural language commands.",
   "tools.lobehubSkill.providers.notion.description": "Notion is a collaborative productivity and note-taking application.",
   "tools.lobehubSkill.providers.notion.readme": "Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.",
+  "tools.lobehubSkill.providers.posthog.description": "PostHog is an open-source product analytics platform for analyzing events, funnels, cohorts, feature flags, experiments, and user behavior.",
+  "tools.lobehubSkill.providers.posthog.readme": "Connect to PostHog to query product analytics, inspect dashboards, review feature flags and experiments, and understand user behavior through natural conversation with your AI assistant.",
   "tools.lobehubSkill.providers.twitter.description": "X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.",
   "tools.lobehubSkill.providers.twitter.readme": "Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.",
   "tools.lobehubSkill.providers.vercel.description": "Vercel is a cloud platform for frontend developers, providing hosting and serverless functions to deploy web applications with ease.",
