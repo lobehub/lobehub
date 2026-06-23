@@ -140,6 +140,15 @@ export class SessionActionImpl {
     await this.#get().internal_updateSession(id, { pinned });
   };
 
+  /**
+   * @deprecated Legacy session-store delete path, kept only for the mobile
+   * session list (`(mobile)/.../SessionListContent/List/Item/Actions.tsx`).
+   * Desktop already deletes via `HomeStore.removeAgent`. New call sites must use
+   * `HomeStore.removeAgent` (agents) / `HomeStore.removeAgentGroup` (groups) —
+   * all three evict the message cache, so behaviour is equivalent apart from this
+   * path also switching to the inbox when the active session is removed. Remove
+   * once the mobile session list migrates to the agent store.
+   */
   removeSession = async (sessionId: string): Promise<void> => {
     await sessionService.removeSession(sessionId);
     await this.#get().refreshSessions();
