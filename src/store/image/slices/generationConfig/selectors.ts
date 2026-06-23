@@ -5,6 +5,7 @@ import { type GenerationConfigState } from './initialState';
 export const model = (s: GenerationConfigState) => s.model;
 export const provider = (s: GenerationConfigState) => s.provider;
 export const imageNum = (s: GenerationConfigState) => s.imageNum;
+const uploadingImagePreviews = (s: GenerationConfigState) => s.uploadingImagePreviews;
 
 const parameters = (s: GenerationConfigState) => s.parameters;
 const parametersSchema = (s: GenerationConfigState) => s.parametersSchema;
@@ -22,4 +23,5 @@ export const imageGenerationConfigSelectors = {
   isSupportedParam,
   parameters,
   parametersSchema,
+  uploadingImagePreviews,
 };

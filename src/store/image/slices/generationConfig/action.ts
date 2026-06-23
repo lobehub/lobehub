@@ -324,6 +324,24 @@ export class GenerationConfigActionImpl {
     this.#set(() => ({ imageNum }), false, `setImageNum/${imageNum}`);
   };
 
+  addUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({ uploadingImagePreviews: [...state.uploadingImagePreviews, ...urls] }),
+      false,
+      'addUploadingImagePreviews',
+    );
+  };
+
+  removeUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({
+        uploadingImagePreviews: state.uploadingImagePreviews.filter((url) => !urls.includes(url)),
+      }),
+      false,
+      'removeUploadingImagePreviews',
+    );
+  };
+
   reuseSettings = (
     model: string,
     provider: string,
