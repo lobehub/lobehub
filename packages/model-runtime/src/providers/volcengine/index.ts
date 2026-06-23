@@ -7,7 +7,12 @@ import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';
 
-const resolveVolcengineReasoningParams = (model: string, thinking: any, reasoning_effort: any) => {
+const resolveVolcengineReasoningParams = (
+  model: string,
+  thinking: any,
+  reasoning_effort: any,
+  isResponses = false,
+) => {
   let targetThinking = thinking;
   let targetReasoningEffort = reasoning_effort;
 
@@ -17,7 +22,11 @@ const resolveVolcengineReasoningParams = (model: string, thinking: any, reasonin
       targetReasoningEffort = 'minimal';
     } else if (thinking?.type === 'enabled' || reasoning_effort) {
       targetThinking = { type: 'enabled' };
-      targetReasoningEffort = reasoning_effort || 'high';
+      let effort = reasoning_effort || 'high';
+      if (isResponses && effort === 'max') {
+        effort = 'high';
+      }
+      targetReasoningEffort = effort;
     }
   }
 
@@ -32,7 +41,12 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
       const { enabledSearch, thinking, reasoning_effort, ...rest } = payload;
-      const params = resolveVolcengineReasoningParams(payload.model, thinking, reasoning_effort);
+      const params = resolveVolcengineReasoningParams(
+        payload.model,
+        thinking,
+        reasoning_effort,
+        enabledSearch,
+      );
 
       if (enabledSearch) {
         return {
@@ -62,7 +76,12 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   responses: {
     handlePayload: (payload) => {
       const { enabledSearch, tools, thinking, reasoning_effort, ...rest } = payload;
-      const params = resolveVolcengineReasoningParams(payload.model, thinking, reasoning_effort);
+      const params = resolveVolcengineReasoningParams(
+        payload.model,
+        thinking,
+        reasoning_effort,
+        true,
+      );
 
       const volcengineTools = enabledSearch
         ? [

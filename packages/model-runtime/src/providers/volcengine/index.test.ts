@@ -100,5 +100,26 @@ describe('LobeVolcengineAI - custom features', () => {
       expect(calledPayload.thinking).toEqual({ type: 'enabled' });
       expect(calledPayload.reasoning_effort).toBe('max');
     });
+
+    it('should fallback reasoning_effort max to high for deepseek-v4 under responses path (enabledSearch: true)', async () => {
+      // Mock the Responses API client call
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        reasoning_effort: 'max',
+        enabledSearch: true,
+        thinking: {
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].responses.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning.effort).toBe('high');
+    });
   });
 });
