@@ -258,11 +258,13 @@ describe('execAgent', () => {
     });
 
     // Regression: LOBE-10604 / LOBE-10627 — a group conversation that reaches
-    // execAgent without a pre-created topicId must still persist groupId on the
-    // new topic. Otherwise the topic is created group-less, only surfaces under
-    // the member agent's list, and never appears in the group sidebar (which
-    // queries `topics.groupId`), so the conversation "disappears" from the group.
-    it('should persist groupId on the created topic when running in a group context', async () => {
+    // execAgent without a pre-created topicId must persist groupId on BOTH the
+    // new topic AND the user/assistant messages. Otherwise:
+    //   - the topic is group-less and never appears in the group sidebar
+    //     (which queries `topics.groupId`), and
+    //   - the messages are group-less, so reopening the topic returns an empty
+    //     conversation (the group read filters on `messages.groupId`).
+    it('should persist groupId on the topic and messages when running in a group context', async () => {
       mockResponsesCreate.mockResolvedValue(
         createMockResponsesAPIStream('Hello from group context') as any,
       );
@@ -274,9 +276,14 @@ describe('execAgent', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
+      // autoStart:false — we only assert topic/message *creation* carries
+      // groupId; no need to run the full agent loop (keeps the test fast and
+      // deterministic). The user message + assistant placeholder are still
+      // created before the run gate.
       const result = await caller.execAgent({
         agentId: testAgentId,
         appContext: { groupId: group.id },
+        autoStart: false,
         prompt: 'Hello, group via execAgent',
       });
 
@@ -289,6 +296,16 @@ describe('execAgent', () => {
 
       expect(createdTopics).toHaveLength(1);
       expect(createdTopics[0].groupId).toBe(group.id);
+
+      // The user + assistant turn must also carry groupId, or the group read
+      // path (messageModel.query filters messages.groupId) returns nothing.
+      const createdMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, createdTopics[0].id));
+
+      expect(createdMessages.length).toBeGreaterThanOrEqual(2);
+      expect(createdMessages.every((m) => m.groupId === group.id)).toBe(true);
     });
   });
 

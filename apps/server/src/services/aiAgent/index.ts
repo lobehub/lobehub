@@ -1258,6 +1258,10 @@ export class AiAgentService {
           agentId: persistAgentId,
           content: prompt,
           files: runAttachments.fileIds,
+          // Group reads filter on messages.groupId (MessageModel.query group
+          // branch), so a group turn must stamp groupId or the message never
+          // shows when the topic is reopened. (LOBE-10604 / LOBE-10627)
+          groupId: appContext?.groupId,
           metadata: requestTriggerMetadata,
           role: 'user',
           threadId: appContext?.threadId ?? undefined,
@@ -1276,6 +1280,9 @@ export class AiAgentService {
     const assistantMessageRecord = await this.messageModel.create({
       agentId: persistAgentId,
       content: LOADING_FLAT,
+      // Stamp groupId so the assistant turn is visible in the group read path
+      // (MessageModel.query filters group chats by messages.groupId).
+      groupId: appContext?.groupId,
       model: isHeteroAgent ? undefined : model,
       parentId: parentMessageId ?? userMessageRecord?.id,
       provider: isHeteroAgent ? heteroType : provider,
