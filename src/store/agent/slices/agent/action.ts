@@ -1,6 +1,10 @@
 import { isDesktop } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
-import { isChatGroupSessionId, pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import {
+  isChatGroupSessionId,
+  type LobeAgentAgencyConfig,
+  pruneWorkingDirByDeviceDeletes,
+} from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
@@ -39,6 +43,28 @@ type AgentMetaUpdate = Partial<
     'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
   >
 >;
+type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
+
+const preserveWorkingDirDeleteMarkers = (
+  merged: LobeAgentAgencyConfig,
+  patch: AgencyConfigPatch,
+): void => {
+  const incoming = patch.workingDirByDevice;
+  if (!incoming) return;
+
+  const deletions = Object.keys(incoming).filter((key) => incoming[key] === undefined);
+  if (deletions.length === 0) return;
+
+  const workingDirByDevice = {
+    ...merged.workingDirByDevice,
+  } as Record<string, string | undefined>;
+
+  for (const key of deletions) {
+    workingDirByDevice[key] = undefined;
+  }
+
+  merged.workingDirByDevice = workingDirByDevice as Record<string, string>;
+};
 
 /**
  * Agent Slice Actions
@@ -456,20 +482,40 @@ export class AgentSliceActionImpl {
     this.#set({ agentMap }, false, 'dispatchAgentMap');
   };
 
+  #mergeLatestAgencyConfigPatch = (
+    id: string,
+    data: PartialDeep<LobeAgentConfig>,
+  ): PartialDeep<LobeAgentConfig> => {
+    const agencyConfigPatch = data.agencyConfig;
+    if (!agencyConfigPatch) return data;
+
+    const currentAgencyConfig = this.#get().agentMap[id]?.agencyConfig;
+    const agencyConfig = merge(
+      currentAgencyConfig ?? {},
+      agencyConfigPatch,
+    ) as LobeAgentAgencyConfig;
+
+    pruneWorkingDirByDeviceDeletes(agencyConfig, agencyConfigPatch);
+    preserveWorkingDirDeleteMarkers(agencyConfig, agencyConfigPatch);
+
+    return { ...data, agencyConfig };
+  };
+
   optimisticUpdateAgentConfig = async (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
 
     // 1. Optimistic update (instant UI feedback)
-    internal_dispatchAgentMap(id, data);
+    internal_dispatchAgentMap(id, mergedData);
     updateSaveStatus('saving');
 
     try {
       // 2. API call returns updated agent data
-      const result = await agentService.updateAgentConfig(id, data, signal);
+      const result = await agentService.updateAgentConfig(id, mergedData, signal);
 
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
