@@ -237,9 +237,11 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // (messages, topics, …): once written, a row rarely changes. We never drop
       // these by age — a stale row hydrates for an instant first paint and SWR's
       // revalidate-on-mount refreshes it in the background (stale-while-revalidate).
-      // Only a version mismatch invalidates a row. TTL governs the localStorage
+      // Version is the only invalidator: a row must carry the *current* version,
+      // so legacy/unversioned rows (which the age check used to bound) are dropped
+      // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
-      const valid = entries.filter((e) => e.version === undefined || e.version === version);
+      const valid = entries.filter((e) => e.version === version);
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));

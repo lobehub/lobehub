@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskTemplateKeys } from './keys';
-import { localDataCache } from './localDataCache';
+import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
   clearSWRCache,
@@ -244,6 +244,18 @@ describe('createCacheProvider — tiering', () => {
     // give async hydration a chance, then assert it never lands
     await new Promise((r) => setTimeout(r, 40));
     expect(map.has('MSGS:stale')).toBe(false);
+  });
+
+  it('drops legacy idb rows that carry no cache version', async () => {
+    // seed a row directly with no version (pre-versioning / non-conforming writer)
+    await localDataCache.set(buildLocalDataKey('s1', 'MSGS:legacy'), { ok: false });
+
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { version: '1.0.0' });
+    const map = provider();
+
+    await new Promise((r) => setTimeout(r, 40));
+    expect(map.has('MSGS:legacy')).toBe(false);
   });
 
   it('handles localStorage QuotaExceededError without throwing', async () => {
