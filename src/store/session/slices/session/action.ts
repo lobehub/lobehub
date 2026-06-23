@@ -12,6 +12,7 @@ import { sessionKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -142,6 +143,9 @@ export class SessionActionImpl {
   removeSession = async (sessionId: string): Promise<void> => {
     await sessionService.removeSession(sessionId);
     await this.#get().refreshSessions();
+    // deleting an agent cascade-deletes its topics + messages on the server; drop
+    // their message cache too so it doesn't orphan in IndexedDB (never expires)
+    void evictMessageCache((ctx) => ctx.agentId === sessionId);
 
     // If the active session deleted, switch to the inbox session
     if (sessionId === this.#get().activeId) {
