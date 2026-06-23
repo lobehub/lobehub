@@ -79,7 +79,7 @@ export const useBuilderSuggestions = ({
 
       const suggestions = (envelope?.data?.suggestions ?? [])
         .filter((s) => s?.title?.trim() && s?.prompt?.trim())
-        .slice(0, 4);
+        .slice(0, 3);
 
       return { suggestions, tracingId: envelope?.tracingId };
     },

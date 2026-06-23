@@ -40,7 +40,7 @@ export interface BuilderSuggestionSchema {
           required: ['title', 'prompt'];
           type: 'object';
         };
-        maxItems: 4;
+        maxItems: 3;
         type: 'array';
       };
     };
@@ -77,7 +77,7 @@ const BUILDER_SUGGESTION_SCHEMA: BuilderSuggestionSchema = {
           required: ['title', 'prompt'],
           type: 'object',
         },
-        maxItems: 4,
+        maxItems: 3,
         type: 'array',
       },
     },
@@ -92,7 +92,7 @@ const AGENT_SYSTEM_PROMPT = `You generate the opening suggestion chips for an "A
 Output a JSON object conforming to the supplied schema.
 
 Guidelines:
-- Return 3-4 suggestions. Every one must be a concrete configuration action for THIS specific agent — never generic small-talk, end-user chat topics, or "ask the agent to do X" tasks.
+- Return exactly 3 suggestions. Every one must be a concrete configuration action for THIS specific agent — never generic small-talk, end-user chat topics, or "ask the agent to do X" tasks.
 - Prioritise GAPS in the current configuration described below: e.g. no system role -> suggest defining its role; no tools/plugins -> suggest enabling relevant ones; no opening message/questions -> suggest writing them; too generic -> suggest narrowing its specialty.
 - "title" is the short chip label (1-40 chars, no trailing punctuation).
 - "prompt" is the full message sent to the builder on click (1-200 chars), phrased in the user's voice as a request, e.g. "Help me refine this agent's role so it's more specific".
@@ -104,7 +104,7 @@ const GROUP_SYSTEM_PROMPT = `You generate the opening suggestion chips for a "Gr
 Output a JSON object conforming to the supplied schema.
 
 Guidelines:
-- Return 3-4 suggestions. Every one must be a concrete configuration action for THIS specific group — never generic small-talk or end-user chat topics.
+- Return exactly 3 suggestions. Every one must be a concrete configuration action for THIS specific group — never generic small-talk or end-user chat topics.
 - Prioritise GAPS in the current setup described below: e.g. missing a needed role -> suggest adding that member; overlapping members -> suggest consolidating; unclear workflow -> suggest optimising collaboration; no group goal/prompt -> suggest defining it; no reviewer -> suggest adding one.
 - "title" is the short chip label (1-40 chars, no trailing punctuation).
 - "prompt" is the full message sent to the builder on click (1-200 chars), phrased in the user's voice as a request, e.g. "Add a member responsible for reviewing the group's output".
@@ -141,7 +141,7 @@ export const chainBuilderSuggestion = ({
   const localeLine = locale
     ? `\nThe user's language is "${locale}" — write the chips in that language.`
     : '';
-  const userContent = `Here is the current configuration of the ${target} being built:\n<config>\n${contextSummary}\n</config>${localeLine}\n\nPropose 3-4 build/configure suggestion chips that best help the user improve this ${target} from here.`;
+  const userContent = `Here is the current configuration of the ${target} being built:\n<config>\n${contextSummary}\n</config>${localeLine}\n\nPropose exactly 3 build/configure suggestion chips that best help the user improve this ${target} from here.`;
 
   return {
     messages: [

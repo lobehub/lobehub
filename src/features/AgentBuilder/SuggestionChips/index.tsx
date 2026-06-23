@@ -1,13 +1,12 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Skeleton as LobeSkeleton, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SuggestQuestions, { type SuggestMode } from '@/features/SuggestQuestions';
-import Skeleton from '@/features/SuggestQuestions/Skeleton';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -58,6 +57,36 @@ const ChipItem = memo<ChipItemProps>(({ title, prompt, index, tracingId, disable
   );
 });
 
+/**
+ * Lightweight loading placeholder that keeps the exact chip-card chrome (same
+ * Block, border, radius, padding) and only swaps the title/description text for
+ * skeleton lines — minimising layout shift (CLS) when real chips arrive.
+ */
+const ChipSkeleton = memo(() => (
+  <Block style={{ borderRadius: cssVar.borderRadiusLG }} variant={'outlined'}>
+    <Flexbox gap={8} paddingBlock={12} paddingInline={14}>
+      <LobeSkeleton.Button
+        active
+        size={'small'}
+        style={{ borderRadius: 4, height: 14, minWidth: 96, width: 96 }}
+      />
+      <Flexbox gap={6}>
+        <LobeSkeleton.Button
+          active
+          block
+          size={'small'}
+          style={{ borderRadius: 4, height: 10, minWidth: '100%' }}
+        />
+        <LobeSkeleton.Button
+          active
+          size={'small'}
+          style={{ borderRadius: 4, height: 10, minWidth: '60%', width: '60%' }}
+        />
+      </Flexbox>
+    </Flexbox>
+  </Block>
+));
+
 interface SuggestionChipsProps {
   /** Builtin builder agent id (drives the model + tracing `agentId`). */
   builderAgentId: string;
@@ -93,8 +122,17 @@ const SuggestionChips = memo<SuggestionChipsProps>(
       provider: provider ?? '',
     });
 
-    // First load with nothing to show yet — skeleton (matches static layout).
-    if (isLoading && suggestions.length === 0) return <Skeleton count={count} />;
+    // First load with nothing to show yet — card-shaped skeleton that keeps the
+    // chip chrome and only loads the text, so there's near-zero layout shift.
+    if (isLoading && suggestions.length === 0) {
+      return (
+        <Flexbox gap={8}>
+          {Array.from({ length: count }).map((_, index) => (
+            <ChipSkeleton key={index} />
+          ))}
+        </Flexbox>
+      );
+    }
 
     // Dynamic, context-aware chips.
     if (suggestions.length > 0) {

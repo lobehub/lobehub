@@ -238,6 +238,23 @@ project loader:
 When in doubt, reach for `NeuralNetworkLoading` — it's the default in-flight
 indicator (e.g. modal "in progress" states).
 
+**Minimise layout shift (CLS): swap text for skeleton in place, keep the chrome.**
+The strongest loading state changes as little of the final layout as possible, so
+nothing jumps when the real content lands. When a surface already knows its shape
+(a card, a row, a list item), **keep the layout elements — the container, border,
+radius, padding, icon — and replace only the text/data with a skeleton sized like
+the text it stands in for.** A generic full-block / full-card skeleton (or a
+centred spinner that the real content later pushes aside) is heavier and shifts
+the layout; an in-place text→skeleton swap is the optimal design.
+
+- [ ] **Reuse the loaded component's chrome for the skeleton.** Render the same
+      card/row wrapper and only skeletonise the text slots, so loading→loaded is a
+      content swap, not a relayout. _(Certainty・Natural)_
+- [ ] **Size skeleton lines like the text they replace** (line height, count,
+      rough width) so the placeholder height ≈ the real height. _(Certainty)_
+- [ ] **Don't downgrade a known-shape surface to a bare block/spinner** — that
+      throws away the layout you already have and reintroduces the shift. _(Natural)_
+
 ### 4.2 Capability-gated features・Certainty・Meaningful
 
 A feature can be fully built and still produce a broken result when the selected
