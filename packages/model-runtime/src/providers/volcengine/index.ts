@@ -41,22 +41,21 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
       const { enabledSearch, thinking, reasoning_effort, ...rest } = payload;
-      const params = resolveVolcengineReasoningParams(
-        payload.model,
-        thinking,
-        reasoning_effort,
-        enabledSearch,
-      );
 
       if (enabledSearch) {
         return {
           ...rest,
           apiMode: 'responses',
           enabledSearch,
-          thinking: params.thinking,
-          reasoning_effort: params.reasoning_effort,
         } as ChatStreamPayload;
       }
+
+      const params = resolveVolcengineReasoningParams(
+        payload.model,
+        thinking,
+        reasoning_effort,
+        false,
+      );
 
       return {
         ...rest,
