@@ -54,10 +54,15 @@ export const useVideoReferenceUpload = () => {
   const removeUploadingImagePreviews = useVideoStore((s) => s.removeUploadingImagePreviews);
 
   const slots = useMemo<ReferenceUploadSlot[]>(() => {
+    const readParams = () => videoGenerationConfigSelectors.parameters(useVideoStore.getState());
     const list: ReferenceUploadSlot[] = [];
     if (isSupportImageUrl) {
       list.push({
         capacity: 1,
+        getCurrentValues: () => {
+          const v = readParams()?.imageUrl;
+          return v ? [v] : [];
+        },
         set: (urls) => setImageUrl((urls[0] ?? null) as any),
         values: imageUrl ? [imageUrl] : [],
       });
@@ -65,6 +70,10 @@ export const useVideoReferenceUpload = () => {
     if (isSupportImageUrls) {
       list.push({
         capacity: imageUrlsMaxCount ?? 4,
+        getCurrentValues: () => {
+          const v = readParams()?.imageUrls;
+          return Array.isArray(v) ? v : [];
+        },
         set: (urls) => setImageUrls(urls as any),
         values: imageUrls ?? [],
       });
@@ -72,6 +81,10 @@ export const useVideoReferenceUpload = () => {
     if (isSupportEndImageUrl) {
       list.push({
         capacity: 1,
+        getCurrentValues: () => {
+          const v = readParams()?.endImageUrl;
+          return v ? [v] : [];
+        },
         set: (urls) => setEndImageUrl((urls[0] ?? null) as any),
         values: endImageUrl ? [endImageUrl] : [],
       });

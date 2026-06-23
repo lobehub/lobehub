@@ -14,9 +14,15 @@ import type { UploadData } from './UploadCard';
 export interface ReferenceUploadSlot {
   /** Maximum number of image URLs this slot can hold. */
   capacity: number;
+  /**
+   * Read this slot's URLs fresh from the store. Used at landing time so a batch
+   * that finishes after a concurrent one merges against the latest content
+   * instead of overwriting it with a stale render-time snapshot.
+   */
+  getCurrentValues: () => string[];
   /** Replace this slot's full content with the given URLs (already capped to capacity). */
   set: (urls: string[]) => void;
-  /** URLs currently landed in this slot. */
+  /** URLs currently landed in this slot (render-time snapshot for previews/capacity). */
   values: string[];
 }
 
@@ -88,6 +94,13 @@ export const useReferenceImageUpload = ({
       const imageFiles = files.filter((file) => file.type.startsWith('image/'));
       if (imageFiles.length === 0) return;
 
+      // Drop files over the model's size limit before consuming capacity, so an
+      // oversized file doesn't steal a slot from a valid one later in the drop.
+      const uploadableFiles = maxFileSize
+        ? imageFiles.filter((file) => file.size <= maxFileSize)
+        : imageFiles;
+      if (uploadableFiles.length === 0) return;
+
       // Account for both landed images and any in-flight uploads.
       const remaining = maxCount - imagePreviewUrls.length - uploadingPreviews.length;
       if (remaining <= 0) {
@@ -96,8 +109,8 @@ export const useReferenceImageUpload = ({
       }
 
       // Only take as many as there is still room for, and warn when truncating.
-      const accepted = imageFiles.slice(0, remaining);
-      if (imageFiles.length > remaining) {
+      const accepted = uploadableFiles.slice(0, remaining);
+      if (uploadableFiles.length > remaining) {
         onLimitExceeded?.(maxCount);
       }
 
@@ -106,10 +119,10 @@ export const useReferenceImageUpload = ({
       addUploadingPreviews(previews);
 
       try {
-        const results = await Promise.all(
+        // `allSettled` isolates per-file failures: a single rejected upload no
+        // longer discards the whole batch, so the images that did land stay.
+        const settled = await Promise.allSettled(
           accepted.map(async (file): Promise<UploadData | null> => {
-            if (maxFileSize && file.size > maxFileSize) return null;
-
             const result = await uploadWithProgress({
               file,
               onStatusUpdate: () => {},
@@ -121,6 +134,9 @@ export const useReferenceImageUpload = ({
               ? { dimensions: result.dimensions, url: result.url }
               : result.url;
           }),
+        );
+        const results = settled.map((outcome) =>
+          outcome.status === 'fulfilled' ? outcome.value : null,
         );
 
         // Collect successful URLs and the first available dimensions.
@@ -136,16 +152,19 @@ export const useReferenceImageUpload = ({
 
         if (firstDimensions) onFirstDimensions?.(firstDimensions);
 
-        // Distribute uploaded URLs across slots by priority, appending to existing
-        // content. Each slot is set once to avoid a stale-closure race.
+        // Distribute uploaded URLs across slots by priority, appending to the
+        // slot's *current* store content (read fresh, not the render-time
+        // snapshot) so a concurrent batch that already landed isn't overwritten.
+        // The loop is synchronous, so each batch's landing is atomic.
         let pool = uploadedUrls;
         for (const slot of slots) {
           if (pool.length === 0) break;
-          const room = slot.capacity - slot.values.length;
+          const current = slot.getCurrentValues();
+          const room = slot.capacity - current.length;
           if (room <= 0) continue;
           const take = pool.slice(0, room);
           pool = pool.slice(room);
-          slot.set([...slot.values, ...take]);
+          slot.set([...current, ...take]);
         }
       } finally {
         // Drop this batch's placeholders, then release the object URLs.

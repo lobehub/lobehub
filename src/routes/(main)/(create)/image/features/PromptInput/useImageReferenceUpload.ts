@@ -51,10 +51,15 @@ export const useImageReferenceUpload = () => {
   const removeUploadingImagePreviews = useImageStore((s) => s.removeUploadingImagePreviews);
 
   const slots = useMemo<ReferenceUploadSlot[]>(() => {
+    const readParams = () => imageGenerationConfigSelectors.parameters(useImageStore.getState());
     const list: ReferenceUploadSlot[] = [];
     if (isSupportImageUrl) {
       list.push({
         capacity: 1,
+        getCurrentValues: () => {
+          const v = readParams()?.imageUrl;
+          return v ? [v] : [];
+        },
         set: (urls) => setImageUrl((urls[0] ?? null) as any),
         values: imageUrl ? [imageUrl] : [],
       });
@@ -62,6 +67,10 @@ export const useImageReferenceUpload = () => {
     if (isSupportImageUrls) {
       list.push({
         capacity: imageUrlsMaxCount ?? 4,
+        getCurrentValues: () => {
+          const v = readParams()?.imageUrls;
+          return Array.isArray(v) ? v : [];
+        },
         set: (urls) => setImageUrls(urls as any),
         values: imageUrls ?? [],
       });
