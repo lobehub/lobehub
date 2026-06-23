@@ -1,6 +1,7 @@
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,10 +15,11 @@ import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
   connectorId: string;
+  lifecycleActions?: ReactNode;
   onDelete?: () => void;
 }
 
-const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) => {
+const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, lifecycleActions, onDelete }) => {
   const { t } = useTranslation('tool');
   const [customModalOpen, setCustomModalOpen] = useState(false);
 
@@ -125,41 +127,47 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
               {t('connector.edit', 'Edit')}
             </Button>
           )}
-          {/* Disconnect / Delete for custom MCP connectors */}
-          {isMcpConnector && (
+          {lifecycleActions !== undefined ? (
+            lifecycleActions
+          ) : (
             <>
-              <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
-                {t('connector.disconnect', 'Disconnect')}
-              </Button>
-              <Button
-                danger
-                icon={<Trash2 size={14} />}
-                size="small"
-                onClick={() => {
-                  confirmModal({
-                    okButtonProps: { danger: true },
-                    onOk: async () => {
-                      await deleteConnector(connectorId);
-                      onDelete?.();
-                    },
-                    title: t('connector.deleteConfirm', 'Delete this connector?'),
-                  });
-                }}
-              >
-                {t('connector.delete', 'Delete')}
-              </Button>
+              {/* Disconnect / Delete for custom MCP connectors */}
+              {isMcpConnector && (
+                <>
+                  <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
+                    {t('connector.disconnect', 'Disconnect')}
+                  </Button>
+                  <Button
+                    danger
+                    icon={<Trash2 size={14} />}
+                    size="small"
+                    onClick={() => {
+                      confirmModal({
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          await deleteConnector(connectorId);
+                          onDelete?.();
+                        },
+                        title: t('connector.deleteConfirm', 'Delete this connector?'),
+                      });
+                    }}
+                  >
+                    {t('connector.delete', 'Delete')}
+                  </Button>
+                </>
+              )}
+              {/* Uninstall for builtin and marketplace tools */}
+              {(isBuiltin || isMarketplace) && (
+                <Button
+                  danger
+                  icon={<Trash2 size={14} />}
+                  size="small"
+                  onClick={handleUninstall}
+                >
+                  {t('connector.uninstall', 'Uninstall')}
+                </Button>
+              )}
             </>
-          )}
-          {/* Uninstall for builtin and marketplace tools */}
-          {(isBuiltin || isMarketplace) && (
-            <Button
-              danger
-              icon={<Trash2 size={14} />}
-              size="small"
-              onClick={handleUninstall}
-            >
-              {t('connector.uninstall', 'Uninstall')}
-            </Button>
           )}
         </div>
       </div>
