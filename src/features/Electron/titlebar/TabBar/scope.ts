@@ -51,6 +51,11 @@ export const resolveTabScope = (url: string): TabScope => {
   return { slug: firstSegment, type: 'workspace' };
 };
 
+export const tabScopeKey = (scope: TabScope): string =>
+  scope.type === 'personal' ? 'personal' : `workspace:${encodeURIComponent(scope.slug)}`;
+
+export const resolveTabScopeKey = (url: string): string => tabScopeKey(resolveTabScope(url));
+
 export const normalizeTabScope = (scope: unknown, url: string): TabScope => {
   if (!scope || typeof scope !== 'object') return resolveTabScope(url);
 
@@ -73,12 +78,7 @@ export const isSameTabScope = (a: TabScope, b: TabScope): boolean => {
   return a.type === 'personal' || a.slug === (b as Extract<TabScope, { type: 'workspace' }>).slug;
 };
 
-export const isSameTabTarget = (
-  target: ScopedTabTarget,
-  url: string,
-  scope: TabScope = resolveTabScope(url),
-): boolean =>
-  normalizeTabUrl(target.url) === normalizeTabUrl(url) &&
-  isSameTabScope(normalizeTabScope(target.scope, target.url), scope);
+export const isSameTabTarget = (target: ScopedTabTarget, url: string): boolean =>
+  normalizeTabUrl(target.url) === normalizeTabUrl(url);
 
 export const tabTargetId = (url: string): string => normalizeTabUrl(url);

@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveTabScope } from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
@@ -25,7 +24,6 @@ const buildTab = (url: string, cached?: TabItem['cached']): TabItem => ({
   cached,
   id: url,
   lastVisited: 1,
-  scope: resolveTabScope(url),
   url,
 });
 
@@ -50,19 +48,28 @@ describe('tabPages actions', () => {
 
       expect(result.current.tabs).toHaveLength(1);
       expect(result.current.tabs[0].id).toBe(createdId);
-      expect(result.current.tabs[0].scope).toEqual({ type: 'personal' });
       expect(result.current.tabs[0].url).toBe('/agent/abc?b=2&a=1');
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
       expect(result.current.activeTabId).toBe(createdId);
     });
 
-    it('records workspace scope on workspace tabs', () => {
+    it('switches the visible tab bucket when the URL moves into a workspace', () => {
       const { result } = renderHook(() => useElectronStore());
 
       act(() => {
+        result.current.addTab('/agent/abc');
         result.current.addTab('/acme/agent/abc');
       });
 
-      expect(result.current.tabs[0].scope).toEqual({ slug: 'acme', type: 'workspace' });
+      expect(result.current.activeTabScope).toEqual({ slug: 'acme', type: 'workspace' });
+      expect(result.current.tabs.map((page) => page.url)).toEqual(['/acme/agent/abc']);
+
+      act(() => {
+        result.current.loadTabs('/agent/abc');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs.map((page) => page.url)).toEqual(['/agent/abc']);
     });
 
     it('dedupes tabs that resolve to the same normalized URL', () => {
@@ -122,12 +129,11 @@ describe('tabPages actions', () => {
       const updatedTab = result.current.tabs[0];
       expect(updatedTab.id).toBe(agentTab.id);
       expect(updatedTab.url).toBe('/');
-      expect(updatedTab.scope).toEqual({ type: 'personal' });
       expect(updatedTab.cached).toBeUndefined();
       expect(result.current.activeTabId).toBe(agentTab.id);
     });
 
-    it('updates the stored scope when the tab moves into a workspace URL', () => {
+    it('keeps a tab in the current bucket when updateTab receives a workspace URL directly', () => {
       const { result } = renderHook(() => useElectronStore());
       const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
 
@@ -139,7 +145,8 @@ describe('tabPages actions', () => {
         result.current.updateTab(agentTab.id, '/acme/agent/abc');
       });
 
-      expect(result.current.tabs[0].scope).toEqual({ slug: 'acme', type: 'workspace' });
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs[0].url).toBe('/acme/agent/abc');
       expect(result.current.tabs[0].cached).toBeUndefined();
     });
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
-import { isSameTabTarget } from '@/features/Electron/titlebar/TabBar/scope';
+import { isSameTabTarget, resolveTabScopeKey } from '@/features/Electron/titlebar/TabBar/scope';
 import { useElectronStore } from '@/store/electron';
 
 import { resolveTabNavigationAction } from './tabNavigation';
@@ -20,18 +20,16 @@ export const useTabNavigation = () => {
   const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const prevLocationRef = useRef<string | null>(null);
-  const loadedRef = useRef(false);
-
-  useEffect(() => {
-    if (!loadedRef.current) {
-      loadTabs();
-      loadedRef.current = true;
-    }
-  }, [loadTabs]);
+  const loadedScopeKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const currentUrl = location.pathname + location.search;
+    const currentScopeKey = resolveTabScopeKey(currentUrl);
 
+    if (loadedScopeKeyRef.current !== currentScopeKey) {
+      loadTabs(currentUrl);
+      loadedScopeKeyRef.current = currentScopeKey;
+    }
     if (prevLocationRef.current === currentUrl) return;
     prevLocationRef.current = currentUrl;
 
@@ -52,7 +50,7 @@ export const useTabNavigation = () => {
         break;
       }
     }
-  }, [location.pathname, location.search, activateTab, addTab, updateTab]);
+  }, [location.pathname, location.search, activateTab, addTab, updateTab, loadTabs]);
 
   useEffect(() => {
     if (!currentRouteMeta || !currentRouteMetaUrl) return;

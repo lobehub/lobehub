@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { type RouteMeta } from '@/spa/router/routeMeta';
 
 import { resolveTab } from './hooks/useResolvedTabs';
-import { resolveTabScope } from './scope';
 import { type TabItem } from './types';
 
 const agentMeta: RouteMeta = { icon: MessageSquare, titleKey: 'navigation.chat' };
@@ -23,7 +22,6 @@ const tab = (url: string, cached?: TabItem['cached']): TabItem => ({
   cached,
   id: url,
   lastVisited: 1,
-  scope: resolveTabScope(url),
   url,
 });
 

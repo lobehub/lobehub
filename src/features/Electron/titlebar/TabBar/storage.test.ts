@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveTabScope } from './scope';
 import {
   getTabPages,
   saveTabPages,
-  TAB_PAGES_STORAGE_KEY,
   TAB_PAGES_STORAGE_KEY_V1,
+  TAB_PAGES_STORAGE_KEY_V2,
+  tabPagesStorageKey,
 } from './storage';
+
+const personalScope = { type: 'personal' } as const;
+const acmeScope = { slug: 'acme', type: 'workspace' } as const;
 
 describe('TabBar storage', () => {
   beforeEach(() => {
@@ -17,130 +20,60 @@ describe('TabBar storage', () => {
     window.localStorage.clear();
   });
 
-  it('returns empty when nothing is stored', () => {
-    expect(getTabPages()).toEqual({ activeTabId: null, tabs: [] });
+  it('returns empty scoped data when nothing is stored', () => {
+    expect(getTabPages(personalScope)).toEqual({ activeTabId: null, tabs: [] });
+    expect(getTabPages(acmeScope)).toEqual({ activeTabId: null, tabs: [] });
   });
 
-  it('round-trips v2 tab items', () => {
+  it('round-trips personal and workspace tab buckets independently', () => {
     saveTabPages(
-      [
-        {
-          id: '/agent/abc',
-          lastVisited: 1,
-          scope: resolveTabScope('/agent/abc'),
-          url: '/agent/abc',
-        },
-      ],
-      '/agent/abc',
+      personalScope,
+      [{ id: 'personal-tab', lastVisited: 1, url: '/agent/abc' }],
+      'personal-tab',
     );
-    const loaded = getTabPages();
-    expect(loaded.tabs).toHaveLength(1);
-    expect(loaded.tabs[0].url).toBe('/agent/abc');
-    expect(loaded.tabs[0].scope).toEqual({ type: 'personal' });
-    expect(loaded.activeTabId).toBe('/agent/abc');
+    saveTabPages(
+      acmeScope,
+      [{ id: 'workspace-tab', lastVisited: 2, url: '/acme/agent/abc' }],
+      'workspace-tab',
+    );
+
+    expect(getTabPages(personalScope)).toEqual({
+      activeTabId: 'personal-tab',
+      tabs: [{ id: 'personal-tab', lastVisited: 1, url: '/agent/abc' }],
+    });
+    expect(getTabPages(acmeScope)).toEqual({
+      activeTabId: 'workspace-tab',
+      tabs: [{ id: 'workspace-tab', lastVisited: 2, url: '/acme/agent/abc' }],
+    });
   });
 
-  it('revives old v2 tab items without persisted scope', () => {
+  it('does not read legacy global tab storage keys', () => {
     window.localStorage.setItem(
-      TAB_PAGES_STORAGE_KEY,
+      TAB_PAGES_STORAGE_KEY_V1,
       JSON.stringify({
-        activeTabId: '/acme/agent/abc',
-        tabs: [{ id: '/acme/agent/abc', lastVisited: 1, url: '/acme/agent/abc' }],
+        activeTabId: 'agent:abc',
+        tabs: [{ id: 'agent:abc', lastVisited: 1, params: { agentId: 'abc' }, type: 'agent' }],
+      }),
+    );
+    window.localStorage.setItem(
+      TAB_PAGES_STORAGE_KEY_V2,
+      JSON.stringify({
+        activeTabId: '/agent/abc',
+        tabs: [{ id: '/agent/abc', lastVisited: 1, url: '/agent/abc' }],
       }),
     );
 
-    const loaded = getTabPages();
-    expect(loaded.tabs[0].scope).toEqual({ slug: 'acme', type: 'workspace' });
+    expect(getTabPages(personalScope)).toEqual({ activeTabId: null, tabs: [] });
   });
 
-  describe('v1 -> v2 migration', () => {
-    it('reconstructs urls from old type + params', () => {
-      window.localStorage.setItem(
-        TAB_PAGES_STORAGE_KEY_V1,
-        JSON.stringify({
-          activeTabId: 'agent:abc',
-          tabs: [
-            {
-              cached: { avatar: 'a.png', title: 'Claude' },
-              id: 'agent:abc',
-              lastVisited: 10,
-              params: { agentId: 'abc' },
-              type: 'agent',
-            },
-            {
-              id: 'agent-topic:abc:tpc_1',
-              lastVisited: 20,
-              params: { agentId: 'abc', topicId: 'tpc_1' },
-              type: 'agent-topic',
-            },
-            {
-              id: 'home',
-              lastVisited: 5,
-              params: {},
-              type: 'home',
-            },
-          ],
-        }),
-      );
+  it('stores workspace buckets under their own key', () => {
+    saveTabPages(
+      acmeScope,
+      [{ id: 'workspace-tab', lastVisited: 1, url: '/acme' }],
+      'workspace-tab',
+    );
 
-      const migrated = getTabPages();
-      expect(migrated.tabs.map((t) => t.url)).toEqual(['/agent/abc', '/agent/abc/tpc_1', '/']);
-      expect(migrated.tabs.map((t) => t.scope)).toEqual([
-        { type: 'personal' },
-        { type: 'personal' },
-        { type: 'personal' },
-      ]);
-      expect(migrated.activeTabId).toBe('/agent/abc');
-      expect(migrated.tabs[0].cached).toEqual({ avatar: 'a.png', title: 'Claude' });
-    });
-
-    it('drops tabs whose url cannot be reconstructed', () => {
-      window.localStorage.setItem(
-        TAB_PAGES_STORAGE_KEY_V1,
-        JSON.stringify({
-          activeTabId: null,
-          tabs: [
-            { id: 'agent:', lastVisited: 1, params: {}, type: 'agent' },
-            { id: 'mystery', lastVisited: 1, params: {}, type: 'unknown-type' },
-            { id: 'home', lastVisited: 1, params: {}, type: 'home' },
-          ],
-        }),
-      );
-
-      const migrated = getTabPages();
-      expect(migrated.tabs).toHaveLength(1);
-      expect(migrated.tabs[0].url).toBe('/');
-    });
-
-    it('removes the v1 key after migration', () => {
-      window.localStorage.setItem(
-        TAB_PAGES_STORAGE_KEY_V1,
-        JSON.stringify({ activeTabId: null, tabs: [] }),
-      );
-      getTabPages();
-      expect(window.localStorage.getItem(TAB_PAGES_STORAGE_KEY_V1)).toBeNull();
-    });
-
-    it('does not migrate when v2 data already exists', () => {
-      window.localStorage.setItem(
-        TAB_PAGES_STORAGE_KEY,
-        JSON.stringify({
-          activeTabId: '/page/p1',
-          tabs: [{ id: '/page/p1', lastVisited: 1, url: '/page/p1' }],
-        }),
-      );
-      window.localStorage.setItem(
-        TAB_PAGES_STORAGE_KEY_V1,
-        JSON.stringify({
-          activeTabId: 'agent:abc',
-          tabs: [{ id: 'agent:abc', lastVisited: 1, params: { agentId: 'abc' }, type: 'agent' }],
-        }),
-      );
-
-      const loaded = getTabPages();
-      expect(loaded.tabs).toHaveLength(1);
-      expect(loaded.tabs[0].url).toBe('/page/p1');
-      expect(loaded.tabs[0].scope).toEqual({ type: 'personal' });
-    });
+    expect(window.localStorage.getItem(tabPagesStorageKey(personalScope))).toBeNull();
+    expect(window.localStorage.getItem(tabPagesStorageKey(acmeScope))).toContain('workspace-tab');
   });
 });

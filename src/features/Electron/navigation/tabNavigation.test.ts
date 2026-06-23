@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveTabScope } from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 
 import { resolveTabNavigationAction } from './tabNavigation';
@@ -8,32 +7,21 @@ import { resolveTabNavigationAction } from './tabNavigation';
 const tab = (id: string, url: string): TabItem => ({
   id,
   lastVisited: 1,
-  scope: resolveTabScope(url),
   url,
 });
 
 describe('resolveTabNavigationAction', () => {
-  it('opens a new tab when navigation crosses from personal to workspace scope', () => {
+  it('adds a tab when the active bucket has no active tab', () => {
     expect(
       resolveTabNavigationAction({
-        activeTabId: 'personal',
-        currentUrl: '/acme/agent/workspace-agent',
-        tabs: [tab('personal', '/agent/personal-agent')],
-      }),
-    ).toEqual({ type: 'add', url: '/acme/agent/workspace-agent' });
-  });
-
-  it('opens a new tab when navigation crosses from workspace to personal scope', () => {
-    expect(
-      resolveTabNavigationAction({
-        activeTabId: 'workspace',
+        activeTabId: null,
         currentUrl: '/agent/personal-agent',
-        tabs: [tab('workspace', '/acme/agent/workspace-agent')],
+        tabs: [],
       }),
     ).toEqual({ type: 'add', url: '/agent/personal-agent' });
   });
 
-  it('updates the active tab for same-scope navigation', () => {
+  it('updates the active tab when the current bucket has no matching target', () => {
     expect(
       resolveTabNavigationAction({
         activeTabId: 'workspace',
@@ -43,7 +31,7 @@ describe('resolveTabNavigationAction', () => {
     ).toEqual({ id: 'workspace', type: 'update', url: '/acme/group/g1' });
   });
 
-  it('activates an existing tab with the same scoped target', () => {
+  it('activates an existing tab with the same target inside the active bucket', () => {
     expect(
       resolveTabNavigationAction({
         activeTabId: 'personal',

@@ -2,10 +2,11 @@ import { nanoid } from 'nanoid';
 
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
 import {
-  isSameTabScope,
   isSameTabTarget,
-  normalizeTabScope,
+  PERSONAL_TAB_SCOPE,
   resolveTabScope,
+  tabScopeKey,
+  type TabScope,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
@@ -20,6 +21,7 @@ const generateTabId = (): string => `tab_${nanoid(8)}`;
 // ======== Types ======== //
 
 export interface TabPagesState {
+  activeTabScope: TabScope;
   activeTabId: string | null;
   tabs: TabItem[];
 }
@@ -27,6 +29,7 @@ export interface TabPagesState {
 // ======== Initial State ======== //
 
 export const tabPagesInitialState: TabPagesState = {
+  activeTabScope: PERSONAL_TAB_SCOPE,
   activeTabId: null,
   tabs: [],
 };
@@ -56,9 +59,9 @@ export class TabPagesActionImpl {
   };
 
   addTab = (url: string, cached?: DynamicRouteMeta, activate = true): string => {
-    const scope = resolveTabScope(url);
+    this.#ensureScopeForUrl(url);
     const { tabs } = this.#get();
-    const existing = tabs.find((t) => isSameTabTarget(t, url, scope));
+    const existing = tabs.find((t) => isSameTabTarget(t, url));
 
     if (existing) {
       if (activate) {
@@ -68,11 +71,12 @@ export class TabPagesActionImpl {
       return existing.id;
     }
 
-    return this.#createTab(url, cached, activate, scope);
+    return this.#createTab(url, cached, activate);
   };
 
   addNewTab = (url: string, cached?: DynamicRouteMeta): string => {
-    return this.#createTab(url, cached, true, resolveTabScope(url));
+    this.#ensureScopeForUrl(url);
+    return this.#createTab(url, cached, true);
   };
 
   getActiveTab = (): TabItem | null => {
@@ -81,9 +85,8 @@ export class TabPagesActionImpl {
     return tabs.find((t) => t.id === activeTabId) ?? null;
   };
 
-  loadTabs = (): void => {
-    const { tabs, activeTabId } = getTabPages();
-    this.#set({ activeTabId, tabs }, false, 'loadTabs');
+  loadTabs = (url = '/'): void => {
+    this.#loadScope(resolveTabScope(url), true);
   };
 
   removeTab = (id: string): string | null => {
@@ -162,17 +165,13 @@ export class TabPagesActionImpl {
     if (index < 0) return id;
 
     const prev = tabs[index];
-    const scope = resolveTabScope(url);
-    const previousScope = normalizeTabScope(prev.scope, prev.url);
-    const sameTarget =
-      normalizeTabUrl(url) === normalizeTabUrl(prev.url) && isSameTabScope(scope, previousScope);
+    const sameTarget = normalizeTabUrl(url) === normalizeTabUrl(prev.url);
 
     const newTabs = [...tabs];
     newTabs[index] = {
       ...prev,
       cached: sameTarget ? prev.cached : undefined,
       lastVisited: Date.now(),
-      scope,
       url,
     };
 
@@ -196,19 +195,13 @@ export class TabPagesActionImpl {
     this.#persist();
   };
 
-  #createTab = (
-    url: string,
-    cached: DynamicRouteMeta | undefined,
-    activate: boolean,
-    scope = resolveTabScope(url),
-  ): string => {
+  #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
     const { tabs, activeTabId } = this.#get();
     const id = generateTabId();
     const newTab: TabItem = {
       cached,
       id,
       lastVisited: Date.now(),
-      scope,
       url,
     };
 
@@ -222,8 +215,24 @@ export class TabPagesActionImpl {
   };
 
   #persist = (): void => {
-    const { tabs, activeTabId } = this.#get();
-    saveTabPages(tabs, activeTabId);
+    const { activeTabScope, tabs, activeTabId } = this.#get();
+    saveTabPages(activeTabScope, tabs, activeTabId);
+  };
+
+  #ensureScopeForUrl = (url: string): void => {
+    const scope = resolveTabScope(url);
+    const { activeTabScope } = this.#get();
+    if (tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
+
+    this.#loadScope(scope);
+  };
+
+  #loadScope = (scope: TabScope, force = false): void => {
+    const { activeTabScope } = this.#get();
+    if (!force && tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
+
+    const { tabs, activeTabId } = getTabPages(scope);
+    this.#set({ activeTabId, activeTabScope: scope, tabs }, false, 'loadTabs');
   };
 }
 

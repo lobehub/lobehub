@@ -1,9 +1,4 @@
-import {
-  isSameTabScope,
-  isSameTabTarget,
-  normalizeTabScope,
-  resolveTabScope,
-} from '@/features/Electron/titlebar/TabBar/scope';
+import { isSameTabTarget } from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 
 export type TabNavigationAction =
@@ -35,22 +30,18 @@ export const resolveTabNavigationAction = ({
   currentUrl,
   tabs,
 }: ResolveTabNavigationActionInput): TabNavigationAction => {
-  const currentScope = resolveTabScope(currentUrl);
   const activeTab = activeTabId ? tabs.find((t) => t.id === activeTabId) : null;
 
-  if (activeTab && isSameTabTarget(activeTab, currentUrl, currentScope)) {
+  if (activeTab && isSameTabTarget(activeTab, currentUrl)) {
     return activeTab.url === currentUrl
       ? { type: 'none' }
       : { id: activeTab.id, type: 'update', url: currentUrl };
   }
 
-  const existing = tabs.find((t) => isSameTabTarget(t, currentUrl, currentScope));
+  const existing = tabs.find((t) => isSameTabTarget(t, currentUrl));
   if (existing) return { id: existing.id, type: 'activate' };
 
   if (!activeTab) return { type: 'add', url: currentUrl };
-
-  const activeScope = normalizeTabScope(activeTab.scope, activeTab.url);
-  if (!isSameTabScope(activeScope, currentScope)) return { type: 'add', url: currentUrl };
 
   return { id: activeTab.id, type: 'update', url: currentUrl };
 };

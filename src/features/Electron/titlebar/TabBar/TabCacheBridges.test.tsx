@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type DynamicRouteMeta, type RouteMeta } from '@/spa/router/routeMeta';
 
-import { resolveTabScope } from './scope';
 import TabCacheBridges from './TabCacheBridges';
 import { type TabItem } from './types';
 
@@ -72,7 +71,6 @@ const buildRoutes = (): RouteObject[] => [
 const tab = (url: string): TabItem => ({
   id: url,
   lastVisited: 1,
-  scope: resolveTabScope(url),
   url,
 });
 
