@@ -296,6 +296,57 @@ describe('buildTaskRunPrompt', () => {
     expect(result).not.toContain('<activities>');
   });
 
+  it('should render the verify delivery-acceptance section with criteria and evidence', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: {
+            criteria: [
+              {
+                required: true,
+                requiredEvidence: [{ hint: 'full page', type: 'screenshot' }],
+                title: 'login page renders',
+              },
+              { required: false, title: 'console is clean' },
+            ],
+            enabled: true,
+            maxIterations: 2,
+            requirement: 'the login flow works end to end',
+          },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Verify — delivery acceptance (maxIterations: 2)');
+    expect(result).toContain('Requirement: the login flow works end to end');
+    expect(result).toContain('login page renders (required)');
+    expect(result).toContain('· evidence: screenshot — full page');
+    expect(result).toContain('console is clean');
+    expect(result).toContain('lh verify');
+  });
+
+  it('should omit the verify section when verify is disabled', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: { criteria: [{ title: 'x' }], enabled: false, requirement: 'r' },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).not.toContain('Verify — delivery acceptance');
+  });
+
   it('should include subtasks in task section', () => {
     const result = buildTaskRunPrompt(
       {

@@ -490,11 +490,101 @@ export const verifyRouter = router({
       });
     }),
 
+  /**
+   * Builder self-evidence contract: submit a check item's verdict AND its
+   * evidence in one call. The check_result row is created lazily (idempotent
+   * upsert on `(verifyRunId, checkItemId)`) so the builder doesn't need a
+   * pre-existing `checkResultId` — solving the run-start handle gap. Evidence
+   * is optional (attach mid-run) and verdict is optional (set later by review).
+   */
+  submitCheckEvidence: verifyProcedure
+    .input(
+      z.object({
+        checkItemId: z.string(),
+        checkItemIndex: z.number().optional(),
+        checkItemTitle: z.string().optional(),
+        confidence: z.number().min(0).max(1).optional(),
+        evidence: z
+          .array(
+            z
+              .object({
+                capturedBy: evidenceCapturedBySchema.optional(),
+                content: z.string().min(1).optional(),
+                description: z.string().optional(),
+                fileId: z.string().min(1).optional(),
+                type: evidenceTypeSchema,
+              })
+              .refine((e) => Boolean(e.content) !== Boolean(e.fileId), {
+                message: 'Provide exactly one of `content` or `fileId`.',
+              }),
+          )
+          .optional(),
+        required: z.boolean().optional(),
+        status: checkStatusSchema.optional(),
+        suggestion: z.string().optional(),
+        toulmin: toulminSchema.optional(),
+        verdict: verdictSchema.optional(),
+        verifierType: verifierTypeSchema.optional(),
+        verifyRunId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+      // undefined fields are omitted by drizzle, so a verdict-less evidence
+      // submit won't clobber a verdict a later review pass writes.
+      const checkResult = await ctx.resultModel.upsertByCheckItem({
+        checkItemId: input.checkItemId,
+        checkItemIndex: input.checkItemIndex,
+        checkItemTitle: input.checkItemTitle,
+        completedAt: input.verdict ? new Date() : undefined,
+        confidence: input.confidence,
+        required: input.required ?? true,
+        status: input.status ?? (input.verdict ? statusForVerdict(input.verdict) : 'running'),
+        suggestion: input.suggestion,
+        toulmin: input.toulmin,
+        verdict: input.verdict,
+        verifierType: input.verifierType ?? 'agent',
+        verifyRunId: run.id,
+      });
+
+      const evidence = input.evidence?.length
+        ? await Promise.all(
+            input.evidence.map((e) =>
+              ctx.evidenceModel.create({
+                capturedAt: new Date(),
+                capturedBy: e.capturedBy ?? null,
+                checkResultId: checkResult.id,
+                content: e.content ?? null,
+                description: e.description ?? null,
+                fileId: e.fileId ?? null,
+                type: e.type,
+              }),
+            ),
+          )
+        : [];
+
+      return { checkResult, evidence };
+    }),
+
   listEvidence: verifyProcedure
     .input(z.object({ checkResultId: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await resolveCheckResult(ctx, input.checkResultId);
       return ctx.evidenceModel.listByCheckResult(result.id);
+    }),
+
+  deleteEvidence: verifyProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const evidence = await ctx.evidenceModel.findById(input.id);
+
+      if (!evidence) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Verification evidence not found' });
+      }
+
+      await ctx.evidenceModel.delete(evidence.id);
+      return { id: evidence.id, success: true };
     }),
 
   upsertReport: verifyProcedure

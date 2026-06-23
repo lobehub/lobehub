@@ -382,6 +382,17 @@ export interface TaskRunPromptInput {
     } | null;
     status: string;
     subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    /** Delivery-acceptance criteria the builder must self-evidence while working. */
+    verify?: {
+      criteria?: Array<{
+        required?: boolean;
+        requiredEvidence?: Array<{ hint?: string; type: string }>;
+        title: string;
+      }>;
+      enabled?: boolean;
+      maxIterations?: number;
+      requirement?: string;
+    } | null;
   };
   /** Pinned documents (workspace) */
   workspace?: TaskRunPromptWorkspaceNode[];
@@ -508,6 +519,33 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     }
   } else {
     taskLines.push('Review: (not configured)');
+  }
+
+  // Verify — delivery acceptance (builder self-evidence)
+  if (task.verify?.enabled && (task.verify.criteria?.length || task.verify.requirement)) {
+    taskLines.push('');
+    taskLines.push(
+      `Verify — delivery acceptance (maxIterations: ${task.verify.maxIterations || 3}):`,
+    );
+    if (task.verify.requirement) {
+      taskLines.push(`  Requirement: ${task.verify.requirement}`);
+    }
+    if (task.verify.criteria && task.verify.criteria.length > 0) {
+      taskLines.push('  Criteria — capture the listed evidence while you work:');
+      for (const c of task.verify.criteria) {
+        const flag = c.required === false ? '' : ' (required)';
+        taskLines.push(`    - ${c.title}${flag}`);
+        for (const e of c.requiredEvidence ?? []) {
+          taskLines.push(`        · evidence: ${e.type}${e.hint ? ` — ${e.hint}` : ''}`);
+        }
+      }
+    }
+    taskLines.push(
+      '  Use the `verify` skill to capture each artifact, then submit it with `lh verify',
+    );
+    taskLines.push(
+      '  submit` (the skill resolves your verify run id and check item ids at runtime).',
+    );
   }
 
   // Workspace
