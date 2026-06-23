@@ -112,6 +112,8 @@ export default {
   'workingPanel.deployments.open': 'Open deployment',
   'workingPanel.deployments.refresh': 'Refresh deployments',
   'workingPanel.deployments.size': '{{size}} bytes',
+  'workingPanel.deployments.buildFailedFallback':
+    'Last build failed; the previous release is still serving.',
   'workingPanel.deployments.status.active': 'Active',
   'workingPanel.deployments.status.building': 'Building',
   'workingPanel.deployments.status.unpublished': 'Unpublished',

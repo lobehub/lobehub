@@ -1348,6 +1348,7 @@
   "workingPanel.browser.tool.screenshot": "截取了页面截图",
   "workingPanel.browser.tool.scroll": "滚动了页面",
   "workingPanel.browser.tool.snapshot": "读取了页面元素",
+  "workingPanel.deployments.buildFailedFallback": "上次构建失败，上一版本仍在线",
   "workingPanel.deployments.copy": "复制链接",
   "workingPanel.deployments.copySuccess": "部署链接已复制",
   "workingPanel.deployments.empty": "当前话题暂无部署",

@@ -1317,6 +1317,7 @@
   "workingPanel.browser.tool.screenshot": "Captured screenshot",
   "workingPanel.browser.tool.scroll": "Scrolled page",
   "workingPanel.browser.tool.snapshot": "Read page elements",
+  "workingPanel.deployments.buildFailedFallback": "Last build failed; the previous release is still serving.",
   "workingPanel.deployments.copy": "Copy URL",
   "workingPanel.deployments.copySuccess": "Deployment URL copied",
   "workingPanel.deployments.empty": "No deployments in this topic",
