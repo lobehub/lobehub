@@ -323,6 +323,92 @@ describe('MarketService', () => {
         success: false,
       });
     });
+
+    it('should use response data as the failure message when no structured error is provided', async () => {
+      const service = new MarketService();
+      const mockCallTool = vi.fn().mockResolvedValue({
+        data: 'PostHog query timed out',
+        success: false,
+      });
+      (service as any).market.skills.callTool = mockCallTool;
+
+      const result = await service.executeLobehubSkill({
+        args: { query: 'select * from events' },
+        provider: 'posthog',
+        toolName: 'query',
+      });
+
+      expect(result).toEqual({
+        content: 'PostHog query timed out',
+        error: { code: 'LOBEHUB_SKILL_ERROR', message: 'PostHog query timed out' },
+        success: false,
+      });
+    });
+
+    it('should use a generic failure message when an unsuccessful response has no detail', async () => {
+      const service = new MarketService();
+      const mockCallTool = vi.fn().mockResolvedValue({
+        data: null,
+        success: false,
+      });
+      (service as any).market.skills.callTool = mockCallTool;
+
+      const result = await service.executeLobehubSkill({
+        args: {},
+        provider: 'posthog',
+        toolName: 'query',
+      });
+
+      expect(result).toEqual({
+        content: 'LobeHub Skill call failed',
+        error: { code: 'LOBEHUB_SKILL_ERROR', message: 'LobeHub Skill call failed' },
+        success: false,
+      });
+    });
+  });
+
+  describe('listSkillTools', () => {
+    it('should use live tool discovery when available', async () => {
+      const service = new MarketService();
+      const liveResponse = {
+        instruction: 'Use live PostHog tools.',
+        tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+      };
+      (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(liveResponse);
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue({ tools: [] });
+
+      await expect(service.listSkillTools('posthog')).resolves.toBe(liveResponse);
+
+      expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
+      expect((service as any).market.skills.listTools).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to static tools when live discovery throws', async () => {
+      const service = new MarketService();
+      const staticResponse = {
+        tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+      };
+      (service as any).market.skills.listLiveTools = vi.fn().mockRejectedValue(new Error('boom'));
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
+
+      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+
+      expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
+      expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
+    });
+
+    it('should fall back to static tools when live discovery returns no response', async () => {
+      const service = new MarketService();
+      const staticResponse = {
+        tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+      };
+      (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(null);
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
+
+      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+
+      expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
+    });
   });
 
   describe('getLobehubSkillManifests', () => {

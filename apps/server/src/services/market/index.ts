@@ -6,6 +6,8 @@ import { type NextRequest } from 'next/server';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
+import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback';
+
 const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
@@ -257,7 +259,20 @@ export class MarketService {
    * List available tools for a provider
    */
   async listSkillTools(providerId: string) {
-    return this.listSkillToolsWithLiveFallback(providerId);
+    return listSkillToolsWithLiveFallback(
+      this.market.skills as {
+        listLiveTools?: (providerId: string) => Promise<any>;
+        listTools: (providerId: string) => Promise<any>;
+      },
+      providerId,
+      (error) => {
+        log(
+          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+          providerId,
+          error,
+        );
+      },
+    );
   }
 
   /**
@@ -265,28 +280,6 @@ export class MarketService {
    */
   async callSkillTool(provider: string, params: { args: Record<string, any>; tool: string }) {
     return this.market.skills.callTool(provider, params);
-  }
-
-  private async listSkillToolsWithLiveFallback(providerId: string) {
-    const skills = this.market.skills as {
-      listLiveTools?: (providerId: string) => Promise<any>;
-      listTools: (providerId: string) => Promise<any>;
-    };
-
-    if (typeof skills.listLiveTools === 'function') {
-      try {
-        const response = await skills.listLiveTools(providerId);
-        if (response) return response;
-      } catch (error) {
-        log(
-          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
-          providerId,
-          error,
-        );
-      }
-    }
-
-    return skills.listTools(providerId);
   }
 
   /**
@@ -600,7 +593,7 @@ export class MarketService {
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
-          const { tools, instruction } = await this.listSkillToolsWithLiveFallback(providerId);
+          const { tools, instruction } = await this.listSkillTools(providerId);
           if (!tools || tools.length === 0) continue;
 
           const manifest: LobeToolManifest = {

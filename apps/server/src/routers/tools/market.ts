@@ -14,6 +14,7 @@ import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
+import { listSkillToolsWithLiveFallback } from '@/server/services/market/listSkillToolsWithLiveFallback';
 import {
   contentBlocksToString,
   processContentBlocks,
@@ -137,29 +138,6 @@ const callCloudMcpEndpointSchema = z.object({
   meta: metaSchema,
   toolName: z.string(),
 });
-
-const listSkillToolsWithLiveFallback = async (
-  skills: {
-    listLiveTools?: (provider: string) => Promise<any>;
-    listTools: (provider: string) => Promise<any>;
-  },
-  provider: string,
-) => {
-  if (typeof skills.listLiveTools === 'function') {
-    try {
-      const response = await skills.listLiveTools(provider);
-      if (response) return response;
-    } catch (error) {
-      log(
-        'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
-        provider,
-        error,
-      );
-    }
-  }
-
-  return skills.listTools(provider);
-};
 
 // ============================== Type Exports ==============================
 export type ExecInSandboxInput = z.infer<typeof execInSandboxSchema>;
@@ -618,7 +596,17 @@ export const marketRouter = router({
       log('connectListTools: provider=%s', input.provider);
 
       try {
-        const response = await listSkillToolsWithLiveFallback(ctx.marketSDK.skills, input.provider);
+        const response = await listSkillToolsWithLiveFallback(
+          ctx.marketSDK.skills,
+          input.provider,
+          (error) => {
+            log(
+              'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+              input.provider,
+              error,
+            );
+          },
+        );
         return {
           provider: input.provider,
           tools: response.tools || [],
