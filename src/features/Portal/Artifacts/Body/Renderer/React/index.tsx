@@ -1,5 +1,5 @@
 import { SandpackLayout, SandpackPreview, SandpackProvider } from '@codesandbox/sandpack-react';
-import { buildReactArtifactProject } from '@lobechat/builtin-skills';
+import { buildReactArtifactProject } from '@lobechat/artifact-template';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

@@ -1,6 +1,6 @@
-// Shared between the Sandpack preview and the publishable-site builder — keep
-// in sync. The LLM only emits the `App.tsx` body; everything else here is the
-// surrounding boilerplate (entry, HTML shell, vite config, package manifest).
+// Shared between the Sandpack preview and the publishable-site builder. This
+// package is the single source of truth for React artifact boilerplate,
+// dependencies, and runtime aliases.
 
 export interface ReactArtifactPackageJsonOverride {
   dependencies?: Record<string, string>;
@@ -24,6 +24,7 @@ export interface ReactArtifactTemplateOptions {
 
 export interface ReactArtifactProject {
   dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
   entry: string;
   externalResources: readonly string[];
   files: Record<string, string>;
@@ -41,31 +42,62 @@ export const REACT_ARTIFACT_PACKAGE_JSON_PATH = '/package.json';
 export const REACT_ARTIFACT_DEFAULT_DEPENDENCIES: Record<string, string> = {
   '@ant-design/icons': 'latest',
   '@lshay/ui': 'latest',
+  '@radix-ui/react-accordion': 'latest',
   '@radix-ui/react-alert-dialog': 'latest',
+  '@radix-ui/react-avatar': 'latest',
+  '@radix-ui/react-checkbox': 'latest',
+  '@radix-ui/react-collapsible': 'latest',
   '@radix-ui/react-dialog': 'latest',
+  '@radix-ui/react-dropdown-menu': 'latest',
   '@radix-ui/react-icons': 'latest',
-  'antd': 'latest',
+  '@radix-ui/react-label': 'latest',
+  '@radix-ui/react-navigation-menu': 'latest',
+  '@radix-ui/react-popover': 'latest',
+  '@radix-ui/react-progress': 'latest',
+  '@radix-ui/react-scroll-area': 'latest',
+  '@radix-ui/react-select': 'latest',
+  '@radix-ui/react-separator': 'latest',
+  '@radix-ui/react-slider': 'latest',
+  '@radix-ui/react-slot': 'latest',
+  '@radix-ui/react-switch': 'latest',
+  '@radix-ui/react-tabs': 'latest',
+  '@radix-ui/react-toast': 'latest',
+  '@radix-ui/react-tooltip': 'latest',
+  antd: 'latest',
   'class-variance-authority': 'latest',
-  'clsx': 'latest',
+  cmdk: 'latest',
+  clsx: 'latest',
+  'date-fns': 'latest',
+  'embla-carousel-react': 'latest',
+  'input-otp': 'latest',
+  'lodash-es': 'latest',
   'lucide-react': 'latest',
-  // Pin react + react-dom so esm.sh's *-prefixed external mode resolves every
-  // lib's transitive react dep against the same module instance (otherwise
-  // React 18 vs 19 ABI mismatches surface as "older version of React").
-  'react': '18.3.1',
-  'react-dom': '18.3.1',
-  'recharts': 'latest',
+  motion: 'latest',
+  react: '19.2.7',
+  'react-day-picker': 'latest',
+  'react-dom': '19.2.7',
+  'react-router': 'latest',
+  recharts: 'latest',
+  sonner: 'latest',
   'tailwind-merge': 'latest',
+  vaul: 'latest',
+  zustand: 'latest',
 };
 
 export const REACT_ARTIFACT_DEFAULT_DEV_DEPENDENCIES: Record<string, string> = {
   '@types/react': 'latest',
   '@types/react-dom': 'latest',
   '@vitejs/plugin-react': 'latest',
-  'typescript': 'latest',
-  'vite': 'latest',
+  typescript: 'latest',
+  vite: 'latest',
 };
 
-export const REACT_ARTIFACT_EXTERNAL_RESOURCES: readonly string[] = ['https://cdn.tailwindcss.com'];
+export const REACT_ARTIFACT_TAILWIND_CDN = 'https://cdn.tailwindcss.com';
+export const REACT_ARTIFACT_EXTERNAL_RESOURCES: readonly string[] = [REACT_ARTIFACT_TAILWIND_CDN];
+
+export const REACT_ARTIFACT_VITE_ALIASES: Record<string, string> = {
+  '@/components/ui': '@lshay/ui/components/default',
+};
 
 const escapeHtml = (value: string) =>
   value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -76,7 +108,7 @@ const defaultIndexHtml = (title: string) => `<!DOCTYPE html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(title)}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="${REACT_ARTIFACT_TAILWIND_CDN}"></script>
   </head>
   <body>
     <div id="root"></div>
@@ -100,12 +132,6 @@ createRoot(container).render(
 );
 `;
 
-// base: './' emits relative asset URLs in the built HTML/JS so that the same
-// dist works at both the live subdomain root (`/index.html` → `/assets/...`)
-// AND at per-release immutable URLs (`/v3/index.html` → `/v3/assets/...`).
-// Absolute paths (the vite default) break the per-release case because the
-// browser resolves `<script src="/assets/...">` against the subdomain root,
-// bypassing the `/v<N>/` prefix and pulling assets from the LIVE manifest.
 const defaultViteConfig = `import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -113,9 +139,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   resolve: {
-    alias: {
-      '@/components/ui': '@lshay/ui/components/default',
-    },
+    alias: ${JSON.stringify(REACT_ARTIFACT_VITE_ALIASES, null, 6)},
   },
 });
 `;
@@ -180,6 +204,7 @@ export const buildReactArtifactProject = (
 
   return {
     dependencies,
+    devDependencies,
     entry: REACT_ARTIFACT_ENTRY_PATH,
     externalResources: REACT_ARTIFACT_EXTERNAL_RESOURCES,
     files,

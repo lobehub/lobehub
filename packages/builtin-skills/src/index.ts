@@ -17,11 +17,13 @@ export {
   REACT_ARTIFACT_EXTERNAL_RESOURCES,
   REACT_ARTIFACT_INDEX_HTML_PATH,
   REACT_ARTIFACT_PACKAGE_JSON_PATH,
+  REACT_ARTIFACT_TAILWIND_CDN,
+  REACT_ARTIFACT_VITE_ALIASES,
   REACT_ARTIFACT_VITE_CONFIG_PATH,
   type ReactArtifactProject,
   type ReactArtifactTemplateOptions,
   type ReactArtifactTemplateOverrides,
-} from './artifacts/react-template';
+} from '@lobechat/artifact-template';
 export { LobeHubIdentifier } from './lobehub';
 export { TaskIdentifier } from './task';
 
