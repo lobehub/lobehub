@@ -93,7 +93,12 @@ export const useReferenceImageUpload = ({
     async (files: File[]) => {
       if (!canCreate) return;
 
-      const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+      // Keep files whose type is an image OR empty: OS/browser drops of images
+      // with uncommon extensions can arrive with an empty `File.type`. Discarding
+      // them here would silently drop a valid reference before the upload pipeline
+      // (which sniffs the MIME from bytes) gets a chance. Known non-image types
+      // (PDF/video/text) still carry a populated `type` and are rejected.
+      const imageFiles = files.filter((file) => file.type === '' || file.type.startsWith('image/'));
       if (imageFiles.length === 0) return;
 
       // Drop files over the model's size limit before consuming capacity, so an
