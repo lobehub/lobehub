@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tabs, Text, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, Check, PenLine, Send, X } from 'lucide-react';
 import { memo } from 'react';
@@ -81,7 +82,6 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     <Flexbox gap={12}>
       {!escapeActive && isMulti && (
         <Tabs
-          compact
           activeKey={activeTab}
           items={questions.map((q, idx) => {
             const done = isQuestionAnswered(q, picks, custom);

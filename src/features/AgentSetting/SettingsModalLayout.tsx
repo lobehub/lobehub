@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Tabs, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';

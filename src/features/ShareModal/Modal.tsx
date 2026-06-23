@@ -1,8 +1,8 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Flexbox, Segmented, Skeleton } from '@lobehub/ui';
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,20 +36,20 @@ const ShareModalContent = memo(() => {
   const tabItems = useMemo(
     () => [
       {
+        key: Tab.Screenshot,
         label: t('shareModal.screenshot'),
-        value: Tab.Screenshot,
       },
       {
+        key: Tab.Text,
         label: t('shareModal.text'),
-        value: Tab.Text,
       },
       {
+        key: Tab.PDF,
         label: t('shareModal.pdf'),
-        value: Tab.PDF,
       },
       {
+        key: Tab.JSON,
         label: 'JSON',
-        value: Tab.JSON,
       },
     ],
     [t],
@@ -61,13 +61,15 @@ const ShareModalContent = memo(() => {
       height={'100%'}
       style={{ overflow: 'hidden', position: 'relative' }}
     >
-      <Segmented
-        block
-        options={tabItems}
-        style={{ width: '100%' }}
-        value={tab}
-        variant={'filled'}
-        onChange={(value) => setTab(value as Tab)}
+      <Tabs
+        activeKey={tab}
+        items={tabItems}
+        variant="rounded"
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => setTab(key as Tab)}
       />
       {isLoading && dbMessages.length === 0 ? (
         <Flexbox gap={12} paddingBlock={8}>

@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {

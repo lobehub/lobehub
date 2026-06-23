@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Tabs, type TabsProps } from 'antd';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
@@ -78,7 +78,7 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const heterogeneousTabItems: TabsProps['items'] = heterogeneousProvider
+  const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
           ? [

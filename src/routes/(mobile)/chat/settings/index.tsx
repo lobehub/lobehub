@@ -1,6 +1,6 @@
 'use client';
 
-import { Tabs } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 
@@ -33,7 +33,6 @@ export default memo(() => {
   return (
     <MobileContentLayout header={<MobileHeader />}>
       <Tabs
-        compact
         activeKey={tab}
         items={cateItems as any}
         style={{
