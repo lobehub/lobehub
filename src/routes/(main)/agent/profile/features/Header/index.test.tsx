@@ -35,7 +35,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@lobechat/const')>()),
   isDesktop: false,
 }));
 
@@ -82,21 +83,30 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      modal: {
-        confirm: vi.fn(),
-      },
-    }),
-  },
-  Modal: {
-    confirm: vi.fn(),
-  },
-}));
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>();
 
-vi.mock('lucide-react', () => ({
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        modal: {
+          confirm: vi.fn(),
+        },
+      }),
+    },
+    Modal: {
+      ...actual.Modal,
+      confirm: vi.fn(),
+    },
+  };
+});
+
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('lucide-react')>()),
   BotMessageSquareIcon: () => null,
+  Circle: () => null,
   Download: () => null,
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
