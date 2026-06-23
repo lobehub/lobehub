@@ -14,7 +14,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
@@ -165,8 +164,6 @@ const ProfileEditor = memo(() => {
           editor here to avoid a control that looks effective but isn't (mirrors the
           ModelSelect hiding above). */}
       {!isHeterogeneous && <EditorCanvas />}
-      {/* Advanced Settings Modal */}
-      <AgentSettings />
     </>
   );
 });

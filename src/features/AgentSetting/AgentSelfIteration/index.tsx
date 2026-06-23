@@ -1,6 +1,5 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -38,19 +37,14 @@ const AgentSelfIteration = memo(() => {
         valuePropName: 'checked',
       };
 
-  const selfIteration: FormGroupItemType = {
-    children: [selfIterationItem],
-    title: t('settingSelfIteration.title'),
-  };
-
   return (
     <Form
       disabled={disabled}
       footer={isInbox ? undefined : <Form.SubmitFooter />}
       form={form}
       initialValues={config}
-      items={[selfIteration]}
-      itemsType={'group'}
+      items={[selfIterationItem]}
+      itemsType={'flat'}
       variant={'borderless'}
       onFinish={(values) => {
         if (disabled) return;

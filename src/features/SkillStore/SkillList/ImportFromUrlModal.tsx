@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
-import { App, Button, Modal, Typography } from 'antd';
+import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { App, Typography } from 'antd';
 import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,25 +10,15 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
-interface ImportFromUrlModalProps {
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}
-
-const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }) => {
+const ImportFromUrlContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
+  const { close } = useModalContext();
   const { message } = App.useApp();
   const importAgentSkillFromUrl = useToolStore((s) => s.importAgentSkillFromUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const { allowed: canCreate } = usePermission('create_content');
-
-  const handleClose = () => {
-    onOpenChange(false);
-    setError(null);
-    setUrl('');
-  };
 
   const handleImport = async () => {
     const trimmed = url.trim();
@@ -39,7 +30,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
     try {
       await importAgentSkillFromUrl({ url: trimmed });
       message.success(t('agentSkillModal.importSuccess'));
-      handleClose();
+      close();
     } catch (err: any) {
       setError(err?.message || String(err));
     } finally {
@@ -48,7 +39,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
   };
 
   return (
-    <Modal destroyOnClose footer={null} open={open} title={null} width={480} onCancel={handleClose}>
+    <Flexbox gap={16}>
       <Flexbox align="center" gap={16} padding={'16px 0'}>
         <Flexbox horizontal align="center" gap={8}>
           <Icon icon={Link} size={28} />
@@ -68,33 +59,36 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
         </Flexbox>
       </Flexbox>
 
-      <Flexbox gap={16}>
-        {error && (
-          <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />
-        )}
+      {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
-        <Flexbox gap={8}>
-          <Typography.Text strong>URL</Typography.Text>
-          <Input
-            disabled={!canCreate}
-            placeholder={t('agentSkillModal.url.urlPlaceholder')}
-            value={url}
-            onPressEnter={handleImport}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              if (error) setError(null);
-            }}
-          />
-        </Flexbox>
-
-        <Button block disabled={!canCreate} loading={loading} type="primary" onClick={handleImport}>
-          {t('common:import')}
-        </Button>
+      <Flexbox gap={8}>
+        <Typography.Text strong>URL</Typography.Text>
+        <Input
+          disabled={!canCreate}
+          placeholder={t('agentSkillModal.url.urlPlaceholder')}
+          value={url}
+          onPressEnter={handleImport}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (error) setError(null);
+          }}
+        />
       </Flexbox>
-    </Modal>
+
+      <Button block disabled={!canCreate} loading={loading} type="primary" onClick={handleImport}>
+        {t('common:import')}
+      </Button>
+    </Flexbox>
   );
 });
 
-ImportFromUrlModal.displayName = 'ImportFromUrlModal';
+ImportFromUrlContent.displayName = 'ImportFromUrlContent';
 
-export default ImportFromUrlModal;
+export const openImportFromUrlModal = (): ModalInstance =>
+  createModal({
+    content: <ImportFromUrlContent />,
+    footer: null,
+    maskClosable: true,
+    styles: { header: { display: 'none' } },
+    width: 480,
+  });

@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { openAgentSettingsModal } from '@/routes/(main)/agent/profile/features/AgentSettings';
 import { useAgentStore } from '@/store/agent';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
@@ -22,10 +23,13 @@ vi.mock('@/store/global', () => ({
     setState: vi.fn(),
   },
 }));
+vi.mock('@/routes/(main)/agent/profile/features/AgentSettings', () => ({
+  openAgentSettingsModal: vi.fn(),
+}));
 describe('useOpenChatSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.setState({ showAgentSetting: false, activeAgentId: undefined });
+    useAgentStore.setState({ activeAgentId: undefined });
   });
 
   it('navigates to mobile chat settings with session info', () => {
@@ -52,7 +56,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(useAgentStore.getState().showAgentSetting).toBeTruthy();
+    expect(openAgentSettingsModal).toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

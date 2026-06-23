@@ -22,6 +22,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
+import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
@@ -170,7 +171,7 @@ const Header = memo(() => {
         icon: <Icon icon={Settings2Icon} />,
         key: 'advanced-settings',
         label: t('advancedSettings', { ns: 'setting' }),
-        onClick: () => useAgentStore.setState({ showAgentSetting: true }),
+        onClick: () => openAgentSettingsModal(),
       },
       { type: 'divider' as const },
       {
