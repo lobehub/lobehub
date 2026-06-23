@@ -15,6 +15,8 @@ import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
+
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
 export type ToolDetailType =
@@ -101,18 +103,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     type === 'mcp-connector' ||
     type === 'lobehub-connector';
 
-  const builtinSkillTitle = builtinSkill
-    ? ts(`tools.builtins.${builtinSkill.identifier}.title`, { defaultValue: builtinSkill.name })
-    : identifier;
-  const builtinSkillDescription = builtinSkill?.description
-    ? ts(`tools.builtins.${builtinSkill.identifier}.description`, {
-        defaultValue: builtinSkill.description,
-      })
-    : undefined;
-  const noPermissionsTitle =
-    type === 'builtin'
-      ? ts(`tools.builtins.${identifier}.title`, { defaultValue: identifier })
-      : identifier;
+  const { title: builtinSkillTitle, description: builtinSkillDescription } =
+    getLocalizedBuiltinSkillDetail(builtinSkill, identifier, ts);
+  const noPermissionsTitle = getNoPermissionsTitle(identifier, type, ts);
 
   useEffect(() => {
     if (!isConnectorType) return;

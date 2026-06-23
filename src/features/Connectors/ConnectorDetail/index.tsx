@@ -11,6 +11,7 @@ import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import CustomConnectorModal from '../CustomConnectorModal';
+import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
@@ -74,36 +75,16 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
 
   if (!connector) return null;
 
-  const rawDescription =
-    typeof connector.metadata?.description === 'string'
-      ? connector.metadata.description
-      : undefined;
   const lobehubProvider = isMarketplace
     ? getLobehubSkillProviderById(connector.identifier)
     : undefined;
   const composioApp = isMarketplace ? getComposioAppByIdentifier(connector.identifier) : undefined;
-
-  let connectorName = connector.name;
-  let connectorDescription = rawDescription;
-
-  if (isBuiltin) {
-    connectorName = ts(`tools.builtins.${connector.identifier}.title`, {
-      defaultValue: connector.name,
-    });
-    connectorDescription = ts(`tools.builtins.${connector.identifier}.description`, {
-      defaultValue: rawDescription || '',
-    });
-  } else if (lobehubProvider) {
-    connectorName = lobehubProvider.label;
-    connectorDescription = ts(`tools.lobehubSkill.providers.${connector.identifier}.description`, {
-      defaultValue: lobehubProvider.description || rawDescription || '',
-    });
-  } else if (composioApp) {
-    connectorName = composioApp.label;
-    connectorDescription = ts(`tools.composio.servers.${connector.identifier}.description`, {
-      defaultValue: composioApp.description || rawDescription || '',
-    });
-  }
+  const { name: connectorName, description: connectorDescription } = getLocalizedConnectorDetail({
+    composioApp,
+    connector,
+    lobehubProvider,
+    t: ts,
+  });
 
   // Sync button label: re-sync tool list from manifest (does NOT reset permissions)
   const syncLabel =
