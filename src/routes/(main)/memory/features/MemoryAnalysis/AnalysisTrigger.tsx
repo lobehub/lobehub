@@ -1,89 +1,48 @@
 'use client';
 
 import { ActionIcon, Button, Tooltip } from '@lobehub/ui';
-import { App } from 'antd';
 import { CalendarClockIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
-import { memoryExtractionService } from '@/services/userMemory/extraction';
 
-import DateRangeModal from './DateRangeModal';
+import { createDateRangeModal } from './DateRangeModal';
 
 interface Props {
-  footerNote: string;
   iconOnly?: boolean;
-  onRangeChange: (range: [Date | null, Date | null]) => void;
-  range: [Date | null, Date | null];
 }
 
-const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnly }) => {
+const AnalysisTrigger = memo<Props>(({ iconOnly }) => {
   const { t } = useTranslation('memory');
-  const { message } = App.useApp();
-  const { isValidating, refresh } = useMemoryAnalysisAsyncTask();
-  const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const { isValidating } = useMemoryAnalysisAsyncTask();
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    try {
-      const [from, to] = range;
-      const result = await memoryExtractionService.requestFromChatTopics({
-        fromDate: from ?? undefined,
-        toDate: to ?? undefined,
-      });
-
-      await refresh();
-      message.success(result.deduped ? t('analysis.toast.deduped') : t('analysis.toast.started'));
-
-      setOpen(false);
-    } catch (error) {
-      console.error(error);
-      message.error(t('analysis.toast.failed'));
-    } finally {
-      setSubmitting(false);
-    }
+  const handleClick = () => {
+    createDateRangeModal();
   };
 
-  const loading = submitting || isValidating;
-
-  return (
-    <>
-      {iconOnly ? (
-        <Tooltip title={t('analysis.action.button')}>
-          <ActionIcon
-            icon={CalendarClockIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            tooltipProps={{ placement: 'bottom' }}
-            onClick={() => setOpen(true)}
-          />
-        </Tooltip>
-      ) : (
-        <Button
-          className="test"
-          icon={CalendarClockIcon}
-          loading={loading}
-          size={'small'}
-          style={{ maxWidth: 300 }}
-          type={'primary'}
-          onClick={() => setOpen(true)}
-        >
-          {t('analysis.action.button')}
-        </Button>
-      )}
-
-      <DateRangeModal
-        footerNote={footerNote}
-        open={open}
-        range={range}
-        submitting={submitting}
-        onCancel={() => setOpen(false)}
-        onChange={onRangeChange}
-        onSubmit={handleSubmit}
+  return iconOnly ? (
+    <Tooltip title={t('analysis.action.button')}>
+      <ActionIcon
+        icon={CalendarClockIcon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        tooltipProps={{ placement: 'bottom' }}
+        onClick={handleClick}
       />
-    </>
+    </Tooltip>
+  ) : (
+    <Button
+      className="test"
+      icon={CalendarClockIcon}
+      loading={isValidating}
+      size={'small'}
+      style={{ maxWidth: 300 }}
+      type={'primary'}
+      onClick={handleClick}
+    >
+      {t('analysis.action.button')}
+    </Button>
   );
 });
 

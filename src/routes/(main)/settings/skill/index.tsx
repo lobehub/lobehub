@@ -12,9 +12,9 @@ import { useSearchParams } from 'react-router';
 import { CustomConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import ImportFromGithubModal from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import ImportFromUrlModal from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import UploadSkillModal from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
+import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
+import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 
@@ -96,9 +96,6 @@ const Page = memo(() => {
   const [selected, setSelected] = useState<SelectedTool | null>(null);
   const [viewMode, setViewMode] = useState<SkillViewMode>(queryViewMode);
   const [showAddConnector, setShowAddConnector] = useState(false);
-  const [showUrlModal, setUrlModal] = useState(false);
-  const [showGithubModal, setGithubModal] = useState(false);
-  const [showUploadModal, setUploadModal] = useState(false);
 
   // Data sources for auto-select
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
@@ -192,7 +189,7 @@ const Page = memo(() => {
                         </Text>
                       </Flexbox>
                     ),
-                    onClick: () => setUrlModal(true),
+                    onClick: () => openImportFromUrlModal(),
                   },
                   {
                     icon: <Icon icon={GithubIcon} />,
@@ -205,7 +202,7 @@ const Page = memo(() => {
                         </Text>
                       </Flexbox>
                     ),
-                    onClick: () => setGithubModal(true),
+                    onClick: () => openImportFromGithubModal(),
                   },
                   {
                     icon: <Icon icon={FileArchive} />,
@@ -218,7 +215,7 @@ const Page = memo(() => {
                         </Text>
                       </Flexbox>
                     ),
-                    onClick: () => setUploadModal(true),
+                    onClick: () => openUploadSkillModal(),
                   },
                   { type: 'divider' as const },
                   {
@@ -265,9 +262,6 @@ const Page = memo(() => {
           </div>
         )}
       </div>
-      <ImportFromUrlModal open={showUrlModal} onOpenChange={setUrlModal} />
-      <ImportFromGithubModal open={showGithubModal} onOpenChange={setGithubModal} />
-      <UploadSkillModal open={showUploadModal} onOpenChange={setUploadModal} />
       <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
     </>
   );

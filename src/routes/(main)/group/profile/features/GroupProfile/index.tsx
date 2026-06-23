@@ -19,7 +19,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
-import AgentSettings from '../AgentSettings';
+import { openGroupAgentSettingsModal } from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
@@ -39,7 +39,6 @@ const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const theme = useTheme();
-  const [showAgentSetting, setShowAgentSetting] = useState(false);
   const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
@@ -167,7 +166,7 @@ const GroupProfile = memo(() => {
             onClick={() => {
               if (!canEdit) return;
 
-              setShowAgentSetting(true);
+              openGroupAgentSettingsModal();
             }}
           >
             {t('advancedSettings')}
@@ -189,8 +188,6 @@ const GroupProfile = memo(() => {
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
         onContentChange={onContentChange}
       />
-      {/* Advanced Settings Modal */}
-      <AgentSettings open={showAgentSetting} onCancel={() => setShowAgentSetting(false)} />
     </>
   );
 });

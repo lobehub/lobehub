@@ -1,4 +1,3 @@
-import { FILE_URL } from '@lobechat/business-const';
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { Center, FileTypeIcon, Flexbox, Icon, Text } from '@lobehub/ui';
@@ -8,8 +7,6 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import GuideModal from '@/components/GuideModal';
-import GuideVideo from '@/components/GuideVideo';
 import NavHeader from '@/features/NavHeader';
 import useNotionImport from '@/features/ResourceManager/components/Header/hooks/useNotionImport';
 import { usePermission } from '@/hooks/usePermission';
@@ -334,16 +331,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             </Flexbox>
           </Flexbox>
         </Center>
-        <GuideModal
-          cancelText={t('header.actions.notionGuide.cancel')}
-          cover={<GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />}
-          desc={t('header.actions.notionGuide.desc')}
-          okText={t('header.actions.notionGuide.ok')}
-          open={notionImport.notionGuideOpen}
-          title={t('header.actions.notionGuide.title')}
-          onCancel={notionImport.handleCloseNotionGuide}
-          onOk={notionImport.handleStartNotionImport}
-        />
         <input
           accept=".zip"
           ref={notionImport.notionInputRef}
