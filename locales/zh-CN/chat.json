@@ -1358,6 +1358,7 @@
   "workingPanel.deployments.refresh": "刷新部署列表",
   "workingPanel.deployments.size": "{{size}} 字节",
   "workingPanel.deployments.status.active": "已上线",
+  "workingPanel.deployments.status.building": "构建中",
   "workingPanel.deployments.status.unpublished": "已下线",
   "workingPanel.deployments.tab": "部署",
   "workingPanel.deployments.title": "部署",

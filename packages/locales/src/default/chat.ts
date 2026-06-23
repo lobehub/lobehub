@@ -113,6 +113,7 @@ export default {
   'workingPanel.deployments.refresh': 'Refresh deployments',
   'workingPanel.deployments.size': '{{size}} bytes',
   'workingPanel.deployments.status.active': 'Active',
+  'workingPanel.deployments.status.building': 'Building',
   'workingPanel.deployments.status.unpublished': 'Unpublished',
   'workingPanel.deployments.tab': 'Deployments',
   'workingPanel.deployments.title': 'Deployments',
