@@ -1,4 +1,5 @@
 import { VerifySkill } from '@lobechat/builtin-skills';
+import type { VerifyCheckItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -144,6 +145,18 @@ const resolveCheckResult = async (
   }
 
   return result;
+};
+
+/** Resolve a run from an Agent Run operation id — the handle a builder has in
+ * the run-start gap, before any result rows (and thus checkResultIds) exist. */
+const resolveRunByOperation = async (ctx: { runModel: VerifyRunModel }, operationId: string) => {
+  const run = await ctx.runModel.findByOperation(operationId);
+
+  if (!run) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'No verification run for this operation' });
+  }
+
+  return run;
 };
 
 export const verifyRouter = router({
@@ -499,52 +512,70 @@ export const verifyRouter = router({
    */
   submitCheckEvidence: verifyProcedure
     .input(
-      z.object({
-        checkItemId: z.string(),
-        checkItemIndex: z.number().optional(),
-        checkItemTitle: z.string().optional(),
-        confidence: z.number().min(0).max(1).optional(),
-        evidence: z
-          .array(
-            z
-              .object({
-                capturedBy: evidenceCapturedBySchema.optional(),
-                content: z.string().min(1).optional(),
-                description: z.string().optional(),
-                fileId: z.string().min(1).optional(),
-                type: evidenceTypeSchema,
-              })
-              .refine((e) => Boolean(e.content) !== Boolean(e.fileId), {
-                message: 'Provide exactly one of `content` or `fileId`.',
-              }),
-          )
-          .optional(),
-        required: z.boolean().optional(),
-        status: checkStatusSchema.optional(),
-        suggestion: z.string().optional(),
-        toulmin: toulminSchema.optional(),
-        verdict: verdictSchema.optional(),
-        verifierType: verifierTypeSchema.optional(),
-        verifyRunId: z.string(),
-      }),
+      z
+        .object({
+          checkItemId: z.string(),
+          checkItemIndex: z.number().optional(),
+          checkItemTitle: z.string().optional(),
+          confidence: z.number().min(0).max(1).optional(),
+          evidence: z
+            .array(
+              z
+                .object({
+                  capturedBy: evidenceCapturedBySchema.optional(),
+                  content: z.string().min(1).optional(),
+                  description: z.string().optional(),
+                  fileId: z.string().min(1).optional(),
+                  type: evidenceTypeSchema,
+                })
+                .refine((e) => Boolean(e.content) !== Boolean(e.fileId), {
+                  message: 'Provide exactly one of `content` or `fileId`.',
+                }),
+            )
+            .optional(),
+          // The builder may hold only its Agent Run operationId (run-start gap);
+          // either handle resolves the session.
+          operationId: z.string().optional(),
+          required: z.boolean().optional(),
+          status: checkStatusSchema.optional(),
+          suggestion: z.string().optional(),
+          toulmin: toulminSchema.optional(),
+          verdict: verdictSchema.optional(),
+          verifierType: verifierTypeSchema.optional(),
+          verifyRunId: z.string().optional(),
+        })
+        .refine((d) => Boolean(d.verifyRunId) || Boolean(d.operationId), {
+          message: 'Provide either `verifyRunId` or `operationId`.',
+        }),
     )
     .mutation(async ({ ctx, input }) => {
-      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+      const run = input.verifyRunId
+        ? await resolveVerifyRun(ctx, input.verifyRunId)
+        : await resolveRunByOperation(ctx, input.operationId!);
 
-      // undefined fields are omitted by drizzle, so a verdict-less evidence
-      // submit won't clobber a verdict a later review pass writes.
+      // `required` / `verifierType` / index / title are stable per plan item, so
+      // hydrate them from the run plan rather than hardcoding defaults — otherwise
+      // an evidence-only submit would flip a soft criterion to required:true on the
+      // conflict-update. `status` is mutable lifecycle state: omit it when there's
+      // no verdict so an existing row keeps its status (and a new row falls to the
+      // DB default 'pending') instead of being reset to 'running'. drizzle omits
+      // undefined fields from both the insert and the conflict-update.
+      const planItem = (run.plan as VerifyCheckItem[] | null)?.find(
+        (i) => i.id === input.checkItemId,
+      );
+
       const checkResult = await ctx.resultModel.upsertByCheckItem({
         checkItemId: input.checkItemId,
-        checkItemIndex: input.checkItemIndex,
-        checkItemTitle: input.checkItemTitle,
+        checkItemIndex: input.checkItemIndex ?? planItem?.index,
+        checkItemTitle: input.checkItemTitle ?? planItem?.title,
         completedAt: input.verdict ? new Date() : undefined,
         confidence: input.confidence,
-        required: input.required ?? true,
-        status: input.status ?? (input.verdict ? statusForVerdict(input.verdict) : 'running'),
+        required: input.required ?? planItem?.required,
+        status: input.status ?? (input.verdict ? statusForVerdict(input.verdict) : undefined),
         suggestion: input.suggestion,
         toulmin: input.toulmin,
         verdict: input.verdict,
-        verifierType: input.verifierType ?? 'agent',
+        verifierType: input.verifierType ?? planItem?.verifierType ?? 'agent',
         verifyRunId: run.id,
       });
 

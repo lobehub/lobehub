@@ -5,6 +5,7 @@ import { FileService } from '@/server/services/file';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
   getFullFileUrl: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    findByOperation: modelMocks.findRunByOperation,
     findById: modelMocks.findRunById,
   })),
 }));
@@ -156,6 +158,69 @@ describe('verifyRouter', () => {
 
       expect(modelMocks.createEvidence).not.toHaveBeenCalled();
       expect(res.evidence).toEqual([]);
+    });
+
+    it('requires either verifyRunId or operationId', async () => {
+      await expect(
+        createCaller().submitCheckEvidence({ checkItemId: 'item-1', verdict: 'passed' } as any),
+      ).rejects.toThrow('Provide either `verifyRunId` or `operationId`.');
+    });
+
+    it('resolves the run from operationId when no verifyRunId is given', async () => {
+      modelMocks.findRunByOperation.mockResolvedValueOnce({ id: 'run-9', plan: [] });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-9' });
+
+      await createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        operationId: 'op-1',
+        verdict: 'passed',
+      });
+
+      expect(modelMocks.findRunByOperation).toHaveBeenCalledWith('op-1');
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({ verifyRunId: 'run-9' }),
+      );
+    });
+
+    it('does NOT reset required/status on an evidence-only submit (no clobber)', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+
+      await createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [{ content: 'note', type: 'text' }],
+        verifyRunId: 'run-1',
+      });
+
+      const arg = modelMocks.upsertByCheckItem.mock.calls[0][0];
+      // Both omitted → drizzle preserves the existing row's values / DB defaults.
+      expect(arg.required).toBeUndefined();
+      expect(arg.status).toBeUndefined();
+    });
+
+    it('hydrates required/verifierType/title from the run plan item', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        plan: [
+          { id: 'item-1', index: 2, required: false, title: 'soft check', verifierType: 'llm' },
+        ],
+      });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+
+      await createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [{ content: 'note', type: 'text' }],
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkItemIndex: 2,
+          checkItemTitle: 'soft check',
+          required: false,
+          verifierType: 'llm',
+        }),
+      );
     });
   });
 

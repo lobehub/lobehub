@@ -650,7 +650,8 @@ export function registerVerifyCommand(program: Command) {
   verify
     .command('submit')
     .description('Submit a check item — upsert its result and attach evidence in one call')
-    .requiredOption('--run <verifyRunId>', 'Target verification session')
+    .option('--run <verifyRunId>', 'Target verification session (or use --operation)')
+    .option('--operation <operationId>', 'Resolve the session from an Agent Run operation id')
     .requiredOption('--item <checkItemId>', 'Plan item id (checkItemId)')
     .option('--type <type>', 'screenshot|gif|video|text|dom_snapshot|transcript')
     .option('--file <path>', 'Local file to upload as the evidence artifact')
@@ -668,11 +669,16 @@ export function registerVerifyCommand(program: Command) {
         file?: string;
         item: string;
         json?: boolean | string;
-        run: string;
+        operation?: string;
+        run?: string;
         title?: string;
         type?: string;
         verdict?: string;
       }) => {
+        if (!options.run && !options.operation) {
+          log.error('Provide --run <verifyRunId> or --operation <operationId>');
+          process.exit(1);
+        }
         const hasEvidence = Boolean(options.file) || Boolean(options.content);
         if (Boolean(options.file) && Boolean(options.content)) {
           log.error('Provide at most one of --file or --content');
@@ -707,6 +713,7 @@ export function registerVerifyCommand(program: Command) {
           checkItemId: options.item,
           checkItemTitle: options.title,
           evidence,
+          operationId: options.operation,
           verdict: options.verdict as any,
           verifyRunId: options.run,
         });

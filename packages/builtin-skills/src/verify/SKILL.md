@@ -4,8 +4,8 @@ description: >
   Self-evidence for task delivery verification. When you run a task that has a
   verify plan, this skill is the full operating manual: what to prove, which
   surface to prove it on (CLI / web / desktop), how to drive that surface with
-  agent-browser, how to get past auth, and how to upload each artifact with
-  `lh verify upload-evidence` so the delivery is judged on real proof — not your
+  agent-browser, how to get past auth, and how to submit each artifact with
+  `lh verify submit` so the delivery is judged on real proof — not your
   word that it works. Triggers on 'verify the task', 'collect evidence', 'prove
   it works', 'upload evidence', 'verify plan', 'requiredEvidence', or any run
   that must self-certify its delivery.
@@ -19,10 +19,10 @@ delivery against a **verify plan** — a list of criteria, some of which demand
 declares `requiredEvidence` **cannot pass on your text alone**: if the artifact
 is missing, the structural gate marks it `uncertain` and the delivery is held.
 
-So while you do the work, capture the proof and upload it. The loop:
+So while you do the work, capture the proof and submit it. The loop:
 
 ```
-discover plan  →  pick the surface  →  capture evidence per criterion  →  upload each  →  self-check coverage
+discover plan  →  pick the surface  →  capture evidence per criterion  →  submit each  →  self-check coverage
 ```
 
 Everything here is portable: the hard dependencies are the `lh` CLI (already
@@ -40,24 +40,21 @@ no local report directory.
   then `agent-browser install` (downloads Chrome). Full reference:
   [references/agent-browser.md](references/agent-browser.md).
 
-## Step 1 — Discover the plan (what to prove + where to attach)
+## Step 1 — Discover the plan (what to prove)
 
-Two reads, joined by `checkItemId`:
+One read tells you what to prove:
 
 ```bash
-# (a) the frozen plan: each item's id, title, and required evidence types
 lh verify plan state "$LOBE_OPERATION_ID" --json
-
-# (b) the pending result rows: maps each checkItemId → checkResultId (the upload handle)
-lh verify result list --operation "$LOBE_OPERATION_ID" --json
 ```
 
-From (a), each `verifyPlan[]` item carries `id` (the **checkItemId**), `title`,
-`required`, and `verifierConfig.requiredEvidence` (`[{ type, hint }]` — the
-artifacts you MUST capture). From (b), each row gives `checkItemId` → `id` (the
-**checkResultId** you upload against). Join them so you have, per criterion: the
-evidence types required and the checkResultId to attach them to. Exact shapes and
-a worked join: [references/plan-format.md](references/plan-format.md).
+Each `verifyPlan[]` item carries `id` (the **checkItemId**), `title`, `required`,
+and `verifierConfig.requiredEvidence` (`[{ type, hint }]` — the artifacts you MUST
+capture). The `checkItemId` is the only handle you need: `lh verify submit` (Step 3)
+keys off it plus your operation id and creates the result row for you, so you do
+**not** need a `checkResultId` up front. (Result rows generally don't exist yet at
+this point — that's expected.) Exact shapes:
+[references/plan-format.md](references/plan-format.md).
 
 > Only items with a non-empty `requiredEvidence` need an artifact. Items without
 > it are judged on the deliverable text alone — don't fabricate evidence.
@@ -90,35 +87,42 @@ Rules of thumb:
   login, authenticate that 端 first or every capture lands on the sign-in
   page. Recipes and boundaries: [references/auth.md](references/auth.md).
 
-## Step 3 — Capture, then upload each artifact
+## Step 3 — Capture, then submit each artifact
 
 Capture each required `type` (recipes per surface in
-[references/evidence.md](references/evidence.md)), then upload one artifact per
-call, attached to the criterion's `checkResultId`:
+[references/evidence.md](references/evidence.md)), then submit one artifact per
+call with the criterion's `checkItemId`. `lh verify submit` resolves your session
+from the operation id, lazily creates/updates the result row, and attaches the
+evidence — one call, no `checkResultId` needed:
 
 ```bash
-# CHECK_RESULT_ID is the checkResultId for this criterion (from Step 1).
+# CHECK_ITEM_ID is the plan item id for this criterion (from Step 1).
 # file artifact (screenshot / dom / video)
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type screenshot \
-  --file ./proof/login.png --by agent-browser \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type screenshot --file ./proof/login.png --by agent-browser \
   --desc "Logged-in home renders the workspace switcher"
 
 # inline text artifact (stdout / computed value) — no file
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type text \
-  --content "$(your-cli command --json)" --by cli \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type text --content "$(your-cli command --json)" --by cli \
   --desc "command reports success after the change"
 ```
 
 `--by` records provenance: `agent-browser` | `cdp` | `cli` | `program`. Use
-`--file` for binaries, `--content` for text — exactly one of them.
+`--file` for binaries, `--content` for text — exactly one. Submit one artifact per
+call; call again for each additional one (same `--item` reuses the row). Leave the
+pass/fail **verdict** to the review step — only add `--verdict` if your task
+explicitly asks you to self-assert the outcome.
 
 ## Step 4 — Self-check coverage (do not skip)
 
 Before you declare the task done, prove every required artifact landed. For each
-criterion with `requiredEvidence`, list what you uploaded and confirm each `type`
-is present:
+criterion with `requiredEvidence`, list what you submitted and confirm each `type`
+is present. After submitting, the result rows exist, so map each `checkItemId` to
+its `checkResultId` and list that row's evidence:
 
 ```bash
+lh verify result list --operation "$LOBE_OPERATION_ID" --json # checkItemId → checkResultId
 lh verify evidence list "$CHECK_RESULT_ID" --json
 ```
 
@@ -136,22 +140,22 @@ Plan item: _"Settings page shows the new 'Beta features' toggle"_,
 ```bash
 OP="$LOBE_OPERATION_ID"
 
-# 1. discover: find this item's checkResultId
-lh verify plan state "$OP" --json              # → item id vci_settings, requires screenshot
-lh verify result list --operation "$OP" --json # → { checkItemId: vci_settings, id: vcr_77 }
+# 1. discover: find this item's checkItemId + required evidence
+lh verify plan state "$OP" --json # → item id vci_settings, requires screenshot
 
 # 2. 端 = web (frontend change). Auth the session if needed (see references/auth.md).
 agent-browser --session app open "http://localhost:3000/settings"
 agent-browser --session app wait --text "Beta features"
 agent-browser --session app screenshot ./proof/settings-beta.png
 
-# 3. upload against the handle
-lh verify evidence upload --check vcr_77 --type screenshot \
+# 3. submit: creates the result row + attaches the screenshot in one call
+lh verify submit --operation "$OP" --item vci_settings --type screenshot \
   --file ./proof/settings-beta.png --by agent-browser \
   --desc "Settings page renders the new Beta features toggle"
 
 # 4. self-check
-lh verify evidence list vcr_77 --json # → one screenshot present → 1/1 covered
+lh verify result list --operation "$OP" --json # → { checkItemId: vci_settings, id: vcr_77 }
+lh verify evidence list vcr_77 --json          # → one screenshot present → 1/1 covered
 ```
 
 ## Portability rules

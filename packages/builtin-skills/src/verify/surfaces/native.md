@@ -33,7 +33,7 @@ Upload as evidence (provenance `cli`, since osascript/screencapture are
 shell-driven):
 
 ```bash
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type screenshot \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type screenshot \
   --file ./proof/native-result.png --by cli \
   --desc "Native app shows the expected state after the change"
 ```
