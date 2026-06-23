@@ -29,7 +29,10 @@ export interface ReactArtifactProject {
   files: Record<string, string>;
 }
 
-export const REACT_ARTIFACT_ENTRY_PATH = '/index.tsx';
+// The HTML shell loaded by the browser when visiting the deployed site.
+export const REACT_ARTIFACT_ENTRY_PATH = '/index.html';
+// The JS bootstrap module the HTML shell references via <script type="module">.
+export const REACT_ARTIFACT_BOOTSTRAP_PATH = '/index.tsx';
 export const REACT_ARTIFACT_APP_PATH = '/App.tsx';
 export const REACT_ARTIFACT_INDEX_HTML_PATH = '/index.html';
 export const REACT_ARTIFACT_VITE_CONFIG_PATH = '/vite.config.ts';
@@ -45,8 +48,11 @@ export const REACT_ARTIFACT_DEFAULT_DEPENDENCIES: Record<string, string> = {
   'class-variance-authority': 'latest',
   'clsx': 'latest',
   'lucide-react': 'latest',
-  'react': 'latest',
-  'react-dom': 'latest',
+  // Pin react + react-dom so esm.sh's *-prefixed external mode resolves every
+  // lib's transitive react dep against the same module instance (otherwise
+  // React 18 vs 19 ABI mismatches surface as "older version of React").
+  'react': '18.3.1',
+  'react-dom': '18.3.1',
   'recharts': 'latest',
   'tailwind-merge': 'latest',
 };
@@ -94,10 +100,17 @@ createRoot(container).render(
 );
 `;
 
+// base: './' emits relative asset URLs in the built HTML/JS so that the same
+// dist works at both the live subdomain root (`/index.html` → `/assets/...`)
+// AND at per-release immutable URLs (`/v3/index.html` → `/v3/assets/...`).
+// Absolute paths (the vite default) break the per-release case because the
+// browser resolves `<script src="/assets/...">` against the subdomain root,
+// bypassing the `/v<N>/` prefix and pulling assets from the LIVE manifest.
 const defaultViteConfig = `import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
@@ -148,7 +161,7 @@ export const buildReactArtifactProject = (
 
   const files: Record<string, string> = {
     [REACT_ARTIFACT_APP_PATH]: overrides?.appCode ?? appCode,
-    [REACT_ARTIFACT_ENTRY_PATH]: overrides?.entry ?? defaultEntry,
+    [REACT_ARTIFACT_BOOTSTRAP_PATH]: overrides?.entry ?? defaultEntry,
     [REACT_ARTIFACT_INDEX_HTML_PATH]: overrides?.indexHtml ?? defaultIndexHtml(resolvedTitle),
     [REACT_ARTIFACT_PACKAGE_JSON_PATH]: defaultPackageJson(
       resolvedTitle,
