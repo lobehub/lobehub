@@ -154,6 +154,39 @@ describe('lobehubSkillStore actions', () => {
       expect(result.current.lobehubSkillExecutingToolIds.has('posthog:query')).toBe(false);
     });
 
+    it('should stringify response data objects as the failure message', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: { detail: 'PostHog query timed out', status: 504 },
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: { query: 'select * from events' },
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: { detail: 'PostHog query timed out', status: 504 },
+        error: JSON.stringify({ detail: 'PostHog query timed out', status: 504 }),
+        errorCode: undefined,
+        success: false,
+      });
+    });
+
     it('should use a generic failure message when an unsuccessful response has no detail', async () => {
       const { result } = renderHook(() => useToolStore());
 

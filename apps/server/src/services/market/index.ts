@@ -506,10 +506,15 @@ export class MarketService {
 
       if (!response.success) {
         const responseError = (response as any).error;
-        const message =
-          responseError?.message ||
-          (typeof response.data === 'string' ? response.data : undefined) ||
-          'LobeHub Skill call failed';
+        let dataMessage: string | undefined;
+
+        if (typeof response.data === 'string') {
+          dataMessage = response.data;
+        } else if (response.data !== undefined && response.data !== null) {
+          dataMessage = JSON.stringify(response.data);
+        }
+
+        const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
 
         return {
           content: message,

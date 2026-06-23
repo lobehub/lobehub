@@ -345,6 +345,28 @@ describe('MarketService', () => {
       });
     });
 
+    it('should stringify response data objects as the failure message', async () => {
+      const service = new MarketService();
+      const mockCallTool = vi.fn().mockResolvedValue({
+        data: { detail: 'PostHog query timed out', status: 504 },
+        success: false,
+      });
+      (service as any).market.skills.callTool = mockCallTool;
+
+      const result = await service.executeLobehubSkill({
+        args: { query: 'select * from events' },
+        provider: 'posthog',
+        toolName: 'query',
+      });
+
+      const message = JSON.stringify({ detail: 'PostHog query timed out', status: 504 });
+      expect(result).toEqual({
+        content: message,
+        error: { code: 'LOBEHUB_SKILL_ERROR', message },
+        success: false,
+      });
+    });
+
     it('should use a generic failure message when an unsuccessful response has no detail', async () => {
       const service = new MarketService();
       const mockCallTool = vi.fn().mockResolvedValue({
@@ -394,6 +416,19 @@ describe('MarketService', () => {
       await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
 
       expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
+      expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
+    });
+
+    it('should fall back to static tools when live discovery returns no tools', async () => {
+      const service = new MarketService();
+      const staticResponse = {
+        tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+      };
+      (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue({ tools: [] });
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
+
+      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
     });
 

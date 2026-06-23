@@ -70,12 +70,17 @@ export class LobehubSkillStoreActionImpl {
 
       if (response.success === false) {
         const responseError = (response as any).error;
+        let dataMessage: string | undefined;
+
+        if (typeof response.data === 'string') {
+          dataMessage = response.data;
+        } else if (response.data !== undefined && response.data !== null) {
+          dataMessage = JSON.stringify(response.data);
+        }
 
         return {
           data: response.data,
-          error:
-            responseError?.message ||
-            (typeof response.data === 'string' ? response.data : 'LobeHub Skill call failed'),
+          error: responseError?.message || dataMessage || 'LobeHub Skill call failed',
           errorCode: responseError?.code,
           success: false,
         };

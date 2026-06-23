@@ -53,6 +53,20 @@ describe('listSkillToolsWithLiveFallback', () => {
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
   });
 
+  it('should fall back to static tools when live discovery returns no tools', async () => {
+    const staticResponse = {
+      tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+    };
+    const skills = {
+      listLiveTools: vi.fn().mockResolvedValue({ instruction: 'No live tools yet.', tools: [] }),
+      listTools: vi.fn().mockResolvedValue(staticResponse),
+    };
+
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toBe(staticResponse);
+
+    expect(skills.listTools).toHaveBeenCalledWith('posthog');
+  });
+
   it('should use static tools when live discovery is unavailable', async () => {
     const staticResponse = {
       tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
