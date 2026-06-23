@@ -84,8 +84,10 @@ export const useReferenceImageUpload = ({
     [slots],
   );
 
-  /** Whether the current model accepts any reference image at all. */
-  const canDropImage = maxCount > 0;
+  // Gate on permission too: without `create_content` the upload handler bails
+  // immediately, so a true flag here would show an active drop zone that
+  // silently accepts and discards the drop.
+  const canDropImage = canCreate && maxCount > 0;
 
   const handleUploadFiles = useCallback(
     async (files: File[]) => {

@@ -34,19 +34,19 @@ interface CreateGenerationPageProps {
 
 const CreateGenerationPage = memo<CreateGenerationPageProps>(
   ({ path, Workspace, PromptInput, dragDisabled, onUploadFiles }) => {
-  const isPersonalPath = useMatch({ end: true, path });
-  const isWorkspacePath = useMatch({ end: true, path: `/:workspaceSlug${path}` });
-  const [topic] = useQueryState('topic');
-  const isHome = !topic;
+    const isPersonalPath = useMatch({ end: true, path });
+    const isWorkspacePath = useMatch({ end: true, path: `/:workspaceSlug${path}` });
+    const [topic] = useQueryState('topic');
+    const isHome = !topic;
 
-  if (!isPersonalPath && !isWorkspacePath) return null;
+    if (!isPersonalPath && !isWorkspacePath) return null;
 
-  const content = (
-    <Flexbox
-      height={'100%'}
-      style={{ flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
-      width={'100%'}
-    >
+    const content = (
+      <Flexbox
+        height={'100%'}
+        style={{ flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        width={'100%'}
+      >
         <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }} width={'100%'}>
           <WideScreenContainer wrapperStyle={{ minHeight: '100%' }}>
             <AnimatePresence initial={false} mode="wait">
@@ -96,34 +96,42 @@ const CreateGenerationPage = memo<CreateGenerationPageProps>(
             </motion.div>
           )}
         </AnimatePresence>
-    </Flexbox>
-  );
+      </Flexbox>
+    );
 
-  return (
-    <>
-      <NavHeader
-        right={<WideScreenButton />}
-        styles={{
-          center: {
-            alignItems: 'center',
-            display: 'flex',
-            justifyContent: 'center',
-            minWidth: 0,
-          },
-          left: { flex: 1, minWidth: 0 },
-          right: { flex: 1, minWidth: 0 },
-        }}
-      />
-      {onUploadFiles ? (
-        <DragUploadZone disabled={dragDisabled} style={dropZoneStyle} onUploadFiles={onUploadFiles}>
-          {content}
-        </DragUploadZone>
-      ) : (
-        content
-      )}
-    </>
-  );
-});
+    return (
+      <>
+        <NavHeader
+          right={<WideScreenButton />}
+          styles={{
+            center: {
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'center',
+              minWidth: 0,
+            },
+            left: { flex: 1, minWidth: 0 },
+            right: { flex: 1, minWidth: 0 },
+          }}
+        />
+        {onUploadFiles ? (
+          <DragUploadZone
+            disabled={dragDisabled}
+            // Generation upload only accepts images; keep the overlay copy/icons
+            // image-only so a dropped PDF/text file isn't falsely invited.
+            enabledFiles={false}
+            style={dropZoneStyle}
+            onUploadFiles={onUploadFiles}
+          >
+            {content}
+          </DragUploadZone>
+        ) : (
+          content
+        )}
+      </>
+    );
+  },
+);
 
 CreateGenerationPage.displayName = 'CreateGenerationPage';
 
