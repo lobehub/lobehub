@@ -6,6 +6,7 @@ import { default as ai302 } from './ai302';
 import { default as ai360 } from './ai360';
 import { default as aihubmix } from './aihubmix';
 import { default as akashchat } from './akashchat';
+import { default as atlascloud } from './atlascloud';
 import { default as antgroup } from './antgroup';
 import { default as anthropic } from './anthropic';
 import { default as azure } from './azure';
@@ -114,6 +115,7 @@ const staticModelMap: ModelsMap = {
   ai360,
   aihubmix,
   akashchat,
+  atlascloud,
   antgroup,
   anthropic,
   azure,
@@ -227,6 +229,7 @@ export { default as ai21 } from './ai21';
 export { default as ai302 } from './ai302';
 export { default as ai360 } from './ai360';
 export { default as aihubmix } from './aihubmix';
+export { default as atlascloud } from './atlascloud';
 export { default as akashchat } from './akashchat';
 export { default as antgroup } from './antgroup';
 export { default as anthropic } from './anthropic';

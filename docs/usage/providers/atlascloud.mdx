@@ -1,0 +1,44 @@
+---
+title: Atlas Cloud Provider Configuration
+description: Learn how to configure and use the Atlas Cloud provider in LobeHub
+tags:
+  - Atlas Cloud
+  - Provider Configuration
+  - Setup Guide
+---
+
+# Atlas Cloud Provider Configuration
+
+[Atlas Cloud](https://www.atlascloud.ai/?utm_source=lobehub) is a full-modal AI inference platform that provides a unified, OpenAI-compatible API for LLM, image generation, and video generation. This guide will help you set up the Atlas Cloud provider in LobeHub.
+
+## Prerequisites
+
+Before using the Atlas Cloud API, you need to:
+
+1. **Create an Atlas Cloud Account**
+   - Visit [Atlas Cloud](https://www.atlascloud.ai/?utm_source=lobehub)
+   - Sign up for an account
+
+2. **Obtain an API Key**
+   - Log in to the [Atlas Cloud Console](https://www.atlascloud.ai/console?utm_source=lobehub)
+   - Create an API key
+
+## Configuration
+
+### Environment Variables
+
+Add the following environment variable to your `.env` file:
+
+```bash
+# Atlas Cloud API Key (required)
+ATLASCLOUD_API_KEY=your_atlascloud_api_key
+```
+
+### Available Models
+
+Atlas Cloud provides access to 59+ LLM models including DeepSeek V4 Pro, Qwen3, Claude, GPT-5, Gemini 3.5, GLM-5, Kimi K2, MiniMax-M2, Grok 4.3, and more.
+
+## Troubleshooting
+
+- **"Invalid API Key"** → Check the key in the Atlas Cloud console.
+- **Empty response / length finish reason** → Models like `deepseek-ai/deepseek-v4-pro` are reasoning models; increase `max_tokens`.

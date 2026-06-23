@@ -1,0 +1,44 @@
+---
+title: Atlas Cloud 提供商配置
+description: 学习如何在 LobeHub 中配置和使用 Atlas Cloud 提供商
+tags:
+  - Atlas Cloud
+  - 提供商配置
+  - 配置指南
+---
+
+# Atlas Cloud 提供商配置
+
+[Atlas Cloud](https://www.atlascloud.ai/?utm_source=lobehub) 是一个全模态 AI 推理平台，通过统一的 OpenAI 兼容 API 提供 LLM、图像生成和视频生成能力。本指南将帮助您在 LobeHub 中设置 Atlas Cloud 提供商。
+
+## 前提条件
+
+使用 Atlas Cloud API 之前，您需要：
+
+1. **注册 Atlas Cloud 账号**
+   - 访问 [Atlas Cloud](https://www.atlascloud.ai/?utm_source=lobehub)
+   - 创建账号
+
+2. **获取 API Key**
+   - 登录 [Atlas Cloud 控制台](https://www.atlascloud.ai/console?utm_source=lobehub)
+   - 创建 API Key
+
+## 配置
+
+### 环境变量
+
+在 `.env` 文件中添加以下环境变量：
+
+```bash
+# Atlas Cloud API Key（必填）
+ATLASCLOUD_API_KEY=your_atlascloud_api_key
+```
+
+### 可用模型
+
+Atlas Cloud 提供 59 个以上 LLM 模型，包括 DeepSeek V4 Pro、Qwen3 系列、Claude、GPT-5、Gemini 3.5、GLM-5、Kimi K2、MiniMax-M2、Grok 4.3 等。
+
+## 故障排查
+
+- **"Invalid API Key"** → 检查 Atlas Cloud 控制台中的 Key 是否有效。
+- **回复为空 / finish_reason=length** → 如 `deepseek-ai/deepseek-v4-pro` 是推理模型，请增大 `max_tokens`。
