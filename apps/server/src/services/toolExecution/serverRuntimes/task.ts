@@ -41,15 +41,25 @@ const resolveWorkspaceId = async (
 export interface TaskRuntimeDeps {
   agentId?: string;
   agentModel: AgentModel;
+  // Assistant message that carried the createTask tool call — the tool-call
+  // anchor, NOT the source user message. Recorded as `context.origin.messageId`.
+  assistantMessageId?: string;
+  // Pointers to the conversation that invoked the createTask tool. Recorded into
+  // `tasks.context.origin` so the task's handoff result can later be delivered
+  // back to this session (LOBE-10625). All optional — a task can be created
+  // outside an agent turn (e.g. via the API).
+  operationId?: string;
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
   taskModel: TaskModel;
   taskService: TaskService;
+  toolCallId?: string;
+  topicId?: string;
 }
 
 export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
-  const { agentId, scope, taskId } = deps;
+  const { agentId, assistantMessageId, operationId, scope, taskId, toolCallId, topicId } = deps;
   // Models are read through `deps` (not destructured) so callers can swap them
   // in lazily — e.g. after async workspace resolution in the runtime factory.
   const agentModel = () => deps.agentModel;
@@ -97,8 +107,18 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
+    // Capture where this task was spawned from so the lifecycle can later
+    // bridge the handoff result back to the creator conversation (LOBE-10625).
+    // Only persist the pocket when we actually have a creator agent + topic;
+    // tasks created outside an agent turn (e.g. via API) have no origin.
+    const origin =
+      agentId && topicId
+        ? { agentId, messageId: assistantMessageId, operationId, toolCallId, topicId }
+        : undefined;
+
     const task = await taskService().createTask({
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
+      context: origin ? { origin } : undefined,
       createdByAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
@@ -584,7 +604,8 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
-    const { agentId, taskId, scope } = context;
+    const { agentId, assistantMessageId, operationId, taskId, toolCallId, topicId, scope } =
+      context;
 
     // Models are wired in lazily after the workspaceId is resolved from the
     // owning task row. `createTaskRuntime` reads them through this shared
@@ -592,8 +613,12 @@ export const taskRuntime: ServerRuntimeRegistration = {
     // method without re-creating the runtime.
     const deps = {
       agentId,
+      assistantMessageId,
+      operationId,
       scope,
       taskId,
+      toolCallId,
+      topicId,
       // Initial personal-mode models cover the no-task-context case. Replaced
       // before the first call when `taskId` is set.
       agentModel: new AgentModel(db, userId),
