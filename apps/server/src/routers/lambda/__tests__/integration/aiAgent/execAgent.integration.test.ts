@@ -6,7 +6,7 @@
  * InMemory implementations when Redis is not available (test environment).
  */
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, messages, threads, topics } from '@lobechat/database/schemas';
+import { agents, chatGroups, messages, threads, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import OpenAI from 'openai';
@@ -255,6 +255,40 @@ describe('execAgent', () => {
 
       expect(result.success).toBe(true);
       expect(result.operationId).toBeDefined();
+    });
+
+    // Regression: LOBE-10604 / LOBE-10627 — a group conversation that reaches
+    // execAgent without a pre-created topicId must still persist groupId on the
+    // new topic. Otherwise the topic is created group-less, only surfaces under
+    // the member agent's list, and never appears in the group sidebar (which
+    // queries `topics.groupId`), so the conversation "disappears" from the group.
+    it('should persist groupId on the created topic when running in a group context', async () => {
+      mockResponsesCreate.mockResolvedValue(
+        createMockResponsesAPIStream('Hello from group context') as any,
+      );
+
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({ title: 'Regression Group', userId })
+        .returning();
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const result = await caller.execAgent({
+        agentId: testAgentId,
+        appContext: { groupId: group.id },
+        prompt: 'Hello, group via execAgent',
+      });
+
+      expect(result.success).toBe(true);
+
+      const createdTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.agentId, testAgentId));
+
+      expect(createdTopics).toHaveLength(1);
+      expect(createdTopics[0].groupId).toBe(group.id);
     });
   });
 

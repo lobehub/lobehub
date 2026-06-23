@@ -1160,6 +1160,14 @@ export class AiAgentService {
       const fallbackTitleSource = markdownToTxt(prompt);
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
+        // Persist the group association when running inside a group conversation.
+        // Without it the topic is created group-less and only shows under the
+        // member agent's topic list — never in the group sidebar (which queries
+        // `topics.groupId`), so the conversation silently "disappears" from the
+        // group. execGroupAgent normally pre-creates the topic, but any path
+        // that reaches execAgent without a topicId (e.g. the async/queue run)
+        // must carry the groupId through too. (LOBE-10604 / LOBE-10627)
+        groupId: appContext?.groupId,
         metadata,
         title:
           title !== undefined
@@ -1169,9 +1177,10 @@ export class AiAgentService {
       });
       topicId = newTopic.id;
       log(
-        'execAgent: created new topic %s with trigger %s, cronJobId %s',
+        'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
         topicId,
         trigger || 'default',
+        appContext?.groupId || 'none',
         cronJobId || 'none',
       );
     } else {
