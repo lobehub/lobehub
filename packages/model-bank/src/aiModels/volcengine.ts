@@ -103,7 +103,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -137,7 +137,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',

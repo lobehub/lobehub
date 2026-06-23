@@ -7,26 +7,47 @@ import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';
 
+const resolveVolcengineReasoningParams = (model: string, thinking: any, reasoning_effort: any) => {
+  let targetThinking = thinking;
+  let targetReasoningEffort = reasoning_effort;
+
+  if (model?.includes('deepseek-v4')) {
+    if (thinking?.type === 'disabled') {
+      targetThinking = { type: 'disabled' };
+      targetReasoningEffort = 'minimal';
+    } else if (thinking?.type === 'enabled' || reasoning_effort) {
+      targetThinking = { type: 'enabled' };
+      targetReasoningEffort = reasoning_effort || 'high';
+    }
+  }
+
+  return {
+    thinking: targetThinking,
+    reasoning_effort: targetReasoningEffort,
+  };
+};
+
 export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
   chatCompletion: {
     handlePayload: (payload) => {
       const { enabledSearch, thinking, reasoning_effort, ...rest } = payload;
+      const params = resolveVolcengineReasoningParams(payload.model, thinking, reasoning_effort);
 
       if (enabledSearch) {
         return {
           ...rest,
           apiMode: 'responses',
           enabledSearch,
-          thinking,
-          reasoning_effort,
+          thinking: params.thinking,
+          reasoning_effort: params.reasoning_effort,
         } as ChatStreamPayload;
       }
 
       return {
         ...rest,
-        ...(thinking?.type && { thinking: { type: thinking.type } }),
-        ...(reasoning_effort && { reasoning_effort }),
+        ...(params.thinking?.type && { thinking: { type: params.thinking.type } }),
+        ...(params.reasoning_effort && { reasoning_effort: params.reasoning_effort }),
       } as any;
     },
   },
@@ -41,6 +62,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   responses: {
     handlePayload: (payload) => {
       const { enabledSearch, tools, thinking, reasoning_effort, ...rest } = payload;
+      const params = resolveVolcengineReasoningParams(payload.model, thinking, reasoning_effort);
 
       const volcengineTools = enabledSearch
         ? [
@@ -57,8 +79,8 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
       return {
         ...rest,
         tools: volcengineTools,
-        ...(thinking?.type && { thinking: { type: thinking.type } }),
-        ...(reasoning_effort && { reasoning_effort }),
+        ...(params.thinking?.type && { thinking: { type: params.thinking.type } }),
+        ...(params.reasoning_effort && { reasoning_effort: params.reasoning_effort }),
       } as any;
     },
   },
