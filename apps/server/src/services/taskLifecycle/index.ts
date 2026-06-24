@@ -28,11 +28,11 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
-import { TaskReviewService } from '@/server/services/taskReview';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
 import {
@@ -129,26 +129,12 @@ export class TaskLifecycleService {
         );
       }
 
-      // 3. Auto-review (if configured) — Judge is the trusted accept signal:
-      //    when review passes, runAutoReview itself transitions the task to 'completed'.
-      //    Returns true if it terminated the task (completed/paused for retry/etc.).
-      const reviewTerminated =
-        currentTask && topicId && lastAssistantContent
-          ? await this.runAutoReview(
-              taskId,
-              taskIdentifier,
-              topicId,
-              lastAssistantContent,
-              currentTask,
-            )
-          : false;
-
-      if (reviewTerminated) {
-        // Review (Judge) already transitioned the task to its terminal state —
-        // bridge the result here before the early return.
-        await this.bridgeResultToCreator(params);
-        return;
-      }
+      // 3. Delivery acceptance now runs through Verify (LOBE-10624): the verify
+      //    run settles asynchronously (agent verifier) and drives the task to its
+      //    terminal state via `driveTaskFromVerify`. The legacy eval-rubric
+      //    auto-review is removed; this branch only lets the task go on to the
+      //    brief + post-tick transition, and the verify-bound check below makes it
+      //    "let go" so verify owns the completion decision.
 
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
@@ -181,6 +167,23 @@ export class TaskLifecycleService {
       //      *proposal* of completion, and the user must explicitly approve
       //      via the brief action to transition to 'completed'. Auto-complete
       //      only happens via the Judge path above.
+      // "Let go" for verify-bound runs: when a confirmed verify plan exists for
+      // this op, delivery acceptance is decided asynchronously by Verify
+      // (driveTaskFromVerify completes / pauses the task on settle), so we must
+      // NOT pause-for-review here — the task stays running until verify settles.
+      // Best-effort: a verify-read failure must never break the task lifecycle.
+      let verifyBound = false;
+      try {
+        const verifyRun = await new VerifyRunModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).findByOperation(params.operationId);
+        verifyBound = Boolean(verifyRun?.planConfirmedAt);
+      } catch (error) {
+        log('verify-bound check failed for op=%s (non-fatal): %O', params.operationId, error);
+      }
+
       if (currentTask) {
         if (
           currentTask.automationMode === 'schedule' &&
@@ -190,7 +193,7 @@ export class TaskLifecycleService {
           await this.taskModel.updateStatus(taskId, 'completed', { completedAt: new Date() });
         } else if (currentTask.automationMode) {
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
-        } else if (this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
+        } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
       }
@@ -621,131 +624,6 @@ export class TaskLifecycleService {
       log('synthesize: brief created task=%s topic=%s type=%s', taskIdentifier, topicId, briefType);
     } catch (e) {
       console.warn('[TaskLifecycle] brief synthesis failed:', e);
-    }
-  }
-
-  /**
-   * Run auto-review if configured.
-   *
-   * Acts as a "Judge" accept signal: when review passes the task transitions to
-   * `completed` here; when it fails, the task is paused for retry or human action.
-   *
-   * @returns true if this method terminated the task lifecycle (caller should not
-   *          additionally pause/transition); false if review wasn't configured or
-   *          a non-terminal path was taken.
-   */
-  private async runAutoReview(
-    taskId: string,
-    taskIdentifier: string,
-    topicId: string,
-    content: string,
-    currentTask: any,
-  ): Promise<boolean> {
-    const reviewConfig = this.taskModel.getReviewConfig(currentTask);
-    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return false;
-
-    try {
-      const topicLinks = await this.taskTopicModel.findByTaskId(taskId);
-      const targetTopic = topicLinks.find((t) => t.topicId === topicId);
-      const iteration = (targetTopic?.reviewIteration || 0) + 1;
-
-      const reviewService = new TaskReviewService(this.db, this.userId, this.workspaceId);
-      const reviewResult = await reviewService.review({
-        content,
-        iteration,
-        judge: reviewConfig.judge || {},
-        rubrics: reviewConfig.rubrics,
-        taskName: currentTask.name || taskIdentifier,
-      });
-
-      log(
-        'review result: task=%s passed=%s score=%d iteration=%d/%d',
-        taskIdentifier,
-        reviewResult.passed,
-        reviewResult.overallScore,
-        iteration,
-        reviewConfig.maxIterations,
-      );
-
-      // Save review result to task_topics
-      await this.taskTopicModel.updateReview(taskId, topicId, {
-        iteration,
-        passed: reviewResult.passed,
-        score: reviewResult.overallScore,
-        scores: reviewResult.rubricResults,
-      });
-
-      if (reviewResult.passed) {
-        // Judge is a trusted accept signal — the brief is created already-resolved
-        // (no actionable buttons in the UI) and the task transitions to 'completed'.
-        const now = new Date();
-        await this.briefModel.create({
-          agentId: currentTask?.assigneeAgentId || undefined,
-          priority: 'info',
-          resolvedAction: 'auto-judge-pass',
-          resolvedAt: now,
-          readAt: now,
-          summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
-          taskId,
-          title: `${taskIdentifier} review passed`,
-          trigger: 'task',
-          type: 'result',
-        });
-        await this.taskModel.updateStatus(taskId, 'completed', { error: null });
-        await this.cascadeAfterAutoComplete(taskId);
-        return true;
-      }
-
-      if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
-        await this.briefModel.create({
-          agentId: currentTask?.assigneeAgentId || undefined,
-          priority: 'normal',
-          summary: `Review failed (score: ${reviewResult.overallScore}%, iteration ${iteration}/${reviewConfig.maxIterations}). Auto-retrying...`,
-          taskId,
-          title: `${taskIdentifier} review failed, retrying`,
-          trigger: 'task',
-          type: 'insight',
-        });
-
-        // Pause so the webhook / polling loop can pick up and re-run
-        await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-        return true;
-      }
-
-      // Max iterations reached — surface the (failed) result for human accept/retry.
-      // Type is `result` so the user's `approve` action is treated as a terminal
-      // accept signal (force-pass) by BriefService.resolve. Result briefs render
-      // a fixed single-button UI, so no custom actions are persisted.
-      await this.briefModel.create({
-        agentId: currentTask?.assigneeAgentId || undefined,
-        priority: 'urgent',
-        summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
-        taskId,
-        title: `${taskIdentifier} review failed — needs attention`,
-        trigger: 'task',
-        type: 'result',
-      });
-      await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-      return true;
-    } catch (e) {
-      console.warn('[TaskLifecycle] auto-review failed:', e);
-      return false;
-    }
-  }
-
-  /**
-   * Trigger downstream task kickoff after this task auto-completes via judge.
-   *
-   * Lazy-imports `TaskRunnerService` to break the runner ↔ lifecycle import
-   * cycle (the runner already constructs a lifecycle for its own hooks).
-   */
-  private async cascadeAfterAutoComplete(completedTaskId: string): Promise<void> {
-    try {
-      const { TaskRunnerService } = await import('@/server/services/taskRunner');
-      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
-      await runner.cascadeOnCompletion(completedTaskId);
-    } catch (e) {
-      console.warn('[TaskLifecycle] dependency cascade failed:', e);
     }
   }
 }

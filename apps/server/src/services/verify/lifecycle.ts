@@ -7,8 +7,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
-import { maybeAutoRepair } from './repairService';
-import { VerifyReporterService } from './reporter';
+import { finalizeVerifyRun } from './settle';
 
 const log = debug('lobe-server:verify-lifecycle');
 
@@ -83,26 +82,24 @@ export const runVerifyOnCompletion = async (
       }),
     });
 
-    // Auto-repair once verification has fully resolved. For runs with only inline
-    // (LLM/program) checks, everything is resolved now; runs with async agent
-    // checks no-op here and re-trigger from the verifier's writeback path.
-    await maybeAutoRepair(db, userId, params.operationId, workspaceId);
-
-    // Generate the report only at the link tail — when verification settled into a
-    // terminal verdict (passed/failed). A run that spawned a repair is now
-    // `repairing`; its report is generated when the repair op completes, so a
-    // single card lands on the final delivery instead of one per repair round.
-    const settled = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+    // Settle the run: repair-aware tail, then (on terminal settle) report + drive
+    // the bound task. For inline (LLM/program) checks everything is resolved now;
+    // runs with async agent checks no-op here and re-enter the same finalizer from
+    // the verifier's writeback path (verifyResult runtime) — so the task is driven
+    // from exactly one place regardless of which path finished last.
+    await finalizeVerifyRun(
+      db,
+      userId,
       params.operationId,
+      {
+        report: {
+          deliverable: params.deliverable,
+          goal: params.goal,
+          modelConfig: { model: op.model, provider: op.provider },
+        },
+      },
+      workspaceId,
     );
-    if (settled?.status === 'passed' || settled?.status === 'failed') {
-      await new VerifyReporterService(db, userId, workspaceId).generateReport({
-        deliverable: params.deliverable,
-        goal: params.goal,
-        modelConfig: { model: op.model, provider: op.provider },
-        verifyRunId: settled.id,
-      });
-    }
   } catch (error) {
     log('runVerifyOnCompletion failed for op %s (non-fatal): %O', params.operationId, error);
   }

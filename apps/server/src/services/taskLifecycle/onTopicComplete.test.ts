@@ -13,6 +13,13 @@ vi.mock('@/server/services/taskScheduler', () => ({
   createTaskSchedulerModule: () => fakeScheduler,
 }));
 
+// onTopicComplete reads the op's verify run to decide whether to "let go" for
+// async Verify-driven completion (LOBE-10624). Mock it; default = no verify run.
+const verifyFindByOperation = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/database/models/verifyRun', () => ({
+  VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -49,6 +56,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     updateTopicStatus = vi.fn().mockResolvedValue(undefined);
     createBrief = vi.fn().mockResolvedValue(undefined);
     getReviewConfig = vi.fn().mockReturnValue(undefined);
+    verifyFindByOperation.mockReset().mockResolvedValue(undefined);
 
     const taskModel = (service as any).taskModel;
     taskModel.updateStatus = updateStatus;
@@ -252,15 +260,12 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(synthesize).not.toHaveBeenCalled();
     });
 
-    it('does not call synthesizeTopicBrief when judge terminates (review enabled + passed)', async () => {
+    it('verify-bound task → does NOT pause-for-review (lets Verify drive completion async)', async () => {
       const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
-      // runAutoReview returns true → onTopicComplete returns early before
-      // reaching synthesizeTopicBrief.
-      vi.spyOn(service as any, 'runAutoReview').mockResolvedValue(true);
-      const synthesize = vi
-        .spyOn(service as any, 'synthesizeTopicBrief')
-        .mockResolvedValue(undefined);
+      // A confirmed verify run exists for this op → onTopicComplete "lets go".
+      verifyFindByOperation.mockResolvedValue({ planConfirmedAt: new Date() });
+      vi.spyOn(service as any, 'synthesizeTopicBrief').mockResolvedValue(undefined);
       vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
 
       await service.onTopicComplete({
@@ -272,7 +277,8 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(synthesize).not.toHaveBeenCalled();
+      // Did not pause — driveTaskFromVerify will complete/pause the task on settle.
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
   });
 

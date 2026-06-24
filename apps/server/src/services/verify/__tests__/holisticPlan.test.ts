@@ -8,7 +8,7 @@ const { setPlanMock, ensureForOperationMock, getCriteriaMock, findByIdsMock } = 
   ensureForOperationMock: vi.fn(async () => ({ id: 'run-1' })),
   findByIdsMock: vi.fn(async () => [] as any[]),
   getCriteriaMock: vi.fn(async () => [] as any[]),
-  setPlanMock: vi.fn(async () => {}),
+  setPlanMock: vi.fn(async (_runId: string, _items: any[]) => {}),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
