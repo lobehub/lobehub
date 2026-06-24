@@ -226,4 +226,23 @@ describe('RouteMetaBridge', () => {
       );
     });
   });
+
+  it('publishes empty dynamic meta for a static route without DynamicMeta', async () => {
+    mocks.setMatches([
+      {
+        data: undefined,
+        handle: { meta: { titleKey: 'navigation.settings' } },
+        id: 'routes/settings',
+        params: {},
+        pathname: '/settings',
+      },
+    ]);
+
+    render(<RouteMetaBridge />);
+
+    await waitFor(() => {
+      expect(document.title).toBe(`translated:navigation.settings · ${BRANDING_NAME}`);
+      expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith({}, '/settings');
+    });
+  });
 });

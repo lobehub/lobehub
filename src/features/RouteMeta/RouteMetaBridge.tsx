@@ -52,6 +52,7 @@ const RouteMetaBridge = memo(() => {
   const matched = useMatchedRouteMeta();
   const currentUrl = location.pathname + location.search;
   const matchedRouteId = matched?.routeId ?? null;
+  const DynamicMeta = matched?.meta.DynamicMeta;
   const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ meta: {}, routeId: null });
 
   const publishRouteMeta = useCallback(
@@ -79,23 +80,24 @@ const RouteMetaBridge = memo(() => {
   const title = matched ? currentDynamic.title || (titleKey ? translate(titleKey) : '') : '';
 
   useEffect(() => {
-    if (matchedRouteId) return;
+    if (DynamicMeta) return;
 
-    setDynamic({ meta: {}, routeId: null });
+    setDynamic({ meta: {}, routeId: matchedRouteId });
     if (isDesktop) {
-      setCurrentRouteMeta(null);
+      if (matchedRouteId) publishRouteMeta({}, currentUrl);
+      else setCurrentRouteMeta(null);
     }
-  }, [matchedRouteId, publishRouteMeta, setCurrentRouteMeta]);
+  }, [DynamicMeta, matchedRouteId, currentUrl, publishRouteMeta, setCurrentRouteMeta]);
 
   useEffect(() => {
     document.title = title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
   }, [title]);
 
-  if (!matched) return null;
+  if (!matched || !DynamicMeta) return null;
 
   return (
     <DynamicMetaRunner
-      DynamicMeta={matched.meta.DynamicMeta}
+      DynamicMeta={DynamicMeta}
       key={matched.routeId}
       params={routeMetaParams}
       onResolve={handleResolve}
