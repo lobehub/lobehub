@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   betterAuth: vi.fn((options) => options),
+  EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+  setGlobalDispatcher: vi.fn(),
 }));
 
 vi.mock('@better-auth/expo', () => ({
@@ -46,8 +48,8 @@ vi.mock('better-auth/plugins', () => ({
 }));
 
 vi.mock('undici', () => ({
-  ProxyAgent: vi.fn(),
-  setGlobalDispatcher: vi.fn(),
+  EnvHttpProxyAgent: mocks.EnvHttpProxyAgent,
+  setGlobalDispatcher: mocks.setGlobalDispatcher,
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -103,6 +105,24 @@ vi.mock('@/server/services/user', () => ({
 }));
 
 describe('defineConfig', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    process.env = { ...originalEnv, NODE_ENV: 'test' };
+    delete process.env.HTTP_PROXY;
+    delete process.env.http_proxy;
+    delete process.env.HTTPS_PROXY;
+    delete process.env.https_proxy;
+    delete process.env.NO_PROXY;
+    delete process.env.no_proxy;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   it('should revoke existing sessions after password reset by default', async () => {
     const { defineConfig } = await import('./define-config');
 
@@ -115,5 +135,33 @@ describe('defineConfig', () => {
         }),
       }),
     );
+  });
+
+  it('should respect NO_PROXY when configuring the development proxy dispatcher', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.HTTP_PROXY = 'http://127.0.0.1:7890';
+    process.env.HTTPS_PROXY = 'http://127.0.0.1:7890';
+    process.env.NO_PROXY = 'example.com,localhost';
+
+    await import('./define-config');
+
+    expect(mocks.EnvHttpProxyAgent).toHaveBeenCalledWith({
+      httpProxy: 'http://127.0.0.1:7890',
+      httpsProxy: 'http://127.0.0.1:7890',
+      noProxy: 'example.com,localhost,127.0.0.1,[::1]',
+    });
+    expect(mocks.setGlobalDispatcher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          noProxy: 'example.com,localhost,127.0.0.1,[::1]',
+        }),
+      }),
+    );
+  });
+
+  it('should preserve NO_PROXY wildcard semantics', async () => {
+    const { mergeLocalNoProxy } = await import('./define-config');
+
+    expect(mergeLocalNoProxy('*')).toBe('*');
   });
 });
