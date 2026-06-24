@@ -7,9 +7,9 @@ import {
   isSameTabTarget,
   PERSONAL_TAB_SCOPE,
   resolveTabScope,
+  type TabScope,
   tabScopeKey,
   tabTargetId,
-  type TabScope,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { type DynamicRouteMeta } from '@/spa/router/routeMeta';

@@ -5,8 +5,8 @@ import {
   isSameTabTarget,
   PERSONAL_TAB_SCOPE,
   resolveTabScope,
-  tabScopeKey,
   type TabScope,
+  tabScopeKey,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
@@ -21,8 +21,8 @@ const generateTabId = (): string => `tab_${nanoid(8)}`;
 // ======== Types ======== //
 
 export interface TabPagesState {
-  activeTabScope: TabScope;
   activeTabId: string | null;
+  activeTabScope: TabScope;
   tabs: TabItem[];
 }
 
