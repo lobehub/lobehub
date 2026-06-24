@@ -21,6 +21,7 @@
   "billing.pay": "立即支付",
   "billing.paymentGateway": "支付渠道",
   "billing.paymentMethod": "支付方式",
+  "billing.paymentMethod.openFailed": "打开支付方式设置失败",
   "billing.price": "订阅价格",
   "billing.startDate": "开始日期",
   "billing.status": "交易状态",
