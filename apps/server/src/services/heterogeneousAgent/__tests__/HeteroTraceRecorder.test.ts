@@ -89,7 +89,15 @@ describe('HeteroTraceRecorder', () => {
         usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
       }),
       ev('stream_chunk', 1, 200, { chunkType: 'text', content: 'done' }),
-      ev('step_complete', 1, 210, { costUsd: 0.002, phase: 'result_usage' }),
+      ev('step_complete', 1, 205, { phase: 'turn_metadata', usage: { totalTokens: 8 } }),
+      // Final result_usage carries the authoritative SESSION total (25) — which
+      // is deliberately NOT the sum of the per-turn steps (15 + 8 = 23), proving
+      // finalize prefers it and does not double-count.
+      ev('step_complete', 1, 210, {
+        costUsd: 0.002,
+        phase: 'result_usage',
+        usage: { totalInputTokens: 12, totalOutputTokens: 13, totalTokens: 25 },
+      }),
     ]);
 
     const totals = await recorder.finalize('op-1', {
@@ -99,7 +107,15 @@ describe('HeteroTraceRecorder', () => {
       userId: 'user-1',
     });
 
-    expect(totals).toMatchObject({ llmCalls: 1, stepCount: 2, toolCalls: 1, totalTokens: 15 });
+    expect(totals).toMatchObject({
+      llmCalls: 1,
+      stepCount: 2,
+      toolCalls: 1,
+      totalInputTokens: 12,
+      totalOutputTokens: 13,
+      totalTokens: 25, // session total, not the 23 step sum
+    });
+    expect(totals!.totalCost).toBeCloseTo(0.002);
     expect(totals!.traceS3Key).toBe('agent-traces/agent-1/topic-1/op-1.json.zst');
 
     const snap = store.saved.get('op-1')!;
@@ -112,7 +128,7 @@ describe('HeteroTraceRecorder', () => {
       provider: 'anthropic',
       topicId: 'topic-1',
       totalSteps: 2,
-      totalTokens: 15,
+      totalTokens: 25, // session total
       traceId: 'op-1',
       userId: 'user-1',
     });
@@ -135,7 +151,8 @@ describe('HeteroTraceRecorder', () => {
     expect(step1.stepIndex).toBe(1);
     expect(step1.stepType).toBe('call_llm'); // pure text
     expect(step1.content).toBe('done');
-    expect(step1.totalCost).toBeCloseTo(0.002);
+    expect(step1.totalTokens).toBe(8); // its own turn_metadata, NOT the session total
+    expect(step1.totalCost).toBe(0); // result_usage cost is a session total, not folded per-step
 
     // context-engine is never populated for hetero steps
     expect(step0.contextEngine).toBeUndefined();

@@ -27,6 +27,15 @@ export interface HeteroTraceTotals {
   traceS3Key: string;
 }
 
+/** Authoritative run-level usage from Claude Code's final `result_usage` event,
+ * stashed on the partial so finalize prefers it over summing per-turn steps. */
+interface HeteroSessionUsage {
+  totalCost?: number;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
+  totalTokens?: number;
+}
+
 const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
@@ -80,10 +89,21 @@ export class HeteroTraceRecorder {
       if (!partial) return null;
 
       const steps = (partial.steps ?? []).slice().sort((a, b) => a.stepIndex - b.stepIndex);
-      const totalTokens = steps.reduce((sum, s) => sum + (s.totalTokens || 0), 0);
-      const totalInputTokens = steps.reduce((sum, s) => sum + (s.inputTokens || 0), 0);
-      const totalOutputTokens = steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
-      const totalCost = steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+
+      // Prefer the authoritative session totals (CC's final `result_usage`) over
+      // summing per-turn steps — summing double-counts (see applyEvent).
+      const session = (
+        partial as Partial<ExecutionSnapshot> & {
+          heteroSessionUsage?: HeteroSessionUsage;
+        }
+      ).heteroSessionUsage;
+      const totalTokens =
+        session?.totalTokens ?? steps.reduce((sum, s) => sum + (s.totalTokens || 0), 0);
+      const totalInputTokens =
+        session?.totalInputTokens ?? steps.reduce((sum, s) => sum + (s.inputTokens || 0), 0);
+      const totalOutputTokens =
+        session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
+      const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
 
       const agentId = params.agentId ?? undefined;
       const topicId = params.topicId ?? undefined;
@@ -207,17 +227,38 @@ export class HeteroTraceRecorder {
       }
       case 'step_complete': {
         const usage = data.usage as Record<string, unknown> | undefined;
-        if (usage && typeof usage === 'object') {
-          const inT = num(usage.totalInputTokens);
-          const outT = num(usage.totalOutputTokens);
-          const tot = num(usage.totalTokens);
-          if (inT !== undefined) step.inputTokens = inT;
-          if (outT !== undefined) step.outputTokens = outT;
-          if (tot !== undefined) step.totalTokens = tot;
-          else if (inT !== undefined || outT !== undefined)
-            step.totalTokens = (inT ?? 0) + (outT ?? 0);
-        }
+        const inT = usage ? num(usage.totalInputTokens) : undefined;
+        const outT = usage ? num(usage.totalOutputTokens) : undefined;
+        const tot = usage ? num(usage.totalTokens) : undefined;
         const cost = num(data.costUsd);
+
+        // Claude Code emits one `turn_metadata` per turn (incremental usage) and
+        // a single final `result_usage` carrying the authoritative SESSION
+        // totals. Folding `result_usage` onto a step then summing steps at
+        // finalize double-counts (per-turn turns + the grand total). So route
+        // `result_usage` to a run-level field and only fold turn_metadata steps.
+        if (data.phase === 'result_usage') {
+          const target = partial as Partial<ExecutionSnapshot> & {
+            heteroSessionUsage?: HeteroSessionUsage;
+          };
+          target.heteroSessionUsage = {
+            totalCost: cost ?? target.heteroSessionUsage?.totalCost,
+            totalInputTokens: inT ?? target.heteroSessionUsage?.totalInputTokens,
+            totalOutputTokens: outT ?? target.heteroSessionUsage?.totalOutputTokens,
+            totalTokens:
+              tot ??
+              (inT !== undefined || outT !== undefined
+                ? (inT ?? 0) + (outT ?? 0)
+                : target.heteroSessionUsage?.totalTokens),
+          };
+          break;
+        }
+
+        if (inT !== undefined) step.inputTokens = inT;
+        if (outT !== undefined) step.outputTokens = outT;
+        if (tot !== undefined) step.totalTokens = tot;
+        else if (inT !== undefined || outT !== undefined)
+          step.totalTokens = (inT ?? 0) + (outT ?? 0);
         if (cost !== undefined) step.totalCost = cost;
         break;
       }

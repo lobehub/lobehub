@@ -144,11 +144,6 @@ export class HeterogeneousAgentService {
       throw err;
     }
 
-    // Accumulate the execution-trace snapshot from the same event batch (steps
-    // keyed by stepIndex). Best-effort + after persist, so tracing never blocks
-    // or fails the ingest path.
-    await this.traceRecorder.appendBatch(operationId, events);
-
     // Sequential publish preserves stepIndex ordering — Redis XADD itself is
     // serialized but awaiting in-order avoids interleaving with concurrent
     // ingest batches sharing the same operationId.
@@ -161,6 +156,14 @@ export class HeterogeneousAgentService {
         type: event.type,
       });
     }
+
+    // Accumulate the execution-trace snapshot LAST. The recorder has no
+    // per-event idempotency, so it must run only after every step that can throw
+    // and trigger a BatchIngester retry of this same batch — otherwise a publish
+    // failure above would re-fold these events and double-count the snapshot.
+    // It's the final statement and best-effort (never throws), so it folds each
+    // batch exactly once (on the attempt that gets this far).
+    await this.traceRecorder.appendBatch(operationId, events);
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {

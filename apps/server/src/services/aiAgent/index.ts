@@ -427,6 +427,21 @@ export class AiAgentService {
       error: { body: { detail }, message, type: 'ServerAgentRuntimeError' },
     });
 
+    // 1b. Mark the agent_operations row terminal. The row was inserted at
+    //     recordStart, but a dispatch failure goes through THIS path, not
+    //     heteroFinish — so without this the row stays status='running' forever
+    //     and pollutes operation-lifecycle / verify views for failed starts.
+    try {
+      await this.agentOperationModel.recordCompletion(operationId, {
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { message, type: 'ServerAgentRuntimeError' },
+        status: 'error',
+      });
+    } catch (err) {
+      log('finalizeHeteroDispatchError: recordCompletion failed (non-fatal): %O', err);
+    }
+
     // 2. Close the UI stream.
     try {
       await createStreamEventManager().publishAgentRuntimeEnd({
