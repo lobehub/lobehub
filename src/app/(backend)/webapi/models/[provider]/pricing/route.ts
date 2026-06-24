@@ -8,10 +8,21 @@ import { AiProviderModel } from '@/database/models/aiProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-const log = debug('lobe-server:newapi:pricing');
+const log = debug('lobe-server:models:pricing');
 
-export const GET = checkAuth(async (req, { userId, serverDB }) => {
-  const provider = 'newapi';
+interface NewApiPricingKeyVaults {
+  apiKey?: string;
+  baseURL?: string;
+}
+
+export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
+  const provider = (await params).provider;
+
+  if (!provider) {
+    return createErrorResponse(ChatErrorType.BadRequest, {
+      message: 'Provider is required.',
+    });
+  }
 
   try {
     // 1. Get user's provider configuration from database
@@ -27,7 +38,7 @@ export const GET = checkAuth(async (req, { userId, serverDB }) => {
       });
     }
 
-    const keyVaults = (providerConfig.keyVaults || {}) as any;
+    const keyVaults = (providerConfig.keyVaults || {}) as NewApiPricingKeyVaults;
     const baseURL = keyVaults.baseURL;
     const apiKey = keyVaults.apiKey;
 

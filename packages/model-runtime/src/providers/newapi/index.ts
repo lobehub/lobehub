@@ -32,11 +32,12 @@ const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'un
 const fetchPricing = async (
   pricingUrl: string,
   apiKey: string,
+  providerId = ModelProvider.NewAPI,
 ): Promise<NewAPIPricing[] | null> => {
   try {
     let res: Response;
     if (isBrowser()) {
-      res = await fetch('/webapi/models/newapi/pricing');
+      res = await fetch(`/webapi/models/${encodeURIComponent(providerId)}/pricing`);
     } else {
       const fetchWithAuth = async (useAuth: boolean) => {
         const headers: Record<string, string> = {
@@ -78,7 +79,10 @@ export const params = {
     'X-Client': 'LobeHub',
   },
   id: ModelProvider.NewAPI,
-  models: async ({ client: openAIClient }) => {
+  models: async ({ client: openAIClient, options }) => {
+    const providerId =
+      typeof options?.providerId === 'string' ? options.providerId : ModelProvider.NewAPI;
+
     // Get base URL (remove trailing API version paths like /v1, /v1beta, etc.)
     const baseURL = openAIClient.baseURL.replace(/\/v\d+[a-z]*\/?$/, '');
 
@@ -91,7 +95,11 @@ export const params = {
     // Try to get pricing information to enrich model details
     const pricingMap: Map<string, NewAPIPricing> = new Map();
 
-    const pricingList = await fetchPricing(`${baseURL}/api/pricing`, openAIClient.apiKey || '');
+    const pricingList = await fetchPricing(
+      `${baseURL}/api/pricing`,
+      openAIClient.apiKey || '',
+      providerId,
+    );
     if (Array.isArray(pricingList)) {
       pricingList.forEach((pricing) => {
         pricingMap.set(pricing.model_name, pricing);

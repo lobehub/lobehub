@@ -253,6 +253,9 @@ describe('createRouterRuntime', () => {
 
       expect(models).toHaveBeenCalledWith({
         client: { provider: 'openai-compatible' },
+        options: expect.objectContaining({
+          baseURL: 'https://api.example.com/v1',
+        }),
       });
     });
   });

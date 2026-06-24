@@ -57,7 +57,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /webapi/models/newapi/pricing', () => {
+describe('GET /webapi/models/[provider]/pricing', () => {
   it('should return ContentNotFound if provider config is missing', async () => {
     const mockParams = Promise.resolve({ provider: 'newapi' });
     const mockModelInstance = new AiProviderModel({} as any, 'test-user-id');
@@ -108,6 +108,36 @@ describe('GET /webapi/models/newapi/pricing', () => {
     expect(responseBody).toEqual({ success: true, data: [{ model_name: 'test' }] });
     expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
       'https://newapi.test.com/api/pricing',
+      expect.any(Object),
+    );
+  });
+
+  it('should fetch pricing from the requested custom provider config', async () => {
+    const mockParams = Promise.resolve({ provider: 'custom-router' });
+    const mockModelInstance = new AiProviderModel({} as any, 'test-user-id');
+    vi.mocked(mockModelInstance.getAiProviderById).mockResolvedValue({
+      keyVaults: {
+        apiKey: 'custom-key',
+        baseURL: 'https://custom-newapi.test.com/v1',
+      },
+    } as any);
+
+    mockSsrfSafeFetch.mockResolvedValue({
+      json: async () => ({ success: true, data: [{ model_name: 'custom-model' }] }),
+      ok: true,
+    });
+
+    const response = await GET(request, { params: mockParams });
+    const responseBody = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseBody).toEqual({ success: true, data: [{ model_name: 'custom-model' }] });
+    expect(mockModelInstance.getAiProviderById).toHaveBeenCalledWith(
+      'custom-router',
+      expect.any(Function),
+    );
+    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
+      'https://custom-newapi.test.com/api/pricing',
       expect.any(Object),
     );
   });
