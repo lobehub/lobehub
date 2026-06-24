@@ -1329,6 +1329,31 @@ export class AiAgentService {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
       const operationId = nanoid();
 
+      // Persist a first-class agent_operations row for the hetero run. The id is
+      // generated here (authoritative) and flows through to heteroIngest /
+      // heteroFinish unchanged. Without this row the run is invisible to the
+      // operation lifecycle: verify (ensureForOperation), repair (parent chain),
+      // judge (op.model/provider) and tracing all key off it. Terminal state +
+      // the trace snapshot are written back in heteroFinish. Non-fatal: a
+      // tracing/op-row insert hiccup must never fail the user's run (verify just
+      // degrades to off for this run).
+      try {
+        await new AgentOperationModel(this.db, this.userId, this.workspaceId).recordStart({
+          agentId: persistAgentId,
+          chatGroupId: appContext?.groupId ?? null,
+          maxSteps,
+          model,
+          operationId,
+          provider,
+          taskId: operationTaskId ?? null,
+          threadId: appContext?.threadId ?? null,
+          topicId,
+          trigger,
+        });
+      } catch (err) {
+        log('execAgent: hetero recordStart failed (non-fatal): %O', err);
+      }
+
       // Read resume session id for next-turn continuity.
       const heteroService = new HeterogeneousAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
