@@ -33,6 +33,7 @@
   "cancelPlan.prevStep": "上一步",
   "cancelPlan.reason.commentPlaceholder": "欢迎补充更多信息，帮助我们改进（选填）",
   "cancelPlan.reason.commentPlaceholderRequired": "请填写您的取消原因",
+  "cancelPlan.reason.hintSelect": "请先选择取消原因",
   "cancelPlan.reason.label": "帮助我们改进——您为什么要取消？",
   "cancelPlan.reason.options.customer_service": "客户服务不及预期",
   "cancelPlan.reason.options.low_quality": "质量不及预期",

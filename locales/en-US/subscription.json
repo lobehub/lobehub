@@ -33,6 +33,7 @@
   "cancelPlan.prevStep": "Back",
   "cancelPlan.reason.commentPlaceholder": "Tell us more to help us improve (optional)",
   "cancelPlan.reason.commentPlaceholderRequired": "Please tell us your reason",
+  "cancelPlan.reason.hintSelect": "Please select a reason for canceling",
   "cancelPlan.reason.label": "Help us improve — why are you canceling?",
   "cancelPlan.reason.options.customer_service": "Customer service was less than expected",
   "cancelPlan.reason.options.low_quality": "Quality was less than expected",
