@@ -12,6 +12,12 @@ const localeModule = {
 };
 
 describe('normalizeDayjsLocale', () => {
+  it('should normalize full app locales to dayjs locale ids', () => {
+    expect(normalizeDayjsLocale('en-US')).toBe('en');
+    expect(normalizeDayjsLocale('zh-CN')).toBe('zh-cn');
+    expect(normalizeDayjsLocale('pt-BR')).toBe('pt-br');
+  });
+
   it('should normalize simplified Chinese script locales to zh-cn', () => {
     expect(normalizeDayjsLocale('zh-Hans')).toBe('zh-cn');
     expect(normalizeDayjsLocale('zh-Hans-CN')).toBe('zh-cn');

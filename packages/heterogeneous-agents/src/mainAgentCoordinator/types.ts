@@ -28,11 +28,17 @@ import type { ExternalSignalContext, ToolCallPayload } from '../types';
  * `reduce` call is the only entry point both engines need.
  *
  * The CHAIN RULE lives here and is authoritative for both engines:
- *   the next turn's assistant parents off the last tool message of the most
- *   recent tool-bearing turn (`lastToolMsgIdEver`), falling back to the current
- *   assistant only when no tool has ever been seen. This keeps the rendered
- *   chain a linear `asst → tool → asst → tool …` zigzag even across toolless
- *   reactive (signal-tagged) turns.
+ * the next turn's assistant parents off the most recent NON-tool,
+ * NON-signal main-thread message — the run's "spine" (`lastSpineMessageId`) —
+ * so the persisted shape is `user → asst → asst …` with tools as inline
+ * children. The read side (`conversation-flow`) reconstructs the
+ * `asst → tool → asst` zigzag from this. The one exception is signal-tagged
+ * reactive turns (Monitor stdout pushes), which parent off the run's most
+ * recent tool (`lastToolMsgIdEver`) so the reader renders them as tool-child
+ * callbacks rather than spine turns. On a cold serverless replica the spine
+ * pointer is recovered from the DB (most recent non-tool main message), which
+ * is fork-resistant — it does NOT depend on the in-memory current-assistant
+ * pointer that can regress mid-run.
  */
 
 // ─── Reducer state ───
@@ -75,14 +81,24 @@ export interface MainAgentRunState {
   currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
+  /**
+   * Chain rule: the most recent NON-tool, NON-signal
+   * main-thread message — the run's spine. The next NORMAL turn's assistant
+   * parents off this (signal-tagged reactive turns parent off `lastToolMsgIdEver`
+   * instead). Advances on every normal turn; a signal turn does NOT advance it,
+   * so a normal continuation after a Monitor-callback burst re-mounts on the
+   * pre-callback spine assistant, not on a callback. Seeded to the placeholder
+   * assistant; recovered from the DB on a cold replica (fork-resistant).
+   */
+  lastSpineMessageId: string;
   /** Highest seen text snapshot sequence (replace-mode de-dup). */
   lastTextSnapshotSeq: number;
   /**
-   * Run-lifetime id of the most recent main-agent tool message. This is the
-   * chain-rule fallback: a new turn whose PRIOR turn produced no tools (e.g. a
-   * Monitor-stdout reactive reply) re-mounts onto this tool rather than onto
-   * the toolless assistant, so the rendered chain stays a linear zigzag.
-   * Only advances on tool batches; never reset across turns.
+   * Run-lifetime id of the most recent main-agent tool message. Since
+   * this anchors ONLY signal-tagged reactive turns (Monitor
+   * stdout pushes) onto a tool, so the reader renders them as tool-child
+   * callbacks; normal turns parent off `lastSpineMessageId`. Only advances on
+   * tool batches; never reset across turns.
    */
   lastToolMsgIdEver: string | undefined;
   /** Nested subagent runs — delegated to `reduceSubagentRuns`. */
@@ -109,6 +125,7 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   currentAssistantId: seedAssistantId,
   currentMainMessageId: undefined,
   ended: false,
+  lastSpineMessageId: seedAssistantId,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
   subagents: createSubagentRunsState(),

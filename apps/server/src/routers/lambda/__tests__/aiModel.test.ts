@@ -82,7 +82,7 @@ describe('aiModelRouter', () => {
     const duplicateError = Object.assign(new Error('failed query'), {
       cause: Object.assign(new Error('duplicate key'), {
         code: '23505',
-        constraint: 'ai_models_id_provider_id_user_id_unique',
+        constraint: 'ai_models_id_provider_id_user_id_pk',
       }),
     });
     const mockCreate = vi.fn().mockRejectedValue(duplicateError);

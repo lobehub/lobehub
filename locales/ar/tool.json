@@ -59,6 +59,7 @@
   "codeInterpreter.files": "الملفات:",
   "codeInterpreter.output": "الناتج:",
   "codeInterpreter.returnValue": "القيمة المرجعة:",
+  "connector.add.title": "إضافة موصل مخصص",
   "dalle.autoGenerate": "توليد تلقائي",
   "dalle.downloading": "روابط الصور التي تم إنشاؤها بواسطة DALL·E3 صالحة لمدة ساعة واحدة فقط، يتم تخزين الصور محليًا...",
   "dalle.generate": "توليد",

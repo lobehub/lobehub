@@ -6,6 +6,8 @@ import { type NextRequest } from 'next/server';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
+import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback';
+
 const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
@@ -257,7 +259,20 @@ export class MarketService {
    * List available tools for a provider
    */
   async listSkillTools(providerId: string) {
-    return this.market.skills.listTools(providerId);
+    return listSkillToolsWithLiveFallback(
+      this.market.skills as {
+        listLiveTools?: (providerId: string) => Promise<any>;
+        listTools: (providerId: string) => Promise<any>;
+      },
+      providerId,
+      (error) => {
+        log(
+          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+          providerId,
+          error,
+        );
+      },
+    );
   }
 
   /**
@@ -489,9 +504,31 @@ export class MarketService {
 
       log('executeLobehubSkill: response: %O', response);
 
+      if (!response.success) {
+        const responseError = (response as any).error;
+        let dataMessage: string | undefined;
+
+        if (typeof response.data === 'string') {
+          dataMessage = response.data;
+        } else if (response.data !== undefined && response.data !== null) {
+          dataMessage = JSON.stringify(response.data);
+        }
+
+        const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
+
+        return {
+          content: message,
+          error: {
+            code: responseError?.code || 'LOBEHUB_SKILL_ERROR',
+            message,
+          },
+          success: false,
+        };
+      }
+
       return {
         content: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
-        success: response.success,
+        success: true,
       };
     } catch (error) {
       const err = error as Error;
@@ -555,12 +592,13 @@ export class MarketService {
             linear: 'Linear',
             microsoft: 'Outlook Calendar',
             notion: 'Notion',
+            posthog: 'PostHog',
             twitter: 'X (Twitter)',
             vercel: 'Vercel',
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
-          const { tools, instruction } = await this.market.skills.listTools(providerId);
+          const { tools, instruction } = await this.listSkillTools(providerId);
           if (!tools || tools.length === 0) continue;
 
           const manifest: LobeToolManifest = {

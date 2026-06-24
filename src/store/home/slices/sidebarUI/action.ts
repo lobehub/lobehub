@@ -6,6 +6,7 @@ import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
 import { getAgentStoreState } from '@/store/agent';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { type SessionGroupItemBase } from '@/types/session';
@@ -92,12 +93,17 @@ export class SidebarUIActionImpl {
   removeAgent = async (agentId: string): Promise<void> => {
     await agentService.removeAgent(agentId);
     await this.#get().refreshAgentList();
+    // deleting an agent cascade-deletes its topics + messages on the server; drop
+    // their message cache too so it doesn't orphan in IndexedDB (never expires)
+    void evictMessageCache((ctx) => ctx.agentId === agentId);
   };
 
   removeAgentGroup = async (groupId: string): Promise<void> => {
     // Delete the group
     await chatGroupService.deleteGroup(groupId);
     await this.#get().refreshAgentList();
+    // same cascade for a group's conversations — drop its cached message lists
+    void evictMessageCache((ctx) => ctx.groupId === groupId);
   };
 
   renameAgentGroup = async (

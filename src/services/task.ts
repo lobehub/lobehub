@@ -44,6 +44,8 @@ class TaskService {
 
   getReview = async (id: string) => lambdaClient.task.getReview.query({ id });
 
+  getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
+
   // ── Mutations ──
 
   create = async (params: {
@@ -144,6 +146,10 @@ class TaskService {
 
   updateReview = async (...args: Parameters<typeof lambdaClient.task.updateReview.mutate>) =>
     lambdaClient.task.updateReview.mutate(...args);
+
+  updateVerifyConfig = async (
+    ...args: Parameters<typeof lambdaClient.task.updateVerifyConfig.mutate>
+  ) => lambdaClient.task.updateVerifyConfig.mutate(...args);
 
   runReview = async (id: string, params?: { content?: string; topicId?: string }) =>
     lambdaClient.task.runReview.mutate({ id, ...params });

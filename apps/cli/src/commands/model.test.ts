@@ -100,6 +100,19 @@ describe('model command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(visibleModels, null, 2));
     });
+
+    it('should normalize the legacy `stt` type to `asr` when filtering', async () => {
+      mockTrpcClient.aiModel.getAiProviderModelList.query.mockResolvedValue([
+        { displayName: 'Whisper', enabled: true, id: 'whisper-1', type: 'asr' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'model', 'list', 'openai', '--type', 'stt']);
+
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'openai', type: 'asr' }),
+      );
+    });
   });
 
   describe('view', () => {
@@ -157,6 +170,28 @@ describe('model command', () => {
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created model'));
     });
+
+    it('should normalize the legacy `stt` type to `asr`', async () => {
+      mockTrpcClient.aiModel.createAiModel.mutate.mockResolvedValue('whisper-1');
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'create',
+        '--id',
+        'whisper-1',
+        '--provider',
+        'openai',
+        '--type',
+        'stt',
+      ]);
+
+      expect(mockTrpcClient.aiModel.createAiModel.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'whisper-1', providerId: 'openai', type: 'asr' }),
+      );
+    });
   });
 
   describe('edit', () => {
@@ -182,6 +217,29 @@ describe('model command', () => {
         value: expect.objectContaining({ displayName: 'New Name' }),
       });
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated model'));
+    });
+
+    it('should normalize the legacy `stt` type to `asr`', async () => {
+      mockTrpcClient.aiModel.updateAiModel.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'edit',
+        'whisper-1',
+        '--provider',
+        'openai',
+        '--type',
+        'stt',
+      ]);
+
+      expect(mockTrpcClient.aiModel.updateAiModel.mutate).toHaveBeenCalledWith({
+        id: 'whisper-1',
+        providerId: 'openai',
+        value: expect.objectContaining({ type: 'asr' }),
+      });
     });
 
     it('should error when no changes specified', async () => {

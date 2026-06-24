@@ -23,6 +23,8 @@ import type { RuntimeInitialContext, UIChatMessage } from '@lobechat/types';
  * Model capability checker functions for server-side
  */
 export interface ServerModelCapabilities {
+  /** Check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
   /** Check if function calling is supported */
   isCanUseFC?: (model: string, provider: string) => boolean;
   /** Check if video is supported */
@@ -130,6 +132,8 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
 
   /** Page content context (optional, for document editing) */
   pageContentContext?: PageContentContext;

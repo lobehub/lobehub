@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -1185,6 +1185,8 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.id).toBe(agent.id);
         expect(result?.slug).toBe(INBOX_SESSION_ID);
+        expect(result?.title).toBe(DEFAULT_INBOX_TITLE);
+        expect(result?.avatar).toBe(DEFAULT_INBOX_AVATAR);
       });
 
       it('should find inbox from legacy session and update agent slug', async () => {
@@ -1749,6 +1751,25 @@ describe('AgentModel', () => {
       );
     });
 
+    it('should fallback inbox agent meta by slug', async () => {
+      await serverDB.insert(agents).values({
+        avatar: null,
+        id: 'inbox-agent-query',
+        slug: INBOX_SESSION_ID,
+        title: null,
+        userId,
+        virtual: null as unknown as boolean,
+      });
+
+      const result = await agentModel.queryAgents();
+      const inbox = result.find((agent) => agent.id === 'inbox-agent-query');
+
+      expect(inbox).toMatchObject({
+        avatar: DEFAULT_INBOX_AVATAR,
+        title: DEFAULT_INBOX_TITLE,
+      });
+    });
+
     it('should filter by keyword in title and description', async () => {
       await agentModel.create({
         title: 'Code Assistant',
@@ -2117,6 +2138,56 @@ describe('AgentModel', () => {
       expect((result?.params as any)?.temperature).toBeNull();
       expect((result?.params as any)?.topP).toBe(0.5);
     });
+
+    it('should delete a workingDirByDevice entry when value is undefined', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Cwd Agent',
+          agencyConfig: {
+            executionTarget: 'local',
+            workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' },
+          },
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { workingDirByDevice: { 'device-a': undefined } } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      // device-a cleared; device-b and sibling fields preserved
+      expect((result?.agencyConfig as any)?.workingDirByDevice).toEqual({ 'device-b': '/b' });
+      expect((result?.agencyConfig as any)?.executionTarget).toBe('local');
+    });
+
+    it('should still upsert a workingDirByDevice entry when value is a path', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Cwd Agent',
+          agencyConfig: { workingDirByDevice: { 'device-a': '/a' } },
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' } } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.workingDirByDevice).toEqual({
+        'device-a': '/a',
+        'device-b': '/b',
+      });
+    });
   });
 
   describe('rank', () => {
@@ -2194,6 +2265,69 @@ describe('AgentModel', () => {
       const result = await agentModel.rank(1);
 
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('listMessengerBindableAgents', () => {
+    it('should keep the inbox, exclude other virtual agents, pin inbox first, and fallback its meta', async () => {
+      await serverDB.insert(agents).values([
+        // Inbox is the oldest, yet must be pinned to the top.
+        {
+          avatar: null,
+          id: 'mb-inbox',
+          slug: INBOX_SESSION_ID,
+          title: null,
+          updatedAt: new Date('2023-01-01'),
+          userId,
+          virtual: true,
+        },
+        {
+          id: 'mb-normal',
+          title: 'Normal',
+          updatedAt: new Date('2024-01-01'),
+          userId,
+        },
+        { id: 'mb-virtual', title: 'Virtual', userId, virtual: true },
+      ]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id)).toEqual(['mb-inbox', 'mb-normal']);
+      expect(result[0]).toMatchObject({
+        avatar: DEFAULT_INBOX_AVATAR,
+        id: 'mb-inbox',
+        isInbox: true,
+        title: DEFAULT_INBOX_TITLE,
+      });
+      expect(result[1]).toMatchObject({ id: 'mb-normal', isInbox: false, title: 'Normal' });
+    });
+
+    it('should fall back a blank non-inbox title to options.fallbackTitle (null by default)', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'mb-blank', title: null, userId },
+        { id: 'mb-named', title: 'Named', userId },
+      ]);
+
+      const withoutFallback = await agentModel.listMessengerBindableAgents();
+      expect(withoutFallback.find((r) => r.id === 'mb-blank')?.title).toBeNull();
+
+      const withFallback = await agentModel.listMessengerBindableAgents({
+        fallbackTitle: 'Custom Agent',
+      });
+      expect(withFallback.find((r) => r.id === 'mb-blank')?.title).toBe('Custom Agent');
+      // A real title is never overridden by the fallback.
+      expect(withFallback.find((r) => r.id === 'mb-named')?.title).toBe('Named');
+    });
+
+    it('should only list the current user agents', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'mb-mine', title: 'Mine', userId },
+        { id: 'mb-theirs', title: 'Theirs', userId: userId2 },
+      ]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id)).toEqual(['mb-mine']);
     });
   });
 });

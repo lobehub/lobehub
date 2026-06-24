@@ -20,11 +20,13 @@ import {
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openRenameModal } from '@/components/RenameModal';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -54,6 +56,7 @@ export const useDropdownMenu = ({
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
@@ -155,9 +158,12 @@ export const useDropdownMenu = ({
                 label: t('actions.openInNewTab', { ns: 'topic' }),
                 onClick: () => {
                   if (!agentId) return;
-                  const url = SESSION_CHAT_TOPIC_URL(agentId, topicId);
+                  const url = buildWorkspaceAwarePath(
+                    SESSION_CHAT_TOPIC_URL(agentId, topicId),
+                    activeWorkspaceSlug,
+                  );
                   addTab(url);
-                  navigate(url);
+                  navigate(url, { escape: true });
                   onClose();
                 },
               },
@@ -244,6 +250,7 @@ export const useDropdownMenu = ({
       ].filter(Boolean) as MenuProps['items'],
     [
       addTab,
+      activeWorkspaceSlug,
       agentId,
       appOrigin,
       autoRenameTopicTitle,

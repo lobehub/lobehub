@@ -24,7 +24,7 @@ interface GroupItemProps {
 }
 
 const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, title, pinned } = item;
+  const { id, avatar, backgroundColor, description, title, pinned } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
@@ -96,6 +96,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
+    description,
     id,
     memberAvatars,
     pinned: pinned ?? false,

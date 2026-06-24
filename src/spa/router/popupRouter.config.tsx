@@ -1,6 +1,6 @@
 'use client';
 
-import type { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router';
 
 import PopupLayout from '@/routes/(popup)/_layout';
 import PopupAgentQuickPage from '@/routes/(popup)/agent/[aid]';

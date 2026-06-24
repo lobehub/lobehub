@@ -1,5 +1,5 @@
 // apps/desktop/src/main/menus/impl/BaseMenuPlatform.ts
-import type { MenuItemConstructorOptions } from 'electron';
+import type { BaseWindow, MenuItemConstructorOptions } from 'electron';
 import { BrowserWindow } from 'electron';
 
 import type { App } from '@/core/App';
@@ -32,6 +32,26 @@ export abstract class BaseMenuPlatform {
         this.buildZoomMenuItemOption(action, label, alternateAccelerator, false),
       ),
     ];
+  }
+
+  protected closeFocusedTabOrWindow(targetWindow?: BaseWindow | null): void {
+    const focused =
+      targetWindow && 'webContents' in targetWindow
+        ? (targetWindow as BrowserWindow)
+        : BrowserWindow.getFocusedWindow();
+    if (!focused) return;
+
+    if (focused.webContents.isDevToolsOpened()) {
+      focused.webContents.closeDevTools();
+      return;
+    }
+
+    const mainWindow = this.app.browserManager.getMainWindow();
+    if (focused === mainWindow.browserWindow) {
+      mainWindow.broadcast('closeCurrentTabOrWindow');
+    } else {
+      focused.close();
+    }
   }
 
   private buildZoomMenuItemOption(

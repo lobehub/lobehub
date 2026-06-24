@@ -4,6 +4,7 @@ import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import type { TaskResult } from '../../utils/asyncifyPolling';
 import { asyncifyPolling } from '../../utils/asyncifyPolling';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 const log = createDebug('lobe-image:zhipu');
 
@@ -101,14 +102,15 @@ export async function createZhipuImage(
   options: CreateImageOptions,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
+  const requestModel = resolveMappedModelId(model, options);
   const { prompt, resolution, size, watermark, width, height } = params;
 
-  log('Creating image with Zhipu API - model: %s, params: %O', model, params);
+  log('Creating image with Zhipu API - model: %s, params: %O', requestModel, params);
 
   const baseURL = options.baseURL || 'https://open.bigmodel.cn/api/paas/v4';
 
   const body: Record<string, unknown> = {
-    model,
+    model: requestModel,
     prompt,
     ...(resolution && { quality: resolution }),
   };

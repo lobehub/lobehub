@@ -34,6 +34,7 @@ import { useVideoGenerationConfigParam } from '@/store/video/slices/generationCo
 import { generateUniqueSeeds } from '@/utils/number';
 
 import PromptTitle from './Title';
+import { useVideoReferenceUpload } from './useVideoReferenceUpload';
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -311,6 +312,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useVideoStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
+  const { handleUploadFiles, uploadingPreviews } = useVideoReferenceUpload();
   useFetchAiVideoConfig();
 
   // Read query parameters
@@ -458,9 +460,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 isSupportEndImage={isSupportEndImageUrl}
                 maxCount={maxCount}
                 maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+                uploadingPreviews={uploadingPreviews}
                 onEndImageChange={handleEndImageChange}
                 onImageUrlsChange={handleAddImage}
                 onRemoveImageUrl={handleRemoveImage}
+                onUploadFiles={handleUploadFiles}
                 onImageChange={(data) => {
                   if (data === null) {
                     handleRemoveImage(imageUrl || '');

@@ -9,19 +9,19 @@ import {
 
 /**
  * Regression for the remote-device chain-fork (observed on tpc_3DKmFfAmx9YA):
- * several CONSECUTIVE, DISTINCT main-agent steps all parented onto the run's
- * FIRST tool message instead of chaining linearly.
+ * several CONSECUTIVE, DISTINCT main-agent steps all parented onto the same
+ * stale node instead of chaining linearly.
  *
- * Root cause: `refreshMainStateFromDb` used to anchor `lastToolMsgIdEver` off
- * `getLastChildToolMessageId(currentAssistantId)`. On a non-sticky / cold
- * replica (a WS reconnect storm spreads one run's batches across replicas),
- * `currentAssistantId` regresses to the operation's seeded placeholder when the
- * `heteroCurrentMsgId` pointer is not yet visible. The anchor then collapses to
- * the SEED's first child tool, and every later `newStep` opens off that same
- * node → orphan sibling forks.
+ * On a non-sticky / cold replica (a WS reconnect storm spreads one run's batches
+ * across replicas), `currentAssistantId` regresses to the operation's seeded
+ * placeholder when the `heteroCurrentMsgId` pointer is not yet visible. If the
+ * chain parent were derived from that in-memory pointer, every later `newStep`
+ * would open off the seed → orphan sibling forks.
  *
- * The fix anchors the chain to the RUN's real latest main-thread tool, read
- * from the DB and ordered by createdAt, independent of `currentAssistantId`.
+ * The phase 2 rewrite anchors the chain to the run's latest NON-tool / NON-signal
+ * main-thread message (`getLastMainThreadSpineMessageId`), read straight from the
+ * DB and ordered by createdAt — independent of `currentAssistantId`. So step 2
+ * chains off step 1's assistant even though the in-memory pointer regressed.
  *
  * This harness models the precondition deterministically: `updateMetadata`
  * never persists `heteroCurrentMsgId`, so every cold load regresses
@@ -103,18 +103,15 @@ const createHarness = () => {
         return [...messages.values()].filter((m) => m.threadId === params.threadId);
       return [...messages.values()].filter((m) => !m.threadId && m.topicId === params?.topicId);
     }),
-    getLastChildToolMessageId: vi.fn(async (assistantMessageId: string) => {
-      const match = [...messages.values()]
-        .filter((m) => m.role === 'tool' && m.parentId === assistantMessageId && !m.threadId)
-        .sort((a, b) => b.seq - a.seq)[0];
-      return match?.id;
-    }),
-    getLastMainThreadToolMessageIdSince: vi.fn(async (topicId: string, sinceMessageId: string) => {
-      const seed = messages.get(sinceMessageId);
-      if (!seed) return undefined;
+    getLastMainThreadSpineMessageId: vi.fn(async (topicId: string) => {
+      // Most recent main-thread, non-tool, non-signal message — the spine anchor.
       const match = [...messages.values()]
         .filter(
-          (m) => m.topicId === topicId && m.role === 'tool' && !m.threadId && m.seq >= seed.seq,
+          (m) =>
+            m.topicId === topicId &&
+            m.role !== 'tool' &&
+            !m.threadId &&
+            !(m as any).metadata?.signal,
         )
         .sort((a, b) => b.seq - a.seq)[0];
       return match?.id;
@@ -184,7 +181,7 @@ describe('HeterogeneousPersistenceHandler — chain anchor survives a regressed 
   beforeEach(() => __resetOperationStatesForTesting());
   afterEach(() => __resetOperationStatesForTesting());
 
-  it('chains consecutive cold-replica steps off the run last tool, not the seed first tool', async () => {
+  it('chains consecutive cold-replica steps linearly off the spine, not forking onto the seed', async () => {
     const h = createHarness();
 
     // Step 1 on a cold replica (currentAssistantId regresses to SEED).
@@ -209,18 +206,22 @@ describe('HeterogeneousPersistenceHandler — chain anchor survives a regressed 
     expect(assistants).toHaveLength(2);
 
     const [a1, a2] = assistants.sort((x, y) => x.seq - y.seq);
-    const toolA = [...h.messages.values()].find((m) => m.tool_call_id === 'tc-A')!;
 
-    // First step still chains off the run's only existing tool (T1, seed's child).
-    expect(a1.parentId).toBe(T1);
-    // Second step must chain off step 1's tool — NOT collapse back onto T1.
-    expect(a2.parentId).toBe(toolA.id);
-    expect(a2.parentId).not.toBe(T1);
+    // Step 1 chains off the spine = the seed assistant (T1 is a tool, excluded).
+    expect(a1.parentId).toBe(SEED);
+    // Step 2 chains off step 1's assistant — the spine query found a1 from the DB
+    // despite the in-memory currentAssistantId having regressed to SEED.
+    expect(a2.parentId).toBe(a1.id);
 
-    // No fork: T1 has exactly one assistant child across the whole run.
-    const t1AssistantChildren = [...h.messages.values()].filter(
-      (m) => m.role === 'assistant' && m.parentId === T1,
+    // No fork: the seed has exactly one assistant child (a1), and a1 has exactly
+    // one assistant child (a2) — a linear spine, not a fan-out.
+    const seedAssistantChildren = [...h.messages.values()].filter(
+      (m) => m.role === 'assistant' && m.parentId === SEED,
     );
-    expect(t1AssistantChildren).toHaveLength(1);
+    expect(seedAssistantChildren).toHaveLength(1);
+    const a1AssistantChildren = [...h.messages.values()].filter(
+      (m) => m.role === 'assistant' && m.parentId === a1.id,
+    );
+    expect(a1AssistantChildren).toHaveLength(1);
   });
 });

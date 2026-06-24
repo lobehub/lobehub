@@ -1,8 +1,13 @@
 // @vitest-environment node
+import { ChatErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
+
+const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
 
@@ -194,6 +199,132 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.lastAssistantContent).toBeUndefined();
     expect(event.attachments).toBeUndefined();
     expect(event.agentId).toBe('a');
+  });
+
+  it('populates errorType + attribution from the normalized error on the error path', () => {
+    // Regression: the event previously carried only errorDetail/errorMessage, so
+    // bot reply renderers never saw the stable code/attribution and always fell
+    // back to the opaque Operation ID. buildLifecycleEvent must normalize the
+    // runtime error via formatErrorForState and surface these taxonomy fields.
+    const state = {
+      error: { error: { message: 'fetch failed' }, errorType: 'ProviderNetworkError' },
+      metadata: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { event } = callBuild(state, 'error');
+
+    expect(event.errorType).toBe('ProviderNetworkError');
+    expect(event.errorAttribution).toBe('system');
+    expect(event.errorMessage).toBe('fetch failed');
+  });
+
+  it('leaves errorType + attribution undefined when there is no error', () => {
+    const { event } = callBuild({ messages: [], metadata: {} }, 'done');
+
+    expect(event.errorType).toBeUndefined();
+    expect(event.errorAttribution).toBeUndefined();
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('persists budget errors without downgrading them to AgentRuntimeError', async () => {
+    const lifecycle = buildLifecycle();
+    const updateMessage = vi.fn().mockResolvedValue({ success: true });
+    const budget = { required: 12 };
+
+    (lifecycle as any).messageModel = { update: updateMessage };
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        error: {
+          budget,
+          error: { message: 'Budget exceeded' },
+          errorType: ChatErrorType.FreePlanLimit,
+          provider: 'lobehub',
+        },
+        metadata: { _hooks: [], assistantMessageId: 'msg-1' },
+        status: 'error',
+      },
+      'error',
+    );
+
+    expect(updateMessage).toHaveBeenCalledWith('msg-1', {
+      error: expect.objectContaining({
+        body: expect.objectContaining({
+          budget,
+          message: 'Budget exceeded',
+          provider: 'lobehub',
+        }),
+        message: 'Budget exceeded',
+        type: ChatErrorType.FreePlanLimit,
+      }),
+    });
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('awaits the start-time verify-plan instantiation before running the completion gate', async () => {
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    // Control exactly when the fire-and-forget instantiation settles.
+    let settle: () => void = () => {};
+    const instantiation = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const instantiateSpy = vi
+      .spyOn(verifyServices, 'instantiateVerifyPlanOnStart')
+      .mockReturnValue(instantiation);
+    const runVerifySpy = vi
+      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .mockResolvedValue(undefined);
+
+    // A top-level task op registers the (still-pending) instantiation at start.
+    await lifecycle.recordStart({ operationId: 'op-1', taskId: 'task-1' } as any);
+    expect(instantiateSpy).toHaveBeenCalledTimes(1);
+
+    // Completion fires while the plan instantiation is still in flight.
+    const doneState = { metadata: { agentId: 'a', _hooks: [] }, status: 'done' };
+    const dispatch = lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    // The gate must stay blocked on the pending instantiation, not race past it.
+    await flushMicrotasks();
+    expect(runVerifySpy).not.toHaveBeenCalled();
+
+    // Once the plan lands, the gate proceeds against the now-confirmed plan.
+    settle();
+    await dispatch;
+    expect(runVerifySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not register an instantiation for a repair / verifier sub-op (parentOperationId set)', async () => {
+    const lifecycle = buildLifecycle();
+    const instantiateSpy = vi
+      .spyOn(verifyServices, 'instantiateVerifyPlanOnStart')
+      .mockResolvedValue(undefined);
+
+    await lifecycle.recordStart({
+      operationId: 'op-2',
+      parentOperationId: 'op-1',
+      taskId: 'task-1',
+    } as any);
+
+    expect(instantiateSpy).not.toHaveBeenCalled();
   });
 });
 

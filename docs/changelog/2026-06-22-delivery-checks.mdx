@@ -1,0 +1,40 @@
+---
+title: Delivery Checks & Audio Messages
+description: >-
+  Set delivery checks that verify a task's result before it ships, send audio that models can listen to, and turn any document into a reusable skill.
+
+tags:
+  - Tasks
+  - Audio
+  - Skills
+  - CLI
+---
+
+# Delivery Checks & Audio Messages
+
+## Features
+
+- **Delivery checks for tasks.** Add checks to a task and a Delivery Checker reviews the result before it's delivered. A failed check can hold the result back and start a repair round, and you get a verification report with the verdict, score, and the evidence behind each check.
+- **Send audio to an agent.** Attach an audio file such as an MP3, and audio-capable models like Gemini can listen to it. Audio messages now play inline with a waveform player.
+- **Turn a document into a skill.** A new "Convert to skill" action in the document explorer turns any agent document into a reusable skill in place.
+- **Self-update the CLI.** Run `lh update` to upgrade the LobeHub CLI to the latest version, and use `file upload` to send local files.
+
+## Improvements
+
+- Creating an agent now recommends relevant skills from the Skill Store.
+- GLM-5.2 lets you choose how much it thinks before answering.
+- Built-in Linear results render as cards instead of raw JSON.
+- A cold start shows one continuous loading screen instead of a brief logo flash.
+- Topics holding unsent text show a "[Draft]" hint, and unread status now syncs from the server so it stays consistent across devices.
+- Desktop: jump to a tab with Mod+1–9, cycle tabs with Ctrl+Tab, and read update notes as formatted Markdown.
+- The execution device switcher gained a Manage button, and the device detail panel lists recent directories.
+- When an agent fails in a connected chat app, the reply explains why instead of showing a bare operation ID.
+
+## Fixes
+
+- Editing a connector no longer silently wipes its saved credentials on save.
+- Switching the interface language no longer flashes a blank screen.
+- Adding a custom model with a duplicate ID is now rejected up front.
+- The agent working-directory clear button now actually clears it.
+- Search results no longer fail on a citation with an empty link.
+- WeChat and QQ file attachments, including audio, are recovered more reliably.

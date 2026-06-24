@@ -102,8 +102,8 @@ const AgentWorkingSidebar = memo(() => {
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isDesktop,
     isHetero,
+    clientExecutionAvailable: isDesktop,
   });
 
   // Running against a bound device (remote, or this machine as a device): file

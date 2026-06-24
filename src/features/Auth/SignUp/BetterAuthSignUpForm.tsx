@@ -6,7 +6,7 @@ import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthCard } from '@/features/AuthCard';
 import { AuthAgreement } from '@/features/AuthShell';

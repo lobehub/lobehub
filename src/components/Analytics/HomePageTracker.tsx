@@ -2,7 +2,7 @@
 
 import { useAnalytics } from '@lobehub/analytics/react';
 import { memo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 const HomePageTracker = memo(() => {
   const { analytics } = useAnalytics();

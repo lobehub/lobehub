@@ -31,6 +31,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     pageId,
     knowledgeBaseId,
+    metaReadOnly,
     onDocumentIdChange,
     onEmojiChange,
     onSave,
@@ -65,6 +66,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('documentId', pageId);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
+    useStoreUpdater('metaReadOnly', metaReadOnly);
     useStoreUpdater('onDocumentIdChange', onDocumentIdChange);
     useStoreUpdater('onEmojiChange', onEmojiChange);
     useStoreUpdater('onSave', onSave);

@@ -19,10 +19,14 @@
   "editMessage.title": "ویرایش پیام",
   "navigateToChat.desc": "رفتن به تب گفت‌وگو و ورود به Lobe AI",
   "navigateToChat.title": "رفتن به گفت‌وگوی پیش‌فرض",
+  "nextTab.desc": "به تب بعدی در برنامه دسکتاپ بروید؛ در انتها به اولین تب بازمی‌گردد",
+  "nextTab.title": "تب بعدی",
   "openChatSettings.desc": "مشاهده و ویرایش تنظیمات گفت‌وگوی فعلی",
   "openChatSettings.title": "باز کردن تنظیمات گفت‌وگو",
   "openHotkeyHelper.desc": "مشاهده راهنمای تمام میانبرهای صفحه‌کلید",
   "openHotkeyHelper.title": "راهنمای میانبرها",
+  "prevTab.desc": "به تب قبلی در برنامه دسکتاپ بروید؛ در ابتدا به آخرین تب بازمی‌گردد",
+  "prevTab.title": "تب قبلی",
   "regenerateMessage.desc": "تولید مجدد آخرین پیام",
   "regenerateMessage.title": "تولید مجدد پیام",
   "saveDocument.desc": "ذخیره فوری تمام تغییرات صفحه فعلی",
@@ -35,10 +39,10 @@
   "showApp.title": "نمایش پنجره اصلی",
   "switchAgent.desc": "تغییر بین نمایندگان پین‌شده در نوار کناری با نگه داشتن Ctrl و فشردن اعداد ۰ تا ۹",
   "switchAgent.title": "تغییر سریع نماینده",
+  "switchTab.desc": "به یک تب خاص بر اساس موقعیت آن (۱–۹) در نوار تب‌های برنامه دسکتاپ بروید",
+  "switchTab.title": "انتقال به تب بر اساس شماره",
   "toggleLeftPanel.desc": "نمایش یا پنهان کردن پنل سمت چپ",
   "toggleLeftPanel.title": "تغییر وضعیت پنل چپ",
   "toggleRightPanel.desc": "نمایش یا پنهان کردن پنل سمت راست",
-  "toggleRightPanel.title": "تغییر وضعیت پنل راست",
-  "toggleZenMode.desc": "در حالت تمرکز، فقط گفت‌وگوی فعلی نمایش داده می‌شود و سایر عناصر رابط کاربری پنهان می‌شوند",
-  "toggleZenMode.title": "تغییر حالت تمرکز"
+  "toggleRightPanel.title": "تغییر وضعیت پنل راست"
 }

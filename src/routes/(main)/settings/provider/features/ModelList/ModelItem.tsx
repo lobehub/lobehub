@@ -131,7 +131,7 @@ const ModelItem = memo<ModelItemProps>(
               }),
           ].filter(Boolean) as string[];
         }
-        case 'stt': {
+        case 'asr': {
           const inputRate = getAudioInputUnitRate(pricing);
           return [
             typeof inputRate === 'number' &&

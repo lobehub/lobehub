@@ -68,6 +68,12 @@ const isModelSupportVideo = (id: string, provider: string) => (s: AIProviderStor
   return model?.abilities?.video;
 };
 
+const isModelSupportAudio = (id: string, provider: string) => (s: AIProviderStoreState) => {
+  const model = getEnabledModelById(id, provider)(s);
+
+  return model?.abilities?.audio || false;
+};
+
 const isModelSupportImageOutput = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const model = getEnabledModelById(id, provider)(s);
 
@@ -160,6 +166,7 @@ export const aiModelSelectors = {
   isModelHasContextWindowToken,
   isModelHasExtendParams,
   isModelLoading,
+  isModelSupportAudio,
   isModelSupportFiles,
   isModelSupportImageOutput,
   isModelSupportReasoning,

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     id: string;
     params: Record<string, string | undefined>;
     pathname: string;
+    search?: string;
   }
 
   const store = {
@@ -52,14 +53,15 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
 }));
 
-vi.mock('react-router-dom', async () => {
+vi.mock('react-router', async () => {
   const React = await vi.importActual<typeof ReactModule>('react');
 
   return {
     useMatches: () => React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot),
     useLocation: () => {
       const matches = React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot);
-      return { pathname: matches.at(-1)?.pathname ?? '/', search: '' };
+      const match = matches.at(-1);
+      return { pathname: match?.pathname ?? '/', search: match?.search ?? '' };
     },
   };
 });
@@ -175,5 +177,39 @@ describe('RouteMetaBridge', () => {
     } finally {
       if (titleDescriptor) Object.defineProperty(document, 'title', titleDescriptor);
     }
+  });
+
+  it('passes search params to dynamic route meta', async () => {
+    mocks.setMatches([
+      {
+        data: undefined,
+        handle: {
+          meta: {
+            titleKey: 'navigation.groupChat',
+            useDynamicMeta: (params: Record<string, string | undefined>) => ({
+              title: `Topic ${params.topic}`,
+            }),
+          },
+        },
+        id: 'routes/group',
+        params: { gid: 'group-a' },
+        pathname: '/group/group-a',
+        search: '?topic=t1',
+      },
+    ]);
+
+    render(<RouteMetaBridge />);
+
+    await waitFor(() => {
+      expect(document.title).toBe(`Topic t1 · ${BRANDING_NAME}`);
+      expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith(
+        {
+          avatar: undefined,
+          backgroundColor: undefined,
+          title: 'Topic t1',
+        },
+        '/group/group-a?topic=t1',
+      );
+    });
   });
 });

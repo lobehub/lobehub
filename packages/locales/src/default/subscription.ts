@@ -35,6 +35,22 @@ export default {
     'You will still enjoy the benefits until the current plan expires ({{date}}). You can resubscribe at any time before expiration.',
   'cancelPlan.desc':
     'After cancellation, you will be downgraded to the free version when the current plan expires.',
+  'cancelPlan.confirmCountdown': 'Cancel Subscription ({{seconds}})',
+  'cancelPlan.keep': 'Keep Subscription',
+  'cancelPlan.nextStep': 'Next',
+  'cancelPlan.prevStep': 'Back',
+  'cancelPlan.reason.commentPlaceholder': 'Tell us more to help us improve (optional)',
+  'cancelPlan.reason.commentPlaceholderRequired': 'Please tell us your reason',
+  'cancelPlan.reason.hintSelect': 'Please select a reason for canceling',
+  'cancelPlan.reason.label': 'Help us improve — why are you canceling?',
+  'cancelPlan.reason.options.customer_service': 'Customer service was less than expected',
+  'cancelPlan.reason.options.low_quality': 'Quality was less than expected',
+  'cancelPlan.reason.options.missing_features': 'Some features are missing',
+  'cancelPlan.reason.options.other': 'Other reason',
+  'cancelPlan.reason.options.switched_service': "I'm switching to another service",
+  'cancelPlan.reason.options.too_complex': "It's too complicated to use",
+  'cancelPlan.reason.options.too_expensive': "It's too expensive",
+  'cancelPlan.reason.options.unused': 'I no longer use it',
   'cancelPlan.title': 'Cancel Subscription',
   'cancelSubscription': 'Cancel Subscription',
   'compare.hobbyCreditTooltip':
@@ -385,6 +401,17 @@ export default {
   'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'plansModal.creditLimit.desc':
+    'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
+  'plansModal.creditLimit.title': 'You’re out of credits',
+  'plansModal.default.desc': 'Unlock more capacity and advanced features.',
+  'plansModal.default.title': 'Upgrade your plan',
+  'plansModal.fileStorageLimit.desc':
+    'Your file storage is full. Upgrade to keep uploading and managing files.',
+  'plansModal.fileStorageLimit.title': 'Storage limit reached',
+  'plansModal.modelAccess.desc':
+    'This model is available on paid plans. Upgrade to use the full model lineup.',
+  'plansModal.modelAccess.title': 'Unlock all models',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
@@ -456,9 +483,12 @@ export default {
     'Invalid referral code format, please enter 2-8 letters, numbers or underscores',
   'referral.errors.selfReferral': 'You cannot use your own invite code',
   'referral.errors.updateFailed': 'Update failed, please try again later',
+  'referral.hero.description':
+    'Share your referral link below. After your friend makes their first payment, you each earn {{reward}}M credits.',
+  'referral.hero.title': 'Invite friends, you both earn <0>{{reward}}M credits</0>',
   'referral.inviteCode.description':
     'Share your exclusive referral code to invite friends to register',
-  'referral.inviteCode.title': 'My Referral Code',
+  'referral.inviteCode.title': 'My Exclusive Referral Code',
   'referral.inviteLink.description':
     'Copy the link and share with friends. Both of you earn credits after your friend makes a payment',
   'referral.inviteLink.title': 'Referral Link',

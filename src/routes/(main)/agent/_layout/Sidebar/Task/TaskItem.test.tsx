@@ -35,7 +35,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
   ),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
   useParams: () => mocks.params,
 }));

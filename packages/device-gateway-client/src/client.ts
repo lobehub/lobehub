@@ -69,6 +69,13 @@ export interface GatewayClientOptions {
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   userId?: string;
+  /**
+   * When set, the connection enrolls as a WORKSPACE-owned device: the gateway
+   * routes it to the `workspace:<id>` principal (reachable by all members)
+   * instead of the signer's personal one. The connect token must carry a
+   * matching `workspace_id` claim or the gateway rejects the socket.
+   */
+  workspaceId?: string;
 }
 
 export class GatewayClient extends EventEmitter {
@@ -86,6 +93,7 @@ export class GatewayClient extends EventEmitter {
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   private userId?: string;
+  private workspaceId?: string;
   private serverUrl?: string;
   private logger: GatewayClientLogger;
   private autoReconnect: boolean;
@@ -100,6 +108,7 @@ export class GatewayClient extends EventEmitter {
     this.channel = options.channel;
     this.serverUrl = options.serverUrl;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
     this.logger = options.logger || noopLogger;
     this.autoReconnect = options.autoReconnect ?? true;
   }
@@ -245,8 +254,12 @@ export class GatewayClient extends EventEmitter {
       params.set('channel', this.channel);
     }
 
-    // Service token mode: pass userId in query
-    if (this.userId) {
+    // Workspace device: route to the `workspace:<id>` principal. Otherwise the
+    // personal path passes userId. (The DO re-validates the token's claim, so
+    // the routing param alone grants nothing.)
+    if (this.workspaceId) {
+      params.set('workspaceId', this.workspaceId);
+    } else if (this.userId) {
       params.set('userId', this.userId);
     }
 

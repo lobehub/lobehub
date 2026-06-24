@@ -9,6 +9,8 @@ export const agentDocumentSWRKeys = {
    * under that key, which drops those fields.
    */
   documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
+  documentChatTopic: (agentId: string, documentId: string) =>
+    ['agent:documentChatTopic', agentId, documentId] as const,
   readDocument: (agentId: string, id: string) => ['agent:documentEditor', agentId, id] as const,
 };
 

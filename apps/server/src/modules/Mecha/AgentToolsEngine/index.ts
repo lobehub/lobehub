@@ -9,7 +9,6 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
-import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -28,7 +27,11 @@ import { ToolsEngine } from '@lobechat/context-engine';
 import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
-import { executionTargetToRuntimeMode, resolveExecutionTarget } from '@/helpers/executionTarget';
+import {
+  executionTargetToRuntimeMode,
+  resolveExecutionTarget,
+  resolveToolMode,
+} from '@/helpers/executionTarget';
 import {
   buildAllowedBuiltinTools,
   DEVICE_TOOL_IDENTIFIERS,
@@ -131,7 +134,6 @@ export const createServerAgentToolsEngine = (
     disableLocalSystem = false,
     executionPlan,
     globalMemoryEnabled = false,
-    hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
     isBotConversation = false,
     model,
@@ -157,7 +159,7 @@ export const createServerAgentToolsEngine = (
   const executionTarget =
     executionPlan?.target ??
     resolveExecutionTarget(agentConfig.agencyConfig, {
-      isDesktop: platform === 'desktop',
+      clientExecutionAvailable: platform === 'desktop',
     });
   const runtimeMode: RuntimeEnvMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools (local-system, remote-device proxy) only exist for
@@ -170,9 +172,7 @@ export const createServerAgentToolsEngine = (
   const isSearchEnabled = searchMode !== 'off';
   // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
   // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
-  const toolMode: 'agent' | 'chat' | 'custom' =
-    agentConfig.chatConfig?.toolMode ??
-    (agentConfig.chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
+  const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
   const isChatMode = toolMode === 'chat';
   const isCustomMode = toolMode === 'custom';
 
@@ -245,7 +245,6 @@ export const createServerAgentToolsEngine = (
       hasDeviceProxy &&
       !deviceContext?.autoActivated &&
       !deviceContext?.boundDeviceId,
-    [AgentDocumentsManifest.identifier]: hasAgentDocuments,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 

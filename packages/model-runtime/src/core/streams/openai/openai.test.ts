@@ -79,6 +79,57 @@ describe('OpenAIStream', () => {
     expect(onCompletionMock).toHaveBeenCalledTimes(1);
   });
 
+  it('should expose missing usage diagnostics when terminal chunk has no usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_missing_usage',
+        });
+        controller.close();
+      },
+    });
+    const onFinal = vi.fn();
+
+    const protocolStream = OpenAIStream(mockOpenAIStream, {
+      callbacks: { onFinal },
+      payload: {
+        apiMode: 'chat_completions',
+        includeUsageRequested: true,
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      decoder.decode(chunk, { stream: true });
+    }
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usageMissingDiagnostics: expect.objectContaining({
+          apiMode: 'chat_completions',
+          finishReason: 'stop',
+          hasUsageMetadata: false,
+          includeUsageRequested: true,
+          model: 'gpt-5.4-mini',
+          provider: 'openai',
+          responseId: 'chatcmpl_missing_usage',
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        }),
+      }),
+    );
+  });
+
   it('should handle empty stream', async () => {
     const mockStream = new ReadableStream({
       start(controller) {
@@ -3633,6 +3684,49 @@ describe('OpenAIStream', () => {
 
     expect(chunks).toEqual([
       'id: finish-usage\n',
+      'event: usage\n',
+      `data: {"inputTextTokens":10,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":20,"totalTokens":30}\n\n`,
+    ]);
+  });
+
+  it('should handle finish_reason with text and usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'finish-text-usage',
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'done' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+          },
+        });
+
+        controller.close();
+      },
+    });
+
+    const protocolStream = OpenAIStream(mockOpenAIStream);
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: finish-text-usage\n',
+      'event: text\n',
+      'data: "done"\n\n',
+      'id: finish-text-usage\n',
       'event: usage\n',
       `data: {"inputTextTokens":10,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":20,"totalTokens":30}\n\n`,
     ]);

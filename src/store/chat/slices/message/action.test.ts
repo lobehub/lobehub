@@ -1220,6 +1220,104 @@ describe('chatMessage actions', () => {
     });
   });
 
+  describe('replaceMessages cache write-through', () => {
+    beforeEach(() => {
+      (mutate as Mock).mockClear();
+    });
+
+    it('seeds the message:list SWR cache for the same bucket without revalidating', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = { agentId: 'wt-agent', topicId: 'wt-topic' };
+      const messages = [{ id: 'm1', role: 'user', content: 'hi' }] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages, { context });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, dataArg, options] = (mutate as Mock).mock.calls[0];
+
+      // seeds, never refetches
+      expect(options).toEqual({ revalidate: false });
+      expect(dataArg).toEqual(messages);
+
+      // matcher targets exactly this bucket, not other buckets / domains
+      expect(typeof matcher).toBe('function');
+      expect(matcher(['message:list', context, 1])).toBe(true);
+      // workspace-augmented variant of the same bucket still matches
+      expect(matcher(['message:list', context, 1, 'workspace-1'])).toBe(true);
+      expect(matcher(['message:list', { agentId: 'wt-agent', topicId: 'other' }, 1])).toBe(false);
+      expect(matcher(['topic:list', 'container', {}])).toBe(false);
+    });
+
+    it('skips write-through for the useFetchMessages onData sync path', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        result.current.replaceMessages([{ id: 'm2', role: 'user', content: 'hi' }] as any, {
+          action: 'useFetchMessages',
+          context: { agentId: 'wt-agent-2', topicId: 'wt-topic-2' },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('skips write-through while the context is streaming', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = { agentId: 'wt-agent-3', topicId: 'wt-topic-3' };
+
+      await act(async () => {
+        // A running AI-runtime op marks the context as streaming.
+        result.current.startOperation({ type: 'execAgentRuntime', context });
+      });
+
+      (mutate as Mock).mockClear();
+
+      await act(async () => {
+        result.current.replaceMessages([{ id: 'm3', role: 'user', content: 'hi' }] as any, {
+          context,
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('still seeds the cache when the store-set is a no-op (optimistic echo)', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = { agentId: 'wt-noop', topicId: 'wt-noop-topic' };
+      const messages = [{ id: 'm-noop', role: 'user', content: 'hi' }] as any;
+      const key = messageMapKey(context);
+
+      // An optimistic dispatch already applied this exact state to the in-memory
+      // store, but never touched the SWR cache.
+      act(() => {
+        useChatStore.setState({ dbMessagesMap: { [key]: messages } });
+      });
+
+      (mutate as Mock).mockClear();
+
+      await act(async () => {
+        result.current.replaceMessages(messages, {
+          action: 'optimisticUpdateMessageContent',
+          context,
+        });
+      });
+
+      // store-set is a no-op (messagesMap bucket never populated)...
+      expect(result.current.messagesMap[key]).toBeUndefined();
+      // ...but the cache is still seeded so a later switch-back is not stale
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, dataArg, options] = (mutate as Mock).mock.calls[0];
+      expect(options).toEqual({ revalidate: false });
+      expect(dataArg).toEqual(messages);
+      expect(matcher(['message:list', context, 1])).toBe(true);
+    });
+  });
+
   describe('Public API with context parameter', () => {
     describe('deleteMessage with context', () => {
       it('should pass context to optimisticDeleteMessages', async () => {

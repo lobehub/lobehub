@@ -16,6 +16,7 @@ import { LocalFile } from './LocalFile';
 import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
+import { TaskDetail } from './TaskDetail';
 import { Thread } from './Thread';
 import { type PortalImpl } from './type';
 import { VerifyResult } from './VerifyResult';
@@ -33,6 +34,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.LocalFile]: LocalFile,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,
+  [PortalViewType.TaskDetail]: TaskDetail,
   [PortalViewType.Thread]: Thread,
   [PortalViewType.GroupThread]: GroupThread,
   [PortalViewType.VerifyResult]: VerifyResult,

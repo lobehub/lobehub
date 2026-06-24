@@ -19,7 +19,7 @@ import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { type ProviderConfig } from '@/types/user/settings';
 
-const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_unique';
+const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
 
 const getPostgresErrorField = (error: unknown, field: 'code' | 'constraint') => {
   let current = error;

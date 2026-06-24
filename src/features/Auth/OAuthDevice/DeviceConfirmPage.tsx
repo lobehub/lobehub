@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import NotFound from '@/components/404';
 

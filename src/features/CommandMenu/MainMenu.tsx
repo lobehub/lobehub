@@ -24,7 +24,7 @@ import ContextCommands from './ContextCommands';
 import { useCommandMenu } from './useCommandMenu';
 
 const MainMenu = memo(() => {
-  const { pathname, menuContext, setPages, pages } = useCommandMenuContext();
+  const { pathname, menuContext, setPages, pages, onClose } = useCommandMenuContext();
   const { t } = useTranslation('common');
   const { allowed: canCreate } = usePermission('create_content');
 
@@ -149,7 +149,14 @@ const MainMenu = memo(() => {
           icon={<FeatherIcon />}
           keywords={t('cmdk.keywords.contactUs').split(' ')}
           value="contact-via-email"
-          onSelect={() => openFeedbackModal()}
+          onSelect={() => {
+            // Close the palette through the context handler (which runs the exit
+            // animation and clears the local `isVisible` state) before opening the
+            // modal. `openFeedbackModal` only flips the store flag, which alone
+            // doesn't unmount the palette — so without this it stays on screen.
+            onClose();
+            openFeedbackModal();
+          }}
         >
           {t('cmdk.contactUs')}
         </CommandItem>

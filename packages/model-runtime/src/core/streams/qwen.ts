@@ -20,6 +20,7 @@ import {
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   generateToolCallId,
+  setOpenAIChatCompletionUsageMissingDiagnostics,
 } from './protocol';
 
 export const transformQwenStream = (
@@ -27,6 +28,14 @@ export const transformQwenStream = (
   streamContext?: StreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
+  if (streamContext) {
+    if (streamContext.chunkIndex === undefined) {
+      streamContext.chunkIndex = 0;
+    } else {
+      streamContext.chunkIndex++;
+    }
+  }
+
   if (Array.isArray(chunk.choices) && chunk.choices.length === 0 && chunk.usage) {
     const usage = convertOpenAIUsage(
       {
@@ -39,6 +48,7 @@ export const transformQwenStream = (
 
     if (streamContext) {
       streamContext.usage = usage;
+      delete streamContext.usageMissingDiagnostics;
     }
 
     return { data: usage, id: chunk.id, type: 'usage' };
@@ -119,6 +129,32 @@ export const transformQwenStream = (
     } as StreamProtocolToolCallChunk;
   }
 
+  const usageChunk: StreamProtocolChunk | undefined = chunk.usage
+    ? { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' }
+    : undefined;
+  const appendUsageChunk = (
+    protocolChunk: StreamProtocolChunk | StreamProtocolChunk[],
+  ): StreamProtocolChunk | StreamProtocolChunk[] => {
+    if (!usageChunk) return protocolChunk;
+
+    if (streamContext) delete streamContext.usageMissingDiagnostics;
+
+    return Array.isArray(protocolChunk)
+      ? [...protocolChunk, usageChunk]
+      : [protocolChunk, usageChunk];
+  };
+
+  if (item.finish_reason && streamContext) {
+    if (usageChunk) {
+      delete streamContext.usageMissingDiagnostics;
+    } else {
+      setOpenAIChatCompletionUsageMissingDiagnostics(streamContext, payload, {
+        finishReason: item.finish_reason,
+        responseId: chunk.id,
+      });
+    }
+  }
+
   // DeepSeek reasoner will put thinking in the reasoning_content field
   if (
     item.delta &&
@@ -130,10 +166,14 @@ export const transformQwenStream = (
   }
 
   if (typeof item.delta?.content === 'string') {
-    return { data: item.delta.content, id: chunk.id, type: 'text' };
+    const textChunk: StreamProtocolChunk = { data: item.delta.content, id: chunk.id, type: 'text' };
+
+    return item.finish_reason ? appendUsageChunk(textChunk) : textChunk;
   }
 
   if (item.finish_reason) {
+    if (usageChunk) return usageChunk;
+
     return { data: item.finish_reason, id: chunk.id, type: 'stop' };
   }
 
@@ -180,5 +220,5 @@ export const QwenAIStream = (
       }),
     )
     .pipeThrough(createSSEProtocolTransformer((c) => c, streamContext))
-    .pipeThrough(createCallbacksTransformer(callbacks));
+    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack: streamContext }));
 };

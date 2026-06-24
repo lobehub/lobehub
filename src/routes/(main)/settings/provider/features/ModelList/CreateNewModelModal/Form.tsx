@@ -45,7 +45,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             'chat',
             'embedding',
             'tts',
-            'stt',
+            'asr',
             'image',
             'video',
             'text2music',

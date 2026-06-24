@@ -3,6 +3,8 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
+import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 
 import type { HeterogeneousPersistenceHandler } from '..';
 import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
@@ -261,6 +263,83 @@ describe('HeterogeneousAgentService', () => {
         operationId: 'op-3',
         reason: 'cancelled',
       });
+    });
+
+    // The unified terminal funnel: heteroFinish must drive the run's lifecycle
+    // hooks through the shared hookDispatcher (the same mechanism the normal LLM
+    // path uses), which is what marks the owning task done/failed and fires any
+    // IM bot completion callback. These register a local-mode handler hook for
+    // the operation and assert heteroFinish dispatches it.
+    const registerHook = (operationId: string): { onComplete: any; onError: any } => {
+      const onComplete = vi.fn(async () => {});
+      const onError = vi.fn(async () => {});
+      const hooks: AgentHook[] = [
+        { handler: onComplete, id: 'task-on-complete', type: 'onComplete' },
+        { handler: onError, id: 'task-on-error', type: 'onError' },
+      ];
+      hookDispatcher.register(operationId, hooks);
+      return { onComplete, onError };
+    };
+
+    it('fires onComplete (reason=done) hooks on a successful run', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-success');
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-hook-success',
+        result: 'success',
+        topicId: 'topic-hook-1',
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onComplete.mock.calls[0][0]).toMatchObject({
+        operationId: 'op-hook-success',
+        reason: 'done',
+      });
+      expect(onError).not.toHaveBeenCalled();
+      // Hooks are unregistered after dispatch so a replay can't double-fire.
+      expect(hookDispatcher.hasHooks('op-hook-success')).toBe(false);
+    });
+
+    it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-error');
+
+      await service.heteroFinish({
+        agentType: 'codex',
+        error: { message: 'auth required', type: 'AuthRequired' },
+        operationId: 'op-hook-error',
+        result: 'error',
+        topicId: 'topic-hook-2',
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0][0]).toMatchObject({
+        errorMessage: 'auth required',
+        errorType: 'AuthRequired',
+        operationId: 'op-hook-error',
+        reason: 'error',
+      });
+    });
+
+    it('does NOT fire hooks on a cancelled run (the real result fires them)', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-cancelled');
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-hook-cancelled',
+        result: 'cancelled',
+        topicId: 'topic-hook-3',
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      // Still registered — the subsequent success/error call will dispatch them.
+      expect(hookDispatcher.hasHooks('op-hook-cancelled')).toBe(true);
+      hookDispatcher.unregister('op-hook-cancelled');
     });
   });
 });

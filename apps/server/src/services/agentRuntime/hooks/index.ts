@@ -1,3 +1,4 @@
+export { dispatchTerminalHooks, type TerminalHookParams } from './dispatchTerminalHooks';
 export { HookDispatcher, hookDispatcher } from './HookDispatcher';
 export type {
   AgentHook,

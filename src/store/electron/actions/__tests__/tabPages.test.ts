@@ -5,6 +5,21 @@ import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
 
+vi.mock('@/features/Electron/titlebar/TabBar/resolveRouteMeta', () => ({
+  guardedMergeCache: (prev: TabItem['cached'], next: TabItem['cached']) => {
+    if (!next) return prev;
+
+    const merged: TabItem['cached'] = { ...prev };
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined) continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
+      merged[key as keyof NonNullable<TabItem['cached']>] = value;
+    }
+
+    return Object.keys(merged ?? {}).length > 0 ? merged : undefined;
+  },
+}));
+
 const buildTab = (url: string, cached?: TabItem['cached']): TabItem => ({
   cached,
   id: url,
@@ -23,16 +38,38 @@ describe('tabPages actions', () => {
   });
 
   describe('addTab', () => {
-    it('uses the normalized URL as the tab id', () => {
+    it('creates a tab with a stable generated id and activates it', () => {
       const { result } = renderHook(() => useElectronStore());
 
+      let createdId = '';
       act(() => {
-        result.current.addTab('/agent/abc?b=2&a=1');
+        createdId = result.current.addTab('/agent/abc?b=2&a=1');
       });
 
       expect(result.current.tabs).toHaveLength(1);
-      expect(result.current.tabs[0].id).toBe('/agent/abc?a=1&b=2');
-      expect(result.current.activeTabId).toBe('/agent/abc?a=1&b=2');
+      expect(result.current.tabs[0].id).toBe(createdId);
+      expect(result.current.tabs[0].url).toBe('/agent/abc?b=2&a=1');
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.activeTabId).toBe(createdId);
+    });
+
+    it('switches the visible tab bucket when the URL moves into a workspace', () => {
+      const { result } = renderHook(() => useElectronStore());
+
+      act(() => {
+        result.current.addTab('/agent/abc');
+        result.current.addTab('/acme/agent/abc');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ slug: 'acme', type: 'workspace' });
+      expect(result.current.tabs.map((page) => page.url)).toEqual(['/acme/agent/abc']);
+
+      act(() => {
+        result.current.loadTabs('/agent/abc');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs.map((page) => page.url)).toEqual(['/agent/abc']);
     });
 
     it('dedupes tabs that resolve to the same normalized URL', () => {
@@ -58,8 +95,26 @@ describe('tabPages actions', () => {
     });
   });
 
+  describe('addNewTab', () => {
+    it('always creates a fresh tab even when the URL already has a tab', () => {
+      const { result } = renderHook(() => useElectronStore());
+
+      act(() => {
+        result.current.addNewTab('/');
+        result.current.addNewTab('/');
+        result.current.addNewTab('/');
+      });
+
+      expect(result.current.tabs).toHaveLength(3);
+      const ids = result.current.tabs.map((t) => t.id);
+      expect(new Set(ids).size).toBe(3);
+      expect(result.current.tabs.every((t) => t.url === '/')).toBe(true);
+      expect(result.current.activeTabId).toBe(result.current.tabs[2].id);
+    });
+  });
+
   describe('updateTab', () => {
-    it('drops cached data when the tab navigates to a different page', () => {
+    it('drops cached data when the tab navigates to a different page but keeps the id stable', () => {
       const { result } = renderHook(() => useElectronStore());
       const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
 
@@ -72,9 +127,27 @@ describe('tabPages actions', () => {
       });
 
       const updatedTab = result.current.tabs[0];
-      expect(updatedTab.id).toBe('/');
+      expect(updatedTab.id).toBe(agentTab.id);
+      expect(updatedTab.url).toBe('/');
       expect(updatedTab.cached).toBeUndefined();
-      expect(result.current.activeTabId).toBe('/');
+      expect(result.current.activeTabId).toBe(agentTab.id);
+    });
+
+    it('keeps a tab in the current bucket when updateTab receives a workspace URL directly', () => {
+      const { result } = renderHook(() => useElectronStore());
+      const agentTab = buildTab('/agent/abc', { title: 'Claude Code' });
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: agentTab.id, tabs: [agentTab] });
+      });
+
+      act(() => {
+        result.current.updateTab(agentTab.id, '/acme/agent/abc');
+      });
+
+      expect(result.current.activeTabScope).toEqual({ type: 'personal' });
+      expect(result.current.tabs[0].url).toBe('/acme/agent/abc');
+      expect(result.current.tabs[0].cached).toBeUndefined();
     });
 
     it('keeps cached data when the normalized URL is unchanged', () => {

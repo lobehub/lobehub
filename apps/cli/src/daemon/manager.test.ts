@@ -19,11 +19,22 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
+// Mock only `execFileSync` (used by isDaemonProcess to read a process command
+// line); keep the real `spawn` so nothing else changes.
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return { ...actual, execFileSync: vi.fn() };
+});
+
+// eslint-disable-next-line import-x/first
+import { execFileSync } from 'node:child_process';
+
 // eslint-disable-next-line import-x/first
 import {
   appendLog,
   getLogPath,
   getRunningDaemonPid,
+  isDaemonProcess,
   isProcessAlive,
   readPid,
   readStatus,
@@ -35,9 +46,15 @@ import {
   writeStatus,
 } from './manager';
 
+// A command line that matches the daemon signature (`connect … --daemon-child`).
+const DAEMON_COMMAND = '/usr/local/bin/node /path/to/cli.js connect --daemon-child';
+
 describe('daemon manager', () => {
   beforeEach(async () => {
     await mkdir(mockDir, { recursive: true });
+    // Default: any inspected PID looks like our daemon. Tests that need a
+    // reused / unrelated PID override this per-case.
+    vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
   });
 
   afterEach(() => {
@@ -80,6 +97,36 @@ describe('daemon manager', () => {
     });
   });
 
+  describe('isDaemonProcess', () => {
+    it('should return true when the command line matches the daemon signature', () => {
+      vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
+      expect(isDaemonProcess(12345)).toBe(true);
+      expect(execFileSync).toHaveBeenCalledWith(
+        'ps',
+        ['-ww', '-p', '12345', '-o', 'command='],
+        expect.any(Object),
+      );
+    });
+
+    it('should return false for an unrelated process command line', () => {
+      vi.mocked(execFileSync).mockReturnValue('/usr/bin/vim notes.txt' as any);
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+
+    it('should return false when the signature is only partially present', () => {
+      // `connect` without the internal `--daemon-child` flag is not our daemon.
+      vi.mocked(execFileSync).mockReturnValue('/usr/bin/node /path/cli connect' as any);
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+
+    it('should return false when ps is unavailable / throws', () => {
+      vi.mocked(execFileSync).mockImplementation(() => {
+        throw new Error('ps: command not found');
+      });
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+  });
+
   describe('getRunningDaemonPid', () => {
     it('should return null when no PID file', () => {
       expect(getRunningDaemonPid()).toBeNull();
@@ -108,6 +155,23 @@ describe('daemon manager', () => {
 
       getRunningDaemonPid();
 
+      expect(readStatus()).toBeNull();
+    });
+
+    it('should treat a live but reused (non-daemon) PID as stale and clean up', () => {
+      // process.pid is alive, but the inspected command line is not our daemon —
+      // simulates the OS reusing a dead daemon's PID for an unrelated process.
+      writePid(process.pid);
+      writeStatus({
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://test.com',
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      });
+      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
       expect(readStatus()).toBeNull();
     });
   });
@@ -229,6 +293,24 @@ describe('daemon manager', () => {
 
       const result = stopDaemon();
       expect(result).toBe(true);
+
+      killSpy.mockRestore();
+    });
+
+    it('should NOT SIGTERM a live PID that is not our daemon', () => {
+      // Stale daemon.pid whose PID was reused by an unrelated, living process.
+      writePid(process.pid);
+      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      const result = stopDaemon();
+
+      expect(result).toBe(false);
+      // Only the liveness probe (signal 0) is allowed — never a real SIGTERM.
+      expect(killSpy).not.toHaveBeenCalledWith(process.pid, 'SIGTERM');
+      // Stale metadata is cleaned up so we don't keep re-checking it.
+      expect(readPid()).toBeNull();
 
       killSpy.mockRestore();
     });

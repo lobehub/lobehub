@@ -149,11 +149,15 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           lastSavedTitle,
           lastSavedEmoji,
           isMetaDirty,
+          metaReadOnly,
           onTitleChange,
           onEmojiChange,
         } = get();
 
-        if (!documentId || !isMetaDirty) return;
+        // Backstop: never persist meta for a read-only doc, even if something
+        // marked it dirty out-of-band. A title save also rewrites the filename
+        // (DocumentService.updateDocument), which would desync a managed skill.
+        if (!documentId || !isMetaDirty || metaReadOnly) return;
 
         set({ metaSaveStatus: 'saving' });
 
@@ -189,7 +193,9 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setEmoji: (emoji: string | undefined) => {
-        const { lastSavedEmoji, triggerDebouncedMetaSave } = get();
+        const { lastSavedEmoji, metaReadOnly, triggerDebouncedMetaSave } = get();
+
+        if (metaReadOnly) return;
 
         const isDirty = emoji !== lastSavedEmoji;
         set({ emoji, isMetaDirty: isDirty });
@@ -226,7 +232,12 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setTitle: (title: string) => {
-        const { lastSavedTitle, triggerDebouncedMetaSave } = get();
+        const { lastSavedTitle, metaReadOnly, triggerDebouncedMetaSave } = get();
+
+        // Ignore title writes from every source — manual UI, AI / page-agent
+        // editTitle, title extraction — when the doc's meta is read-only. The
+        // visible name is owned elsewhere (e.g. a skill bundle title).
+        if (metaReadOnly) return;
 
         const isDirty = title !== lastSavedTitle;
         set({ isMetaDirty: isDirty, title });

@@ -163,7 +163,7 @@ export interface ResumeMessage {
   lastEventId: string;
   type: 'resume';
   /**
-   * Opt into the authoritative `resume_complete` reply (LOBE-10443). Set by
+   * Opt into the authoritative `resume_complete` reply. Set by
    * this client so a current gateway hands back the stored session status;
    * legacy gateways ignore it and replay only.
    */
@@ -252,7 +252,7 @@ export type SessionStatus =
  * is wiped by hibernation, an empty replay is ambiguous — the run may still be
  * alive. This message resolves that ambiguity so the client never guesses
  * "completed" from silence (which would clear the shared `runningOperation` and
- * cancel the run on every device). See LOBE-10443.
+ * cancel the run on every device).
  */
 export interface ResumeCompleteMessage {
   status: SessionStatus;

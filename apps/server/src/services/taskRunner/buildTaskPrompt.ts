@@ -4,6 +4,8 @@ import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types'
 import type { BriefModel } from '@/database/models/brief';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
+import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
@@ -152,6 +154,46 @@ export async function buildTaskPrompt(
 
   const taskFiles = toFileMetas(taskFileIds);
 
+  // Delivery-acceptance (verify) context: resolve the task's verify config
+  // (with parent inheritance) and the referenced criteria so the builder knows
+  // what to self-evidence while it works. Run-time handles (verifyRunId /
+  // checkItemId) don't exist yet at prompt-build time — the verify skill
+  // resolves those at runtime from the builder's operationId.
+  const verifyConfig = await taskModel.resolveVerifyConfig(task.id).catch(() => undefined);
+  const verifyEnabled = !!verifyConfig && verifyConfig.enabled !== false;
+  let verifyCriteria: Array<{
+    required?: boolean;
+    requiredEvidence?: Array<{ hint?: string; type: string }>;
+    title: string;
+  }> = [];
+  if (verifyEnabled && (verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length)) {
+    const criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
+    const rubricModel = new VerifyRubricModel(db, userId, workspaceId);
+    const collected = (
+      await Promise.all([
+        verifyConfig.verifyRubricId
+          ? rubricModel.getCriteria(verifyConfig.verifyRubricId).catch(() => [])
+          : Promise.resolve([]),
+        verifyConfig.verifyCriteriaIds?.length
+          ? criterionModel.findByIds(verifyConfig.verifyCriteriaIds).catch(() => [])
+          : Promise.resolve([]),
+      ])
+    ).flat();
+    const seen = new Set<string>();
+    verifyCriteria = collected
+      .filter((c) => !seen.has(c.id) && seen.add(c.id))
+      .map((c) => {
+        const raw = (c.verifierConfig as Record<string, unknown> | null)?.requiredEvidence;
+        return {
+          required: c.required,
+          requiredEvidence: Array.isArray(raw)
+            ? (raw as Array<{ hint?: string; type: string }>)
+            : undefined,
+          title: c.title,
+        };
+      });
+  }
+
   const prompt = buildTaskRunPrompt({
     activities: {
       briefs: briefs.map((b: any) => ({
@@ -212,6 +254,14 @@ export async function buildTaskPrompt(
       priority: task.priority,
       review: taskModel.getReviewConfig(task) as any,
       status: task.status,
+      verify: verifyEnabled
+        ? {
+            criteria: verifyCriteria,
+            enabled: true,
+            maxIterations: verifyConfig?.maxIterations,
+            requirement: verifyConfig?.requirement,
+          }
+        : undefined,
       subtasks: subtasks.map((s: any) => ({
         blockedBy: subtaskDepMap.get(s.id),
         identifier: s.identifier,

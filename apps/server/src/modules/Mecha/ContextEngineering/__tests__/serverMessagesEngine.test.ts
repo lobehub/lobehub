@@ -70,6 +70,25 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
+    it('should inject model knowledge cutoff when provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        modelKnowledgeCutoff: '2024-06',
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nModel knowledge cutoff: 2024-06',
+      );
+    });
+
     it('should handle empty messages', async () => {
       const result = await serverMessagesEngine({
         messages: [],

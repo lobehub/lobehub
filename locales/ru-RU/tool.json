@@ -59,6 +59,7 @@
   "codeInterpreter.files": "Файлы:",
   "codeInterpreter.output": "Вывод:",
   "codeInterpreter.returnValue": "Возвращаемое значение:",
+  "connector.add.title": "Добавить пользовательский коннектор",
   "dalle.autoGenerate": "Автогенерация",
   "dalle.downloading": "Ссылки на изображения, сгенерированные DALL·E3, действительны только в течение 1 часа, кэширование изображений локально...",
   "dalle.generate": "Сгенерировать",

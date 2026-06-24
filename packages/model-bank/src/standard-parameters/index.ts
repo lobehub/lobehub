@@ -64,7 +64,7 @@ export const ModelParamsMetaSchema = z.object({
 
   imageUrl: z
     .object({
-      default: z.string().nullable().optional(),
+      default: z.string().nullish(),
       description: z.string().optional(),
       maxFileSize: z.number().optional(),
       type: z.tuple([z.literal('string'), z.literal('null')]).optional(),

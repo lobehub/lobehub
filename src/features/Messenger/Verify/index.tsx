@@ -3,7 +3,7 @@
 import { Button, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';

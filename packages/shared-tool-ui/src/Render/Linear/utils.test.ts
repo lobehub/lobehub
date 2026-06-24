@@ -7,43 +7,43 @@ describe('buildLinearRenderModel', () => {
     const model = buildLinearRenderModel({
       apiName: 'save_issue',
       args: {
-        id: 'LOBE-10205',
+        id: 'TEST-123',
         links: [
           {
-            title: 'PR #15766: refactor(chat): unify agent run lifecycle',
-            url: 'https://github.com/lobehub/lobehub/pull/15766',
+            title: 'PR #1: mock pull request',
+            url: 'https://github.com/acme/repo/pull/1',
           },
         ],
         state: 'In Review',
       },
       content: JSON.stringify({
-        description: '## 背景\n\n统一三种客户端 Agent Runtime 的 run 生命周期 hooks。',
-        id: 'LOBE-10205',
+        description: '## Background\n\nMock issue description body.',
+        id: 'TEST-123',
         links: [
           {
-            title: 'PR #15766: refactor(chat): unify agent run lifecycle',
-            url: 'https://github.com/lobehub/lobehub/pull/15766',
+            title: 'PR #1: mock pull request',
+            url: 'https://github.com/acme/repo/pull/1',
           },
         ],
         state: { name: 'In Review' },
-        title: '统一三种客户端 Agent Runtime 的 run 生命周期 hooks',
-        url: 'https://linear.app/lobehub/issue/LOBE-10205',
+        title: 'Mock issue title',
+        url: 'https://linear.app/acme/issue/TEST-123',
       }),
     });
 
     expect(model.actionLabel).toBe('Save issue');
     expect(model.requestFields).toEqual([
-      { key: 'id', label: 'ID', value: 'LOBE-10205' },
+      { key: 'id', label: 'ID', value: 'TEST-123' },
       { key: 'state', label: 'State', value: 'In Review' },
     ]);
     expect(model.requestLinks).toHaveLength(1);
     expect(model.resultEntities).toHaveLength(1);
     expect(model.resultEntities[0]).toMatchObject({
-      description: '## 背景\n\n统一三种客户端 Agent Runtime 的 run 生命周期 hooks。',
-      id: 'LOBE-10205',
+      description: '## Background\n\nMock issue description body.',
+      id: 'TEST-123',
       state: 'In Review',
-      title: '统一三种客户端 Agent Runtime 的 run 生命周期 hooks',
-      url: 'https://linear.app/lobehub/issue/LOBE-10205',
+      title: 'Mock issue title',
+      url: 'https://linear.app/acme/issue/TEST-123',
     });
     expect(model.rawResultJson).toBeUndefined();
   });
@@ -51,18 +51,140 @@ describe('buildLinearRenderModel', () => {
   it('normalizes Codex Apps entity-prefixed ids in request fields', () => {
     const model = buildLinearRenderModel({
       apiName: 'get_issue',
-      args: { id: 'issue:LOBE-10205' },
-      content: '{"title":"Resume error on topic switch"}',
+      args: { id: 'issue:TEST-123' },
+      content: '{"title":"Mock issue title"}',
     });
 
-    expect(model.requestFields).toContainEqual({ key: 'id', label: 'ID', value: 'LOBE-10205' });
-    expect(model.resultEntities[0]).toMatchObject({ title: 'Resume error on topic switch' });
+    expect(model.requestFields).toContainEqual({ key: 'id', label: 'ID', value: 'TEST-123' });
+    expect(model.resultEntities[0]).toMatchObject({ title: 'Mock issue title' });
+  });
+
+  it('renders a get_issue entity even when it embeds empty sub-collections', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__get_issue',
+      args: { id: 'TEST-456' },
+      content: JSON.stringify({
+        assignee: 'Mock User',
+        attachments: [],
+        createdAt: '2024-01-02T03:04:05.000Z',
+        description: '## Mock description',
+        documents: [],
+        id: 'TEST-456',
+        labels: [],
+        parentId: 'TEST-400',
+        priority: { name: 'Medium', value: 3 },
+        project: 'Mock Project',
+        status: 'Backlog',
+        team: 'Mock Team',
+        title: 'Mock issue title',
+        updatedAt: '2024-01-02T03:04:05.000Z',
+        url: 'https://linear.app/acme/issue/TEST-456',
+      }),
+    });
+
+    expect(model.rawResultJson).toBeUndefined();
+    expect(model.resultEntities).toHaveLength(1);
+    const [entity] = model.resultEntities;
+    expect(entity).toMatchObject({
+      description: '## Mock description',
+      id: 'TEST-456',
+      state: 'Backlog',
+      title: 'Mock issue title',
+      url: 'https://linear.app/acme/issue/TEST-456',
+    });
+    // `status` is surfaced via the state tag, so it should not duplicate as a field.
+    expect(entity.fields.find((field) => field.key === 'status')).toBeUndefined();
+    // ISO timestamps render as a concrete date + time.
+    expect(entity.fields).toContainEqual({
+      key: 'createdAt',
+      label: 'Created At',
+      value: '2024-01-02 03:04:05',
+    });
+    expect(entity.fields).toContainEqual({ key: 'priority', label: 'Priority', value: 'Medium' });
+  });
+
+  it('keeps a comment entity titleless (UUID id stays a tag, not the title) with dated fields', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__create_comment',
+      args: { issueId: 'TEST-456' },
+      content: JSON.stringify({
+        body: '## Mock comment body',
+        createdAt: '2024-01-02T03:04:05.080Z',
+        id: 'ff0dabda-eb1f-4dfe-b525-09114c0d6bd0',
+        updatedAt: '2024-01-02T03:04:05.038Z',
+      }),
+    });
+
+    expect(model.resultEntities).toHaveLength(1);
+    const [entity] = model.resultEntities;
+    // No human title — the render must not promote the UUID id to the title.
+    expect(entity.title).toBeUndefined();
+    expect(entity.id).toBe('ff0dabda-eb1f-4dfe-b525-09114c0d6bd0');
+    expect(entity.description).toBe('## Mock comment body');
+    expect(entity.fields).toContainEqual({
+      key: 'createdAt',
+      label: 'Created At',
+      value: '2024-01-02 03:04:05',
+    });
+  });
+
+  it('still unwraps list_* payloads from their nested collection', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'list_issues',
+      args: {},
+      content: JSON.stringify({
+        issues: [
+          { id: 'TEST-1', title: 'First mock issue' },
+          { id: 'TEST-2', title: 'Second mock issue' },
+        ],
+      }),
+    });
+
+    expect(model.resultEntities).toHaveLength(2);
+    expect(model.resultEntities.map((entity) => entity.id)).toEqual(['TEST-1', 'TEST-2']);
+  });
+
+  it('unwraps search-style { results: [...] } wrappers into cards (Codex bare `search`)', () => {
+    // Codex routes Linear search through a bare `search` apiName → parses to
+    // `verb: 'other'`, so the unwrap must be driven by the wrapper shape, not the verb.
+    const model = buildLinearRenderModel({
+      apiName: 'search',
+      args: { query: 'mock query' },
+      content: JSON.stringify({
+        results: [
+          { id: 'TEST-1', title: 'First match', url: 'https://linear.app/acme/issue/TEST-1' },
+          { id: 'TEST-2', title: 'Second match', url: 'https://linear.app/acme/issue/TEST-2' },
+        ],
+      }),
+    });
+
+    expect(model.rawResultJson).toBeUndefined();
+    expect(model.resultEntities).toHaveLength(2);
+    expect(model.resultEntities.map((entity) => entity.id)).toEqual(['TEST-1', 'TEST-2']);
+  });
+
+  it('keeps a single fetched entity intact even when it embeds a populated sub-collection', () => {
+    // A project (fetch-one) carries its own id/title AND a nested `issues` array;
+    // the entity must win over its sub-collection.
+    const model = buildLinearRenderModel({
+      apiName: 'get_project',
+      args: { id: 'PRJ-1' },
+      content: JSON.stringify({
+        id: 'PRJ-1',
+        issues: [{ id: 'TEST-1', title: 'Child issue' }],
+        name: 'Mock Project',
+        url: 'https://linear.app/acme/project/PRJ-1',
+      }),
+    });
+
+    expect(model.resultEntities).toHaveLength(1);
+    expect(model.resultEntities[0]).toMatchObject({ id: 'PRJ-1', title: 'Mock Project' });
   });
 
   it('keeps non-JSON result text as a readable fallback', () => {
     const model = buildLinearRenderModel({
       apiName: 'search',
-      args: { query: 'agent runtime' },
+      args: { query: 'mock query' },
       content: 'No matching Linear issues found.',
     });
 

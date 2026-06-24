@@ -6,7 +6,6 @@ import createClient from '@azure-rest/ai-inference';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
-import { systemToUserModels } from '../../const/models';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
 import { createSSEDataExtractor, OpenAIStream } from '../../core/streams';
@@ -16,6 +15,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { StreamingResponse } from '../../utils/response';
 import { sanitizeError } from '../../utils/sanitizeError';
+import { systemToUserModels } from '../openai/openaiModelId';
 
 interface AzureAIParams {
   apiKey?: string;

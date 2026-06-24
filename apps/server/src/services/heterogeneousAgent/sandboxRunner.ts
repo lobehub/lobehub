@@ -14,8 +14,12 @@ import { createSandboxService } from '@/server/services/sandbox';
 
 const log = debug('lobe-server:hetero-sandbox-runner');
 
+const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+
 export interface SandboxRunParams {
   agentType: 'claude-code' | 'codex';
+  /** Resolved `lh hetero exec` wrapper args. */
+  args?: string[];
   /** Initial assistant placeholder message id — injected as LOBEHUB_ASSISTANT_MESSAGE_ID so
    * the CLI can pass it through the heteroIngest payload, removing the need for the server
    * to re-read topic.metadata.runningOperation on every cold Lambda start. */
@@ -71,15 +75,15 @@ function repoToLocalDir(repo: string): string {
  */
 function buildCredsSetupScript(githubToken?: string): string | null {
   if (!githubToken) return null;
-  const tokenJson = JSON.stringify(githubToken);
+  const tokenArg = shellQuote(githubToken);
   return [
     'mkdir -p ~/.creds',
     // Write GITHUB_ACCESS_TOKEN matching the injectCredsToSandbox oauth naming scheme
-    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenJson} > ~/.creds/env`,
+    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenArg} > ~/.creds/env`,
     // Pre-authenticate gh CLI so CC can use it immediately (gh also picks up
     // GITHUB_TOKEN from env, but explicit login ensures ~/.config/gh/hosts.yml
     // is populated for cases where env is reset in a sub-shell)
-    `echo ${tokenJson} | gh auth login --hostname github.com --with-token 2>/dev/null || true`,
+    `echo ${tokenArg} | gh auth login --hostname github.com --with-token 2>/dev/null || true`,
   ].join(' && \\\n');
 }
 
@@ -97,12 +101,16 @@ function buildRepoSetupScript(repos: string[], githubToken?: string): string | n
     const repoPath = repo.startsWith('http') ? (repo.split('github.com/')[1] ?? repo) : repo;
     // Use git's insteadOf rewrite (passed via -c, not stored in .git/config) so the token
     // never ends up in the cloned repo's remote URL.
+    const dirArg = shellQuote(dir);
+    const repoUrlArg = shellQuote(`https://github.com/${repoPath}`);
     const cloneCmd = githubToken
-      ? `git -c "url.https://oauth2:${githubToken}@github.com/.insteadOf=https://github.com/" clone -q https://github.com/${repoPath} '${dir}'`
-      : `git clone -q 'https://github.com/${repoPath}' '${dir}'`;
+      ? `git -c ${shellQuote(
+          `url.https://oauth2:${githubToken}@github.com/.insteadOf=https://github.com/`,
+        )} clone -q ${repoUrlArg} ${dirArg}`
+      : `git clone -q ${repoUrlArg} ${dirArg}`;
 
     // `|| true` makes clone failures non-fatal — CC still runs even if a repo can't be cloned.
-    return `{ [ -d '${dir}' ] || ${cloneCmd}; } || true`;
+    return `{ [ -d ${dirArg} ] || ${cloneCmd}; } || true`;
   });
 
   return lines.join(' && \\\n');
@@ -124,6 +132,7 @@ function buildRepoSetupScript(repos: string[], githubToken?: string): string | n
 export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void> {
   const {
     agentType,
+    args: extraArgs,
     assistantMessageId,
     githubToken,
     jwt,
@@ -164,6 +173,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     args.push('--resume', resumeSessionId);
   }
   args.push('--cwd', cwd);
+  args.push(...(extraArgs ?? []));
 
   // Encode the prompt as base64 to avoid all shell quoting issues.
   // echo + shell quoting mangled inner JSON quotes; base64 is quote-safe.
@@ -182,14 +192,15 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // auth callbacks and must stay as localhost in dev.
   const serverUrl = process.env.LOBEHUB_HETERO_SERVER_URL ?? appEnv.APP_URL;
   const envVars = [
-    `LOBEHUB_JWT=${JSON.stringify(jwt)}`,
-    `LOBEHUB_SERVER=${JSON.stringify(serverUrl)}`,
-    `LOBEHUB_ASSISTANT_MESSAGE_ID=${JSON.stringify(assistantMessageId)}`,
+    `LOBEHUB_JWT=${shellQuote(jwt)}`,
+    `LOBEHUB_SERVER=${shellQuote(serverUrl)}`,
+    `LOBEHUB_ASSISTANT_MESSAGE_ID=${shellQuote(assistantMessageId)}`,
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
-    ...(githubToken ? [`GITHUB_TOKEN=${JSON.stringify(githubToken)}`] : []),
+    ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
   ].join(' ');
-  const mainCommand = `echo ${base64Payload} | base64 -d | ${envVars} ${args.join(' ')}`;
+  const shellArgs = args.map(shellQuote).join(' ');
+  const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;
   // Creds first (writes ~/.creds/env + authenticates gh CLI), then repo clone.
   const credsScript = buildCredsSetupScript(githubToken);
   const repoScript = buildRepoSetupScript(repos ?? [], githubToken);

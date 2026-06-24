@@ -112,9 +112,14 @@ secret: don't paste it into shared logs, PRs, or commit it anywhere.
 
 1. `$SCRIPT status --surface web` — green? Start testing. Do not ask for a Cookie header.
 2. Not green and using the seeded local env → `$SCRIPT web-seed`.
-3. Still not green or not using the seed env → `$SCRIPT open-chrome` opens Chrome at `SERVER_URL` with DevTools.
-4. User copies the `Cookie:` header from Network tab → any same-origin request → Request Headers → right-click `Cookie:` → **Copy value**. Must be from Network, NOT `document.cookie` (HttpOnly cookies are invisible to `document.cookie`).
-5. `pbpaste | $SCRIPT web` — filters to better-auth cookies (`session_token`, `session_data`, `state`), builds Playwright `storageState`, loads it into the `agent-browser` session (`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
+3. If repo-root `.env` exists and `web-seed` fails, do **not** seed or modify the current DB; treat it as an existing local environment and use Cookie injection.
+4. Still not green or not using the seed env → `$SCRIPT open-chrome` opens Chrome at `SERVER_URL` with DevTools.
+5. User copies the `Cookie:` header from Network tab → any same-origin request → Request Headers → right-click `Cookie:` → **Copy value**. Must be from Network, NOT `document.cookie` (HttpOnly cookies are invisible to `document.cookie`).
+6. `pbpaste | $SCRIPT web` — filters to better-auth cookies (`session_token`, `session_data`, `state`), builds Playwright `storageState`, loads it into the `agent-browser` session (`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
+
+`ENABLE_MOCK_DEV_USER` is not Web auth. It only affects server-side API context
+and does not satisfy Better Auth or stop the SPA from redirecting to `/signin`.
+Do not use it as a substitute for `status --surface web` or Cookie injection.
 
 ### Using the authenticated session
 

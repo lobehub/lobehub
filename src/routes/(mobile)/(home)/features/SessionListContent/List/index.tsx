@@ -2,7 +2,7 @@ import { useAnalytics } from '@lobehub/analytics/react';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import LazyLoad from 'react-lazy-load';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { SESSION_CHAT_URL } from '@/const/index';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';

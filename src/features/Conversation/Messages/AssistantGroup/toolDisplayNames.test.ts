@@ -49,6 +49,39 @@ describe('tool display names', () => {
     expect(summary).not.toContain('Web_search');
   });
 
+  it('leads the summary with the total call count and appends the tool-kind count when truncated', () => {
+    const tools = [
+      ...Array.from({ length: 6 }, (_, i) => ({ apiName: 'a', id: `a-${i}` })),
+      ...Array.from({ length: 4 }, (_, i) => ({ apiName: 'b', id: `b-${i}` })),
+      ...Array.from({ length: 2 }, (_, i) => ({ apiName: 'c', id: `c-${i}` })),
+      { apiName: 'd', id: 'd-0' },
+      { apiName: 'e', id: 'e-0', result: { error: { message: 'boom' } } },
+      { apiName: 'f', id: 'f-0' },
+    ];
+    const summary = getWorkflowSummaryText([blk({ id: '0', tools: tools as any })]);
+
+    // total calls (15) leads, "calls total" / "共" wording is gone
+    expect(summary.startsWith('15 calls:')).toBe(true);
+    expect(summary).not.toContain('calls total');
+    // truncated tool list is followed by the kind count, then the failure count
+    expect(summary).toContain('across 6 tools');
+    expect(summary).toContain('1 failed');
+  });
+
+  it('omits the total call count when each tool is called once', () => {
+    const summary = getWorkflowSummaryText([
+      blk({
+        id: '0',
+        tools: [
+          { apiName: 'a', id: 'a-0' },
+          { apiName: 'b', id: 'b-0' },
+        ] as any,
+      }),
+    ]);
+
+    expect(summary).not.toContain('calls:');
+  });
+
   it('uses friendly labels for Linear MCP tool names', () => {
     expect(getToolDisplayName('mcp__claude_ai_Linear__save_issue')).toBe('Linear · Save issue');
     expect(getToolDisplayName('mcp__linear-server__get_issue')).toBe('Linear · Get issue');

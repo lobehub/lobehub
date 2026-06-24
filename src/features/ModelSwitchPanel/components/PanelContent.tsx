@@ -72,11 +72,23 @@ export const PanelContent: FC<PanelContentProps> = ({
       <Rnd
         disableDragging
         enableResizing={ENABLE_RESIZING}
+        // Rnd needs a numeric `size.height`, but a fixed height overflows the top
+        // edge when the upward-opening popup meets a short viewport. Pass the
+        // clamp through Rnd's own `maxHeight` (a `style.maxHeight` gets overridden
+        // by Rnd's internal default) so CSS caps the box to the space base-ui
+        // exposes via `--available-height`; the inner list then flex-shrinks and
+        // scrolls. Height resize is disabled, so this doesn't fight drag logic.
+        maxHeight={`min(${panelHeight}px, var(--available-height, ${panelHeight}px))`}
         maxWidth={MAX_WIDTH}
         minWidth={MIN_WIDTH}
         position={{ x: 0, y: 0 }}
         size={{ height: panelHeight, width: panelWidth }}
-        style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          position: 'relative',
+        }}
         onResizeStop={(_e, _direction, ref) => {
           handlePanelWidthChange(ref.offsetWidth);
         }}
@@ -91,7 +103,13 @@ export const PanelContent: FC<PanelContentProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: panelHeight,
+        // Clamp the panel to the viewport space base-ui exposes via
+        // `--available-height` (falling back to the natural height before it's
+        // measured). The trigger usually sits at the page bottom and the popup
+        // opens upward; a fixed height would overflow the top edge and clip the
+        // search box + first items on short viewports. Keeping a *concrete*
+        // height (not max-height) lets the inner list flex-shrink and scroll.
+        height: `min(${panelHeight}px, var(--available-height, ${panelHeight}px))`,
         position: 'relative',
         width: DEFAULT_WIDTH,
       }}

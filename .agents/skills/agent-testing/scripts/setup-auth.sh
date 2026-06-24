@@ -81,6 +81,7 @@ SERVER_URL="${SERVER_URL:-$(default_server_url)}"
 SESSION="${SESSION:-lobehub-dev}"
 AUTH_DIR="${AUTH_DIR:-$HOME/.lobehub-agent-testing}"
 STATE_FILE="$AUTH_DIR/web-state.json"
+ROOT_ENV_FILE="$REPO_ROOT/.env"
 CLI_HOME_NAME="${LOBEHUB_CLI_HOME:-.lobehub-dev}"
 CLI_HOME="$HOME/${CLI_HOME_NAME#/}"
 CLI_CREDENTIALS_FILE="$CLI_HOME/credentials.json"
@@ -481,8 +482,13 @@ PY
 
   if [[ ! "$code" =~ ^[23] ]]; then
     bad "seed user sign-in failed at $SERVER_URL/api/auth/sign-in/email (http_code='$code')"
-    note "make sure the seed user exists:"
-    note "./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user"
+    if [[ -f "$ROOT_ENV_FILE" ]]; then
+      note "root .env exists; do not seed or modify this DB for Web auth."
+      note "Use Chrome Cookie injection instead: $0 open-chrome, then pbpaste | $0 web"
+    else
+      note "make sure the seed user exists:"
+      note "./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user"
+    fi
     return 1
   fi
 
@@ -517,6 +523,7 @@ cmd_web_verify() {
     bad "failed to open $SERVER_URL in agent-browser session '$SESSION'"
     return 1
   fi
+  agent-browser --session "$SESSION" wait --load networkidle > /dev/null 2>&1 || true
   local url
   url=$(agent-browser --session "$SESSION" get url 2> /dev/null || true)
   if [[ -z "$url" ]]; then

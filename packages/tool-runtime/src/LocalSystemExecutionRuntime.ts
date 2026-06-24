@@ -264,6 +264,13 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'editLocalFile': {
         return {
+          // Surface raw.error at the top level so ComputerRuntime.errorOutput has
+          // a real message to render. Without this, a failed edit (e.g. old_string
+          // not found — common on Windows when CRLF/LF differ) left result.error
+          // undefined and the tool message collapsed to the generic
+          // "[UNKNOWN_EXEC_ERROR] Tool execution failed", hiding the real reason
+          // and blocking the model from self-correcting. Mirrors grep/glob above.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             diffText: raw.diffText,
             error: raw.error,

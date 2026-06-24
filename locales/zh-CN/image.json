@@ -7,6 +7,7 @@
   "config.header.title": "图片",
   "config.height.label": "高度",
   "config.imageNum.label": "图片数量",
+  "config.imageUpload.maxCountReached": "最多可添加 {{count}} 张参考图",
   "config.imageUrl.label": "参考图",
   "config.imageUrls.label": "参考图",
   "config.model.label": "模型",

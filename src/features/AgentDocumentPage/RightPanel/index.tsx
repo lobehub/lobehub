@@ -1,20 +1,25 @@
 'use client';
 
+import { AGENT_DOCUMENT_CATEGORY, AGENT_DOCUMENT_SKILL_CATEGORY } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import RightPanel from '@/features/RightPanel';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useClientDataSWR } from '@/libs/swr';
 import AgentDocumentsGroup from '@/routes/(main)/agent/features/Conversation/WorkingSidebar/ResourcesSection/AgentDocumentsGroup';
+import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
+import { standardizeIdentifier } from '@/utils/identifier';
 
 type AgentDocumentPanelTab = 'documents' | 'skills';
 
@@ -66,7 +71,9 @@ const TABS = [
 
 const AgentDocumentRightPanel = memo(() => {
   const { t } = useTranslation('chat');
-  const [activeTab, setActiveTab] = useState<AgentDocumentPanelTab>('documents');
+  // null = not yet picked by the user → follow the auto default below.
+  const [pickedTab, setPickedTab] = useState<AgentDocumentPanelTab | null>(null);
+  const { docId } = useParams<{ docId?: string }>();
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -75,13 +82,42 @@ const AgentDocumentRightPanel = memo(() => {
     activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
   );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isDesktop,
     isHetero,
+    clientExecutionAvailable: isDesktop,
   });
   const remoteDeviceId =
     effectiveTarget === 'device' && agencyConfig?.boundDeviceId
       ? agencyConfig.boundDeviceId
       : undefined;
+
+  // Deduped against AgentDocumentsGroup's own fetch (same SWR key). When the
+  // agent has no plain documents (e.g. only skills) we default to the Skills
+  // tab so the panel doesn't open on an empty Documents view.
+  const { data: documentList = [], isLoading: isDocumentListLoading } = useClientDataSWR(
+    activeAgentId ? agentDocumentSWRKeys.documentsList(activeAgentId) : null,
+    () => agentDocumentService.listDocuments({ agentId: activeAgentId! }),
+  );
+  const hasDocuments = useMemo(
+    () => documentList.some((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
+    [documentList],
+  );
+  // The open doc itself decides the default tab: a skill entry (SKILL.md or any
+  // file inside a skill bundle) lands on Skills even when normal documents
+  // exist — otherwise the skill-entry flow would open on the wrong tab.
+  const isSkillEntry = useMemo(
+    () =>
+      docId
+        ? documentList.some(
+            (doc) =>
+              standardizeIdentifier(doc.documentId) === docId &&
+              doc.category === AGENT_DOCUMENT_SKILL_CATEGORY,
+          )
+        : false,
+    [docId, documentList],
+  );
+  const activeTab: AgentDocumentPanelTab =
+    pickedTab ??
+    (isSkillEntry || (!isDocumentListLoading && !hasDocuments) ? 'skills' : 'documents');
 
   return (
     <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
@@ -100,7 +136,7 @@ const AgentDocumentRightPanel = memo(() => {
                 className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => setPickedTab(tab.key)}
               >
                 {t(tab.labelKey)}
               </button>

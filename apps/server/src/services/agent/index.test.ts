@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -190,10 +190,12 @@ describe('AgentService', () => {
       expect(result?.provider).toBe('anthropic');
     });
 
-    it('should merge avatar from builtin-agents package definition', async () => {
+    it('should fallback inbox title and avatar', async () => {
       const mockAgent = {
+        avatar: null,
         id: 'agent-1',
         slug: 'inbox',
+        title: null,
         model: 'gpt-4',
       };
 
@@ -207,8 +209,8 @@ describe('AgentService', () => {
       const newService = new AgentService(mockDb, mockUserId);
       const result = await newService.getBuiltinAgent('inbox');
 
-      // Avatar should be merged from BUILTIN_AGENTS definition
-      expect((result as any)?.avatar).toBe('/avatars/lobe-ai.png');
+      expect((result as any)?.avatar).toBe(DEFAULT_INBOX_AVATAR);
+      expect((result as any)?.title).toBe(DEFAULT_INBOX_TITLE);
     });
 
     it('should not include avatar for non-builtin agents', async () => {

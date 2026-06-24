@@ -59,6 +59,7 @@
   "codeInterpreter.files": "檔案：",
   "codeInterpreter.output": "輸出：",
   "codeInterpreter.returnValue": "回傳值：",
+  "connector.add.title": "新增自訂連接器",
   "dalle.autoGenerate": "自動生成",
   "dalle.downloading": "DallE3 生成的圖片連結有效期僅1小時，正在快取圖片到本地...",
   "dalle.generate": "生成",

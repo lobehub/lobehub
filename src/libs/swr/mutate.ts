@@ -20,6 +20,10 @@
  */
 import { type ScopedMutator } from 'swr/_internal';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+
+import { augmentKey } from './augmentKey';
+
 // Mutable container to hold the scoped mutate reference
 // Using an object allows us to update the reference while keeping the same export
 const mutateRef: { current: ScopedMutator | null } = { current: null };
@@ -46,11 +50,23 @@ export const getMutate = (): ScopedMutator => {
 };
 
 /**
- * Scoped mutate function that works with custom cache providers
- * This is the actual mutate function from useSWRConfig(), stored globally
+ * Scoped mutate function that works with custom cache providers. Mirrors the
+ * `augmentKey` treatment that `useClientDataSWR` applies to subscriber keys so
+ * a workspace-scoped revalidation actually matches its subscriber — without
+ * this, a `mutate(['x'])` call from a store action would miss every active
+ * `useSWR([['x'], wsId])` and silently no-op (manifested as image generation
+ * topics not appearing after create, batches not refreshing after submit).
  *
- * Use this instead of `import { mutate } from 'swr'` when using localStorage cache provider
+ * - Function-form keys (SWR matcher predicates) are passed through unchanged;
+ *   the predicate already controls its own match logic.
+ * - Concrete keys go through `augmentKey` with the current active workspace
+ *   id, which is a no-op in personal mode.
+ *
+ * Use this instead of `import { mutate } from 'swr'` when using localStorage
+ * cache provider.
  */
 export const mutate: ScopedMutator = (async (...args: Parameters<ScopedMutator>) => {
-  return await getMutate()(...args);
+  const [key, ...rest] = args;
+  const finalKey = typeof key === 'function' ? key : augmentKey(key, getActiveWorkspaceId());
+  return await getMutate()(finalKey as any, ...(rest as [any, any]));
 }) as ScopedMutator;

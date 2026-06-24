@@ -1,0 +1,69 @@
+import type { TaskTemplateConnectorReference } from '@lobechat/const';
+import { Button, Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { getProviderMeta } from './providerMeta';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from './useConnectorConnection';
+
+interface ConnectorAuthRowProps {
+  disabled?: boolean;
+  onError: (error: unknown) => void;
+  spec: TaskTemplateConnectorReference;
+}
+
+/**
+ * Inline row for a single required/optional connector the user has not yet authorized.
+ * Renders `null` once the provider is connected so the caller can collapse the
+ * surrounding container without extra bookkeeping.
+ */
+export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, onError }) => {
+  const { t } = useTranslation('common');
+  const specs = useMemo(() => [spec], [spec]);
+  const meta = useMemo(() => getProviderMeta(spec), [spec]);
+  const { connect, isAllConnected, isConnecting } = useConnectorConnection(specs);
+
+  const handleConnect = useCallback(async () => {
+    if (disabled) return;
+    try {
+      await connect();
+    } catch (error) {
+      onError(error);
+    }
+  }, [connect, disabled, onError]);
+
+  if (!meta || isAllConnected) return null;
+
+  return (
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+        {typeof meta.icon === 'string' ? (
+          <Image alt={meta.label} height={16} src={meta.icon} style={{ flex: 'none' }} width={16} />
+        ) : (
+          <Icon color={cssVar.colorText} fill={cssVar.colorText} icon={meta.icon} size={16} />
+        )}
+        <Text ellipsis fontSize={13}>
+          {meta.label}
+        </Text>
+      </Flexbox>
+      <Button
+        disabled={disabled}
+        loading={isConnecting}
+        size={'small'}
+        variant={'text'}
+        onClick={handleConnect}
+      >
+        {t('taskTemplate.action.connect.short')}
+      </Button>
+    </Flexbox>
+  );
+});
+
+ConnectorAuthRow.displayName = 'ConnectorAuthRow';
+
+export { ConnectorConnectionMarketAuthRequiredError, ConnectorConnectionPopupBlockedError };

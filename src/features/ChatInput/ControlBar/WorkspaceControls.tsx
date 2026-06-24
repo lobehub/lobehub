@@ -37,8 +37,8 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
     const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      isDesktop,
       isHetero: isHeterogeneous,
+      clientExecutionAvailable: isDesktop,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
 

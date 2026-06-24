@@ -21,6 +21,7 @@ import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
 import SupervisorMessage from './Supervisor';
 import TaskMessage from './Task';
+import TaskCallbackMessage from './TaskCallback';
 import TasksMessage from './Tasks';
 import ToolMessage from './Tool';
 import UserMessage from './User';
@@ -190,6 +191,10 @@ const MessageItem = memo<MessageItemProps>(
 
         case 'verify': {
           return <VerifyMessage id={id} index={index} />;
+        }
+
+        case 'taskCallback': {
+          return <TaskCallbackMessage id={id} index={index} />;
         }
       }
 

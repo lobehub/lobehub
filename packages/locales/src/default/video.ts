@@ -5,6 +5,7 @@ export default {
   'config.endImageUrl.label': 'End Frame',
   'config.generateAudio.label': 'Generate Audio',
   'config.header.title': 'Video',
+  'config.imageUpload.maxCountReached': 'You can add up to {{count}} reference images',
   'config.imageUrl.label': 'Start Frame',
   'config.promptExtend.label': 'Prompt Extend',
   'config.prompt.placeholder': 'Describe the video you want to generate',

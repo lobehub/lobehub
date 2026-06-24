@@ -33,6 +33,41 @@ export interface CheckpointConfig {
   };
 }
 
+/**
+ * Task-level delivery-acceptance (verify) gate config, persisted under
+ * `tasks.config.verify`. This is the authoritative source for a task run's
+ * verify gate — it is *not* unioned with any agent-level mount
+ * (`agencyConfig.verifyRubricId`) — the task config is authoritative and never
+ * field-level merged with the agent-level rubric.
+ *
+ * Subtasks inherit with whole-config override semantics: a subtask uses its own
+ * config when present, otherwise the nearest ancestor's config in full (never a
+ * field-level merge). Resolved at runtime via `TaskModel.resolveVerifyConfig`.
+ */
+export interface TaskVerifyConfig {
+  /** Whether the verify gate runs on topic completion. */
+  enabled?: boolean;
+  /** Task-level cap on verify repair / re-run iterations. */
+  maxIterations?: number;
+  /**
+   * The one-sentence acceptance requirement the user typed — the source the
+   * acceptance criteria were AI-generated from. Kept so the UI can show it and
+   * offer "regenerate", distinct from the resolved criteria themselves.
+   */
+  requirement?: string;
+  /**
+   * Which agent executes the verify run (the Push-model review agent). When
+   * omitted, falls back to the built-in verify agent. The execution target /
+   * bound device is inherited from the chosen agent's `agencyConfig`, not
+   * written here.
+   */
+  verifierAgentId?: string;
+  /** One-off ad-hoc criteria ids (references `verify_criteria.id`). */
+  verifyCriteriaIds?: string[];
+  /** Reuse a rubric template (references `verify_rubrics.id`). */
+  verifyRubricId?: string;
+}
+
 export interface WorkspaceDocNode {
   charCount: number | null;
   createdAt: string;
@@ -102,7 +137,27 @@ export interface TaskSchedulerContext {
   tickMessageId?: string;
 }
 
+// Pointer back to the agent conversation that spawned this task via the
+// `createTask` tool. Captured at creation so the task lifecycle can deliver the
+// handoff result back to that session once the task completes (LOBE-10625).
+export interface TaskOriginContext {
+  // The agent that invoked the createTask tool (the task's creator session).
+  agentId?: string;
+  // The assistant message that carried the createTask tool call — the tool-call
+  // anchor, sourced from the runtime's `payload.parentMessageId` (NOT the source
+  // user message). A later bridge can backfill the tool message under this.
+  messageId?: string;
+  // The operation that was running when the task was created.
+  operationId?: string;
+  // The tool call id of the createTask invocation. Doubles as the dedupe key
+  // for the eventual result-bridge delivery.
+  toolCallId?: string;
+  // The topic the creator conversation lives in — the default delivery target.
+  topicId?: string;
+}
+
 export interface TaskContext {
+  origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
 }
 
@@ -321,7 +376,6 @@ export interface TaskDetailData {
   name?: string | null;
   parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
-  review?: Record<string, any> | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;
@@ -331,6 +385,8 @@ export interface TaskDetailData {
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;
   userId?: string | null;
+  /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
+  verify?: TaskVerifyConfig | null;
   workspace?: TaskDetailWorkspaceNode[];
   /** Owning workspace; null for personal (non-workspace) tasks. */
   workspaceId?: string | null;

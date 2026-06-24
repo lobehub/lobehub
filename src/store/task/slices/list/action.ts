@@ -27,6 +27,20 @@ const DEFAULT_KANBAN_GROUPS = [
   { key: 'canceled', statuses: ['canceled'] },
 ];
 
+/**
+ * Cleared whenever the list scope changes (all-agents <-> a specific agent).
+ * The list and group datasets are shared store fields, so without this reset
+ * the previous scope's tasks would render until the new fetch resolves — e.g.
+ * the `/tasks` page briefly showing only the last-visited agent's tasks.
+ */
+const scopeChangeResetState = {
+  isTaskGroupListInit: false,
+  isTaskListInit: false,
+  taskGroups: [] as TaskGroupItem[],
+  tasks: [] as TaskListItem[],
+  tasksTotal: 0,
+};
+
 type Setter = StoreSetter<TaskStore>;
 
 export const createTaskListSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
@@ -76,7 +90,11 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskGroupList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskGroupList/syncAgentId',
+      );
     }
 
     return useClientDataSWR(
@@ -111,7 +129,11 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskList/syncAgentId',
+      );
     }
 
     return useClientDataSWR(

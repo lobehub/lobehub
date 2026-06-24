@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
   "features.platformAgent.desc": "Toon de optie \"Agent Verbinden\" in het aanmaakmenu. Verbonden agents (bijv. OpenClaw, Hermes) draaien op je eigen apparaten en communiceren terug via lh connect.",
   "features.platformAgent.title": "Agent Verbinden",
+  "features.taskVerify.desc": "Voeg een sectie voor leveringsacceptatie toe aan de taakdetails: beschrijf de acceptatie in één zin en laat AI bewerkbare verificatiecriteria genereren.",
+  "features.taskVerify.title": "Taak Leveringsacceptatie",
   "title": "Labs"
 }

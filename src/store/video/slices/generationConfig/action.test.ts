@@ -107,3 +107,28 @@ describe('video generationConfig actions', () => {
     expect(result.current.parameters?.duration).toBe(modelBDefaultValues.duration);
   });
 });
+
+describe('uploading image previews', () => {
+  it('should append and remove in-flight upload previews', () => {
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      useVideoStore.setState({ uploadingImagePreviews: [] });
+    });
+
+    act(() => {
+      result.current.addUploadingImagePreviews(['blob:a', 'blob:b']);
+    });
+    expect(result.current.uploadingImagePreviews).toEqual(['blob:a', 'blob:b']);
+
+    act(() => {
+      result.current.addUploadingImagePreviews(['blob:c']);
+    });
+    expect(result.current.uploadingImagePreviews).toEqual(['blob:a', 'blob:b', 'blob:c']);
+
+    act(() => {
+      result.current.removeUploadingImagePreviews(['blob:a', 'blob:c']);
+    });
+    expect(result.current.uploadingImagePreviews).toEqual(['blob:b']);
+  });
+});

@@ -9,6 +9,14 @@ export interface PublicState {
   autoSave?: boolean;
   emoji?: string;
   knowledgeBaseId?: string;
+  /**
+   * Make the page meta (title + emoji) read-only even when the body is editable.
+   * Used for managed docs whose identity is owned elsewhere — e.g. a skill's
+   * `SKILL.md` index, where the visible name is the bundle title and renaming
+   * must go through the skill APIs, never a plain document title save (which
+   * would overwrite the index filename and desync the bundle).
+   */
+  metaReadOnly?: boolean;
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;

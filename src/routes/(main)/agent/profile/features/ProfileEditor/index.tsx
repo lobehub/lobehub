@@ -3,7 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Divider, Tabs } from 'antd';
+import { Tabs, type TabsProps } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,13 +14,32 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
+
+const styles = createStaticStyles(({ css }) => ({
+  configLabel: css`
+    font-size: 12px;
+    line-height: 1;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  configPanel: css`
+    padding-block: 12px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  topArea: css`
+    cursor: default;
+    margin-block-end: 28px;
+  `,
+}));
 
 const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
@@ -57,11 +77,41 @@ const ProfileEditor = memo(() => {
     isHeterogeneous &&
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
+  const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
+  const heterogeneousTabItems: TabsProps['items'] = heterogeneousProvider
+    ? [
+        ...(showCloudHeterogeneousTab
+          ? [
+              {
+                key: 'cloud',
+                label: t('heterogeneousStatus.cloud.tabLabel'),
+                children: (
+                  <CloudHeterogeneousConfig
+                    provider={heterogeneousProvider}
+                    onEnvChange={updateHeterogeneousEnv}
+                  />
+                ),
+              },
+            ]
+          : []),
+        {
+          key: 'desktop',
+          label: t('heterogeneousStatus.desktop.tabLabel'),
+          disabled: !isDesktop,
+          children: (
+            <HeterogeneousAgentStatusCard
+              provider={heterogeneousProvider}
+              onCommandChange={updateHeterogeneousCommand}
+            />
+          ),
+        },
+      ]
+    : [];
 
   return (
     <>
       <Flexbox
-        style={{ cursor: 'default', marginBottom: 12 }}
+        className={styles.topArea}
         onClick={(e) => {
           e.stopPropagation();
         }}
@@ -77,68 +127,43 @@ const ProfileEditor = memo(() => {
             />
           </Flexbox>
         ) : isHeterogeneous && heterogeneousProvider ? (
-          // Local CLI agents (claude-code, codex): tabs for cloud (web) and desktop environments
+          // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
           <Tabs
-            defaultActiveKey={isDesktop ? 'desktop' : 'cloud'}
+            defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
+            items={heterogeneousTabItems}
             size="small"
-            items={[
-              {
-                key: 'cloud',
-                label: t('heterogeneousStatus.cloud.tabLabel'),
-                children: (
-                  <CloudHeterogeneousConfig
-                    provider={heterogeneousProvider}
-                    onEnvChange={updateHeterogeneousEnv}
-                  />
-                ),
-              },
-              {
-                key: 'desktop',
-                label: t('heterogeneousStatus.desktop.tabLabel'),
-                disabled: !isDesktop,
-                children: (
-                  <HeterogeneousAgentStatusCard
-                    provider={heterogeneousProvider}
-                    onCommandChange={updateHeterogeneousCommand}
-                  />
-                ),
-              },
-            ]}
           />
         ) : (
           <>
-            {/* Config Bar: Model Selector */}
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={8}
-              justify={'flex-start'}
-              style={{ marginBottom: 12 }}
-            >
-              <ModelSelect
-                initialWidth
-                disabled={!canEdit}
-                popupWidth={400}
-                value={{
-                  model: config.model,
-                  provider: config.provider,
-                }}
-                onChange={(value) => {
-                  if (!canEdit) return;
+            <Flexbox className={styles.configPanel} gap={10}>
+              <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
+              <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
+                <ModelSelect
+                  initialWidth
+                  disabled={!canEdit}
+                  popupWidth={400}
+                  value={{
+                    model: config.model,
+                    provider: config.provider,
+                  }}
+                  onChange={(value) => {
+                    if (!canEdit) return;
 
-                  updateConfig(value);
-                }}
-              />
+                    updateConfig(value);
+                  }}
+                />
+                <AgentTool />
+              </Flexbox>
             </Flexbox>
-            <AgentTool />
           </>
         )}
       </Flexbox>
-      <Divider />
-      {/* Main Content: Prompt Editor */}
-      <EditorCanvas />
-      {/* Advanced Settings Modal */}
-      <AgentSettings />
+      {/* Main Content: Prompt Editor — built-in model runtime only. Hetero agents
+          (Claude Code / Codex + remote platforms) run an external CLI with its own
+          system prompt, so the agent's systemRole never reaches them. Hide the
+          editor here to avoid a control that looks effective but isn't (mirrors the
+          ModelSelect hiding above). */}
+      {!isHeterogeneous && <EditorCanvas />}
     </>
   );
 });

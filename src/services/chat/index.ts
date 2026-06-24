@@ -10,7 +10,7 @@ import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
+import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
 import type {
   RuntimeInitialContext,
   RuntimeStepContext,
@@ -368,7 +368,7 @@ class ChatService {
       ? findDeploymentName(model, provider)
       : undefined;
     const shouldUseDeploymentField =
-      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      (provider === ModelProvider.Azure && isResponsesAPIModel(model)) ||
       provider === ModelProvider.Spark;
 
     if (!shouldUseDeploymentField && deploymentName) {

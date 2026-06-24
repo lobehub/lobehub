@@ -3,8 +3,9 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import type { ChatGroupItem } from '@/database/schemas/chatGroup';
 import type * as SwrModule from '@/libs/swr';
-import { mutate } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 
 import { useAgentGroupStore } from '../store';
@@ -18,8 +19,17 @@ vi.mock('@/services/chatGroup', () => ({
 
 vi.mock('@/libs/swr', async (importOriginal) => {
   const actual = await importOriginal<typeof SwrModule>();
-  return { ...actual, mutate: vi.fn().mockResolvedValue(undefined) };
+  return {
+    ...actual,
+    mutate: vi.fn().mockResolvedValue(undefined),
+    useClientDataSWRWithSync: vi.fn(() => ({ data: undefined, isValidating: false })),
+  };
 });
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: vi.fn(() => null),
+  useActiveWorkspaceId: vi.fn(() => null),
+}));
 
 // Helper to create mock AgentGroupDetail
 const createMockGroup = (overrides: Partial<AgentGroupDetail>): AgentGroupDetail => ({
@@ -33,6 +43,27 @@ const createMockGroup = (overrides: Partial<AgentGroupDetail>): AgentGroupDetail
   ...overrides,
 });
 
+const createMockChatGroup = (overrides: Partial<ChatGroupItem> = {}): ChatGroupItem => ({
+  accessedAt: new Date(),
+  avatar: null,
+  backgroundColor: null,
+  clientId: null,
+  config: null,
+  content: null,
+  createdAt: new Date(),
+  description: null,
+  editorData: null,
+  groupId: null,
+  id: 'group-1',
+  marketIdentifier: null,
+  pinned: false,
+  title: 'Test Group',
+  updatedAt: new Date(),
+  userId: 'user-1',
+  workspaceId: null,
+  ...overrides,
+});
+
 describe('ChatGroupCurdSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,7 +74,7 @@ describe('ChatGroupCurdSlice', () => {
         groupMap: {
           'group-1': createMockGroup({ id: 'group-1', title: 'Test Group' }),
         },
-        groups: [],
+        groups: [createMockChatGroup({ id: 'group-1', title: 'Test Group' })],
         groupsInit: true,
       });
     });
@@ -78,6 +109,38 @@ describe('ChatGroupCurdSlice', () => {
       });
 
       expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+    });
+  });
+
+  describe('refreshGroups', () => {
+    it('should invalidate the group list', async () => {
+      const { result } = renderHook(() => useAgentGroupStore());
+
+      await act(async () => {
+        await result.current.refreshGroups();
+      });
+
+      expect(mutate).toHaveBeenCalledWith(['group:list', true]);
+    });
+  });
+
+  describe('useFetchGroupDetail', () => {
+    it('should remove stale local group data when detail revalidation reports not found', () => {
+      const { result } = renderHook(() => useAgentGroupStore());
+
+      act(() => {
+        result.current.useFetchGroupDetail(true, 'group-1');
+      });
+
+      const swrOptions = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1)?.[2];
+      const onError = swrOptions?.onError as ((error: Error) => void) | undefined;
+
+      act(() => {
+        onError?.(new Error('Group group-1 not found'));
+      });
+
+      expect(result.current.groupMap['group-1']).toBeUndefined();
+      expect(result.current.groups.some((group) => group.id === 'group-1')).toBe(false);
     });
   });
 

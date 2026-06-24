@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "标为进行中",
   "defaultTitle": "默认话题",
   "displayItems": "显示条目",
+  "draft": "[草稿]",
   "duplicateLoading": "话题复制中…",
   "duplicateSuccess": "话题复制成功",
   "failedStatusTip": "当前执行遇到了错误，点击查看详情",

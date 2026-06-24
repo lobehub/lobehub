@@ -7,13 +7,22 @@ import {
 } from './inputCompletion';
 
 describe('chainInputCompletion', () => {
-  it('returns a system + user message pair', () => {
+  it('returns a system + user message pair with the draft and cursor marker', () => {
     const { messages } = chainInputCompletion('How can I ', '');
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe('system');
     expect(messages[1].role).toBe('user');
-    expect(messages[1].content).toContain('Before cursor: "How can I "');
-    expect(messages[1].content).toContain('After cursor: ""');
+
+    const draft = messages[1].content as string;
+    expect(draft).toContain('<draft>');
+    expect(draft).toContain('How can I ');
+    // beforeCursor is immediately followed by the cursor marker
+    expect(draft).toContain('How can I <|cursor|>');
+  });
+
+  it('places afterCursor text on the far side of the cursor marker', () => {
+    const { messages } = chainInputCompletion('fix the ', ' bug');
+    expect(messages[1].content as string).toContain('fix the <|cursor|> bug');
   });
 
   it('attaches a minimal `{ completion: string }` schema for generateObject', () => {
@@ -25,24 +34,54 @@ describe('chainInputCompletion', () => {
     expect(schema.schema.properties.completion.type).toBe('string');
   });
 
-  it('adds a separate user message for conversation context when provided', () => {
+  it('folds conversation context into the single user message as a labelled block', () => {
     const { messages } = chainInputCompletion('write ', '', [
       { content: 'previous response', role: 'assistant' },
       { content: 'previous question', role: 'user' },
     ]);
-    expect(messages).toHaveLength(3);
+    // Context is NOT replayed as real role turns — still just system + user.
+    expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe('system');
     expect(messages[1].role).toBe('user');
-    expect(messages[2].role).toBe('user');
 
-    const contextMsg = messages[1].content as string;
-    expect(contextMsg).toContain('Current conversation context');
-    expect(contextMsg).toContain('assistant: previous response');
-    expect(contextMsg).toContain('user: previous question');
-    expect(contextMsg).not.toContain('Before cursor');
+    const content = messages[1].content as string;
+    expect(content).toContain('<conversation>');
+    expect(content).toContain('Assistant: previous response');
+    expect(content).toContain('User: previous question');
+    // The draft still appears, after the context block.
+    expect(content.indexOf('<conversation>')).toBeLessThan(content.indexOf('<draft>'));
+    expect(content).toContain('write <|cursor|>');
+  });
 
-    const cursorMsg = messages[2].content as string;
-    expect(cursorMsg).toContain('Before cursor: "write "');
+  it('omits the conversation block when there is no context', () => {
+    const { messages } = chainInputCompletion('hi', '');
+    expect(messages[1].content as string).not.toContain('<conversation>');
+  });
+
+  it('keeps only the most recent turns and drops non user/assistant + empty messages', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      content: `msg ${i}`,
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'assistant' | 'user',
+    }));
+    const { messages } = chainInputCompletion('next ', '', [
+      { content: 'system noise', role: 'system' },
+      { content: '   ', role: 'user' },
+      ...many,
+    ]);
+    const content = messages[1].content as string;
+    // Last 8 of the 12 valid turns survive; the earliest do not.
+    expect(content).toContain('msg 11');
+    expect(content).toContain('msg 4');
+    expect(content).not.toContain('msg 3');
+    expect(content).not.toContain('system noise');
+  });
+
+  it('clips an over-long message so it cannot crowd out the draft', () => {
+    const huge = 'x'.repeat(5000);
+    const { messages } = chainInputCompletion('go ', '', [{ content: huge, role: 'user' }]);
+    const content = messages[1].content as string;
+    expect(content).toContain('…');
+    expect(content).not.toContain('x'.repeat(1100));
   });
 
   it('keeps the system prompt stable regardless of conversation context', () => {

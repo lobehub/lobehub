@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 

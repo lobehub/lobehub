@@ -337,6 +337,7 @@ export default {
   'creds.view.title': 'View Credential: {{name}}',
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
+  'devices.actions.connectAnother': 'Connect another device',
   'devices.actions.edit': 'Edit',
   'devices.actions.remove': 'Remove',
   'devices.channel.connected': 'Connected {{time}}',
@@ -353,14 +354,6 @@ export default {
   'devices.edit.friendlyNamePlaceholder': 'A name to recognize this device',
   'devices.edit.save': 'Save',
   'devices.edit.title': 'Edit device',
-  'devices.capabilities.commands.desc': 'Safely execute terminal commands in your environment.',
-  'devices.capabilities.commands.title': 'Run commands',
-  'devices.capabilities.files.desc':
-    'Let agents directly access and organize the files on your computer.',
-  'devices.capabilities.files.title': 'Read & write local files',
-  'devices.capabilities.title': 'What you can do once connected',
-  'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
-  'devices.capabilities.tools.title': 'Call system tools',
   'devices.connectWizard.button': 'Connect Device',
   'devices.connectWizard.cli.connectDesc':
     'Start the background daemon to keep the device online and listening for remote operations.',
@@ -375,35 +368,66 @@ export default {
   'devices.connectWizard.desktop.step1': 'Download the desktop app',
   'devices.connectWizard.desktop.step1Desc':
     'Visit the LobeHub downloads page and get the app for your operating system.',
-  'devices.connectWizard.desktop.step2': 'Sign in and open the device gateway',
+  'devices.connectWizard.desktop.step2': 'Sign in and turn on Device Connection',
   'devices.connectWizard.desktop.step2Desc':
-    "After signing in, click the device gateway icon in the top-right corner and confirm it's turned on.",
+    'After signing in, click Device Connection in the top-right corner of LobeHub Desktop and turn it on.',
   'devices.connectWizard.desktop.step3': 'Your device appears automatically',
   'devices.connectWizard.desktop.step3Desc':
-    "The desktop app registers itself as a device on launch — you'll see it in the list once connected.",
+    "Once Device Connection is on, LobeHub Desktop registers this device — you'll see it in the list once connected.",
   'devices.connectWizard.footer':
-    'Only device metadata is registered — your data is never accessed.',
+    'LobeHub only stores device metadata and configured working directories. File access and commands run only while LobeHub Desktop is open with Device Connection on, or while the CLI daemon is running.',
   'devices.connectWizard.method.cli': 'Via CLI',
   'devices.connectWizard.method.desktop': 'Via Desktop',
-  'devices.connectWizard.subtitle': 'Choose how to connect your computer to LobeHub.',
   'devices.connectWizard.title': 'Connect Device',
   'devices.empty.desc':
-    'Once connected, LobeHub agents can read/write files, run commands, and call system tools directly on your computer.',
+    'Connect a trusted computer or server so agents can work in configured directories, run commands, and use command-line tools available on that device.',
   'devices.empty.methodCli.desc':
     'Install the CLI in your terminal — great for servers or headless machines.',
   'devices.empty.methodCli.title': 'Connect via CLI',
   'devices.empty.methodDesktop.badge': 'Recommended',
   'devices.empty.methodDesktop.desc':
-    'Download the desktop app, sign in, and your device connects automatically.',
+    'Download the desktop app, sign in, and turn on Device Connection.',
   'devices.empty.methodDesktop.title': 'Connect via Desktop',
   'devices.empty.title': 'Connect your first device',
   'devices.fallbackBadge': 'Unstable identity',
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
   'devices.lastSeen': 'Last active {{time}}',
+  'devices.overview.personal.desc':
+    'After you select a device, agents can use its configured directories, terminal, and installed command-line tools.',
+  'devices.overview.personal.title': 'Run agents on local devices',
+  'devices.overview.workspace.desc':
+    'Enroll a trusted machine so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
+  'devices.overview.workspace.title': 'Run agents on shared workspace devices',
+  'devices.placeholder.connection':
+    'Check whether LobeHub Desktop is open with Device Connection on, or whether the CLI daemon is running.',
+  'devices.placeholder.cwd': 'Set the default working folder for agent runs.',
+  'devices.placeholder.desc':
+    'Review live connections, set the default working folder, and choose where agents run local operations.',
+  'devices.placeholder.security':
+    "Turn off Device Connection, quit LobeHub Desktop, or stop the CLI daemon when you don't want agents to run on this machine.",
+  'devices.placeholder.title': 'Select a device to manage it',
+  'devices.placeholder.workspace.connection':
+    'Check whether the CLI daemon is running on the shared machine.',
+  'devices.placeholder.workspace.cwd': 'Set the shared project folder for agent runs.',
+  'devices.placeholder.workspace.security':
+    'Stop the CLI daemon when this machine should no longer be available to the workspace.',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
+  'devices.security.personal.metadata':
+    'LobeHub stores device metadata and configured working directories, not your files.',
+  'devices.security.personal.onlineOnly':
+    'Agents can use this device only while LobeHub Desktop is open with Device Connection on, or while the CLI daemon is running.',
+  'devices.security.personal.stop':
+    'To take a device offline, turn off Device Connection or quit LobeHub Desktop on that machine. For CLI devices, stop the daemon.',
+  'devices.security.title': 'Security & access',
+  'devices.security.workspace.members':
+    'Workspace devices are visible to members, but only owners can enroll devices and manage settings.',
+  'devices.security.workspace.onlineOnly':
+    'Members can run agents on a shared device only while its CLI daemon is running.',
+  'devices.security.workspace.scope':
+    'Keep working directories limited to projects the workspace should access.',
   'devices.status.offline': 'Offline',
   'devices.status.online': 'Online',
   'devices.title': 'My Devices',
@@ -413,8 +437,8 @@ export default {
   'danger.clear.confirm': "Clear all chat data? This can't be undone.",
   'danger.clear.desc':
     'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
-  'danger.clear.success': 'All session messages have been cleared',
-  'danger.clear.title': 'Wipe Data',
+  'danger.clear.success': 'All conversation messages have been cleared',
+  'danger.clear.title': 'Clear Data',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
   'danger.reset.currentVersion': 'Current Version',
@@ -436,9 +460,9 @@ export default {
   'header.global': 'Global Settings',
   'header.group': 'Group Settings',
   'header.groupDesc': 'Manage group and chat preferences',
-  'header.session': 'Session Settings',
-  'header.sessionDesc': 'Agent Profile and session preferences',
-  'header.sessionWithName': 'Session Settings · {{name}}',
+  'header.session': 'Agent Settings',
+  'header.sessionDesc': 'Agent Profile and chat preferences',
+  'header.sessionWithName': 'Agent Settings · {{name}}',
   'header.title': 'Settings',
   'hotkey.clearBinding': 'Clear binding',
   'hotkey.conflicts': 'Conflicts with existing hotkeys',
@@ -504,7 +528,7 @@ export default {
   'llm.fetcher.noLatestTime': 'No list available yet',
   'llm.helpDoc': 'Configuration Guide',
   'llm.modelList.desc':
-    'Select the models to display in the session. The selected models will be displayed in the model list.',
+    'Select the models to display in conversations. The selected models will be displayed in the model list.',
   'llm.modelList.placeholder': 'Please select a model from the list',
   'llm.modelList.title': 'Model List',
   'llm.modelList.total': '{{count}} models available in total',
@@ -512,73 +536,7 @@ export default {
   'llm.proxyUrl.title': 'API proxy URL',
   'llm.waitingForMore': 'More models are <1>planned to be added</1>, stay tuned',
   'llm.waitingForMoreLinkAriaLabel': 'Open the Provider request form',
-  'marketPublish.forkConfirm.by': 'by {{author}}',
-  'marketPublish.forkConfirm.confirm': 'Confirm Publish',
-  'marketPublish.forkConfirm.confirmGroup': 'Confirm Publish',
-  'marketPublish.forkConfirm.description':
-    'You are about to publish a derivative version based on an existing agent from the community. Your new agent will be created as a separate entry in the marketplace.',
-  'marketPublish.forkConfirm.descriptionGroup':
-    'You are about to publish a derivative version based on an existing group from the community. Your new group will be created as a separate entry in the marketplace.',
-  'marketPublish.forkConfirm.title': 'Publish Derivative Agent',
-  'marketPublish.forkConfirm.titleGroup': 'Publish Derivative Group',
-  'marketPublish.modal.changelog.extra':
-    'Describe the key changes and improvements in this version',
-  'marketPublish.modal.changelog.label': 'Changelog',
-  'marketPublish.modal.changelog.maxLengthError': 'Changelog must not exceed 500 characters',
-  'marketPublish.modal.changelog.placeholder': 'Enter the changelog',
-  'marketPublish.modal.changelog.required': 'Please enter the changelog',
-  'marketPublish.modal.comparison.local': 'Current Local Version',
-  'marketPublish.modal.comparison.remote': 'Currently Published Version',
-  'marketPublish.modal.identifier.extra':
-    'This is the Agent’s unique identifier. Use lowercase letters, numbers, and hyphens.',
-  'marketPublish.modal.identifier.label': 'Agent Identifier',
-  'marketPublish.modal.identifier.lengthError': 'Identifier must be between 3 and 50 characters',
-  'marketPublish.modal.identifier.patternError':
-    'Identifier can only contain lowercase letters, numbers, and hyphens',
-  'marketPublish.modal.identifier.placeholder':
-    'Enter a unique identifier for the agent, e.g., web-development',
-  'marketPublish.modal.identifier.required': 'Please enter the agent identifier',
-  'marketPublish.modal.loading.fetchingRemote': 'Loading remote data...',
-  'marketPublish.modal.loading.submit': 'Submitting Agent...',
-  'marketPublish.modal.loading.submitGroup': 'Submitting Group...',
-  'marketPublish.modal.loading.upload': 'Publishing new version...',
-  'marketPublish.modal.loading.uploadGroup': 'Publishing new group version...',
-  'marketPublish.modal.messages.createVersionFailed': 'Failed to create version: {{message}}',
-  'marketPublish.modal.messages.fetchRemoteFailed': 'Failed to fetch remote agent data',
-  'marketPublish.modal.messages.missingIdentifier':
-    'This Agent doesn’t have a Community identifier yet.',
-  'marketPublish.modal.messages.noGroup': 'No group selected',
-  'marketPublish.modal.messages.notAuthenticated': 'Sign in to your Community account first.',
-  'marketPublish.modal.messages.publishFailed': 'Publish failed: {{message}}',
-  'marketPublish.modal.submitButton': 'Publish',
-  'marketPublish.modal.title.submit': 'Share to Agent Community',
-  'marketPublish.modal.title.upload': 'Publish New Version',
-  'marketPublish.resultModal.message':
-    'Your Agent has been submitted for review. Once approved, it will go live automatically.',
-  'marketPublish.resultModal.messageGroup':
-    'Your Group has been submitted for review. Once approved, it will go live automatically.',
-  'marketPublish.resultModal.title': 'Submission Successful',
-  'marketPublish.resultModal.view': 'View in Community',
   'marketPublish.status.underReview': 'Under Review',
-  'marketPublish.submit.button': 'Share to Community',
-  'marketPublish.submit.tooltip': 'Share this Agent to the Community',
-  'marketPublish.submitGroup.tooltip': 'Share this Group to the Community',
-  'marketPublish.upload.button': 'Publish New Version',
-  'marketPublish.upload.tooltip': 'Publish a new version to Agent Community',
-  'marketPublish.uploadGroup.tooltip': 'Publish a new version to Group Community',
-  'marketPublish.validation.communitySetupRequired.action': 'Set Up Now',
-  'marketPublish.validation.communitySetupRequired.desc':
-    "This workspace hasn't set up its Community profile yet. Set it up before publishing to the Community.",
-  'marketPublish.validation.communitySetupRequired.memberHint':
-    "This workspace hasn't set up its Community profile yet. Ask a workspace owner to set it up before publishing to the Community.",
-  'marketPublish.validation.communitySetupRequired.title': 'Set Up Community Profile First',
-  'marketPublish.validation.confirmPublish': 'Publish to the Market?',
-  'marketPublish.validation.confirmPublishDesc':
-    'Once published, this content will be publicly visible in the market and available for anyone to discover and use.',
-  'marketPublish.validation.emptyName': 'Cannot publish: Name is required',
-  'marketPublish.validation.emptySystemRole': 'Cannot publish: System Role is required',
-  'marketPublish.validation.underReview':
-    'Your new version is currently under review. Please wait for approval before publishing a new version.',
   'memory.effort.desc': 'Control how aggressively the AI retrieves and updates memory.',
   'memory.effort.high': 'High — Proactive retrieval and updates',
   'memory.effort.level.high': 'High',
@@ -605,6 +563,7 @@ export default {
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.category.workspace.title': 'Workspace',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
+  'notification.item.credit_balance_low': 'Credit balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.video_generation_completed': 'Video generation completed',
@@ -626,14 +585,6 @@ export default {
   'myAgents.actions.deprecateLoading': 'Deprecating agent...',
   'myAgents.actions.deprecateSuccess': 'Agent deprecated',
   'myAgents.actions.edit': 'Edit Agent',
-  'myAgents.actions.publish': 'Publish Agent',
-  'myAgents.actions.publishError': 'Failed to publish agent',
-  'myAgents.actions.publishLoading': 'Publishing agent...',
-  'myAgents.actions.publishSuccess': 'Agent published',
-  'myAgents.actions.unpublish': 'Unpublish Agent',
-  'myAgents.actions.unpublishError': 'Failed to unpublish agent',
-  'myAgents.actions.unpublishLoading': 'Unpublishing agent...',
-  'myAgents.actions.unpublishSuccess': 'Agent unpublished',
   'myAgents.actions.viewDetail': 'View Details',
   'myAgents.detail.category': 'Category',
   'myAgents.detail.description': 'Description',
@@ -662,7 +613,6 @@ export default {
   'plugin.settings.title': '{{id}} Skill Configuration',
   'plugin.settings.tooltip': 'Skill Configuration',
   'plugin.store': 'Skill Store',
-  'publishToCommunity': 'Publish to Community',
   'settingAgent.avatar.sizeExceeded': 'Image size exceeds 1MB limit, please choose a smaller image',
   'settingAgent.avatar.title': 'Avatar',
   'settingAgent.backgroundColor.title': 'Background Color',
@@ -681,21 +631,13 @@ export default {
   'settingAgent.export.untitledFileName': 'agent-profile',
   'settingAgent.name.placeholder': 'Enter agent name',
   'settingAgent.name.title': 'Name',
-  'settingAgent.prompt.placeholder': 'Enter agent settings, press / to open the command menu',
-  'settingAgent.prompt.templatePlaceholder':
-    '#### Goal\n' +
-    'Describe the main purpose and objective of this agent.\n\n' +
-    '#### Skills\n' +
-    '- List the key capabilities\n' +
-    '- And specialized knowledge areas\n\n' +
-    '#### Workflow\n' +
-    '1. Step-by-step process\n' +
-    '2. How the agent should approach tasks\n' +
-    '3. Expected interactions with users\n\n' +
-    '#### Constraints\n' +
-    '- Important limitations to follow\n' +
-    '- Guidelines for behavior',
-  'settingAgent.prompt.title': 'Agent Profile',
+  'settingAgent.prompt.desc':
+    'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
+  'settingAgent.prompt.editorPlaceholder':
+    'Enter core instructions, press / to open the Slash Menu',
+  'settingAgent.prompt.placeholder': 'Enter agent instructions',
+  'settingAgent.prompt.title': 'Core Instructions',
+  'settingAgent.runtimeConfig.title': 'Model & Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
   'settingAgent.tag.placeholder': 'Enter tag',
@@ -794,14 +736,14 @@ export default {
   'settingGroup.scene.options.productive': 'Productive',
   'settingGroup.scene.title': 'Group scenario',
   'settingGroup.submit': 'Update Group',
-  'settingGroup.systemPrompt.placeholder': 'Please enter the host system prompt',
-  'settingGroup.systemPrompt.title': 'Host System Prompt',
+  'settingGroup.systemPrompt.placeholder': 'Please enter the Orchestrator system prompt',
+  'settingGroup.systemPrompt.title': 'Orchestrator System Prompt',
   'settingGroup.title': 'Group Information',
   'settingGroupChat.allowDM.desc':
     'When turned off, you can still send direct messages to the agent',
   'settingGroupChat.allowDM.title': 'Allow Direct Messages from Agent',
   'settingGroupChat.enableSupervisor.desc':
-    'Enable the moderator feature to manage Group conversations',
+    'Enable the Orchestrator feature to manage Group conversations',
   'settingGroupChat.enableSupervisor.title': 'Enable Orchestrator',
   'settingGroupChat.maxResponseInRow.desc':
     'Select how many consecutive messages a member can reply with. Set to 0 to disable this limit.',
@@ -825,9 +767,10 @@ export default {
   'settingGroupChat.revealDM.title': 'Show Private Messages',
   'settingGroupChat.submit': 'Update Settings',
   'settingGroupChat.systemPrompt.desc':
-    'Custom system prompt for the group chat host. This may affect the default host behavior.',
-  'settingGroupChat.systemPrompt.placeholder': 'Please enter a custom host system prompt...',
-  'settingGroupChat.systemPrompt.title': 'Host System Prompt',
+    'Custom system prompt for the group chat Orchestrator. This may affect the default Orchestrator behavior.',
+  'settingGroupChat.systemPrompt.placeholder':
+    'Please enter a custom Orchestrator system prompt...',
+  'settingGroupChat.systemPrompt.title': 'Orchestrator System Prompt',
   'settingGroupChat.title': 'Chat Settings',
   'settingGroupMembers.addToGroup': 'Add to Group',
   'settingGroupMembers.availableAgents': 'Available Agents',
@@ -1001,8 +944,15 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'skillGroup.builtinSkills': 'Built-in Skills',
+  'skillGroup.builtinTools': 'Built-in Tools',
+  'skillGroup.communityConnectors': 'OAuth Connectors',
+  'skillGroup.communitySkills': 'Community Skills',
+  'skillGroup.communityTools': 'Community Tools',
+  'skillGroup.customConnectors': 'Custom Connectors',
+  'skillGroup.customSkills': 'Custom Skills',
   'skillStore.button': 'Skill Store',
-  'skillStore.empty': 'Browse the Skill store. Install one to get started, add more later.',
+  'skillStore.empty': 'Browse the Skill Store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
@@ -1032,6 +982,8 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.connectors': 'Connectors',
+  'skillView.skills': 'Skills',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to...',
   'storage.actions.transfer.desc':
@@ -1113,14 +1065,6 @@ When I am ___, I need ___
   'storageOverage.usage.estimatedCharge': 'Est. Cycle Charge',
   'storageOverage.usage.incurredCharge': 'Incurred This Cycle',
   'storageOverage.usage.overage': 'Overage',
-  'submitAgentModal.button': 'Submit Agent',
-  'submitAgentModal.identifier': 'Agent Identifier',
-  'submitAgentModal.metaMiss':
-    'Please complete the agent information before submitting. It should include name, description, and tags',
-  'submitAgentModal.placeholder': 'Enter a unique identifier for the agent, e.g. web-development',
-  'submitAgentModal.success': 'Agent submitted successfully',
-  'submitAgentModal.tooltips': 'Share to Agent Community',
-  'submitGroupModal.tooltips': 'Share to Group Community',
   'sync.device.deviceName.hint': 'Add a name for easy identification',
   'sync.device.deviceName.placeholder': 'Enter device name',
   'sync.device.deviceName.title': 'Device Name',
@@ -1610,8 +1554,7 @@ When I am ___, I need ___
     'All agents, skills, and their configurations',
   'workspace.general.delete.confirm.warning.items.billing':
     'Subscription, budget settings, and auto top-up',
-  'workspace.general.delete.confirm.warning.items.conversations':
-    'All sessions, messages, topics, and tasks',
+  'workspace.general.delete.confirm.warning.items.conversations': 'All messages, topics, and tasks',
   'workspace.general.delete.confirm.warning.items.files':
     'Uploaded files, generations, and knowledge base data',
   'workspace.general.delete.confirm.warning.items.members':
@@ -1622,7 +1565,7 @@ When I am ___, I need ___
     'This cannot be undone. Spend and top-up history will be retained for audit only.',
   'workspace.general.delete.cta': 'Delete Workspace',
   'workspace.general.delete.description':
-    'Permanently delete this workspace and everything inside it — agents, sessions, messages, files, members, and invitations. This action cannot be reversed.',
+    'Permanently delete this workspace and everything inside it — agents, messages, files, members, and invitations. This action cannot be reversed.',
   'workspace.general.delete.failed': 'Failed to delete workspace',
   'workspace.general.delete.hint':
     'Cancel any active subscription before deletion. Billing history is kept for audit.',
@@ -1648,7 +1591,9 @@ When I am ___, I need ___
     'You will lose access to "{{name}}" immediately. You can rejoin only if you are invited again.',
   'workspace.general.transferAgents.modal.back': 'Back',
   'workspace.general.transferAgents.modal.continue': 'Continue',
+  'workspace.general.transferAgents.modal.done': 'Done',
   'workspace.general.transferAgents.modal.failed': 'Failed to move agents',
+  'workspace.general.transferAgents.modal.goToTarget': 'Go to {{target}}',
   'workspace.general.transferAgents.modal.loadFailed': 'Failed to load agents',
   'workspace.general.transferAgents.modal.noAgents': 'No agents in this workspace',
   'workspace.general.transferAgents.modal.selectAgents': 'Select Agents to move to {{target}}.',
@@ -1667,7 +1612,9 @@ When I am ___, I need ___
   'workspace.general.transferAgents.personalAccount': 'Personal Account',
   'workspace.general.transferAgentGroups.modal.back': 'Back',
   'workspace.general.transferAgentGroups.modal.continue': 'Continue',
+  'workspace.general.transferAgentGroups.modal.done': 'Done',
   'workspace.general.transferAgentGroups.modal.failed': 'Failed to transfer agent groups',
+  'workspace.general.transferAgentGroups.modal.goToTarget': 'Go to {{target}}',
   'workspace.general.transferAgentGroups.modal.loadFailed': 'Failed to load agent groups',
   'workspace.general.transferAgentGroups.modal.noGroups': 'No agent groups in this workspace',
   'workspace.general.transferAgentGroups.modal.selectGroups': 'Select agent groups to transfer.',
@@ -1699,7 +1646,9 @@ When I am ___, I need ___
   'workspace.general.copyLobeAI.modal.copyOptions.unsupported': 'Unavailable',
   'workspace.general.copyLobeAI.modal.create': 'Copy {{count}} agent(s)',
   'workspace.general.copyLobeAI.modal.defaultInboxTitle': 'LobeAI',
+  'workspace.general.copyLobeAI.modal.done': 'Done',
   'workspace.general.copyLobeAI.modal.failed': 'Failed to copy agents',
+  'workspace.general.copyLobeAI.modal.goToTarget': 'Go to {{target}}',
   'workspace.general.copyLobeAI.modal.includeHistory': 'Copy topics and messages',
   'workspace.general.copyLobeAI.modal.includeHistoryDesc':
     'Optional. Copies selected Agents’ conversation history into the new Agents.',
@@ -1733,7 +1682,9 @@ When I am ___, I need ___
   'workspace.general.copyAgentGroups.modal.copyOptions.title': 'Copy options',
   'workspace.general.copyAgentGroups.modal.copyOptions.unsupported': 'Unavailable',
   'workspace.general.copyAgentGroups.modal.create': 'Copy {{count}} agent group(s)',
+  'workspace.general.copyAgentGroups.modal.done': 'Done',
   'workspace.general.copyAgentGroups.modal.failed': 'Failed to copy agent groups',
+  'workspace.general.copyAgentGroups.modal.goToTarget': 'Go to {{target}}',
   'workspace.general.copyAgentGroups.modal.loadFailed': 'Failed to load agent groups',
   'workspace.general.copyAgentGroups.modal.noGroups': 'No agent groups available to copy',
   'workspace.general.copyAgentGroups.modal.selectGroups': 'Select agent groups to copy.',
@@ -1936,7 +1887,7 @@ When I am ___, I need ___
   'workspace.members.title': 'Members',
   'workspace.name.placeholder': 'Workspace name',
   'workspace.name.title': 'Name',
-  'workspace.newWorkspace': 'New workspace',
+  'workspace.newWorkspace': 'New Workspace',
   'workspace.personalTag': 'Personal',
   'workspace.switchWorkspace': 'Switch workspace',
   'workspace.upgradeModal.alreadyUpgraded': 'Already upgraded',
@@ -2178,6 +2129,17 @@ When I am ___, I need ___
   'workspace.onboarding.step3.installed': 'Added {{count}} agent(s) to your workspace',
   'workspace.onboarding.step3.empty': 'No recommendations available right now.',
   'workspaceSetting.breadcrumb.settings': 'Settings',
+  'workspaceSetting.devices.desc':
+    'Shared machines enrolled in this workspace. Members can run agents on them.',
+  'workspaceSetting.devices.empty': 'No workspace devices yet.',
+  'workspaceSetting.devices.enrollDesc':
+    'Run this on the machine you want to share (workspace owners only):',
+  'workspaceSetting.devices.enrollTitle': 'Add a device',
+  'workspaceSetting.devices.heroDesc':
+    'Enroll a trusted shared machine — such as a build server or team Mac — so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
+  'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
+  'workspaceSetting.devices.offline': 'Offline',
+  'workspaceSetting.devices.online': 'Online',
   'workspaceSetting.group.admin': 'Admin',
   'workspaceSetting.group.agent': 'Agent',
   'workspaceSetting.group.general': 'General',
@@ -2190,7 +2152,7 @@ When I am ___, I need ___
   'workspaceSetting.storage.comingSoon': 'Workspace-scoped data import & export is coming soon.',
   'workspaceSetting.storage.danger.clear.desc':
     'Delete all data in this workspace, including agents, files, messages, and skills. The workspace itself will NOT be deleted.',
-  'workspaceSetting.storage.danger.clear.title': 'Wipe Workspace Data',
+  'workspaceSetting.storage.danger.clear.title': 'Clear Workspace Data',
   'workspaceSetting.storage.danger.reset.desc':
     'Restore all workspace settings to defaults. Workspace data will not be deleted.',
   'workspaceSetting.storage.danger.reset.title': 'Reset Workspace Settings',
@@ -2200,7 +2162,8 @@ When I am ___, I need ___
   'workspaceSetting.tab.skill': 'Skills',
   'workspaceSetting.tab.usage': 'Usage',
   'tools.add': 'Add Skill',
-  'tools.addSkillOrConnector': 'Add Skills / Connector',
+  'tools.addSkillOrConnector': 'Add Skills / Connectors',
+  'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
   'tools.builtins.groupName': 'Built-ins',
   'tools.builtins.install': 'Install',
   'tools.builtins.installed': 'Installed',
@@ -2520,6 +2483,10 @@ When I am ___, I need ___
     'Notion is a collaborative productivity and note-taking application.',
   'tools.lobehubSkill.providers.notion.readme':
     'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
+  'tools.lobehubSkill.providers.posthog.description':
+    'PostHog is an open-source product analytics platform for analyzing events, funnels, cohorts, feature flags, experiments, and user behavior.',
+  'tools.lobehubSkill.providers.posthog.readme':
+    'Connect to PostHog to query product analytics, inspect dashboards, review feature flags and experiments, and understand user behavior through natural conversation with your AI assistant.',
   'tools.lobehubSkill.providers.twitter.description':
     'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
   'tools.lobehubSkill.providers.twitter.readme':
@@ -2541,6 +2508,7 @@ When I am ___, I need ___
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
+  'tools.activation.pin': 'Pin',
   'tools.activation.pinned': 'Pinned',
   'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':

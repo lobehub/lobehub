@@ -57,7 +57,6 @@ describe('systemStatusSelectors', () => {
         showFilePanel: true,
         hidePWAInstaller: true,
         isShowCredit: true,
-        zenMode: false,
         leftPanelWidth: 300,
         portalWidth: 500,
         filePanelWidth: 400,
@@ -76,22 +75,10 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.showFilePanel(s)).toBe(true);
       expect(systemStatusSelectors.hidePWAInstaller(s)).toBe(true);
       expect(systemStatusSelectors.isShowCredit(s)).toBe(true);
-      expect(systemStatusSelectors.showChatHeader(s)).toBe(true);
-      expect(systemStatusSelectors.inZenMode(s)).toBe(false);
       expect(systemStatusSelectors.leftPanelWidth(s)).toBe(300);
       expect(systemStatusSelectors.portalWidth(s)).toBe(500);
       expect(systemStatusSelectors.filePanelWidth(s)).toBe(400);
       expect(systemStatusSelectors.wideScreen(s)).toBe(false);
-    });
-
-    it('should handle zen mode effects', () => {
-      const zenState = merge(s, {
-        status: { zenMode: true },
-      });
-      expect(systemStatusSelectors.showAgentBuilderPanel(zenState)).toBe(false);
-      expect(systemStatusSelectors.showRightPanel(zenState)).toBe(false);
-      expect(systemStatusSelectors.showLeftPanel(zenState)).toBe(false);
-      expect(systemStatusSelectors.showChatHeader(zenState)).toBe(false);
     });
 
     it('should return default portal width if not set', () => {

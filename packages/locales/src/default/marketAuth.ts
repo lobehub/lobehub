@@ -6,17 +6,19 @@ export default {
     'By continuing, you confirm that you have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>.',
   'authorize.footer.privacy': 'Privacy Policy',
   'authorize.footer.terms': 'Terms of Service',
+  'authorize.scenes.connector.confirm': 'Continue to Market',
+  'authorize.scenes.connector.description':
+    'Market is only used to start this service authorization. Your {{appName}} account stays separate.',
+  'authorize.scenes.connector.subtitle':
+    'Sign in to Market to connect and authorize this community service.',
+  'authorize.scenes.connector.title': 'Connect Community Service',
   'authorize.scenes.mcp.subtitle':
     'Create a community profile to install and run this skill from the community.',
   'authorize.scenes.mcp.title': 'Install Community Skill',
-  'authorize.scenes.publish.subtitle':
-    'Create a community profile to publish and manage your listing within the community.',
-  'authorize.scenes.publish.title': 'Publish to the Community',
   'authorize.scenes.sandbox.subtitle':
     'Create a community profile to run this tool in the community sandbox.',
   'authorize.scenes.sandbox.title': 'Try the Community Sandbox',
-  'authorize.subtitle':
-    'Create a community profile to submit and manage listings within the community.',
+  'authorize.subtitle': 'Create a community profile to use community features.',
   'authorize.title': 'Create Community Profile',
   'callback.buttons.close': 'Close Window',
   'claimResources.claim': 'Claim Selected',
@@ -40,7 +42,8 @@ export default {
   'errors.authorizationFailed': 'Authorization failed, please try again.',
   'errors.browserOnly': 'The authorization process can only be initiated in a browser.',
   'errors.codeConsumed': 'The authorization code has already been used. Please try again.',
-  'errors.codeVerifierMissing': 'Invalid authorization session. Please restart the login process.',
+  'errors.codeVerifierMissing':
+    'Invalid authorization session. Please restart the sign-in process.',
   'errors.general': 'An error occurred during authorization. Please try again.',
   'errors.handoffFailed': 'Failed to retrieve authorization result. Please try again.',
   'errors.handoffTimeout':
@@ -50,7 +53,7 @@ export default {
   'errors.openPopupFailed':
     "Failed to open authorization popup. Please check your browser's popup blocker settings.",
   'errors.popupClosed': 'The authorization window was closed before completion.',
-  'errors.sessionExpired': 'Authorization session has expired. Please log in again.',
+  'errors.sessionExpired': 'Authorization session has expired. Please sign in again.',
   'errors.stateMismatch': 'Authorization state mismatch. Please try again.',
   'errors.stateMissing': 'Authorization state not found. Please try again.',
   'messages.authorizationFailed':
@@ -60,8 +63,6 @@ export default {
   'messages.loading': 'Starting authorization process...',
   'messages.success.cloudMcpInstall':
     'Authorization successful! You can now install the Cloud MCP skill.',
-  'messages.success.submit': 'Authorization successful! You can now publish your agent.',
-  'messages.success.upload': 'Authorization successful! You can now publish a new version.',
   'profileSetup.cancel': 'Cancel',
   'profileSetup.descriptionEdit': 'Update your community profile information.',
   'profileSetup.descriptionFirstTime': 'Set up your profile to complete your community profile.',
