@@ -119,11 +119,12 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgMask};
 
-    /* The mask is a dark scrim in both themes, so force a light spinner for
-       contrast — the default indicator inherits a dark text color and smears
-       into the scrim. */
-    .ant-spin-dot-item {
-      background-color: ${cssVar.colorWhite};
+    /* antd resets the Spin's own color to colorText (near-black in the light
+       theme) and the percent ring's stroke is \`currentcolor\`, so it smears into
+       the dark mask. The mask is a dark scrim in both themes — override the Spin
+       color to white for contrast. */
+    .ant-spin {
+      color: ${cssVar.colorWhite};
     }
   `,
 }));
@@ -272,7 +273,7 @@ const UploadCard = memo<UploadCardProps>(
               />
               {uploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
-                  <Spin size="small" />
+                  <Spin percent={'auto'} size="small" />
                 </div>
               )}
             </div>
