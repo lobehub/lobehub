@@ -36,6 +36,9 @@ export default {
   'cancelPlan.desc':
     'After cancellation, you will be downgraded to the free version when the current plan expires.',
   'cancelPlan.confirmCountdown': 'Cancel Subscription ({{seconds}})',
+  'cancelPlan.keep': 'Keep Subscription',
+  'cancelPlan.nextStep': 'Next',
+  'cancelPlan.prevStep': 'Back',
   'cancelPlan.reason.commentPlaceholder': 'Tell us more to help us improve (optional)',
   'cancelPlan.reason.commentPlaceholderRequired': 'Please tell us your reason',
   'cancelPlan.reason.label': 'Help us improve — why are you canceling?',
