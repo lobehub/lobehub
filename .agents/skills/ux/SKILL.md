@@ -20,6 +20,36 @@ conflict priority).
 > The checklists below are the execution layer. Each item is tagged with the
 > value(s) it serves; for what those values mean, see the file above.
 
+## Interaction principles
+
+Use these principles before the execution checklists when a flow has multiple
+plausible interaction patterns.
+
+### Preserve the surface contract・Meaningful・Natural
+
+Every surface carries a task promise: chat keeps the user in a working
+conversation, a document page supports focused reading / editing, a settings page
+supports configuration, and so on. Default interactions should continue that
+promise instead of unexpectedly moving the user into another mode. Prefer
+in-context surfaces (portal / panel / drawer) for reference and auxiliary work;
+reserve full-page navigation for committed focus or explicit mode switches.
+
+### Consistency is semantic, not mechanical・Certainty・Meaningful
+
+Consistency means the same user intent behaves the same way in the same surface.
+It does not mean the same component must do the same thing everywhere. When a
+component is reused across surfaces, let the parent surface provide the
+interaction strategy so behavior follows intent rather than implementation
+convenience.
+
+### Layout communicates role・Natural・Certainty
+
+Element placement is part of the interface language. Identity and location
+(breadcrumbs, titles, object labels) should read separately from state and
+actions (save status, sharing, panel toggles, overflow menus). When these roles
+are mixed, users have to infer whether an element describes the current object or
+acts on it.
+
 ## How this is organized
 
 The checklists are grouped by **interaction type** — the kind of thing the user
