@@ -8,7 +8,7 @@ export default {
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
   'credit_balance_low':
-    'Your credit balance is running low — about {{balance}} in credits remaining. Top up now, or turn on auto top-up to refill automatically and never get interrupted again.',
+    'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
   'credit_balance_low_title': 'Your credit balance is running low',
   'image_generation_completed': 'Your image "{{prompt}}" is ready.',
