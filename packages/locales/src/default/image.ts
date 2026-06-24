@@ -7,6 +7,7 @@ export default {
   'config.header.title': 'Image',
   'config.height.label': 'Height',
   'config.imageNum.label': 'Number of Images',
+  'config.imageUpload.maxCountReached': 'You can add up to {{count}} reference images',
   'config.imageUrl.label': 'Reference Image',
   'config.imageUrls.label': 'Reference Images',
   'config.model.label': 'Model',

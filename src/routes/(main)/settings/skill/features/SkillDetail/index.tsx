@@ -1,19 +1,23 @@
 'use client';
 
+import { getLobehubSkillProviderById } from '@lobechat/const';
 import { Avatar, Markdown, Skeleton } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Plus, Trash2 } from 'lucide-react';
-import { lazy, memo, Suspense, useEffect, useState } from 'react';
+import { Plus, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorDetail } from '@/features/Connectors';
+import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+
+import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
@@ -52,6 +56,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 14px;
     color: ${cssVar.colorTextTertiary};
   `,
+  noPermissionsHeader: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-block-end: 8px;
+  `,
+  noPermissionsTitle: css`
+    font-size: 16px;
+    font-weight: 600;
+    color: ${cssVar.colorText};
+  `,
 }));
 
 interface SkillDetailProps {
@@ -59,6 +76,72 @@ interface SkillDetailProps {
   onDelete?: () => void;
   type: ToolDetailType;
 }
+
+interface LobehubConnectorActionProps {
+  identifier: string;
+  label: string;
+  onDisconnected?: () => void;
+}
+
+const LobehubConnectorAction = memo<LobehubConnectorActionProps>(
+  ({ identifier, label, onDisconnected }) => {
+    const { t } = useTranslation('setting');
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
+    const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({
+      identifier,
+      type: 'lobehub',
+    });
+
+    const handleConfirmDisconnect = useCallback(() => {
+      if (!canEdit) return;
+
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        okButtonProps: { danger: true },
+        okText: t('tools.lobehubSkill.disconnect'),
+        onOk: async () => {
+          const disconnected = await handleDisconnect();
+          if (disconnected) onDisconnected?.();
+        },
+        title: t('tools.lobehubSkill.disconnectConfirm.title', { name: label }),
+      });
+    }, [canEdit, handleDisconnect, label, onDisconnected, t]);
+
+    if (isConnected) {
+      return (
+        <Button
+          danger
+          disabled={!canEdit}
+          icon={<Unplug size={14} />}
+          loading={isConnecting}
+          size="small"
+          onClick={handleConfirmDisconnect}
+        >
+          {t('tools.lobehubSkill.disconnect')}
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        disabled={!canCreate || !canEdit}
+        icon={<SquareArrowOutUpRight size={14} />}
+        loading={isConnecting}
+        size="small"
+        onClick={() => {
+          if (!canCreate || !canEdit) return;
+          handleConnect();
+        }}
+      >
+        {t('tools.lobehubSkill.connect')}
+      </Button>
+    );
+  },
+);
+
+LobehubConnectorAction.displayName = 'LobehubConnectorAction';
 
 /**
  * Right panel for the Settings > Skill master-detail layout.
@@ -69,6 +152,7 @@ interface SkillDetailProps {
  */
 const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const { t } = useTranslation('plugin');
+  const { t: ts } = useTranslation('setting');
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
 
@@ -86,6 +170,12 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
 
   // For lobehub-connector: get the server's tool list from the store
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
+  const lobehubProvider =
+    type === 'lobehub-connector' ? getLobehubSkillProviderById(identifier) : undefined;
+  const lobehubLabel =
+    type === 'lobehub-connector'
+      ? lobehubProvider?.label || lobehubServer?.name || identifier
+      : identifier;
 
   // For builtin-skill: look up from store
   const builtinSkill = useToolStore(
@@ -99,6 +189,22 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     type === 'plugin' ||
     type === 'mcp-connector' ||
     type === 'lobehub-connector';
+
+  const { title: builtinSkillTitle, description: builtinSkillDescription } =
+    getLocalizedBuiltinSkillDetail(builtinSkill, identifier, ts);
+  const noPermissionsTitle = getNoPermissionsTitle(identifier, type, ts);
+
+  const renderLobehubConnectorAction = (onDisconnected?: () => void) => {
+    if (type !== 'lobehub-connector') return undefined;
+
+    return (
+      <LobehubConnectorAction
+        identifier={identifier}
+        label={lobehubLabel}
+        onDisconnected={onDisconnected}
+      />
+    );
+  };
 
   useEffect(() => {
     if (!isConnectorType) return;
@@ -139,8 +245,17 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     };
 
     ensureConnector();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identifier, type, isConnectorType]);
+  }, [
+    fetchConnectors,
+    identifier,
+    isConnectorType,
+    lobehubServer?.name,
+    lobehubServer?.tools,
+    syncBuiltinTool,
+    syncPluginTools,
+    syncToolsFromClient,
+    type,
+  ]);
 
   const handleUninstallBuiltin = () => {
     confirmModal({
@@ -210,9 +325,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <div style={{ alignItems: 'flex-start', display: 'flex', gap: 12 }}>
             {builtinSkill?.avatar && <Avatar avatar={builtinSkill.avatar} size={40} />}
             <div>
-              <div className={styles.name}>{builtinSkill?.name || identifier}</div>
-              {builtinSkill?.description && (
-                <div className={styles.description}>{builtinSkill.description}</div>
+              <div className={styles.name}>{builtinSkillTitle}</div>
+              {builtinSkillDescription && (
+                <div className={styles.description}>{builtinSkillDescription}</div>
               )}
             </div>
           </div>
@@ -254,13 +369,24 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (noManifest || !connector) {
     return (
       <div className={styles.noPermissions}>
-        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{identifier}</div>
-        This skill does not expose configurable tool permissions.
+        <div className={styles.noPermissionsHeader}>
+          <div className={styles.noPermissionsTitle}>
+            {type === 'lobehub-connector' ? lobehubLabel : noPermissionsTitle}
+          </div>
+          {renderLobehubConnectorAction()}
+        </div>
+        {ts('tools.noConfigurablePermissions')}
       </div>
     );
   }
 
-  return <ConnectorDetail connectorId={connector.id} onDelete={onDelete} />;
+  return (
+    <ConnectorDetail
+      connectorId={connector.id}
+      lifecycleActions={renderLobehubConnectorAction(() => setNoManifest(true))}
+      onDelete={onDelete}
+    />
+  );
 });
 
 SkillDetail.displayName = 'SkillDetail';

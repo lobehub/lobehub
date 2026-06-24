@@ -101,12 +101,18 @@ export class ContextTreeBuilder {
       const agentCouncilNode = this.createAgentCouncilNodeFromChildren(message, idNode);
       contextTree.push(agentCouncilNode);
 
-      // Continue processing children of the last member (for supervisor final reply)
-      // The supervisor's reply has parentId pointing to the last agent's message
-      const lastChild = idNode.children.at(-1);
-      if (lastChild && lastChild.children.length > 0) {
-        // Process the first child of the last agent (supervisor's reply)
-        this.transformToLinear(lastChild.children[0], contextTree);
+      // Continue from every member to surface the supervisor's post-council reply.
+      // The reply attaches to exactly ONE member, but which member is non-deterministic:
+      // broadcast agents finish near-simultaneously so their createdAt values tie, and the
+      // writer anchors the reply to the createdAt-last member while the tree preserves
+      // input-array order — the two can disagree. Walking only children.at(-1) would strand
+      // the reply. Only the member carrying it has children, so iterating every member emits
+      // it exactly once and keeps contextTree in agreement with flatList (FlatListBuilder
+      // applies the same all-member continuation).
+      for (const child of idNode.children) {
+        if (child.children.length > 0) {
+          this.transformToLinear(child.children[0], contextTree);
+        }
       }
       return;
     }

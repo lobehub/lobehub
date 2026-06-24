@@ -21,7 +21,7 @@ export const VerifyIdentifier = 'verify';
  * depends only on the `lh` CLI and `agent-browser`, so any external builder
  * (Claude Code / Codex) can run it from a task's working directory: discover the
  * plan → pick a surface → capture evidence per criterion → `lh verify
- * upload-evidence` → self-check coverage.
+ * submit` → self-check coverage.
  *
  * The references carry the full operating manual (agent-browser CLI, web vs
  * Electron decision + setup, auth recipes, capture recipes), with all
@@ -35,7 +35,7 @@ export const VerifySkill: BuiltinSkill = {
   avatar: '✅',
   content,
   description:
-    'Self-evidence for task delivery verification — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and upload each with `lh verify upload-evidence` so the delivery is judged on real proof.',
+    'Self-evidence for task delivery verification — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and submit each with `lh verify submit` so the delivery is judged on real proof.',
   identifier: VerifyIdentifier,
   name: 'Verify',
   resources: toResourceMeta({

@@ -51,6 +51,30 @@ describe('parseAgentTabContext', () => {
     });
   });
 
+  it('parses a workspace agent url', () => {
+    expect(parseAgentTabContext('/acme/agent/abc')).toEqual({
+      agentId: 'abc',
+      topicId: null,
+      workspaceSlug: 'acme',
+    });
+  });
+
+  it('parses a workspace agent topic path url', () => {
+    expect(parseAgentTabContext('/acme/agent/abc/tpc_xyz')).toEqual({
+      agentId: 'abc',
+      topicId: 'tpc_xyz',
+      workspaceSlug: 'acme',
+    });
+  });
+
+  it('parses workspace topic from the search param', () => {
+    expect(parseAgentTabContext('/acme/agent/abc?topic=t1')).toEqual({
+      agentId: 'abc',
+      topicId: 't1',
+      workspaceSlug: 'acme',
+    });
+  });
+
   it('returns null for non-agent urls', () => {
     expect(parseAgentTabContext('/group/g1')).toBeNull();
   });

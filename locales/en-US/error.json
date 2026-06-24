@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.",
   "response.SystemTimeNotMatchError": "Sorry, your system time does not match the server. Please check your system time and try again.",
   "response.UnknownChatFetchError": "Sorry, an unknown request error occurred. Please check the information below or try again.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "This agent lives in a workspace, so it can only bind devices the whole team can reach. Personal devices stay with the user who registered them — pick a workspace device instead, or enroll this device to the workspace first.",
   "response.WorkspaceFrozenByAdmin": "This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.",
   "response.WorkspaceFrozenByRiskControl": "This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.",
   "stt.responseError": "Service request failed, please check the configuration or try again",

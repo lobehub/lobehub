@@ -1,5 +1,6 @@
 import { type DynamicRouteMeta } from '@/spa/router/routeMeta';
 
+import { normalizeTabScope } from './scope';
 import { type TabItem } from './types';
 import { normalizeTabUrl } from './url';
 
@@ -19,6 +20,17 @@ const isTabItem = (item: unknown): item is TabItem =>
   typeof (item as TabItem).id === 'string' &&
   typeof (item as TabItem).url === 'string' &&
   typeof (item as TabItem).lastVisited === 'number';
+
+const reviveTabItem = (item: unknown): TabItem | null => {
+  if (!isTabItem(item)) return null;
+
+  return {
+    ...item,
+    scope: normalizeTabScope((item as Partial<TabItem>).scope, item.url),
+  };
+};
+
+const isRevivedTabItem = (item: TabItem | null): item is TabItem => !!item;
 
 const reconstructUrlFromV1 = (type: unknown, params: unknown): string | null => {
   if (typeof type !== 'string' || !params || typeof params !== 'object') return null;
@@ -94,6 +106,7 @@ const migrateV1 = (): TabPagesStorageData => {
         cached,
         id,
         lastVisited: typeof old.lastVisited === 'number' ? old.lastVisited : Date.now(),
+        scope: normalizeTabScope(undefined, url),
         url,
         visitCount: typeof old.visitCount === 'number' ? old.visitCount : undefined,
       });
@@ -123,7 +136,9 @@ export const getTabPages = (): TabPagesStorageData => {
     const parsed = JSON.parse(data);
     if (!parsed || typeof parsed !== 'object') return EMPTY;
 
-    const tabs = Array.isArray(parsed.tabs) ? parsed.tabs.filter(isTabItem) : [];
+    const tabs = Array.isArray(parsed.tabs)
+      ? parsed.tabs.map(reviveTabItem).filter(isRevivedTabItem)
+      : [];
 
     return {
       activeTabId: typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null,

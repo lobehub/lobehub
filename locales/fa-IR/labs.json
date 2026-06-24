@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
   "features.platformAgent.desc": "نمایش گزینه \"اتصال عامل\" در منوی ایجاد. عوامل متصل (مانند OpenClaw، Hermes) بر روی دستگاه‌های شما اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
   "features.platformAgent.title": "اتصال عامل",
+  "features.taskVerify.desc": "یک بخش پذیرش تحویل به جزئیات وظیفه اضافه کنید: پذیرش را در یک جمله توضیح دهید و اجازه دهید هوش مصنوعی معیارهای قابل ویرایش تأیید را تولید کند.",
+  "features.taskVerify.title": "پذیرش تحویل وظیفه",
   "title": "آزمایشگاه‌ها"
 }

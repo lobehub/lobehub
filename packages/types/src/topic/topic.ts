@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { SerializedAgentHook } from '../agentHook';
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
@@ -158,16 +159,20 @@ export interface ChatTopicMetadata {
   runningOperation?: {
     assistantMessageId: string;
     /**
-     * Webhook to fire when the operation completes.
-     * Populated by the IM bot path so heterogeneous agents (Claude Code / Codex)
-     * can call back to the bot-callback endpoint even though they bypass the
-     * normal hook registration flow.
+     * Serialized lifecycle hooks (onComplete / onError) registered for this run.
+     *
+     * Persisted so the heterogeneous-agent terminal path can fire them through
+     * the same `hookDispatcher` the normal LLM runtime uses, instead of a
+     * bespoke single-webhook callback. Read by every hetero terminal site —
+     * the CLI exit (`aiAgent.heteroFinish`), the remote-agent `agentNotify`
+     * done signal, and a synchronous dispatch failure — so the task lifecycle
+     * (`onTopicComplete`) and IM bot completion callbacks fire uniformly.
+     *
+     * Only hooks carrying a webhook config are serializable (handler closures
+     * can't cross a process boundary); queue mode delivers these webhooks while
+     * local mode dispatches the in-memory handlers registered at dispatch time.
      */
-    completionWebhook?: {
-      body?: Record<string, unknown>;
-      delivery?: 'fetch' | 'qstash';
-      url: string;
-    };
+    hooks?: SerializedAgentHook[];
     operationId: string;
     scope?: string;
     threadId?: string | null;

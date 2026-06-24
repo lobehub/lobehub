@@ -226,9 +226,11 @@ const TopicItem = memo<TopicItemProps>(
         void navigateToTopic(id, { skipPopupFocus: true });
         return;
       }
-      addTab(SESSION_CHAT_TOPIC_URL(activeAgentId, id));
+      addTab(
+        buildWorkspaceAwarePath(SESSION_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug),
+      );
       void navigateToTopic(id);
-    }, [id, activeAgentId, addTab, focusTopicPopup, navigateToTopic]);
+    }, [id, activeAgentId, activeWorkspaceSlug, addTab, focusTopicPopup, navigateToTopic]);
 
     const { dropdownMenu } = useTopicItemDropdownMenu({
       fav,

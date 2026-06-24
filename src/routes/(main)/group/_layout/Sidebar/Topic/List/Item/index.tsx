@@ -13,11 +13,13 @@ import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import DotsLoading from '@/components/DotsLoading';
 import { isDesktop } from '@/const/version';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -92,13 +94,14 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
   const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
   const addTab = useElectronStore((s) => s.addTab);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const focusTopicPopup = useFocusTopicPopup({ groupId: activeGroupId });
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeGroupId || !id) return undefined;
-    return `/group/${activeGroupId}?topic=${id}`;
-  }, [activeGroupId, id]);
+    return buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug);
+  }, [activeGroupId, activeWorkspaceSlug, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
     id ? s.topicRenamingId === id : false,
@@ -145,10 +148,18 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
       toggleMobileTopic(false);
       return;
     }
-    addTab(`/group/${activeGroupId}?topic=${id}`);
+    addTab(buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug));
     switchTopic(id);
     toggleMobileTopic(false);
-  }, [id, activeGroupId, addTab, focusTopicPopup, switchTopic, toggleMobileTopic]);
+  }, [
+    id,
+    activeGroupId,
+    activeWorkspaceSlug,
+    addTab,
+    focusTopicPopup,
+    switchTopic,
+    toggleMobileTopic,
+  ]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
     id,

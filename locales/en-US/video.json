@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "End Frame",
   "config.generateAudio.label": "Generate Audio",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "You can add up to {{count}} reference images",
   "config.imageUrl.label": "Start Frame",
   "config.prompt.placeholder": "Describe the video you want to generate",
   "config.prompt.placeholderWithRef": "Describe the scene you want to generate with the image",

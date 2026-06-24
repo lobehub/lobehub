@@ -59,6 +59,7 @@
   "codeInterpreter.files": "Pliki:",
   "codeInterpreter.output": "Wynik:",
   "codeInterpreter.returnValue": "Zwracana Wartość:",
+  "connector.add.title": "Dodaj niestandardowy konektor",
   "dalle.autoGenerate": "Generuj Automatycznie",
   "dalle.downloading": "Linki do obrazów wygenerowanych przez DALL·E3 są ważne tylko przez 1 godzinę, zapisywanie obrazów lokalnie...",
   "dalle.generate": "Generuj",

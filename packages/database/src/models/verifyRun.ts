@@ -16,6 +16,10 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 export interface VerifyRunState {
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
+  /** The session id — exposed so a builder holding only its operationId can
+   * resolve the handle needed by `verify.submitCheckEvidence` before any
+   * result rows exist (the run-start gap). */
+  verifyRunId: string | null;
   verifyStatus: VerifyRunStatus | null;
 }
 
@@ -24,6 +28,7 @@ const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =
     ? {
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
+        verifyRunId: run.id,
         verifyStatus: (run.status ?? null) as VerifyRunStatus | null,
       }
     : null;

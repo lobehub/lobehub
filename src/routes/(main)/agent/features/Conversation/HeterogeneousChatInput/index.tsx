@@ -24,11 +24,11 @@ import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
 
-// Heterogeneous agents (e.g. Claude Code) bring their own toolchain, memory,
-// and model, so LobeHub-side pickers don't apply. Typo is kept so the user
-// can still toggle the rich-text formatting bar.
+// Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
+// so most LobeHub-side pickers don't apply. Typo is kept so the user can still
+// toggle the rich-text formatting bar. Local CLI model + thinking effort live
+// in the control bar next to workspace controls, not beside the send button.
 const leftActions: ActionKeys[] = ['typo'];
-const rightActions: ActionKeys[] = [];
 
 /**
  * GuardBanner
@@ -175,7 +175,6 @@ const HeterogeneousChatInput = memo(() => {
       <ChatInput
         controlBarSlot={<HeteroControlBar />}
         leftActions={leftActions}
-        rightActions={rightActions}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
         skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {

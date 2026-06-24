@@ -19,6 +19,7 @@ import {
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import StatusDot from '@/features/AgentTopicManager/StatusDot';
 import {
@@ -29,6 +30,7 @@ import {
   useConversationStore,
 } from '@/features/Conversation';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -351,6 +353,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const { t } = useTranslation('electron');
   const meta = useAgentDisplayMeta(column.agentId);
   const addTab = useElectronStore((s) => s.addTab);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const context = useMemo(() => toConversationContext(column), [column]);
 
   const storedWidth = useFleetStore((s) => s.widths[column.key]);
@@ -430,7 +433,8 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
                   icon: <Icon icon={MessageSquareIcon} />,
                   key: 'open-in-chat',
                   label: t('fleet.openInChat'),
-                  onClick: () => addTab(buildChatPath(column)),
+                  onClick: () =>
+                    addTab(buildWorkspaceAwarePath(buildChatPath(column), activeWorkspaceSlug)),
                 },
               ]}
             >

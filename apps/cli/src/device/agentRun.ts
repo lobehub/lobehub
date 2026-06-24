@@ -7,6 +7,8 @@ import {
 
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
+  /** Resolved `lh hetero exec` wrapper args. */
+  args?: string[];
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
@@ -52,6 +54,7 @@ export function spawnHeteroAgentRun(
 ): Promise<AgentRunAckResult> {
   const {
     agentType,
+    args: extraArgs,
     cwd,
     imageList,
     jwt,
@@ -83,6 +86,7 @@ export function spawnHeteroAgentRun(
     '--cwd',
     workDir,
     ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+    ...(extraArgs ?? []),
   ];
 
   // systemContext / image attachments turn the payload into a content-block

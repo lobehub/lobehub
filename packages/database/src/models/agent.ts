@@ -1,7 +1,8 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { AgentRankItem } from '@lobechat/types';
+import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -16,6 +17,7 @@ import {
   agentsKnowledgeBases,
   agentsToSessions,
   chatGroupsAgents,
+  devices,
   documents,
   files,
   knowledgeBases,
@@ -92,6 +94,62 @@ export class AgentModel {
 
   private agentsToSessionsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
+
+  /**
+   * Collect device ids that an incoming `agencyConfig` patch is *setting*
+   * (not clearing). `workingDirByDevice` entries with `undefined` value are
+   * deletes (per `pruneWorkingDirByDeviceDeletes`) and are skipped.
+   */
+  private collectBoundDeviceIds = (
+    agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
+  ): string[] => {
+    if (!agencyConfig) return [];
+    const ids: string[] = [];
+    const bound = agencyConfig.boundDeviceId;
+    if (typeof bound === 'string' && bound) ids.push(bound);
+    const map = agencyConfig.workingDirByDevice;
+    if (map) {
+      for (const [deviceId, cwd] of Object.entries(map)) {
+        if (cwd === undefined) continue;
+        ids.push(deviceId);
+      }
+    }
+    return ids;
+  };
+
+  /**
+   * Enforce: a workspace-scoped agent may only bind devices enrolled in the
+   * same workspace. Personal devices (workspace_id IS NULL) are reachable only
+   * by their owning user, so a workspace member who isn't that owner would get
+   * a broken agent. Rejects at write time rather than at execution time.
+   *
+   * No-op when `agentWorkspaceId` is null (personal agent — any device OK) or
+   * when the patch carries no new device ids.
+   */
+  private assertWorkspaceDeviceBinding = async (
+    agentWorkspaceId: string | null,
+    agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
+  ): Promise<void> => {
+    if (!agentWorkspaceId) return;
+    const candidates = this.collectBoundDeviceIds(agencyConfig);
+    if (candidates.length === 0) return;
+
+    const rows = await this.db
+      .select({ deviceId: devices.deviceId })
+      .from(devices)
+      .where(and(eq(devices.workspaceId, agentWorkspaceId), inArray(devices.deviceId, candidates)));
+    const allowed = new Set(rows.map((r) => r.deviceId));
+    const invalid = candidates.find((id) => !allowed.has(id));
+    if (invalid) {
+      throw new TRPCError({
+        cause: { data: { code: 'WorkspaceAgentRequiresWorkspaceDevice', deviceId: invalid } },
+        code: 'FORBIDDEN',
+        message:
+          'Workspace agent can only bind devices enrolled in the same workspace. ' +
+          'Enroll the device to the workspace, or pick a workspace device.',
+      });
+    }
+  };
 
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
@@ -513,6 +571,8 @@ export class AgentModel {
    * This is used for creating virtual agents (e.g., group chat members).
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
+    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
+
     const [result] = await this.db
       .insert(agents)
       .values([
@@ -613,6 +673,8 @@ export class AgentModel {
     });
 
     if (!agent) return;
+
+    await this.assertWorkspaceDeviceBinding(agent.workspaceId, data.agencyConfig);
 
     // First process the params field: undefined means delete, null means disable flag
     const existingParams = agent.params ?? {};
@@ -865,10 +927,49 @@ export class AgentModel {
         workspaceId: targetWorkspaceId,
       };
 
+      // 3a. Strip stale device bindings when moving INTO a workspace: any
+      // boundDeviceId / workingDirByDevice entry that isn't enrolled in the
+      // target workspace is silently dropped. Otherwise the moved agent would
+      // reference a device only the previous owner can reach. Moving to a
+      // personal scope (`targetWorkspaceId === null`) keeps existing bindings.
+      let nextAgencyConfig: LobeAgentAgencyConfig | null = agent.agencyConfig ?? null;
+      if (targetWorkspaceId && nextAgencyConfig) {
+        const candidateIds = this.collectBoundDeviceIds(nextAgencyConfig);
+        if (candidateIds.length > 0) {
+          const rows = await trx
+            .select({ deviceId: devices.deviceId })
+            .from(devices)
+            .where(
+              and(
+                eq(devices.workspaceId, targetWorkspaceId),
+                inArray(devices.deviceId, candidateIds),
+              ),
+            );
+          const allowed = new Set(rows.map((r) => r.deviceId));
+          const cleaned: LobeAgentAgencyConfig = { ...nextAgencyConfig };
+          if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
+            delete cleaned.boundDeviceId;
+          }
+          if (cleaned.workingDirByDevice) {
+            const filtered: Record<string, string> = {};
+            for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
+              if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
+            }
+            cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
+          }
+          nextAgencyConfig = cleaned;
+        }
+      }
+
       // 4. Update the agent record
       await trx
         .update(agents)
-        .set({ ...ownershipUpdate, slug, updatedAt: new Date() })
+        .set({
+          ...ownershipUpdate,
+          agencyConfig: nextAgencyConfig,
+          slug,
+          updatedAt: new Date(),
+        })
         .where(eq(agents.id, agentId));
 
       // 5. Update sessions linked via agentsToSessions

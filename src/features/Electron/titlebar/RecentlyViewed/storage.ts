@@ -1,3 +1,4 @@
+import { normalizeTabScope } from '../TabBar/scope';
 import { type TabItem } from '../TabBar/types';
 
 export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v3';
@@ -9,6 +10,17 @@ const isTabItem = (item: unknown): item is TabItem =>
   typeof (item as TabItem).url === 'string' &&
   typeof (item as TabItem).lastVisited === 'number';
 
+const reviveTabItem = (item: unknown): TabItem | null => {
+  if (!isTabItem(item)) return null;
+
+  return {
+    ...item,
+    scope: normalizeTabScope((item as Partial<TabItem>).scope, item.url),
+  };
+};
+
+const isRevivedTabItem = (item: TabItem | null): item is TabItem => !!item;
+
 export const getPinnedPages = (): TabItem[] => {
   if (typeof window === 'undefined') return [];
 
@@ -19,7 +31,7 @@ export const getPinnedPages = (): TabItem[] => {
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.filter(isTabItem);
+    return parsed.map(reviveTabItem).filter(isRevivedTabItem);
   } catch {
     return [];
   }

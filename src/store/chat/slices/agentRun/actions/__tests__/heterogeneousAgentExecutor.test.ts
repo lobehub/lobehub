@@ -1225,6 +1225,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
     });
 
+    it('should pass Claude Code model and thinking effort as spawn args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--verbose'],
+          command: 'claude',
+          effort: 'high',
+          model: 'opus',
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--verbose', '--model', 'opus', '--effort', 'high'],
+          agentType: 'claude-code',
+        }),
+      );
+    });
+
+    it('should pass Codex model and thinking effort as spawn args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--ask-for-approval', 'never'],
+          command: 'codex',
+          effort: 'xhigh',
+          model: 'gpt-5.5',
+          type: 'codex' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'codex',
+          args: [
+            '--ask-for-approval',
+            'never',
+            '--model',
+            'gpt-5.5',
+            '-c',
+            'model_reasoning_effort="xhigh"',
+          ],
+        }),
+      );
+    });
+
+    it('should preserve Claude Code defaults when model and effort are not selected', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--verbose'],
+          command: 'claude',
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--verbose'],
+          agentType: 'claude-code',
+        }),
+      );
+    });
+
     it('should clear stale resume metadata and retry once without resume for recoverable Codex errors', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "Renderizado de Markdown en la Entrada",
   "features.platformAgent.desc": "Mostrar la entrada \"Conectar Agente\" en el menú de creación. Los agentes conectados (por ejemplo, OpenClaw, Hermes) se ejecutan en tus propios dispositivos y se comunican de vuelta a través de lh connect.",
   "features.platformAgent.title": "Conectar Agente",
+  "features.taskVerify.desc": "Agrega una sección de aceptación de entrega a los detalles de la tarea: describe la aceptación en una frase y permite que la IA genere criterios de verificación editables.",
+  "features.taskVerify.title": "Aceptación de Entrega de Tarea",
   "title": "Laboratorios"
 }

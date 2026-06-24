@@ -6,6 +6,7 @@ import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'luci
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
@@ -15,6 +16,7 @@ interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
   avatar?: string;
   backgroundColor?: string;
+  description?: string | null;
   id: string;
   memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
@@ -25,6 +27,7 @@ export const useGroupDropdownMenu = ({
   anchor,
   avatar,
   backgroundColor,
+  description,
   id,
   memberAvatars,
   pinned,
@@ -40,6 +43,13 @@ export const useGroupDropdownMenu = ({
     s.duplicateAgentGroup,
     s.removeAgentGroup,
   ]);
+  const transferMenuItems = useAgentGroupTransferMenuItem(id, {
+    avatar,
+    backgroundColor,
+    description,
+    memberAvatars,
+    title,
+  });
 
   return useMemo(
     () => () =>
@@ -99,6 +109,8 @@ export const useGroupDropdownMenu = ({
           },
         },
         { type: 'divider' },
+        ...(transferMenuItems ?? []),
+        ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
         {
           danger: true,
           disabled: !canEdit,
@@ -138,6 +150,7 @@ export const useGroupDropdownMenu = ({
       openAgentInNewWindow,
       removeAgentGroup,
       message,
+      transferMenuItems,
     ],
   );
 };

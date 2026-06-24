@@ -1,4 +1,12 @@
+import { nanoid } from 'nanoid';
+
 import { guardedMergeCache } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import {
+  isSameTabScope,
+  isSameTabTarget,
+  normalizeTabScope,
+  resolveTabScope,
+} from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
@@ -6,6 +14,8 @@ import { type DynamicRouteMeta } from '@/spa/router/routeMeta';
 import { type StoreSetter } from '@/store/types';
 
 import { type ElectronStore } from '../store';
+
+const generateTabId = (): string => `tab_${nanoid(8)}`;
 
 // ======== Types ======== //
 
@@ -46,33 +56,23 @@ export class TabPagesActionImpl {
   };
 
   addTab = (url: string, cached?: DynamicRouteMeta, activate = true): string => {
-    const id = normalizeTabUrl(url);
+    const scope = resolveTabScope(url);
     const { tabs } = this.#get();
-    const existing = tabs.find((t) => t.id === id);
+    const existing = tabs.find((t) => isSameTabTarget(t, url, scope));
 
     if (existing) {
       if (activate) {
-        this.#set({ activeTabId: id }, false, 'activateExistingTab');
+        this.#set({ activeTabId: existing.id }, false, 'activateExistingTab');
         this.#persist();
       }
-      return id;
+      return existing.id;
     }
 
-    const newTab: TabItem = {
-      cached,
-      id,
-      lastVisited: Date.now(),
-      url,
-    };
+    return this.#createTab(url, cached, activate, scope);
+  };
 
-    const newTabs = [...tabs, newTab];
-    this.#set(
-      { activeTabId: activate ? id : this.#get().activeTabId, tabs: newTabs },
-      false,
-      'addTab',
-    );
-    this.#persist();
-    return id;
+  addNewTab = (url: string, cached?: DynamicRouteMeta): string => {
+    return this.#createTab(url, cached, true, resolveTabScope(url));
   };
 
   getActiveTab = (): TabItem | null => {
@@ -157,27 +157,28 @@ export class TabPagesActionImpl {
   };
 
   updateTab = (id: string, url: string): string => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return id;
 
-    const nextId = normalizeTabUrl(url);
     const prev = tabs[index];
+    const scope = resolveTabScope(url);
+    const previousScope = normalizeTabScope(prev.scope, prev.url);
+    const sameTarget =
+      normalizeTabUrl(url) === normalizeTabUrl(prev.url) && isSameTabScope(scope, previousScope);
 
     const newTabs = [...tabs];
     newTabs[index] = {
       ...prev,
-      cached: nextId === prev.id ? prev.cached : undefined,
-      id: nextId,
+      cached: sameTarget ? prev.cached : undefined,
       lastVisited: Date.now(),
+      scope,
       url,
     };
 
-    const newActiveTabId = activeTabId === id ? nextId : activeTabId;
-
-    this.#set({ activeTabId: newActiveTabId, tabs: newTabs }, false, 'updateTab');
+    this.#set({ tabs: newTabs }, false, 'updateTab');
     this.#persist();
-    return nextId;
+    return id;
   };
 
   updateTabCache = (id: string, cached: DynamicRouteMeta): void => {
@@ -193,6 +194,31 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
     this.#persist();
+  };
+
+  #createTab = (
+    url: string,
+    cached: DynamicRouteMeta | undefined,
+    activate: boolean,
+    scope = resolveTabScope(url),
+  ): string => {
+    const { tabs, activeTabId } = this.#get();
+    const id = generateTabId();
+    const newTab: TabItem = {
+      cached,
+      id,
+      lastVisited: Date.now(),
+      scope,
+      url,
+    };
+
+    this.#set(
+      { activeTabId: activate ? id : activeTabId, tabs: [...tabs, newTab] },
+      false,
+      'addTab',
+    );
+    this.#persist();
+    return id;
   };
 
   #persist = (): void => {

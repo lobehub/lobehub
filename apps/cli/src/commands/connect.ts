@@ -387,6 +387,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       const ack = await spawnHeteroAgentRun(
         {
           agentType: request.agentType,
+          args: request.args,
           cwd: request.cwd,
           imageList: request.imageList,
           jwt: request.jwt,

@@ -2683,6 +2683,8 @@ export const createRuntimeExecutors = (
                   chatToolPayload,
                   payload.parentMessageId,
                 ),
+                // Assistant message owning this tool call (≠ source user message).
+                assistantMessageId: payload.parentMessageId,
                 documentId: state.metadata?.documentId,
                 editingAgentId: state.metadata?.editingAgentId,
                 execSubAgent: ctx.execSubAgent,
@@ -3277,6 +3279,8 @@ export const createRuntimeExecutors = (
                       chatToolPayload,
                       payload.parentMessageId,
                     ),
+                    // Assistant message owning this tool call (≠ source user message).
+                    assistantMessageId: payload.parentMessageId,
                     documentId: state.metadata?.documentId,
                     execSubAgent: ctx.execSubAgent,
                     executionTimeoutMs: timeoutMs,

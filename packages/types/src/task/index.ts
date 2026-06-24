@@ -137,7 +137,27 @@ export interface TaskSchedulerContext {
   tickMessageId?: string;
 }
 
+// Pointer back to the agent conversation that spawned this task via the
+// `createTask` tool. Captured at creation so the task lifecycle can deliver the
+// handoff result back to that session once the task completes (LOBE-10625).
+export interface TaskOriginContext {
+  // The agent that invoked the createTask tool (the task's creator session).
+  agentId?: string;
+  // The assistant message that carried the createTask tool call — the tool-call
+  // anchor, sourced from the runtime's `payload.parentMessageId` (NOT the source
+  // user message). A later bridge can backfill the tool message under this.
+  messageId?: string;
+  // The operation that was running when the task was created.
+  operationId?: string;
+  // The tool call id of the createTask invocation. Doubles as the dedupe key
+  // for the eventual result-bridge delivery.
+  toolCallId?: string;
+  // The topic the creator conversation lives in — the default delivery target.
+  topicId?: string;
+}
+
 export interface TaskContext {
+  origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
 }
 

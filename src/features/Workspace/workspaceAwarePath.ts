@@ -46,6 +46,28 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
 ]);
 
 const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;
+const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
+
+const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
+  'agent',
+  'community',
+  'eval',
+  'fleet',
+  'group',
+  'image',
+  'memory',
+  'page',
+  'resource',
+  'settings',
+  'task',
+  'tasks',
+  'video',
+]);
+
+const parseFirstSegment = (pathname: string): string | null => {
+  const match = pathname.match(FIRST_SEGMENT_REGEX);
+  return match ? match[1] : null;
+};
 
 /**
  * Returns `true` for `/settings/<tab>` where `<tab>` is NOT in
@@ -80,5 +102,9 @@ export const buildWorkspaceAwarePath = (
   if (isPersonalPath(to)) return to;
   if (isPersonalSettingsPath(to)) return to;
   if (to === `/${activeSlug}` || to.startsWith(`/${activeSlug}/`)) return to;
+
+  const firstSegment = parseFirstSegment(to);
+  if (firstSegment && !WORKSPACE_MIRRORED_FIRST_SEGMENTS.has(firstSegment)) return to;
+
   return `/${activeSlug}${to}`;
 };

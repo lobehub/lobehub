@@ -115,6 +115,25 @@ const imagePricing = {
   units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
 };
 
+const emptyLookupPricing = {
+  currency: 'USD',
+  units: [
+    {
+      lookup: { prices: {} },
+      name: 'imageGeneration',
+      strategy: 'lookup',
+      unit: 'image',
+    },
+  ],
+};
+
+const discountedTextPricing = {
+  currency: 'USD',
+  units: [
+    { name: 'textInput', originalRate: 5, rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+  ],
+};
+
 const createEnabledList = (
   provider: string,
   pricing: Record<string, unknown>,
@@ -149,6 +168,22 @@ describe('ModelDetailPanel pricing', () => {
     expect(screen.getByText('5M credits/M tokens')).toBeInTheDocument();
     expect(screen.getByText('25M credits/M tokens')).toBeInTheDocument();
     expect(container).not.toHaveTextContent('$5.00');
+  });
+
+  it('renders the original branding price without repeating the unit suffix', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', discountedTextPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    const originalPrice = container.querySelector('.originalPriceText');
+
+    expect(originalPrice).toHaveTextContent('5M');
+    expect(originalPrice).not.toHaveTextContent('credits/M tokens');
+    expect(container).toHaveTextContent('2.5M credits/M tokens');
   });
 
   it('keeps dollar pricing for non-branding providers', () => {
@@ -192,5 +227,18 @@ describe('ModelDetailPanel pricing', () => {
 
     expect(videoResult.container).toHaveTextContent('~ 800.0K credits / video');
     expect(videoResult.container).not.toHaveTextContent('$0.80');
+  });
+
+  it('renders a placeholder for empty lookup pricing tables', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', emptyLookupPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Image Generation');
+    expect(container).toHaveTextContent('- credits/img');
   });
 });

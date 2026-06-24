@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
   "features.platformAgent.desc": "作成メニューに「エージェントを接続」エントリを表示します。接続されたエージェント（例: OpenClaw、Hermes）は、ユーザー自身のデバイス上で動作し、lh connectを介して通信します。",
   "features.platformAgent.title": "エージェントを接続",
+  "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",
+  "features.taskVerify.title": "タスク納品受け入れ",
   "title": "ラボ"
 }

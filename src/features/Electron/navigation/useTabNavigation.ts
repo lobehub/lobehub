@@ -3,8 +3,10 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
-import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
+import { isSameTabTarget } from '@/features/Electron/titlebar/TabBar/scope';
 import { useElectronStore } from '@/store/electron';
+
+import { resolveTabNavigationAction } from './tabNavigation';
 
 export const useTabNavigation = () => {
   const location = useLocation();
@@ -33,30 +35,33 @@ export const useTabNavigation = () => {
     if (prevLocationRef.current === currentUrl) return;
     prevLocationRef.current = currentUrl;
 
-    const id = normalizeTabUrl(currentUrl);
     const { tabs, activeTabId } = useElectronStore.getState();
+    const action = resolveTabNavigationAction({ activeTabId, currentUrl, tabs });
 
-    const existing = tabs.find((t) => t.id === id);
-    if (existing) {
-      if (existing.id !== activeTabId) activateTab(existing.id);
-      return;
-    }
-
-    if (activeTabId && tabs.some((t) => t.id === activeTabId)) {
-      updateTab(activeTabId, currentUrl);
-    } else {
-      // First launch (or stale activeTabId): make the current page visible as a tab,
-      // so the tab bar and its "+" entry are always discoverable.
-      addTab(currentUrl);
+    switch (action.type) {
+      case 'activate': {
+        activateTab(action.id);
+        break;
+      }
+      case 'add': {
+        addTab(action.url);
+        break;
+      }
+      case 'update': {
+        updateTab(action.id, action.url);
+        break;
+      }
     }
   }, [location.pathname, location.search, activateTab, addTab, updateTab]);
 
   useEffect(() => {
     if (!currentRouteMeta || !currentRouteMetaUrl) return;
 
-    const { activeTabId } = useElectronStore.getState();
+    const { activeTabId, tabs } = useElectronStore.getState();
     if (!activeTabId) return;
-    if (activeTabId !== normalizeTabUrl(currentRouteMetaUrl)) return;
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab) return;
+    if (!isSameTabTarget(activeTab, currentRouteMetaUrl)) return;
 
     updateTabCache(activeTabId, currentRouteMeta);
   }, [currentRouteMeta, currentRouteMetaUrl, updateTabCache]);

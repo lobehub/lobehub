@@ -10,14 +10,16 @@ import {
   type DynamicRouteMeta,
   getRouteMetaFromHandle,
   type RouteMeta,
+  type RouteMetaParams,
 } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
 import DynamicMetaRunner from './DynamicMetaRunner';
+import { mergeSearchParams } from './params';
 
 interface MatchedRouteMeta {
   meta: RouteMeta;
-  params: Record<string, string | undefined>;
+  params: RouteMetaParams;
   routeId: string;
 }
 
@@ -67,6 +69,10 @@ const RouteMetaBridge = memo(() => {
 
   const translate = t as unknown as Translate;
   const titleKey = matched?.meta.titleKey;
+  const routeMetaParams = useMemo(
+    () => (matched ? mergeSearchParams(matched.params, location.search) : {}),
+    [location.search, matched],
+  );
   // Keep the previously resolved meta while navigating within the same route family
   // (e.g. switching topics) so the title doesn't briefly fall back to the static label.
   const currentDynamic = matched && dynamic.routeId === matched.routeId ? dynamic.meta : {};
@@ -90,7 +96,7 @@ const RouteMetaBridge = memo(() => {
   return (
     <DynamicMetaRunner
       key={matched.routeId}
-      params={matched.params}
+      params={routeMetaParams}
       useDynamicMeta={matched.meta.useDynamicMeta}
       onResolve={handleResolve}
     />

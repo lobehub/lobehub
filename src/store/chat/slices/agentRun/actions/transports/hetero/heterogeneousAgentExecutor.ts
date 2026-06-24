@@ -26,7 +26,12 @@ import type {
   MessageMapScope,
   UIChatMessage,
 } from '@lobechat/types';
-import { AgentRuntimeErrorType, ThreadStatus, ThreadType } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  buildHeteroSpawnArgs,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
@@ -1056,7 +1061,7 @@ export const executeHeterogeneousAgent = async (
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: heterogeneousProvider.args,
+      args: buildHeteroSpawnArgs(heterogeneousProvider),
       command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
       env: heterogeneousProvider.env,

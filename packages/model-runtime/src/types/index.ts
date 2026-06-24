@@ -4,6 +4,7 @@ export * from './embeddings';
 export * from './error';
 export * from './image';
 export * from './model';
+export * from './pricing';
 export * from './structureOutput';
 export * from './toolsCalling';
 export * from './tts';

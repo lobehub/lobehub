@@ -15,6 +15,12 @@ import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
 
 const styles = createStaticStyles(({ css }) => ({
+  action: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+  `,
   cwd: css`
     overflow: hidden;
     font-family: ${cssVar.fontFamilyCode};
@@ -34,7 +40,14 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorSuccess};
   `,
   icon: css`
+    display: flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+
     color: ${cssVar.colorTextSecondary};
   `,
   row: css`
@@ -105,14 +118,12 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   return (
     <Flexbox
       horizontal
-      align={'flex-start'}
+      align={'center'}
       className={cx(styles.row, selected && styles.rowActive)}
       gap={12}
       onClick={onSelect}
     >
-      <span className={styles.icon} style={{ marginBlockStart: 2 }}>
-        {getDeviceIcon(device.platform)}
-      </span>
+      <span className={styles.icon}>{getDeviceIcon(device.platform)}</span>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text ellipsis weight={500}>
@@ -137,7 +148,7 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
           </Flexbox>
         )}
       </Flexbox>
-      <span onClick={(e) => e.stopPropagation()}>
+      <span className={styles.action} onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
           items={[
             {

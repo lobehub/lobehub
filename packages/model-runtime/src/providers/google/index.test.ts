@@ -80,7 +80,7 @@ describe('LobeGoogleAI', () => {
 
       const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
       expect(callArgs[0].model).toBe('gemini-upstream');
-      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
+      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
     });
 
     it('should handle text messages correctly', async () => {
@@ -1127,7 +1127,7 @@ describe('modelIdMapping', () => {
 
     expect(result.imageUrl).toBe('data:image/png;base64,image-base64');
     expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream-image');
-    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical:image', provider);
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical:image', provider, undefined);
   });
 
   it('should use mapped model id for upstream generateObject requests while keeping pricing on logical model', async () => {
@@ -1157,7 +1157,7 @@ describe('modelIdMapping', () => {
 
     expect(result).toEqual({ ok: true });
     expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream');
-    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
   });
 });
 

@@ -1,3 +1,5 @@
+import { type ModelPricingContext } from '@lobechat/model-runtime';
+
 import { type ModelPerformance, type ModelUsage } from '@/types/index';
 
 interface ChargeParams {
@@ -9,6 +11,7 @@ interface ChargeParams {
   };
   metrics?: ModelPerformance;
   modelUsage?: ModelUsage;
+  pricingContext?: ModelPricingContext;
   provider: string;
   userId: string;
   workspaceId?: string;

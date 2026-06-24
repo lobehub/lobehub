@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { resolveTabScope } from './scope';
 import {
   getTabPages,
   saveTabPages,
@@ -21,11 +22,35 @@ describe('TabBar storage', () => {
   });
 
   it('round-trips v2 tab items', () => {
-    saveTabPages([{ id: '/agent/abc', lastVisited: 1, url: '/agent/abc' }], '/agent/abc');
+    saveTabPages(
+      [
+        {
+          id: '/agent/abc',
+          lastVisited: 1,
+          scope: resolveTabScope('/agent/abc'),
+          url: '/agent/abc',
+        },
+      ],
+      '/agent/abc',
+    );
     const loaded = getTabPages();
     expect(loaded.tabs).toHaveLength(1);
     expect(loaded.tabs[0].url).toBe('/agent/abc');
+    expect(loaded.tabs[0].scope).toEqual({ type: 'personal' });
     expect(loaded.activeTabId).toBe('/agent/abc');
+  });
+
+  it('revives old v2 tab items without persisted scope', () => {
+    window.localStorage.setItem(
+      TAB_PAGES_STORAGE_KEY,
+      JSON.stringify({
+        activeTabId: '/acme/agent/abc',
+        tabs: [{ id: '/acme/agent/abc', lastVisited: 1, url: '/acme/agent/abc' }],
+      }),
+    );
+
+    const loaded = getTabPages();
+    expect(loaded.tabs[0].scope).toEqual({ slug: 'acme', type: 'workspace' });
   });
 
   describe('v1 -> v2 migration', () => {
@@ -60,6 +85,11 @@ describe('TabBar storage', () => {
 
       const migrated = getTabPages();
       expect(migrated.tabs.map((t) => t.url)).toEqual(['/agent/abc', '/agent/abc/tpc_1', '/']);
+      expect(migrated.tabs.map((t) => t.scope)).toEqual([
+        { type: 'personal' },
+        { type: 'personal' },
+        { type: 'personal' },
+      ]);
       expect(migrated.activeTabId).toBe('/agent/abc');
       expect(migrated.tabs[0].cached).toEqual({ avatar: 'a.png', title: 'Claude' });
     });
@@ -110,6 +140,7 @@ describe('TabBar storage', () => {
       const loaded = getTabPages();
       expect(loaded.tabs).toHaveLength(1);
       expect(loaded.tabs[0].url).toBe('/page/p1');
+      expect(loaded.tabs[0].scope).toEqual({ type: 'personal' });
     });
   });
 });

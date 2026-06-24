@@ -19,10 +19,14 @@
   "editMessage.title": "메시지 편집",
   "navigateToChat.desc": "채팅 탭으로 전환하고 Lobe AI에 진입합니다",
   "navigateToChat.title": "기본 대화로 전환",
+  "nextTab.desc": "데스크톱 앱에서 브라우저 스타일의 다음 탭으로 이동합니다. 끝에서 첫 번째 탭으로 돌아갑니다.",
+  "nextTab.title": "다음 탭",
   "openChatSettings.desc": "현재 대화의 설정 보기 및 수정",
   "openChatSettings.title": "대화 설정 열기",
   "openHotkeyHelper.desc": "모든 단축키 사용법 보기",
   "openHotkeyHelper.title": "단축키 도움말 열기",
+  "prevTab.desc": "데스크톱 앱에서 이전 탭으로 이동합니다. 시작에서 마지막 탭으로 돌아갑니다.",
+  "prevTab.title": "이전 탭",
   "regenerateMessage.desc": "마지막 메시지를 다시 생성",
   "regenerateMessage.title": "메시지 다시 생성",
   "saveDocument.desc": "현재 문서의 모든 변경 사항을 즉시 저장합니다",
@@ -35,10 +39,10 @@
   "showApp.title": "메인 창 표시",
   "switchAgent.desc": "Ctrl 키와 숫자 0~9를 눌러 사이드바에 고정된 도우미 전환",
   "switchAgent.title": "도우미 빠르게 전환",
+  "switchTab.desc": "데스크톱 앱 탭 바에서 위치(1–9)에 따라 특정 탭으로 바로 이동합니다.",
+  "switchTab.title": "번호로 탭 전환",
   "toggleLeftPanel.desc": "왼쪽 패널 표시 또는 숨기기",
   "toggleLeftPanel.title": "왼쪽 패널 표시/숨기기",
   "toggleRightPanel.desc": "오른쪽 패널 표시 또는 숨기기",
-  "toggleRightPanel.title": "오른쪽 패널 표시/숨기기",
-  "toggleZenMode.desc": "집중 모드에서는 현재 대화만 표시되고 다른 UI는 숨겨짐",
-  "toggleZenMode.title": "집중 모드 전환"
+  "toggleRightPanel.title": "오른쪽 패널 표시/숨기기"
 }

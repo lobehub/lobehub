@@ -1,3 +1,7 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +12,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     verify: {
       createRubric: { mutate: vi.fn() },
       getRubric: { query: vi.fn() },
+      getSkillBundle: { query: vi.fn() },
       updateRubric: { mutate: vi.fn() },
     },
   },
@@ -128,5 +133,73 @@ describe('verify evidence upload command', () => {
 
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(mockGetTrpcClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('verify init command', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let dir: string;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
+      content: '# Verify SKILL',
+      files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
+      identifier: 'verify',
+      name: 'Verify',
+    });
+    dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommand(program);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('writes SKILL.md and resource files into .claude/skills/verify', async () => {
+    await run(['init', '--dir', dir]);
+
+    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
+      identifier: 'verify',
+    });
+    const skillDir = path.join(dir, '.claude', 'skills', 'verify');
+    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Verify SKILL');
+    expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
+    expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
+  });
+
+  it('skips existing files without --force and overwrites with it', async () => {
+    const skillFile = path.join(dir, '.claude', 'skills', 'verify', 'SKILL.md');
+    await run(['init', '--dir', dir]);
+
+    // server now serves updated content
+    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValue({
+      content: '# Updated SKILL',
+      files: {},
+      identifier: 'verify',
+      name: 'Verify',
+    });
+
+    await run(['init', '--dir', dir]); // no --force → keep existing
+    expect(readFileSync(skillFile, 'utf8')).toBe('# Verify SKILL');
+
+    await run(['init', '--dir', dir, '--force']); // --force → overwrite
+    expect(readFileSync(skillFile, 'utf8')).toBe('# Updated SKILL');
+  });
+
+  it('reports the written/skipped counts as JSON', async () => {
+    await run(['init', '--dir', dir, '--json']);
+    const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
+    expect(out.skill).toBe('verify');
+    expect(out.written).toContain('SKILL.md');
+    expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
   });
 });

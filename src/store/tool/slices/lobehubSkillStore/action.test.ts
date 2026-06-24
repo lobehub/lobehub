@@ -1,5 +1,7 @@
 import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolsClient } from '@/libs/trpc/client';
@@ -39,6 +41,14 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
+const createSWRWrapper = () => {
+  const value = { dedupingInterval: 0, provider: () => new Map() };
+
+  return function SWRTestWrapper({ children }: { children: ReactNode }) {
+    return createElement(SWRConfig, { value }, children);
+  };
+};
+
 describe('lobehubSkillStore actions', () => {
   describe('callLobehubSkillTool', () => {
     it('should call tool successfully and return result', async () => {
@@ -72,6 +82,141 @@ describe('lobehubSkillStore actions', () => {
         toolName: 'createIssue',
         args: { title: 'Test Issue' },
         topicId: undefined,
+      });
+    });
+
+    it('should return failure when the tool response is unsuccessful', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: null,
+        error: { code: 'POSTHOG_QUERY_FAILED', message: 'Query failed' },
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: { query: 'select * from events' },
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: null,
+        error: 'Query failed',
+        errorCode: 'POSTHOG_QUERY_FAILED',
+        success: false,
+      });
+      expect(result.current.lobehubSkillExecutingToolIds.has('posthog:query')).toBe(false);
+    });
+
+    it('should use string response data as the failure message when no structured error is provided', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: 'PostHog query timed out',
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: { query: 'select * from events' },
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: 'PostHog query timed out',
+        error: 'PostHog query timed out',
+        errorCode: undefined,
+        success: false,
+      });
+      expect(result.current.lobehubSkillExecutingToolIds.has('posthog:query')).toBe(false);
+    });
+
+    it('should stringify response data objects as the failure message', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: { detail: 'PostHog query timed out', status: 504 },
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: { query: 'select * from events' },
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: { detail: 'PostHog query timed out', status: 504 },
+        error: JSON.stringify({ detail: 'PostHog query timed out', status: 504 }),
+        errorCode: undefined,
+        success: false,
+      });
+    });
+
+    it('should use a generic failure message when an unsuccessful response has no detail', async () => {
+      const { result } = renderHook(() => useToolStore());
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillExecutingToolIds: new Set(),
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillServers: [],
+        });
+      });
+
+      vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
+        data: null,
+        success: false,
+      } as any);
+
+      let callResult;
+      await act(async () => {
+        callResult = await result.current.callLobehubSkillTool({
+          args: {},
+          provider: 'posthog',
+          toolName: 'query',
+        });
+      });
+
+      expect(callResult).toEqual({
+        data: null,
+        error: 'LobeHub Skill call failed',
+        errorCode: undefined,
+        success: false,
       });
     });
 
@@ -831,6 +976,56 @@ describe('lobehubSkillStore actions', () => {
       await waitFor(() => {
         expect(toolsClient.market.connectListConnections.query).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('useFetchProviderTools', () => {
+    it('should fetch and normalize provider tools', async () => {
+      vi.mocked(toolsClient.market.connectListTools.query).mockResolvedValue({
+        provider: 'posthog',
+        tools: [
+          {
+            description: 'Run a PostHog query',
+            inputSchema: { properties: { query: { type: 'string' } }, type: 'object' },
+            name: 'query',
+          },
+        ],
+      } as any);
+
+      const { result } = renderHook(
+        () => useToolStore.getState().useFetchProviderTools('posthog'),
+        { wrapper: createSWRWrapper() },
+      );
+
+      await waitFor(() => {
+        expect(toolsClient.market.connectListTools.query).toHaveBeenCalledWith({
+          provider: 'posthog',
+        });
+      });
+
+      const normalized = await result.current.mutate();
+
+      expect(normalized).toEqual([
+        {
+          description: 'Run a PostHog query',
+          inputSchema: { properties: { query: { type: 'string' } }, type: 'object' },
+          name: 'query',
+        },
+      ]);
+    });
+
+    it('should not fetch tools when provider is undefined', () => {
+      vi.mocked(toolsClient.market.connectListTools.query).mockClear();
+
+      const { result } = renderHook(
+        () => useToolStore.getState().useFetchProviderTools(undefined),
+        {
+          wrapper: createSWRWrapper(),
+        },
+      );
+
+      expect(result.current.data).toEqual([]);
+      expect(toolsClient.market.connectListTools.query).not.toHaveBeenCalled();
     });
   });
 

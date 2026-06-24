@@ -272,6 +272,7 @@
   "generation.hero.taglinePrefix": "Начните создавать с",
   "generation.promptModeration.blocked": "Проверка политики контента не пройдена. Пожалуйста, измените ваш запрос.",
   "getDesktopApp": "Скачать приложение для компьютера",
+  "goToTarget": "Перейти к цели",
   "historyRange": "Диапазон истории",
   "home.suggestQuestions": "Попробуйте эти примеры",
   "import": "Импорт",

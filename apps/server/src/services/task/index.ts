@@ -1,4 +1,5 @@
 import type {
+  TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
   TaskDetailData,
@@ -34,6 +35,9 @@ export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
+  // creation to record `context.origin` — the creator conversation pointer.
+  context?: TaskContext;
   createdByAgentId?: string;
   description?: string;
   editorData?: unknown;

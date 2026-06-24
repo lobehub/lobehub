@@ -7,23 +7,24 @@ import type {
 import { GoogleGenAI } from '@google/genai';
 import debug from 'debug';
 
-import { type LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
-import {
-  type ASROptions,
-  type ASRPayload,
-  type ASRResponse,
-  type ChatCompletionTool,
-  type ChatMethodOptions,
-  type ChatStreamPayload,
-  type GenerateObjectOptions,
-  type GenerateObjectPayload,
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatCompletionTool,
+  ChatMethodOptions,
+  ChatStreamPayload,
+  CreateImageMethodOptions,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { type CreateImagePayload, type CreateImageResponse } from '../../types/image';
-import { type CreateVideoPayload, type CreateVideoResponse } from '../../types/video';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
@@ -241,7 +242,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       // Convert the response into a friendly text-stream
-      const pricing = await getModelPricing(model, this.provider);
+      const pricing = await getModelPricing(model, this.provider, options?.pricingContext);
 
       const stream = GoogleGenerativeAIStream(prod, {
         callbacks: options?.callback,
@@ -275,10 +276,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * Generate images using Google AI Imagen API or Gemini Chat Models
    * @see https://ai.google.dev/gemini-api/docs/image-generation#imagen
    */
-  async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
+  async createImage(
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ): Promise<CreateImageResponse> {
     const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
 
     return createGoogleImage(this.client, this.provider, requestPayload, {
+      pricingContext: options?.pricingContext,
       pricingModel: payload.model,
       routingModel: payload.model,
     });
@@ -334,7 +339,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
     // Convert OpenAI messages to Google format
     const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
-    const pricing = await getModelPricing(payload.model, this.provider);
+    const pricing = await getModelPricing(payload.model, this.provider, options?.pricingContext);
     const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
 
     // Handle tools-based structured output

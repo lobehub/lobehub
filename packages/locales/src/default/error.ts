@@ -175,6 +175,8 @@ export default {
     'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
+  'response.WorkspaceAgentRequiresWorkspaceDevice':
+    'This agent lives in a workspace, so it can only bind devices the whole team can reach. Personal devices stay with the user who registered them — pick a workspace device instead, or enroll this device to the workspace first.',
   'response.WorkspaceFrozenByAdmin':
     'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
   'response.WorkspaceFrozenByRiskControl':

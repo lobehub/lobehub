@@ -223,7 +223,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           },
         );
 
-        const pricing = await getModelPricing(model, ModelProvider.GithubCopilot);
+        const pricing = await getModelPricing(
+          model,
+          ModelProvider.GithubCopilot,
+          options?.pricingContext,
+        );
 
         const streamResponse = response as any;
         const [prod, useForDebug] = streamResponse.tee();
