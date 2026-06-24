@@ -82,8 +82,12 @@ export interface DeliverTaskResultParams {
  * Delivers a finished task's handoff back to the conversation that created it
  * (LOBE-10625). Fire-and-forget: appends a `role='taskCallback'` card into the
  * creator topic and runs the creator agent off history so it reads the result
- * and continues — without impersonating a user turn. Never throws into the
- * task lifecycle: a bridge failure must not affect task status.
+ * and continues — without impersonating a user turn.
+ *
+ * Invoked from `TaskLifecycleService.onTopicComplete` AFTER all status
+ * transitions, so the automation gate below reads the settled task status
+ * (never racing the post-tick terminal transition). The caller guards against
+ * throws so a bridge failure never affects task status.
  */
 export class TaskResultBridgeService {
   private db: LobeChatDatabase;
@@ -132,7 +136,8 @@ export class TaskResultBridgeService {
     });
 
     // Idempotency: a deterministic id keyed on (task, completed topic). QStash
-    // can redeliver the hook — the second create loses the PK race and we skip.
+    // can redeliver the `on-topic-complete` webhook (which drives this bridge) —
+    // the second create loses the PK race and we skip.
     const messageId = `task-cb-${taskId}-${topicId ?? params.operationId}`;
     const messageModel = new MessageModel(this.db, this.userId);
     try {

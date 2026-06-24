@@ -13,7 +13,6 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
-import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
 
@@ -206,31 +205,6 @@ export class TaskRunnerService {
               body: { taskId, taskIdentifier, userId },
               delivery: 'qstash' as const,
               url: '/api/workflows/task/on-topic-complete',
-            },
-          },
-          {
-            // Bridge the finished task's handoff back to the conversation that
-            // created it (LOBE-10625). Runs after `task-on-complete` in local
-            // mode (sequential hooks) so the handoff is already persisted; the
-            // service falls back to `lastAssistantContent` for the cloud path
-            // where the two webhooks race.
-            handler: async (event) => {
-              await new TaskResultBridgeService(this.db, this.userId, this.workspaceId).deliver({
-                errorMessage: event.errorMessage,
-                lastAssistantContent: event.lastAssistantContent,
-                operationId: event.operationId,
-                reason: event.reason || 'done',
-                taskId,
-                taskIdentifier,
-                topicId: event.topicId,
-              });
-            },
-            id: 'task-result-bridge',
-            type: 'onComplete' as const,
-            webhook: {
-              body: { taskId, taskIdentifier, userId },
-              delivery: 'qstash' as const,
-              url: '/api/workflows/task/result-bridge',
             },
           },
         ],

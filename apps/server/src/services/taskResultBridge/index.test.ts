@@ -143,6 +143,22 @@ describe('TaskResultBridgeService.deliver', () => {
     expect(execAgent).not.toHaveBeenCalled();
   });
 
+  // The bridge runs from onTopicComplete AFTER status transitions, so a
+  // scheduled task that hit its cap is already `completed` when we read it —
+  // the callback must NOT be dropped (the race that this fix closes).
+  it('bridges an automation task once it has reached a terminal status', async () => {
+    findById.mockResolvedValue({
+      automationMode: 'schedule',
+      context: { origin: ORIGIN },
+      status: 'completed',
+    } as any);
+
+    await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+
+    expect(createMsg).toHaveBeenCalledTimes(1);
+    expect(execAgent).toHaveBeenCalledTimes(1);
+  });
+
   it('falls back to lastAssistantContent when the handoff is not yet written (cloud race)', async () => {
     findByTopicId.mockResolvedValue({ handoff: undefined } as any);
 
