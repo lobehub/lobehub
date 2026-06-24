@@ -1,5 +1,7 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { MessageSquare } from 'lucide-react';
+import type * as ReactModule from 'react';
+import { useMemo, useState } from 'react';
 import { type RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,17 +11,28 @@ import TabCacheBridges from './TabCacheBridges';
 import { type TabItem } from './types';
 
 const mocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  const routes = { current: [] as RouteObject[] };
   const tabs: { current: TabItem[] } = { current: [] };
+  const emit = () => {
+    for (const listener of listeners) listener();
+  };
 
   return {
     getTabs: () => tabs.current,
-    routes: { current: [] as RouteObject[] },
+    routes,
     setRoutes: (next: RouteObject[]) => {
       tabs.current = [];
-      mocks.routes.current = next;
+      routes.current = next;
+      emit();
     },
     setTabs: (next: TabItem[]) => {
       tabs.current = next;
+      emit();
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     updateTabCache: vi.fn<(id: string, cached: DynamicRouteMeta) => void>(),
   };
@@ -36,10 +49,17 @@ interface ElectronState {
   updateTabCache: typeof mocks.updateTabCache;
 }
 
-vi.mock('@/store/electron', () => ({
-  useElectronStore: (selector: (state: ElectronState) => unknown) =>
-    selector({ tabs: mocks.getTabs(), updateTabCache: mocks.updateTabCache }),
-}));
+vi.mock('@/store/electron', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react');
+
+  return {
+    useElectronStore: (selector: (state: ElectronState) => unknown) => {
+      const tabs = React.useSyncExternalStore(mocks.subscribe, mocks.getTabs, mocks.getTabs);
+
+      return selector({ tabs, updateTabCache: mocks.updateTabCache });
+    },
+  };
+});
 
 const dynamicSource: Record<string, DynamicRouteMeta> = {};
 const resolveTopicMeta = (params: Record<string, string | undefined>): DynamicRouteMeta => {
@@ -73,6 +93,47 @@ const tab = (url: string): TabItem => ({
   lastVisited: 1,
   url,
 });
+
+const stableTab = (id: string, url: string): TabItem => ({
+  id,
+  lastVisited: 1,
+  url,
+});
+
+const workspaceHomeMetaWithHook: RouteMeta = {
+  titleKey: 'navigation.home',
+  useDynamicMeta: () => {
+    const [title] = useState('Workspace Home');
+
+    return { title };
+  },
+};
+
+const agentMetaWithExtraHook: RouteMeta = {
+  icon: MessageSquare,
+  titleKey: 'navigation.chat',
+  useDynamicMeta: () => {
+    const [prefix] = useState('Agent');
+    const suffix = useMemo(() => 'Detail', []);
+
+    return { title: `${prefix} ${suffix}` };
+  },
+};
+
+const buildWorkspaceRoutesWithChangingMetaHooks = (): RouteObject[] => [
+  {
+    children: [
+      {
+        children: [
+          { handle: { meta: workspaceHomeMetaWithHook }, index: true },
+          { handle: { meta: agentMetaWithExtraHook }, path: 'agent/:aid' },
+        ],
+        path: ':workspaceSlug',
+      },
+    ],
+    path: '/',
+  },
+];
 
 describe('TabCacheBridges', () => {
   afterEach(() => {
@@ -141,6 +202,32 @@ describe('TabCacheBridges', () => {
 
     await waitFor(() => {
       expect(mocks.updateTabCache).not.toHaveBeenCalled();
+    });
+  });
+
+  it('remounts the dynamic meta runner when a tab url switches route meta hooks', async () => {
+    mocks.routes.current = buildWorkspaceRoutesWithChangingMetaHooks();
+    mocks.setTabs([stableTab('workspace-tab', '/acme')]);
+
+    render(<TabCacheBridges />);
+
+    await waitFor(() => {
+      expect(mocks.updateTabCache).toHaveBeenCalledWith(
+        'workspace-tab',
+        expect.objectContaining({ title: 'Workspace Home' }),
+      );
+    });
+
+    mocks.updateTabCache.mockClear();
+    act(() => {
+      mocks.setTabs([stableTab('workspace-tab', '/acme/agent/a1')]);
+    });
+
+    await waitFor(() => {
+      expect(mocks.updateTabCache).toHaveBeenCalledWith(
+        'workspace-tab',
+        expect.objectContaining({ title: 'Agent Detail' }),
+      );
     });
   });
 });
