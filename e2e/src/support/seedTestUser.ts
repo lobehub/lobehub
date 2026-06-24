@@ -4,10 +4,10 @@ import bcrypt from 'bcryptjs';
 
 // Test user credentials - these are used for e2e testing only
 export const TEST_USER = {
-  email: 'e2e-test@lobehub.com',
+  email: process.env.E2E_TEST_USER_EMAIL || 'e2e-test@lobehub.com',
   fullName: 'E2E Test User',
   id: 'user_e2e_test_user_001',
-  password: 'TestPassword123!',
+  password: process.env.E2E_TEST_USER_PASSWORD || 'TestPassword123!',
   username: 'e2e_test_user',
 };
 
