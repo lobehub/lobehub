@@ -456,7 +456,7 @@ const HeteroModel = memo(() => {
     <DropdownMenuRoot open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger nativeButton={false}>{trigger}</DropdownMenuTrigger>
       <DropdownMenuPortal>
-        <DropdownMenuPositioner placement="topRight" sideOffset={8}>
+        <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
           <DropdownMenuPopup className={styles.popup} style={{ width: 208 }}>
             <div className={styles.sectionTitle}>{t('heteroAgent.modelSelector.reasoning')}</div>
             <div className={styles.scroll}>
