@@ -86,6 +86,36 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({
+    children,
+    disabled,
+    loading,
+    onClick,
+    ...rest
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean }) => (
+    <button disabled={disabled || loading} onClick={onClick} {...rest}>
+      {children}
+    </button>
+  ),
+  Switch: ({
+    checked,
+    disabled,
+    onChange,
+  }: {
+    checked?: boolean;
+    disabled?: boolean;
+    onChange?: (next: boolean) => void;
+  }) => (
+    <button
+      aria-checked={checked}
+      disabled={disabled}
+      role="switch"
+      onClick={() => onChange?.(!checked)}
+    />
+  ),
+}));
+
 vi.mock('@/components/FormInput', () => ({
   FormInput: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   FormPassword: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
