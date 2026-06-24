@@ -1,7 +1,7 @@
 import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { ChevronRight, Languages } from 'lucide-react';
+import { ChevronRight, GlobeIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +18,10 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
     ]);
 
     const { t } = useTranslation(['setting', 'common']);
+    const currentLabel =
+      language === 'auto'
+        ? t('settingCommon.lang.autoMode')
+        : localeOptions.find((item) => item.value === language)?.label || 'English';
 
     const items = useMemo<DropdownMenuCheckboxItem[]>(() => {
       const autoItem: DropdownMenuCheckboxItem = {
@@ -66,7 +70,20 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
     let trigger: ReactNode;
 
     if (size) {
-      trigger = <ActionIcon icon={Languages} size={size} />;
+      trigger = (
+        <Button
+          icon={GlobeIcon}
+          iconPosition="end"
+          size="small"
+          type="text"
+          style={{
+            height: 32,
+            paddingInline: 8,
+          }}
+        >
+          <Text fontSize={12}>{currentLabel}</Text>
+        </Button>
+      );
     } else {
       trigger = (
         <Flexbox
@@ -89,8 +106,8 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
             e.currentTarget.style.background = 'transparent';
           }}
         >
-          <Icon icon={Languages} size={'small'} style={{ color: cssVar.colorTextSecondary }} />
-          <Flexbox flex={1}>{t('settingCommon.lang.title')}</Flexbox>
+          <Flexbox flex={1}>{currentLabel}</Flexbox>
+          <Icon icon={GlobeIcon} size={'small'} style={{ color: cssVar.colorTextSecondary }} />
           <Icon icon={ChevronRight} size={'small'} style={{ color: cssVar.colorTextSecondary }} />
         </Flexbox>
       );
