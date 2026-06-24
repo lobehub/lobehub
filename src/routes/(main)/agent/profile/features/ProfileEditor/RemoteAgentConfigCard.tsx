@@ -90,7 +90,7 @@ interface ChangeDeviceContentProps {
 const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
   ({ currentDeviceId, isWorkspaceAgent, onConfirm, platform }) => {
     const { t } = useTranslation('setting');
-    const { close } = useModalContext();
+    const { close, setCanDismissByClickOutside } = useModalContext();
 
     const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(currentDeviceId);
     const [capabilityResult, setCapabilityResult] = useState<
@@ -98,6 +98,10 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
     >(undefined);
     const [checkingCapability, setCheckingCapability] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+      setCanDismissByClickOutside(!saving);
+    }, [saving, setCanDismissByClickOutside]);
 
     const { data: devices, isLoading: loadingDevices } = lambdaQuery.device.listDevices.useQuery(
       undefined,

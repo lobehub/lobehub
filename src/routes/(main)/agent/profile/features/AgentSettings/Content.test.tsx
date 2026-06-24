@@ -85,15 +85,18 @@ describe('AgentSettings Content', () => {
     mocks.serverState.featureFlags.enableAgentSelfIteration = true;
   });
 
-  it('falls back to self iteration when inbox hides opening', () => {
+  it('exposes both tabs for inbox when feature is on', () => {
     render(<Content />);
 
     const layout = screen.getByTestId('layout');
-    expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.SelfIteration);
-    expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.SelfIteration);
+    expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
+    expect(layout).toHaveAttribute(
+      'data-tabs',
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.SelfIteration}`,
+    );
     expect(screen.getByTestId('agent-settings-content')).toHaveAttribute(
       'data-tab',
-      ChatSettingsTabs.SelfIteration,
+      ChatSettingsTabs.Opening,
     );
   });
 
@@ -108,6 +111,16 @@ describe('AgentSettings Content', () => {
       'data-tabs',
       `${ChatSettingsTabs.Opening},${ChatSettingsTabs.SelfIteration}`,
     );
+  });
+
+  it('falls back to opening when feature flag is off (inbox)', () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+
+    render(<Content />);
+
+    const layout = screen.getByTestId('layout');
+    expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
+    expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
   });
 
   it('exposes only opening when feature flag is off', () => {

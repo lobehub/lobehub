@@ -41,10 +41,10 @@ const Content = memo(() => {
   const availableTabs = useMemo(
     () =>
       [
-        !isInbox ? ChatSettingsTabs.Opening : null,
+        ChatSettingsTabs.Opening,
         enableAgentSelfIteration ? ChatSettingsTabs.SelfIteration : null,
       ].filter(Boolean) as ChatSettingsTabs[],
-    [isInbox, enableAgentSelfIteration],
+    [enableAgentSelfIteration],
   );
 
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];

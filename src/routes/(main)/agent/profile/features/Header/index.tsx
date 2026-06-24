@@ -1,10 +1,10 @@
 import { isDesktop } from '@lobechat/const';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import { BotMessageSquareIcon, Download, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
@@ -163,6 +163,15 @@ const Header = memo(() => {
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
 
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
+
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
@@ -171,7 +180,10 @@ const Header = memo(() => {
         icon: <Icon icon={Settings2Icon} />,
         key: 'advanced-settings',
         label: t('advancedSettings', { ns: 'setting' }),
-        onClick: () => openAgentSettingsModal(),
+        onClick: () => {
+          settingsModalRef.current?.close();
+          settingsModalRef.current = openAgentSettingsModal();
+        },
       },
       { type: 'divider' as const },
       {

@@ -5,7 +5,7 @@ import { Button, createModal, type ModalInstance, useModalContext } from '@lobeh
 import { GithubIcon } from '@lobehub/ui/icons';
 import { App, Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -13,13 +13,17 @@ import { useToolStore } from '@/store/tool';
 
 const ImportFromGithubContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
-  const { close } = useModalContext();
+  const { close, setCanDismissByClickOutside } = useModalContext();
   const { message } = App.useApp();
   const importAgentSkillFromGitHub = useToolStore((s) => s.importAgentSkillFromGitHub);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const { allowed: canCreate } = usePermission('create_content');
+
+  useEffect(() => {
+    setCanDismissByClickOutside(!loading);
+  }, [loading, setCanDismissByClickOutside]);
 
   const handleImport = async () => {
     const trimmed = url.trim();

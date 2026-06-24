@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
@@ -45,6 +46,15 @@ const GroupProfile = memo(() => {
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
 
   // Collaborative edit lock for workspace groups (same model as pages): read-only
   // when another member is editing; acquired implicitly on the first edit.
@@ -166,7 +176,8 @@ const GroupProfile = memo(() => {
             onClick={() => {
               if (!canEdit) return;
 
-              openGroupAgentSettingsModal();
+              settingsModalRef.current?.close();
+              settingsModalRef.current = openGroupAgentSettingsModal();
             }}
           >
             {t('advancedSettings')}

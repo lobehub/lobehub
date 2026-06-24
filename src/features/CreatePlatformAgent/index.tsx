@@ -113,7 +113,7 @@ const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'ope
 
 const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(({ groupId }) => {
   const { t } = useTranslation('chat');
-  const { close } = useModalContext();
+  const { close, setCanDismissByClickOutside } = useModalContext();
   const navigate = useNavigate();
   const storeCreateAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
@@ -133,6 +133,9 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(({ grou
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
   const [fetchingProfile, setFetchingProfile] = useState(false);
   const [creating, setCreating] = useState(false);
+  useEffect(() => {
+    setCanDismissByClickOutside(!creating);
+  }, [creating, setCanDismissByClickOutside]);
   const [capabilityResult, setCapabilityResult] = useState<
     { available: boolean; reason?: string; version?: string } | undefined
   >(undefined);
