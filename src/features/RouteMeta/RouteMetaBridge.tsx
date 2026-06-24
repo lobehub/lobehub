@@ -95,9 +95,9 @@ const RouteMetaBridge = memo(() => {
 
   return (
     <DynamicMetaRunner
+      DynamicMeta={matched.meta.DynamicMeta}
       key={matched.routeId}
       params={routeMetaParams}
-      useDynamicMeta={matched.meta.useDynamicMeta}
       onResolve={handleResolve}
     />
   );

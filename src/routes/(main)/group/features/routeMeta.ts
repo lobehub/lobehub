@@ -1,7 +1,9 @@
 import { Users } from 'lucide-react';
 
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
-import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
+import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { useChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
@@ -24,19 +26,26 @@ const useTopicTitle = (
     return topic?.title || undefined;
   });
 
+const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const group = useSessionStore((s) => {
+    const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(s);
+    return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
+  });
+  const topicTitle = useTopicTitle(params.gid, params.topic, routeWorkspaceId);
+
+  usePublishDynamicRouteMeta(
+    {
+      title: topicTitle || group?.name || undefined,
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
 export const groupRouteMeta = routeMeta({
+  DynamicMeta: GroupDynamicMeta,
   icon: Users,
   titleKey: 'navigation.groupChat',
-  useDynamicMeta: (params): DynamicRouteMeta => {
-    const routeWorkspaceId = useRouteWorkspaceId(params);
-    const group = useSessionStore((s) => {
-      const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(s);
-      return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
-    });
-    const topicTitle = useTopicTitle(params.gid, params.topic, routeWorkspaceId);
-
-    return {
-      title: topicTitle || group?.name || undefined,
-    };
-  },
 });

@@ -1,45 +1,48 @@
 'use client';
 
 import debug from 'debug';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 
 import { SafeBoundary } from '@/components/ErrorBoundary';
 import {
   type DynamicRouteMeta,
+  type DynamicRouteMetaProps,
   type RouteMeta,
   type RouteMetaParams,
 } from '@/spa/router/routeMeta';
 
+import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
+
 const log = debug('lobe-client:route-meta');
 
 interface DynamicMetaRunnerProps {
+  DynamicMeta?: RouteMeta['DynamicMeta'];
   onResolve: (meta: DynamicRouteMeta) => void;
   params: RouteMetaParams;
-  useDynamicMeta?: RouteMeta['useDynamicMeta'];
 }
 
-const Runner = memo<DynamicMetaRunnerProps>(({ useDynamicMeta, params, onResolve }) => {
-  const { avatar, backgroundColor, title } = useDynamicMeta?.(params) ?? {};
-
-  useEffect(() => {
-    onResolve({ avatar, backgroundColor, title });
-  }, [avatar, backgroundColor, title, onResolve]);
+const EmptyDynamicMeta = memo<DynamicRouteMetaProps>(({ onResolve }) => {
+  usePublishDynamicRouteMeta({}, onResolve);
 
   return null;
 });
 
-Runner.displayName = 'DynamicMetaRunner';
+EmptyDynamicMeta.displayName = 'EmptyDynamicMeta';
 
-const DynamicMetaRunner = memo<DynamicMetaRunnerProps>((props) => (
-  <SafeBoundary
-    onError={(error) => {
-      log('useDynamicMeta threw, falling back to static meta: %O', error);
-      props.onResolve({});
-    }}
-  >
-    <Runner {...props} />
-  </SafeBoundary>
-));
+const DynamicMetaRunner = memo<DynamicMetaRunnerProps>(({ DynamicMeta, onResolve, params }) => {
+  const MetaComponent = DynamicMeta ?? EmptyDynamicMeta;
+
+  return (
+    <SafeBoundary
+      onError={(error) => {
+        log('DynamicMeta threw, falling back to static meta: %O', error);
+        onResolve({});
+      }}
+    >
+      <MetaComponent params={params} onResolve={onResolve} />
+    </SafeBoundary>
+  );
+});
 
 DynamicMetaRunner.displayName = 'DynamicMetaRunnerBoundary';
 
