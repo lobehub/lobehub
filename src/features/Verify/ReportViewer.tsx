@@ -275,8 +275,8 @@ const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }
 
 /**
  * Renders a check's evidence artifacts (screenshots / video / documents / inline
- * text). `imageMaxHeight` lets the compact desktop table shrink screenshots so
- * more rows stay on screen, while the mobile cards keep the larger preview.
+ * text). Screenshots are capped at `imageMaxHeight` and constrained to the
+ * container width so a wide capture never overflows on a narrow viewport.
  */
 const EvidenceList = memo<{
   evidence: VerifyResultWithEvidence['evidence'];
