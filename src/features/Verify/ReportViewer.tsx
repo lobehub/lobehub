@@ -38,7 +38,7 @@ const filenameFromUrl = (url: string): string => {
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
     width: 100%;
-    max-width: 1080px;
+    max-width: 880px;
     margin-block: 0;
     margin-inline: auto;
     padding: 24px;
@@ -149,62 +149,6 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 20px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-  `,
-  /* Desktop "Checks" table: one compact row per check so the eye scans more at once. */
-  table: css`
-    overflow: hidden;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorBgContainer};
-  `,
-  tableCellEvidence: css`
-    min-width: 0;
-  `,
-  tableCellTitle: css`
-    min-width: 0;
-  `,
-  tableCellVerdict: css`
-    align-items: flex-start;
-  `,
-  tableHeader: css`
-    display: grid;
-    grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2.4fr) 112px;
-    gap: 16px;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${token.colorTextTertiary};
-
-    background: ${token.colorFillQuaternary};
-  `,
-  tableRow: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-
-    padding-block: 14px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  /* The compact, aligned top tier of a row: Check / Evidence text / Result. */
-  tableRowMain: css`
-    display: grid;
-    grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2.4fr) 112px;
-    gap: 16px;
-    align-items: start;
-  `,
-  /* Evidence artifacts break out to the row's full width so screenshots stay
-     prominent instead of being squeezed into the narrow Evidence column. */
-  tableRowEvidence: css`
-    padding-inline-start: 2px;
   `,
 }));
 
@@ -375,7 +319,7 @@ const EvidenceList = memo<{
   );
 });
 
-/** Mobile / narrow-screen rendering of a single check — a stacked card. */
+/** A single check — a stacked card with its title, verdict, reasoning and evidence. */
 const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   const { styles } = useStyles();
   return (
@@ -403,71 +347,12 @@ const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
 });
 
 /**
- * Desktop rendering of a single check. Top tier is a compact, aligned grid
- * (Check / Evidence text / Result) so text-only checks stay one line tall and
- * scannable; any evidence artifacts then break out to the row's full width
- * below, keeping screenshots large and visible at a glance.
- */
-const ResultRow = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
-  const { styles } = useStyles();
-  return (
-    <div className={styles.tableRow}>
-      <div className={styles.tableRowMain}>
-        <Flexbox className={styles.tableCellTitle} gap={4}>
-          <Flexbox horizontal align={'center'} gap={6}>
-            <Text strong>{result.checkItemTitle || result.checkItemId}</Text>
-            {!result.required && <Tag>soft</Tag>}
-          </Flexbox>
-          {result.suggestion && (
-            <Text fontSize={12} type="secondary">
-              {result.suggestion}
-            </Text>
-          )}
-        </Flexbox>
-        <Flexbox className={styles.tableCellEvidence} gap={6}>
-          {result.toulmin?.evidence && (
-            <Text fontSize={13} type="secondary">
-              {result.toulmin.evidence}
-            </Text>
-          )}
-        </Flexbox>
-        <Flexbox className={styles.tableCellVerdict}>
-          <VerdictTag verdict={result.verdict ?? result.status} />
-        </Flexbox>
-      </div>
-      {result.evidence.length > 0 && (
-        <Flexbox className={styles.tableRowEvidence}>
-          <EvidenceList evidence={result.evidence} imageMaxHeight={360} />
-        </Flexbox>
-      )}
-    </div>
-  );
-});
-
-/** Compact, scannable table of all checks for desktop. */
-const ChecksTable = memo<{ results: VerifyResultWithEvidence[] }>(({ results }) => {
-  const { styles } = useStyles();
-  return (
-    <div className={styles.table}>
-      <div className={styles.tableHeader}>
-        <span>Check</span>
-        <span>Evidence</span>
-        <span>Result</span>
-      </div>
-      {results.map((r) => (
-        <ResultRow key={r.id} result={r} />
-      ))}
-    </div>
-  );
-});
-
-/**
  * Standalone viewer for a verification session's report, addressed purely by
  * `?id=<verifyRunId>` — no Agent Run / chat context required. Renders the report
- * narrative plus every check result and its evidence.
- *
- * Desktop lays the checks out as a compact table (more rows visible at once);
- * mobile falls back to stacked cards that wrap cleanly on a narrow viewport.
+ * narrative plus every check result and its evidence. Checks render as stacked
+ * cards (the screenshot is the most valuable part, so it stays full-width and
+ * prominent); the layout just tightens padding and wraps the stats row on
+ * mobile so a narrow viewport never overflows horizontally.
  */
 const ReportViewer = memo(() => {
   const { styles, cx } = useStyles();
@@ -532,15 +417,13 @@ const ReportViewer = memo(() => {
 
       <Flexbox gap={8}>
         <Text as="h3">Checks</Text>
-        {isMobile ? (
-          results.map((r) => <ResultCard key={r.id} result={r} />)
-        ) : (
-          <ChecksTable results={results} />
-        )}
+        {results.map((r) => (
+          <ResultCard key={r.id} result={r} />
+        ))}
       </Flexbox>
 
       {/* Narrative detail (verification commands / score / notes). The scope and
-          per-check table are already structured above, so a well-formed report
+          per-check cards are already structured above, so a well-formed report
           body carries only the non-duplicate prose. */}
       {report?.content && (
         <Flexbox gap={8}>
