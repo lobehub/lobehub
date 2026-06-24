@@ -118,6 +118,13 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     border-radius: 3px;
 
     background: ${cssVar.colorBgMask};
+
+    /* The mask is a dark scrim in both themes, so force a light spinner for
+       contrast — the default indicator inherits a dark text color and smears
+       into the scrim. */
+    .ant-spin-dot-item {
+      background-color: ${cssVar.colorWhite};
+    }
   `,
 }));
 
@@ -265,7 +272,7 @@ const UploadCard = memo<UploadCardProps>(
               />
               {uploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
-                  <Spin percent={'auto'} size="small" />
+                  <Spin size="small" />
                 </div>
               )}
             </div>
