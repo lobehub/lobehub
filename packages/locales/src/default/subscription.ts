@@ -16,6 +16,8 @@ export default {
   'billing.empty': 'No billing history',
   'billing.endDate': 'End Date',
   'billing.history': 'Billing History',
+  'billing.info.openFailed': 'Failed to open billing information',
+  'billing.info.title': 'Billing Details',
   'billing.orderNumber': 'Order Number',
   'billing.paid': 'Paid',
   'billing.pay': 'Pay Now',
@@ -61,7 +63,7 @@ export default {
   'comparePlans': 'View Plans',
   'createSubscriptionError': 'Failed to create subscription',
   'currentPlan.cancelAlert':
-    'Subscription will be cancelled after {{canceledAt}}. You can still restore it in "Manage Subscription" before then',
+    'Subscription will be cancelled after {{canceledAt}}. You can still restore it before then',
   'currentPlan.downgradeAlert': 'Will be downgraded to {{plan}} after {{downgradedAt}}.',
   'currentPlan.management': 'Manage Subscription',
   'currentPlan.notIncluded': 'Not included in current plan',
