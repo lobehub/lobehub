@@ -253,8 +253,8 @@ export class HeterogeneousAgentService {
     // snapshot + one completion. Aggregates come from the accumulated steps;
     // missing fields stay null (schema treats null as "not measured"). This
     // makes the hetero run a verify/tracing peer of the built-in agent.
-    const completionReason =
-      result === 'success' ? 'done' : result === 'cancelled' ? 'interrupted' : 'error';
+    // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
+    const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
     try {
       const totals = await this.traceRecorder.finalize(operationId, {
         agentId,

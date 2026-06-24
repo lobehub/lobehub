@@ -307,6 +307,7 @@ export class AiAgentService {
   private readonly db: LobeChatDatabase;
   private readonly agentDocumentsService: AgentDocumentsService;
   private readonly agentModel: AgentModel;
+  private readonly agentOperationModel: AgentOperationModel;
   private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
   private readonly connectorModel: ConnectorModel;
@@ -332,6 +333,7 @@ export class AiAgentService {
     const wsId = this.workspaceId;
     this.agentDocumentsService = new AgentDocumentsService(db, userId, wsId);
     this.agentModel = new AgentModel(db, userId, wsId);
+    this.agentOperationModel = new AgentOperationModel(db, userId, wsId);
     this.agentService = new AgentService(db, userId, wsId);
     this.messageModel = new MessageModel(db, userId, wsId);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
@@ -1338,7 +1340,7 @@ export class AiAgentService {
       // tracing/op-row insert hiccup must never fail the user's run (verify just
       // degrades to off for this run).
       try {
-        await new AgentOperationModel(this.db, this.userId, this.workspaceId).recordStart({
+        await this.agentOperationModel.recordStart({
           agentId: persistAgentId,
           chatGroupId: appContext?.groupId ?? null,
           maxSteps,
@@ -3314,11 +3316,7 @@ export class AiAgentService {
     // Inherit the supervisor op's trigger so member rows stay attributable.
     let inheritedTrigger: string | undefined;
     try {
-      const parentOp = await new AgentOperationModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).findById(parentOperationId);
+      const parentOp = await this.agentOperationModel.findById(parentOperationId);
       inheritedTrigger = parentOp?.trigger ?? undefined;
     } catch (error) {
       log('execAgentMember: failed to read parent operation trigger: %O', error);
@@ -3470,11 +3468,7 @@ export class AiAgentService {
     let inheritedTrigger: string | undefined;
     if (parentOperationId) {
       try {
-        const parentOp = await new AgentOperationModel(
-          this.db,
-          this.userId,
-          this.workspaceId,
-        ).findById(parentOperationId);
+        const parentOp = await this.agentOperationModel.findById(parentOperationId);
         inheritedTrigger = parentOp?.trigger ?? undefined;
       } catch (error) {
         log('%s: failed to read parent operation trigger: %O', options.logScope, error);
