@@ -10,8 +10,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import EditorCanvas from './EditorCanvas';
 
+const typoBarMock = vi.hoisted(() => vi.fn(() => null));
+
 vi.mock('./Typobar', () => ({
-  default: () => null,
+  default: typoBarMock,
 }));
 
 const mentionEditorState = {
@@ -45,28 +47,39 @@ interface TestWrapperProps {
   defaultValue?: string;
   editorData?: unknown;
   onEditorReady?: (editor: IEditor) => void;
+  tooltipPopupContainer?: HTMLElement | null;
 }
 
-const TestWrapper = memo<TestWrapperProps>(({ defaultValue, editorData, onEditorReady }) => {
-  const editor = useEditor();
-  const readyRef = useRef(false);
+const TestWrapper = memo<TestWrapperProps>(
+  ({ defaultValue, editorData, onEditorReady, tooltipPopupContainer }) => {
+    const editor = useEditor();
+    const readyRef = useRef(false);
 
-  useEffect(() => {
-    if (editor && !readyRef.current) {
-      readyRef.current = true;
-      onEditorReady?.(editor);
-    }
-  }, [editor, onEditorReady]);
+    useEffect(() => {
+      if (editor && !readyRef.current) {
+        readyRef.current = true;
+        onEditorReady?.(editor);
+      }
+    }, [editor, onEditorReady]);
 
-  if (!editor) return null;
+    if (!editor) return null;
 
-  return <EditorCanvas defaultValue={defaultValue} editor={editor} editorData={editorData} />;
-});
+    return (
+      <EditorCanvas
+        defaultValue={defaultValue}
+        editor={editor}
+        editorData={editorData}
+        tooltipPopupContainer={tooltipPopupContainer}
+      />
+    );
+  },
+);
 
 TestWrapper.displayName = 'EditorModalEditorCanvasTestWrapper';
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe('EditorModal EditorCanvas', () => {
@@ -88,5 +101,14 @@ describe('EditorModal EditorCanvas', () => {
     });
 
     expect(screen.getByText('Hello from markdown')).toBeInTheDocument();
+  });
+
+  it('should forward tooltip popup container to TypoBar', () => {
+    const popupContainer = document.createElement('div');
+
+    render(<TestWrapper defaultValue={'tooltip test'} tooltipPopupContainer={popupContainer} />);
+
+    expect(typoBarMock).toHaveBeenCalled();
+    expect(typoBarMock.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ popupContainer }));
   });
 });
