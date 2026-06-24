@@ -138,10 +138,13 @@ describe('defineConfig', () => {
   });
 
   it('should respect NO_PROXY when configuring the development proxy dispatcher', async () => {
-    process.env.NODE_ENV = 'development';
-    process.env.HTTP_PROXY = 'http://127.0.0.1:7890';
-    process.env.HTTPS_PROXY = 'http://127.0.0.1:7890';
-    process.env.NO_PROXY = 'example.com,localhost';
+    process.env = {
+      ...process.env,
+      HTTP_PROXY: 'http://127.0.0.1:7890',
+      HTTPS_PROXY: 'http://127.0.0.1:7890',
+      NODE_ENV: 'development',
+      NO_PROXY: 'example.com,localhost',
+    };
 
     await import('./define-config');
 
