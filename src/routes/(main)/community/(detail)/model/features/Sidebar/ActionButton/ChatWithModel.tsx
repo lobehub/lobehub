@@ -1,13 +1,13 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Button, DropdownMenu } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import SplitButton from '@/components/SplitButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
@@ -17,24 +17,6 @@ const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
-    }
-  `,
-  // Joined split-button: main action + dropdown chevron, sharing a border like
-  // antd's Dropdown.Button. Both <button>s are direct children because
-  // DropdownMenu renders its trigger inline (Menu.Root is context-only).
-  splitButton: css`
-    & > button + button {
-      margin-inline-start: -1px;
-    }
-
-    & > button:first-child {
-      border-start-end-radius: 0;
-      border-end-end-radius: 0;
-    }
-
-    & > button:last-child {
-      border-start-start-radius: 0;
-      border-end-start-radius: 0;
     }
   `,
 }));
@@ -62,14 +44,12 @@ const ChatWithModel = memo(() => {
 
   if (includeLobeHub)
     return (
-      <Flexbox horizontal className={styles.splitButton} style={{ flex: 1, width: 'unset' }}>
-        <Button size={'large'} style={{ flex: 1 }} type={'primary'} onClick={handleLobeHubChat}>
+      <SplitButton size={'large'} style={{ flex: 1, width: 'unset' }} type={'primary'}>
+        <SplitButton.Main style={{ flex: 1 }} onClick={handleLobeHubChat}>
           {t('models.chat')}
-        </Button>
-        <DropdownMenu items={items} popupProps={{ style: { minWidth: 267 } }}>
-          <Button icon={<Icon icon={ChevronDownIcon} />} size={'large'} type={'primary'} />
-        </DropdownMenu>
-      </Flexbox>
+        </SplitButton.Main>
+        <SplitButton.Menu items={items} popupProps={{ style: { minWidth: 267 } }} />
+      </SplitButton>
     );
 
   if (items.length === 1)
