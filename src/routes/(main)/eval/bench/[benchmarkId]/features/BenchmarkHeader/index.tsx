@@ -2,9 +2,9 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Badge, Dropdown } from 'antd';
+import { Badge } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleDollarSign,
@@ -122,7 +122,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
       });
     };
 
-    const menuItems = [
+    const menuItems: DropdownItem[] = [
       {
         danger: true,
         icon: <Trash2 size={16} />,
@@ -226,9 +226,9 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
               <Button icon={Edit} size="small" variant="outlined" onClick={handleEdit}>
                 {t('common.edit')}
               </Button>
-              <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={['click']}>
+              <DropdownMenu items={menuItems} placement="bottomRight">
                 <Button icon={EllipsisVertical} size="small" variant="outlined" />
-              </Dropdown>
+              </DropdownMenu>
             </Flexbox>
           </Flexbox>
         </Flexbox>

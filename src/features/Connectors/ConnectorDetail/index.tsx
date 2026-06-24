@@ -111,18 +111,21 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 16 }}>
-        {/* Header */}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header — full-bleed bar with bottom border, aligned with the left pane's header */}
         <div
           style={{
             alignItems: 'center',
+            borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
             display: 'flex',
+            flexShrink: 0,
             gap: 8,
+            height: 42,
             justifyContent: 'space-between',
-            marginBottom: 16,
+            paddingInline: 16,
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{connectorName}</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{connectorName}</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {/* Reset permissions: restore all tools to auto (fully open) */}
             <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
@@ -187,64 +190,75 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           </div>
         </div>
 
-        {/* Description */}
-        {connectorDescription && (
-          <div
-            style={{
-              color: 'var(--ant-color-text-secondary)',
-              fontSize: 13,
-              lineHeight: 1.6,
-              marginBottom: 16,
-            }}
-          >
-            {connectorDescription}
-          </div>
-        )}
+        {/* Body */}
+        <div
+          style={{
+            display: 'flex',
+            flex: 1,
+            flexDirection: 'column',
+            minHeight: 0,
+            padding: 16,
+          }}
+        >
+          {/* Description */}
+          {connectorDescription && (
+            <div
+              style={{
+                color: 'var(--ant-color-text-secondary)',
+                fontSize: 13,
+                lineHeight: 1.6,
+                marginBottom: 16,
+              }}
+            >
+              {connectorDescription}
+            </div>
+          )}
 
-        {hasTools ? (
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <ToolPermissionGroup
-              label={t('connector.readOnlyTools', 'Read-only tools')}
-              tools={readTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-            <ToolPermissionGroup
-              label={t('connector.createTools', 'Create tools')}
-              tools={createTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-            <ToolPermissionGroup
-              label={t('connector.updateTools', 'Update tools')}
-              tools={updateTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-            <ToolPermissionGroup
-              label={t('connector.deleteTools', 'Delete tools')}
-              tools={deleteTools}
-              onBatchPermission={handleBatchPermission}
-              onPermissionChange={updateToolPermission}
-            />
-          </div>
-        ) : (
-          <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 14 }}>
-            {t('connector.noTools', 'No tool permissions to configure.')}
-          </div>
-        )}
+          {hasTools ? (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <ToolPermissionGroup
+                label={t('connector.readOnlyTools', 'Read-only tools')}
+                tools={readTools}
+                onBatchPermission={handleBatchPermission}
+                onPermissionChange={updateToolPermission}
+              />
+              <ToolPermissionGroup
+                label={t('connector.createTools', 'Create tools')}
+                tools={createTools}
+                onBatchPermission={handleBatchPermission}
+                onPermissionChange={updateToolPermission}
+              />
+              <ToolPermissionGroup
+                label={t('connector.updateTools', 'Update tools')}
+                tools={updateTools}
+                onBatchPermission={handleBatchPermission}
+                onPermissionChange={updateToolPermission}
+              />
+              <ToolPermissionGroup
+                label={t('connector.deleteTools', 'Delete tools')}
+                tools={deleteTools}
+                onBatchPermission={handleBatchPermission}
+                onPermissionChange={updateToolPermission}
+              />
+            </div>
+          ) : (
+            <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 14 }}>
+              {t('connector.noTools', 'No tool permissions to configure.')}
+            </div>
+          )}
 
-        {/* Edit modal — only http connectors have a server URL to edit */}
-        {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-          <CustomConnectorModal
-            connectorId={connectorId}
-            open={customModalOpen}
-            onClose={() => setCustomModalOpen(false)}
-            onEditSuccess={() => {
-              fetchConnectors();
-            }}
-          />
-        )}
+          {/* Edit modal — only http connectors have a server URL to edit */}
+          {isMcpConnector && connector?.mcpConnectionType === 'http' && (
+            <CustomConnectorModal
+              connectorId={connectorId}
+              open={customModalOpen}
+              onClose={() => setCustomModalOpen(false)}
+              onEditSuccess={() => {
+                fetchConnectors();
+              }}
+            />
+          )}
+        </div>
       </div>
     );
   },

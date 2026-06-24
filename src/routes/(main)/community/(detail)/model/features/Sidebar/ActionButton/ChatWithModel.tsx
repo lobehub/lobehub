@@ -1,8 +1,7 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
-import { Dropdown } from 'antd';
+import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -18,6 +17,24 @@ const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
+    }
+  `,
+  // Joined split-button: main action + dropdown chevron, sharing a border like
+  // antd's Dropdown.Button. Both <button>s are direct children because
+  // DropdownMenu renders its trigger inline (Menu.Root is context-only).
+  splitButton: css`
+    & > button + button {
+      margin-inline-start: -1px;
+    }
+
+    & > button:first-child {
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+
+    & > button:last-child {
+      border-start-start-radius: 0;
+      border-end-start-radius: 0;
     }
   `,
 }));
@@ -45,20 +62,14 @@ const ChatWithModel = memo(() => {
 
   if (includeLobeHub)
     return (
-      <Dropdown.Button
-        className={styles.button}
-        icon={<Icon icon={ChevronDownIcon} />}
-        overlayStyle={{ minWidth: 267 }}
-        size={'large'}
-        style={{ flex: 1, width: 'unset' }}
-        type={'primary'}
-        menu={{
-          items,
-        }}
-        onClick={handleLobeHubChat}
-      >
-        {t('models.chat')}
-      </Dropdown.Button>
+      <Flexbox horizontal className={styles.splitButton} style={{ flex: 1, width: 'unset' }}>
+        <Button size={'large'} style={{ flex: 1 }} type={'primary'} onClick={handleLobeHubChat}>
+          {t('models.chat')}
+        </Button>
+        <DropdownMenu items={items} popupProps={{ style: { minWidth: 267 } }}>
+          <Button icon={<Icon icon={ChevronDownIcon} />} size={'large'} type={'primary'} />
+        </DropdownMenu>
+      </Flexbox>
     );
 
   if (items.length === 1)

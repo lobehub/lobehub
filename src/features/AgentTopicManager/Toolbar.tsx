@@ -1,36 +1,138 @@
 'use client';
 
-import {
-  Button,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Segmented,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { confirmModal, Tabs } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
+  Archive,
+  CalendarRange,
   ChevronDown,
+  FolderClosed,
+  ListFilter,
   ListTodoIcon,
   type LucideIcon,
   MessageCircle,
+  MoreHorizontal,
+  Plus,
   TestTubeIcon,
   Webhook,
+  X,
 } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+
 import { useTopicsViewStore } from './store';
-import ToolbarActions from './ToolbarActions';
 import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
 
+const CONTROL_HEIGHT = 32;
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
 const styles = createStaticStyles(({ css }) => ({
+  addPill: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    height: ${CONTROL_HEIGHT}px;
+    padding-inline: 12px;
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: ${CONTROL_HEIGHT / 2}px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+
+    transition: all 0.15s;
+
+    &:hover {
+      border-color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorText};
+    }
+  `,
+  chip: css`
+    display: inline-flex;
+    align-items: stretch;
+
+    height: ${CONTROL_HEIGHT}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${CONTROL_HEIGHT / 2}px;
+
+    background: ${cssVar.colorFillTertiary};
+
+    transition: border-color 0.15s;
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+    }
+  `,
+  chipClose: css`
+    all: unset;
+
+    cursor: pointer;
+
+    display: inline-flex;
+    align-items: center;
+
+    padding-inline: 8px 12px;
+    border-start-end-radius: ${CONTROL_HEIGHT / 2}px;
+    border-end-end-radius: ${CONTROL_HEIGHT / 2}px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  chipMain: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 0;
+    padding-inline: 12px 6px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+  `,
+  chipValue: css`
+    font-weight: 500;
+    color: ${cssVar.colorText};
+  `,
   divider: css`
     width: 1px;
     height: 16px;
     margin-inline: 4px;
     background: ${cssVar.colorBorderSecondary};
+  `,
+  sortPill: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    height: ${CONTROL_HEIGHT}px;
+    padding-inline: 12px;
+    border-radius: ${CONTROL_HEIGHT / 2}px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
   `,
 }));
 
@@ -65,8 +167,46 @@ const CheckMark = ({ visible }: { visible: boolean }) => (
   <span style={{ display: 'inline-block', width: 12 }}>{visible ? '✓' : ''}</span>
 );
 
+interface FilterChipProps {
+  icon?: LucideIcon;
+  items: DropdownItem[];
+  label: string;
+  onClear: () => void;
+  value: ReactNode;
+}
+
+const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }) => {
+  return (
+    <span className={styles.chip}>
+      <DropdownMenu items={items}>
+        <span className={styles.chipMain}>
+          {icon && <Icon icon={icon} size={12} />}
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>{label}:</Text>
+          <span className={styles.chipValue}>{value}</span>
+          <Icon icon={ChevronDown} size={10} />
+        </span>
+      </DropdownMenu>
+      <button
+        aria-label={`Clear ${label}`}
+        className={styles.chipClose}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClear();
+        }}
+      >
+        <Icon icon={X} size={12} />
+      </button>
+    </span>
+  );
+});
+
 const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const { t } = useTranslation('topic');
+  const { message } = App.useApp();
+
+  const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
+  const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
 
   const status = useTopicsViewStore((s) => s.status);
   const setStatus = useTopicsViewStore((s) => s.setStatus);
@@ -81,7 +221,20 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const groupBy = useTopicsViewStore((s) => s.groupBy);
   const setGroupBy = useTopicsViewStore((s) => s.setGroupBy);
 
-  const projectMenu: DropdownItem[] = useMemo(() => {
+  const triggerItems: DropdownItem[] = useMemo(
+    () =>
+      TRIGGER_OPTIONS.map((tr) => ({
+        extra: <CheckMark visible={triggers.includes(tr)} />,
+        icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
+        key: tr,
+        label: t(`management.filters.trigger.${tr}` as any) as string,
+        onClick: () =>
+          setTriggers(triggers.includes(tr) ? triggers.filter((x) => x !== tr) : [...triggers, tr]),
+      })),
+    [triggers, t, setTriggers],
+  );
+
+  const projectItems: DropdownItem[] = useMemo(() => {
     if (projects.length === 0) {
       return [{ disabled: true, key: 'empty', label: t('management.filters.project.empty') }];
     }
@@ -98,20 +251,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     }));
   }, [projects, groupIds, t, setGroupIds]);
 
-  const triggerMenu: DropdownItem[] = useMemo(
-    () =>
-      TRIGGER_OPTIONS.map((tr) => ({
-        extra: <CheckMark visible={triggers.includes(tr)} />,
-        icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
-        key: tr,
-        label: t(`management.filters.trigger.${tr}` as any) as string,
-        onClick: () =>
-          setTriggers(triggers.includes(tr) ? triggers.filter((x) => x !== tr) : [...triggers, tr]),
-      })),
-    [triggers, t, setTriggers],
-  );
-
-  const timeMenu: DropdownItem[] = useMemo(
+  const timeItems: DropdownItem[] = useMemo(
     () =>
       TIME_OPTIONS.map((r) => ({
         icon: <CheckMark visible={timeRange === r} />,
@@ -122,7 +262,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     [timeRange, t, setTimeRange],
   );
 
-  const sortMenu: DropdownItem[] = useMemo(
+  const sortItems: DropdownItem[] = useMemo(
     () =>
       SORT_OPTIONS.map((s) => ({
         icon: <CheckMark visible={sortBy === s} />,
@@ -133,7 +273,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     [sortBy, t, setSortBy],
   );
 
-  const groupMenu: DropdownItem[] = useMemo(
+  const groupItems: DropdownItem[] = useMemo(
     () =>
       GROUP_OPTIONS.map((g) => ({
         icon: <CheckMark visible={groupBy === g} />,
@@ -144,104 +284,217 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     [groupBy, t, setGroupBy],
   );
 
-  const triggerLabel =
-    triggers.length === 0
-      ? (t('management.filters.trigger.label') as string)
-      : `${t('management.filters.trigger.label')} (${triggers.length})`;
+  const triggerApplied = triggers.length > 0;
+  const projectApplied = groupIds.length > 0;
+  const timeApplied = timeRange !== 'all';
+  const anyFilterApplied = triggerApplied || projectApplied || timeApplied;
 
-  const projectLabel =
-    groupIds.length === 0
-      ? (t('management.filters.project.label') as string)
-      : `${t('management.filters.project.label')} (${groupIds.length})`;
+  const addFilterItems: DropdownItem[] = useMemo(() => {
+    const items: DropdownItem[] = [];
+    if (!triggerApplied) {
+      items.push({
+        children: triggerItems,
+        icon: <Icon icon={ListFilter} size={14} />,
+        key: 'trigger',
+        label: t('management.filters.trigger.label'),
+        type: 'submenu',
+      });
+    }
+    if (!projectApplied) {
+      items.push({
+        children: projectItems,
+        icon: <Icon icon={FolderClosed} size={14} />,
+        key: 'project',
+        label: t('management.filters.project.label'),
+        type: 'submenu',
+      });
+    }
+    if (!timeApplied) {
+      items.push({
+        children: timeItems,
+        icon: <Icon icon={CalendarRange} size={14} />,
+        key: 'time',
+        label: t('management.filters.time.label'),
+        type: 'submenu',
+      });
+    }
+    return items;
+  }, [triggerApplied, projectApplied, timeApplied, triggerItems, projectItems, timeItems, t]);
 
-  const timeLabel =
-    timeRange === 'all'
-      ? (t('management.filters.time.label') as string)
-      : (t(`management.filters.time.${timeRange}` as any) as string);
+  const projectChipValue = useMemo(() => {
+    if (groupIds.length === 1) {
+      return projects.find((p) => p.value === groupIds[0])?.label ?? groupIds[0];
+    }
+    return `${groupIds.length} selected`;
+  }, [groupIds, projects]);
 
-  const sortLabel = `${t('management.sort.label')}: ${t(`management.sort.${sortBy}` as any)}`;
-  const groupLabel = `${t('management.group.label')}: ${t(`management.group.${groupBy}` as any)}`;
+  const triggerChipValue =
+    triggers.length === 1
+      ? (t(`management.filters.trigger.${triggers[0]}` as any) as string)
+      : `${triggers.length} selected`;
+
+  const handleArchiveStale = useCallback(() => {
+    const cutoff = Date.now() - THREE_MONTHS_MS;
+    const stale = (topics ?? []).filter((tp) => {
+      if (tp.status === 'completed') return false;
+      const updated =
+        typeof tp.updatedAt === 'number' ? tp.updatedAt : new Date(tp.updatedAt).getTime();
+      return updated < cutoff;
+    });
+
+    if (stale.length === 0) {
+      message.info(t('management.actionsMenu.archiveStale.noneFound'));
+      return;
+    }
+
+    confirmModal({
+      content: t('management.actionsMenu.archiveStale.confirm', { count: stale.length }),
+      okText: t('management.actionsMenu.archiveStale.confirmOk'),
+      onOk: async () => {
+        for (const topic of stale) {
+          await updateTopicStatus({ status: 'completed', topicId: topic.id });
+        }
+        message.success(t('management.actionsMenu.archiveStale.done', { count: stale.length }));
+      },
+      title: t('management.actionsMenu.archiveStale.title'),
+    });
+  }, [topics, updateTopicStatus, message, t]);
+
+  const overflowItems: DropdownItem[] = useMemo(() => {
+    const items: DropdownItem[] = [
+      {
+        children: groupItems,
+        key: 'group',
+        label: `${t('management.group.label')}: ${t(`management.group.${groupBy}` as any)}`,
+        type: 'submenu',
+      },
+    ];
+    if (anyFilterApplied) {
+      items.push(
+        { key: 'd1', type: 'divider' as const },
+        {
+          icon: <Icon icon={X} size={14} />,
+          key: 'clear',
+          label: t('management.filters.clearAll', { defaultValue: 'Clear all filters' }),
+          onClick: () => {
+            setTriggers([]);
+            setGroupIds([]);
+            setTimeRange('all');
+          },
+        },
+      );
+    }
+    items.push(
+      { key: 'd2', type: 'divider' as const },
+      {
+        icon: <Icon icon={Archive} size={14} />,
+        key: 'archive-stale',
+        label: t('management.actionsMenu.archiveStale.label'),
+        onClick: handleArchiveStale,
+      },
+    );
+    return items;
+  }, [
+    groupItems,
+    groupBy,
+    anyFilterApplied,
+    t,
+    setTriggers,
+    setGroupIds,
+    setTimeRange,
+    handleArchiveStale,
+  ]);
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
-        <Segmented
-          value={status}
-          options={STATUS_OPTIONS.map((opt) => {
-            const count = statusCounts[opt.key] ?? 0;
-            return {
-              label: (
-                <Flexbox horizontal align={'center'} gap={6}>
-                  <span>{t(opt.labelKey as any) as string}</span>
-                  <Text
-                    style={{
-                      color: status === opt.key ? 'inherit' : cssVar.colorTextTertiary,
-                      fontSize: 12,
-                      fontVariantNumeric: 'tabular-nums',
-                      opacity: status === opt.key ? 0.7 : 1,
-                    }}
-                  >
-                    {count}
-                  </Text>
-                </Flexbox>
-              ),
-              value: opt.key,
-            };
-          })}
-          onChange={(v) => setStatus(v as StatusFilter)}
+    <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
+      <Tabs
+        activeKey={status}
+        size={'small'}
+        style={{ width: 'auto' }}
+        items={STATUS_OPTIONS.map((opt) => {
+          const count = statusCounts[opt.key] ?? 0;
+          return {
+            key: opt.key,
+            label: (
+              <Flexbox horizontal align={'center'} gap={6}>
+                <span>{t(opt.labelKey as any) as string}</span>
+                <Text
+                  style={{
+                    color: status === opt.key ? 'inherit' : cssVar.colorTextTertiary,
+                    fontSize: 12,
+                    fontVariantNumeric: 'tabular-nums',
+                    opacity: status === opt.key ? 0.7 : 1,
+                  }}
+                >
+                  {count}
+                </Text>
+              </Flexbox>
+            ),
+          };
+        })}
+        onChange={(key) => setStatus(key as StatusFilter)}
+      />
+
+      <span className={styles.divider} />
+
+      {triggerApplied && (
+        <FilterChip
+          icon={ListFilter}
+          items={triggerItems}
+          label={t('management.filters.trigger.label')}
+          value={triggerChipValue}
+          onClear={() => setTriggers([])}
         />
+      )}
+      {projectApplied && (
+        <FilterChip
+          icon={FolderClosed}
+          items={projectItems}
+          label={t('management.filters.project.label')}
+          value={projectChipValue}
+          onClear={() => setGroupIds([])}
+        />
+      )}
+      {timeApplied && (
+        <FilterChip
+          icon={CalendarRange}
+          items={timeItems}
+          label={t('management.filters.time.label')}
+          value={t(`management.filters.time.${timeRange}` as any) as string}
+          onClear={() => setTimeRange('all')}
+        />
+      )}
 
-        <span className={styles.divider} />
-
-        <DropdownMenu items={projectMenu}>
-          <Button variant={'filled'}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              {projectLabel}
-              <Icon icon={ChevronDown} size={11} />
-            </Flexbox>
-          </Button>
+      {addFilterItems.length > 0 && (
+        <DropdownMenu items={addFilterItems}>
+          <span className={styles.addPill}>
+            <Icon icon={Plus} size={12} />
+            {t('management.filters.add', {
+              defaultValue: anyFilterApplied ? 'Add filter' : 'Filter',
+            })}
+          </span>
         </DropdownMenu>
+      )}
 
-        <DropdownMenu items={triggerMenu}>
-          <Button variant={'filled'}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              {triggerLabel}
-              <Icon icon={ChevronDown} size={11} />
-            </Flexbox>
-          </Button>
-        </DropdownMenu>
+      <Flexbox flex={1} />
 
-        <DropdownMenu items={timeMenu}>
-          <Button variant={'filled'}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              {timeLabel}
-              <Icon icon={ChevronDown} size={11} />
-            </Flexbox>
-          </Button>
-        </DropdownMenu>
+      <DropdownMenu items={sortItems}>
+        <span className={styles.sortPill}>
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+            {t('management.sort.label')}:
+          </Text>
+          <span style={{ fontWeight: 500 }}>{t(`management.sort.${sortBy}` as any)}</span>
+          <Icon icon={ChevronDown} size={10} />
+        </span>
+      </DropdownMenu>
 
-        <Flexbox flex={1} />
-
-        <DropdownMenu items={groupMenu}>
-          <Button variant={'filled'}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              {groupLabel}
-              <Icon icon={ChevronDown} size={11} />
-            </Flexbox>
-          </Button>
-        </DropdownMenu>
-
-        <DropdownMenu items={sortMenu}>
-          <Button variant={'filled'}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              {sortLabel}
-              <Icon icon={ChevronDown} size={11} />
-            </Flexbox>
-          </Button>
-        </DropdownMenu>
-
-        <ToolbarActions />
-      </Flexbox>
+      <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+        <ActionIcon
+          icon={MoreHorizontal}
+          size={{ blockSize: CONTROL_HEIGHT, size: 18 }}
+          title={t('management.actionsMenu.title')}
+        />
+      </DropdownMenu>
     </Flexbox>
   );
 });

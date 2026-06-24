@@ -10,10 +10,10 @@ import {
   Highlighter,
   Icon,
   Markdown,
-  Segmented,
   Select,
   Text,
 } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { BotIcon, UserRoundIcon } from 'lucide-react';
@@ -210,24 +210,26 @@ const Platform = memo<PlatformProps>(
 
     return (
       <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
-        <Segmented
-          block
+        <Tabs
+          activeKey={mode}
           style={{ marginBottom: 8 }}
-          value={mode}
-          variant={'filled'}
-          options={[
+          items={[
             {
               icon: <Icon icon={BotIcon} />,
+              key: 'agent',
               label: t('skills.hero.guide.agent'),
-              value: 'agent',
             },
             {
               icon: <Icon icon={UserRoundIcon} />,
+              key: 'human',
               label: t('skills.hero.guide.human'),
-              value: 'human',
             },
           ]}
-          onChange={(value) => setMode(value as GuideMode)}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => setMode(key as GuideMode)}
         />
 
         {mode === 'agent' ? (
@@ -280,11 +282,18 @@ const Platform = memo<PlatformProps>(
                 onSelect={(v) => setActive(v as PlatformType)}
               />
             ) : (
-              <Segmented
-                block
-                options={options}
-                value={active}
-                onChange={(v) => setActive(v as PlatformType)}
+              <Tabs
+                activeKey={active}
+                items={options.map((opt) => ({
+                  icon: opt.icon,
+                  key: opt.value,
+                  label: opt.label,
+                }))}
+                styles={{
+                  list: { display: 'flex', width: '100%' },
+                  tab: { flex: 1 },
+                }}
+                onChange={(key) => setActive(key as PlatformType)}
               />
             )}
             <Flexbox>

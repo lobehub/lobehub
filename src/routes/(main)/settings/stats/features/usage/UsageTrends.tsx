@@ -1,5 +1,6 @@
 import { type BarChartProps } from '@lobehub/charts';
-import { Segmented, Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -118,13 +119,14 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUs
   return (
     <StatsFormGroup
       extra={
-        <Segmented
-          value={type}
-          options={[
-            { label: t('usage.trends.spend'), value: ShowType.Spend },
-            { label: t('usage.trends.tokens'), value: ShowType.Token },
+        <Tabs
+          activeKey={type}
+          style={{ width: 'auto' }}
+          items={[
+            { key: ShowType.Spend, label: t('usage.trends.spend') },
+            { key: ShowType.Token, label: t('usage.trends.tokens') },
           ]}
-          onChange={(value) => setType(value as ShowType)}
+          onChange={(key) => setType(key as ShowType)}
         />
       }
     >

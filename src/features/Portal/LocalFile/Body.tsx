@@ -1,16 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import {
-  ActionIcon,
-  Center,
-  Empty,
-  Flexbox,
-  Icon,
-  Image,
-  Markdown,
-  Segmented,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -285,26 +276,26 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 onClick={handleReloadPreview}
               />
             )}
-            <Segmented
+            <Tabs
+              activeKey={mode}
               size={'small'}
-              value={mode}
-              options={[
+              items={[
                 {
                   icon: <Icon icon={EyeIcon} />,
+                  key: 'render',
                   label: t('workingPanel.localFile.preview.render'),
-                  value: 'render',
                 },
                 {
                   icon: <Icon icon={CodeIcon} />,
+                  key: 'raw',
                   label: t(
                     isHtml
                       ? 'workingPanel.localFile.preview.source'
                       : 'workingPanel.localFile.preview.raw',
                   ),
-                  value: 'raw',
                 },
               ]}
-              onChange={(v) => setMode(v as TextPreviewMode)}
+              onChange={(key) => setMode(key as TextPreviewMode)}
             />
           </Flexbox>
         )}

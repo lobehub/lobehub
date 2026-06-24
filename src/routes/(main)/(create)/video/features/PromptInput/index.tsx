@@ -1,7 +1,8 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider, Switch } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -98,24 +99,25 @@ const ResolutionItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
-    () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
-    [enumValues],
+    () => (enumValues ?? []).map((v) => ({ disabled: !canCreate, key: v, label: v })),
+    [enumValues, canCreate],
   );
 
   if (options.length === 0) return null;
 
   return (
-    <Segmented
-      block
-      disabled={!canCreate}
-      options={options}
+    <Tabs
+      activeKey={value}
+      items={options}
       style={{ width: '100%' }}
-      value={value}
-      variant="filled"
-      onChange={(v) => {
+      styles={{
+        list: { display: 'flex', width: '100%' },
+        tab: { flex: 1 },
+      }}
+      onChange={(key) => {
         if (!canCreate) return;
 
-        setValue(String(v) as any);
+        setValue(key as any);
       }}
     />
   );
@@ -129,26 +131,28 @@ const DurationItem = memo(() => {
     () =>
       enumValues && enumValues.length > 0
         ? enumValues.map((v) => ({
+            disabled: !canCreate,
+            key: String(v),
             label: String(v),
-            value: v,
           }))
         : [],
-    [enumValues],
+    [enumValues, canCreate],
   );
 
   if (options.length > 0) {
     return (
-      <Segmented
-        block
-        disabled={!canCreate}
-        options={options}
+      <Tabs
+        activeKey={String(value ?? min)}
+        items={options}
         style={{ width: '100%' }}
-        value={value ?? min}
-        variant="filled"
-        onChange={(v) => {
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => {
           if (!canCreate) return;
 
-          setValue(Number(v) as any);
+          setValue(Number(key) as any);
         }}
       />
     );
@@ -236,23 +240,25 @@ const PromptExtendItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
-  const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
+  const options =
+    enumValues?.map((item) => ({ disabled: !canCreate, key: item, label: item })) ?? [];
 
   if (options.length > 0) {
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          disabled={!canCreate}
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => {
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
             if (!canCreate) return;
 
-            setValue(String(next) as any);
+            setValue(key as any);
           }}
         />
       </Flexbox>

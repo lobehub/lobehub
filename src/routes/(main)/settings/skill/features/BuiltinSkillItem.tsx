@@ -2,10 +2,12 @@
 
 import { Avatar, Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
@@ -95,6 +97,18 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
         </Button>
       );
     };
+
+    if (onSelect) {
+      return (
+        <NavItem
+          active={isSelected}
+          icon={() => <Avatar avatar={avatar} size={18} />}
+          title={title}
+          titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}
+          onClick={onSelect}
+        />
+      );
+    }
 
     return (
       <Flexbox

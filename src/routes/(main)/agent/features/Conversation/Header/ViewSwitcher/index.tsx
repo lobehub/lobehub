@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Segmented } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FileText, MessageSquareText } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -20,18 +21,6 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: center;
     width: 100%;
     min-width: 0;
-  `,
-  switcher: css`
-    .ant-segmented-item-label {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .ant-segmented-item,
-    .ant-segmented-thumb {
-      border-radius: 999px;
-    }
   `,
   icon: css`
     display: none;
@@ -71,6 +60,7 @@ const ViewSwitcher = memo(() => {
   const options = useMemo(
     () => [
       {
+        key: 'chat',
         label: (
           <Flexbox
             horizontal
@@ -82,9 +72,9 @@ const ViewSwitcher = memo(() => {
             <span className={styles.text}>{t('viewSwitcher.chat')}</span>
           </Flexbox>
         ),
-        value: 'chat',
       },
       {
+        key: 'page',
         label: (
           <Flexbox
             horizontal
@@ -96,17 +86,15 @@ const ViewSwitcher = memo(() => {
             <span className={styles.text}>{t('viewSwitcher.page')}</span>
           </Flexbox>
         ),
-        value: 'page',
       },
-      // { label: t('viewSwitcher.task'), value: 'task' },
     ],
     [t],
   );
 
-  const handleChange = (value: number | string) => {
+  const handleChange = (key: string) => {
     if (!aid) return;
 
-    switch (String(value) as ViewTab) {
+    switch (key as ViewTab) {
       case 'chat': {
         if (topicId) navigate(SESSION_CHAT_TOPIC_URL(aid, topicId));
         break;
@@ -124,16 +112,7 @@ const ViewSwitcher = memo(() => {
 
   if (!topicId || isHeterogeneousAgent) return null;
 
-  return (
-    <Segmented
-      className={styles.switcher}
-      options={options}
-      shape={'round'}
-      size={'small'}
-      value={currentTab}
-      onChange={handleChange}
-    />
-  );
+  return <Tabs activeKey={currentTab} items={options} size={'small'} onChange={handleChange} />;
 });
 
 ViewSwitcher.displayName = 'ViewSwitcher';

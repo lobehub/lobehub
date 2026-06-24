@@ -1,54 +1,27 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
-import { CustomConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
-import { createSkillStoreModal } from '@/features/SkillStore';
-import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 
+import LeftPanel from './features/LeftPanel';
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
-import SkillList, { type SkillViewMode } from './features/SkillList';
+import { type SkillViewMode } from './features/SkillList';
 
 export interface SelectedTool {
   identifier: string;
   type: ToolDetailType;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   detail: css`
     overflow-y: auto;
     flex: 1;
-  `,
-  left: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    min-width: 260px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  leftHeader: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   root: css`
     overflow: hidden;
@@ -56,37 +29,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     height: 100%;
   `,
-  tab: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    transition: all 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  tabActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  tabs: css`
-    display: flex;
-    gap: 2px;
-    align-items: center;
-  `,
 }));
 
 const Page = memo(() => {
-  const { t } = useTranslation('setting');
   const [searchParams] = useSearchParams();
   const queryViewMode: SkillViewMode =
     searchParams.get('tab') === 'skill' || searchParams.get('view') === 'skill'
@@ -95,9 +40,7 @@ const Page = memo(() => {
   const querySkillIdentifier = searchParams.get('skill');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
   const [viewMode, setViewMode] = useState<SkillViewMode>(queryViewMode);
-  const [showAddConnector, setShowAddConnector] = useState(false);
 
-  // Data sources for auto-select
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
@@ -106,7 +49,7 @@ const Page = memo(() => {
     (s) => builtinToolSelectors.installedAllMetaList(s).map((tool) => tool.identifier),
     isEqual,
   );
-  // Auto-select first item when view changes or on load
+
   useEffect(() => {
     setSelected(null);
   }, [viewMode]);
@@ -142,10 +85,6 @@ const Page = memo(() => {
     if (skill) setSelected({ identifier: skill.id, type: 'agent-skill' });
   }, [marketAgentSkills, querySkillIdentifier, userAgentSkills, viewMode]);
 
-  const handleOpenStore = useCallback(() => {
-    createSkillStoreModal();
-  }, []);
-
   const handleSelect = (identifier: string, type: ToolDetailType) => {
     setSelected({ identifier, type });
   };
@@ -154,104 +93,14 @@ const Page = memo(() => {
     <>
       <NavHeader />
       <div className={styles.root}>
-        {/* Left panel */}
-        <div className={styles.left}>
-          <div className={styles.leftHeader}>
-            {/* Connector / Skill tab switcher */}
-            <div className={styles.tabs}>
-              <span
-                className={`${styles.tab} ${viewMode === 'connector' ? styles.tabActive : ''}`}
-                onClick={() => setViewMode('connector')}
-              >
-                {t('skillView.connectors', 'Connectors')}
-              </span>
-              <span
-                className={`${styles.tab} ${viewMode === 'skill' ? styles.tabActive : ''}`}
-                onClick={() => setViewMode('skill')}
-              >
-                {t('skillView.skills', 'Skills')}
-              </span>
-            </div>
+        <LeftPanel
+          selectedIdentifier={selected?.identifier}
+          viewMode={viewMode}
+          onDeleteSelected={() => setSelected(null)}
+          onSelect={handleSelect}
+          onViewModeChange={setViewMode}
+        />
 
-            <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-              <DropdownMenu
-                nativeButton={false}
-                placement="bottomRight"
-                items={[
-                  {
-                    icon: <Icon icon={Link} />,
-                    key: 'importUrl',
-                    label: (
-                      <Flexbox gap={2}>
-                        <span>{t('tab.importFromUrl')}</span>
-                        <Text style={{ fontSize: 12 }} type="secondary">
-                          {t('tab.importFromUrl.desc')}
-                        </Text>
-                      </Flexbox>
-                    ),
-                    onClick: () => openImportFromUrlModal(),
-                  },
-                  {
-                    icon: <Icon icon={GithubIcon} />,
-                    key: 'importGithub',
-                    label: (
-                      <Flexbox gap={2}>
-                        <span>{t('tab.importFromGithub')}</span>
-                        <Text style={{ fontSize: 12 }} type="secondary">
-                          {t('tab.importFromGithub.desc')}
-                        </Text>
-                      </Flexbox>
-                    ),
-                    onClick: () => openImportFromGithubModal(),
-                  },
-                  {
-                    icon: <Icon icon={FileArchive} />,
-                    key: 'uploadZip',
-                    label: (
-                      <Flexbox gap={2}>
-                        <span>{t('tab.uploadZip')}</span>
-                        <Text style={{ fontSize: 12 }} type="secondary">
-                          {t('tab.uploadZip.desc')}
-                        </Text>
-                      </Flexbox>
-                    ),
-                    onClick: () => openUploadSkillModal(),
-                  },
-                  { type: 'divider' as const },
-                  {
-                    icon: <Icon icon={Grid2x2Plus} />,
-                    key: 'addConnector',
-                    label: (
-                      <Flexbox gap={2}>
-                        <span>
-                          {t('connector.add.title', {
-                            defaultValue: 'Add Custom Connector',
-                            ns: 'tool',
-                          })}
-                        </span>
-                      </Flexbox>
-                    ),
-                    onClick: () => setShowAddConnector(true),
-                  },
-                ]}
-              >
-                <Button icon={Grid2x2Plus} size="small" />
-              </DropdownMenu>
-              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-            <SkillList
-              selectedIdentifier={selected?.identifier}
-              viewMode={viewMode}
-              onDeleteSelected={() => setSelected(null)}
-              onSelect={handleSelect}
-            />
-          </div>
-        </div>
-
-        {/* Right: tool detail + permissions */}
         {selected && (
           <div className={styles.detail}>
             <SkillDetail
@@ -262,7 +111,6 @@ const Page = memo(() => {
           </div>
         )}
       </div>
-      <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
     </>
   );
 });

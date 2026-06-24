@@ -1,7 +1,8 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider, Switch } from 'antd';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
@@ -83,22 +84,27 @@ const PromptExtendItem = memo(() => {
   const { value, setValue, enumValues } = useGenerationConfigParam('promptExtend');
 
   if (enumValues && enumValues.length > 0) {
-    const options = enumValues.map((item) => ({ label: item, value: item }));
+    const options = enumValues.map((item) => ({
+      disabled: !canCreate,
+      key: item,
+      label: item,
+    }));
 
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          disabled={!canCreate}
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => {
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
             if (!canCreate) return;
 
-            setValue(String(next) as any);
+            setValue(key as any);
           }}
         />
       </Flexbox>
