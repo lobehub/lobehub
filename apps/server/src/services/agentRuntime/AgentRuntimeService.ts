@@ -132,6 +132,25 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 };
 
+/**
+ * Extract a short, human-readable reason string from a failed operation's
+ * `state.error`, for inlining into the tool-result `content` a parent agent
+ * sees. Without this the supervising agent only gets the opaque generic note
+ * ("Sub-agent did not complete (error).") and cannot tell *why* a `callAgent`
+ * dispatch failed — so it can't retry, switch target, or report the cause; it
+ * silently falls back to answering itself (issue #16257). The full structured
+ * error still rides on `pluginError`; this is just the readable summary.
+ */
+const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const message = formatErrorForMetadata(error)?.message;
+  if (typeof message !== 'string') return undefined;
+  const trimmed = message.trim();
+  if (!trimmed) return undefined;
+  // Keep the tool result compact — a runaway provider error body would otherwise
+  // bloat the parent's LLM context.
+  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
+};
+
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
 ) => {
@@ -1934,8 +1953,11 @@ export class AgentRuntimeService {
     const lastAssistant = [...messages]
       .reverse()
       .find((m: { role?: string }) => m?.role === 'assistant');
+    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const content = failed
-      ? `Sub-agent did not complete (${reason}).`
+      ? errorReason
+        ? `Sub-agent did not complete (${reason}): ${errorReason}`
+        : `Sub-agent did not complete (${reason}).`
       : (lastAssistant?.content as string | undefined) ||
         'Sub-agent completed without a textual answer.';
 
@@ -2102,8 +2124,11 @@ export class AgentRuntimeService {
       .reverse()
       .find((m: { role?: string }) => m?.role === 'assistant');
     const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
+    const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const anchorContent = failed
-      ? `Agent member did not complete (${reason}).`
+      ? memberErrorReason
+        ? `Agent member did not complete (${reason}): ${memberErrorReason}`
+        : `Agent member did not complete (${reason}).`
       : mode === 'in_group'
         ? `Agent ${agentLabel} responded in the group.`
         : (lastAssistant?.content as string | undefined) ||

@@ -71,7 +71,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         }
 
         const description = taskTitle || `Call agent ${agentId}`;
-        const { started, subOperationId, threadId } = await ctx.subAgent.run({
+        const { started, error, subOperationId, threadId } = await ctx.subAgent.run({
           agentId,
           description,
           instruction,
@@ -79,12 +79,11 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         });
 
         if (!started) {
+          const detail = error ? `: ${error}` : '.';
+          const message = `Agent "${agentId}" failed to start${detail}`;
           return {
-            content: `Agent "${agentId}" failed to start.`,
-            error: {
-              code: 'AGENT_CALL_START_FAILED',
-              message: `Agent "${agentId}" failed to start.`,
-            },
+            content: message,
+            error: { code: 'AGENT_CALL_START_FAILED', message },
             success: false,
           };
         }

@@ -158,6 +158,29 @@ describe('agentManagementRuntime', () => {
       expect(result.deferred).toBeUndefined();
     });
 
+    it('surfaces the underlying start error so the failure is diagnosable', async () => {
+      const run = vi.fn().mockResolvedValue({
+        error: 'Agent not found: agent-target',
+        started: false,
+        threadId: '',
+      });
+      const runtime = createRuntime();
+
+      const result = await runtime.callAgent(
+        { agentId: 'agent-target', instruction: 'Do delegated work' },
+        { subAgent: { run }, toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe(
+        'Agent "agent-target" failed to start: Agent not found: agent-target',
+      );
+      expect(result.error).toMatchObject({
+        code: 'AGENT_CALL_START_FAILED',
+        message: 'Agent "agent-target" failed to start: Agent not found: agent-target',
+      });
+    });
+
     it('rejects nested server callAgent execution', async () => {
       const run = vi.fn();
       const runtime = createRuntime();
