@@ -142,6 +142,8 @@ export const useTaskDetailToggle = (identifier?: string) => {
 
 interface TaskResultCardProps {
   children?: ReactNode;
+  /** Inline status/extra slot rendered in the header, after the identifier chip. */
+  headerExtra?: ReactNode;
   icon?: LucideIcon;
   iconColor?: string;
   identifier?: string;
@@ -154,7 +156,7 @@ interface TaskResultCardProps {
  * optional body of detail fields. The whole card opens the task detail portal.
  */
 export const TaskResultCard = memo<TaskResultCardProps>(
-  ({ children, icon, iconColor, identifier, title }) => {
+  ({ children, headerExtra, icon, iconColor, identifier, title }) => {
     const { t } = useTranslation('chat');
     const { canOpen, isExpanded, open, toggle } = useTaskDetailToggle(identifier);
 
@@ -171,6 +173,7 @@ export const TaskResultCard = memo<TaskResultCardProps>(
           )}
           <Text className={styles.title}>{title}</Text>
           {identifier && <span className={styles.identifier}>{identifier}</span>}
+          {headerExtra}
           <div className={styles.spacer} />
           {canOpen && (
             <ActionIcon

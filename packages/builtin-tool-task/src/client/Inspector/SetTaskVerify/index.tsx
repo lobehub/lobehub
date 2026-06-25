@@ -23,22 +23,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  modeChip: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorInfo};
-
-    background: ${cssVar.colorInfoBg};
-  `,
-  separator: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextQuaternary};
-  `,
 }));
 
 export const SetTaskVerifyInspector = memo<
@@ -47,8 +31,6 @@ export const SetTaskVerifyInspector = memo<
   const { t } = useTranslation('plugin');
 
   const identifier = args?.identifier || partialArgs?.identifier;
-  const enabled = args?.enabled ?? partialArgs?.enabled;
-  const modeLabel = enabled === undefined ? undefined : enabled ? 'on' : 'off';
 
   return (
     <div
@@ -60,12 +42,6 @@ export const SetTaskVerifyInspector = memo<
     >
       <span>{t('builtins.lobe-task.apiName.setTaskVerify')}</span>
       {identifier && <span className={styles.identifierChip}>{identifier}</span>}
-      {modeLabel && (
-        <>
-          <span className={styles.separator}>·</span>
-          <span className={styles.modeChip}>{modeLabel}</span>
-        </>
-      )}
     </div>
   );
 });

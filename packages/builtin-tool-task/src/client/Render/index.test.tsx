@@ -145,12 +145,18 @@ describe('SetTaskVerifyRender', () => {
     expect(screen.getByText('off')).toBeTruthy();
   });
 
-  it('renders the verifier agent and max iterations', () => {
-    mocks.agentMetaById.agt_verifier = { title: 'Verifier Agent' };
-    renderVerify({ enabled: true, maxIterations: 3, verifierAgentId: 'agt_verifier' });
+  it('renders the requirement as markdown only (no extra fields)', () => {
+    renderVerify({
+      enabled: true,
+      maxIterations: 3,
+      requirement: '## Acceptance',
+      verifierAgentId: 'agt_verifier',
+    });
 
-    expect(screen.getByText('Verifier Agent')).toBeTruthy();
-    expect(screen.getByText('3')).toBeTruthy();
+    // Body is just the requirement markdown — verifier / iterations are not shown.
+    expect(screen.getByTestId('markdown').textContent).toContain('## Acceptance');
+    expect(screen.queryByTestId('assignee-avatar')).toBeNull();
+    expect(screen.queryByText('3')).toBeNull();
   });
 });
 
