@@ -1,5 +1,6 @@
 import { flushSync } from 'react-dom';
 
+import { startBootMetricsFinalize } from '@/libs/bootMetrics';
 import { bootTiming } from '@/libs/bootTiming';
 
 import { setAppReady } from '../atoms/app';
@@ -29,5 +30,6 @@ export const startAppInitialization = () => {
       });
       bootTiming.mark('app-ready');
       startPostRenderInitialization();
+      startBootMetricsFinalize();
     });
 };
