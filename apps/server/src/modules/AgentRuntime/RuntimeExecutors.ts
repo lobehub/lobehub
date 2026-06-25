@@ -2294,6 +2294,9 @@ export const createRuntimeExecutors = (
       const dbMessages = await ctx.messageModel.query(
         {
           agentId: state.metadata?.agentId,
+          // Group runs need groupId or the query filters `groupId IS NULL` and
+          // returns no group messages (here the compression candidate set).
+          groupId: state.metadata?.groupId,
           threadId: state.metadata?.threadId,
           topicId,
         },
@@ -3635,6 +3638,11 @@ export const createRuntimeExecutors = (
     const latestMessages = await ctx.messageModel.query(
       {
         agentId: state.metadata?.agentId,
+        // Group runs must pass groupId, else the query falls into the standard
+        // branch (`groupId IS NULL`) and returns zero group messages — the next
+        // call_llm step then gets an empty context and the provider rejects it
+        // ("at least one message is required").
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
@@ -4089,6 +4097,9 @@ export const createRuntimeExecutors = (
       try {
         const dbMessages = await ctx.messageModel.query({
           agentId: state.metadata?.agentId,
+          // Group runs need groupId or the query returns no group messages, so
+          // the existing tool-message lookup on resume would find nothing.
+          groupId: state.metadata?.groupId,
           threadId: state.metadata?.threadId,
           topicId: state.metadata?.topicId,
         });
@@ -4121,6 +4132,9 @@ export const createRuntimeExecutors = (
         try {
           const dbMessages = await ctx.messageModel.query({
             agentId: state.metadata?.agentId,
+            // Group runs need groupId or the query returns no group messages, so
+            // the parent-assistant fallback lookup would find nothing.
+            groupId: state.metadata?.groupId,
             threadId: state.metadata?.threadId,
             topicId: state.metadata?.topicId,
           });
