@@ -42,6 +42,7 @@ import {
   applyModelExtendParams,
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  isDeepSeekThinkingEligibleModel,
   isKimiAlwaysPreserveThinkingModel,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
@@ -941,9 +942,25 @@ export const createRuntimeExecutors = (
         const modelSupportsPreserveThinkingFromCard =
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
         // Kimi K2.7+ Code has preserved thinking always active and cannot opt out.
-        const modelForcesPreserveThinking =
+        const kimiForcesPreserveThinking =
           (provider === 'moonshot' || provider === BRANDING_PROVIDER) &&
           isKimiAlwaysPreserveThinkingModel(model);
+        // DeepSeek V4 / reasoner thinking models MUST replay the real assistant
+        // reasoning in history — this is mandatory, not opt-in. Their
+        // Anthropic-compatible API rejects an assistant tool-call turn whose
+        // thinking block is missing (HTTP 400), so stripping reasoning leaves the
+        // payload builder no choice but to emit a whitespace-only placeholder
+        // thinking block. Under large agentic context that degenerate history makes
+        // the model emit its final answer *inside* the thinking block with empty
+        // visible text (controlled replay: ~30% answer-in-thinking with the
+        // placeholder vs ~2.5% when the genuine reasoning is replayed). Skip only
+        // when the user explicitly turned thinking off.
+        const deepseekThinkingDisabled =
+          agentConfig.chatConfig?.deepseekV4ReasoningEffort === 'none';
+        const deepseekForcesPreserveThinking =
+          isDeepSeekThinkingEligibleModel(model) && !deepseekThinkingDisabled;
+        const modelForcesPreserveThinking =
+          kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
         const providerSupportsPreserveThinkingFallback =
           provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
         const modelSupportsPreserveThinking =
@@ -1571,6 +1588,10 @@ export const createRuntimeExecutors = (
             const reasoningImageUploads: Promise<void>[] = [];
             let hasContentImages = false;
             let hasReasoningImages = false;
+            // Set when a terminal turn's answer was salvaged from the reasoning
+            // channel (see the answer-in-thinking guard below) — surfaced in
+            // message metadata for observability.
+            let answerSalvagedFromReasoning = false;
             textBuffer = '';
             reasoningBuffer = '';
 
@@ -1841,6 +1862,36 @@ export const createRuntimeExecutors = (
                 throw new ModelEmptyError();
               }
 
+              // Answer-in-thinking salvage: some thinking-mode models — notably
+              // DeepSeek V4 over the Anthropic-compatible API — occasionally emit
+              // the final user-facing answer inside the reasoning channel and stop
+              // naturally with an empty text block. The reasoning is then rendered
+              // as a collapsed "thinking" panel, so the user sees a blank reply.
+              // When a turn ends naturally with no tool calls and no visible
+              // content but non-empty text reasoning, promote the reasoning to be
+              // the answer. This is a backstop; the primary fix is replaying the
+              // real assistant reasoning in history (see modelForcesPreserveThinking
+              // above) which sharply reduces how often the model does this.
+              const isTerminalNaturalStop =
+                currentStepFinishReason === 'end_turn' || currentStepFinishReason === 'stop';
+              if (
+                isTerminalNaturalStop &&
+                toolsCalling.length === 0 &&
+                tool_calls.length === 0 &&
+                content.trim().length === 0 &&
+                thinkingContent.trim().length > 0 &&
+                !hasReasoningImages
+              ) {
+                log(
+                  '[%s] answer-in-thinking salvage: promoting %d chars of reasoning to content',
+                  operationLogId,
+                  thinkingContent.length,
+                );
+                content = thinkingContent;
+                thinkingContent = '';
+                answerSalvagedFromReasoning = true;
+              }
+
               log(
                 `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
                 content.length,
@@ -1934,6 +1985,9 @@ export const createRuntimeExecutors = (
                 }
                 if (hasContentImages) {
                   metadata.isMultimodal = true;
+                }
+                if (answerSalvagedFromReasoning) {
+                  metadata.answerSalvagedFromReasoning = true;
                 }
 
                 // Sanitize tool_call `arguments` before persisting to DB so malformed
