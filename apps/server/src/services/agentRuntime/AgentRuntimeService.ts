@@ -600,10 +600,14 @@ export class AgentRuntimeService {
   async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
     const agentId: string | undefined = agentState?.metadata?.agentId;
     const topicId: string | undefined = agentState?.metadata?.topicId;
+    // groupId scopes group conversations. Without it the query falls into the
+    // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
+    // the step_start uiMessages snapshot would be empty and clobber the client.
+    const groupId: string | undefined = agentState?.metadata?.groupId;
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({ agentId, topicId });
+      return await this.messageService.queryMessages({ agentId, groupId, topicId });
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
@@ -2264,6 +2268,10 @@ export class AgentRuntimeService {
     const dbMessages = await this.messageModel.query(
       {
         agentId: state.metadata?.agentId,
+        // Group runs must pass groupId, else the query filters `groupId IS NULL`
+        // and returns no group messages — the next LLM step then gets an empty
+        // context and the provider rejects it ("at least one message is required").
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
@@ -2412,6 +2420,9 @@ export class AgentRuntimeService {
     try {
       const dbMessages = await this.messageModel.query({
         agentId: state.metadata?.agentId,
+        // Group runs need groupId or the query returns no group messages
+        // (standard branch filters `groupId IS NULL`), losing the device context.
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       });
