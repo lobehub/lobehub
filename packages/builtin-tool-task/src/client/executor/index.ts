@@ -55,6 +55,7 @@ const DETAIL_MUTATING_APIS = new Set<string>([
   TaskApiName.editTask,
   TaskApiName.runTask,
   TaskApiName.setTaskSchedule,
+  TaskApiName.setTaskVerify,
   TaskApiName.updateTaskComment,
   TaskApiName.updateTaskStatus,
   TaskApiName.viewTask,
@@ -522,6 +523,110 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content: `Failed to set task schedule: ${message}`,
         error: { message, type: 'SetTaskScheduleFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskVerify = async (
+    params: {
+      enabled?: boolean | null;
+      identifier: string;
+      maxIterations?: number | null;
+      requirement?: string | null;
+      verifierAgentId?: string | null;
+      verifyCriteriaIds?: string[] | null;
+      verifyRubricId?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskVerify - params:', params);
+
+      const { identifier } = params;
+
+      // Only forward keys the caller actually provided. The TRPC contract
+      // (task.updateVerifyConfig) treats `null` as "clear" and omission as
+      // "leave untouched", so an undefined field must NOT reach the payload.
+      const verify: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: string[] | null;
+        verifyRubricId?: string | null;
+      } = {};
+      const changes: string[] = [];
+
+      if (params.enabled !== undefined) {
+        verify.enabled = params.enabled;
+        changes.push(
+          params.enabled === null
+            ? 'verify enabled cleared'
+            : `verify ${params.enabled ? 'enabled' : 'disabled'}`,
+        );
+      }
+      if (params.requirement !== undefined) {
+        verify.requirement = params.requirement;
+        changes.push(
+          params.requirement ? 'acceptance requirement set' : 'acceptance requirement cleared',
+        );
+      }
+      if (params.maxIterations !== undefined) {
+        verify.maxIterations = params.maxIterations;
+        changes.push(
+          params.maxIterations === null
+            ? 'max iterations cleared'
+            : `max iterations → ${params.maxIterations}`,
+        );
+      }
+      if (params.verifierAgentId !== undefined) {
+        verify.verifierAgentId = params.verifierAgentId;
+        changes.push(
+          params.verifierAgentId
+            ? `verifier agent → ${params.verifierAgentId}`
+            : 'verifier agent cleared',
+        );
+      }
+      if (params.verifyRubricId !== undefined) {
+        verify.verifyRubricId = params.verifyRubricId;
+        changes.push(
+          params.verifyRubricId
+            ? `verify rubric → ${params.verifyRubricId}`
+            : 'verify rubric cleared',
+        );
+      }
+      if (params.verifyCriteriaIds !== undefined) {
+        verify.verifyCriteriaIds = params.verifyCriteriaIds;
+        changes.push(
+          params.verifyCriteriaIds?.length
+            ? `verify criteria → ${params.verifyCriteriaIds.length} item(s)`
+            : 'verify criteria cleared',
+        );
+      }
+
+      if (Object.keys(verify).length === 0) {
+        return {
+          content: 'No verify fields provided; nothing to update.',
+          error: { message: 'No verify fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await taskService.updateVerifyConfig({ id: identifier, verify });
+      await getTaskStoreState().internal_refreshTaskDetail(identifier);
+
+      return {
+        content: formatTaskEdited(identifier, changes),
+        state: { enabled: params.enabled, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskVerify - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task verify config';
+      return {
+        content: `Failed to set task verify config: ${message}`,
+        error: { message, type: 'SetTaskVerifyFailed' },
         success: false,
       };
     }
