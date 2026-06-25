@@ -254,7 +254,9 @@ describe('AgentManagerRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('Found 2 agents in your workspace, showing 1-2');
+      expect(result.content).toContain('Found 2 agents in your workspace, showing 1-2:');
+      expect(result.content).toContain('id="agent-1"');
+      expect(result.content).toContain('id="agent-2"');
       expect(result.state).toMatchObject({
         agents: expect.arrayContaining([
           expect.objectContaining({ id: 'agent-1', isMarket: false }),
@@ -263,6 +265,31 @@ describe('AgentManagerRuntime', () => {
         hasMore: false,
         source: 'user',
         totalCount: 2,
+      });
+    });
+
+    it('should surface heteroType for heterogeneous agents in state and content', async () => {
+      vi.mocked(mockAgentService.queryAgents).mockResolvedValue([
+        {
+          id: 'cc-agent',
+          title: 'CC 2号机',
+          description: null,
+          avatar: null,
+          backgroundColor: null,
+          heteroType: 'claude-code',
+        },
+      ] as any);
+      vi.mocked(mockAgentService.countAgents).mockResolvedValue(1);
+
+      const result = await runtime.searchAgents({ source: 'user' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('heteroType="claude-code"');
+      expect(result.content).toContain('heterogeneous agents');
+      expect(result.state).toMatchObject({
+        agents: expect.arrayContaining([
+          expect.objectContaining({ id: 'cc-agent', heteroType: 'claude-code' }),
+        ]),
       });
     });
 
@@ -325,7 +352,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ keyword: 'nonexistent', source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents found');
+      expect(result.content).toContain('No agents matched');
     });
 
     it('should report the real total and a pagination hint when more agents exist', async () => {
@@ -342,7 +369,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ limit: 20, source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('Found 137 agents in your workspace, showing 1-20');
+      expect(result.content).toContain('Found 137 agents in your workspace, showing 1-20:');
       expect(result.content).toContain('call searchAgent with offset=20');
       expect(result.state).toMatchObject({ hasMore: true, offset: 0, totalCount: 137 });
     });
@@ -365,7 +392,7 @@ describe('AgentManagerRuntime', () => {
         limit: 20,
         offset: 20,
       });
-      expect(result.content).toContain('Found 50 agents in your workspace, showing 21-40');
+      expect(result.content).toContain('Found 50 agents in your workspace, showing 21-40:');
       expect(result.content).toContain('call searchAgent with offset=40');
       expect(result.state).toMatchObject({ hasMore: true, offset: 20 });
     });
@@ -390,7 +417,7 @@ describe('AgentManagerRuntime', () => {
         offset: 0,
       });
       expect(result.content).toContain(
-        'requested limit 50 exceeds the maximum of 20, so results were capped at 20',
+        'Requested limit 50 exceeds the maximum of 20; results were capped at 20 per call.',
       );
     });
 
@@ -401,7 +428,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ offset: 200, source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents at offset 200; only 37 agents match');
+      expect(result.content).toContain('No agents at offset 200; only 37 match');
     });
 
     it('should fall back to item count when marketplace omits totalCount', async () => {

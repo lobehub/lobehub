@@ -214,7 +214,9 @@ export class AgentModel {
 
   /**
    * Query non-virtual agents with optional keyword filter.
-   * Returns minimal agent info (id, title, description, avatar, backgroundColor).
+   * Returns minimal agent info (id, title, description, avatar, backgroundColor),
+   * plus a compact `heteroType` derived from `agencyConfig` so callers can tell
+   * which results are heterogeneous (external CLI/device) agents.
    * Excludes virtual agents (like inbox, supervisors, etc).
    */
   queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
@@ -223,6 +225,7 @@ export class AgentModel {
 
     const rows = await this.db
       .select({
+        agencyConfig: agents.agencyConfig,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
@@ -236,7 +239,13 @@ export class AgentModel {
       .limit(limit)
       .offset(offset);
 
-    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
+    // Surface only the hetero runtime type, not the full agencyConfig payload.
+    return rows.map(({ slug, agencyConfig, ...row }) =>
+      normalizeInboxAgentMeta(
+        { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
+        { slug },
+      ),
+    );
   };
 
   /**

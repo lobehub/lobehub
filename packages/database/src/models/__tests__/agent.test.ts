@@ -1685,6 +1685,26 @@ describe('AgentModel', () => {
       expect(result[0]).toHaveProperty('backgroundColor');
     });
 
+    it('should derive heteroType from agencyConfig.heterogeneousProvider', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+        id: 'hetero-agent',
+        title: 'CC 2号机',
+        userId,
+        virtual: false,
+      });
+      await agentModel.create({ title: 'Normal Agent', virtual: false });
+
+      const result = await agentModel.queryAgents();
+
+      const hetero = result.find((a) => a.id === 'hetero-agent');
+      const normal = result.find((a) => a.title === 'Normal Agent');
+      expect(hetero?.heteroType).toBe('claude-code');
+      expect(normal?.heteroType).toBeUndefined();
+      // raw agencyConfig must not leak into the result payload
+      expect(hetero).not.toHaveProperty('agencyConfig');
+    });
+
     it('should exclude virtual agents', async () => {
       // Create a virtual agent
       await agentModel.create({
