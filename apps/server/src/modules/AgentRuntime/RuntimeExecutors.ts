@@ -43,6 +43,7 @@ import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
   isDeepSeekThinkingEligibleModel,
+  isDeepSeekV4FamilyModel,
   isKimiAlwaysPreserveThinkingModel,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
@@ -953,12 +954,18 @@ export const createRuntimeExecutors = (
         // thinking block. Under large agentic context that degenerate history makes
         // the model emit its final answer *inside* the thinking block with empty
         // visible text (controlled replay: ~30% answer-in-thinking with the
-        // placeholder vs ~2.5% when the genuine reasoning is replayed). Skip only
-        // when the user explicitly turned thinking off.
-        const deepseekThinkingDisabled =
+        // placeholder vs ~2.5% when the genuine reasoning is replayed). The only
+        // opt-out is a V4 model whose thinking the user explicitly disabled via
+        // `deepseekV4ReasoningEffort: 'none'`. That flag is V4-specific and may
+        // linger on an agent after switching models, so it must NOT suppress
+        // replay for `deepseek-reasoner`, which is thinking-only and always
+        // forces reasoning history in the payload builder — suppressing it there
+        // would reintroduce the 400/answer-hidden behavior.
+        const deepseekV4ThinkingDisabled =
+          isDeepSeekV4FamilyModel(model) &&
           agentConfig.chatConfig?.deepseekV4ReasoningEffort === 'none';
         const deepseekForcesPreserveThinking =
-          isDeepSeekThinkingEligibleModel(model) && !deepseekThinkingDisabled;
+          isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
         const modelForcesPreserveThinking =
           kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
         const providerSupportsPreserveThinkingFallback =
