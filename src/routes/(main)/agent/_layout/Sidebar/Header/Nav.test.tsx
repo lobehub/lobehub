@@ -51,10 +51,6 @@ vi.mock('react-router', async () => {
   };
 });
 
-vi.mock('@/const/url', () => ({
-  AGENT_CHAT_URL: (agentId: string) => `/agent/${agentId}`,
-}));
-
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
     active,

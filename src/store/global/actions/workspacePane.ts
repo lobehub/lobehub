@@ -1,7 +1,7 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { produce } from 'immer';
 
 import { INBOX_SESSION_ID } from '@/const/session';
-import { AGENT_CHAT_URL } from '@/const/url';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
 import type { StoreSetter } from '@/store/types';

@@ -1,7 +1,7 @@
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 import { useParams } from 'react-router';
 
-import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@/const/url';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';

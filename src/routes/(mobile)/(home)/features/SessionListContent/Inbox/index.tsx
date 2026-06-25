@@ -1,8 +1,8 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { memo } from 'react';
 import { Link } from 'react-router';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import { AGENT_CHAT_URL } from '@/const/url';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';

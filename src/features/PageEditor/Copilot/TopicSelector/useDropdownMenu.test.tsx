@@ -41,10 +41,6 @@ vi.mock('@/components/RenameModal', () => ({
   openRenameModal: vi.fn(),
 }));
 
-vi.mock('@/const/url', () => ({
-  AGENT_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
-}));
-
 vi.mock('@/const/version', () => ({
   isDesktop: true,
 }));

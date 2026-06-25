@@ -1,8 +1,8 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
-import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@/const/url';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalKeys } from '@/libs/swr/keys';

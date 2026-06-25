@@ -1,13 +1,16 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_PAGE_URL,
+  AGENT_CHAT_TOPIC_URL,
+  DESKTOP_HEADER_ICON_SMALL_SIZE,
+} from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArrowLeft, X } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import { memo } from 'react';
 import { useLocation, useParams } from 'react-router';
 
-import { AGENT_CHAT_TOPIC_PAGE_URL, AGENT_CHAT_TOPIC_URL } from '@/const/url';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';

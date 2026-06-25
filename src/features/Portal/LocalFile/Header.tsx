@@ -1,13 +1,17 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_PAGE_URL,
+  AGENT_CHAT_TOPIC_URL,
+  DESKTOP_HEADER_ICON_SMALL_SIZE,
+  isDesktop,
+} from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { ArrowLeft, FolderOpen, X } from 'lucide-react';
 import { Fragment, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router';
 
-import { AGENT_CHAT_TOPIC_PAGE_URL, AGENT_CHAT_TOPIC_URL } from '@/const/url';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { localFileService } from '@/services/electron/localFileService';

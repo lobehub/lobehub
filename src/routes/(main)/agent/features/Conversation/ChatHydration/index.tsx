@@ -1,9 +1,9 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
-import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@/const/url';
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';

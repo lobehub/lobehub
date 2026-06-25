@@ -1,6 +1,6 @@
+import { GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { type NewChatGroup } from '@lobechat/types';
 
-import { GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@/const/url';
 import { chatGroupService } from '@/services/chatGroup';
 import { useChatStore } from '@/store/chat';
 import { getHomeStoreState } from '@/store/home';
