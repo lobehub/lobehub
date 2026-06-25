@@ -337,7 +337,6 @@ export default {
   'creds.view.title': 'View Credential: {{name}}',
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
-  'devices.actions.connectAnother': 'Connect another device',
   'devices.actions.edit': 'Edit',
   'devices.actions.remove': 'Remove',
   'devices.channel.connected': 'Connected {{time}}',
@@ -354,6 +353,14 @@ export default {
   'devices.edit.friendlyNamePlaceholder': 'A name to recognize this device',
   'devices.edit.save': 'Save',
   'devices.edit.title': 'Edit device',
+  'devices.capabilities.commands.desc': 'Safely execute terminal commands in your environment.',
+  'devices.capabilities.commands.title': 'Run commands',
+  'devices.capabilities.files.desc':
+    'Let agents directly access and organize the files on your computer.',
+  'devices.capabilities.files.title': 'Read & write local files',
+  'devices.capabilities.title': 'What you can do once connected',
+  'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
+  'devices.capabilities.tools.title': 'Call system tools',
   'devices.connectWizard.button': 'Connect Device',
   'devices.connectWizard.cli.connectDesc':
     'Start the background daemon to keep the device online and listening for remote operations.',
@@ -368,66 +375,35 @@ export default {
   'devices.connectWizard.desktop.step1': 'Download the desktop app',
   'devices.connectWizard.desktop.step1Desc':
     'Visit the LobeHub downloads page and get the app for your operating system.',
-  'devices.connectWizard.desktop.step2': 'Sign in and turn on Device Connection',
+  'devices.connectWizard.desktop.step2': 'Sign in and open the device gateway',
   'devices.connectWizard.desktop.step2Desc':
-    'After signing in, click Device Connection in the top-right corner of LobeHub Desktop and turn it on.',
+    "After signing in, click the device gateway icon in the top-right corner and confirm it's turned on.",
   'devices.connectWizard.desktop.step3': 'Your device appears automatically',
   'devices.connectWizard.desktop.step3Desc':
-    "Once Device Connection is on, LobeHub Desktop registers this device — you'll see it in the list once connected.",
+    "The desktop app registers itself as a device on launch — you'll see it in the list once connected.",
   'devices.connectWizard.footer':
-    'LobeHub only stores device metadata and configured working directories. File access and commands run only while LobeHub Desktop is open with Device Connection on, or while the CLI daemon is running.',
+    'Only device metadata is registered — your data is never accessed.',
   'devices.connectWizard.method.cli': 'Via CLI',
   'devices.connectWizard.method.desktop': 'Via Desktop',
+  'devices.connectWizard.subtitle': 'Choose how to connect your computer to LobeHub.',
   'devices.connectWizard.title': 'Connect Device',
   'devices.empty.desc':
-    'Connect a trusted computer or server so agents can work in configured directories, run commands, and use command-line tools available on that device.',
+    'Once connected, LobeHub agents can read/write files, run commands, and call system tools directly on your computer.',
   'devices.empty.methodCli.desc':
     'Install the CLI in your terminal — great for servers or headless machines.',
   'devices.empty.methodCli.title': 'Connect via CLI',
   'devices.empty.methodDesktop.badge': 'Recommended',
   'devices.empty.methodDesktop.desc':
-    'Download the desktop app, sign in, and turn on Device Connection.',
+    'Download the desktop app, sign in, and your device connects automatically.',
   'devices.empty.methodDesktop.title': 'Connect via Desktop',
   'devices.empty.title': 'Connect your first device',
   'devices.fallbackBadge': 'Unstable identity',
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
   'devices.lastSeen': 'Last active {{time}}',
-  'devices.overview.personal.desc':
-    'After you select a device, agents can use its configured directories, terminal, and installed command-line tools.',
-  'devices.overview.personal.title': 'Run agents on local devices',
-  'devices.overview.workspace.desc':
-    'Enroll a trusted machine so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
-  'devices.overview.workspace.title': 'Run agents on shared workspace devices',
-  'devices.placeholder.connection':
-    'Check whether LobeHub Desktop is open with Device Connection on, or whether the CLI daemon is running.',
-  'devices.placeholder.cwd': 'Set the default working folder for agent runs.',
-  'devices.placeholder.desc':
-    'Review live connections, set the default working folder, and choose where agents run local operations.',
-  'devices.placeholder.security':
-    "Turn off Device Connection, quit LobeHub Desktop, or stop the CLI daemon when you don't want agents to run on this machine.",
-  'devices.placeholder.title': 'Select a device to manage it',
-  'devices.placeholder.workspace.connection':
-    'Check whether the CLI daemon is running on the shared machine.',
-  'devices.placeholder.workspace.cwd': 'Set the shared project folder for agent runs.',
-  'devices.placeholder.workspace.security':
-    'Stop the CLI daemon when this machine should no longer be available to the workspace.',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
-  'devices.security.personal.metadata':
-    'LobeHub stores device metadata and configured working directories, not your files.',
-  'devices.security.personal.onlineOnly':
-    'Agents can use this device only while LobeHub Desktop is open with Device Connection on, or while the CLI daemon is running.',
-  'devices.security.personal.stop':
-    'To take a device offline, turn off Device Connection or quit LobeHub Desktop on that machine. For CLI devices, stop the daemon.',
-  'devices.security.title': 'Security & access',
-  'devices.security.workspace.members':
-    'Workspace devices are visible to members, but only owners can enroll devices and manage settings.',
-  'devices.security.workspace.onlineOnly':
-    'Members can run agents on a shared device only while its CLI daemon is running.',
-  'devices.security.workspace.scope':
-    'Keep working directories limited to projects the workspace should access.',
   'devices.status.offline': 'Offline',
   'devices.status.online': 'Online',
   'devices.title': 'My Devices',
@@ -2130,13 +2106,13 @@ When I am ___, I need ___
   'workspace.onboarding.step3.empty': 'No recommendations available right now.',
   'workspaceSetting.breadcrumb.settings': 'Settings',
   'workspaceSetting.devices.desc':
-    'Shared machines enrolled in this workspace. Members can run agents on them.',
+    'Shared machines enrolled into this workspace. Members can run agents on them.',
   'workspaceSetting.devices.empty': 'No workspace devices yet.',
   'workspaceSetting.devices.enrollDesc':
-    'Run this on the machine you want to share (workspace owners only):',
+    'Run this on the machine you want to share (workspace owner only):',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
   'workspaceSetting.devices.heroDesc':
-    'Enroll a trusted shared machine — such as a build server or team Mac — so workspace members can run agents there with access to shared project folders, commands, and installed command-line tools.',
+    'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
   'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',
