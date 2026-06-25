@@ -11,6 +11,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       getDeviceSystemInfo: { query: vi.fn() },
       listDevices: { query: vi.fn() },
       removeDevice: { mutate: vi.fn() },
+      removeWorkspaceDevice: { mutate: vi.fn() },
       status: { query: vi.fn() },
     },
   },
@@ -48,6 +49,13 @@ describe('device command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
+    // Default: the deletable ids exist as PERSONAL devices, so `delete` resolves
+    // them to the personal `removeDevice` path. Tests override per-scope as needed.
+    mockTrpcClient.device.listDevices.query.mockResolvedValue([
+      { deviceId: 'd1', scope: 'personal' },
+      { deviceId: 'd2', scope: 'personal' },
+      { deviceId: '8040798a77ae', scope: 'personal' },
+    ]);
   });
 
   afterEach(() => {
@@ -124,6 +132,35 @@ describe('device command', () => {
       await program.parseAsync(['node', 'test', 'device', 'delete', 'd1', '--yes']);
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('boom'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should route a workspace device to removeWorkspaceDevice', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+      mockTrpcClient.device.removeWorkspaceDevice.mutate.mockResolvedValue({ success: true });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'delete', 'ws1', '--yes']);
+
+      expect(mockTrpcClient.device.removeWorkspaceDevice.mutate).toHaveBeenCalledWith({
+        deviceId: 'ws1',
+      });
+      expect(mockTrpcClient.device.removeDevice.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should error + exit(1) without deleting when the device is not in the list', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'other', scope: 'personal' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'delete', 'missing', '--yes']);
+
+      expect(mockTrpcClient.device.removeDevice.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.device.removeWorkspaceDevice.mutate).not.toHaveBeenCalled();
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('was not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });

@@ -94,10 +94,31 @@ export function registerDeviceCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
+
+      // Resolve each device's scope first: workspace devices are owner-gated and
+      // live in a separate pool, so they need `removeWorkspaceDevice`, not the
+      // personal `removeDevice`. Routing blindly through the personal path would
+      // no-op on a workspace device yet still print success. `listDevices`
+      // already returns both pools (only when a workspace context is set).
+      const devices = await client.device.listDevices.query();
+      const byId = new Map(devices.map((d: any) => [d.deviceId, d]));
+
       let failed = 0;
       for (const deviceId of deviceIds) {
+        const device = byId.get(deviceId);
+        if (!device) {
+          failed += 1;
+          log.error(
+            `Device "${deviceId}" was not found. Run 'lh device list' to see available devices.`,
+          );
+          continue;
+        }
         try {
-          await client.device.removeDevice.mutate({ deviceId });
+          if (device.scope === 'workspace') {
+            await client.device.removeWorkspaceDevice.mutate({ deviceId });
+          } else {
+            await client.device.removeDevice.mutate({ deviceId });
+          }
           console.log(`${pc.green('✓')} Removed device ${pc.bold(deviceId)}`);
         } catch (e) {
           failed += 1;
