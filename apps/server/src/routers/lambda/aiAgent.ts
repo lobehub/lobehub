@@ -21,6 +21,7 @@ import { TopicModel } from '@/database/models/topic';
 import { topics } from '@/database/schemas';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
@@ -1487,7 +1488,6 @@ export const aiAgentRouter = router({
         });
       }
 
-      const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
       const token = await signUserJWT(ctx.userId);
 
       return { token };

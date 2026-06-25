@@ -234,6 +234,10 @@ export const runMemoryActionAgent = async (
   const manifestMap = toolsEngine.getEnabledPluginManifests([MemoryIdentifier]);
   const operationId = `agent-signal-memory-${nanoid()}`;
   const initialContext = createInitialContext(operationId);
+  // Lazy-loaded on purpose: `AgentRuntimeService` pulls the model-runtime core
+  // (eagerly touches server-only env at module init). This policy action sits on
+  // the light agentSignal request path imported by aiAgent, so a static import
+  // would couple that whole subsystem into every aiAgent import.
   const { AgentRuntimeService } =
     await import('@/server/services/agentRuntime/AgentRuntimeService');
 

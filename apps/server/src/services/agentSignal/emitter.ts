@@ -118,6 +118,10 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
     return undefined;
   }
 
+  // Lazy-loaded on purpose: `orchestrator` pulls the agent-execution / model-runtime
+  // core, while this emitter is imported on the light request path (e.g. from
+  // aiAgent). Importing it statically would drag that whole subsystem — which
+  // eagerly touches server-only env at module init — into every emitter import.
   const { executeAgentSignalSourceEvent } = await import('./orchestrator');
 
   return executeAgentSignalSourceEvent(input, context, withSelfIterationPolicy(options, true));

@@ -4,6 +4,7 @@ import { customAlphabet } from 'nanoid/non-secure';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketSDK, marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
@@ -111,7 +112,6 @@ const agentGroupProcedure = authedProcedure
   .use(marketUserInfo)
   .use(marketSDK)
   .use(async ({ ctx, next }) => {
-    const { UserModel } = await import('@/database/models/user');
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
     let marketOidcAccessToken: string | undefined;

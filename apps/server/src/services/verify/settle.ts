@@ -6,6 +6,8 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { TaskService } from '@/server/services/task';
+import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
@@ -52,9 +54,8 @@ export const driveTaskFromVerify = async (
 
     if (run.status === 'passed') {
       // Complete + cascade (checkpoint / sibling rollup / unlock downstream).
-      // Dynamic import breaks the static cycle verify → TaskService → aiAgent →
-      // agentRuntime completion → verify (the same break agentVerifier uses).
-      const { TaskService } = await import('@/server/services/task');
+      // The verify → TaskService → aiAgent → agentRuntime completion → verify
+      // cycle is safe statically since every use is call-time (inside this fn).
       await new TaskService(db, userId, workspaceId).updateStatus({
         id: op.taskId,
         status: 'completed',
@@ -82,7 +83,6 @@ export const driveTaskFromVerify = async (
     // never an unaccepted output it might act on before a later verify failure.
     // Best-effort; must not block the idempotency marker below.
     try {
-      const { TaskResultBridgeService } = await import('@/server/services/taskResultBridge');
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
         reason: run.status === 'passed' ? 'done' : 'error',

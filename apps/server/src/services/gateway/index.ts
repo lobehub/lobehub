@@ -109,10 +109,6 @@ export class GatewayService {
    * Called on startup to recover connections after LobeHub restarts.
    */
   private async syncGatewayConnections(): Promise<void> {
-    const { getServerDB } = await import('@/database/core/db-adaptor');
-    const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
-    const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
-
     const client = getMessageGatewayClient();
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -550,10 +546,6 @@ export class GatewayService {
   ): Promise<'started'> {
     const client = getMessageGatewayClient();
 
-    const { getServerDB } = await import('@/database/core/db-adaptor');
-    const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
-    const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
-
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
     const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
@@ -611,9 +603,6 @@ export class GatewayService {
     }
 
     const client = getMessageGatewayClient();
-
-    const { getServerDB } = await import('@/database/core/db-adaptor');
-    const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
 
     const serverDB = await getServerDB();
     const provider = await AgentBotProviderModel.findByPlatformAndAppId(

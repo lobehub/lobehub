@@ -8,6 +8,7 @@ import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import type { VerifierAgentRunner } from './executor';
 import { describeEvidence, type JudgeEvidence } from './prompts';
@@ -138,9 +139,9 @@ export const createVerifierAgentRunner = (params: {
       .map((e) => e.fileId)
       .filter((id): id is string => Boolean(id));
 
-    // Dynamic import breaks the static cycle: aiAgent → agentRuntime completion
-    // → verify lifecycle → this runner → aiAgent.
-    const { AiAgentService } = await import('@/server/services/aiAgent');
+    // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
+    // aiAgent import cycle is safe statically: every use here is call-time (inside
+    // this runner), so the module is fully initialized before it runs.
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),

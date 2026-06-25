@@ -1,6 +1,7 @@
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { WebOnboardingExecutionRuntime } from '@lobechat/builtin-tool-web-onboarding/executionRuntime';
 
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { OnboardingService } from '@/server/services/onboarding';
 
@@ -33,7 +34,6 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
         const personaModel = new UserPersonaModel(context.serverDB!, context.userId!);
         const persona = await personaModel.getLatestPersonaDocument();
 
@@ -57,7 +57,6 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
           return { id: doc?.id ?? null };
         }
 
-        const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
         const personaModel = new UserPersonaModel(context.serverDB!, context.userId!);
         const result = await personaModel.upsertPersona({
           editedBy: 'agent_tool',
