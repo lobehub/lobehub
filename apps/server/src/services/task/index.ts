@@ -564,8 +564,13 @@ export class TaskService {
     const agentIds = new Set<string>();
     const userIds = new Set<string>();
 
-    // Topics are created by the task's assignee agent
-    if (task.assigneeAgentId && topics.length > 0) agentIds.add(task.assigneeAgentId);
+    // Each topic keeps the agent that actually ran it (topics.agentId), so an
+    // earlier run's avatar stays correct after the task is reassigned. Fall back
+    // to the current assignee only when a topic has no recorded agent.
+    for (const t of topics) {
+      const topicAgentId = t.agentId ?? task.assigneeAgentId;
+      if (topicAgentId) agentIds.add(topicAgentId);
+    }
     // Briefs may have an agentId
     for (const b of briefs) {
       if (b.agentId) agentIds.add(b.agentId);
@@ -600,8 +605,9 @@ export class TaskService {
       ...(createdActivity ? [createdActivity] : []),
       ...topics.map((t) => {
         const handoff = t.handoff as TaskTopicHandoff | null;
+        const topicAgentId = t.agentId ?? task.assigneeAgentId;
         return {
-          author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
           id: t.topicId ?? undefined,
           operationId: t.operationId ?? null,
