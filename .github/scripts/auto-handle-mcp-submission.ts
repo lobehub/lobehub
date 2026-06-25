@@ -179,28 +179,35 @@ function classify(title: string, body: string): Classification {
   // count — some remote-only servers link a repo yet ship "no install, no npm".
   // Servers that also offer a remote endpoint but ARE installable stay `local`,
   // because the CLI can still serve the installable path.
-  const hasInstallSignal =
+  // Strong, unambiguous "installable" signals — these prove the CLI can publish it.
+  const hasStrongInstall =
     /\bnpx\b|\buvx\b|\bpipx\b|\bpip install\b|\bdocker run\b/.test(text) ||
     /"command"\s*:/.test(text) ||
-    /\bstdio\b/.test(text) ||
     /npmjs\.com\/package\//.test(text);
+  // A bare "stdio" mention is weak — remote submissions often name it in a negation
+  // or comparison ("Transport: SSE, not stdio"), so it must not outrank a remote signal.
+  const hasStdioMention = /\bstdio\b/.test(text);
   const hasRemoteSignal =
     /"url"\s*:/.test(text) ||
     /\bstreamable[- ]?http\b|\bsse\b/.test(text) ||
     /transport[^a-z]{0,8}(?:sse|http|streamable)/.test(text) ||
-    /\bremote(?:ly)? (?:hosted|mcp|server)\b|\bhosted mcp\b/.test(text);
-  // An explicit "no install / no npm / remote-only" statement is decisive: the
-  // server ships only as a URL, so it overrides any incidental stdio/command
-  // mention (e.g. a body that says "unlike stdio servers, this one is remote").
+    /\bremote(?:ly)? (?:hosted|mcp|server)\b|\bhosted mcp\b/.test(text) ||
+    // a bare endpoint URL (non-GitHub) labelled "url:" / "endpoint:" is a remote reference
+    /\b(?:endpoint|url)\b[^\n]{1,15}https?:\/\/(?!github\.com)/.test(text);
+  // An explicit "no install / no npm / remote-only" statement is decisive: the server
+  // ships only as a URL, so it overrides any incidental stdio/command mention.
   const isRemoteOnly =
     /\bno install\b|\bno npm\b|\bremote[- ]only\b|no local install|installation[- ]free/.test(text);
+  // Precedence: explicit remote-only > strong install > any remote signal > lone stdio mention.
   const delivery: Classification['delivery'] = isRemoteOnly
     ? 'remote'
-    : hasInstallSignal
+    : hasStrongInstall
       ? 'local'
       : hasRemoteSignal
         ? 'remote'
-        : 'unknown';
+        : hasStdioMention
+          ? 'local'
+          : 'unknown';
 
   if (!hasMcp) return { delivery, isSubmission: false, reason: 'no "mcp" keyword', repoUrl };
   if (!hasAddVerb)
