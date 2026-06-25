@@ -726,6 +726,78 @@ describe('AiModelModel', () => {
       expect(remoteModel?.abilities).toEqual({ vision: true });
       expect(customModel?.abilities).toEqual({ reasoning: true }); // Now updated from remote
     });
+
+    it('should NOT update builtin models with remote provider-sourced data', async () => {
+      // 1. Builtin model with existing data
+      await serverDB.insert(aiModels).values({
+        id: 'gpt-4',
+        providerId: 'openai',
+        userId,
+        displayName: 'GPT-4',
+        abilities: { functionCall: true, vision: true },
+        type: 'chat',
+        contextWindowTokens: 128000,
+        pricing: {
+          currency: 'USD',
+          units: [
+            { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+            { name: 'output', rate: 30, strategy: 'fixed', unit: 'token' },
+          ],
+        } as any,
+        parameters: { temperature: 1 },
+        releasedAt: '2023-03-14',
+        description: 'Built-in model description',
+        source: 'builtin',
+      });
+
+      // 2. Remote provides different data for same model id
+      const models = [
+        {
+          id: 'gpt-4',
+          enabled: false,
+          displayName: 'Remote GPT-4',
+          abilities: { reasoning: true }, // Different abilities
+          type: 'image' as const, // Different type
+          contextWindowTokens: 8192, // Different context window
+          pricing: {
+            currency: 'USD',
+            units: [
+              { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+              { name: 'output', rate: 15, strategy: 'fixed', unit: 'token' },
+            ],
+          } as any, // Different pricing
+          parameters: { temperature: 0.5 }, // Different parameters
+          releasedAt: '2024-01-01', // Different release date
+          description: 'Remote model description', // Different description
+        },
+      ] as any as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify: builtin model is protected from remote updates
+      const updated = await aiProviderModel.findById('gpt-4');
+
+      // Provider-sourced fields should NOT be updated
+      expect(updated?.abilities).toEqual({ functionCall: true, vision: true }); // Preserved
+      expect(updated?.type).toBe('chat'); // Preserved
+      expect(updated?.contextWindowTokens).toBe(128000); // Preserved
+      expect(updated?.pricing).toEqual({
+        currency: 'USD',
+        units: [
+          { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+          { name: 'output', rate: 30, strategy: 'fixed', unit: 'token' },
+        ],
+      }); // Preserved
+      expect(updated?.parameters).toEqual({ temperature: 1 }); // Preserved
+      expect(updated?.releasedAt).toBe('2023-03-14'); // Preserved
+      expect(updated?.description).toBe('Built-in model description'); // Preserved
+
+      // User-editable fields still use DB-first COALESCE
+      expect(updated?.displayName).toBe('GPT-4'); // Preserved (user-editable)
+
+      // Source is never overwritten
+      expect(updated?.source).toBe('builtin');
+    });
   });
 
   describe('batchToggleAiModels', () => {
