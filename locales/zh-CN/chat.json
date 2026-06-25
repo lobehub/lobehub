@@ -946,6 +946,7 @@
   "tts.action": "语音朗读",
   "tts.clear": "删除语音",
   "turnProcess.done": "已处理",
+  "turnProcess.ranFor": "共运行 {{duration}}",
   "untitledAgent": "未命名助理",
   "untitledGroup": "未命名群组",
   "updateAgent": "更新助理信息",

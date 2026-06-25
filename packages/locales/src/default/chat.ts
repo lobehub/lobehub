@@ -1042,6 +1042,7 @@ export default {
   'tts.action': 'Text-to-Speech',
   'tts.clear': 'Clear Speech',
   'turnProcess.done': 'Processed',
+  'turnProcess.ranFor': 'Ran for {{duration}}',
   'untitledAgent': 'Untitled Agent',
   'untitledGroup': 'Untitled Group',
   'updateAgent': 'Update Agent Information',

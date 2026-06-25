@@ -1,15 +1,6 @@
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Accordion, AccordionItem, Text } from '@lobehub/ui';
 import { type Key, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const styles = createStaticStyles(({ css }) => ({
-  duration: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
 
 const PROCESS_KEY = 'process';
 
@@ -37,10 +28,9 @@ const ProcessFold = memo<ProcessFoldProps>(
     const expandedKeys = useMemo(() => (expanded ? [PROCESS_KEY] : []), [expanded]);
 
     const title = (
-      <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-        <Text type={'secondary'}>{t('turnProcess.done')}</Text>
-        {durationText && <span className={styles.duration}>{durationText}</span>}
-      </Flexbox>
+      <Text style={{ minWidth: 0 }} type={'secondary'}>
+        {durationText ? t('turnProcess.ranFor', { duration: durationText }) : t('turnProcess.done')}
+      </Text>
     );
 
     return (
