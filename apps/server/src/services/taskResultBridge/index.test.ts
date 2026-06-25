@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 
@@ -103,6 +104,14 @@ describe('TaskResultBridgeService.deliver', () => {
       parentMessageId: 'task-cb-task-1-topic-done',
       suppressUserMessage: true,
     });
+  });
+
+  it('scopes the MessageModel to the bridge workspace so workspace tasks find their leaf', async () => {
+    await new TaskResultBridgeService(db, TEST_USER, 'ws-1').deliver(baseParams);
+
+    // Personal-mode model (workspace_id IS NULL) would miss the team topic's
+    // leaf and create the callback parentless — the lookup must be ws-scoped.
+    expect(MessageModel).toHaveBeenCalledWith(db, TEST_USER, 'ws-1');
   });
 
   it('skips tasks with no origin (e.g. API-created)', async () => {

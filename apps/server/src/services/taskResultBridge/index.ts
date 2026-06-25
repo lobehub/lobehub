@@ -139,7 +139,11 @@ export class TaskResultBridgeService {
     // can redeliver the `on-topic-complete` webhook (which drives this bridge) —
     // the second create loses the PK race and we skip.
     const messageId = `task-cb-${taskId}-${topicId ?? params.operationId}`;
-    const messageModel = new MessageModel(this.db, this.userId);
+    // Pass workspaceId: a workspace-scoped task's origin topic lives under the
+    // team workspace, so the leaf lookup + create must use the matching
+    // ownership predicate — a personal-mode model (workspace_id IS NULL) finds
+    // no leaf and the callback would be created parentless (LOBE-10784).
+    const messageModel = new MessageModel(this.db, this.userId, this.workspaceId);
 
     // Anchor the callback on the creator topic's CURRENT leaf at delivery time —
     // NOT origin.messageId (the assistant turn that called createTask). A task
