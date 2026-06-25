@@ -393,6 +393,11 @@ export default {
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
   'cliOverloadedGuide.actions.retry': 'Retry',
+  'cliOverloadedGuide.autoRetry.actions.cancel': 'Stop auto-retry',
+  'cliOverloadedGuide.autoRetry.actions.retryNow': 'Retry now',
+  'cliOverloadedGuide.autoRetry.status':
+    'Upstream is temporarily overloaded (not your usage limit) · retry {{attempt}}/{{max}} in {{seconds}}s',
+  'cliOverloadedGuide.autoRetry.title': '{{name}} is busy — retrying automatically…',
   'cliOverloadedGuide.desc':
     "{{name}}'s upstream model service is temporarily overloaded. This usually clears in a moment.",
   'cliOverloadedGuide.errorDetails': 'Error details',

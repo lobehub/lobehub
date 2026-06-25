@@ -113,10 +113,20 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/features/Conversation/store', () => ({
+  dataSelectors: {
+    getDisplayMessageById: () => () => undefined,
+  },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      delAndRegenerateMessage: vi.fn(),
       deleteMessage: vi.fn(),
-      regenerateAssistantMessage: vi.fn(),
+      heteroOverloadRetryAttempts: {},
+      internal_beginHeteroOverloadWait: vi.fn(),
+      internal_endHeteroOverloadWait: vi.fn(),
+      isHeteroOverloadWaitAborted: () => false,
+      markHeteroOverloadRetryExhausted: vi.fn(),
+      recordHeteroOverloadRetry: vi.fn(),
+      resetHeteroOverloadRetry: vi.fn(),
     }),
 }));
 

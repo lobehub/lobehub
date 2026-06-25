@@ -3,6 +3,22 @@
  */
 export interface MessageStateState {
   /**
+   * Consecutive auto-retry count for heterogeneous-agent "overloaded" errors,
+   * keyed by the parent user message id (stable across the delete+recreate
+   * cycle a retry performs). Drives the backoff schedule and the
+   * exhausted→manual fallback; cancelling pins it past the cap.
+   */
+  heteroOverloadRetryAttempts: Record<string, number>;
+
+  /**
+   * Operation id of the in-flight "auto-retry pending" operation per turn
+   * (keyed by parent user message id). This operation stays running for the
+   * whole countdown so the turn keeps its loading/in-progress state between
+   * attempts; cancelling it (Stop / guide cancel) tears the auto-retry down.
+   */
+  heteroOverloadWaitOpIds: Record<string, string>;
+
+  /**
    * IDs of messages currently being edited
    */
   messageEditingIds: string[];
@@ -20,6 +36,8 @@ export interface MessageStateState {
 }
 
 export const messageStateInitialState: MessageStateState = {
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
   messageEditingIds: [],
   messageLoadingIds: [],
   pendingArgsUpdates: new Map(),

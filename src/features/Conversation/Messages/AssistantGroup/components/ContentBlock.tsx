@@ -3,10 +3,13 @@ import { memo, useCallback } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
-import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
+import ErrorMessageExtra, {
+  isHeterogeneousAgentStatusGuideError,
+  useErrorContent,
+} from '@/features/Conversation/Error';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
-import { messageStateSelectors, useConversationStore } from '../../../store';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
 import Reasoning from '../../components/Reasoning';
 import { Tools } from '../Tools';
@@ -34,11 +37,19 @@ const ContentBlock = memo<ContentBlockProps>(
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
-    const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
-      messageStateSelectors.isMessageInReasoning(id)(s),
-      s.deleteDBMessage,
-      s.continueGeneration,
-    ]);
+    const [isReasoning, deleteMessage, continueGeneration, delAndRegenerateMessage] =
+      useConversationStore((s) => [
+        messageStateSelectors.isMessageInReasoning(id)(s),
+        s.deleteDBMessage,
+        s.continueGeneration,
+        s.delAndRegenerateMessage,
+      ]);
+    // The group's parent user message id — the stable scope key for auto-retry
+    // (survives the delete+recreate a retry performs) and the regenerate target.
+    const groupParentId = useConversationStore(
+      (s) => dataSelectors.getDisplayMessageById(assistantId)(s)?.parentId,
+    );
+    const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
@@ -46,9 +57,27 @@ const ContentBlock = memo<ContentBlockProps>(
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
     const handleRegenerate = useCallback(async () => {
+      // Hetero CLIs (CC / Codex) have no "continue a cut-off response"
+      // primitive, so `continueGeneration` is a silent no-op for them and the
+      // retry button does nothing. An errored hetero turn must instead be
+      // regenerated from the user message — routed through the GROUP id (the
+      // child block id isn't a top-level displayMessage). Use the delete-first
+      // `delAndRegenerateMessage` so the failed turn is replaced in place rather
+      // than accumulating a sibling branch on every (auto-)retry.
+      if (isHeteroError) {
+        void delAndRegenerateMessage(assistantId);
+        return;
+      }
       await deleteMessage(id);
       continueGeneration(assistantId);
-    }, [assistantId, continueGeneration, deleteMessage, id]);
+    }, [
+      assistantId,
+      continueGeneration,
+      delAndRegenerateMessage,
+      deleteMessage,
+      id,
+      isHeteroError,
+    ]);
 
     const errorBlock = error ? (
       <ErrorContent
@@ -58,6 +87,7 @@ const ContentBlock = memo<ContentBlockProps>(
           <ErrorMessageExtra
             data={{ error, id }}
             error={alertError}
+            retryScopeId={groupParentId}
             onRegenerate={handleRegenerate}
           />
         )}
