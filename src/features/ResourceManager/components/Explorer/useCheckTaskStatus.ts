@@ -14,7 +14,7 @@ export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
           (item.chunkingStatus === AsyncTaskStatus.Processing ||
             item.embeddingStatus === AsyncTaskStatus.Processing),
       )
-      .map((item) => item.id) ?? [];
+      .map((item) => item.fileId ?? item.id) ?? [];
   const processingKey = processingFileIds.join(',');
 
   // Poll every 5s to check if chunking/embedding status has changed

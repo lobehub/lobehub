@@ -126,6 +126,7 @@ const FileListItem = ({
   createdAt,
   embeddingError,
   embeddingStatus,
+  fileId,
   fileType,
   finishEmbedding,
   id,
@@ -138,12 +139,12 @@ const FileListItem = ({
   slug,
   sourceType,
   url,
-  userId,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
+  const chunkTargetId = fileId ?? id;
   const fileStoreState = useFileStore(
     (s) => ({
-      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
+      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(chunkTargetId)(s),
       parseFiles: s.parseFilesToChunks,
       refreshFileList: s.refreshFileList,
       updateResource: s.updateResource,
@@ -310,6 +311,7 @@ const FileListItem = ({
             chunkingStatus={chunkingStatus}
             embeddingError={embeddingError}
             embeddingStatus={embeddingStatus}
+            fileId={fileId}
             finishEmbedding={finishEmbedding}
             id={id}
             isCreatingFileParseTask={fileStoreState.isCreatingFileParseTask}

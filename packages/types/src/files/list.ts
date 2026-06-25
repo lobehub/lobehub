@@ -15,9 +15,11 @@ export interface FileListItem {
    */
   content?: string | null;
   createdAt: Date;
+  documentId?: string | null;
   editorData?: Record<string, any> | null;
   embeddingError: any | null;
   embeddingStatus?: AsyncTaskStatus | null;
+  fileId?: string | null;
   fileType: string;
   finishEmbedding: boolean;
   id: string;

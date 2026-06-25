@@ -23,12 +23,14 @@ export interface ResourceItem {
   content?: string | null;
   // Timestamps
   createdAt: Date;
+  documentId?: string | null;
 
   editorData?: Record<string, any> | null;
   embeddingError?: any | null;
 
   embeddingStatus?: string | null;
   embeddingTaskId?: string | null;
+  fileId?: string | null;
   fileType: string;
   finishEmbedding?: boolean;
   // Identity

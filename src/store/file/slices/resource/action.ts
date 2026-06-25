@@ -479,11 +479,30 @@ export class ResourceActionImpl {
     if (items.length === 0) return;
 
     const statusMap = new Map(items.map((item) => [item.id, item]));
+    const statusByResourceId = new Map<
+      string,
+      Pick<
+        ResourceItem,
+        | 'id'
+        | 'chunkCount'
+        | 'chunkingError'
+        | 'chunkingStatus'
+        | 'embeddingError'
+        | 'embeddingStatus'
+        | 'finishEmbedding'
+      >
+    >();
+
+    for (const resource of this.#get().resourceList) {
+      const status =
+        statusMap.get(resource.id) ?? (resource.fileId && statusMap.get(resource.fileId));
+      if (status) statusByResourceId.set(resource.id, status);
+    }
 
     this.#patchLocalResourceEntries(
-      new Set(statusMap.keys()),
+      new Set(statusByResourceId.keys()),
       (resource) => {
-        const patch = statusMap.get(resource.id);
+        const patch = statusByResourceId.get(resource.id);
         if (!patch) return resource;
 
         return {
