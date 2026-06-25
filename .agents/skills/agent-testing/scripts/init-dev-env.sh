@@ -28,13 +28,25 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 ROOT_ENV_FILE="$REPO_ROOT/.env"
 
+# Resolve the workspace root the SAME way test-env.sh does, so both scripts
+# read/write the ports file (and other .records artifacts) at the same path.
+# When the skill resolves under a cloud checkout's submodule
+# (.../lobehub-cloud*/lobehub), REPO_ROOT is the submodule but the shared
+# .records lives at the cloud parent — mismatching it would make setup-db/dev
+# allocate ports that test-env.sh / setup-auth.sh never read.
+WORKSPACE_ROOT="$REPO_ROOT"
+if [[ "$(basename "$WORKSPACE_ROOT")" == "lobehub" ]]; then
+  _parent_root="$(cd "$WORKSPACE_ROOT/.." && pwd)"
+  [[ "$(basename "$_parent_root")" == lobehub-cloud* ]] && WORKSPACE_ROOT="$_parent_root"
+fi
+
 # --- auto-allocated, non-conflicting ports (persisted per workspace) ---------
 # Each repo copy (lobehub-cloud, lobehub-cloud-cc, ...) probes its own free
 # SERVER_PORT / SPA_PORT so copies running concurrently never fight over
 # 3010/9876. Ports are probed once then persisted, so repeated calls (setup-db,
 # seed-user, dev, web-seed) and test-env.sh all agree on the same port. Delete
 # the ports file (or pass SERVER_PORT=... explicitly) to re-allocate.
-PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$REPO_ROOT/.records/env/agent-testing-ports.env}"
+PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$WORKSPACE_ROOT/.records/env/agent-testing-ports.env}"
 
 _port_in_use() { lsof -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1; }
 _pick_free_port() {
@@ -81,8 +93,8 @@ DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:${DB_PORT
 REDIS_PORT="${REDIS_PORT:-6380}"
 REDIS_CONTAINER="${REDIS_CONTAINER:-lobehub-agent-testing-redis}"
 REDIS_URL="${REDIS_URL:-redis://localhost:${REDIS_PORT}}"
-ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-dev.env"
-CLI_ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-cli.env"
+ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-dev.env"
+CLI_ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-cli.env"
 AGENT_TESTING_API_KEY="${AGENT_TESTING_API_KEY:-sk-lh-agenttesting0001}"
 QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
 QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
@@ -450,7 +462,12 @@ cmd_qstash() {
 cmd_dev_next() {
   apply_env
   cd "$REPO_ROOT"
-  exec pnpm run dev:next
+  # Pass the allocated port explicitly. The submodule's `dev:next` package script
+  # hard-codes `-p 3010`, so going through it would bind the wrong port whenever
+  # SERVER_PORT was auto-allocated to something else. apply_env already exported
+  # every env this needs (there is no .env to load in this mode), so invoking
+  # next directly is equivalent and port-correct in both cloud and submodule.
+  exec pnpm exec next dev -p "$SERVER_PORT"
 }
 
 cmd_dev() {
