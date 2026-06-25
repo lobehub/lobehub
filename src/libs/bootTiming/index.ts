@@ -53,6 +53,15 @@ export const bootTiming = {
     }
   },
 
+  spanSync<T>(name: string, fn: () => T): T {
+    const start = now();
+    try {
+      return fn();
+    } finally {
+      spans.push({ durMs: now() - start, name, startMs: start });
+    }
+  },
+
   _reset(): void {
     spans = [];
     marks = {};

@@ -86,6 +86,45 @@ describe('bootTiming', () => {
     expect(spans[0]).toEqual({ durMs: 20, name: 'resource', startMs: 50 });
   });
 
+  it('spanSync records name/startMs/durMs and returns fn value', () => {
+    const nowMock = vi.spyOn(performance, 'now');
+    nowMock.mockReturnValueOnce(10).mockReturnValueOnce(25);
+
+    const result = bootTiming.spanSync('sync-init', () => 'ok');
+
+    expect(result).toBe('ok');
+    const { spans } = bootTiming.snapshot();
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toEqual({ durMs: 15, name: 'sync-init', startMs: 10 });
+  });
+
+  it('spanSync records span even when fn throws, and rethrows the error', () => {
+    const nowMock = vi.spyOn(performance, 'now');
+    nowMock.mockReturnValueOnce(2).mockReturnValueOnce(8);
+
+    const err = new Error('boom');
+    expect(() =>
+      bootTiming.spanSync('sync-bad', () => {
+        throw err;
+      }),
+    ).toThrow(err);
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toEqual({ durMs: 6, name: 'sync-bad', startMs: 2 });
+  });
+
+  it('measure with fromMark absent is a no-op', () => {
+    const nowMock = vi.spyOn(performance, 'now');
+    nowMock.mockReturnValueOnce(10);
+
+    bootTiming.mark('b');
+    expect(() => bootTiming.measure('a-to-b', 'missing', 'b')).not.toThrow();
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans).toHaveLength(0);
+  });
+
   it('snapshot returns copies — mutating returned data does not affect internal state', () => {
     bootTiming.recordSpan('x', 1, 2);
     bootTiming.mark('m');
