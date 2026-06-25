@@ -19,7 +19,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AGENT_CHAT_TOPIC_URL } from '@/const/url';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@/const/url';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -77,21 +77,25 @@ const SearchResults = memo<SearchResultsProps>(
         case 'topic': {
           if (result.agentId) {
             navigate(AGENT_CHAT_TOPIC_URL(result.agentId, result.id));
+          } else if (result.groupId) {
+            navigate(GROUP_CHAT_TOPIC_URL(result.groupId, result.id));
           } else {
-            navigate(`/chat?topic=${result.id}`);
+            navigate('/');
           }
           break;
         }
         case 'message': {
-          // Navigate to the topic/agent where the message is
+          // Navigate to the topic/agent (or group) where the message lives
           if (result.topicId && result.agentId) {
             navigate(`${AGENT_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
-          } else if (result.topicId) {
-            navigate(`/chat?topic=${result.topicId}#${result.id}`);
+          } else if (result.topicId && result.groupId) {
+            navigate(`${GROUP_CHAT_TOPIC_URL(result.groupId, result.topicId)}#${result.id}`);
           } else if (result.agentId) {
             navigate(`/agent/${result.agentId}#${result.id}`);
+          } else if (result.groupId) {
+            navigate(`${GROUP_CHAT_URL(result.groupId)}#${result.id}`);
           } else {
-            navigate(`/chat#${result.id}`);
+            navigate('/');
           }
           break;
         }

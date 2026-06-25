@@ -122,7 +122,6 @@ describe('AgentManagerRuntime', () => {
     it('should create an agent successfully', async () => {
       vi.mocked(mockAgentService.createAgent).mockResolvedValue({
         agentId: 'new-agent-id',
-        sessionId: 'new-session-id',
       });
 
       const result = await runtime.createAgent({
@@ -136,7 +135,6 @@ describe('AgentManagerRuntime', () => {
       expect(result.content).toContain('My New Agent');
       expect(result.state).toMatchObject({
         agentId: 'new-agent-id',
-        sessionId: 'new-session-id',
         success: true,
       });
     });

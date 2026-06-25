@@ -68,21 +68,21 @@ export const CreateAgentRender = memo<BuiltinRenderProps<CreateAgentParams, Crea
     const { title, description, systemRole, plugins, model, provider, avatar, backgroundColor } =
       args || {};
 
-    const handleNavigateToSession = useCallback(() => {
-      const targetId = pluginState?.sessionId ?? pluginState?.agentId;
+    const handleNavigateToAgent = useCallback(() => {
+      const targetId = pluginState?.agentId;
       if (!targetId) return;
       navigate(AGENT_CHAT_URL(targetId));
-    }, [navigate, pluginState?.sessionId, pluginState?.agentId]);
+    }, [navigate, pluginState?.agentId]);
 
     // After tool execution succeeds, render a clickable agent card
-    if (pluginState?.success && (pluginState.agentId || pluginState.sessionId)) {
+    if (pluginState?.success && pluginState.agentId) {
       return (
         <Flexbox
           horizontal
           align={'center'}
           className={styles.agentCard}
           gap={12}
-          onClick={handleNavigateToSession}
+          onClick={handleNavigateToAgent}
         >
           <Avatar
             avatar={avatar || '🤖'}

@@ -104,10 +104,6 @@ export interface CreateAgentState {
    */
   error?: string;
   /**
-   * The associated session ID
-   */
-  sessionId?: string;
-  /**
    * Whether the creation was successful
    */
   success: boolean;
