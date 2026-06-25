@@ -117,4 +117,32 @@ describe('createVerifierAgentRunner', () => {
     expect(existsByIdMock).not.toHaveBeenCalled();
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
+
+  it('injects the builder-captured evidence into the verifier prompt (LOBE-10638)', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({
+      ...runnerArgs,
+      evidence: [
+        { description: 'toolbar screenshot', type: 'screenshot' },
+        { content: 'aria-label="Send"', description: 'DOM', type: 'dom_snapshot' },
+      ],
+    });
+
+    const prompt: string = execParams().prompt;
+    expect(prompt).toContain('## Captured evidence');
+    expect(prompt).toContain('toolbar screenshot');
+    expect(prompt).toContain('[artifact captured]'); // screenshot referenced by presence
+    expect(prompt).toContain('aria-label="Send"'); // inline dom text quoted
+  });
+
+  it('omits the captured-evidence section when no evidence was provided', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner(runnerArgs);
+
+    expect(execParams().prompt).not.toContain('## Captured evidence');
+  });
 });

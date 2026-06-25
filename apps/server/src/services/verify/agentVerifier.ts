@@ -10,6 +10,7 @@ import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 
 import type { VerifierAgentRunner } from './executor';
+import { describeEvidence, type JudgeEvidence } from './prompts';
 
 const log = debug('lobe-server:verify-agent-verifier');
 
@@ -17,21 +18,30 @@ const log = debug('lobe-server:verify-agent-verifier');
  * Build the instruction for a verifier sub-agent investigating one check. The
  * sub-agent reports its verdict by calling the `submitVerifyResult` tool with the
  * `checkItemId` injected here — it does not write to the DB directly.
+ *
+ * `evidence` is what the builder self-captured during the run (LOBE-10638): the
+ * verifier judges against the run goal AND this evidence — it's the verifier's
+ * primary Data, not a competing verdict.
  */
 export const buildVerifierPrompt = (params: {
   checkItem: VerifyCheckItem;
   deliverable: string;
+  evidence?: JudgeEvidence[];
   goal: string;
   instruction?: string;
 }): string => {
-  const { checkItem, deliverable, goal, instruction } = params;
+  const { checkItem, deliverable, evidence, goal, instruction } = params;
+  const capturedEvidence = describeEvidence(evidence);
   return [
     `## Check to verify\ncheckItemId: ${checkItem.id}\nTitle: ${checkItem.title}`,
     checkItem.description ? `Summary: ${checkItem.description}` : '',
     instruction ? `\n## Judging instruction\n${instruction}` : '',
     `\n## Run goal\n${goal}`,
     deliverable ? `\n## Deliverable / final output\n${deliverable}` : '',
-    `\n## Your task\nInvestigate whether the deliverable satisfies this check, following the judging instruction. Gather concrete evidence. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
+    capturedEvidence
+      ? `\n## Captured evidence (builder self-evidence — primary Data, weight above prose)${capturedEvidence}`
+      : '',
+    `\n## Your task\nInvestigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -69,7 +79,7 @@ export const createVerifierAgentRunner = (params: {
     params;
   if (!topicId) return undefined;
 
-  return async ({ checkItem, goal, operationId }) => {
+  return async ({ checkItem, evidence, goal, operationId }) => {
     // The detailed instruction is the criterion's rule body, stored in a document.
     const instruction = checkItem.documentId
       ? ((await new DocumentModel(db, userId, workspaceId).findById(checkItem.documentId))
@@ -133,7 +143,7 @@ export const createVerifierAgentRunner = (params: {
       // pinned agent keeps its own (critical for heterogeneous runtimes).
       ...(inheritModel && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({ checkItem, deliverable, goal, instruction }),
+      prompt: buildVerifierPrompt({ checkItem, deliverable, evidence, goal, instruction }),
       ...(inheritModel && provider ? { provider } : {}),
       ...agentRef,
       userInterventionConfig: { approvalMode: 'headless' },

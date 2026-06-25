@@ -68,7 +68,7 @@ export interface JudgePromptInput {
   mode: 'single' | 'batch';
 }
 
-const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
+export const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
   if (!evidence?.length) return '';
   const lines = evidence.map((e) => {
     const caption = e.description ? ` — ${e.description}` : '';
