@@ -1,3 +1,4 @@
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest, ToolsGenerationResult } from '@lobechat/context-engine';
 import { generateToolsFromManifest } from '@lobechat/context-engine';
@@ -72,6 +73,33 @@ const dropPageAgentIfEditorNotMounted = (
   };
 };
 
+// Inside a group, coordination already happens through real member agents
+// (GroupManagement.executeAgentTask / broadcast). The lobe-agent `callSubAgent`
+// dispatch would spawn an *isolated* ad-hoc sub-agent on top of that, which is
+// redundant and confusing for both supervisor (`group`) and member (`group_agent`)
+// turns. Drop only that one API — the rest of lobe-agent (plan / todo / visual
+// media) stays available, so the manifest and toolId are kept.
+const dropSubAgentInGroup = (
+  set: ComposedToolSet,
+  context: ToolSetComposerContext,
+): ComposedToolSet => {
+  if (context.scope !== 'group' && context.scope !== 'group_agent') return set;
+  if (!set.enabledToolIds.includes(LobeAgentIdentifier)) return set;
+
+  const subAgentToolName = `${LobeAgentIdentifier}____${LobeAgentApiName.callSubAgent}`;
+  const nextTools = set.tools?.filter((t) => t.function?.name !== subAgentToolName);
+
+  // No callSubAgent tool present (e.g. already manual-excluded) — nothing to do.
+  if (nextTools && set.tools && nextTools.length === set.tools.length) return set;
+
+  log('dropping %s: in-group scope (%s)', subAgentToolName, context.scope);
+
+  return {
+    ...set,
+    tools: nextTools && nextTools.length > 0 ? nextTools : undefined,
+  };
+};
+
 export const composeEnabledTools = ({
   toolsDetailed,
   injectedManifests,
@@ -83,8 +111,8 @@ export const composeEnabledTools = ({
     tools: toolsDetailed.tools,
   };
 
-  return dropPageAgentIfEditorNotMounted(
-    mergeInjectedManifests(initial, injectedManifests),
+  return dropSubAgentInGroup(
+    dropPageAgentIfEditorNotMounted(mergeInjectedManifests(initial, injectedManifests), context),
     context,
   );
 };
