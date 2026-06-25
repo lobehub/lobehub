@@ -84,7 +84,11 @@ const MessageItem = memo<MessageItemProps>(
       inPortalThread,
       topic,
     });
-    const shouldInjectFooter = role === 'assistant' || role === 'assistantGroup';
+    // Supervisor renders through AssistantGroupMessage, which draws footerRender
+    // itself — keep it in the injected-footer set so the outer wrapper doesn't
+    // render the same anchored footer (e.g. AgentSignalReceiptList) a second time.
+    const shouldInjectFooter =
+      role === 'assistant' || role === 'assistantGroup' || role === 'supervisor';
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {

@@ -425,6 +425,11 @@ export class GatewayActionImpl {
           }),
           groupId: context.groupId,
           ...(initialTopicMetadata && { initialTopicMetadata }),
+          // Forward the group orchestration role so the server can stamp it onto
+          // the assistant message metadata. Without this the gateway-created
+          // supervisor turn loses its role on the step_start snapshot / refetch
+          // and renders as a generic assistant.
+          orchestrationRole: context.orchestrationRole,
           scope: context.scope,
           taskId,
           threadId: context.threadId,

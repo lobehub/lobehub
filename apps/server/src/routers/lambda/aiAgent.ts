@@ -147,6 +147,12 @@ const ExecAgentSchema = z
             workingDirectory: z.string().optional(),
           })
           .optional(),
+        /**
+         * Group orchestration role of the run, stamped onto the assistant
+         * message's `metadata.orchestrationRole` so the supervisor/member
+         * identity survives the gateway step_start snapshot / refetch.
+         */
+        orchestrationRole: z.enum(['supervisor', 'member']).optional(),
         scope: z.string().nullish(),
         sessionId: z.string().optional(),
         taskId: z.string().nullish(),
