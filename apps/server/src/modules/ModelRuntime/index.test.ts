@@ -172,6 +172,40 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
     });
 
+    it('Bedrock AI provider: with API key only', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        apiKey: 'user-bedrock-api-key',
+        awsRegion: 'us-east-1',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
+
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
+    });
+
+    it('Bedrock AI provider: with legacy AWS credentials only', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        awsAccessKeyId: 'user-aws-id',
+        awsSecretAccessKey: 'user-aws-secret',
+        awsRegion: 'user-aws-region',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
+
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
+    });
+
+    it('Bedrock AI provider: falls back to env credentials when only region is provided', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        awsRegion: 'custom-aws-region',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
+
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
+      expect(runtime['_runtime'].region).toBe('custom-aws-region');
+    });
+
     it('Ollama provider: with endpoint', async () => {
       const jwtPayload: ClientSecretPayload = { baseURL: 'http://user-ollama-url' };
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Ollama, jwtPayload);
@@ -569,11 +603,28 @@ describe('buildPayloadFromKeyVaults', () => {
       const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Bedrock);
 
       expect(payload).toEqual({
-        apiKey: 'aws-secret-keyaws-access-key',
+        apiKey: undefined,
         awsAccessKeyId: 'aws-access-key',
         awsRegion: 'us-east-1',
         awsSecretAccessKey: 'aws-secret-key',
         awsSessionToken: 'session-token',
+        runtimeProvider: ModelProvider.Bedrock,
+      });
+    });
+
+    it('Bedrock: returns API key and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'bedrock-api-key',
+        region: 'us-east-1',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Bedrock);
+
+      expect(payload).toEqual({
+        apiKey: 'bedrock-api-key',
+        awsAccessKeyId: undefined,
+        awsRegion: 'us-east-1',
+        awsSecretAccessKey: undefined,
+        awsSessionToken: undefined,
         runtimeProvider: ModelProvider.Bedrock,
       });
     });

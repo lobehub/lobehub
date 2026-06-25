@@ -1,13 +1,21 @@
 'use client';
 
 import { Select } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { BedrockProviderCard } from 'model-bank/modelProviders';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormPassword } from '@/components/FormInput';
 import { SkeletonInput } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
+import {
+  BedrockAuthMode,
+  inferBedrockAuthMode,
+  normalizeBedrockConfigValues,
+  normalizeBedrockKeyVaultsForAuthMode,
+} from '@/utils/bedrockAuthMode';
 
 import { KeyVaultsConfigKey } from '../../const';
 import { type ProviderItem } from '../../type';
@@ -53,6 +61,107 @@ const useBedrockCard = (): ProviderItem => {
   const { t } = useTranslation('modelProvider');
 
   const isLoading = useAiInfraStore(aiProviderSelectors.isAiProviderConfigLoading(providerKey));
+  const keyVaults = useAiInfraStore(aiProviderSelectors.providerKeyVaults(providerKey));
+  const updateAiProviderConfig = useAiInfraStore((s) => s.updateAiProviderConfig);
+
+  const [authMode, setAuthMode] = useState(() => inferBedrockAuthMode(keyVaults));
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const hasAuthShape = !!(
+      keyVaults?.accessKeyId ||
+      keyVaults?.apiKey ||
+      keyVaults?.secretAccessKey
+    );
+
+    if (!hasAuthShape) return;
+
+    setAuthMode(inferBedrockAuthMode(keyVaults));
+  }, [isLoading, keyVaults?.accessKeyId, keyVaults?.apiKey, keyVaults?.secretAccessKey]);
+
+  const authModeOptions = useMemo<TabsItem[]>(
+    () => [
+      { key: BedrockAuthMode.ApiKey, label: t(`${providerKey}.authMode.options.apiKey`) },
+      {
+        key: BedrockAuthMode.AwsCredentials,
+        label: t(`${providerKey}.authMode.options.awsCredentials`),
+      },
+    ],
+    [t],
+  );
+
+  const handleAuthModeChange = useCallback(
+    (mode: string) => {
+      const nextMode = mode as BedrockAuthMode;
+
+      setAuthMode(nextMode);
+      void updateAiProviderConfig(providerKey, {
+        keyVaults: normalizeBedrockKeyVaultsForAuthMode(nextMode),
+      });
+    },
+    [updateAiProviderConfig],
+  );
+
+  const apiKeyItem = {
+    children: isLoading ? (
+      <SkeletonInput />
+    ) : (
+      <FormPassword
+        autoComplete={'new-password'}
+        placeholder={t(`${providerKey}.apiKey.placeholder`)}
+      />
+    ),
+    desc: t(`${providerKey}.apiKey.desc`),
+    label: t(`${providerKey}.apiKey.title`),
+    name: [KeyVaultsConfigKey, 'apiKey'],
+    preserve: false,
+  };
+
+  const awsCredentialItems = [
+    {
+      children: isLoading ? (
+        <SkeletonInput />
+      ) : (
+        <FormPassword
+          autoComplete={'new-password'}
+          placeholder={t(`${providerKey}.accessKeyId.placeholder`)}
+        />
+      ),
+      desc: t(`${providerKey}.accessKeyId.desc`),
+      label: t(`${providerKey}.accessKeyId.title`),
+      name: [KeyVaultsConfigKey, 'accessKeyId'],
+      preserve: false,
+    },
+    {
+      children: isLoading ? (
+        <SkeletonInput />
+      ) : (
+        <FormPassword
+          autoComplete={'new-password'}
+          placeholder={t(`${providerKey}.secretAccessKey.placeholder`)}
+        />
+      ),
+      desc: t(`${providerKey}.secretAccessKey.desc`),
+      label: t(`${providerKey}.secretAccessKey.title`),
+      name: [KeyVaultsConfigKey, 'secretAccessKey'],
+      preserve: false,
+    },
+    {
+      children: isLoading ? (
+        <SkeletonInput />
+      ) : (
+        <FormPassword
+          autoComplete={'new-password'}
+          placeholder={t(`${providerKey}.sessionToken.placeholder`)}
+        />
+      ),
+      desc: t(`${providerKey}.sessionToken.desc`),
+      label: t(`${providerKey}.sessionToken.title`),
+      name: [KeyVaultsConfigKey, 'sessionToken'],
+      preserve: false,
+    },
+  ];
 
   return {
     ...BedrockProviderCard,
@@ -61,41 +170,20 @@ const useBedrockCard = (): ProviderItem => {
         children: isLoading ? (
           <SkeletonInput />
         ) : (
-          <FormPassword
-            autoComplete={'new-password'}
-            placeholder={t(`${providerKey}.accessKeyId.placeholder`)}
+          <Tabs
+            activeKey={authMode}
+            items={authModeOptions}
+            styles={{
+              list: { display: 'flex', width: '100%' },
+              tab: { flex: 1 },
+            }}
+            onChange={handleAuthModeChange}
           />
         ),
-        desc: t(`${providerKey}.accessKeyId.desc`),
-        label: t(`${providerKey}.accessKeyId.title`),
-        name: [KeyVaultsConfigKey, 'accessKeyId'],
+        desc: t(`${providerKey}.authMode.desc`),
+        label: t(`${providerKey}.authMode.title`),
       },
-      {
-        children: isLoading ? (
-          <SkeletonInput />
-        ) : (
-          <FormPassword
-            autoComplete={'new-password'}
-            placeholder={t(`${providerKey}.secretAccessKey.placeholder`)}
-          />
-        ),
-        desc: t(`${providerKey}.secretAccessKey.desc`),
-        label: t(`${providerKey}.secretAccessKey.title`),
-        name: [KeyVaultsConfigKey, 'secretAccessKey'],
-      },
-      {
-        children: isLoading ? (
-          <SkeletonInput />
-        ) : (
-          <FormPassword
-            autoComplete={'new-password'}
-            placeholder={t(`${providerKey}.sessionToken.placeholder`)}
-          />
-        ),
-        desc: t(`${providerKey}.sessionToken.desc`),
-        label: t(`${providerKey}.sessionToken.title`),
-        name: [KeyVaultsConfigKey, 'sessionToken'],
-      },
+      ...(authMode === BedrockAuthMode.ApiKey ? [apiKeyItem] : awsCredentialItems),
       {
         children: isLoading ? (
           <SkeletonInput />
@@ -114,6 +202,7 @@ const useBedrockCard = (): ProviderItem => {
         name: [KeyVaultsConfigKey, 'region'],
       },
     ],
+    normalizeConfigValues: normalizeBedrockConfigValues(authMode),
   };
 };
 

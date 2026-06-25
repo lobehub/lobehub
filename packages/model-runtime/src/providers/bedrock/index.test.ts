@@ -75,6 +75,22 @@ describe('LobeBedrockAI', () => {
       expect(instance).toBeInstanceOf(LobeBedrockAI);
     });
 
+    it('should correctly initialize with API key authentication', async () => {
+      const instance = new LobeBedrockAI({
+        apiKey: 'test-bedrock-api-key',
+        region: 'us-west-2',
+      });
+
+      expect(instance).toBeInstanceOf(LobeBedrockAI);
+      expect(instance.region).toBe('us-west-2');
+      await expect(instance['client'].config.authSchemePreference()).resolves.toEqual([
+        'httpBearerAuth',
+      ]);
+      await expect(instance['client'].config.token?.()).resolves.toEqual({
+        token: 'test-bedrock-api-key',
+      });
+    });
+
     it('should throw InvalidBedrockCredentials if accessKeyId is missing', () => {
       expect(() => {
         new LobeBedrockAI({

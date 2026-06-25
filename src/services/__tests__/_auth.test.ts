@@ -71,7 +71,6 @@ describe('getProviderAuthPayload', () => {
   });
 
   it('should return correct payload for Bedrock provider', () => {
-    // 假设的 Bedrock 配置
     const mockBedrockConfig = {
       accessKeyId: 'bedrock-access-key-id',
       region: 'bedrock-region',
@@ -80,7 +79,7 @@ describe('getProviderAuthPayload', () => {
 
     const payload = getProviderAuthPayload(ModelProvider.Bedrock, mockBedrockConfig);
     expect(payload).toEqual({
-      apiKey: mockBedrockConfig.secretAccessKey + mockBedrockConfig.accessKeyId,
+      apiKey: undefined,
       awsAccessKeyId: mockBedrockConfig.accessKeyId,
       awsRegion: mockBedrockConfig.region,
       awsSecretAccessKey: mockBedrockConfig.secretAccessKey,
@@ -88,6 +87,25 @@ describe('getProviderAuthPayload', () => {
       accessKeySecret: mockBedrockConfig.secretAccessKey,
       awsSessionToken: undefined,
       region: mockBedrockConfig.region,
+      sessionToken: undefined,
+    });
+  });
+
+  it('should return correct payload for Bedrock API key authentication', () => {
+    const payload = getProviderAuthPayload(ModelProvider.Bedrock, {
+      apiKey: 'bedrock-api-key',
+      region: 'us-east-1',
+    });
+
+    expect(payload).toEqual({
+      accessKeyId: undefined,
+      accessKeySecret: undefined,
+      apiKey: 'bedrock-api-key',
+      awsAccessKeyId: undefined,
+      awsRegion: 'us-east-1',
+      awsSecretAccessKey: undefined,
+      awsSessionToken: undefined,
+      region: 'us-east-1',
       sessionToken: undefined,
     });
   });

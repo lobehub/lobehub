@@ -81,8 +81,7 @@ export const buildPayloadFromKeyVaults = (
   // This handles both builtin providers and custom providers with sdkType
   switch (runtimeProvider) {
     case ModelProvider.Bedrock: {
-      const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
-      const apiKey = (secretAccessKey || '') + (accessKeyId || '');
+      const { accessKeyId, apiKey, region, secretAccessKey, sessionToken } = keyVaults;
 
       return {
         apiKey,
@@ -213,17 +212,28 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
     case ModelProvider.Bedrock: {
       const { AWS_SECRET_ACCESS_KEY, AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SESSION_TOKEN } = llmConfig;
-      let accessKeyId: string | undefined = AWS_ACCESS_KEY_ID;
-      let accessKeySecret: string | undefined = AWS_SECRET_ACCESS_KEY;
-      let region = AWS_REGION;
-      let sessionToken: string | undefined = AWS_SESSION_TOKEN;
-      // if the payload has the api key, use user
-      if (payload.apiKey) {
-        accessKeyId = payload?.awsAccessKeyId;
-        accessKeySecret = payload?.awsSecretAccessKey;
-        sessionToken = payload?.awsSessionToken;
-        region = payload?.awsRegion;
+
+      const hasUserBedrockAuth = !!(
+        payload.apiKey ||
+        payload.awsAccessKeyId ||
+        payload.awsSecretAccessKey
+      );
+
+      if (hasUserBedrockAuth) {
+        return {
+          accessKeyId: payload.awsAccessKeyId,
+          accessKeySecret: payload.awsSecretAccessKey,
+          apiKey: apiKeyManager.pick(payload.apiKey),
+          region: payload.awsRegion || AWS_REGION,
+          sessionToken: payload.awsSessionToken,
+        };
       }
+
+      const accessKeyId: string | undefined = AWS_ACCESS_KEY_ID;
+      const accessKeySecret: string | undefined = AWS_SECRET_ACCESS_KEY;
+      const region = payload.awsRegion || AWS_REGION;
+      const sessionToken: string | undefined = payload.awsSessionToken || AWS_SESSION_TOKEN;
+
       return { accessKeyId, accessKeySecret, region, sessionToken };
     }
 
