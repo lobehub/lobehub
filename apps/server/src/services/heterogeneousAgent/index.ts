@@ -271,6 +271,12 @@ export class HeterogeneousAgentService {
         completionReason,
         error: error ?? null,
         llmCalls: totals?.llmCalls ?? null,
+        // Backfill the real executed model/provider resolved from the CLI stream
+        // (recordStart could only seed provider=heteroType + model=null at
+        // dispatch). Spread conditionally so a run without a model event keeps the
+        // seeded values instead of getting clobbered back to null.
+        ...(totals?.model ? { model: totals.model } : {}),
+        ...(totals?.provider ? { provider: totals.provider } : {}),
         status: completionReason,
         stepCount: totals?.stepCount ?? null,
         toolCalls: totals?.toolCalls ?? null,

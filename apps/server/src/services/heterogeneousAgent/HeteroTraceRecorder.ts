@@ -18,6 +18,13 @@ export interface HeteroFinalizeParams {
  * operation row's aggregate columns by `heteroFinish`. */
 export interface HeteroTraceTotals {
   llmCalls: number;
+  /** Real executed model, resolved from the CLI's stream_start / turn_metadata
+   * (e.g. `claude-opus-4-8`). Null until an event carries it. Lets `heteroFinish`
+   * backfill the op row, which `recordStart` can only seed as null at dispatch. */
+  model: string | null;
+  /** Heterogeneous provider the run executed on (e.g. `claude-code`). Mirrors the
+   * provider `recordStart` already seeds, returned so the backfill stays consistent. */
+  provider: string | null;
   stepCount: number;
   toolCalls: number;
   totalCost: number;
@@ -131,6 +138,8 @@ export class HeteroTraceRecorder {
 
       return {
         llmCalls: steps.filter((s) => s.stepType === 'call_llm').length,
+        model: partial.model ?? null,
+        provider: partial.provider ?? null,
         stepCount: steps.length,
         toolCalls: steps.filter((s) => s.stepType === 'call_tool').length,
         totalCost,

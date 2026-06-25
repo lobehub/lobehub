@@ -1362,7 +1362,9 @@ export class AiAgentService {
 
     if (isHeteroAgent) {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
-      const operationId = nanoid();
+      // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
+      // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
+      const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
       // Persist a first-class agent_operations row for the hetero run. The id is
       // generated here (authoritative) and flows through to heteroIngest /
@@ -1377,9 +1379,14 @@ export class AiAgentService {
           agentId: persistAgentId,
           chatGroupId: appContext?.groupId ?? null,
           maxSteps,
-          model,
+          // Seed the heterogeneous provider (claude-code / codex / …), NOT the
+          // agent's configured chat provider — the run executes on the CLI, so
+          // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
+          // irrelevant. `model` is intentionally left unset: the real executed
+          // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
+          // assistant-message seeding above (provider: heteroType, model: undefined).
           operationId,
-          provider,
+          provider: heteroType,
           taskId: operationTaskId ?? null,
           threadId: appContext?.threadId ?? null,
           topicId,
