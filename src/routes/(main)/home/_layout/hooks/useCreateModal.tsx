@@ -311,12 +311,13 @@ export interface CreateAgentModalProps {
   onCreateBlank: () => Promise<void> | void;
   onOpenSkills?: (identifier: string) => void;
   onSubmit: (prompt: string) => Promise<void> | void;
+  onTryInLobeAI?: () => Promise<void> | void;
   open: boolean;
   type: 'agent' | 'group';
 }
 
 export const CreateAgentModal = memo<CreateAgentModalProps>(
-  ({ open, type, agentId, onClose, onOpenSkills, onSubmit, onCreateBlank }) => {
+  ({ open, type, agentId, onClose, onOpenSkills, onSubmit, onCreateBlank, onTryInLobeAI }) => {
     const { t } = useTranslation('chat');
     const editorRef = useRef<ChatInputEditor | null>(null);
     const contentRef = useRef('');
@@ -479,9 +480,10 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     const handleTryInLobeAI = useCallback(() => {
       if (installedSkill) {
         trackSkillSuggestionAction('try_in_lobeai_clicked', installedSkill.identifier);
+        void onTryInLobeAI?.();
       }
       handleClose();
-    }, [handleClose, installedSkill, trackSkillSuggestionAction]);
+    }, [handleClose, installedSkill, onTryInLobeAI, trackSkillSuggestionAction]);
 
     const handleCreateBlank = useCallback(async () => {
       if (loading) return;

@@ -228,6 +228,7 @@ const renderModal = (type: 'agent' | 'group' = 'agent') => {
   const onCreateBlank = vi.fn().mockResolvedValue(undefined);
   const onOpenSkills = vi.fn();
   const onSubmit = vi.fn().mockResolvedValue(undefined);
+  const onTryInLobeAI = vi.fn();
 
   render(
     <CreateAgentModal
@@ -238,10 +239,11 @@ const renderModal = (type: 'agent' | 'group' = 'agent') => {
       onCreateBlank={onCreateBlank}
       onOpenSkills={onOpenSkills}
       onSubmit={onSubmit}
+      onTryInLobeAI={onTryInLobeAI}
     />,
   );
 
-  return { onClose, onCreateBlank, onOpenSkills, onSubmit };
+  return { onClose, onCreateBlank, onOpenSkills, onSubmit, onTryInLobeAI };
 };
 
 const expectTrackedSkillSuggestionAction = async (
@@ -620,7 +622,7 @@ describe('CreateAgentModal analytics', () => {
       totalCount: 1,
       totalPages: 1,
     });
-    const { onClose, onOpenSkills, onSubmit } = renderModal();
+    const { onClose, onOpenSkills, onSubmit, onTryInLobeAI } = renderModal();
 
     fireEvent.change(screen.getByLabelText('chat input'), {
       target: { value: '帮我做一个简历优化检查清单' },
@@ -662,6 +664,7 @@ describe('CreateAgentModal analytics', () => {
     });
 
     fireEvent.click(tryInLobeAIButton);
+    expect(onTryInLobeAI).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalled();
     await expectTrackedSkillSuggestionAction('try_in_lobeai_clicked', {
       selected_skill_identifier: 'resume-reviewer',
