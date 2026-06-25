@@ -164,7 +164,7 @@ describe('useHeterogeneousAutoRetry', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('onCancel pins the counter past the cap and never auto-retries', () => {
+  it('onCancel pins the counter past the cap, ends the wait, and blocks a queued timer', () => {
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
       useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
@@ -174,6 +174,14 @@ describe('useHeterogeneousAutoRetry', () => {
       result.current?.onCancel();
     });
     expect(storeMock.markHeteroOverloadRetryExhausted).toHaveBeenCalledWith(SCOPE);
+    expect(storeMock.internal_endHeteroOverloadWait).toHaveBeenCalledWith(SCOPE);
+
+    // A timer callback that was already dequeued for this tick must not retry
+    // after the user cancelled.
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(onRetry).not.toHaveBeenCalled();
   });
 
   it('cleans up the pending timer on unmount', () => {

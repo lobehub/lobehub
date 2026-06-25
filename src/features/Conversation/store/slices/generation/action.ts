@@ -532,9 +532,11 @@ export const generationSlice: StateCreator<
 
   isHeteroOverloadWaitAborted: (scopeId: string) => {
     const opId = get().heteroOverloadWaitOpIds[scopeId];
-    if (!opId) return false;
+    // A missing id means the wait was already torn down (cancel/Stop cleanup
+    // can race the timer near the deadline) — treat that as aborted so a stale
+    // queued retry doesn't run after the user asked to stop.
+    if (!opId) return true;
     const op = useChatStore.getState().operations[opId];
-    // No op (already torn down) or a non-running op means it was cancelled.
     return !op || op.status !== 'running';
   },
 

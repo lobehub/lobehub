@@ -122,6 +122,9 @@ export const useHeterogeneousAutoRetry = ({
 
   const onCancel = useCallback(() => {
     if (!scopeId) return;
+    // Mark fired so a timer callback already dequeued for this tick can't slip
+    // through and retry after the user cancelled.
+    firedRef.current = true;
     endWait(scopeId);
     markExhausted(scopeId);
   }, [endWait, markExhausted, scopeId]);

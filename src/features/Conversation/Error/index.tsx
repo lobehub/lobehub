@@ -299,8 +299,15 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     }, [handleRetryAgentMessage, resetHeteroOverloadRetry, resolvedScopeId]);
 
     const autoRetry = useHeterogeneousAutoRetry({
+      // Must be an actual heterogeneous-agent (CC / Codex) overloaded error —
+      // not just any ChatMessageError whose body happens to carry
+      // `code: 'overloaded'`. This guard runs before the same predicate gates
+      // the guide render below, so without it a provider/tool error rendering
+      // the normal card could be silently retried.
       enabled:
-        canCreate && sessionErrorBody?.code === HeterogeneousAgentSessionErrorCode.Overloaded,
+        canCreate &&
+        isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
+        sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.Overloaded,
       onRetry: handleRetryAgentMessage,
       scopeId: resolvedScopeId,
     });
