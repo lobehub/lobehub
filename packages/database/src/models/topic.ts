@@ -1028,31 +1028,46 @@ export class TopicModel {
    * This method merges new metadata with existing metadata instead of replacing it
    */
   updateMetadata = async (id: string, metadata: TopicMetadataPatch) => {
-    // Get existing topic to merge metadata
-    const existing = await this.db.query.topics.findFirst({
-      columns: { metadata: true },
-      where: and(eq(topics.id, id), this.ownership()),
+    // Merge into the existing metadata under a row lock so concurrent writers
+    // can't lose each other's keys. The old read-then-write was a non-atomic
+    // read-modify-write: a hetero run seeds `metadata.runningOperation` while
+    // heteroIngest concurrently writes `metadata.heteroCurrentMsgId`, and a write
+    // built on a stale snapshot (interleaved read, or a read-replica that hadn't
+    // caught up) silently dropped `runningOperation` — stranding the finished
+    // task at `task_topics.status = 'running'` because heteroFinish then had no
+    // hooks to deliver. `SELECT … FOR UPDATE` forces a primary read + serializes
+    // writers on the row, killing both the interleave and replica-lag variants
+    // while preserving the exact (shallow + nested onboardingSession) merge.
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      // No row (missing or not owned) — nothing to update, mirror the old no-op.
+      if (!existing) return [];
+
+      const mergedOnboardingSession =
+        existing.metadata?.onboardingSession && metadata.onboardingSession
+          ? {
+              ...existing.metadata.onboardingSession,
+              ...metadata.onboardingSession,
+            }
+          : metadata.onboardingSession;
+
+      const mergedMetadata = {
+        ...existing.metadata,
+        ...metadata,
+        ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
+      } as ChatTopicMetadata;
+
+      return tx
+        .update(topics)
+        .set({ metadata: mergedMetadata })
+        .where(and(eq(topics.id, id), this.ownership()))
+        .returning();
     });
-
-    const mergedOnboardingSession =
-      existing?.metadata?.onboardingSession && metadata.onboardingSession
-        ? {
-            ...existing.metadata.onboardingSession,
-            ...metadata.onboardingSession,
-          }
-        : metadata.onboardingSession;
-
-    const mergedMetadata = {
-      ...existing?.metadata,
-      ...metadata,
-      ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
-    } as ChatTopicMetadata;
-
-    return this.db
-      .update(topics)
-      .set({ metadata: mergedMetadata })
-      .where(and(eq(topics.id, id), this.ownership()))
-      .returning();
   };
 
   getCronTopicsGroupedByCronJob = async (

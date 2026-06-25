@@ -520,4 +520,83 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
   });
+
+  // The seed side of the hetero terminal-hook funnel. execAgent runs the hetero
+  // block inline (process A) and serializes the run's lifecycle hooks onto
+  // `topic.metadata.runningOperation.hooks` BEFORE the device/sandbox fork, so
+  // the later heteroFinish callback (process B) can re-fire them across the
+  // process boundary. If this seed drops the task-on-complete webhook, a finished
+  // hetero task's `task_topics.status` stays stuck at `running` because
+  // `onTopicComplete` never gets delivered. Guards that the passed hooks reach
+  // runningOperation.hooks in serialized (webhook-only) form on BOTH dispatch
+  // targets.
+  describe('terminal hook seeding onto runningOperation (regression guard)', () => {
+    const taskHook = {
+      handler: async () => {},
+      id: 'task-on-complete',
+      type: 'onComplete' as const,
+      webhook: {
+        body: { taskId: 'task_x', taskIdentifier: 'T-X', userId: 'test-user-id' },
+        delivery: 'qstash' as const,
+        url: '/api/workflows/task/on-topic-complete',
+      },
+    };
+
+    // Pick out the updateMetadata call that persists the running operation.
+    const findRunningOpSeed = () =>
+      topicMock.updateMetadata.mock.calls
+        .map((call) => call[1])
+        .find((patch: any) => patch?.runningOperation?.operationId);
+
+    it('serializes the onComplete webhook hook onto runningOperation (sandbox dispatch)', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        hooks: [taskHook],
+        prompt: 'do the task',
+      } as any);
+
+      // Sanity: this run took the sandbox path (no bound device).
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+
+      const seed = findRunningOpSeed();
+      expect(seed).toBeDefined();
+      expect(seed.runningOperation.hooks).toEqual([
+        expect.objectContaining({
+          id: 'task-on-complete',
+          type: 'onComplete',
+          webhook: expect.objectContaining({
+            delivery: 'qstash',
+            url: '/api/workflows/task/on-topic-complete',
+          }),
+        }),
+      ]);
+      // The non-serializable handler must be stripped (only webhook crosses the
+      // process boundary).
+      expect(seed.runningOperation.hooks[0]).not.toHaveProperty('handler');
+    });
+
+    it('serializes the onComplete webhook hook onto runningOperation (device dispatch)', async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        hooks: [taskHook],
+        prompt: 'do the task on device',
+      } as any);
+
+      // Sanity: this run took the device path.
+      expect(mockDispatchAgentRun).toHaveBeenCalled();
+
+      const seed = findRunningOpSeed();
+      expect(seed).toBeDefined();
+      expect(seed.runningOperation.hooks?.[0]?.id).toBe('task-on-complete');
+      expect(seed.runningOperation.hooks?.[0]?.webhook?.url).toBe(
+        '/api/workflows/task/on-topic-complete',
+      );
+    });
+  });
 });
