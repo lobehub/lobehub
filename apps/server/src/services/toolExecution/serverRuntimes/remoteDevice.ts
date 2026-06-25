@@ -38,16 +38,12 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
         const workspaceId = await resolveRunWorkspaceId(context);
 
         // Without a DB handle we cannot merge aliases / DB rows; fall back to the
-        // raw gateway pools, still tagged with scope.
+        // raw gateway pool for the active scope (workspace runs never include
+        // personal devices), still tagged with scope.
         if (!serverDB) {
-          const [personal, workspace] = await Promise.all([
-            deviceGateway.queryDeviceList(userId),
-            workspaceId ? deviceGateway.queryDeviceList(userId, workspaceId) : Promise.resolve([]),
-          ]);
-          return [
-            ...personal.map((d) => ({ ...d, scope: 'personal' as const })),
-            ...workspace.map((d) => ({ ...d, scope: 'workspace' as const })),
-          ];
+          const scope = workspaceId ? ('workspace' as const) : ('personal' as const);
+          const online = await deviceGateway.queryDeviceList(userId, workspaceId);
+          return online.map((d) => ({ ...d, scope }));
         }
 
         const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);

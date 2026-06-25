@@ -96,11 +96,11 @@ describe('remoteDeviceRuntime', () => {
       const result = await runtime.listOnlineDevices();
 
       expect(mockQueryDeviceList).toHaveBeenCalledTimes(1);
-      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1');
+      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1', undefined);
       expect(result.success).toBe(true);
     });
 
-    it('should merge personal + workspace pools when workspaceId is in context', async () => {
+    it('lists ONLY workspace devices in a workspace run (personal devices excluded)', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
         userId: 'user-1',
@@ -130,18 +130,16 @@ describe('remoteDeviceRuntime', () => {
 
       const result = await runtime.listOnlineDevices();
 
-      expect(mockQueryDeviceList).toHaveBeenCalledTimes(2);
-      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1');
+      // Strict isolation: only the workspace pool is queried; the personal pool
+      // is never fetched for a workspace run.
+      expect(mockQueryDeviceList).toHaveBeenCalledTimes(1);
       expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.content);
-      // Each device is tagged with its scope so the model can disambiguate.
-      expect(parsed).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ deviceId: 'd-personal', scope: 'personal' }),
-          expect.objectContaining({ deviceId: 'd-workspace', scope: 'workspace' }),
-        ]),
-      );
+      expect(parsed).toEqual([
+        expect.objectContaining({ deviceId: 'd-workspace', scope: 'workspace' }),
+      ]);
+      expect(parsed.some((d: { deviceId: string }) => d.deviceId === 'd-personal')).toBe(false);
     });
 
     it('recovers the workspace scope from the running agent when context.workspaceId is missing', async () => {
@@ -203,7 +201,7 @@ describe('remoteDeviceRuntime', () => {
       await runtime.listOnlineDevices();
 
       expect(mockQueryDeviceList).toHaveBeenCalledTimes(1);
-      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1');
+      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1', undefined);
     });
 
     it('surfaces a DB-registered workspace device (with its alias) merged with gateway online status (no duplicate)', async () => {
