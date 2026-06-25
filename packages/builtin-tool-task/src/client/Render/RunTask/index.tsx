@@ -1,6 +1,7 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
+import { Markdown } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
@@ -52,7 +53,11 @@ export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState
               <span className={styles.topicChip}>{t('builtins.lobe-task.run.continueTopic')}</span>
             )}
             {prompt && (
-              <SectionField label={t('builtins.lobe-task.run.prompt')}>{prompt}</SectionField>
+              <SectionField label={t('builtins.lobe-task.run.prompt')}>
+                <Markdown fontSize={12} variant={'chat'}>
+                  {prompt}
+                </Markdown>
+              </SectionField>
             )}
             {topicId && (
               <InlineField label={t('builtins.lobe-task.run.topic')}>
