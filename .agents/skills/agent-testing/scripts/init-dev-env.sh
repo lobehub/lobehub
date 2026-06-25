@@ -28,7 +28,53 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 ROOT_ENV_FILE="$REPO_ROOT/.env"
 
-SERVER_PORT="${SERVER_PORT:-3010}"
+# --- auto-allocated, non-conflicting ports (persisted per workspace) ---------
+# Each repo copy (lobehub-cloud, lobehub-cloud-cc, ...) probes its own free
+# SERVER_PORT / SPA_PORT so copies running concurrently never fight over
+# 3010/9876. Ports are probed once then persisted, so repeated calls (setup-db,
+# seed-user, dev, web-seed) and test-env.sh all agree on the same port. Delete
+# the ports file (or pass SERVER_PORT=... explicitly) to re-allocate.
+PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$REPO_ROOT/.records/env/agent-testing-ports.env}"
+
+_port_in_use() { lsof -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1; }
+_pick_free_port() {
+  local fallback="$1" p
+  for _ in $(seq 1 80); do
+    p=$(((RANDOM % 20000) + 20000))
+    _port_in_use "$p" || {
+      printf '%s' "$p"
+      return 0
+    }
+  done
+  printf '%s' "$fallback"
+}
+_load_or_alloc_ports() {
+  # Reuse persisted ports verbatim once allocated — the port being "in use" is
+  # expected (our own dev server holds it), so never re-probe on reuse.
+  # shellcheck disable=SC1090
+  [[ -f "$PORTS_FILE" ]] && source "$PORTS_FILE"
+  local changed=0
+  if [[ -z "${ALLOC_SERVER_PORT:-}" ]]; then
+    ALLOC_SERVER_PORT="$(_pick_free_port 3010)"
+    changed=1
+  fi
+  if [[ -z "${ALLOC_SPA_PORT:-}" ]]; then
+    ALLOC_SPA_PORT="$(_pick_free_port 9876)"
+    changed=1
+  fi
+  if [[ "$changed" == 1 ]]; then
+    mkdir -p "$(dirname "$PORTS_FILE")"
+    {
+      printf '# agent-testing auto-allocated ports (delete to re-allocate)\n'
+      printf 'ALLOC_SERVER_PORT=%s\n' "$ALLOC_SERVER_PORT"
+      printf 'ALLOC_SPA_PORT=%s\n' "$ALLOC_SPA_PORT"
+    } > "$PORTS_FILE"
+  fi
+}
+_load_or_alloc_ports
+
+SERVER_PORT="${SERVER_PORT:-$ALLOC_SERVER_PORT}"
+SPA_PORT="${SPA_PORT:-$ALLOC_SPA_PORT}"
 DB_PORT="${DB_PORT:-5433}"
 DB_CONTAINER="${DB_CONTAINER:-lobehub-agent-testing-postgres}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:${DB_PORT}/postgres}"
@@ -78,6 +124,12 @@ apply_env() {
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
   export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
   export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-agent-testing-secret-key}"
+  export SPA_PORT
+  export VITE_DEV_PORT="${VITE_DEV_PORT:-$SPA_PORT}"
+  # Bypass cloud chat-security UA/headless fingerprint checks for local e2e only.
+  # Guarded by NODE_ENV !== 'production' inside detectSuspiciousRequest(), so it
+  # can never weaken production. Lets headless agent-browser drive real chats.
+  export AGENT_TESTING_DISABLE_CHAT_SECURITY="${AGENT_TESTING_DISABLE_CHAT_SECURITY:-1}"
 }
 
 env_keys() {
@@ -102,7 +154,10 @@ env_keys() {
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
     S3_ENDPOINT \
-    S3_SECRET_ACCESS_KEY
+    S3_SECRET_ACCESS_KEY \
+    SPA_PORT \
+    VITE_DEV_PORT \
+    AGENT_TESTING_DISABLE_CHAT_SECURITY
 }
 
 print_env() {
