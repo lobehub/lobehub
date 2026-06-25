@@ -6,6 +6,7 @@ import {
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
+  formatTasksCreated,
   priorityLabel,
 } from '@lobechat/prompts';
 import type {
@@ -18,6 +19,7 @@ import type {
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
@@ -35,6 +37,14 @@ import type {
 import { TaskApiName } from '../../types';
 
 const log = debug('lobe-task:executor');
+
+// In-app (SPA) deep-link base for tasks: a relative path so it resolves against
+// the current origin and stays durable. Workspace-scoped tasks live under
+// `/{slug}/task/...`, so prefix the active workspace slug when there is one.
+const taskLinkBaseUrl = (): string | undefined => {
+  const slug = getActiveWorkspaceSlug();
+  return slug ? `/${slug}` : undefined;
+};
 
 // APIs whose execution mutates state that's surfaced in the renderer's task
 // list or detail caches. Used by `onAfterCall` to decide what to revalidate.
@@ -188,6 +198,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskCreated({
+          baseUrl: taskLinkBaseUrl(),
           identifier: task.identifier,
           instruction: params.instruction,
           name: task.name,
@@ -239,9 +250,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
 
     const results: CreateTasksItemResult[] = [];
-    const lines: string[] = [];
 
-    for (const [index, item] of items.entries()) {
+    for (const item of items) {
       const result = await this.createTask(item, ctx);
       const success = result.success === true;
       const identifier =
@@ -254,23 +264,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           (typeof result.content === 'string' ? result.content : 'Unknown error');
 
       results.push({ error, identifier, name: item.name, success });
-
-      if (success) {
-        lines.push(`${index + 1}. ${identifier ?? '(unknown id)'} "${item.name}" — created`);
-      } else {
-        lines.push(`${index + 1}. "${item.name}" — failed: ${error}`);
-      }
     }
 
     const succeeded = results.filter((r) => r.success).length;
     const failed = results.length - succeeded;
-    const header =
-      failed === 0
-        ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-        : `Created ${succeeded}/${results.length} tasks (${failed} failed):`;
 
+    // Relative, workspace-aware links: this content is rendered in-app (SPA),
+    // where a relative path resolves against the current origin and is more
+    // durable than baking in one. The server runtime passes an absolute baseUrl
+    // for IM / mobile.
     return {
-      content: [header, ...lines].join('\n'),
+      content: formatTasksCreated(results, taskLinkBaseUrl()),
       state: { failed, results, succeeded },
       success: failed === 0,
     };

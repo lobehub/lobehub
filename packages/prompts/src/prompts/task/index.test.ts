@@ -1,11 +1,82 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTaskRunPrompt } from './index';
+import {
+  buildTaskRunPrompt,
+  formatTaskCreated,
+  formatTasksCreated,
+  taskDetailHref,
+  taskRef,
+} from './index';
 
 // Fixed reference time for stable timeAgo output
 const NOW = new Date('2026-03-22T12:00:00Z');
 
 const baseTask = { id: 'task_test', status: 'running' };
+
+describe('task deep-links', () => {
+  it('taskDetailHref returns a relative path without baseUrl', () => {
+    expect(taskDetailHref('T-198')).toBe('/task/T-198');
+  });
+
+  it('taskDetailHref returns an absolute url with baseUrl (and strips trailing slash)', () => {
+    expect(taskDetailHref('T-198', 'https://app.lobehub.com')).toBe(
+      'https://app.lobehub.com/task/T-198',
+    );
+    expect(taskDetailHref('T-198', 'https://app.lobehub.com/')).toBe(
+      'https://app.lobehub.com/task/T-198',
+    );
+  });
+
+  it('taskRef renders a markdown link', () => {
+    expect(taskRef('T-199')).toBe('[T-199](/task/T-199)');
+    expect(taskRef('T-199', 'https://app.lobehub.com')).toBe(
+      '[T-199](https://app.lobehub.com/task/T-199)',
+    );
+  });
+
+  it('formatTaskCreated links identifier + parent, absolute when baseUrl is given (IM/bot)', () => {
+    const out = formatTaskCreated({
+      baseUrl: 'https://app.lobehub.com',
+      identifier: 'T-198',
+      instruction: 'do it',
+      name: 'Parent task',
+      parentLabel: 'T-100',
+      priority: 2,
+      status: 'backlog',
+    });
+    expect(out).toContain(
+      'Task created: [T-198](https://app.lobehub.com/task/T-198) "Parent task"',
+    );
+    expect(out).toContain('Parent: [T-100](https://app.lobehub.com/task/T-100)');
+  });
+
+  it('formatTasksCreated renders a header + linked lines (relative without baseUrl)', () => {
+    const out = formatTasksCreated([
+      { identifier: 'T-1', name: 'A', success: true },
+      { identifier: 'T-2', name: 'B', success: true },
+    ]);
+    expect(out).toBe(
+      [
+        'Created 2 tasks:',
+        '1. [T-1](/task/T-1) "A" — created',
+        '2. [T-2](/task/T-2) "B" — created',
+      ].join('\n'),
+    );
+  });
+
+  it('formatTasksCreated uses absolute links with baseUrl and reports failures', () => {
+    const out = formatTasksCreated(
+      [
+        { identifier: 'T-1', name: 'A', success: true },
+        { error: 'boom', name: 'B', success: false },
+      ],
+      'https://app.lobehub.com',
+    );
+    expect(out).toContain('Created 1/2 tasks (1 failed):');
+    expect(out).toContain('1. [T-1](https://app.lobehub.com/task/T-1) "A" — created');
+    expect(out).toContain('2. "B" — failed: boom');
+  });
+});
 
 describe('buildTaskRunPrompt', () => {
   it('should build prompt with only task instruction', () => {

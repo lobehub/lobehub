@@ -1,5 +1,6 @@
 import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { TaskCreatedItem } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -8,6 +9,7 @@ import {
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
+  formatTasksCreated,
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
@@ -15,7 +17,9 @@ import { eq } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { tasks } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
 
@@ -49,6 +53,11 @@ export interface TaskRuntimeDeps {
   // back to this session (LOBE-10625). All optional — a task can be created
   // outside an agent turn (e.g. via the API).
   operationId?: string;
+  // Resolves the base URL for task deep-links: app origin + optional `/{slug}`
+  // workspace prefix. Provided by the factory (which owns db / userId / the
+  // resolved workspaceId); when absent (unit tests) links fall back to the bare
+  // app origin.
+  resolveLinkBaseUrl?: () => Promise<string>;
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
@@ -66,6 +75,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   const taskModel = () => deps.taskModel;
   const taskService = () => deps.taskService;
   const taskCaller = () => deps.taskCaller;
+
+  // Base URL for task deep-links embedded in tool results. These results can be
+  // pushed to IM / bot channels and mobile, so the link must be ABSOLUTE — and
+  // workspace-scoped tasks live under `/{slug}/task/...`, so the slug has to be
+  // in the path too or the link resolves to the wrong (personal) scope. The
+  // factory supplies the workspace-aware resolver; fall back to the bare origin.
+  const taskLinkBaseUrl = async (): Promise<string> =>
+    (await deps.resolveLinkBaseUrl?.()) ?? appEnv.APP_URL.replace(/\/$/, '');
 
   const resolveAssigneeAgent = async (assigneeAgentId?: string | null) => {
     if (!assigneeAgentId) return { success: true } as const;
@@ -129,6 +146,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     return {
       content: formatTaskCreated({
+        // Absolute, workspace-scoped link: this content can be pushed to IM /
+        // bot channels and mobile, where a relative path has no app origin to
+        // resolve against and the `/{slug}` prefix would otherwise be lost.
+        baseUrl: await taskLinkBaseUrl(),
         identifier: task.identifier,
         instruction: args.instruction,
         name: task.name,
@@ -184,36 +205,29 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         return { content: 'No tasks provided.', success: false };
       }
 
-      const lines: string[] = [];
-      let succeeded = 0;
-      let failed = 0;
+      const results: TaskCreatedItem[] = [];
 
-      for (const [index, item] of items.entries()) {
+      for (const item of items) {
         try {
           const result = await createTaskImpl(item);
-          if (result.success) {
-            succeeded += 1;
-            lines.push(
-              `${index + 1}. ${result.identifier ?? '(unknown id)'} "${item.name}" — created`,
-            );
-          } else {
-            failed += 1;
-            lines.push(`${index + 1}. "${item.name}" — failed: ${result.content}`);
-          }
+          results.push({
+            error: result.success ? undefined : result.content,
+            identifier: result.identifier,
+            name: item.name,
+            success: result.success,
+          });
         } catch (error) {
-          failed += 1;
           const message = error instanceof Error ? error.message : 'Unknown error';
-          lines.push(`${index + 1}. "${item.name}" — failed: ${message}`);
+          results.push({ error: message, name: item.name, success: false });
         }
       }
 
-      const header =
-        failed === 0
-          ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-          : `Created ${succeeded}/${items.length} tasks (${failed} failed):`;
+      const failed = results.filter((r) => !r.success).length;
 
       return {
-        content: [header, ...lines].join('\n'),
+        // Absolute, workspace-scoped links so the summary stays clickable when
+        // pushed to IM / mobile.
+        content: formatTasksCreated(results, await taskLinkBaseUrl()),
         success: failed === 0,
       };
     },
@@ -687,6 +701,22 @@ export const taskRuntime: ServerRuntimeRegistration = {
     const { agentId, assistantMessageId, operationId, taskId, toolCallId, topicId, scope } =
       context;
 
+    // Workspace slug for deep-links: resolved once (memoized) from the workspace
+    // owning the created task (`workspaceId` is set by `ensureModels` below),
+    // and only when the task is actually workspace-scoped.
+    let workspaceId: string | undefined;
+    let slugPromise: Promise<string | undefined> | undefined;
+    const resolveLinkBaseUrl = async (): Promise<string> => {
+      const origin = appEnv.APP_URL.replace(/\/$/, '');
+      if (!workspaceId) return origin;
+      slugPromise ??= new WorkspaceModel(db, userId)
+        .findById(workspaceId)
+        .then((workspace) => workspace?.slug ?? undefined)
+        .catch(() => undefined);
+      const slug = await slugPromise;
+      return slug ? `${origin}/${slug}` : origin;
+    };
+
     // Models are wired in lazily after the workspaceId is resolved from the
     // owning task row. `createTaskRuntime` reads them through this shared
     // `deps` object, so re-assigning the fields below propagates into every
@@ -695,6 +725,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
       agentId,
       assistantMessageId,
       operationId,
+      resolveLinkBaseUrl,
       scope,
       taskId,
       toolCallId,
@@ -715,6 +746,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
       // up the owning task row for callers that pre-date the propagation work
       // and still construct `ToolExecutionContext` without `workspaceId`.
       const wsId = context.workspaceId ?? (await resolveWorkspaceId(db, taskId));
+      workspaceId = wsId;
       deps.agentModel = new AgentModel(db, userId, wsId);
       deps.taskModel = new TaskModel(db, userId, wsId);
       deps.taskService = new TaskService(db, userId, wsId);
