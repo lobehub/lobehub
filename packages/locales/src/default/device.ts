@@ -34,6 +34,8 @@ export default {
   'workingDirectory.filesModified': 'Modified',
   'workingDirectory.ghMissing':
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
+  'workingDirectory.heteroHint':
+    'This agent always runs inside a working directory. Until you pick one, it uses a default folder — choose another below to change it.',
   'workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',
   'workingDirectory.noRecent': 'No recent directories',
   'workingDirectory.notSet': 'Click to set working directory',
