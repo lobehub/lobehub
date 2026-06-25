@@ -13,7 +13,7 @@ import {
   useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
-import { useFileStore } from '@/store/file';
+import { getChunkTargetId, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
@@ -207,7 +207,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     sourceType,
     slug,
   }) => {
-    const chunkTargetId = fileId ?? id;
+    const chunkTargetId = getChunkTargetId({ fileId, id });
     const [markdownContent, setMarkdownContent] = useState<string>('');
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
 

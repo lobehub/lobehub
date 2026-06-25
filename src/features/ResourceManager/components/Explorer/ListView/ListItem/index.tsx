@@ -7,7 +7,7 @@ import { shallow } from 'zustand/shallow';
 
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
-import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
@@ -141,7 +141,7 @@ const FileListItem = ({
   url,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
-  const chunkTargetId = fileId ?? id;
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const fileStoreState = useFileStore(
     (s) => ({
       isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(chunkTargetId)(s),

@@ -52,18 +52,10 @@ export class FileManageActionImpl {
     this.#get = get;
   }
 
-  #findLocalChunkResource = (id: string): ResourceItem | undefined => {
-    const { resourceList, resourceMap } = this.#get();
-
-    return (
-      resourceMap.get(id) ??
-      [...resourceMap.values()].find((item) => item.fileId === id) ??
-      resourceList.find((item) => item.id === id || item.fileId === id)
-    );
-  };
-
   #resolveChunkTargetId = async (id: string): Promise<string> => {
-    const localResource = this.#findLocalChunkResource(id);
+    // Reuse the selector so local resolution consults every store list
+    // (fileList → resourceMap → resourceMap-by-fileId → resourceList).
+    const localResource = fileManagerSelectors.getFileByChunkTargetId(id)(this.#get());
     if (localResource?.fileId) return localResource.fileId;
     if (!id.startsWith('docs_')) return id;
 

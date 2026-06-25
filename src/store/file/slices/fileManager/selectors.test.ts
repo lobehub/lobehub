@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { initialState } from '@/store/file/initialState';
 
-import { fileManagerSelectors } from './selectors';
+import { fileManagerSelectors, getChunkTargetId } from './selectors';
 
 describe('fileManagerSelectors', () => {
   describe('getFileByChunkTargetId', () => {
@@ -94,6 +94,24 @@ describe('fileManagerSelectors', () => {
         fileId: 'file_1',
         id: 'docs_1',
       });
+    });
+  });
+
+  describe('getChunkTargetId', () => {
+    // For file-backed resources the item id can be a coalesced docs_* id while
+    // chunk APIs need the underlying file_* id. See issue #16267.
+    it('returns the linked fileId when present', () => {
+      expect(getChunkTargetId({ fileId: 'file_TaLrbfD61pNv', id: 'docs_B2x3zYnRUttC' })).toBe(
+        'file_TaLrbfD61pNv',
+      );
+    });
+
+    it('falls back to the item id when there is no fileId', () => {
+      expect(getChunkTargetId({ id: 'docs_B2x3zYnRUttC' })).toBe('docs_B2x3zYnRUttC');
+    });
+
+    it('falls back to the item id when fileId is null', () => {
+      expect(getChunkTargetId({ fileId: null, id: 'file_1' })).toBe('file_1');
     });
   });
 });

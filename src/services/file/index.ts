@@ -89,7 +89,6 @@ export class FileService {
         chunkingStatus: null,
         content: doc.content,
         createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
-        documentId: doc.id,
         editorData: doc.editorData,
         embeddingError: null,
         embeddingStatus: null,

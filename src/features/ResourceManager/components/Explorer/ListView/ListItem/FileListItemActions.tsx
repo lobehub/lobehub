@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 
 import { useFileTransferMenuItem } from '@/business/client/hooks/useFileTransferMenuItem';
 import { usePermission } from '@/hooks/usePermission';
+import { getChunkTargetId } from '@/store/file';
 
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import ChunksBadge from './ChunkTag';
@@ -75,7 +76,7 @@ const FileListItemActions = ({
   t,
 }: FileListItemActionsProps) => {
   const { allowed: canEditResources } = usePermission('edit_own_content');
-  const chunkTargetId = fileId ?? id;
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const transferMenuItems = useFileTransferMenuItem(
     id,
     isPage ? 'document' : isFolder ? 'folder' : 'file',

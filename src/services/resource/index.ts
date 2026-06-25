@@ -26,8 +26,6 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     createdAt: item.createdAt,
 
-    documentId: item.documentId,
-
     editorData: item.editorData,
 
     embeddingError: item.embeddingError,

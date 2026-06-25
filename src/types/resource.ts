@@ -23,7 +23,6 @@ export interface ResourceItem {
   content?: string | null;
   // Timestamps
   createdAt: Date;
-  documentId?: string | null;
 
   editorData?: Record<string, any> | null;
   embeddingError?: any | null;

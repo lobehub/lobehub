@@ -25,6 +25,16 @@ const getFileByChunkTargetId = (id?: string | null) => (s: FilesStoreState) => {
   );
 };
 
+/**
+ * Resolve the id to pass into chunk/embedding/search APIs.
+ *
+ * File-backed knowledge resources can expose a coalesced `docs_*` id while chunk
+ * operations expect the underlying `file_*` id, so prefer `fileId` when present.
+ * @see https://github.com/lobehub/lobehub/issues/16267
+ */
+export const getChunkTargetId = (item: { fileId?: string | null; id: string }): string =>
+  item.fileId ?? item.id;
+
 const isUploadingFiles = (s: FilesStoreState) =>
   s.dockUploadFileList.some((file) => uploadStatusArray.has(file.status));
 
