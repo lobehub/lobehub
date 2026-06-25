@@ -10,6 +10,8 @@ import {
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
+import { searchAgentsResultsPrompt } from '@lobechat/prompts';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
@@ -254,6 +256,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             avatar?: string | null;
             backgroundColor?: string | null;
             description?: string | null;
+            heteroType?: HeterogeneousProviderConfig['type'];
             id: string;
             isMarket?: boolean;
             title?: string | null;
@@ -298,37 +301,22 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const shownUserCount = sliced.filter((a) => !a.isMarket).length;
           const hasMore = offset + shownUserCount < userTotal;
 
-          const headerBySource: Record<typeof source, string> = {
-            all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${sliced.length}:`,
-            market: `Found ${marketTotal} agents in the marketplace, showing the first ${sliced.length}:`,
-            user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + sliced.length}:`,
-          };
-
-          const notes: string[] = [];
-          if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
-            notes.push(
-              `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
-            );
-          }
-          if (hasMore) {
-            notes.push(
-              `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
-            );
-          }
-
-          let content: string;
-          if (sliced.length === 0) {
-            content =
-              totalCount === 0
-                ? 'No agents found matching your search criteria.'
-                : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
-          } else {
-            const list = sliced
-              .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-              .join('\n');
-            content = `${headerBySource[source]}\n${list}`;
-          }
-          if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
+          const content = searchAgentsResultsPrompt({
+            agents: sliced.map((a) => ({
+              description: a.description ?? undefined,
+              heteroType: a.heteroType,
+              id: a.id,
+              isMarket: a.isMarket,
+              title: a.title ?? undefined,
+            })),
+            hasMore,
+            marketTotal,
+            maxLimit: MAX_SEARCH_AGENT_LIMIT,
+            offset,
+            requestedLimit: params.limit,
+            source,
+            userTotal,
+          });
 
           return {
             content,
