@@ -69,6 +69,11 @@ vi.mock('@/store/chat/selectors', () => ({
   },
 }));
 
+const renderProps = {
+  content: '',
+  messageId: 'message-test',
+};
+
 describe('EditTaskRender', () => {
   beforeEach(() => {
     mocks.agentMetaById = {};
@@ -76,7 +81,9 @@ describe('EditTaskRender', () => {
   afterEach(() => cleanup());
 
   const renderEdit = (args: Partial<EditTaskParams>) =>
-    render(<EditTaskRender args={{ identifier: 'T-1', ...args } as EditTaskParams} />);
+    render(
+      <EditTaskRender {...renderProps} args={{ identifier: 'T-1', ...args } as EditTaskParams} />,
+    );
 
   it('renders the identifier and edit title', () => {
     renderEdit({ name: 'Renamed task' });
@@ -130,7 +137,12 @@ describe('SetTaskVerifyRender', () => {
   afterEach(() => cleanup());
 
   const renderVerify = (args: Partial<SetTaskVerifyParams>) =>
-    render(<SetTaskVerifyRender args={{ identifier: 'T-1', ...args } as SetTaskVerifyParams} />);
+    render(
+      <SetTaskVerifyRender
+        {...renderProps}
+        args={{ identifier: 'T-1', ...args } as SetTaskVerifyParams}
+      />,
+    );
 
   it('shows the gate-on label and full requirement text', () => {
     renderVerify({ enabled: true, requirement: 'Ship a complete report' });
@@ -169,6 +181,7 @@ describe('RunTaskRender', () => {
   ) =>
     render(
       <RunTaskRender
+        {...renderProps}
         args={{ identifier: 'T-1', ...args } as RunTaskParams}
         pluginState={pluginState}
       />,
