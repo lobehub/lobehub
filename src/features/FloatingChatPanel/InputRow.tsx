@@ -103,10 +103,11 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
         <HoverExpandBar visible={isCollapsed && focused} onExpand={onExpand} />
         <div className={s.surface}>
           <ChatInput
+            allowExpand={false}
             compact={effectiveCompact}
             leftActions={effectiveCompact ? EMPTY_ACTIONS : EXPANDED_LEFT_ACTIONS}
             rightActions={effectiveCompact ? EMPTY_ACTIONS : EXPANDED_RIGHT_ACTIONS}
-            showControlBar={!effectiveCompact}
+            showControlBar={false}
           />
         </div>
       </div>
