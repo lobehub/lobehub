@@ -81,20 +81,6 @@ const scheduleAfterFirstPaint = (task: () => void): void => {
   runWhenIdle();
 };
 
-const getResourceTiming = (
-  urlSubstring: string,
-  spanName: string,
-): { durMs: number; name: string; startMs: number } | undefined => {
-  try {
-    const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
-    const entry = entries.find((e) => e.name.includes(urlSubstring));
-    if (!entry) return undefined;
-    return { durMs: entry.duration, name: spanName, startMs: entry.startTime };
-  } catch {
-    return undefined;
-  }
-};
-
 const sendPayload = (ingestUrl: string): void => {
   if (sent) return;
 
@@ -116,10 +102,6 @@ const sendPayload = (ingestUrl: string): void => {
     const fcpEntry = performance.getEntriesByName('first-contentful-paint')[0];
     const fcpMs = fcpEntry?.startTime;
 
-    const resourceTimings: { durMs: number; name: string; startMs: number }[] = [];
-    const serverConfigRt = getResourceTiming('/trpc/lambda', 'fetch:server-config');
-    if (serverConfigRt) resourceTimings.push(serverConfigRt);
-
     const isLogin = authSelectors.isLogin(userState);
     const userId = userState.user?.id;
 
@@ -135,7 +117,6 @@ const sendPayload = (ingestUrl: string): void => {
       fcpMs,
       htmlMarkMs,
       navResponseStartMs,
-      resourceTimings,
       snapshot,
     });
 
