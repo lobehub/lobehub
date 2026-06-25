@@ -9,10 +9,14 @@ import { TaskResultBridgeService } from './index';
 // `MessageModel.create` is a class-field arrow (instance prop, not on the
 // prototype) and `AiAgentService`'s constructor builds many sub-services — mock
 // both modules so we observe the calls without standing up the real graph.
-const { createMsg, execAgent } = vi.hoisted(() => ({ createMsg: vi.fn(), execAgent: vi.fn() }));
+const { createMsg, execAgent, getLastLeaf } = vi.hoisted(() => ({
+  createMsg: vi.fn(),
+  execAgent: vi.fn(),
+  getLastLeaf: vi.fn(),
+}));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({ create: createMsg })),
+  MessageModel: vi.fn(() => ({ create: createMsg, getLastMainThreadSpineMessageId: getLastLeaf })),
 }));
 
 vi.mock('../aiAgent', () => ({
@@ -46,6 +50,9 @@ describe('TaskResultBridgeService.deliver', () => {
 
   beforeEach(() => {
     createMsg.mockReset().mockResolvedValue({ id: 'task-cb-task-1-topic-done' } as any);
+    // The creator topic's current leaf at delivery time — the live tail of the
+    // conversation, NOT origin.messageId (the stale create-task message).
+    getLastLeaf.mockReset().mockResolvedValue('msg-current-leaf');
     execAgent
       .mockReset()
       .mockResolvedValue({ operationId: 'op-new', topicId: 'topic-origin' } as any);
@@ -73,7 +80,8 @@ describe('TaskResultBridgeService.deliver', () => {
     const [params, id] = createMsg.mock.calls[0] as [any, string];
     expect(params).toMatchObject({
       agentId: 'agent-creator',
-      parentId: 'msg-anchor',
+      // anchored on the topic's live leaf, not origin.messageId ('msg-anchor')
+      parentId: 'msg-current-leaf',
       role: 'taskCallback',
       topicId: 'topic-origin',
     });

@@ -140,6 +140,15 @@ export class TaskResultBridgeService {
     // the second create loses the PK race and we skip.
     const messageId = `task-cb-${taskId}-${topicId ?? params.operationId}`;
     const messageModel = new MessageModel(this.db, this.userId);
+
+    // Anchor the callback on the creator topic's CURRENT leaf at delivery time —
+    // NOT origin.messageId (the assistant turn that called createTask). A task
+    // runs for minutes while the creator agent keeps talking, so origin.messageId
+    // is a stale mid-conversation node; parenting there forks a hidden sibling
+    // branch the linear UI never follows, so the user never sees the result
+    // (LOBE-10784).
+    const parentId = await messageModel.getLastMainThreadSpineMessageId(origin.topicId);
+
     try {
       await messageModel.create(
         {
@@ -148,7 +157,7 @@ export class TaskResultBridgeService {
           metadata: {
             taskCallback: { identifier: taskIdentifier, reason, taskId, topicId },
           },
-          parentId: origin.messageId,
+          parentId,
           role: 'taskCallback',
           topicId: origin.topicId,
         },
