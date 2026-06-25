@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormPassword } from '@/components/FormInput';
 import { SkeletonInput } from '@/components/Skeleton';
+import { usePermission } from '@/hooks/usePermission';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
 import {
@@ -59,6 +60,7 @@ const AWS_REGIONS: string[] = [
 
 const useBedrockCard = (): ProviderItem => {
   const { t } = useTranslation('modelProvider');
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
   const isLoading = useAiInfraStore(aiProviderSelectors.isAiProviderConfigLoading(providerKey));
   const keyVaults = useAiInfraStore(aiProviderSelectors.providerKeyVaults(providerKey));
@@ -82,17 +84,24 @@ const useBedrockCard = (): ProviderItem => {
 
   const authModeOptions = useMemo<TabsItem[]>(
     () => [
-      { key: BedrockAuthMode.ApiKey, label: t(`${providerKey}.authMode.options.apiKey`) },
       {
+        disabled: !canManageProvider,
+        key: BedrockAuthMode.ApiKey,
+        label: t(`${providerKey}.authMode.options.apiKey`),
+      },
+      {
+        disabled: !canManageProvider,
         key: BedrockAuthMode.AwsCredentials,
         label: t(`${providerKey}.authMode.options.awsCredentials`),
       },
     ],
-    [t],
+    [canManageProvider, t],
   );
 
   const handleAuthModeChange = useCallback(
     (mode: string) => {
+      if (!canManageProvider) return;
+
       const nextMode = mode as BedrockAuthMode;
 
       setAuthMode(nextMode);
@@ -100,7 +109,7 @@ const useBedrockCard = (): ProviderItem => {
         keyVaults: normalizeBedrockKeyVaultsForAuthMode(nextMode),
       });
     },
-    [updateAiProviderConfig],
+    [canManageProvider, updateAiProviderConfig],
   );
 
   const apiKeyItem = {
