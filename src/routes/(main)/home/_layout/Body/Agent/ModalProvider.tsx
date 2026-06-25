@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_INBOX_TITLE, SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { type ReactNode, useCallback } from 'react';
 import { createContext, memo, use, useMemo, useState } from 'react';
 
@@ -112,7 +112,7 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupI
   const handleTryInLobeAI = useCallback(() => {
     if (!inboxAgentId) return;
 
-    navigate(SESSION_CHAT_URL(inboxAgentId, false));
+    navigate(AGENT_CHAT_URL(inboxAgentId, false));
   }, [inboxAgentId, navigate]);
 
   return (

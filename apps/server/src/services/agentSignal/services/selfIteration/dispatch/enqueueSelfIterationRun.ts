@@ -81,6 +81,10 @@ export const enqueueSelfIterationRun = async (
     }
   }
 
+  // Lazy-loaded on purpose: `AiAgentService` is the heavy agent-execution core
+  // (eagerly touches server-only model-runtime env at module init). This dispatch
+  // helper is reachable from the light agentSignal path, so a static import would
+  // couple that whole subsystem into every importer.
   const { AiAgentService } = await import('@/server/services/aiAgent');
   const result = await new AiAgentService(input.db, input.userId, {
     workspaceId: input.workspaceId,

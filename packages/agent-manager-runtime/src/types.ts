@@ -11,7 +11,6 @@ export interface IAgentService {
   countAgents: (params?: { keyword?: string }) => Promise<number>;
   createAgent: (params: { config: Record<string, unknown> }) => Promise<{
     agentId?: string;
-    sessionId?: string;
   }>;
   duplicateAgent: (agentId: string, newTitle?: string) => Promise<{ agentId: string } | null>;
   getAgentConfigById: (agentId: string) => Promise<LobeAgentConfig | null>;

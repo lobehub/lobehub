@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
 import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
@@ -9,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import DotsLoading from '@/components/DotsLoading';
 import RingLoadingIcon from '@/components/RingLoading';
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
@@ -169,10 +169,7 @@ const TopicItem = memo<TopicItemProps>(
     // Construct href for cmd+click support
     const href = useMemo(() => {
       if (!activeAgentId || !id) return undefined;
-      return buildWorkspaceAwarePath(
-        SESSION_CHAT_TOPIC_URL(activeAgentId, id),
-        activeWorkspaceSlug,
-      );
+      return buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug);
     }, [activeAgentId, activeWorkspaceSlug, id]);
 
     const [editing, isLoading] = useChatStore((s) => [
@@ -226,9 +223,7 @@ const TopicItem = memo<TopicItemProps>(
         void navigateToTopic(id, { skipPopupFocus: true });
         return;
       }
-      addTab(
-        buildWorkspaceAwarePath(SESSION_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug),
-      );
+      addTab(buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug));
       void navigateToTopic(id);
     }, [id, activeAgentId, activeWorkspaceSlug, addTab, focusTopicPopup, navigateToTopic]);
 

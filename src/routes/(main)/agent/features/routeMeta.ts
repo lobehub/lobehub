@@ -1,7 +1,9 @@
 import { MessageSquare } from 'lucide-react';
 
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
-import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
+import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -21,27 +23,34 @@ const useTopicTitle = (
     return topic?.title || undefined;
   });
 
-export const agentRouteMeta = routeMeta({
-  icon: MessageSquare,
-  titleKey: 'navigation.chat',
-  useDynamicMeta: (params): DynamicRouteMeta => {
-    const routeWorkspaceId = useRouteWorkspaceId(params);
-    const meta = useAgentStore((s) => {
-      const agentId = params.aid ?? '';
-      const agent = s.agentMap[agentId];
+const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const meta = useAgentStore((s) => {
+    const agentId = params.aid ?? '';
+    const agent = s.agentMap[agentId];
 
-      if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
+    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
 
-      return agentSelectors.getAgentMetaById(agentId)(s);
-    });
-    const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
-    const hasMeta = Object.keys(meta).length > 0;
-    const agentTitle = hasMeta ? meta.title : undefined;
+    return agentSelectors.getAgentMetaById(agentId)(s);
+  });
+  const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
+  const hasMeta = Object.keys(meta).length > 0;
+  const agentTitle = hasMeta ? meta.title : undefined;
 
-    return {
+  usePublishDynamicRouteMeta(
+    {
       avatar: meta.avatar,
       backgroundColor: meta.backgroundColor,
       title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
-    };
-  },
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const agentRouteMeta = routeMeta({
+  DynamicMeta: AgentDynamicMeta,
+  icon: MessageSquare,
+  titleKey: 'navigation.chat',
 });

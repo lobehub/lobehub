@@ -1,4 +1,4 @@
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { useMemo } from 'react';
 import { useLocation } from 'react-router';
 
@@ -20,6 +20,6 @@ export const usePreservedAgentUrl = (agentId: string): string => {
     if (subPath && PRESERVED_AGENT_SUB_PATHS.has(subPath)) {
       return `/agent/${agentId}/${subPath}`;
     }
-    return SESSION_CHAT_URL(agentId, false);
+    return AGENT_CHAT_URL(agentId, false);
   }, [agentId, pathname]);
 };

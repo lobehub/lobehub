@@ -116,7 +116,6 @@ export class AgentManagerRuntime {
         content: `Successfully created agent "${params.title}" with ID: ${result.agentId}`,
         state: {
           agentId: result.agentId,
-          sessionId: result.sessionId,
           success: true,
         } as CreateAgentState,
         success: true,

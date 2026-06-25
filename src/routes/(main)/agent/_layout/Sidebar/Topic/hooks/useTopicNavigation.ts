@@ -1,8 +1,8 @@
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
@@ -65,8 +65,8 @@ export const useTopicNavigation = () => {
       // If in agent sub-route, navigate back to agent chat first
       if (isInAgentSubRoute() && routeAgentId) {
         const basePath = topicId
-          ? SESSION_CHAT_TOPIC_URL(routeAgentId, topicId)
-          : SESSION_CHAT_URL(routeAgentId);
+          ? AGENT_CHAT_TOPIC_URL(routeAgentId, topicId)
+          : AGENT_CHAT_URL(routeAgentId);
         const targetPath = buildPrefixedAgentRoutePath(basePath, agentRoute, activeWorkspaceSlug);
 
         // Include topicId in URL when navigating from sub-route

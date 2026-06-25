@@ -36,10 +36,18 @@ export const instantiateVerifyPlanOnStart = async (
     const taskModel = new TaskModel(db, userId, workspaceId);
     const verifyConfig = await taskModel.resolveVerifyConfig(params.taskId);
 
-    // Opt-in: a task only verifies when it configured a rubric or ad-hoc criteria
-    // and hasn't disabled the gate.
+    // Opt-in to verify, then pick the plan shape:
+    //  - rubric / ad-hoc criteria  → decomposed multi-item plan (existing path)
+    //  - else explicitly enabled OR a one-sentence acceptance requirement set
+    //    → coarse single holistic agent check (LOBE-10755)
+    //  - no signal at all          → verify stays off
     if (!verifyConfig || verifyConfig.enabled === false) return;
-    if (!verifyConfig.verifyRubricId && !verifyConfig.verifyCriteriaIds?.length) return;
+    const hasCriteria = Boolean(
+      verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length,
+    );
+    const holistic =
+      !hasCriteria && (verifyConfig.enabled === true || Boolean(verifyConfig.requirement?.trim()));
+    if (!hasCriteria && !holistic) return;
 
     const runModel = new VerifyRunModel(db, userId, workspaceId);
     const existing = await runModel.findByOperation(params.operationId);
@@ -54,7 +62,10 @@ export const instantiateVerifyPlanOnStart = async (
       // No AI proposal — the task's configured rubric/criteria are the plan.
       enableAiGeneration: false,
       goal,
+      // Fall back to a single agent-type holistic check when nothing decomposed.
+      holisticFallback: holistic,
       operationId: params.operationId,
+      requirement: verifyConfig.requirement,
       verifyCriteriaIds: verifyConfig.verifyCriteriaIds,
       verifyRubricId: verifyConfig.verifyRubricId,
     });

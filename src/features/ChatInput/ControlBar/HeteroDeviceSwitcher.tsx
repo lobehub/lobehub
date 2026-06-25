@@ -11,14 +11,16 @@ import {
   BoxIcon,
   CheckIcon,
   ChevronDownIcon,
+  ExternalLinkIcon,
   InfoIcon,
   LaptopIcon,
+  MonitorDownIcon,
   MonitorIcon,
   MonitorOffIcon,
   SettingsIcon,
   SparklesIcon,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -95,6 +97,30 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  downloadCard: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    text-decoration: none;
+
+    transition: background-color 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  downloadCardArrow: css`
+    flex: none;
+    margin-inline-start: auto;
     color: ${cssVar.colorTextQuaternary};
   `,
   option: css`
@@ -188,6 +214,21 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextSecondary};
     }
   `,
+  headerLink: css`
+    display: flex;
+    gap: 3px;
+    align-items: center;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+    text-decoration: none;
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
+  `,
   headerTitle: css`
     font-size: 12px;
     font-weight: 500;
@@ -204,15 +245,14 @@ const styles = createStaticStyles(({ css }) => ({
     border: none;
 
     font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextQuaternary};
 
     background: none;
 
     transition: color 0.2s;
 
     &:hover {
-      color: ${cssVar.colorTextSecondary};
+      color: ${cssVar.colorPrimary};
     }
   `,
   groupLabel: css`
@@ -300,7 +340,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
-  const isRemoteHetero = heteroType ? isRemoteHeterogeneousType(heteroType) : false;
 
   // Heterogeneous agents (Claude Code / Codex — remote types already early-return
   // below) bring their own toolchain and must execute somewhere, so `'none'`
@@ -312,17 +351,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     staleTime: 30_000,
   });
 
-  // The current machine's Device Connection id (desktop only). The desktop
-  // picker shows this machine once as the dedicated local option, but we still
-  // persist the id with that local choice so web/mobile can resolve it back to
-  // this concrete connected device instead of falling back to the sandbox.
+  // The current machine's own gateway deviceId (desktop only), used to badge the
+  // matching device row with a "This device" tag and show the local-process
+  // description instead of the generic online/offline status.
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: shared with server dispatch. In particular, a desktop
-  // "local" selection that carries this desktop's boundDeviceId becomes a
-  // device target when the same agent is opened from web.
+  // Effective target: shared with server dispatch. In particular, a hetero
+  // desktop "local" selection that carries this desktop's boundDeviceId becomes
+  // a device target when the same agent is opened from web.
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero,
     clientExecutionAvailable: isDesktop,
@@ -336,10 +374,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
       let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
       if (target === 'local') {
-        // Desktop local execution is selected by location ("this machine"), not
-        // by transport. Store the machine's connected-device id anyway so the
-        // same agent opened outside desktop knows which device "local" referred
-        // to and can display/route that selection as `device` there.
         nextBoundDeviceId = currentDeviceId;
         if (!nextBoundDeviceId) {
           try {
@@ -362,59 +396,25 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
   );
 
-  useEffect(() => {
-    if (
-      !isDesktop ||
-      isRemoteHetero ||
-      !currentDeviceId ||
-      agencyConfig?.executionTarget !== 'device' ||
-      boundDeviceId !== currentDeviceId
-    ) {
-      return;
-    }
-
-    // Historical/cross-client configs may store this desktop as an explicit
-    // `device` target. In the desktop picker we show the current machine only
-    // once as `local`, so normalize that equivalent location instead of adding
-    // a duplicate "same machine via Device Connection" row just to mark it
-    // selected.
-    void updateAgentConfigById(agentId, {
-      agencyConfig: { ...agencyConfig, boundDeviceId: currentDeviceId, executionTarget: 'local' },
-    });
-  }, [
-    agentId,
-    agencyConfig,
-    boundDeviceId,
-    currentDeviceId,
-    isRemoteHetero,
-    updateAgentConfigById,
-  ]);
-
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
-  if (isRemoteHetero) return null;
+  if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
   const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
-  // Avoid showing the same execution location twice on desktop. The current
-  // machine is already represented by the local option above; the connected
-  // device list is for other machines. Cross-client continuity is handled by the
-  // `boundDeviceId` stored with local selections, not by exposing a duplicate
-  // "same machine through Device Connection" row here.
-  const visibleDeviceRows = currentDeviceId
-    ? deviceRows.filter((device) => device.deviceId !== currentDeviceId)
-    : deviceRows;
   const hasNoDevices = deviceRows.length === 0;
-  const hasOnlineDevices = deviceRows.some((device) => device.online);
+  // On web with no device, the prominent download card below replaces the small
+  // header link — avoid showing the same CTA twice.
+  const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
 
   // Workspace agents drop the personal section entirely — only workspace
   // devices are reachable to every member, so no one should see (let alone
   // pick) a teammate's personal machine.
   const personalDevices = isWorkspaceAgent
     ? []
-    : visibleDeviceRows.filter((d) => d.scope === 'personal');
-  const workspaceDevices = visibleDeviceRows.filter((d) => d.scope === 'workspace');
+    : (devices ?? []).filter((d) => d.scope === 'personal');
+  const workspaceDevices = (devices ?? []).filter((d) => d.scope === 'workspace');
   // Only split into Personal / Workspace sections once a workspace device exists;
   // otherwise (personal mode / OSS) the list stays flat, exactly as before.
   const showDeviceGroups = workspaceDevices.length > 0;
@@ -440,7 +440,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipLabel =
       boundDevice?.friendlyName ??
       boundDevice?.hostname ??
-      (isLoading ? t('heteroAgent.executionTarget.loading') : undefined) ??
       t('heteroAgent.executionTarget.unknownDevice');
   }
 
@@ -463,11 +462,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => (
     <OptionRow
       active={isActive('device', d.deviceId)}
-      desc={renderDeviceStatus(d)}
       disabled={!d.online}
       icon={getDeviceIcon(d.platform)}
       key={d.deviceId}
       label={d.friendlyName || d.hostname || d.deviceId}
+      tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.gateway') : undefined}
+      desc={
+        d.deviceId === currentDeviceId
+          ? t('heteroAgent.executionTarget.gatewayDesc')
+          : renderDeviceStatus(d)
+      }
       onClick={() => void handleSelect('device', d.deviceId)}
     />
   );
@@ -483,17 +487,29 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             </span>
           </Tooltip>
         </Flexbox>
-        <button
-          className={styles.manageButton}
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            navigate('/settings/devices');
-          }}
-        >
-          <Icon icon={SettingsIcon} size={11} />
-          <span>{t('heteroAgent.executionTarget.manage')}</span>
-        </button>
+        {isDesktop || showWebDownloadCard ? (
+          <button
+            className={styles.manageButton}
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/settings/devices');
+            }}
+          >
+            <Icon icon={SettingsIcon} size={11} />
+            <span>{t('heteroAgent.executionTarget.manage')}</span>
+          </button>
+        ) : (
+          <a
+            className={styles.headerLink}
+            href="https://lobehub.com/downloads"
+            rel="noreferrer"
+            target="_blank"
+          >
+            <Icon icon={ExternalLinkIcon} size={11} />
+            <span>{t('heteroAgent.executionTarget.downloadDesktop')}</span>
+          </a>
+        )}
       </div>
       {isHetero ? null : (
         <OptionRow
@@ -507,15 +523,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {isHetero ? null : (
         <OptionRow
           active={isActive('auto')}
+          desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<Icon icon={SparklesIcon} size={14} />}
           label={t('heteroAgent.executionTarget.auto')}
-          desc={
-            isLoading
-              ? t('heteroAgent.executionTarget.loading')
-              : hasOnlineDevices
-                ? t('heteroAgent.executionTarget.autoDesc')
-                : t('heteroAgent.executionTarget.autoUnavailableDesc')
-          }
           onClick={() => void handleSelect('auto')}
         />
       )}
@@ -564,6 +574,32 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
+      ) : null}
+      {/* On web with no remote device, guide the user to the desktop app (which
+          unlocks local execution + `lh connect`) rather than a muted dead-end. */}
+      {showWebDownloadCard ? (
+        <a
+          className={styles.downloadCard}
+          href="https://lobehub.com/downloads"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <div className={styles.optionIcon}>
+            <Icon icon={MonitorDownIcon} size={14} />
+          </div>
+          <div className={styles.optionMeta}>
+            <div className={styles.optionTitle}>
+              {t('heteroAgent.executionTarget.downloadDesktopTitle')}
+            </div>
+            <div className={styles.desc}>
+              {t('heteroAgent.executionTarget.downloadDesktopDesc')}
+            </div>
+          </div>
+          <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
+        </a>
+      ) : null}
+      {hasNoDevices && !isLoading && isDesktop ? (
+        <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>
   );

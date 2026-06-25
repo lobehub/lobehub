@@ -1,9 +1,9 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -62,7 +62,7 @@ const ChatHydration = memo(() => {
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
 
-        const nextPath = state ? SESSION_CHAT_TOPIC_URL(aid, state) : SESSION_CHAT_URL(aid);
+        const nextPath = state ? AGENT_CHAT_TOPIC_URL(aid, state) : AGENT_CHAT_URL(aid);
         const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${locationRef.current.hash}`;
         const currentUrl = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
 

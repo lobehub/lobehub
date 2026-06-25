@@ -31,6 +31,11 @@ import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@
 
 const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
 
+const groupChatElement = dynamicElement(
+  () => import('@/routes/(main)/group'),
+  'Desktop > Agent Group',
+);
+
 /**
  * Children shared between the root tree (`/`) and the workspace tree
  * (`/:workspaceSlug`). Personal-only segments (settings, index, catch-all,
@@ -151,7 +156,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/group'), 'Desktop > Agent Group'),
+            element: groupChatElement,
             handle: { meta: groupRouteMeta },
             index: true,
           },
@@ -161,6 +166,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Agent Group > Profile',
             ),
             path: 'profile',
+          },
+          {
+            element: groupChatElement,
+            handle: { meta: groupRouteMeta },
+            path: ':topicId',
           },
         ],
         element: dynamicLayout(

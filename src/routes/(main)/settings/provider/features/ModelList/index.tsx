@@ -140,6 +140,7 @@ const Content = memo<ContentProps>(({ id }) => {
         items={tabs}
         size="small"
         style={{ marginBottom: 12, marginLeft: -6 }}
+        variant="square"
         onChange={setActiveTab}
       />
       <EnabledModelList activeTab={currentActiveTab} />

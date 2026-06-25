@@ -1,3 +1,4 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx, keyframes } from 'antd-style';
 import {
@@ -14,7 +15,6 @@ import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import RingLoadingIcon from '@/components/RingLoading';
-import { SESSION_CHAT_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -241,11 +241,7 @@ const GroupItem = memo<GroupItemComponentProps>(
       await commitAgentDefault(workingDirectory);
       useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
       router.push(
-        buildPrefixedAgentRoutePath(
-          SESSION_CHAT_URL(targetAgentId),
-          agentRoute,
-          activeWorkspaceSlug,
-        ),
+        buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
       );
     }, [
       workingDirectory,

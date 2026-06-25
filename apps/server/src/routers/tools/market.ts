@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { UserModel } from '@/database/models/user';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
@@ -20,6 +21,7 @@ import {
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
 import { createSandboxService } from '@/server/services/sandbox';
+import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { scheduleToolCallReport } from './_helpers';
 import {
@@ -57,7 +59,6 @@ const marketToolProcedure = wsCompatProcedure
   .use(telemetry)
   .use(marketUserInfo)
   .use(async ({ ctx, next }) => {
-    const { UserModel } = await import('@/database/models/user');
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
     // In a workspace context, sandbox runtime calls are attributed to the
@@ -191,8 +192,6 @@ const execInSandboxHandler = async ({
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
     if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
-      const { preprocessLhCommand } =
-        await import('@/server/services/toolExecution/preprocessLhCommand');
       const lhResult = await preprocessLhCommand(params.command, userId);
 
       if (lhResult.error) {

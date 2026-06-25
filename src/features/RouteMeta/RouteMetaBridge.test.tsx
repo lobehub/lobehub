@@ -3,7 +3,10 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import type * as ReactModule from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DynamicRouteMeta, DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+
 import RouteMetaBridge from './RouteMetaBridge';
+import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
 
 const mocks = vi.hoisted(() => {
   interface MockMatch {
@@ -39,6 +42,18 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+const createDynamicMeta = (
+  resolve: (params: Record<string, string | undefined>) => DynamicRouteMeta,
+) => {
+  const TestDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+    usePublishDynamicRouteMeta(resolve(params), onResolve);
+
+    return null;
+  };
+
+  return TestDynamicMeta;
+};
+
 vi.mock('@/const/version', () => ({
   isDesktop: true,
 }));
@@ -67,7 +82,10 @@ vi.mock('react-router', async () => {
 });
 
 describe('RouteMetaBridge', () => {
-  const resolveDynamicMeta = () => ({ title: 'Chat A' });
+  const ChatDynamicMeta = createDynamicMeta(() => ({ title: 'Chat A' }));
+  const TopicDynamicMeta = createDynamicMeta((params) => ({
+    title: `Topic ${params.topicId ?? params.topic}`,
+  }));
 
   afterEach(() => {
     cleanup();
@@ -82,8 +100,8 @@ describe('RouteMetaBridge', () => {
         data: undefined,
         handle: {
           meta: {
+            DynamicMeta: ChatDynamicMeta,
             titleKey: 'navigation.chat',
-            useDynamicMeta: resolveDynamicMeta,
           },
         },
         id: 'routes/agent',
@@ -145,10 +163,8 @@ describe('RouteMetaBridge', () => {
         data: undefined,
         handle: {
           meta: {
+            DynamicMeta: TopicDynamicMeta,
             titleKey: 'navigation.chat',
-            useDynamicMeta: (params: Record<string, string | undefined>) => ({
-              title: `Topic ${params.topicId}`,
-            }),
           },
         },
         id: 'routes/agent',
@@ -185,10 +201,8 @@ describe('RouteMetaBridge', () => {
         data: undefined,
         handle: {
           meta: {
+            DynamicMeta: TopicDynamicMeta,
             titleKey: 'navigation.groupChat',
-            useDynamicMeta: (params: Record<string, string | undefined>) => ({
-              title: `Topic ${params.topic}`,
-            }),
           },
         },
         id: 'routes/group',
@@ -210,6 +224,25 @@ describe('RouteMetaBridge', () => {
         },
         '/group/group-a?topic=t1',
       );
+    });
+  });
+
+  it('publishes empty dynamic meta for a static route without DynamicMeta', async () => {
+    mocks.setMatches([
+      {
+        data: undefined,
+        handle: { meta: { titleKey: 'navigation.settings' } },
+        id: 'routes/settings',
+        params: {},
+        pathname: '/settings',
+      },
+    ]);
+
+    render(<RouteMetaBridge />);
+
+    await waitFor(() => {
+      expect(document.title).toBe(`translated:navigation.settings · ${BRANDING_NAME}`);
+      expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith({}, '/settings');
     });
   });
 });

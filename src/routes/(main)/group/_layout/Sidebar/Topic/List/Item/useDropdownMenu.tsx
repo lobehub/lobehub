@@ -1,3 +1,4 @@
+import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
@@ -118,7 +119,7 @@ export const useTopicItemDropdownMenu = ({
               onClick: () => {
                 if (!activeGroupId) return;
                 const url = buildWorkspaceAwarePath(
-                  `/group/${activeGroupId}?topic=${id}`,
+                  GROUP_CHAT_TOPIC_URL(activeGroupId, id),
                   activeWorkspaceSlug,
                 );
                 addTab(url);
@@ -153,7 +154,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeGroupId) return;
-          const url = `${appOrigin}/group/${activeGroupId}?topic=${id}`;
+          const url = `${appOrigin}${GROUP_CHAT_TOPIC_URL(activeGroupId, id)}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },

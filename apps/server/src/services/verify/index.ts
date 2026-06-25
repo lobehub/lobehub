@@ -16,4 +16,5 @@ export {
   VerifyRepairService,
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
+export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VerifyStatusService } from './statusService';

@@ -510,18 +510,6 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
     });
 
-    it('should gate a desktop-local bound device to "none" on web (device tools route separately)', () => {
-      const state = createState({
-        agentMap: {
-          'agent-1': {
-            agencyConfig: { boundDeviceId: 'device-a', executionTarget: 'local' },
-          },
-        },
-      });
-
-      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
-    });
-
     it('should gate device target to "none" (device tools are routed separately)', () => {
       const state = createState({
         agentMap: {

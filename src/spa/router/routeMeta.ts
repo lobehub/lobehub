@@ -1,4 +1,5 @@
-import { type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 
 export interface StaticRouteMeta {
   icon?: LucideIcon;
@@ -13,8 +14,13 @@ export interface DynamicRouteMeta {
 
 export type RouteMetaParams = Record<string, string | undefined>;
 
+export interface DynamicRouteMetaProps {
+  onResolve: (meta: DynamicRouteMeta) => void;
+  params: RouteMetaParams;
+}
+
 export interface RouteMeta extends StaticRouteMeta {
-  useDynamicMeta?: (params: RouteMetaParams) => DynamicRouteMeta;
+  DynamicMeta?: ComponentType<DynamicRouteMetaProps>;
 }
 
 export interface RouteHandle {
