@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "验收已禁用",
   "verifyConfig.done": "完成",
   "verifyConfig.edit": "编辑",
+  "verifyConfig.empty.materializeHint": "该验收要求已生效，可进一步拆解为结构化的逐条验收标准。",
   "verifyConfig.empty.subtitle": "用一句话描述你希望怎么验收，AI 会帮你拆解成可编辑的验收清单。",
   "verifyConfig.empty.title": "交付验收",
   "verifyConfig.enable": "启用验收检查",
