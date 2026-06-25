@@ -37,10 +37,12 @@ vi.mock('../../../store', () => ({
   useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
-const useMarkdownMock = vi.fn(() => ({}));
+type UseMarkdownArgs = [id: string, disableStreaming?: boolean];
+
+const useMarkdownMock = vi.fn((..._args: UseMarkdownArgs) => ({}));
 
 vi.mock('../useMarkdown', () => ({
-  useMarkdown: (...args: unknown[]) => useMarkdownMock(...args),
+  useMarkdown: (...args: UseMarkdownArgs) => useMarkdownMock(...args),
 }));
 
 describe('MessageContent', () => {
