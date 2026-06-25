@@ -28,6 +28,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildPayloadFromKeyVaults, initModelRuntimeWithUserPayload } from './index';
 
+interface InspectableBedrockRuntime {
+  client: {
+    config: {
+      token?: () => Promise<{ token: string }>;
+    };
+  };
+  region: string;
+}
+
 // 模拟依赖项
 vi.mock('@/envs/llm', () => ({
   getLLMConfig: vi.fn(() => ({
@@ -190,7 +199,8 @@ describe('initModelRuntimeWithUserPayload method', () => {
         awsRegion: 'us-east-1',
       };
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
-      const token = await runtime['_runtime']['client'].config.token?.();
+      const bedrockRuntime = runtime['_runtime'] as unknown as InspectableBedrockRuntime;
+      const token = await bedrockRuntime.client.config.token?.();
 
       expect(token).toEqual({ token: apiKey });
     });
@@ -215,7 +225,9 @@ describe('initModelRuntimeWithUserPayload method', () => {
 
       expect(runtime).toBeInstanceOf(ModelRuntime);
       expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
-      expect(runtime['_runtime'].region).toBe('custom-aws-region');
+      expect((runtime['_runtime'] as unknown as InspectableBedrockRuntime).region).toBe(
+        'custom-aws-region',
+      );
     });
 
     it('Ollama provider: with endpoint', async () => {
