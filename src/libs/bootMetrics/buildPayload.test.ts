@@ -270,6 +270,34 @@ describe('buildBootMetricsPayload', () => {
     });
   });
 
+  describe('spans cap', () => {
+    it('truncates spans to 64 when input would produce more', () => {
+      const manySpans = Array.from({ length: 70 }, (_, i) => ({
+        durMs: 1,
+        name: `span-${i}`,
+        startMs: i,
+      }));
+      const result = buildBootMetricsPayload({
+        dimensions: baseDimensions,
+        snapshot: { marks: {}, spans: manySpans },
+      });
+      expect(result.spans).toHaveLength(64);
+    });
+
+    it('does not truncate spans when count is exactly 64', () => {
+      const spans = Array.from({ length: 64 }, (_, i) => ({
+        durMs: 1,
+        name: `span-${i}`,
+        startMs: i,
+      }));
+      const result = buildBootMetricsPayload({
+        dimensions: baseDimensions,
+        snapshot: { marks: {}, spans },
+      });
+      expect(result.spans).toHaveLength(64);
+    });
+  });
+
   describe('non-finite duration guard', () => {
     it('omits span with NaN duration', () => {
       const result = buildBootMetricsPayload({

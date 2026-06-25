@@ -87,7 +87,7 @@ export const buildBootMetricsPayload = (input: BuildPayloadInput): BootMetricPay
 
   return {
     ...dimensions,
-    spans: [...snapshotSpans, ...derived],
+    spans: [...snapshotSpans, ...derived].slice(0, 64),
     totalMs,
   };
 };
