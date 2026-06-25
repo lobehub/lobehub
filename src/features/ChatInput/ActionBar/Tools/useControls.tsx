@@ -516,9 +516,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           }}
         >
           <span className={cx(styles.policyItemIcon)}>{icon}</span>
-          <span className={cx(styles.policyText)}>
-            {t(value === 'pinned' ? 'tools.activation.pin' : `tools.activation.${value}`)}
-          </span>
+          <span className={cx(styles.policyText)}>{t(`tools.activation.${value}`)}</span>
           {renderCheck(value)}
         </button>
       );

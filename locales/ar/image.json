@@ -7,6 +7,7 @@
   "config.header.title": "رسم",
   "config.height.label": "الارتفاع",
   "config.imageNum.label": "عدد الصور",
+  "config.imageUpload.maxCountReached": "يمكنك إضافة ما يصل إلى {{count}} من صور المرجع",
   "config.imageUrl.label": "صورة مرجعية",
   "config.imageUrls.label": "صور مرجعية",
   "config.model.label": "النموذج",

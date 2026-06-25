@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Quadro Final",
   "config.generateAudio.label": "Gerar Áudio",
   "config.header.title": "Vídeo",
+  "config.imageUpload.maxCountReached": "Você pode adicionar até {{count}} imagens de referência",
   "config.imageUrl.label": "Quadro Inicial",
   "config.prompt.placeholder": "Descreva o vídeo que você deseja gerar",
   "config.prompt.placeholderWithRef": "Descreva a cena que você deseja gerar com a imagem",

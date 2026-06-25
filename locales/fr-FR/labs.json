@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Regroupement des messages de l'agent",
   "features.fleet.desc": "Afficher l'entrée Fleet dans la barre de titre — un tableau de bord côte à côte de toutes les tâches en cours sur vos agents.",
   "features.fleet.title": "Vue Fleet",
+  "features.foldFinishedTurn.desc": "Réduire le processus (raisonnement et appels d'outils) des tours d'agent terminés et non les plus récents sous un en-tête \"Traité\". La réponse finale reste visible ; cliquez pour développer le processus.",
+  "features.foldFinishedTurn.title": "Réduire les tours terminés",
   "features.groupChat.desc": "Activez la coordination de discussions de groupe multi-agents.",
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
   "features.imessage.desc": "Connecter les agents à iMessage via le pont local LobeHub Desktop BlueBubbles.",

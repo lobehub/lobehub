@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
   "features.fleet.desc": "عرض إدخال الأسطول في شريط العنوان — لوحة معلومات جنبًا إلى جنب لجميع المهام الجارية عبر وكلائك.",
   "features.fleet.title": "عرض الأسطول",
+  "features.foldFinishedTurn.desc": "طي العملية (الاستدلال واستدعاءات الأدوات) للأدوار المكتملة وغير الأحدث تحت عنوان \"تمت المعالجة\". يبقى الجواب النهائي مرئيًا؛ انقر لتوسيع العملية.",
+  "features.foldFinishedTurn.title": "طي الأدوار المكتملة",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.imessage.desc": "ربط الوكلاء بـ iMessage من خلال جسر BlueBubbles المحلي لتطبيق LobeHub Desktop.",

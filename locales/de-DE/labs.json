@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
   "features.fleet.desc": "Zeigt den Fleet-Eintrag in der Titelleiste an – ein nebeneinander angeordnetes Dashboard aller laufenden Aufgaben über Ihre Agenten hinweg.",
   "features.fleet.title": "Flottenansicht",
+  "features.foldFinishedTurn.desc": "Klappen Sie den Prozess (Argumentation und Werkzeugaufrufe) abgeschlossener, nicht letzter Agenten-Züge unter einer \"Verarbeitet\"-Überschrift zusammen. Die endgültige Antwort bleibt sichtbar; klicken Sie, um den Prozess zu erweitern.",
+  "features.foldFinishedTurn.title": "Abgeschlossene Züge einklappen",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
   "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
   "features.imessage.desc": "Verbinden Sie Agenten mit iMessage über die lokale LobeHub Desktop BlueBubbles-Bridge.",

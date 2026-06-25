@@ -343,6 +343,7 @@
   "builtins.lobe-task.apiName.runTask": "تشغيل مهمة",
   "builtins.lobe-task.apiName.runTasks": "تشغيل مهام",
   "builtins.lobe-task.apiName.setTaskSchedule": "تعيين الجدول الزمني",
+  "builtins.lobe-task.apiName.setTaskVerify": "تعيين التحقق",
   "builtins.lobe-task.apiName.updateTaskComment": "تحديث تعليق",
   "builtins.lobe-task.apiName.updateTaskStatus": "تحديث الحالة",
   "builtins.lobe-task.apiName.viewTask": "عرض المهمة",

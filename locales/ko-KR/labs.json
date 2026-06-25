@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "도우미 메시지 그룹화",
   "features.fleet.desc": "제목 표시줄에 Fleet 항목을 표시합니다 — 에이전트 간 실행 중인 모든 작업의 대시보드를 나란히 볼 수 있습니다.",
   "features.fleet.title": "Fleet 보기",
+  "features.foldFinishedTurn.desc": "완료된 비최신 에이전트 턴의 프로세스(추론 및 도구 호출)를 \"처리됨\" 헤더 아래로 축소합니다. 최종 답변은 계속 표시되며, 프로세스를 확장하려면 클릭하세요.",
+  "features.foldFinishedTurn.title": "완료된 턴 축소",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.imessage.desc": "로컬 LobeHub Desktop BlueBubbles 브리지를 통해 에이전트를 iMessage에 연결합니다.",

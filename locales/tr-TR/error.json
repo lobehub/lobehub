@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Abonelik puanlarınız tükendi, bu özelliği kullanamazsınız. Lütfen kredi yükleyin veya özel model API yapılandırın.",
   "response.SystemTimeNotMatchError": "Üzgünüz, sistem saatiniz sunucuyla eşleşmiyor. Lütfen sistem saatinizi kontrol edip tekrar deneyin.",
   "response.UnknownChatFetchError": "Üzgünüz, bilinmeyen bir istek hatası oluştu. Lütfen aşağıdaki bilgileri kontrol edin veya tekrar deneyin.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Bu temsilci bir çalışma alanında bulunuyor, bu nedenle yalnızca tüm ekibin erişebileceği cihazları bağlayabilir. Kişisel cihazlar, onları kaydeden kullanıcıda kalır — bunun yerine bir çalışma alanı cihazı seçin veya bu cihazı önce çalışma alanına kaydedin.",
   "response.WorkspaceFrozenByAdmin": "Bu çalışma alanı bir yönetici tarafından dondurulmuş ve istekler çalıştırılamıyor. Sorunu çözmek için lütfen çalışma alanı sahibiyle iletişime geçin.",
   "response.WorkspaceFrozenByRiskControl": "Bu çalışma alanı risk kontrolü tarafından otomatik olarak dondurulmuş ve istekler çalıştırılamıyor. Durumu gözden geçirmek için lütfen destekle iletişime geçin.",
   "stt.responseError": "Hizmet isteği başarısız oldu, lütfen yapılandırmayı kontrol edin veya tekrar deneyin",

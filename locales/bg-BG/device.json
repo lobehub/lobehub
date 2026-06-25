@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Зареждане на промени…",
   "workingDirectory.filesModified": "Модифицирани",
   "workingDirectory.ghMissing": "Инсталирайте и влезте в GitHub CLI (`gh`), за да видите свързаните pull заявки",
+  "workingDirectory.heteroHint": "Този агент винаги работи в работна директория. Докато не изберете такава, той използва папка по подразбиране — изберете друга по-долу, за да я промените.",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "Няма скорошни директории",
   "workingDirectory.notSet": "Кликнете, за да зададете работна директория",

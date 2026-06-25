@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "الإطار النهائي",
   "config.generateAudio.label": "توليد صوت",
   "config.header.title": "فيديو",
+  "config.imageUpload.maxCountReached": "يمكنك إضافة ما يصل إلى {{count}} من صور المرجع",
   "config.imageUrl.label": "الإطار الابتدائي",
   "config.prompt.placeholder": "صف الفيديو الذي ترغب في إنشائه",
   "config.prompt.placeholderWithRef": "وصف المشهد الذي تريد إنشاؤه مع الصورة",

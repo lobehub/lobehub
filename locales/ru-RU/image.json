@@ -7,6 +7,7 @@
   "config.header.title": "Картина",
   "config.height.label": "Высота",
   "config.imageNum.label": "Количество изображений",
+  "config.imageUpload.maxCountReached": "Вы можете добавить до {{count}} эталонных изображений",
   "config.imageUrl.label": "Референсное изображение",
   "config.imageUrls.label": "Референсные изображения",
   "config.model.label": "Модель",

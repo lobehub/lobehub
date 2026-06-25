@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Caricamento modifiche…",
   "workingDirectory.filesModified": "Modificati",
   "workingDirectory.ghMissing": "Installa e accedi al GitHub CLI (`gh`) per vedere le pull request collegate",
+  "workingDirectory.heteroHint": "Questo agente opera sempre all'interno di una directory di lavoro. Fino a quando non ne scegli una, utilizza una cartella predefinita — scegli un'altra qui sotto per modificarla.",
   "workingDirectory.newBranchPlaceholder": "feature/nome-nuovo-ramo",
   "workingDirectory.noRecent": "Nessuna directory recente",
   "workingDirectory.notSet": "Clicca per impostare la directory di lavoro",

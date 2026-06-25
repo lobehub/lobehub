@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
   "features.fleet.desc": "Mostra la voce Fleet nella barra del titolo — un pannello affiancato di tutte le attività in corso tra i tuoi agenti.",
   "features.fleet.title": "Vista Fleet",
+  "features.foldFinishedTurn.desc": "Comprimi il processo (ragionamento e chiamate agli strumenti) dei turni dell'agente completati e non più recenti sotto un'intestazione \"Elaborato\". La risposta finale rimane visibile; clicca per espandere il processo.",
+  "features.foldFinishedTurn.title": "Comprimi Turni Completati",
   "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
   "features.groupChat.title": "Chat di Gruppo (Multi-Agente)",
   "features.imessage.desc": "Collega gli agenti a iMessage tramite il bridge locale LobeHub Desktop BlueBubbles.",

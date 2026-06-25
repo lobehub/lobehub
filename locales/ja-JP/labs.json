@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
   "features.fleet.desc": "タイトルバーにフリートエントリを表示します。エージェント全体で実行中のタスクを並べて表示するダッシュボードです。",
   "features.fleet.title": "フリートビュー",
+  "features.foldFinishedTurn.desc": "完了した最新ではないエージェントのターンのプロセス（推論やツールの呼び出し）を「処理済み」ヘッダーの下に折りたたみます。最終的な回答は表示されたままです。プロセスを展開するにはクリックしてください。",
+  "features.foldFinishedTurn.title": "完了したターンを折りたたむ",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.imessage.desc": "LobeHub Desktop BlueBubblesブリッジを介してエージェントをiMessageに接続します。",

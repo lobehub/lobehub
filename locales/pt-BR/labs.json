@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Agrupamento de Mensagens do Agente",
   "features.fleet.desc": "Exiba a entrada da Frota na barra de título — um painel lado a lado de todas as tarefas em execução entre seus agentes.",
   "features.fleet.title": "Visão da Frota",
+  "features.foldFinishedTurn.desc": "Colapse o processo (raciocínio e chamadas de ferramentas) de turnos finalizados e não mais recentes do agente sob um cabeçalho \"Processado\". A resposta final permanece visível; clique para expandir o processo.",
+  "features.foldFinishedTurn.title": "Colapsar Turnos Finalizados",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
   "features.imessage.desc": "Conectar agentes ao iMessage através da ponte local LobeHub Desktop BlueBubbles.",

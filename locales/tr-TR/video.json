@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Bitiş Kare Görseli",
   "config.generateAudio.label": "Ses Oluştur",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "En fazla {{count}} referans görseli ekleyebilirsiniz",
   "config.imageUrl.label": "Başlangıç Kare Görseli",
   "config.prompt.placeholder": "Oluşturmak istediğiniz videoyu tanımlayın",
   "config.prompt.placeholderWithRef": "Oluşturmak istediğiniz sahneyi görüntü ile tanımlayın",

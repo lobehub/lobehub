@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Wijzigingen laden…",
   "workingDirectory.filesModified": "Gewijzigd",
   "workingDirectory.ghMissing": "Installeer en log in op de GitHub CLI (`gh`) om gekoppelde pull requests te zien",
+  "workingDirectory.heteroHint": "Deze agent draait altijd binnen een werkmap. Totdat u er een kiest, wordt een standaardmap gebruikt — kies hieronder een andere om dit te wijzigen.",
   "workingDirectory.newBranchPlaceholder": "feature/nieuwe-branch-naam",
   "workingDirectory.noRecent": "Geen recente mappen",
   "workingDirectory.notSet": "Klik om werkmap in te stellen",

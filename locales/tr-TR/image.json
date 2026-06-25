@@ -7,6 +7,7 @@
   "config.header.title": "Resim",
   "config.height.label": "Yükseklik",
   "config.imageNum.label": "Görüntü Sayısı",
+  "config.imageUpload.maxCountReached": "En fazla {{count}} referans görseli ekleyebilirsiniz",
   "config.imageUrl.label": "Referans Görsel",
   "config.imageUrls.label": "Referans Görseller",
   "config.model.label": "Model",

@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Hai esaurito i punti del tuo abbonamento e non puoi usare questa funzione. Ricarica i crediti o configura una API personalizzata.",
   "response.SystemTimeNotMatchError": "Spiacenti, l'orario del tuo sistema non corrisponde a quello del server. Verifica l'orologio e riprova.",
   "response.UnknownChatFetchError": "Spiacenti, si è verificato un errore sconosciuto nella richiesta. Verifica le informazioni seguenti o riprova.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Questo agente si trova in uno spazio di lavoro, quindi può collegare solo dispositivi accessibili a tutto il team. I dispositivi personali rimangono con l'utente che li ha registrati — scegli invece un dispositivo dello spazio di lavoro o registra prima questo dispositivo nello spazio di lavoro.",
   "response.WorkspaceFrozenByAdmin": "Questo spazio di lavoro è stato bloccato da un amministratore e non può eseguire richieste. Contatta il proprietario dello spazio di lavoro per risolvere il problema.",
   "response.WorkspaceFrozenByRiskControl": "Questo spazio di lavoro è stato bloccato automaticamente dal controllo dei rischi e non può eseguire richieste. Contatta il supporto per esaminare lo stato.",
   "stt.responseError": "Richiesta al servizio fallita. Verifica la configurazione o riprova.",
