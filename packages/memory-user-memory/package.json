@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./prompts": "./src/prompts/index.ts",
     "./schemas": "./src/schemas/index.ts",
     "./types": "./src/types.ts"
   },

@@ -4,6 +4,11 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { agents, chatGroups, chatGroupsAgents, topics, topicShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import {
+  normalizeInboxAgentAvatar,
+  normalizeInboxAgentMeta,
+  normalizeInboxAgentTitle,
+} from '../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type TopicShareData = NonNullable<
@@ -153,6 +158,7 @@ export class TopicShareModel {
           avatar: agents.avatar,
           backgroundColor: agents.backgroundColor,
           id: agents.id,
+          slug: agents.slug,
           title: agents.title,
         })
         .from(chatGroupsAgents)
@@ -161,10 +167,21 @@ export class TopicShareModel {
         .orderBy(asc(chatGroupsAgents.order))
         .limit(4);
 
-      groupMembers = members;
+      groupMembers = members.map(({ slug, ...member }) =>
+        normalizeInboxAgentMeta(member, { slug }),
+      );
     }
 
-    return { ...share, groupMembers };
+    return {
+      ...share,
+      agentAvatar: normalizeInboxAgentAvatar(share.agentAvatar, {
+        slug: share.agentSlug,
+      }),
+      agentTitle: normalizeInboxAgentTitle(share.agentTitle, {
+        slug: share.agentSlug,
+      }),
+      groupMembers,
+    };
   };
 
   /**

@@ -258,9 +258,9 @@ describe('groupTopicsByStatus', () => {
   });
 
   it('should bucket an unread completion as pending while read completions stay completed', () => {
-    const topics = [createTopic('unread', 'completed'), createTopic('read', 'completed')];
+    const topics = [createTopic('unread', 'unread'), createTopic('read', 'completed')];
 
-    const result = groupTopicsByStatus(topics, 'updatedAt', undefined, new Set(['unread']));
+    const result = groupTopicsByStatus(topics, 'updatedAt');
 
     expect(result.map((g) => g.id)).toEqual(['pending', 'completed']);
     expect(result[0].children.map((t) => t.id)).toEqual(['unread']);

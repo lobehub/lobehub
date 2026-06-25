@@ -33,6 +33,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { describeHeterogeneousAgent, renderHeteroRuntimeLines } from './heteroAgentDescriptor';
 import type {
   AgentManagerRuntimeServices,
   AgentSearchItem,
@@ -306,6 +307,11 @@ export class AgentManagerRuntime {
       // (e.g., description, tags) that aren't on LobeAgentConfig type
       const raw = config as Record<string, any>;
 
+      // Heterogeneous agents (Claude Code / Codex / …) bring their own toolset
+      // and ignore the chat model/plugins. Surface a runtime descriptor so the
+      // orchestrator can reason about what the external agent can actually do.
+      const runtime = describeHeterogeneousAgent(config.agencyConfig);
+
       const detail = {
         config: {
           model: config.model,
@@ -313,6 +319,7 @@ export class AgentManagerRuntime {
           openingQuestions: config.openingQuestions,
           plugins: config.plugins,
           provider: config.provider,
+          ...(runtime && { runtime }),
           systemRole: config.systemRole,
         },
         meta: {
@@ -330,6 +337,7 @@ export class AgentManagerRuntime {
       if (detail.config.model)
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
       if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      parts.push(...renderHeteroRuntimeLines(runtime));
       if (detail.config.systemRole) {
         parts.push(`System Prompt: ${detail.config.systemRole}`);
       }

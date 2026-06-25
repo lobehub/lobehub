@@ -39,6 +39,7 @@ const showLocalFile = (s: ChatStoreState) => currentViewType(s) === PortalViewTy
 const showMessageDetail = (s: ChatStoreState) =>
   currentViewType(s) === PortalViewType.MessageDetail;
 const showPluginUI = (s: ChatStoreState) => currentViewType(s) === PortalViewType.ToolUI;
+const showTaskDetail = (s: ChatStoreState) => currentViewType(s) === PortalViewType.TaskDetail;
 
 // ============== Data Extractors ==============
 
@@ -207,6 +208,12 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
   return view?.messageId;
 };
 
+// Task Detail selectors
+const taskDetailId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.TaskDetail);
+  return view?.taskId;
+};
+
 // Tool UI / Plugin selectors
 const currentToolUI = (
   s: ChatStoreState,
@@ -244,6 +251,7 @@ export const chatPortalSelectors = {
   showLocalFile,
   showMessageDetail,
   showPluginUI,
+  showTaskDetail,
 
   // Artifact data
   currentArtifact,
@@ -278,6 +286,9 @@ export const chatPortalSelectors = {
 
   // Message detail data
   messageDetailId,
+
+  // Task detail data
+  taskDetailId,
 
   // Tool UI data
   currentToolUI,

@@ -51,7 +51,7 @@ export const topicRouter = router({
     }),
 
   batchDeleteBySessionId: topicDeleteProcedure
-    .input(z.object({ id: z.string().nullable().optional() }))
+    .input(z.object({ id: z.string().nullish() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.topicModel.batchDeleteBySessionId(input.id);
     }),
@@ -82,9 +82,9 @@ export const topicRouter = router({
     .input(
       z.object({
         favorite: z.boolean().optional(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messages: z.array(z.string()).optional(),
-        sessionId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
         title: z.string(),
       }),
     )
@@ -97,7 +97,7 @@ export const topicRouter = router({
   getTopics: topicProcedure
     .input(
       z.object({
-        containerId: z.string().nullable().optional(),
+        containerId: z.string().nullish(),
         current: z.number().optional(),
         pageSize: z.number().optional(),
       }),
@@ -127,9 +127,9 @@ export const topicRouter = router({
   searchTopics: topicProcedure
     .input(
       z.object({
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         keywords: z.string(),
-        sessionId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
       }),
     )
     .query(async ({ input, ctx }) => {

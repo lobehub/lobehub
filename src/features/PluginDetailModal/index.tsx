@@ -1,5 +1,5 @@
-import { type SegmentedProps } from '@lobehub/ui';
-import { Modal, Segmented } from '@lobehub/ui';
+import { Modal } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
@@ -48,25 +48,28 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
         }}
       >
         <Meta id={id} />
-        <Segmented
-          block
-          value={tabKey}
-          options={
+        <Tabs
+          activeKey={tabKey}
+          items={
             [
               {
+                key: Tab.Info,
                 label: t('detailModal.tabs.info'),
-                value: Tab.Info,
               },
               hasSettings && {
+                key: Tab.Settings,
                 label: t('detailModal.tabs.settings'),
-                value: Tab.Settings,
               },
-            ].filter(Boolean) as SegmentedProps['options']
+            ].filter(Boolean) as TabsItem[]
           }
           style={{
             marginBlock: 16,
           }}
-          onChange={(v) => setTabKey(v as Tab)}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => setTabKey(key as Tab)}
         />
         {tabKey === 'settings' ? (
           hasSettings && <PluginSettingsConfig id={id} schema={schema} />

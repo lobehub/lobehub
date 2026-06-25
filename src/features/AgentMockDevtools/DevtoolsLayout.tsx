@@ -1,4 +1,5 @@
-import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -13,9 +14,9 @@ import { type DevtoolsTab, useAgentMockStore } from './store/agentMockStore';
 import { FixtureView } from './views/FixtureView';
 import { TimelineView } from './views/TimelineView';
 
-const TAB_OPTIONS: Array<{ label: string; value: DevtoolsTab }> = [
-  { label: 'Timeline', value: 'timeline' },
-  { label: 'Fixture', value: 'fixture' },
+const TAB_OPTIONS: TabsItem[] = [
+  { key: 'timeline', label: 'Timeline' },
+  { key: 'fixture', label: 'Fixture' },
 ];
 
 const styles = createStaticStyles(({ css }) => ({
@@ -142,11 +143,11 @@ export const DevtoolsLayout = memo(() => {
       </Flexbox>
 
       <Flexbox horizontal align="center" className={styles.rowTwo} justify="space-between">
-        <Segmented
-          options={TAB_OPTIONS}
+        <Tabs
+          activeKey={activeTab}
+          items={TAB_OPTIONS}
           size="small"
-          value={activeTab}
-          onChange={(value) => setActiveTab(value as DevtoolsTab)}
+          onChange={(key) => setActiveTab(key as DevtoolsTab)}
         />
         <span className={styles.hint}>⌘K open palette</span>
       </Flexbox>

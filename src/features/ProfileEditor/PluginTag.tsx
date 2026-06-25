@@ -3,6 +3,7 @@
 import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
+import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, X } from 'lucide-react';
@@ -21,6 +22,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 /**
  * Composio server icon component
@@ -115,6 +117,9 @@ const PluginTag = memo<PluginTagProps>(
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
+    // Custom connector state
+    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
 
@@ -154,6 +159,19 @@ const PluginTag = memo<PluginTagProps>(
         }
       }
 
+      // Check if it's a custom connector
+      const customConnector = customConnectors.find((c) => c.identifier === identifier);
+      if (customConnector) {
+        return {
+          availableInWeb: true,
+          icon: McpIcon,
+          isInstalled: true,
+          label: customConnector.name || customConnector.identifier,
+          title: customConnector.name || customConnector.identifier,
+          type: 'custom-connector' as const,
+        };
+      }
+
       const builtinMeta = builtinList.find((p) => p.identifier === identifier);
       if (builtinMeta) {
         // availableInWeb is only present when using allMetaList
@@ -190,6 +208,7 @@ const PluginTag = memo<PluginTagProps>(
       allComposioServers,
       isLobehubSkillEnabled,
       allLobehubSkillServers,
+      customConnectors,
     ]);
 
     // Fetch from remote if not found locally
@@ -232,6 +251,11 @@ const PluginTag = memo<PluginTagProps>(
       // LobeHub Skill type has icon property
       if (meta.type === 'lobehub-skill' && 'icon' in meta && 'label' in meta) {
         return <LobehubSkillIcon icon={meta.icon} label={meta.label} />;
+      }
+
+      // Custom connector type
+      if (meta.type === 'custom-connector') {
+        return <Icon fill={cssVar.colorText} icon={McpIcon} size={16} />;
       }
 
       // Builtin type has avatar

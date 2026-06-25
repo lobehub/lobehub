@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
 import { agentSelectors } from '@/store/agent/selectors';
-import * as agentDispatcher from '@/store/chat/slices/aiChat/actions/agentDispatcher';
-import * as heterogeneousAgentExecutor from '@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor';
+import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';

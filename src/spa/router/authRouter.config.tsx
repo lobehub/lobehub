@@ -1,8 +1,8 @@
 import { useTheme } from 'next-themes';
 import type { ComponentType, CSSProperties, ReactElement } from 'react';
 import { lazy, Suspense } from 'react';
-import type { RouteObject } from 'react-router-dom';
-import { Outlet, useRouteError } from 'react-router-dom';
+import type { RouteObject } from 'react-router';
+import { Outlet, useRouteError } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AuthShell from '@/features/AuthShell';

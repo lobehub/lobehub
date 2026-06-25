@@ -32,6 +32,8 @@ import type { LobeToolManifest } from '../tools/types';
  * Injected by caller to check if model supports specific capabilities
  */
 export interface ModelCapabilityChecker {
+  /** Check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
   /** Check if function calling is supported */
   isCanUseFC?: (model: string, provider: string) => boolean;
   /** Check if video is supported */
@@ -213,6 +215,8 @@ export interface MessagesEngineParams {
   messages: UIChatMessage[];
   /** Model ID */
   model: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
   /** Provider ID */
   provider: string;
 

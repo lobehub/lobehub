@@ -18,7 +18,7 @@ import { ttsOptions } from './options';
 import SelectWithTTSPreview from './SelectWithTTSPreview';
 
 const TTS_SETTING_KEY = 'tts';
-const { openaiVoiceOptions, localeOptions } = VoiceList;
+const { openaiVoiceOptions } = VoiceList;
 
 const AgentTTS = memo(() => {
   const { t } = useTranslation('setting');
@@ -75,19 +75,6 @@ const AgentTTS = memo(() => {
         hidden: config.ttsService !== 'microsoft',
         label: t('settingTTS.voice.title'),
         name: [TTS_SETTING_KEY, 'voice', 'microsoft'],
-      },
-      {
-        children: (
-          <Select
-            options={[
-              { label: t('settingCommon.lang.autoMode'), value: 'auto' },
-              ...(localeOptions || []),
-            ]}
-          />
-        ),
-        desc: t('settingTTS.sttLocale.desc'),
-        label: t('settingTTS.sttLocale.title'),
-        name: [TTS_SETTING_KEY, 'sttLocale'],
       },
     ],
     icon: Mic,

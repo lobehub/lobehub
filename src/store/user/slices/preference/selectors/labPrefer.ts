@@ -14,4 +14,5 @@ export const labPreferSelectors = {
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,
   enablePlatformAgent: (s: UserState): boolean => s.preference.lab?.enablePlatformAgent ?? false,
+  enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
 };

@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "Girdi Markdown Görüntüleme",
   "features.platformAgent.desc": "Oluşturma menüsünde \"Bağlantı Ajanı\" girişini göster. Bağlı ajanlar (ör. OpenClaw, Hermes) kendi cihazlarınızda çalışır ve lh connect aracılığıyla geri iletişim kurar.",
   "features.platformAgent.title": "Bağlantı Ajanı",
+  "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",
+  "features.taskVerify.title": "Görev Teslimat Kabulü",
   "title": "Deneysel Özellikler"
 }

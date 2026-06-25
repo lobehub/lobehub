@@ -329,6 +329,7 @@ export class FileService {
 
     // Extract filename from pathname
     const name = pathname.split('/').pop() || 'unknown';
+    const dirname = pathname.split('/').slice(0, -1).join('/');
 
     // Calculate file metadata
     const size = buffer.length;
@@ -343,6 +344,13 @@ export class FileService {
       fileHash: hash,
       fileType,
       id: fileId, // Use UUID instead of auto-generated ID
+      // Keep generated/base64 uploads compatible with UI hash-dedup, which reads metadata.path.
+      metadata: {
+        date: new Date().toISOString().slice(0, 10),
+        dirname,
+        filename: name,
+        path: key,
+      },
       name,
       size,
       url: key, // Store original key (S3 key or desktop://)

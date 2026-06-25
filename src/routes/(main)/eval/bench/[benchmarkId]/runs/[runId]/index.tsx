@@ -6,7 +6,7 @@ import { Button, Card, Progress, Typography } from 'antd';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
 

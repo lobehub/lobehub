@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
   "features.platformAgent.desc": "在建立選單中顯示「連接代理」項目。已連接的代理（例如 OpenClaw、Hermes）運行於您的設備上，並通過 lh connect 進行通信。",
   "features.platformAgent.title": "連接代理",
+  "features.taskVerify.desc": "在任務詳情中新增交付驗收部分：用一句話描述驗收內容，並讓 AI 生成可編輯的驗收標準。",
+  "features.taskVerify.title": "任務交付驗收",
   "title": "實驗室"
 }

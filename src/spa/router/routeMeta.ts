@@ -11,8 +11,10 @@ export interface DynamicRouteMeta {
   title?: string;
 }
 
+export type RouteMetaParams = Record<string, string | undefined>;
+
 export interface RouteMeta extends StaticRouteMeta {
-  useDynamicMeta?: (params: Record<string, string | undefined>) => DynamicRouteMeta;
+  useDynamicMeta?: (params: RouteMetaParams) => DynamicRouteMeta;
 }
 
 export interface RouteHandle {

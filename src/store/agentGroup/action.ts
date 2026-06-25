@@ -64,9 +64,19 @@ class ChatGroupInternalAction implements ResetableStore {
     );
   };
 
+  private removeStaleGroup = (groupId: string) => {
+    this.internal_dispatchChatGroup({ payload: groupId, type: 'deleteGroup' });
+  };
+
+  private isGroupNotFoundError = (error: unknown, groupId: string) =>
+    error instanceof Error && error.message === `Group ${groupId} not found`;
+
   internal_fetchGroupDetail = async (groupId: string) => {
     const groupDetail = await chatGroupService.getGroupDetail(groupId);
-    if (!groupDetail) return;
+    if (!groupDetail) {
+      this.removeStaleGroup(groupId);
+      return;
+    }
 
     // Update groupMap with full group detail including supervisorAgentId and agents
     this.internal_dispatchChatGroup({
@@ -159,10 +169,18 @@ class ChatGroupInternalAction implements ResetableStore {
       enabled && groupId ? groupKeys.detail(groupId) : null,
       async () => {
         const groupDetail = await chatGroupService.getGroupDetail(groupId);
-        if (!groupDetail) throw new Error(`Group ${groupId} not found`);
+        if (!groupDetail) {
+          this.removeStaleGroup(groupId);
+          throw new Error(`Group ${groupId} not found`);
+        }
         return groupDetail;
       },
       {
+        onError: (error) => {
+          if (this.isGroupNotFoundError(error, groupId)) {
+            this.removeStaleGroup(groupId);
+          }
+        },
         onData: (groupDetail) => {
           if (!groupDetail) return;
 

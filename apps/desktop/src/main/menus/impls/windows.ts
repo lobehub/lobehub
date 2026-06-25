@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
@@ -185,16 +185,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
           { label: t('window.minimize'), role: 'minimize' },
           {
             accelerator: 'CmdOrCtrl+W',
-            click: () => {
-              const focused = BrowserWindow.getFocusedWindow();
-              if (!focused) return;
-              const mainWindow = this.app.browserManager.getMainWindow();
-              if (focused === mainWindow.browserWindow) {
-                mainWindow.broadcast('closeCurrentTabOrWindow');
-              } else {
-                focused.close();
-              }
-            },
+            click: (_item, targetWindow) => this.closeFocusedTabOrWindow(targetWindow),
             label: t('window.close'),
           },
         ],

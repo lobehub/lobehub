@@ -59,8 +59,8 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
   // Mirror the WorkingSidebar exactly: resolve the EFFECTIVE target first, then
   // treat it as remote only when it lands on `device` with a bound device. The
-  // effective target matters because a hetero agent saved as desktop "This
-  // device" (`local` + boundDeviceId) coerces to `device` when opened on web —
+  // effective target matters because an agent saved as desktop "This device"
+  // (`local` + boundDeviceId) coerces to `device` when opened on web —
   // reading the raw stored target would miss that and leave the menu empty even
   // though the sidebar lists the skills.
   const agencyConfig = useAgentStore((s) =>
@@ -69,7 +69,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
-  const effectiveTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+    isHetero,
+    clientExecutionAvailable: isDesktop,
+  });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
 

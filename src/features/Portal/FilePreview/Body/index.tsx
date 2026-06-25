@@ -1,4 +1,5 @@
-import { Flexbox, Icon, Markdown, Segmented } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { BoltIcon, FileIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,23 +48,27 @@ const FilePreview = () => {
       style={{ borderRadius: 4, overflow: 'hidden' }}
     >
       {chunkText && (
-        <Segmented
-          block
-          value={tab}
-          variant={'filled'}
-          options={[
+        <Tabs
+          activeKey={tab}
+          items={[
             {
               icon: <Icon icon={BoltIcon} />,
+              key: FilePreviewTab.Chunk,
               label: t('FilePreview.tabs.chunk'),
-              value: FilePreviewTab.Chunk,
             },
             {
               icon: <Icon icon={FileIcon} />,
+              key: FilePreviewTab.File,
               label: t('FilePreview.tabs.file'),
-              value: FilePreviewTab.File,
             },
           ]}
-          onChange={(v) => setTabByTopic((prev) => ({ ...prev, [topicKey]: v as FilePreviewTab }))}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) =>
+            setTabByTopic((prev) => ({ ...prev, [topicKey]: key as FilePreviewTab }))
+          }
         />
       )}
 

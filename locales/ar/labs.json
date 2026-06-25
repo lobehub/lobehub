@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
   "features.platformAgent.desc": "عرض خيار \"اتصال الوكيل\" في قائمة الإنشاء. الوكلاء المتصلون (مثل OpenClaw، Hermes) يعملون على أجهزتك الخاصة ويتواصلون عبر lh connect.",
   "features.platformAgent.title": "اتصال الوكيل",
+  "features.taskVerify.desc": "أضف قسم قبول التسليم إلى تفاصيل المهمة: قم بوصف القبول في جملة واحدة ودع الذكاء الاصطناعي يولد معايير تحقق قابلة للتعديل.",
+  "features.taskVerify.title": "قبول تسليم المهمة",
   "title": "المختبرات"
 }

@@ -153,13 +153,6 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ noWideScreen }, n('toggleWideScreen', newValue));
   };
 
-  toggleZenMode = (): void => {
-    const { status } = this.#get();
-    const nextZenMode = !status.zenMode;
-
-    this.#get().updateSystemStatus({ zenMode: nextZenMode }, n('toggleZenMode'));
-  };
-
   updateModelDetailPanelExpandedKeys = (keys: ModelDetailPanelExpandedKey[]): void => {
     this.#get().updateSystemStatus(
       { modelDetailPanelExpandedKeys: keys },

@@ -4,13 +4,17 @@ import debug from 'debug';
 import { memo, useEffect } from 'react';
 
 import { SafeBoundary } from '@/components/ErrorBoundary';
-import { type DynamicRouteMeta, type RouteMeta } from '@/spa/router/routeMeta';
+import {
+  type DynamicRouteMeta,
+  type RouteMeta,
+  type RouteMetaParams,
+} from '@/spa/router/routeMeta';
 
 const log = debug('lobe-client:route-meta');
 
 interface DynamicMetaRunnerProps {
   onResolve: (meta: DynamicRouteMeta) => void;
-  params: Record<string, string | undefined>;
+  params: RouteMetaParams;
   useDynamicMeta?: RouteMeta['useDynamicMeta'];
 }
 

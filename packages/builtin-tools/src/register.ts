@@ -152,7 +152,7 @@ import { CodexInspectors, CodexRenders } from './codex';
 import { GithubIdentifier, GithubInspectors, GithubRenders } from './github';
 import { registerBuiltinInspectors } from './inspectors';
 import { registerBuiltinInterventions } from './interventions';
-import { LinearIdentifier, LinearInspectors } from './linear';
+import { LinearIdentifier, LinearInspectors, LinearRenders } from './linear';
 import { NotebookIdentifier, NotebookRenders } from './notebook';
 import { registerBuiltinPlaceholders } from './placeholders';
 import { registerBuiltinPortals } from './portals';
@@ -199,6 +199,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       command_execution: RunCommandRender as BuiltinRender,
     },
     [GithubIdentifier]: GithubRenders,
+    [LinearIdentifier]: LinearRenders,
   });
 
   registerBuiltinInspectors({

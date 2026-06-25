@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { responsesAPIModels } from '../../const/models';
 import * as openAIContextBuilders from '../../core/contextBuilders/openai';
+import { isResponsesAPIModel } from '../openai/openaiModelId';
 import { LobeGithubCopilotAI } from './index';
 
 // Mock console.error to avoid polluting test output
@@ -282,13 +282,13 @@ describe('LobeGithubCopilotAI', () => {
     });
   });
 
-  describe('responses api routing helpers', () => {
-    it('should contain codex mini model in responses api model list', () => {
-      expect(responsesAPIModels.has('gpt-5.1-codex-mini')).toBe(true);
+  describe('responses api routing', () => {
+    it('should detect parsed codex mini models as responses api models', () => {
+      expect(isResponsesAPIModel('gpt-5.1-codex-mini')).toBe(true);
     });
 
     it('should not treat gpt-4o as responses-only model', () => {
-      expect(responsesAPIModels.has('gpt-4o')).toBe(false);
+      expect(isResponsesAPIModel('gpt-4o')).toBe(false);
     });
 
     it('should convert chat completion tool to responses tool', () => {

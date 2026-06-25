@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';

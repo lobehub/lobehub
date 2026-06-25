@@ -15,13 +15,13 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
-} from '@/store/chat/slices/aiChat/actions/commandBus';
-import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
+} from '@/store/chat/slices/agentRun/actions/entries/commandBus';
+import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
@@ -59,6 +59,28 @@ const buildRetryInitialContext = (editorData: Record<string, any> | null | undef
     },
     phase: 'init' as const,
   };
+};
+
+/**
+ * Settle a regenerate / continue entry's OUTER tracking operation and fire its
+ * thin UI completion hook (`onRegenerateComplete` / `onContinueComplete`).
+ *
+ * Each of these entries owns an outer tracking op distinct from the executor's
+ * run op (`${messageKey}/${parentMessageId}`). The unified run lifecycle
+ * (`buildRunLifecycle`, inside the executor) already drove the run-level terminal
+ * side effects — title / queue drain / notification / complete signal — so the
+ * entry only retires its own tracking op and broadcasts the UI hook. Five runtime
+ * branches (regenerate × client/gateway/hetero, continue × client/gateway) shared
+ * this identical two-line tail; centralized here so they converge on one adapter
+ * instead of hand-rolling completion at each call site.
+ */
+const settleGenerationEntry = (
+  chatStore: ReturnType<typeof useChatStore.getState>,
+  operationId: string,
+  notify?: () => void,
+) => {
+  chatStore.completeOperation(operationId);
+  notify?.();
 };
 
 /**
@@ -134,7 +156,7 @@ const runHeterogeneousFromExistingMessage = async (
 
   try {
     const { executeHeterogeneousAgent } =
-      await import('@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor');
+      await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
     await executeHeterogeneousAgent(() => useChatStore.getState(), {
       assistantMessageId: assistantMsg.id,
       context,
@@ -350,10 +372,10 @@ export const generationSlice: StateCreator<
         await chatStore.executeGatewayAgent({
           context,
           message: '',
-          onComplete: () => {
-            chatStore.completeOperation(operationId);
-            if (hooks.onContinueComplete) hooks.onContinueComplete(displayMessageId);
-          },
+          onComplete: () =>
+            settleGenerationEntry(chatStore, operationId, () =>
+              hooks.onContinueComplete?.(displayMessageId),
+            ),
           parentMessageId: dbMessageId,
         });
         return;
@@ -368,12 +390,9 @@ export const generationSlice: StateCreator<
         parentOperationId: operationId,
       });
 
-      chatStore.completeOperation(operationId);
-
-      // ===== Hook: onContinueComplete =====
-      if (hooks.onContinueComplete) {
-        hooks.onContinueComplete(displayMessageId);
-      }
+      settleGenerationEntry(chatStore, operationId, () =>
+        hooks.onContinueComplete?.(displayMessageId),
+      );
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),
@@ -515,12 +534,10 @@ export const generationSlice: StateCreator<
         await chatStore.executeGatewayAgent({
           context,
           message: item.content,
-          onComplete: () => {
-            chatStore.completeOperation(operationId);
-            if (hooks.onRegenerateComplete) {
-              hooks.onRegenerateComplete(messageId);
-            }
-          },
+          onComplete: () =>
+            settleGenerationEntry(chatStore, operationId, () =>
+              hooks.onRegenerateComplete?.(messageId),
+            ),
           parentMessageId: messageId,
         });
 
@@ -545,8 +562,9 @@ export const generationSlice: StateCreator<
           parentOperationId: operationId,
           prompt: item.content,
         });
-        chatStore.completeOperation(operationId);
-        if (hooks.onRegenerateComplete) hooks.onRegenerateComplete(messageId);
+        settleGenerationEntry(chatStore, operationId, () =>
+          hooks.onRegenerateComplete?.(messageId),
+        );
         return;
       }
 
@@ -561,12 +579,7 @@ export const generationSlice: StateCreator<
         parentOperationId: operationId,
       });
 
-      chatStore.completeOperation(operationId);
-
-      // ===== Hook: onRegenerateComplete =====
-      if (hooks.onRegenerateComplete) {
-        hooks.onRegenerateComplete(messageId);
-      }
+      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),

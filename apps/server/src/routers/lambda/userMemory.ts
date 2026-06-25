@@ -104,6 +104,7 @@ export const userMemoryRouter = router({
 
   deleteAll: userMemoryWriteProcedure.mutation(async ({ ctx }) => {
     await ctx.userMemoryModel.deleteAll();
+    await ctx.personaModel.deletePersona();
 
     return { success: true };
   }),

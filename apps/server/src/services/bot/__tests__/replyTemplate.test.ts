@@ -417,7 +417,70 @@ describe('replyTemplate', () => {
       expect(zh).toContain('命令会话已断开');
     });
 
-    it('falls back to the generic op-id template for unknown error codes', () => {
+    it('keeps command-disconnect copy after the error is refined to a StateStore code', () => {
+      // formatErrorForState pattern-refines "Command aborted due to connection
+      // close" to StateStorePersistError (write) / StateStoreReadError (read).
+      // The specific disconnect guidance must still win over the harness/system
+      // tiers now that errorType is always populated.
+      const persist = renderAgentError(
+        'StateStorePersistError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'harness',
+      );
+      expect(persist).toContain('Command session disconnected');
+
+      const read = renderAgentError(
+        'StateStoreReadError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(read).toContain('Command session disconnected');
+    });
+
+    it('uses provider-neutral copy for system infra errors (no model-provider blame)', () => {
+      // StateStoreReadError is system-attributed but the LLM provider is not
+      // involved — the fallback must not suggest switching models / blame the
+      // provider the way the network copy does.
+      const en = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(en).toContain('temporary system error');
+      expect(en).not.toContain('model provider');
+      expect(en).not.toMatch(/switch to a different model/i);
+      expect(en).toContain('op-1');
+
+      const zh = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'zh-CN',
+        'system',
+      );
+      expect(zh).toContain('临时系统错误');
+    });
+
+    it('still gives ProviderNetworkError the provider-specific network copy', () => {
+      // Regression guard: the provider-neutral system fallback must not swallow
+      // the one system-attributed code that IS about the model provider.
+      const out = renderAgentError(
+        'ProviderNetworkError',
+        'fetch failed',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(out).toContain('Network error talking to the model provider');
+    });
+
+    it('falls back to the generic op-id template for unknown error codes without attribution', () => {
       expect(renderAgentError('SomeNewErrorCode', undefined, 'op-1')).toBe(
         '**Agent Execution Failed**\nOperation ID: `op-1`',
       );
@@ -425,6 +488,63 @@ describe('replyTemplate', () => {
 
     it('falls back to the generic header when neither errorType nor operationId is known', () => {
       expect(renderAgentError(undefined, undefined, undefined)).toBe('**Agent Execution Failed**');
+    });
+
+    it('surfaces a network message for ProviderNetworkError instead of a bare op id', () => {
+      const en = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net');
+      expect(en).toContain('Network error talking to the model provider');
+      expect(en).toContain('op-net');
+      expect(en).not.toContain('**Agent Execution Failed**\nOperation ID');
+
+      const zh = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net', 'zh-CN');
+      expect(zh).toContain('网络连接异常');
+    });
+
+    it('maps provider-capacity codes to the temporarily-unavailable copy', () => {
+      const unavailable = renderAgentError('ProviderServiceUnavailable', undefined, 'op-1');
+      const noChannel = renderAgentError('NoAvailableChannel', undefined, 'op-1');
+      expect(unavailable).toContain('temporarily unavailable');
+      expect(unavailable).toBe(noChannel);
+
+      expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
+        'Too many requests',
+      );
+      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1')).toContain(
+        'empty response',
+      );
+    });
+
+    it('gives OperationInactivityTimeout retry-oriented copy', () => {
+      expect(renderAgentError('OperationInactivityTimeout', undefined, 'op-1')).toContain(
+        'timed out',
+      );
+    });
+
+    it('falls back by attribution when the exact code is unknown', () => {
+      // system → provider-neutral infra copy (must not blame the model provider)
+      expect(renderAgentError('SomeNewInfraCode', undefined, 'op-1', 'en-US', 'system')).toContain(
+        'temporary system error',
+      );
+      // provider → temporarily-unavailable copy
+      expect(renderAgentError('SomeNewCode', undefined, 'op-1', 'en-US', 'provider')).toContain(
+        'temporarily unavailable',
+      );
+      // harness → internal-error copy, op id kept for support
+      const harness = renderAgentError('SomeNewCode', undefined, 'op-h', 'en-US', 'harness');
+      expect(harness).toContain('Something went wrong on our side');
+      expect(harness).toContain('op-h');
+      // user → generic check-your-settings copy
+      expect(renderAgentError('SomeNewCode', undefined, 'op-1', 'en-US', 'user')).toContain(
+        "couldn't be completed",
+      );
+    });
+
+    it('prefers the precise code copy over the attribution fallback', () => {
+      // ProviderNetworkError has precise copy even though attribution=system
+      // would also resolve; the precise tier must win.
+      const out = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1', 'en-US', 'system');
+      expect(out).toContain('Invalid or missing API key');
+      expect(out).not.toContain('Network error');
     });
   });
 

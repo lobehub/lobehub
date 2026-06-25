@@ -24,7 +24,11 @@ const TitleSection = memo(() => {
   // Gate the title/emoji on the same state as the body editor: edit permission
   // AND not locked by another member (nor pending / save-blocked). The lock makes
   // the whole page read-only, so metadata must not stay editable behind it.
-  const canEdit = usePageEditable();
+  // `metaReadOnly` additionally locks just the meta (title + emoji) while leaving
+  // the body editable — used for managed docs like a skill's `SKILL.md` index,
+  // whose identity is renamed through skill APIs, never a plain title save.
+  const isMetaReadOnly = usePageEditorStore((s) => s.metaReadOnly);
+  const canEdit = usePageEditable() && !isMetaReadOnly;
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);

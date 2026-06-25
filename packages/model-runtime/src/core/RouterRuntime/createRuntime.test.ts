@@ -119,6 +119,69 @@ describe('createRouterRuntime', () => {
       expect(mockChat).toHaveBeenCalledWith(payload, undefined);
     });
 
+    it('should attach route attempt metadata for lobehub runtime only', async () => {
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'openai',
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const metadata: Record<string, unknown> = { traceId: 'trace-1', trigger: 'chat' };
+
+      await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 }, { metadata });
+
+      expect(metadata.routeAttempt).toEqual(
+        expect.objectContaining({
+          apiType: 'openai',
+          channelId: 'channel-1',
+          optionIndex: 0,
+          providerId: 'lobehub',
+          success: true,
+          totalOptions: 1,
+        }),
+      );
+    });
+
+    it('should not attach route attempt metadata for non-lobehub runtime', async () => {
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const metadata: Record<string, unknown> = { traceId: 'trace-1', trigger: 'chat' };
+
+      await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 }, { metadata });
+
+      expect(metadata).not.toHaveProperty('routeAttempt');
+    });
+
     it('should handle errors when provided with handleError', async () => {
       const mockError = new Error('API Error');
       const mockChat = vi.fn().mockRejectedValue(mockError);
@@ -981,7 +1044,7 @@ describe('createRouterRuntime', () => {
 
       const result = await runtime.createImage(payload);
       expect(result).toEqual({ imageUrl: 'https://example.com/image.png' });
-      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+      expect(mockCreateImage).toHaveBeenCalledWith(payload, undefined);
     });
 
     it('should forward options.metadata to onRouteAttempt', async () => {
@@ -1010,10 +1073,14 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       const payload = { model: 'gpt-image-1', params: { prompt: 'a cat' } };
       const metadata = { trigger: 'image' };
+      const options = {
+        metadata,
+        pricingContext: { plan: 'premium', scope: 'personal' },
+      } as const;
 
-      await runtime.createImage(payload, { metadata });
+      await runtime.createImage(payload, options);
 
-      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+      expect(mockCreateImage).toHaveBeenCalledWith(payload, options);
       expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
     });
   });
@@ -1043,7 +1110,7 @@ describe('createRouterRuntime', () => {
 
       const result = await runtime.createVideo(payload);
       expect(result).toEqual({ inferenceId: 'job-1' });
-      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload, undefined);
     });
 
     it('should forward options.metadata to onRouteAttempt', async () => {
@@ -1070,10 +1137,14 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       const payload = { model: 'sora-1', params: { prompt: 'a cat' } } as any;
       const metadata = { trigger: 'video' };
+      const options = {
+        metadata,
+        pricingContext: { plan: 'premium', scope: 'personal' },
+      } as const;
 
-      await runtime.createVideo(payload, { metadata });
+      await runtime.createVideo(payload, options);
 
-      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload, options);
       expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
     });
 

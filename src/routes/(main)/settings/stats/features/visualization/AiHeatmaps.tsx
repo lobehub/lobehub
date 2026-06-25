@@ -1,6 +1,7 @@
 import { type HeatmapsProps } from '@lobehub/charts';
 import { Heatmaps } from '@lobehub/charts';
-import { Flexbox, Icon, Segmented, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -78,23 +79,23 @@ const AiHeatmaps = memo<
   );
 
   const typeSwitch = (
-    <Segmented
+    <Tabs
+      activeKey={type}
       size={'small'}
-      value={type}
-      variant={'outlined'}
-      options={[
+      style={{ width: 'auto' }}
+      items={[
         {
           icon: <Icon icon={CoinsIcon} />,
+          key: HeatmapType.Tokens,
           label: t('stats.tokens'),
-          value: HeatmapType.Tokens,
         },
         {
           icon: <Icon icon={MessageSquareIcon} />,
+          key: HeatmapType.Messages,
           label: t('stats.messages'),
-          value: HeatmapType.Messages,
         },
       ]}
-      onChange={(v) => setType(v as HeatmapType)}
+      onChange={(key) => setType(key as HeatmapType)}
     />
   );
 

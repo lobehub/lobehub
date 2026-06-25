@@ -167,6 +167,17 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageTaskCallbackSchema = z.object({
+  // Task identifier (e.g. `T-42`) for the card header + jump link.
+  identifier: z.string(),
+  // Terminal outcome of the task run that produced this callback.
+  reason: z.enum(['done', 'error', 'interrupted']),
+  // The task id (jump target → task detail).
+  taskId: z.string(),
+  // The completed task topic, for an optional "view run" link.
+  topicId: z.string().optional(),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
   inspectExpanded: z.boolean().optional(),
@@ -183,6 +194,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   subAgentId: z.string().optional(),
+  // role='taskCallback' card: which task delivered its handoff back to this
+  // conversation, and the run outcome. The card header + jump link read this.
+  taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
@@ -350,6 +364,12 @@ export interface MessageMetadata {
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
   subAgentId?: string;
+  /**
+   * Task-callback card pointer (for role='taskCallback' messages). Identifies
+   * the task whose handoff result was delivered back into this conversation and
+   * the run outcome; the card header + jump link read off it.
+   */
+  taskCallback?: MessageTaskCallback;
   taskTitle?: string;
   // message content is multimodal, display content in the streaming, won't save to db
   tempDisplayContent?: string;
@@ -384,6 +404,23 @@ export interface MessageMetadata {
   verifyOperationId?: string;
   /** Display round number for the verify card (1-based; repair rounds are separate). */
   verifyRound?: number;
+}
+
+/**
+ * Pointer carried on a `role='taskCallback'` message — the result-bridge card
+ * that reports a finished task's handoff back to its creator conversation
+ * (LOBE-10625). The handoff summary itself lives in the message `content`; this
+ * pointer drives the card header (identifier + outcome) and the jump link.
+ */
+export interface MessageTaskCallback {
+  /** Task identifier (e.g. `T-42`) for the card header + jump link. */
+  identifier: string;
+  /** Terminal outcome of the task run that produced this callback. */
+  reason: 'done' | 'error' | 'interrupted';
+  /** The task id (jump target → task detail). */
+  taskId: string;
+  /** The completed task topic, for an optional "view run" link. */
+  topicId?: string;
 }
 
 /**

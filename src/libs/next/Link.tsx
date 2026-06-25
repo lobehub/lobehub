@@ -4,7 +4,7 @@
  */
 
 import { type AnchorHTMLAttributes } from 'react';
-import { Link as RRLink } from 'react-router-dom';
+import { Link as RRLink } from 'react-router';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from './nextjsOnlyRoutes';
 

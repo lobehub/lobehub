@@ -28,6 +28,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 interface UseAgentDropdownMenuParams {
   anchor: HTMLElement | null;
   avatar?: string;
+  backgroundColor?: string;
   group: string | undefined;
   id: string;
   openCreateGroupModal: () => void;
@@ -38,6 +39,7 @@ interface UseAgentDropdownMenuParams {
 export const useAgentDropdownMenu = ({
   anchor,
   avatar,
+  backgroundColor,
   group,
   id,
   openCreateGroupModal,
@@ -64,7 +66,11 @@ export const useAgentDropdownMenu = ({
   const { allowed: canCreate } = usePermission('create_content');
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace feature is off)
-  const transferMenuItems = useAgentTransferMenuItem(id);
+  const transferMenuItems = useAgentTransferMenuItem(id, {
+    avatar,
+    backgroundColor,
+    title,
+  });
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -172,6 +178,7 @@ export const useAgentDropdownMenu = ({
       pinned,
       id,
       avatar,
+      backgroundColor,
       title,
       sessionCustomGroups,
       group,

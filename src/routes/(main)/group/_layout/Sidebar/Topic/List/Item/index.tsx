@@ -1,5 +1,5 @@
 import type { ChatTopicStatus } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Tag, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CheckCircle2,
@@ -13,13 +13,17 @@ import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import DotsLoading from '@/components/DotsLoading';
 import { isDesktop } from '@/const/version';
+import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
@@ -90,13 +94,14 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
   const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
   const addTab = useElectronStore((s) => s.addTab);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const focusTopicPopup = useFocusTopicPopup({ groupId: activeGroupId });
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeGroupId || !id) return undefined;
-    return `/group/${activeGroupId}?topic=${id}`;
-  }, [activeGroupId, id]);
+    return buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug);
+  }, [activeGroupId, activeWorkspaceSlug, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
     id ? s.topicRenamingId === id : false,
@@ -143,10 +148,18 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
       toggleMobileTopic(false);
       return;
     }
-    addTab(`/group/${activeGroupId}?topic=${id}`);
+    addTab(buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug));
     switchTopic(id);
     toggleMobileTopic(false);
-  }, [id, activeGroupId, addTab, focusTopicPopup, switchTopic, toggleMobileTopic]);
+  }, [
+    id,
+    activeGroupId,
+    activeWorkspaceSlug,
+    addTab,
+    focusTopicPopup,
+    switchTopic,
+    toggleMobileTopic,
+  ]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
     id,
@@ -201,11 +214,29 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     </span>
   );
 
+  // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
+  // input. Group drafts live in localStorage keyed by messageMapKey under the
+  // group scope; the default topic (no id) maps to the new-topic draft.
+  const draftKey = useMemo(
+    () =>
+      activeGroupId
+        ? messageMapKey({ agentId: '', groupId: activeGroupId, scope: 'group', topicId: id })
+        : undefined,
+    [activeGroupId, id],
+  );
+  const hasDraft = useHasDraft(draftKey);
+  const draftPrefix = hasDraft ? (
+    <Text fontSize={12} style={{ color: cssVar.colorError, flex: 'none' }}>
+      {t('draft')}
+    </Text>
+  ) : undefined;
+
   // For default topic (no id)
   if (!id) {
     return (
       <NavItem
         active={active}
+        slots={{ titlePrefix: draftPrefix }}
         titleColor={cssVar.colorText}
         icon={
           isLoading ? (
@@ -274,6 +305,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         })()}
         slots={{
           iconPostfix: unreadNode,
+          titlePrefix: draftPrefix,
         }}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}

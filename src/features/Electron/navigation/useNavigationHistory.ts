@@ -3,7 +3,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
@@ -40,14 +40,14 @@ export const useNavigationHistory = () => {
     if (!canGoBackFn()) return;
 
     const targetEntry = storeGoBack();
-    if (targetEntry) navigate(targetEntry.url);
+    if (targetEntry) navigate(targetEntry.url, { escape: true });
   }, [canGoBackFn, storeGoBack, navigate]);
 
   const goForward = useCallback(() => {
     if (!canGoForwardFn()) return;
 
     const targetEntry = storeGoForward();
-    if (targetEntry) navigate(targetEntry.url);
+    if (targetEntry) navigate(targetEntry.url, { escape: true });
   }, [canGoForwardFn, storeGoForward, navigate]);
 
   useEffect(() => {

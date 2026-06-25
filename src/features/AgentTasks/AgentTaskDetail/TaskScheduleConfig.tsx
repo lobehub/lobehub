@@ -1,16 +1,6 @@
 import type { TaskAutomationMode } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  InputNumber,
-  Popover,
-  Segmented,
-  Text,
-} from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Button, Flexbox, Icon, InputNumber, Popover, Text } from '@lobehub/ui';
+import { Select, Tabs } from '@lobehub/ui/base-ui';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
@@ -282,7 +272,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   const handleModeChange = useCallback(
-    (value: string | number) => {
+    (value: string) => {
       if (!canEditTask) return;
       if (!finalTaskId) return;
       setAutomationMode(finalTaskId, value as TaskAutomationMode);
@@ -336,30 +326,34 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
       {enabled && (
         <>
-          <Segmented
-            block
-            disabled={!canEditTask}
-            value={automationMode ?? 'heartbeat'}
-            options={[
+          <Tabs
+            activeKey={automationMode ?? 'heartbeat'}
+            items={[
               {
+                disabled: !canEditTask,
+                key: 'schedule',
                 label: (
                   <Flexbox horizontal align="center" gap={6} justify="center">
                     <Icon icon={CalendarDays} size={14} />
                     <span>{t('taskSchedule.schedulerTab')}</span>
                   </Flexbox>
                 ),
-                value: 'schedule',
               },
               {
+                disabled: !canEditTask,
+                key: 'heartbeat',
                 label: (
                   <Flexbox horizontal align="center" gap={6} justify="center">
                     <Icon icon={RefreshCw} size={14} />
                     <span>{t('taskSchedule.intervalTab')}</span>
                   </Flexbox>
                 ),
-                value: 'heartbeat',
               },
             ]}
+            styles={{
+              list: { display: 'flex', width: '100%' },
+              tab: { flex: 1 },
+            }}
             onChange={handleModeChange}
           />
           {automationMode === 'heartbeat' && (

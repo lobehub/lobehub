@@ -1,0 +1,328 @@
+---
+title: Glossary
+description: Definitions of the core concepts and terms used across LobeHub, from agents and topics to skills, memory, models, and billing.
+tags:
+  - LobeHub
+  - Glossary
+  - Terminology
+  - Concepts
+  - Reference
+---
+
+# Glossary
+
+A quick reference for the words you'll meet across LobeHub. Terms are grouped by their first letter; common synonyms point to the main entry.
+
+## A
+
+### Agent
+
+A configurable AI assistant with its own system role, model, skills, knowledge base, and memory. It is the core unit you chat with and assign tasks to, built to be reused across conversations rather than created for a single one. Also called an Assistant.
+
+### Agent Builder
+
+A built-in agent that creates and configures agents (or whole agent groups) for you from a plain-language description of what you want.
+
+### Agent Group
+
+See [Group](#group).
+
+### Artifact
+
+Substantial, self-contained content an agent produces during a conversation, such as a web app, SVG graphic, HTML page, diagram, document, or code file. Artifacts open in a dedicated preview panel where you can view, iterate on, and export them.
+
+## B
+
+### Branching
+
+Turning a linear chat into a tree by starting a new conversation path from any message. Continuation mode keeps the earlier context, while standalone mode starts fresh. See also [Thread](#thread).
+
+### Budget
+
+The pool of credits available to spend, checked before each AI request. Personal and workspace budgets draw from separate credit sources, and a request is blocked when the budget is too low.
+
+## C
+
+### Channels
+
+Per-agent connections that link an agent to an external messaging platform (Discord, Slack, Telegram, LINE, iMessage, QQ, WeChat, Feishu, and Lark) using your own bot, so anyone in that chat can talk to the agent. See also [Messenger](#messenger).
+
+### Chat Mode
+
+A per-conversation setting that switches an agent between Agent mode (can use tools, a runtime environment, and memory to work autonomously) and Chat mode (plain conversation with fewer tokens and no tool use).
+
+### Claude Code
+
+Anthropic's terminal coding agent that you can drive from the LobeHub desktop app. LobeHub runs the local `claude` CLI and renders its tasks, todos, skills, and tool calls as chat blocks.
+
+### Cloud Sandbox
+
+A secure, isolated cloud environment where an agent can run code, create files, and execute commands, returning real output instead of just code snippets.
+
+### Codex
+
+OpenAI's terminal coding agent that you can drive from the LobeHub desktop app. LobeHub runs the local `codex` CLI and renders its file changes, todos, and command output as chat blocks.
+
+### Command Menu
+
+A quick-action search overlay (Cmd/Ctrl + K) for jumping to agents, topics, settings, skills, and actions with fuzzy search.
+
+### Credits
+
+The unit LobeHub uses to measure AI usage. Different models consume different amounts per request, and credits are drawn from your free allowance, subscription, referral rewards, and top-ups.
+
+### Custom API
+
+Connecting your own model provider API keys (OpenAI, Anthropic, OpenRouter, and others) instead of using built-in credits. Available on paid plans.
+
+## D
+
+### Data Analytics
+
+A personal usage dashboard showing days of use, agent, topic, and message counts, an activity heatmap, and model and agent breakdowns, with a shareable stats image.
+
+## E
+
+### Embedding
+
+A numeric (vector) representation of text that lets content be matched by meaning. LobeHub embeds your files so they can be found through semantic search.
+
+## F
+
+### Feature Flags
+
+Switches that turn features on or off in self-hosted deployments, set through the `FEATURE_FLAGS` environment variable.
+
+### File Chunk
+
+A segment of a larger file. Files are split into chunks and embedded so their content can be searched and used in conversation. Also called chunking.
+
+### File Upload
+
+Adding documents, code, images, and media to a conversation by drag-and-drop, click, or paste, so an agent can read and reference them. Uploaded files are saved to Resources.
+
+### Fork
+
+Creating your own derivative version of a marketplace agent. A fork keeps attribution to the original creator.
+
+## G
+
+### Group
+
+A shared space where several agents collaborate on a task. A group can run automatically under an Orchestrator or be driven by `@mentioning` members, and supports modes such as sequential, parallel, iterative, and debate. Also called an Agent Group or Group Chat.
+
+### GTD Tools
+
+A built-in skill that brings the Getting Things Done method into chat, letting an agent capture, track, complete, and reschedule tasks from natural language.
+
+## I
+
+### Image Generation
+
+A built-in workspace that turns text prompts into images using models such as DALL-E 3 and Flux, with controls for aspect ratio, resolution, quality, and seed. Output is saved to Resources.
+
+### Inbox
+
+See [Lobe AI](#lobe-ai).
+
+### Integrations
+
+Connections from an agent to external services, including MCP servers and OAuth-connected apps such as Linear, Microsoft, and Twitter.
+
+## K
+
+### Knowledge Base
+
+A collection of uploaded files, stored as searchable vector chunks, that an agent can reference so it answers from your data rather than general training alone. Shown in the app as a Library.
+
+## L
+
+### Library
+
+See [Knowledge Base](#knowledge-base).
+
+### Lobe AI
+
+The built-in, zero-setup general assistant that is ready to chat, research, write, and code out of the box, without creating a custom agent. Also called the Inbox.
+
+### LobeHub Provider
+
+LobeHub's built-in model provider that gives you access to mainstream models without configuring your own API keys, billed with credits.
+
+## M
+
+### MCP (Model Context Protocol)
+
+An open standard for connecting agents to external tools, data, and services. LobeHub acts as the MCP client; MCP servers run locally (STDIO) or remotely (Streamable HTTP) and expose tools, resources, and prompts.
+
+### Memory
+
+Personal context (preferences, role, work habits, and experiences) that agents extract from conversations and recall later. LobeHub keeps memory white-box: you can view, edit, delete, and add entries, and agents remember only what you approve.
+
+### Messenger
+
+A no-setup way to chat with your own LobeHub agents through the official `@LobeHub` bot on Telegram, Slack, and Discord. Unlike Channels, only you talk to the bot.
+
+### Model
+
+The large language (or image and video) model that powers an agent's responses, such as GPT-4o, Claude, or Gemini. You can set a default model per agent and switch models mid-conversation.
+
+### Model Provider
+
+A service that supplies models, such as OpenAI, Anthropic, Google, or local options like Ollama. LobeHub integrates many providers, configured under Settings. Also called a Provider.
+
+### Moderator
+
+See [Orchestrator](#orchestrator).
+
+## N
+
+### Notebook
+
+A side panel that stores documents (notes, reports, research) tied to the current topic and lists the pages linked to it.
+
+## O
+
+### OCR
+
+Reading and transcribing text from images, screenshots, handwriting, and documents. Short for optical character recognition.
+
+### Orchestrator
+
+The coordinator in a group that understands your goal, assigns work to the right member agents, orders their contributions, and summarizes the result. Also called the Moderator or Supervisor.
+
+## P
+
+### Page
+
+A long-form document (文稿) you write and edit in LobeHub, with Markdown, live preview, version history, and auto-save. Agents can draft and revise pages directly through the Pages agent.
+
+### Plan
+
+A subscription tier that sets your monthly credit allowance and feature access. Tiers range from a free entry plan to paid plans with more credits and premium features.
+
+### Plugin
+
+See [Skill](#skill).
+
+### Provider
+
+See [Model Provider](#model-provider).
+
+## R
+
+### RAG
+
+Retrieval-augmented generation. Your question is embedded, compared to stored file chunks by meaning, and the most relevant chunks are given to the agent so it answers from your data. Also called semantic search.
+
+### Referral
+
+A reward program where you share a code or link; you and the person you invite both receive bonus credits after they sign up and make a payment.
+
+### Resources
+
+The area that holds all your files, folders, pages, and knowledge bases, with semantic search. Also called the Resource Library.
+
+### Risk Control
+
+Safeguards that detect and block abuse such as bulk fake registrations and referral fraud.
+
+## S
+
+### Sandbox
+
+See [Cloud Sandbox](#cloud-sandbox).
+
+### Scheduled Task
+
+A task that runs an agent on your prompt automatically on a schedule, for example hourly, daily, or weekly. Each run starts without prior chat context, so the prompt must be self-contained.
+
+### Self-hosting
+
+Running open-source LobeHub on your own infrastructure (Docker, Vercel, or other platforms) for full control of your data. Commercial features such as credits and subscriptions are inactive in self-hosted deployments.
+
+### Skill
+
+An installable capability that gives an agent new tools, such as web search, code execution, or a third-party connector. Skills are the product's user-facing name for plugins and are managed in the Skill Store.
+
+### Skill Store
+
+The in-product browser for finding, installing, and configuring skills, including built-in tools, community MCP servers, and custom servers you add yourself.
+
+### Spend
+
+A record of credits consumed by a request, itemized by model, token usage, and source (chat, image, bot, API, or scheduled run).
+
+### STT (Speech-to-Text)
+
+Voice input that converts your spoken words into text in the message box before sending.
+
+### Sub-agents
+
+Scoped helper agents that a coding agent (Claude Code or Codex) spawns to handle parallel or isolated work. Their threads render separately within the conversation.
+
+### Subscription
+
+A recurring plan, billed monthly or yearly, that grants a credit allowance and feature access. See also [Plan](#plan).
+
+### Subtopic
+
+See [Thread](#thread).
+
+### System Role
+
+The instruction that defines an agent's personality, expertise, and behavior. It is the most important part of an agent's configuration. Also called the system prompt or agent profile.
+
+## T
+
+### Task
+
+A unit of agent work with a status, instructions, an assignee, and an activity log. Tasks run in the background, can repeat on a schedule, and can produce artifacts. Statuses move from backlog to in progress to review to done.
+
+### Thread
+
+A branched sub-conversation spun off from a message in a topic, optionally carrying the topic's context. Also called a subtopic (子话题). See also [Branching](#branching).
+
+### Tool
+
+A function an agent calls to take an action, such as searching the web, generating an image, or managing files. Skills and MCP servers provide tools.
+
+### Topic
+
+A single conversation thread with an agent or group. Topics can be searched, renamed, favorited, archived, shared, and grouped by time.
+
+### Top-up
+
+Buying extra credits on demand. Auto top-up can refill your balance automatically when it runs low. Top-up credits are used after free, subscription, and referral credits.
+
+### Translation Assistant
+
+A model you assign in settings to translate conversation messages into a target language with one click.
+
+### TTS (Text-to-Speech)
+
+Voice output that reads an agent's responses aloud, with selectable voices and cached playback.
+
+## V
+
+### Video Generation
+
+A built-in workspace that turns text or images into video using models such as Sora, Veo, and Kling, with controls for start and end frames, duration, and resolution.
+
+### Vision
+
+The ability of vision-enabled models to see and understand uploaded images, including describing them, comparing them, answering questions about them, and extracting text (OCR).
+
+## W
+
+### Web Search
+
+Lets an agent retrieve up-to-date information from the internet and cite its sources. You can set it to automatic, always on, or off.
+
+### Working Directory
+
+The folder a coding agent (Claude Code or Codex) treats as the project root for a session. Changing it mid-conversation starts a new session.
+
+### Workspace
+
+Has two related meanings. (1) The contextual side panel that surfaces a conversation's artifacts, files, pages, and tool details. (2) A shared team space with its own subscription, shared credits, agents, and knowledge bases, billed separately from members' personal accounts.

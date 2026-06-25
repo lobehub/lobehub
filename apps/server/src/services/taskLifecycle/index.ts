@@ -31,6 +31,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
+import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { TaskReviewService } from '@/server/services/taskReview';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
@@ -142,7 +143,12 @@ export class TaskLifecycleService {
             )
           : false;
 
-      if (reviewTerminated) return;
+      if (reviewTerminated) {
+        // Review (Judge) already transitioned the task to its terminal state —
+        // bridge the result here before the early return.
+        await this.bridgeResultToCreator(params);
+        return;
+      }
 
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
@@ -208,11 +214,40 @@ export class TaskLifecycleService {
       await this.taskModel.updateStatus(taskId, 'paused');
     }
 
+    // Bridge the finished task's handoff back to the creator conversation
+    // (LOBE-10625). Runs HERE — after all status transitions above — so the
+    // bridge reads the settled task status. Doing it as a separate webhook
+    // racing `on-topic-complete` could observe the pre-transition status and
+    // silently drop the only callback for automation tasks that become terminal
+    // in this path (e.g. a scheduled task hitting its execution cap).
+    await this.bridgeResultToCreator(params);
+
     // Heartbeat re-arm: re-read task state (status / context may have just
     // been mutated by the branches above) and decide whether to publish the
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Deliver the finished task's result back to the conversation that created
+   * it. Always best-effort: a bridge failure must never affect task status, so
+   * it's wrapped here and the underlying service also avoids throwing.
+   */
+  private async bridgeResultToCreator(params: TopicCompleteParams): Promise<void> {
+    try {
+      await new TaskResultBridgeService(this.db, this.userId, this.workspaceId).deliver({
+        errorMessage: params.errorMessage,
+        lastAssistantContent: params.lastAssistantContent,
+        operationId: params.operationId,
+        reason: params.reason,
+        taskId: params.taskId,
+        taskIdentifier: params.taskIdentifier,
+        topicId: params.topicId,
+      });
+    } catch (error) {
+      log('result bridge failed for task=%s (non-fatal): %O', params.taskIdentifier, error);
+    }
   }
 
   /**

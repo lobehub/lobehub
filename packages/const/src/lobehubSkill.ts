@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiGithub, SiLinear, SiVercel, SiX } from '@icons-pack/react-simple-icons';
+import { SiGithub, SiLinear, SiPosthog, SiVercel, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -35,6 +35,8 @@ export interface LobehubSkillProviderType {
    */
   readme: string;
 }
+
+export type LobehubConnectorProviderType = LobehubSkillProviderType;
 
 /**
  * Predefined LobeHub Skill Provider list
@@ -97,6 +99,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     authorUrl: 'https://lobehub.com',
     defaultVisible: true,
     description:
+      'PostHog is an open-source product analytics platform for analyzing events, funnels, cohorts, feature flags, experiments, and user behavior.',
+    icon: SiPosthog,
+    id: 'posthog',
+    label: 'PostHog',
+    readme:
+      'Connect to PostHog to query product analytics, inspect dashboards, review feature flags and experiments, and understand user behavior through natural conversation with your AI assistant.',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
       'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
     icon: SiX,
     id: 'twitter',
@@ -118,11 +132,15 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
   },
 ];
 
+export const LOBEHUB_CONNECTOR_PROVIDERS = LOBEHUB_SKILL_PROVIDERS;
+
 /**
  * Get provider config by ID
  */
 export const getLobehubSkillProviderById = (id: string) =>
   LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === id);
+
+export const getLobehubConnectorProviderById = getLobehubSkillProviderById;
 
 /**
  * Get all visible providers (for default UI display)

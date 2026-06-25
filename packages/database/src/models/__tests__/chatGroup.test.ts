@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1023,6 +1024,34 @@ describe('ChatGroupModel', () => {
       const result = await workspaceChatGroupModel.getGroupsWithAgents(['workspace-agent']);
 
       expect(result).toEqual([expect.objectContaining({ id: 'workspace-group', workspaceId })]);
+    });
+  });
+
+  describe('getMemberAvatarsByGroupIds', () => {
+    it('should group member avatars by chatGroupId in member order with inbox fallback', async () => {
+      await serverDB.insert(agentsTable).values([
+        { avatar: '/custom.png', id: 'member-custom', slug: 'custom', userId },
+        { avatar: null, id: 'member-inbox', slug: INBOX_SESSION_ID, userId },
+      ]);
+      await serverDB.insert(chatGroups).values({ id: 'group-avatars', title: 'G', userId });
+      await serverDB.insert(chatGroupsAgents).values([
+        { agentId: 'member-inbox', chatGroupId: 'group-avatars', order: 1, userId },
+        { agentId: 'member-custom', chatGroupId: 'group-avatars', order: 0, userId },
+      ]);
+
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds(['group-avatars']);
+
+      // Ordered by `order`: custom (0) before inbox (1); inbox avatar falls back.
+      expect(result.get('group-avatars')).toEqual([
+        { avatar: '/custom.png', backgroundColor: null },
+        { avatar: DEFAULT_INBOX_AVATAR, backgroundColor: null },
+      ]);
+    });
+
+    it('should return an empty map for no group ids', async () => {
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds([]);
+
+      expect(result.size).toBe(0);
     });
   });
 });

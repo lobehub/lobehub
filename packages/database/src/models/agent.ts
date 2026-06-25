@@ -1,6 +1,8 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import type { AgentRankItem } from '@lobechat/types';
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -15,6 +17,7 @@ import {
   agentsKnowledgeBases,
   agentsToSessions,
   chatGroupsAgents,
+  devices,
   documents,
   files,
   knowledgeBases,
@@ -24,6 +27,7 @@ import {
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class AgentModel {
@@ -43,12 +47,13 @@ export class AgentModel {
    * the recents filter: real agents plus the inbox, excluding other virtual agents.
    */
   rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         count: count(topics.id).as('count'),
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
@@ -58,6 +63,8 @@ export class AgentModel {
       .having(({ count }) => gt(count, 0))
       .orderBy(desc(sql`count`))
       .limit(limit);
+
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
 
   /**
@@ -87,6 +94,62 @@ export class AgentModel {
 
   private agentsToSessionsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
+
+  /**
+   * Collect device ids that an incoming `agencyConfig` patch is *setting*
+   * (not clearing). `workingDirByDevice` entries with `undefined` value are
+   * deletes (per `pruneWorkingDirByDeviceDeletes`) and are skipped.
+   */
+  private collectBoundDeviceIds = (
+    agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
+  ): string[] => {
+    if (!agencyConfig) return [];
+    const ids: string[] = [];
+    const bound = agencyConfig.boundDeviceId;
+    if (typeof bound === 'string' && bound) ids.push(bound);
+    const map = agencyConfig.workingDirByDevice;
+    if (map) {
+      for (const [deviceId, cwd] of Object.entries(map)) {
+        if (cwd === undefined) continue;
+        ids.push(deviceId);
+      }
+    }
+    return ids;
+  };
+
+  /**
+   * Enforce: a workspace-scoped agent may only bind devices enrolled in the
+   * same workspace. Personal devices (workspace_id IS NULL) are reachable only
+   * by their owning user, so a workspace member who isn't that owner would get
+   * a broken agent. Rejects at write time rather than at execution time.
+   *
+   * No-op when `agentWorkspaceId` is null (personal agent — any device OK) or
+   * when the patch carries no new device ids.
+   */
+  private assertWorkspaceDeviceBinding = async (
+    agentWorkspaceId: string | null,
+    agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
+  ): Promise<void> => {
+    if (!agentWorkspaceId) return;
+    const candidates = this.collectBoundDeviceIds(agencyConfig);
+    if (candidates.length === 0) return;
+
+    const rows = await this.db
+      .select({ deviceId: devices.deviceId })
+      .from(devices)
+      .where(and(eq(devices.workspaceId, agentWorkspaceId), inArray(devices.deviceId, candidates)));
+    const allowed = new Set(rows.map((r) => r.deviceId));
+    const invalid = candidates.find((id) => !allowed.has(id));
+    if (invalid) {
+      throw new TRPCError({
+        cause: { data: { code: 'WorkspaceAgentRequiresWorkspaceDevice', deviceId: invalid } },
+        code: 'FORBIDDEN',
+        message:
+          'Workspace agent can only bind devices enrolled in the same workspace. ' +
+          'Enroll the device to the workspace, or pick a workspace device.',
+      });
+    }
+  };
 
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
@@ -158,12 +221,13 @@ export class AgentModel {
     const { keyword, limit = 9999, offset = 0 } = params ?? {};
     const searchCondition = this.buildQueryAgentsWhere(keyword);
 
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
@@ -171,6 +235,8 @@ export class AgentModel {
       .orderBy(desc(agents.updatedAt))
       .limit(limit)
       .offset(offset);
+
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
 
   /**
@@ -204,11 +270,68 @@ export class AgentModel {
       .from(agents)
       .where(and(this.ownership(), inArray(agents.id, ids)));
 
-    return rows.map(({ slug, ...row }) => ({
-      ...row,
-      avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-      title: row.title || (slug === INBOX_SESSION_ID ? 'Lobe AI' : null),
-    }));
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
+  };
+
+  /**
+   * List agents bindable by the System Bot messenger picker: real agents plus
+   * the inbox (other virtual agents excluded), ordered by `updatedAt DESC` with
+   * the inbox pinned to the top.
+   *
+   * Title fallback is fully owned here: the inbox resolves to the LobeAI
+   * default, and any other agent with a blank title resolves to
+   * `options.fallbackTitle` (default `null`, so a caller that omits it can let
+   * the client supply its own i18n default).
+   */
+  listMessengerBindableAgents = async (options?: {
+    fallbackTitle?: string | null;
+  }): Promise<
+    Array<{
+      avatar: string | null;
+      backgroundColor: string | null;
+      id: string;
+      isInbox: boolean;
+      title: string | null;
+    }>
+  > => {
+    const fallbackTitle = options?.fallbackTitle ?? null;
+
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        slug: agents.slug,
+        title: agents.title,
+      })
+      .from(agents)
+      .where(and(this.ownership(), or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID))))
+      .orderBy(desc(agents.updatedAt));
+
+    const normalized = rows
+      .filter((row) => row.id)
+      .map(({ slug, ...row }) => {
+        const meta = normalizeInboxAgentMeta(row, { slug });
+        return {
+          avatar: meta.avatar,
+          backgroundColor: meta.backgroundColor,
+          id: meta.id,
+          isInbox: slug === INBOX_SESSION_ID,
+          // The inbox title is already resolved by normalizeInboxAgentMeta; any
+          // other blank title falls back to the caller-provided default.
+          title: meta.title?.trim() || fallbackTitle,
+        };
+      });
+
+    // Pin the inbox agent to the top regardless of updatedAt — it's the
+    // implicit "default" agent and should always be the first option.
+    const inboxIdx = normalized.findIndex((row) => row.isInbox);
+    if (inboxIdx > 0) {
+      const [inbox] = normalized.splice(inboxIdx, 1);
+      normalized.unshift(inbox);
+    }
+
+    return normalized;
   };
 
   /**
@@ -235,6 +358,7 @@ export class AgentModel {
    */
   private enrichAgentWithKnowledge = async (agent: AgentItem) => {
     const knowledge = await this.getAgentAssignedKnowledge(agent.id);
+    const normalizedAgent = normalizeInboxAgentMeta(agent, { slug: agent.slug });
 
     // Fetch document content for enabled files
     const enabledFileIds = knowledge.files
@@ -256,7 +380,7 @@ export class AgentModel {
       }));
     }
 
-    return { ...agent, ...knowledge, files };
+    return { ...normalizedAgent, ...knowledge, files };
   };
 
   getAgentAssignedKnowledge = async (id: string) => {
@@ -447,6 +571,8 @@ export class AgentModel {
    * This is used for creating virtual agents (e.g., group chat members).
    */
   create = async (config: Partial<AgentItem>): Promise<AgentItem> => {
+    await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, config.agencyConfig);
+
     const [result] = await this.db
       .insert(agents)
       .values([
@@ -548,6 +674,8 @@ export class AgentModel {
 
     if (!agent) return;
 
+    await this.assertWorkspaceDeviceBinding(agent.workspaceId, data.agencyConfig);
+
     // First process the params field: undefined means delete, null means disable flag
     const existingParams = agent.params ?? {};
     const updatedParams: Record<string, any> = { ...existingParams };
@@ -575,6 +703,10 @@ export class AgentModel {
 
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
+
+    // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
+    // `undefined`, which merge() skips — prune those keys so the delete persists.
+    pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
 
     // Final cleanup: ensure no undefined or null values enter the database
     if (mergedValue.params) {
@@ -672,7 +804,7 @@ export class AgentModel {
       where: and(eq(agents.slug, slug), this.ownership()),
     });
 
-    if (existing) return existing;
+    if (existing) return normalizeInboxAgentMeta(existing, { slug: existing.slug });
 
     // For inbox agent, it has special compatibility handling:
     // Historical inbox was stored as session with slug='inbox' and linked agent via agentsToSessions
@@ -696,7 +828,7 @@ export class AgentModel {
           .where(eq(agents.id, result[0].agent.id))
           .returning();
 
-        return updatedAgent;
+        return normalizeInboxAgentMeta(updatedAgent, { slug: updatedAgent.slug });
       }
     }
 
@@ -733,13 +865,13 @@ export class AgentModel {
       .onConflictDoNothing()
       .returning();
 
-    if (result[0]) return result[0];
+    if (result[0]) return normalizeInboxAgentMeta(result[0], { slug: result[0].slug });
 
-    return (
-      (await this.db.query.agents.findFirst({
-        where: and(eq(agents.slug, slug), this.ownership()),
-      })) ?? null
-    );
+    const agent = await this.db.query.agents.findFirst({
+      where: and(eq(agents.slug, slug), this.ownership()),
+    });
+
+    return agent ? normalizeInboxAgentMeta(agent, { slug: agent.slug }) : null;
   };
 
   /**
@@ -795,10 +927,49 @@ export class AgentModel {
         workspaceId: targetWorkspaceId,
       };
 
+      // 3a. Strip stale device bindings when moving INTO a workspace: any
+      // boundDeviceId / workingDirByDevice entry that isn't enrolled in the
+      // target workspace is silently dropped. Otherwise the moved agent would
+      // reference a device only the previous owner can reach. Moving to a
+      // personal scope (`targetWorkspaceId === null`) keeps existing bindings.
+      let nextAgencyConfig: LobeAgentAgencyConfig | null = agent.agencyConfig ?? null;
+      if (targetWorkspaceId && nextAgencyConfig) {
+        const candidateIds = this.collectBoundDeviceIds(nextAgencyConfig);
+        if (candidateIds.length > 0) {
+          const rows = await trx
+            .select({ deviceId: devices.deviceId })
+            .from(devices)
+            .where(
+              and(
+                eq(devices.workspaceId, targetWorkspaceId),
+                inArray(devices.deviceId, candidateIds),
+              ),
+            );
+          const allowed = new Set(rows.map((r) => r.deviceId));
+          const cleaned: LobeAgentAgencyConfig = { ...nextAgencyConfig };
+          if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
+            delete cleaned.boundDeviceId;
+          }
+          if (cleaned.workingDirByDevice) {
+            const filtered: Record<string, string> = {};
+            for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
+              if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
+            }
+            cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
+          }
+          nextAgencyConfig = cleaned;
+        }
+      }
+
       // 4. Update the agent record
       await trx
         .update(agents)
-        .set({ ...ownershipUpdate, slug, updatedAt: new Date() })
+        .set({
+          ...ownershipUpdate,
+          agencyConfig: nextAgencyConfig,
+          slug,
+          updatedAt: new Date(),
+        })
         .where(eq(agents.id, agentId));
 
       // 5. Update sessions linked via agentsToSessions

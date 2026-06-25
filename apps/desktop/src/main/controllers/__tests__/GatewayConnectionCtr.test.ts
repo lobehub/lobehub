@@ -861,6 +861,20 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('forwards resolved selector args from the request to spawnLhHeteroExec', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-args', 'hi', 'mock-jwt', {
+        args: ['--model', 'opus', '--effort', 'high'],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'opus', '--effort', 'high'],
+        }),
+      );
+    });
+
     it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-xyz');

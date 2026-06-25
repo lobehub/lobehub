@@ -8,8 +8,9 @@ const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockSignUpEmail = vi.hoisted(() => vi.fn());
 const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
+const mockPreSocialSignupCheck = vi.hoisted(() => vi.fn(async () => true));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
@@ -24,7 +25,6 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
 
 vi.mock('@lobechat/business-const', () => ({
   BRANDING_NAME: 'LobeHub',
-  ENABLE_BUSINESS_FEATURES: false,
 }));
 
 vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
@@ -32,15 +32,17 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
     businessElement: null,
     getCaptchaTokenOnError: mockGetCaptchaTokenOnError,
     getFetchOptions: async () => undefined,
-    preSocialSignupCheck: async () => true,
+    preSocialSignupCheck: mockPreSocialSignupCheck,
   }),
 }));
 
 let mockEnableEmailVerification = false;
+let mockEnableBusinessFeatures = false;
 vi.mock('@/features/AuthShell', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {
+        enableBusinessFeatures: mockEnableBusinessFeatures,
         enableEmailVerification: mockEnableEmailVerification,
       },
     }),
@@ -53,6 +55,8 @@ describe('useSignUp', () => {
     vi.clearAllMocks();
     mockSearchParamsGet.mockReturnValue(null);
     mockGetCaptchaTokenOnError.mockResolvedValue(undefined);
+    mockPreSocialSignupCheck.mockResolvedValue(true);
+    mockEnableBusinessFeatures = false;
     mockEnableEmailVerification = false;
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -102,6 +106,20 @@ describe('useSignUp', () => {
           password: 'Password123!',
         }),
       );
+    });
+
+    it('should stop sign up when business pre-check rejects', async () => {
+      mockEnableBusinessFeatures = true;
+      mockPreSocialSignupCheck.mockResolvedValue(false);
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(mockPreSocialSignupCheck).toHaveBeenCalledWith(validValues);
+      expect(mockSignUpEmail).not.toHaveBeenCalled();
     });
 
     it('should redirect to onboarding on success', async () => {

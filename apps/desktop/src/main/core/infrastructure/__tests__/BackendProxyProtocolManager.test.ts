@@ -197,7 +197,7 @@ describe('BackendProxyProtocolManager', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('throws when upstream fetch throws', async () => {
+  it('returns 502 when upstream fetch throws', async () => {
     const manager = new BackendProxyProtocolManager();
     const session = {} as any;
 
@@ -211,16 +211,22 @@ describe('BackendProxyProtocolManager', () => {
       getRemoteBaseUrl: async () => 'https://remote.example.com',
     });
 
-    await expect(
-      manager.proxy(
-        {
-          headers: new Headers(),
-          method: 'GET',
-          url: 'app://renderer/trpc/hello',
-        } as any,
-        session,
-      ),
-    ).rejects.toThrow('network down');
+    const response = await manager.proxy(
+      {
+        headers: new Headers({ Origin: 'app://renderer' }),
+        method: 'GET',
+        url: 'app://renderer/trpc/hello',
+      } as any,
+      session,
+    );
+
+    expect(response).not.toBeNull();
+    expect(response!.status).toBe(502);
+    expect(response!.statusText).toBe('Bad Gateway');
+    expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('app://renderer');
+    expect(response!.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+    expect(response!.headers.get('X-Src-Url')).toBe('https://remote.example.com/trpc/hello');
+    expect(await response!.text()).toBe('Backend Proxy Upstream Unavailable');
   });
 
   it('broadcasts authorizationRequired when X-Auth-Required is set on HTTP 207 (batched tRPC)', async () => {
@@ -372,6 +378,27 @@ describe('BackendProxyProtocolManager', () => {
         'https://remote.example.com/trpc/hello?batch=1',
         expect.objectContaining({ method: 'GET' }),
       );
+    });
+
+    it('returns 502 for backend paths when the proxy path fails unexpectedly', async () => {
+      const manager = new BackendProxyProtocolManager();
+      manager.register(electronSession.defaultSession as any, {
+        getAccessToken: async () => {
+          throw new Error('token lookup failed');
+        },
+        rewriteUrl: async () => 'https://remote.example.com/trpc/hello',
+      });
+
+      const interceptor = manager.createAppRequestInterceptor();
+      const res = await interceptor({
+        headers: new Headers(),
+        method: 'GET',
+        url: 'app://renderer/trpc/hello',
+      } as any);
+
+      expect(res).not.toBeNull();
+      expect(res!.status).toBe(502);
+      expect(await res!.text()).toBe('Backend Proxy Unavailable');
     });
   });
 });

@@ -1,4 +1,5 @@
-import { Flexbox, Icon, SearchBar, Segmented, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
@@ -39,22 +40,28 @@ export const Toolbar = memo<ToolbarProps>(
           onKeyDown={stopPropagation}
         />
         {showGroupModeSwitch && (
-          <Segmented
+          <Tabs
+            activeKey={groupMode}
             size="small"
-            value={groupMode}
-            options={[
+            items={[
               {
-                icon: <Icon icon={Brain} />,
-                title: t('ModelSwitchPanel.byModel'),
-                value: 'byModel',
+                key: 'byModel',
+                label: (
+                  <Tooltip title={t('ModelSwitchPanel.byModel')}>
+                    <Icon icon={Brain} />
+                  </Tooltip>
+                ),
               },
               {
-                icon: <Icon icon={ProviderIcon} />,
-                title: t('ModelSwitchPanel.byProvider'),
-                value: 'byProvider',
+                key: 'byProvider',
+                label: (
+                  <Tooltip title={t('ModelSwitchPanel.byProvider')}>
+                    <Icon icon={ProviderIcon} />
+                  </Tooltip>
+                ),
               },
             ]}
-            onChange={(value) => onGroupModeChange?.(value as GroupMode)}
+            onChange={(key) => onGroupModeChange?.(key as GroupMode)}
           />
         )}
       </Flexbox>

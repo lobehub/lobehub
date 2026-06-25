@@ -2,7 +2,7 @@
 
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { memo, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import WorkspaceSettingsSideBarContent from '@/features/WorkspaceSetting/SideBar/Content';

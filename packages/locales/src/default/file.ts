@@ -58,10 +58,10 @@ export default {
   'library.hierarchy.empty.desc': 'Add files or create a folder to get started',
   'library.hierarchy.empty.title': 'Nothing here yet',
   'library.import.action': 'Import to workspace…',
-  'library.import.failed': 'Failed to import knowledge base.',
-  'library.import.success': 'Knowledge base imported to {{name}}.',
+  'library.import.failed': 'Failed to import library.',
+  'library.import.success': 'Library imported to {{name}}.',
   'library.import.tooltip':
-    'Fork this knowledge base into a workspace. Files are shared by reference; the original stays in your personal space.',
+    'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
   'library.list.confirmRemoveLibrary':
     'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
   'library.list.copyDescription':

@@ -56,7 +56,11 @@ const FileUpload = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
 
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+    agentId,
+  );
 
   const [showTip, updateGuideState] = useUserStore((s) => [
     preferenceSelectors.showUploadFileInKnowledgeBaseTip(s),
@@ -130,7 +134,8 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
-              (file.type.startsWith('video') && !canUploadVideo)
+              (file.type.startsWith('video') && !canUploadVideo) ||
+              (file.type.startsWith('audio') && !canUploadAudio)
             )
               return false;
 
@@ -169,7 +174,8 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
-              (file.type.startsWith('video') && !canUploadVideo)
+              (file.type.startsWith('video') && !canUploadVideo) ||
+              (file.type.startsWith('audio') && !canUploadAudio)
             )
               return false;
 

@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useLayoutEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import AgentTaskManager from '@/features/AgentTaskManager';
 import { resetNavPanel } from '@/features/NavPanel';

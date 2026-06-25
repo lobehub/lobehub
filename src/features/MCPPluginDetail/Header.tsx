@@ -26,7 +26,7 @@ import {
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import useSWR from 'swr';
 
 import OfficialIcon from '@/components/OfficialIcon';

@@ -23,8 +23,8 @@ const defaultOpenAIBaseURL = 'https://api.moonshot.cn/v1';
 const anthropicBaseURL = 'https://api.moonshot.cn/anthropic';
 
 // Mock the console.error and console.warn to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => {});
-vi.spyOn(console, 'warn').mockImplementation(() => {});
+vi.spyOn(console, 'error').mockImplementation(() => { });
+vi.spyOn(console, 'warn').mockImplementation(() => { });
 
 beforeEach(() => {
   loadModelsMock.mockResolvedValue([]);
@@ -360,6 +360,17 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.temperature).toBe(0.6);
         expect(payload.thinking).toEqual({ type: 'disabled' });
       });
+
+      it('should handle kimi-k2.6 model with preserveThinking enabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          preserveThinking: true,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ keep: 'all', type: 'enabled' });
+      });
     });
 
     describe('kimi-k2-thinking native thinking models', () => {
@@ -388,6 +399,21 @@ describe('LobeMoonshotOpenAI', () => {
         const payload = getLastRequestPayload();
         expect(payload.thinking).toEqual({ type: 'enabled' });
         expect(payload.temperature).toBe(1);
+      });
+
+      it('should always enable thinking for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.7-code',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
       });
 
       it('should ignore thinking disabled for native thinking models', async () => {
@@ -431,6 +457,24 @@ describe('LobeMoonshotOpenAI', () => {
 
         expect(assistantMessage?.reasoning_content).toBe('');
       });
+
+      it('should force reasoning_content on assistant messages for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.7-code',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.reasoning_content).toBe('');
+      });
     });
 
     describe('interleaved thinking', () => {
@@ -455,6 +499,31 @@ describe('LobeMoonshotOpenAI', () => {
 
         expect(assistantMessage?.reasoning_content).toBe('My reasoning process');
         expect(assistantMessage?.reasoning).toBeUndefined();
+      });
+    });
+
+    describe('prompt_cache_key', () => {
+      it('should inject prompt_cache_key for kimi- models when user is provided', async () => {
+        await instance.chat(
+          {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'kimi-k2.6',
+          },
+          { user: 'user-abc' },
+        );
+
+        const payload = getLastRequestPayload();
+        expect(payload.prompt_cache_key).toBe('lobe:user-abc:kimi-k2.6');
+      });
+
+      it('should not inject prompt_cache_key when user is not provided', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.prompt_cache_key).toBeUndefined();
       });
     });
   });
@@ -626,6 +695,22 @@ describe('LobeMoonshotAnthropicAI', () => {
         expect(payload.temperature).toBe(0.6);
       });
 
+      it('should handle kimi-k2.6 model with preserveThinking enabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          preserveThinking: true,
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          keep: 'all',
+          type: 'enabled',
+        });
+      });
+
       it('should not add thinking params for non-K2-toggle models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -671,6 +756,22 @@ describe('LobeMoonshotAnthropicAI', () => {
         expect(payload.temperature).toBe(1);
       });
 
+      it('should always enable thinking for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.7-code',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
       it('should ignore thinking disabled for native thinking models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -709,6 +810,27 @@ describe('LobeMoonshotAnthropicAI', () => {
             { content: 'Follow-up', role: 'user' },
           ],
           model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+
+      it('should force thinking block on assistant messages for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.7-code',
         });
 
         const payload = getLastRequestPayload();

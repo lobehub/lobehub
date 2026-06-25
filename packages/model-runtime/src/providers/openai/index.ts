@@ -1,28 +1,24 @@
 import { ModelProvider } from 'model-bank';
 
-import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import {
+  isGPT5ProResponsesModel,
+  isOpenAIComputerUseModel,
+  isOpenAIReasoningPayloadModel,
+  isResponsesAPIModel,
+  supportsOpenAIServiceTierFlex,
+} from './openaiModelId';
 
 export interface OpenAIModelCard {
   id: string;
 }
 
-const prunePrefixes = ['o1', 'o3', 'o4', 'codex', 'computer-use', 'gpt-5'];
 const oaiSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE; // low, medium, high
 const enableServiceTierFlex = process.env.OPENAI_SERVICE_TIER_FLEX === '1';
-const flexSupportedModels = ['gpt-5', 'o3', 'o4-mini']; // Flex tier is only available for these models
-
-const supportsFlexTier = (model: string) => {
-  // Exclude o3-mini, which does not support Flex tier
-  if (model.startsWith('o3-mini')) {
-    return false;
-  }
-  return flexSupportedModels.some((supportedModel) => model.startsWith(supportedModel));
-};
 
 export const params = {
   baseURL: 'https://api.openai.com/v1',
@@ -30,11 +26,11 @@ export const params = {
     handlePayload: (payload) => {
       const { enabledSearch, model, ...rest } = payload;
 
-      if (responsesAPIModels.has(model) || enabledSearch) {
+      if (isResponsesAPIModel(model) || enabledSearch) {
         return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
       }
 
-      if (prunePrefixes.some((prefix) => model.startsWith(prefix))) {
+      if (isOpenAIReasoningPayloadModel(model)) {
         return pruneReasoningPayload(payload) as any;
       }
 
@@ -47,7 +43,8 @@ export const params = {
           stream: payload.stream ?? true,
           temperature: undefined,
           top_p: undefined,
-          ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
+          ...(enableServiceTierFlex &&
+            supportsOpenAIServiceTierFlex(model) && { service_tier: 'flex' }),
           ...(oaiSearchContextSize && {
             web_search_options: {
               search_context_size: oaiSearchContextSize,
@@ -59,7 +56,8 @@ export const params = {
       return {
         ...rest,
         model,
-        ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
+        ...(enableServiceTierFlex &&
+          supportsOpenAIServiceTierFlex(model) && { service_tier: 'flex' }),
         stream: payload.stream ?? true,
       };
     },
@@ -92,7 +90,7 @@ export const params = {
           ]
         : tools;
 
-      if (prunePrefixes.some((prefix) => model.startsWith(prefix))) {
+      if (isOpenAIReasoningPayloadModel(model)) {
         const reasoning = payload.reasoning
           ? { ...payload.reasoning, summary: 'auto' }
           : { summary: 'auto' };
@@ -103,11 +101,12 @@ export const params = {
           ...rest,
           model,
           reasoning,
-          ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
+          ...(enableServiceTierFlex &&
+            supportsOpenAIServiceTierFlex(model) && { service_tier: 'flex' }),
           stream: payload.stream ?? true,
           tools: openaiTools as any,
           // computer-use series must set truncation as auto
-          ...(model.startsWith('computer-use') && { truncation: 'auto' }),
+          ...(isOpenAIComputerUseModel(model) && { truncation: 'auto' }),
           text: verbosity ? { verbosity } : undefined,
         }) as any;
       }
@@ -115,7 +114,8 @@ export const params = {
       return {
         ...rest,
         model,
-        ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
+        ...(enableServiceTierFlex &&
+          supportsOpenAIServiceTierFlex(model) && { service_tier: 'flex' }),
         stream: payload.stream ?? true,
         tools: openaiTools,
       } as any;

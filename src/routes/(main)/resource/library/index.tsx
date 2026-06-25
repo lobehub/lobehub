@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import NProgress from '@/components/NProgress';

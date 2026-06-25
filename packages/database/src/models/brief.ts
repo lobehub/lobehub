@@ -4,6 +4,7 @@ import { agents } from '../schemas/agent';
 import type { BriefItem, NewBrief } from '../schemas/task';
 import { briefs, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
+import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface UnresolvedBriefRow {
@@ -86,11 +87,12 @@ export class BriefModel {
    */
   async listUnresolvedEnriched(options?: { limit?: number }): Promise<UnresolvedBriefRow[]> {
     const { limit = 20 } = options ?? {};
-    return this.db
+    const rows = await this.db
       .select({
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentRowId: agents.id,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         brief: briefs,
         taskStatus: tasks.status,
@@ -108,6 +110,16 @@ export class BriefModel {
         desc(briefs.createdAt),
       )
       .limit(limit);
+
+    return rows.map(({ agentSlug, ...row }) => ({
+      ...row,
+      agentAvatar: normalizeInboxAgentAvatar(row.agentAvatar, {
+        slug: agentSlug,
+      }),
+      agentTitle: normalizeInboxAgentTitle(row.agentTitle, {
+        slug: agentSlug,
+      }),
+    }));
   }
 
   /**

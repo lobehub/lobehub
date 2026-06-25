@@ -117,11 +117,11 @@ const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
-    getLastChildToolMessageId: vi.fn(async (assistantMessageId: string) => {
-      // Mirror the SQL: last-created main-agent (threadId null) tool row whose
-      // parentId is the assistant. Map insertion order == creation order.
+    getLastMainThreadSpineMessageId: vi.fn(async (_topicId: string) => {
+      // Mirror the SQL: most recent main-agent (threadId null) message that is
+      // NOT a tool and NOT a signal-tagged callback. Insertion order == creation.
       const match = [...messages.values()].findLast(
-        (m) => m.role === 'tool' && m.parentId === assistantMessageId && !m.threadId,
+        (m) => m.role !== 'tool' && !m.threadId && !(m as any).metadata?.signal,
       );
       return match?.id;
     }),
@@ -561,7 +561,7 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('step boundaries (stream_start newStep)', () => {
-    it('flushes prior content, opens a new assistant chained off the last tool message', async () => {
+    it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
@@ -591,28 +591,24 @@ describe('HeterogeneousPersistenceHandler', () => {
         topicId: 'topic-1',
       });
 
-      // First step: asst-1 got content + tools
-      // After step boundary: a NEW assistant created chained off the tool msg
+      // First step: asst-1 got content + tools.
+      // After step boundary (phase 2 spine rule): a NEW assistant is created
+      // chained off the prior assistant (asst-1), with the tool as an inline
+      // child — the read side reconstructs the zigzag.
       const newAssistants = [...h.messages.values()].filter(
         (m) => m.role === 'assistant' && m.id !== 'asst-1',
       );
       expect(newAssistants).toHaveLength(1);
-
-      const toolMsg = [...h.messages.values()].find((m) => m.role === 'tool');
-      expect(newAssistants[0].parentId).toBe(toolMsg?.id);
+      expect(newAssistants[0].parentId).toBe('asst-1');
     });
 
-    it('chains off the tool message even when the prior tools_calling landed on a DIFFERENT replica (multi-replica recovery)', async () => {
-      // Reproduces the prod bug: the in-memory state.toolState gets RESET at
-      // the end of every handleStepStart. If the next step's tools_calling
-      // event then lands on a different replica, this replica's toolState
-      // stays empty, and the FOLLOWING step boundary computes parentId from
-      // that empty state → falls back to currentAssistantMessageId →
-      // new assistant chains off the previous ASSISTANT rather than the
-      // previous TOOL message.
-      //
-      // Fix: `ingest()` refresh adopts `tools[]` from DB as authoritative
-      // whenever DB has more resolved tools than memory.
+    it('chains off the prior assistant (spine) across a multi-replica boundary, recovered from DB', async () => {
+      // Phase 2: the chain parent is the run's latest non-tool / non-signal
+      // main message, recovered from the DB (`getLastMainThreadSpineMessageId`)
+      // independent of the in-memory current-assistant pointer. So even when the
+      // prior step's tools_calling drained on a DIFFERENT replica (this replica's
+      // toolState stays empty), step 2 still chains off step 1's assistant — a
+      // linear spine, not a fork.
       const h = createHarness({
         assistantMessageId: 'asst-init',
         operationId: 'op-1',
@@ -680,10 +676,8 @@ describe('HeterogeneousPersistenceHandler', () => {
       });
 
       // ── Batch 2: step 2 stream_start lands back on THIS replica ──
-      // Pre-fix: state.toolState.payloads is still [] → lastToolMsgId is
-      // undefined → stepParentId falls back to step1Asst.id (BUG).
-      // Post-fix: ingest() refresh reads step1Asst.tools from DB → toolState
-      // gets the tool with result_msg_id → handleStepStart chains correctly.
+      // The DB spine query returns step1Asst (the latest non-tool main message),
+      // so step 2 chains off it regardless of this replica's empty toolState.
       await h.handler.ingest({
         events: [buildEvent('stream_start', 2, { newStep: true })],
         operationId: 'op-1',
@@ -694,7 +688,7 @@ describe('HeterogeneousPersistenceHandler', () => {
         (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
       );
       expect(step2Asst).toBeDefined();
-      expect(step2Asst!.parentId).toBe('tool-other-replica');
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
       // And the new assistant should inherit model/provider that the other
       // replica wrote — refresh also restores lastModel/lastProvider so we
       // no longer create assistants with model=null/provider=null on the
@@ -703,14 +697,12 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(step2Asst!.provider).toBe('claude-code');
     });
 
-    it('chains off the tool ROW when the refresh misses the tools[] result_msg_id backfill', async () => {
-      // Residual race the batch-start refresh does NOT cover: the other replica
-      // created the tool row (Phase 2) but its assistant.tools[] result_msg_id
-      // backfill (Phase 3) is not yet visible. The refresh keys off
-      // result_msg_id, so it sees 0 resolved tools → does NOT adopt → toolState
-      // stays empty → pre-fix the step boundary falls back to the previous
-      // assistant and forks the wire. The fix queries the role:'tool' row
-      // itself (committed in Phase 2, independent of the JSONB mirror).
+    it('chains off the spine regardless of the prior step tool backfill state', async () => {
+      // Phase 2: the chain anchors to the spine (latest non-tool main message),
+      // so the prior step's tool-row / result_msg_id backfill timing — which
+      // used to matter for the tool anchor — no longer affects the chain. Even
+      // with a tool row present but no tools[] backfill, step 2 chains off the
+      // prior assistant.
       const h = createHarness({
         assistantMessageId: 'asst-init',
         operationId: 'op-1',
@@ -763,11 +755,11 @@ describe('HeterogeneousPersistenceHandler', () => {
         (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
       );
       expect(step2Asst).toBeDefined();
-      // Chains off the tool row, NOT the previous assistant → wire stays linear.
-      expect(step2Asst!.parentId).toBe('tool-row-only');
+      // Chains off the prior assistant (spine) → wire stays linear; the tool is inline.
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
     });
 
-    it('chains off the latest tool row when parallel tools are only partially backfilled', async () => {
+    it('chains off the spine when parallel tools are only partially backfilled', async () => {
       // Regression for main-chain breaks with parallel/multi tool calls:
       // tool A is visible in assistant.tools[].result_msg_id, while tool B's
       // row exists but Phase 3 has not backfilled assistant.tools[] yet. The
@@ -849,7 +841,8 @@ describe('HeterogeneousPersistenceHandler', () => {
         (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
       );
       expect(step2Asst).toBeDefined();
-      expect(step2Asst!.parentId).toBe('tool-b-row-only');
+      // Spine-anchored: parallel-tool backfill state is irrelevant to the chain.
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
     });
 
     it('ignores subagent tool rows (threadId set) when resolving the step anchor', async () => {
@@ -1095,9 +1088,10 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(threadTool?.tool_call_id).toBe('inner-tc-1');
       expect(threadTool?.parentId).toBe(threadAssts[0].id);
 
-      // Second-turn assistant chains off the tool message
+      // Second-turn assistant chains off the prior in-thread assistant (spine),
+      // with the tool as an inline child (phase 2 rule).
       const secondTurn = threadAssts[1];
-      expect(secondTurn.parentId).toBe(threadTool?.id);
+      expect(secondTurn.parentId).toBe(threadAssts[0].id);
     });
 
     it('finalizes the run with terminal assistant carrying tool_result content', async () => {

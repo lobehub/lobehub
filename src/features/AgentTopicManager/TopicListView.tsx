@@ -6,7 +6,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { useActivityTime } from '@/hooks/useActivityTime';

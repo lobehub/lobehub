@@ -3,7 +3,7 @@
 import { Pagination as Page } from 'antd';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import { memo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQuery } from '@/hooks/useQuery';

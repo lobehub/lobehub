@@ -116,14 +116,6 @@ interface OperationState {
   operationId: string;
   processedKeys: Set<string>;
   /**
-   * The operation's seeded placeholder assistant (the row `execAgent` creates
-   * before the first ingest). Immutable for the run's lifetime. Used as the
-   * `createdAt` floor when anchoring the chain to the run's real last tool —
-   * a topic runs at most one operation at a time, so "tool messages on/after
-   * the seed" scopes to THIS run without a recursive parent walk.
-   */
-  seedAssistantMessageId: string;
-  /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
    * this map lets a `tool_result` land even when its `tools_calling` was
@@ -404,7 +396,6 @@ export class HeterogeneousPersistenceHandler {
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
       processedKeys: new Set(),
-      seedAssistantMessageId: baseAssistantMessageId,
       toolMsgIdByCallId: new Map(),
       topicId,
     };
@@ -479,26 +470,11 @@ export class HeterogeneousPersistenceHandler {
     return toolState;
   }
 
-  private getLastSnapshotToolMessageId(
-    snapshot: AssistantDbSnapshot,
-    toolMsgIdByCallId: Map<string, string>,
-  ): string | undefined {
-    for (const tool of [...snapshot.tools].reverse()) {
-      const toolMessageId = tool.result_msg_id ?? toolMsgIdByCallId.get(tool.id);
-      if (toolMessageId) return toolMessageId;
-    }
-    return undefined;
-  }
-
   private async refreshToolMessageIndex(state: OperationState): Promise<void> {
     const toolPlugins = await this.deps.messageModel.listMessagePluginsByTopic(state.topicId);
     for (const plugin of toolPlugins) {
       if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
     }
-  }
-
-  private async getLastChildToolMessageId(assistantMessageId: string): Promise<string | undefined> {
-    return await this.deps.messageModel.getLastChildToolMessageId?.(assistantMessageId);
   }
 
   /**
@@ -553,49 +529,16 @@ export class HeterogeneousPersistenceHandler {
     if (snapshot.model) state.main.turnModel = snapshot.model;
     if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
-    // Anchor the chain to the RUN's real latest main-thread tool message, read
-    // straight from the DB and independent of `currentAssistantId`. The latter
-    // can regress to the seeded placeholder on a cold / non-sticky replica
-    // (see the multi-replica caveat on the class) when `heteroCurrentMsgId` is
-    // not yet bound to this operation: anchoring off its child tools would then
-    // collapse onto the run's FIRST tool, and every later step opens off that
-    // same node — forking the wire into orphan siblings. Ordering by createdAt
-    // also sidesteps the multi-tool-batch hazard where an earlier tool's
-    // result_msg_id is backfilled before a later tool row's JSONB is rewritten.
-    const runLastToolId = await this.getLastRunToolMessageId(state);
-    if (runLastToolId) {
-      state.main.lastToolMsgIdEver = runLastToolId;
-      return;
-    }
-
-    // No tool persisted in this run yet — fall back to the per-assistant lookups
-    // so the very first turn still chains correctly before any tool exists.
-    const currentTurnToolId =
-      (await this.getLastChildToolMessageId(state.main.currentAssistantId)) ??
-      this.getLastSnapshotToolMessageId(snapshot, state.toolMsgIdByCallId);
-    if (currentTurnToolId) {
-      state.main.lastToolMsgIdEver = currentTurnToolId;
-      return;
-    }
-
-    const toolMessageIds = new Set(state.toolMsgIdByCallId.values());
-    if (snapshot.parentId && toolMessageIds.has(snapshot.parentId)) {
-      state.main.lastToolMsgIdEver = snapshot.parentId;
-    }
-  }
-
-  /**
-   * Latest main-thread tool message created on/after the run's seed assistant.
-   * Scopes to the current operation via the seed's `createdAt` floor without a
-   * recursive walk, and stays correct even when `currentAssistantId` has
-   * regressed on a cold replica. Optional on the model so test mocks that don't
-   * implement it transparently fall back to the per-assistant anchors.
-   */
-  private async getLastRunToolMessageId(state: OperationState): Promise<string | undefined> {
-    return await this.deps.messageModel.getLastMainThreadToolMessageIdSince?.(
-      state.topicId,
-      state.seedAssistantMessageId,
-    );
+    // Recover the chain spine from the DB. The next normal
+    // turn parents off the run's latest NON-tool / NON-signal main-thread
+    // message; reading it straight from the DB (independent of
+    // `currentAssistantId`, which can regress to the seed placeholder on a cold
+    // / non-sticky replica — see the multi-replica caveat on the class) keeps
+    // consecutive cold-replica steps chained linearly instead of forking onto a
+    // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
+    // maintained in-memory across the run's tool batches.
+    const spineId = await this.deps.messageModel.getLastMainThreadSpineMessageId?.(state.topicId);
+    if (spineId) state.main.lastSpineMessageId = spineId;
   }
 
   /**
@@ -706,8 +649,11 @@ export class HeterogeneousPersistenceHandler {
     if (!currentAssistant) return undefined;
 
     const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
-    const childTools = toolRows.filter((m) => m.parentId === currentAssistant.id);
-    const lastChainParentId = childTools.at(-1)?.id ?? currentAssistant.id;
+    // Chain rule: the next turn's assistant parents off the
+    // prior assistant (the spine), not its last child tool — recover the anchor
+    // as the current assistant itself (matches the subagent reducer, and is
+    // fork-resistant since it reads the thread's real latest assistant from DB).
+    const lastChainParentId = currentAssistant.id;
     // Recover the in-flight turn's CC message.id so a continuation event is
     // recognized as the SAME turn (no spurious boundary → no fragmentation).
     const currentSubagentMessageId =

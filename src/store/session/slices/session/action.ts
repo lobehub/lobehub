@@ -12,6 +12,7 @@ import { sessionKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -139,9 +140,21 @@ export class SessionActionImpl {
     await this.#get().internal_updateSession(id, { pinned });
   };
 
+  /**
+   * @deprecated Legacy session-store delete path, kept only for the mobile
+   * session list (`(mobile)/.../SessionListContent/List/Item/Actions.tsx`).
+   * Desktop already deletes via `HomeStore.removeAgent`. New call sites must use
+   * `HomeStore.removeAgent` (agents) / `HomeStore.removeAgentGroup` (groups) —
+   * all three evict the message cache, so behaviour is equivalent apart from this
+   * path also switching to the inbox when the active session is removed. Remove
+   * once the mobile session list migrates to the agent store.
+   */
   removeSession = async (sessionId: string): Promise<void> => {
     await sessionService.removeSession(sessionId);
     await this.#get().refreshSessions();
+    // deleting an agent cascade-deletes its topics + messages on the server; drop
+    // their message cache too so it doesn't orphan in IndexedDB (never expires)
+    void evictMessageCache((ctx) => ctx.agentId === sessionId);
 
     // If the active session deleted, switch to the inbox session
     if (sessionId === this.#get().activeId) {

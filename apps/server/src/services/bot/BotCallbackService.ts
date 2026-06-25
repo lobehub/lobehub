@@ -55,6 +55,13 @@ export interface BotCallbackBody {
   cost?: number;
   duration?: number;
   elapsedMs?: number;
+  /**
+   * Error ownership from the model-runtime error taxonomy (`user` | `provider`
+   * | `harness` | `system`). Drives the user-facing error message tier when the
+   * exact `errorType` has no precise copy. Forwarded verbatim from the agent
+   * lifecycle event.
+   */
+  errorAttribution?: string;
   errorMessage?: string;
   errorType?: string;
   executionTimeMs?: number;
@@ -379,8 +386,15 @@ export class BotCallbackService {
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage, errorType, operationId, attachments } =
-      body;
+    const {
+      reason,
+      lastAssistantContent,
+      errorAttribution,
+      errorMessage,
+      errorType,
+      operationId,
+      attachments,
+    } = body;
 
     if (reason === 'error') {
       log(
@@ -389,7 +403,13 @@ export class BotCallbackService {
         errorType,
         errorMessage,
       );
-      const errorBody = renderAgentError(errorType, errorMessage, operationId, replyLocale);
+      const errorBody = renderAgentError(
+        errorType,
+        errorMessage,
+        operationId,
+        replyLocale,
+        errorAttribution,
+      );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       await this.deliverFirstChunk(messenger, progressMessageId, errorText, canEdit);
       return;

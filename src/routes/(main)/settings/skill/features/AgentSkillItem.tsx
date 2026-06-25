@@ -5,10 +5,12 @@ import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } f
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Space } from 'antd';
+import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
@@ -205,6 +207,20 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   };
 
   const showDisconnected = isBuiltin && !isBuiltinInstalled;
+
+  if (onSelect) {
+    return (
+      <NavItem
+        active={isSelected}
+        title={title}
+        titleColor={showDisconnected ? cssVar.colorTextDescription : undefined}
+        icon={() =>
+          avatar ? <Avatar avatar={avatar} size={18} /> : <Icon icon={SkillsIcon} size={18} />
+        }
+        onClick={onSelect}
+      />
+    );
+  }
 
   return (
     <>

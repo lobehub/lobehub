@@ -1,7 +1,7 @@
 import '../initialize';
 
 import { createRoot } from 'react-dom/client';
-import { RouterProvider } from 'react-router-dom';
+import { RouterProvider } from 'react-router/dom';
 
 import BootErrorBoundary from '@/components/BootErrorBoundary';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';

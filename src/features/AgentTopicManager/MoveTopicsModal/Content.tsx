@@ -7,7 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import { message } from '@/components/AntdStaticMethods';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';

@@ -19,6 +19,7 @@ export { GroupContextInjector } from './GroupContextInjector';
 export { HistorySummaryProvider } from './HistorySummary';
 export { KnowledgeInjector } from './KnowledgeInjector';
 export { LocalSystemToolSnapshotInjector } from './LocalSystemToolSnapshotInjector';
+export { ModelKnowledgeCutoffProvider } from './ModelKnowledgeCutoffProvider';
 export { OnboardingActionHintInjector } from './OnboardingActionHintInjector';
 export { OnboardingContextInjector } from './OnboardingContextInjector';
 export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInjector';
@@ -90,6 +91,7 @@ export type {
 export type { HistorySummaryConfig } from './HistorySummary';
 export type { KnowledgeInjectorConfig } from './KnowledgeInjector';
 export type { LocalSystemToolSnapshotInjectorConfig } from './LocalSystemToolSnapshotInjector';
+export type { ModelKnowledgeCutoffProviderConfig } from './ModelKnowledgeCutoffProvider';
 export type {
   OnboardingContext,
   OnboardingContextInjectorConfig,

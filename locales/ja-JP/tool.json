@@ -59,6 +59,7 @@
   "codeInterpreter.files": "ファイル：",
   "codeInterpreter.output": "出力：",
   "codeInterpreter.returnValue": "戻り値：",
+  "connector.add.title": "カスタムコネクタを追加",
   "dalle.autoGenerate": "自動生成",
   "dalle.downloading": "DallE3 で生成された画像リンクは有効期間が1時間しかありません。画像をローカルにキャッシュしています...",
   "dalle.generate": "生成する",

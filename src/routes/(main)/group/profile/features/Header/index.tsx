@@ -1,10 +1,11 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon, type MenuProps } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Crown, Users } from 'lucide-react';
+import { Crown, Sparkles, Users, UsersRound } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { usePermission } from '@/hooks/usePermission';
@@ -48,9 +49,11 @@ const Header = memo(() => {
 
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const members = useAgentGroupStore(agentGroupSelectors.currentGroupAgents);
+  const { gid } = useParams<{ gid: string }>();
+  const members = useAgentGroupStore((s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s));
   const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
+  const createAgentInGroup = useAgentGroupStore((s) => s.createAgentInGroup);
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
 
   // Use URL query param for selected tab
@@ -90,6 +93,34 @@ const Header = memo(() => {
     setShowAddModal(false);
   };
 
+  const handleCreateMember = async () => {
+    if (!activeGroupId) return;
+    const newAgentId = await createAgentInGroup(activeGroupId, {
+      title: t('group.profile.addMember.newMemberTitle'),
+    });
+    // Jump to the newly created member so the user can configure it right away
+    if (newAgentId) setSelectedTabId(newAgentId);
+  };
+
+  const addMenuItems = useMemo<MenuProps['items']>(
+    () => [
+      {
+        icon: <Icon icon={Sparkles} />,
+        key: 'create-new',
+        label: t('group.profile.addMember.createNew'),
+        onClick: handleCreateMember,
+      },
+      {
+        icon: <Icon icon={UsersRound} />,
+        key: 'add-existing',
+        label: t('group.profile.addMember.addExisting'),
+        onClick: () => setShowAddModal(true),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeGroupId, t],
+  );
+
   return (
     <>
       <Flexbox horizontal align="center" className={styles.header} gap={4} justify="space-between">
@@ -99,8 +130,8 @@ const Header = memo(() => {
             activeId={selectedTabId}
             addDisabled={!canEdit}
             addDisabledReason={reason}
+            addMenuItems={addMenuItems}
             items={tabItems}
-            onAdd={() => setShowAddModal(true)}
             onChange={setSelectedTabId}
           />
         </div>

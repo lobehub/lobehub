@@ -1,4 +1,5 @@
 import type {
+  TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
   TaskDetailData,
@@ -34,6 +35,9 @@ export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
+  // creation to record `context.origin` — the creator conversation pointer.
+  context?: TaskContext;
   createdByAgentId?: string;
   description?: string;
   editorData?: unknown;
@@ -691,7 +695,6 @@ export class TaskService {
       name: task.name,
       parent,
       priority: task.priority,
-      review: this.taskModel.getReviewConfig(task),
       schedule:
         task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
           ? {
@@ -702,6 +705,7 @@ export class TaskService {
           : undefined,
       status: task.status,
       userId: task.assigneeUserId,
+      verify: this.taskModel.getVerifyConfig(task),
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,

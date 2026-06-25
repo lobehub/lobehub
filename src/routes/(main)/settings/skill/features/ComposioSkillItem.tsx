@@ -1,9 +1,17 @@
 'use client';
 
 import { type ComposioAppType } from '@lobechat/const';
-import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  Avatar,
+  Button as LobeButton,
+  Center,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tooltip,
+} from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Badge, Button } from 'antd';
 import { cssVar } from 'antd-style';
 import {
   Loader2,
@@ -13,9 +21,10 @@ import {
   Trash2,
   Unplug,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
@@ -328,6 +337,40 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     };
 
     const isConnected = server?.status === ComposioServerStatus.ACTIVE;
+    const isPending = server?.status === ComposioServerStatus.PENDING_AUTH;
+    const isError = server?.status === ComposioServerStatus.ERROR;
+
+    if (onSelect) {
+      let badge: ReactNode;
+      if (isPending) {
+        badge = (
+          <Center width={18}>
+            <Badge status="warning" />
+          </Center>
+        );
+      } else if (isError) {
+        badge = (
+          <Center width={18}>
+            <Badge status="error" />
+          </Center>
+        );
+      }
+      const renderNavIcon = () => {
+        const { icon, label } = serverType;
+        if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
+        return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+      };
+      return (
+        <NavItem
+          active={isSelected}
+          extra={badge}
+          icon={renderNavIcon}
+          title={serverType.label}
+          titleColor={!isConnected ? cssVar.colorTextDescription : undefined}
+          onClick={onSelect}
+        />
+      );
+    }
 
     return (
       <Flexbox

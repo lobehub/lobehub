@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentDocumentPage from '@/features/AgentDocumentPage';

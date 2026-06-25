@@ -1,5 +1,6 @@
 import type { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
 
+import type { ModelPricingContext } from './pricing';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -37,11 +38,16 @@ interface UserMessageContentPartVideo {
   type: 'video_url';
   video_url: { url: string };
 }
+interface UserMessageContentPartAudio {
+  audio_url: { url: string };
+  type: 'audio_url';
+}
 
 export type UserMessageContentPart =
   | UserMessageContentPartText
   | UserMessageContentPartImage
   | UserMessageContentPartVideo
+  | UserMessageContentPartAudio
   | UserMessageContentPartThinking;
 
 export interface OpenAIChatMessage {
@@ -182,6 +188,8 @@ export interface ChatMethodOptions {
   headers?: Record<string, any>;
   /** Metadata passed to hooks (billing, tracing, etc.) */
   metadata?: Record<string, unknown>;
+  /** Request-scoped pricing context for model-bank pricing lookups. */
+  pricingContext?: ModelPricingContext;
   /**
    * send the request to the ai api endpoint
    */
@@ -240,6 +248,25 @@ export interface OnFinishData {
   thinking?: string;
   toolsCalling?: MessageToolCall[];
   usage?: ModelUsage;
+  usageMissingDiagnostics?: UsageMissingDiagnostics;
+}
+
+export interface UsageMissingDiagnostics {
+  apiMode?: 'chat_completions' | 'messages' | 'responses';
+  chunkIndex?: number;
+  finishReason?: string | null;
+  hasUsageMetadata: boolean;
+  includeUsageRequested?: boolean;
+  model?: string;
+  provider?: string;
+  responseId?: string;
+  source:
+    | 'anthropic_messages'
+    | 'google_generative_ai'
+    | 'openai_chat_completions'
+    | 'openai_responses';
+  terminalEventType: string;
+  terminalStatus?: string;
 }
 
 /**

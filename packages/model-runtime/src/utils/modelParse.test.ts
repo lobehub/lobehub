@@ -112,7 +112,7 @@ const { loadModelsMock, mockDefaultModelList } = vi.hoisted(() => ({
 // Mock the import
 vi.mock('model-bank', () => ({
   AiModelTypeSchema: {
-    options: ['chat', 'embedding', 'tts', 'stt', 'image', 'video', 'text2music', 'realtime'],
+    options: ['chat', 'embedding', 'tts', 'asr', 'image', 'video', 'text2music', 'realtime'],
   },
   LOBE_DEFAULT_MODEL_LIST: mockDefaultModelList,
   loadModels: vi.fn().mockResolvedValue(mockDefaultModelList),

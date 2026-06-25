@@ -2,10 +2,11 @@
 
 import { LoadingOutlined } from '@ant-design/icons';
 import { Alert, Flexbox, Icon } from '@lobehub/ui';
-import { App, Modal, Spin, Typography, Upload } from 'antd';
+import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { App, Spin, Typography, Upload } from 'antd';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -13,23 +14,18 @@ import { lambdaClient } from '@/libs/trpc/client/lambda';
 import { uploadService } from '@/services/upload';
 import { useToolStore } from '@/store/tool';
 
-interface UploadSkillModalProps {
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}
-
-const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) => {
+const UploadSkillContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
+  const { close, setCanDismissByClickOutside } = useModalContext();
   const { message } = App.useApp();
   const importAgentSkillFromZip = useToolStore((s) => s.importAgentSkillFromZip);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { allowed: canCreate } = usePermission('create_content');
 
-  const handleClose = () => {
-    onOpenChange(false);
-    setError(null);
-  };
+  useEffect(() => {
+    setCanDismissByClickOutside(!loading);
+  }, [loading, setCanDismissByClickOutside]);
 
   const handleUploadFile = async (file: File) => {
     if (!canCreate) return;
@@ -54,7 +50,7 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
 
       await importAgentSkillFromZip({ zipFileId: result.id });
       message.success(t('agentSkillModal.importSuccess'));
-      handleClose();
+      close();
     } catch (err: any) {
       setError(err?.message || String(err));
     } finally {
@@ -63,16 +59,7 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
   };
 
   return (
-    <Modal
-      destroyOnClose
-      closable={!loading}
-      footer={null}
-      maskClosable={!loading}
-      open={open}
-      title={null}
-      width={480}
-      onCancel={handleClose}
-    >
+    <Flexbox gap={16}>
       <Flexbox align="center" gap={16} padding={'16px 0'}>
         <Flexbox horizontal align="center" gap={8}>
           <Icon icon={UploadIcon} size={28} />
@@ -92,64 +79,67 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
         </Flexbox>
       </Flexbox>
 
-      <Flexbox gap={16}>
-        {error && (
-          <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />
-        )}
+      {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
-        <Upload.Dragger
-          accept=".zip,.skill"
-          disabled={loading || !canCreate}
-          showUploadList={false}
-          beforeUpload={(file) => {
-            if (!canCreate) return false;
-            handleUploadFile(file);
-            return false;
-          }}
-        >
-          <Flexbox align="center" gap={8} padding={24}>
-            {loading ? (
-              <>
-                <Spin indicator={<LoadingOutlined spin />} />
-                <Typography.Text type="secondary">
-                  {t('agentSkillModal.upload.uploading')}
-                </Typography.Text>
-              </>
-            ) : (
-              <>
-                <Icon
-                  icon={InboxIcon}
-                  size={48}
-                  style={{ color: 'var(--ant-color-text-quaternary)' }}
-                />
-                <Typography.Text type="secondary">
-                  {t('agentSkillModal.upload.dragText')}
-                </Typography.Text>
-              </>
-            )}
-          </Flexbox>
-        </Upload.Dragger>
-
-        <Flexbox gap={8}>
-          <Typography.Text strong>{t('agentSkillModal.upload.requirements')}</Typography.Text>
-          <ul style={{ margin: 0, paddingLeft: 20 }}>
-            <li>
+      <Upload.Dragger
+        accept=".zip,.skill"
+        disabled={loading || !canCreate}
+        showUploadList={false}
+        beforeUpload={(file) => {
+          if (!canCreate) return false;
+          handleUploadFile(file);
+          return false;
+        }}
+      >
+        <Flexbox align="center" gap={8} padding={24}>
+          {loading ? (
+            <>
+              <Spin indicator={<LoadingOutlined spin />} />
               <Typography.Text type="secondary">
-                {t('agentSkillModal.upload.requirementZip')}
+                {t('agentSkillModal.upload.uploading')}
               </Typography.Text>
-            </li>
-            <li>
+            </>
+          ) : (
+            <>
+              <Icon
+                icon={InboxIcon}
+                size={48}
+                style={{ color: 'var(--ant-color-text-quaternary)' }}
+              />
               <Typography.Text type="secondary">
-                {t('agentSkillModal.upload.requirementSkillMd')}
+                {t('agentSkillModal.upload.dragText')}
               </Typography.Text>
-            </li>
-          </ul>
+            </>
+          )}
         </Flexbox>
+      </Upload.Dragger>
+
+      <Flexbox gap={8}>
+        <Typography.Text strong>{t('agentSkillModal.upload.requirements')}</Typography.Text>
+        <ul style={{ margin: 0, paddingLeft: 20 }}>
+          <li>
+            <Typography.Text type="secondary">
+              {t('agentSkillModal.upload.requirementZip')}
+            </Typography.Text>
+          </li>
+          <li>
+            <Typography.Text type="secondary">
+              {t('agentSkillModal.upload.requirementSkillMd')}
+            </Typography.Text>
+          </li>
+        </ul>
       </Flexbox>
-    </Modal>
+    </Flexbox>
   );
 });
 
-UploadSkillModal.displayName = 'UploadSkillModal';
+UploadSkillContent.displayName = 'UploadSkillContent';
 
-export default UploadSkillModal;
+export const openUploadSkillModal = (): ModalInstance =>
+  createModal({
+    content: <UploadSkillContent />,
+    footer: null,
+    maskClosable: true,
+    styles: { header: { display: 'none' } },
+    width: 480,
+  });

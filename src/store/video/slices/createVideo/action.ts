@@ -1,9 +1,7 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { t } from 'i18next';
 
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
-import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message } from '@/components/AntdStaticMethods';
 import { videoService } from '@/services/video';
 import { type StoreSetter } from '@/store/types';
@@ -92,10 +90,6 @@ export class CreateVideoActionImpl {
           false,
           'createVideo/startCreateVideoWithNewTopic',
         );
-      }
-
-      if (ENABLE_BUSINESS_FEATURES) {
-        markUserValidAction();
       }
 
       // 4. Create video via service

@@ -88,6 +88,17 @@ vi.mock('@/features/FloatingChatPanel', () => ({
   default: () => <div data-testid="floating-chat-panel" />,
 }));
 
+const docChatTopicState = vi.hoisted(() => ({
+  current: {
+    error: undefined as Error | undefined,
+    isLoading: false,
+    topicId: 'doc-topic-1' as string | undefined,
+  },
+}));
+vi.mock('@/features/FloatingChatPanel/useDocumentChatTopic', () => ({
+  useDocumentChatTopic: () => docChatTopicState.current,
+}));
+
 const mockChatState = vi.hoisted(() => ({
   current: {
     activeTopicId: 'topic-1',
@@ -149,6 +160,11 @@ describe('DocumentBody', () => {
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
     mockUpdateDocument.mockClear();
+    docChatTopicState.current = {
+      error: undefined,
+      isLoading: false,
+      topicId: 'doc-topic-1',
+    };
     vi.useFakeTimers();
   });
 
@@ -162,12 +178,21 @@ describe('DocumentBody', () => {
     expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
   });
 
-  it('renders FloatingChatPanel when the lab feature is enabled', () => {
+  it('renders FloatingChatPanel when the lab feature is enabled and the doc topic resolves', () => {
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
 
     render(<DocumentBody />);
 
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
+  });
+
+  it('holds the panel until the doc-anchored topic id resolves', () => {
+    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
+    docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
   });
 
   it('renders highlight editor for non-markdown files', () => {

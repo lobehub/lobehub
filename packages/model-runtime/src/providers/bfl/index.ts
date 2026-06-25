@@ -13,7 +13,8 @@ export class LobeBflAI implements LobeRuntimeAI {
   private apiKey: string;
   baseURL?: string;
 
-  constructor({ apiKey, baseURL }: ClientOptions = {}) {
+  // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
+  constructor({ apiKey, baseURL }: Omit<ClientOptions, 'apiKey'> & { apiKey?: string } = {}) {
     if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
     this.apiKey = apiKey;

@@ -21,6 +21,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
+import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 interface CopyAgentGroupToWorkspaceOptions {
@@ -485,6 +486,7 @@ export class AgentGroupRepository {
         avatar: agents.avatar,
         description: agents.description,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
         virtual: agents.virtual,
       })
@@ -496,11 +498,16 @@ export class AgentGroupRepository {
 
     for (const agent of agentDetails) {
       if (agent.virtual) {
+        const meta = normalizeInboxAgentMeta(
+          { avatar: agent.avatar, title: agent.title },
+          { slug: agent.slug },
+        );
+
         virtualAgents.push({
-          avatar: agent.avatar,
+          avatar: meta.avatar,
           description: agent.description,
           id: agent.id,
-          title: agent.title,
+          title: meta.title,
         });
       } else {
         nonVirtualAgentIds.push(agent.id);

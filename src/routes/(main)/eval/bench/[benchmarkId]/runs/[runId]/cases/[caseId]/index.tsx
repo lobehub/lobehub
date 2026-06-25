@@ -1,10 +1,11 @@
 'use client';
 
 import type { EvalThreadResult } from '@lobechat/types';
-import { Flexbox, Tabs } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
@@ -98,7 +99,6 @@ const CaseDetail = memo(() => {
       />
       {hasMultipleThreads && (
         <Tabs
-          compact
           activeKey={activeThreadId!}
           items={threads.map((thread, index) => ({
             key: thread.threadId,

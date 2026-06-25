@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import GroupSkeleton from '@/routes/(main)/home/features/components/GroupSkeleton';

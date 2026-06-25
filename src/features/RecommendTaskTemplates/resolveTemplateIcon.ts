@@ -1,6 +1,10 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
 import { SiGithub } from '@icons-pack/react-simple-icons';
-import type { TaskTemplate, TaskTemplateIcon, TaskTemplateSkillRequirement } from '@lobechat/const';
+import type {
+  TaskTemplate,
+  TaskTemplateConnectorReference,
+  TaskTemplateIcon,
+} from '@lobechat/const';
 import { type LucideIcon, Sparkles } from 'lucide-react';
 
 import { getProviderMeta } from './providerMeta';
@@ -18,10 +22,15 @@ const SELF_ICON_MAP: Record<TaskTemplateIcon, TemplateIconComponent> = {
 const toSpec = (icon: string | TemplateIconComponent): TemplateIconSpec =>
   typeof icon === 'string' ? { kind: 'url', src: icon } : { Comp: icon, kind: 'component' };
 
+const getPrioritizedConnectors = (template: TaskTemplate): TaskTemplateConnectorReference[] => [
+  ...template.connectors.filter((connector) => connector.required),
+  ...template.connectors.filter((connector) => !connector.required),
+];
+
 /**
  * Resolve the icon to display on a task-template card.
  *
- * Priority: self icon (`template.icon`) > first resolvable skill provider
+ * Priority: self icon (`template.icon`) > first resolvable connector provider
  * (required before optional) > interest icon > `Sparkles`. Unknown providers
  * are skipped so a stale template never crashes the card.
  */
@@ -33,8 +42,7 @@ export const resolveTemplateIcon = (
     return { Comp: SELF_ICON_MAP[template.icon], kind: 'component' };
   }
 
-  for (const spec of [template.requiresSkills?.[0], template.optionalSkills?.[0]]) {
-    if (!spec) continue;
+  for (const spec of getPrioritizedConnectors(template)) {
     const meta = getProviderMeta(spec);
     if (meta) return toSpec(meta.icon);
   }
@@ -45,22 +53,21 @@ export const resolveTemplateIcon = (
 };
 
 /**
- * The skill spec whose visual the card's main icon already represents.
+ * The connector spec whose visual the card's main icon already represents.
  *
- * Mirrors the self/skill branches of `resolveTemplateIcon` so callers can hide
+ * Mirrors the self/connector branches of `resolveTemplateIcon` so callers can hide
  * that provider from inline lists (e.g. the auth row) to avoid showing the
  * same logo twice on a card. Returns `undefined` when the main icon falls back
  * to the interest icon or `Sparkles` — those carry no provider semantics.
  */
 export const getMainIconProvider = (
   template: TaskTemplate,
-): TaskTemplateSkillRequirement | undefined => {
+): TaskTemplateConnectorReference | undefined => {
   // The self-icon union is currently the single lobehub provider id 'github';
   // expand `SELF_ICON_MAP` and this mapping together when more are added.
-  if (template.icon) return { provider: template.icon, source: 'lobehub' };
+  if (template.icon) return { identifier: template.icon, source: 'lobehub' };
 
-  for (const spec of [template.requiresSkills?.[0], template.optionalSkills?.[0]]) {
-    if (!spec) continue;
+  for (const spec of getPrioritizedConnectors(template)) {
     if (getProviderMeta(spec)) return spec;
   }
   return undefined;

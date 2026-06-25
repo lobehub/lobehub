@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';

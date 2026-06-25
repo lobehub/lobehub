@@ -178,7 +178,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     try {
       const [res, pricing] = await Promise.all([
         this.client.send(command, { abortSignal: options?.signal }),
-        getModelPricing(payload.model, this.id),
+        getModelPricing(payload.model, this.id, options?.pricingContext),
       ]);
       const responseBody = JSON.parse(
         new TextDecoder().decode(res.body),
@@ -353,7 +353,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         debugStream(debug).catch(console.error);
       }
 
-      const pricing = await getModelPricing(payload.model, this.id);
+      const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
       const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
       const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
 

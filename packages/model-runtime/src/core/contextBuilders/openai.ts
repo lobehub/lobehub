@@ -3,7 +3,7 @@ import { Buffer } from 'buffer.js';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
-import { disableStreamModels, systemToUserModels } from '../../const/models';
+import { disableStreamModels, systemToUserModels } from '../../providers/openai/openaiModelId';
 import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
 import { parseDataUri } from '../../utils/uriParser';

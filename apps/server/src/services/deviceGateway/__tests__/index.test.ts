@@ -65,7 +65,7 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual(expected);
-      expect(mockClient.queryDeviceStatus).toHaveBeenCalledWith('user-1');
+      expect(mockClient.queryDeviceStatus).toHaveBeenCalledWith('user-1', undefined);
     });
 
     it('should return offline status on error', async () => {
@@ -136,7 +136,7 @@ describe('DeviceGateway', () => {
           platform: 'win32',
         },
       ]);
-      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1');
+      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1', undefined);
     });
 
     it('tolerates a legacy gateway response without channels', async () => {
@@ -191,7 +191,7 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toEqual(systemInfo);
-      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1');
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', undefined);
     });
 
     it('should return undefined when result is not successful', async () => {

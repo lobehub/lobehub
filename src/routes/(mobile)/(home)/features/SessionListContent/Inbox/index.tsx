@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { SESSION_CHAT_URL } from '@/const/url';

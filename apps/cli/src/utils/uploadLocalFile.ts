@@ -9,21 +9,27 @@ import type { TrpcClient } from '../api/client';
  * Unknown extensions fall back to `application/octet-stream`.
  */
 const MIME_MAP: Record<string, string> = {
+  aac: 'audio/aac',
   csv: 'text/csv',
   doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  flac: 'audio/flac',
   gif: 'image/gif',
   jpeg: 'image/jpeg',
   jpg: 'image/jpeg',
   json: 'application/json',
+  m4a: 'audio/mp4',
   md: 'text/markdown',
   mp3: 'audio/mpeg',
   mp4: 'video/mp4',
+  ogg: 'audio/ogg',
   pdf: 'application/pdf',
   png: 'image/png',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   svg: 'image/svg+xml',
   txt: 'text/plain',
+  wav: 'audio/wav',
+  webm: 'audio/webm',
   webp: 'image/webp',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };

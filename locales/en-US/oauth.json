@@ -44,9 +44,9 @@
   "handoff.desc.success": "An attempt has been made to open the desktop application. If it does not open automatically, please switch manually. You can close this browser window later.",
   "handoff.title.processing": "Authorization in progress...",
   "handoff.title.success": "Authorization completed",
-  "login.button": "Confirm Login",
-  "login.description": "The application {{clientName}} is requesting to use your account for login",
-  "login.title": "Login to {{clientName}}",
+  "login.button": "Confirm Sign In",
+  "login.description": "The application {{clientName}} is requesting to use your account for sign-in",
+  "login.title": "Sign in to {{clientName}}",
   "login.userWelcome": "Welcome back, ",
   "success.subTitle": "You have successfully authorized the application to access your account. You may now close this page.",
   "success.title": "Authorization Successful"

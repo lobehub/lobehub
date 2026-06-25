@@ -195,6 +195,12 @@ export interface RpcResponseMessage {
 /** Server → Client: request the desktop to spawn `lh hetero exec`. */
 export interface AgentRunRequestMessage {
   agentType: string;
+  /**
+   * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.
+   * Optional for protocol
+   * compatibility with older servers.
+   */
+  args?: string[];
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch

@@ -42,8 +42,11 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
   Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
   Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Segmented: () => null,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Tabs: () => null,
 }));
 
 vi.mock('@/components/CodeEditorPane', () => ({

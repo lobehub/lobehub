@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { maybeAutoRepair, VerifyStatusService } from '@/server/services/verify';
 
@@ -55,9 +56,17 @@ class VerifyResultExecutionRuntime {
     );
     const targetOperationId = op?.parentOperationId ?? this.operationId;
 
+    // The result row is keyed by the parent run's verification session.
+    const run = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
+      targetOperationId,
+    );
+    if (!run) {
+      return { content: 'No verification session for this run.', error: 'NO_RUN', success: false };
+    }
+
     const status = params.verdict === 'passed' ? 'passed' : 'failed';
     await new VerifyCheckResultModel(this.db, this.userId, this.workspaceId).updateByCheckItem(
-      targetOperationId,
+      run.id,
       params.checkItemId,
       {
         completedAt: new Date(),

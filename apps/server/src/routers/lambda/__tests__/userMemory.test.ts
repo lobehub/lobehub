@@ -12,6 +12,7 @@ const mockFindById = vi.fn();
 
 const mockCountTopicsForMemoryExtractor = vi.fn();
 const mockDeleteAll = vi.fn();
+const mockDeletePersona = vi.fn();
 const { mockTriggerProcessUsers } = vi.hoisted(() => ({
   mockTriggerProcessUsers: vi.fn(),
 }));
@@ -41,6 +42,12 @@ vi.mock('@/database/models/userMemory', () => ({
     deleteAll: mockDeleteAll,
   })),
   UserMemoryPreferenceModel: vi.fn(() => ({})),
+}));
+
+vi.mock('@/database/models/userMemory/persona', () => ({
+  UserPersonaModel: vi.fn(() => ({
+    deletePersona: mockDeletePersona,
+  })),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -301,11 +308,13 @@ describe('userMemoryRouter.deleteAll', () => {
 
   it('purges all user memories through the aggregate model', async () => {
     mockDeleteAll.mockResolvedValue(undefined);
+    mockDeletePersona.mockResolvedValue(undefined);
 
     const caller = createCaller();
     const result = await caller.deleteAll();
 
     expect(mockDeleteAll).toHaveBeenCalledOnce();
+    expect(mockDeletePersona).toHaveBeenCalledOnce();
     expect(result).toEqual({ success: true });
   });
 });

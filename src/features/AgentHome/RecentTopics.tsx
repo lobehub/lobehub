@@ -5,7 +5,7 @@ import { cssVar } from 'antd-style';
 import { BotMessageSquareIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
