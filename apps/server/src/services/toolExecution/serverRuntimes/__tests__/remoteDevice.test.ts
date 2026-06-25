@@ -246,5 +246,43 @@ describe('remoteDeviceRuntime', () => {
         scope: 'workspace',
       });
     });
+
+    it('still returns gateway devices when the DB enrichment lookup fails', async () => {
+      // The gateway is authoritative for "online"; a DB failure must degrade to
+      // gateway-only (no alias) rather than blanking the list / disabling
+      // auto-activation.
+      const context: ToolExecutionContext = {
+        serverDB: makeServerDB('ws-1'),
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      };
+
+      mockQueryWorkspaceDevices.mockRejectedValue(new Error('db down'));
+      mockQueryDeviceList.mockImplementation((_userId: string, wsId?: string) =>
+        Promise.resolve(
+          wsId
+            ? [
+                {
+                  deviceId: 'd-ws',
+                  hostname: 'VM-7-11-ubuntu',
+                  lastSeen: '2024-01-02',
+                  online: true,
+                  platform: 'linux',
+                },
+              ]
+            : [],
+        ),
+      );
+
+      const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
+      const result = await runtime.listOnlineDevices();
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content);
+      expect(parsed).toEqual([
+        expect.objectContaining({ deviceId: 'd-ws', online: true, scope: 'workspace' }),
+      ]);
+    });
   });
 });

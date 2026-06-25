@@ -1,9 +1,12 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
+import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+
+const log = debug('lobe-server:device-scope');
 
 /**
  * Online devices an agent run may reach, scoped to a SINGLE principal and built
@@ -24,6 +27,11 @@ import { deviceGateway } from './index';
  * Rows include offline DB devices (`online: false`); callers that only want live
  * devices filter on `online` (both `listOnlineDevices` and the systemRole
  * snapshot already do).
+ *
+ * The **gateway is authoritative** for which devices are online (and enforces the
+ * scope via the principal); the DB lookup is best-effort enrichment (aliases +
+ * offline rows). A DB hiccup must NOT blank the device list / disable
+ * auto-activation, so it degrades to gateway-only on failure.
  */
 export const getScopedOnlineDevices = async (
   serverDB: LobeChatDatabase,
@@ -34,7 +42,12 @@ export const getScopedOnlineDevices = async (
   const scope: 'personal' | 'workspace' = workspaceId ? 'workspace' : 'personal';
 
   const [rows, online] = await Promise.all([
-    workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal(),
+    (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
+      (error) => {
+        log('DB device lookup failed (scope=%s); using gateway only: %O', scope, error);
+        return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
+      },
+    ),
     deviceGateway.queryDeviceList(userId, workspaceId),
   ]);
 
