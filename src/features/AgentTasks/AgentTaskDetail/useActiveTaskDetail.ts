@@ -53,7 +53,7 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
 
   // Hydrate-only (never touches `activeAgentId`); no-ops on an empty id, so it
   // simply activates once the assignee is known from the task detail.
-  const { error: agentConfigError } = useHydrateAgentConfig(isLogin, assigneeAgentId ?? '');
+  const { isLoading: agentConfigLoading } = useHydrateAgentConfig(isLogin, assigneeAgentId ?? '');
 
   if (!taskId) return { isInitialLoading: false, isNotFound: false };
 
@@ -62,10 +62,15 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
   // resolving — keep the skeleton up instead of flashing empty/404.
   const isTaskResolving = !hasTaskDetail && !isNotFound;
 
-  // Block on the assignee config only when there is one and a fetch can run;
-  // release on success (in map) or failure (error) so we never deadlock.
+  // Block on the assignee config only while its fetch is genuinely in-flight and
+  // we don't already have it cached. Gating on `isLoading` (not "absent from the
+  // map") is what avoids the deadlock: a settled fetch that resolves to `null` —
+  // the assignee was deleted or moved to another workspace, so the ownership-
+  // scoped query returns null *without* erroring — leaves `isLoading=false` and
+  // no error, releasing the gate instead of waiting forever for a config that
+  // will never land in the map.
   const isAssigneeResolving =
-    !!assigneeAgentId && isLogin === true && !assigneeInMap && !agentConfigError;
+    !!assigneeAgentId && isLogin === true && !assigneeInMap && agentConfigLoading;
 
   return {
     isInitialLoading: isTaskResolving || (hasTaskDetail && isAssigneeResolving),
