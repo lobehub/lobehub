@@ -37,13 +37,16 @@ vi.mock('../../../store', () => ({
   useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
+const useMarkdownMock = vi.fn(() => ({}));
+
 vi.mock('../useMarkdown', () => ({
-  useMarkdown: () => ({}),
+  useMarkdown: (...args: unknown[]) => useMarkdownMock(...args),
 }));
 
 describe('MessageContent', () => {
   afterEach(() => {
     cleanup();
+    useMarkdownMock.mockClear();
     mockStoreContent = 'original full content';
     mockStoreHasTools = true;
   });
@@ -61,5 +64,32 @@ describe('MessageContent', () => {
     render(<MessageContent id="block-1" />);
 
     expect(screen.getByTestId('markdown')).toHaveTextContent('original full content');
+  });
+
+  it('disables markdown streaming when the block already has tools below the text', () => {
+    render(<MessageContent hasToolsOverride contentOverride="lead sentence" id="block-1" />);
+
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true);
+  });
+
+  it('keeps markdown streaming enabled when the block has no tools and is not disabled', () => {
+    render(
+      <MessageContent contentOverride="lead sentence" hasToolsOverride={false} id="block-1" />,
+    );
+
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', false);
+  });
+
+  it('disables markdown streaming when disableStreaming is set even without tools', () => {
+    render(
+      <MessageContent
+        disableStreaming
+        contentOverride="lead sentence"
+        hasToolsOverride={false}
+        id="block-1"
+      />,
+    );
+
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true);
   });
 });
