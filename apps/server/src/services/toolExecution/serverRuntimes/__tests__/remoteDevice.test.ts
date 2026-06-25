@@ -14,10 +14,12 @@ vi.mock('@/server/services/deviceGateway', () => ({
   },
 }));
 
-// Mock the DeviceModel so the runtime's DB-backed workspace lookup is observable.
+// Mock the DeviceModel so the runtime's DB-backed lookups are observable.
+const mockQueryPersonal = vi.fn();
 const mockQueryWorkspaceDevices = vi.fn();
 vi.mock('@/database/models/device', () => ({
   DeviceModel: vi.fn().mockImplementation(() => ({
+    queryPersonal: mockQueryPersonal,
     queryWorkspaceDevices: mockQueryWorkspaceDevices,
   })),
 }));
@@ -39,6 +41,8 @@ const makeServerDB = (workspaceId: string | null) =>
 
 beforeEach(() => {
   mockQueryDeviceList.mockReset();
+  mockQueryPersonal.mockReset();
+  mockQueryPersonal.mockResolvedValue([]);
   mockQueryWorkspaceDevices.mockReset();
   mockQueryWorkspaceDevices.mockResolvedValue([]);
 });
@@ -202,7 +206,7 @@ describe('remoteDeviceRuntime', () => {
       expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1');
     });
 
-    it('surfaces a DB-registered workspace device merged with gateway online status (no duplicate)', async () => {
+    it('surfaces a DB-registered workspace device (with its alias) merged with gateway online status (no duplicate)', async () => {
       const context: ToolExecutionContext = {
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
@@ -212,7 +216,7 @@ describe('remoteDeviceRuntime', () => {
 
       const gatewayWorkspaceDevice = {
         deviceId: 'd-ws',
-        hostname: 'shared-mac',
+        hostname: 'VM-7-11-ubuntu',
         lastSeen: '2024-01-02',
         online: true,
         platform: 'linux',
@@ -223,7 +227,8 @@ describe('remoteDeviceRuntime', () => {
       mockQueryWorkspaceDevices.mockResolvedValue([
         {
           deviceId: 'd-ws',
-          hostname: 'shared-mac',
+          friendlyName: 'Build Server',
+          hostname: 'VM-7-11-ubuntu',
           lastSeenAt: new Date('2024-01-01'),
           platform: 'linux',
         },
@@ -235,7 +240,13 @@ describe('remoteDeviceRuntime', () => {
       const parsed = JSON.parse(result.content);
       const wsEntries = parsed.filter((d: { deviceId: string }) => d.deviceId === 'd-ws');
       expect(wsEntries).toHaveLength(1);
-      expect(wsEntries[0]).toMatchObject({ deviceId: 'd-ws', online: true });
+      // The user-set alias is surfaced so the model/user can recognise it.
+      expect(wsEntries[0]).toMatchObject({
+        deviceId: 'd-ws',
+        friendlyName: 'Build Server',
+        online: true,
+        scope: 'workspace',
+      });
     });
   });
 });

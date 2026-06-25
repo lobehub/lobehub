@@ -1,19 +1,17 @@
 import {
+  type DeviceAttachment,
   RemoteDeviceExecutionRuntime,
   RemoteDeviceIdentifier,
 } from '@lobechat/builtin-tool-remote-device';
 import debug from 'debug';
 
-import { DeviceModel } from '@/database/models/device';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 // Enable with DEBUG=lobe-server:remote-device (works in prod via the env var).
-// Traces how the remote-device tool resolves its workspace scope and which
-// device pools it reads, so a "lists personal devices instead of workspace"
-// report can be pinned to a concrete layer (missing scope vs empty gateway pool).
 const log = debug('lobe-server:remote-device');
 
 export const remoteDeviceRuntime: ServerRuntimeRegistration = {
@@ -24,17 +22,14 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
 
     const userId = context.userId;
     const serverDB = context.serverDB;
-    const agentId = context.agentId;
-    const contextWorkspaceId = context.workspaceId;
 
     return new RemoteDeviceExecutionRuntime({
       // Personal pool (user principal) ∪ the current workspace's shared pool
       // (workspace principal), surfaced the same way the device-settings page
-      // (`device.ts` listDevices) does: the DB-registered workspace rows merged
-      // with the live gateway pool. Returning only the raw gateway pool meant a
-      // workspace device the DB knows about could silently drop out — diverging
-      // from the settings page and from `list_document`, which are DB-backed.
-      queryDeviceList: async () => {
+      // (`device.ts` listDevices) does — DB rows merged with the live gateway
+      // pool, tagged with `scope` and the user-set `friendlyName` alias so the
+      // model can tell the workspace device apart from the personal one.
+      queryDeviceList: async (): Promise<DeviceAttachment[]> => {
         // Resolve the workspace scope used to decide which workspace device pool
         // to include. Recovers from the running agent when the run-scoped
         // workspaceId was lost on the way to this tool call — see
@@ -42,60 +37,32 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
         // degrade to the personal-only pool.
         const workspaceId = await resolveRunWorkspaceId(context);
 
-        const deviceModel = serverDB ? new DeviceModel(serverDB, userId, workspaceId) : undefined;
+        // Without a DB handle we cannot merge aliases / DB rows; fall back to the
+        // raw gateway pools, still tagged with scope.
+        if (!serverDB) {
+          const [personal, workspace] = await Promise.all([
+            deviceGateway.queryDeviceList(userId),
+            workspaceId ? deviceGateway.queryDeviceList(userId, workspaceId) : Promise.resolve([]),
+          ]);
+          return [
+            ...personal.map((d) => ({ ...d, scope: 'personal' as const })),
+            ...workspace.map((d) => ({ ...d, scope: 'workspace' as const })),
+          ];
+        }
 
-        const [personal, workspaceOnline, workspaceRows] = await Promise.all([
-          deviceGateway.queryDeviceList(userId),
-          workspaceId ? deviceGateway.queryDeviceList(userId, workspaceId) : Promise.resolve([]),
-          workspaceId && deviceModel ? deviceModel.queryWorkspaceDevices() : Promise.resolve([]),
-        ]);
-
-        // DB rows ⊕ gateway online: `online` is driven by the gateway's live
-        // channels (the DB does not track liveness), but a workspace device the
-        // gateway pool momentarily omits is still surfaced (offline) rather than
-        // vanishing entirely.
-        const onlineById = new Map(workspaceOnline.map((d) => [d.deviceId, d]));
-        const seen = new Set<string>();
-        const workspaceMerged = workspaceRows.map((row) => {
-          seen.add(row.deviceId);
-          const live = onlineById.get(row.deviceId);
-          return {
-            channels: live?.channels,
-            deviceId: row.deviceId,
-            hostname: live?.hostname ?? row.hostname ?? '',
-            lastSeen: live?.lastSeen ?? row.lastSeenAt.toISOString(),
-            online: !!live,
-            platform: live?.platform ?? row.platform ?? '',
-            scope: 'workspace' as const,
-          };
-        });
-        // Gateway-reported workspace devices not yet auto-registered in the DB.
-        const workspaceTransient = workspaceOnline
-          .filter((d) => !seen.has(d.deviceId))
-          .map((d) => ({ ...d, scope: 'workspace' as const }));
-
-        // Tag personal-pool devices so the model can tell an otherwise-identical
-        // personal machine apart from its workspace-enrolled counterpart (same
-        // physical machine, distinct ids under different principals).
-        const personalScoped = personal.map((d) => ({ ...d, scope: 'personal' as const }));
-
+        const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);
         log(
-          'scope: contextWorkspaceId=%o resolvedWorkspaceId=%o agentId=%o | gateway personal=%d workspace=%d | db workspace rows=%d',
-          contextWorkspaceId,
+          'listOnlineDevices: workspaceId=%o -> %d device(s): %o',
           workspaceId,
-          agentId,
-          personal.length,
-          workspaceOnline.length,
-          workspaceRows.length,
+          devices.length,
+          devices.map((d) => ({
+            id: d.deviceId,
+            name: d.friendlyName ?? d.hostname,
+            online: d.online,
+            scope: d.scope,
+          })),
         );
-        log(
-          '  deviceIds: gatewayPersonal=%o gatewayWorkspace=%o dbWorkspace=%o',
-          personal.map((d) => d.deviceId),
-          workspaceOnline.map((d) => d.deviceId),
-          workspaceRows.map((d) => d.deviceId),
-        );
-
-        return [...personalScoped, ...workspaceMerged, ...workspaceTransient];
+        return devices;
       },
     });
   },

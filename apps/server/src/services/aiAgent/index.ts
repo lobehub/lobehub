@@ -107,6 +107,7 @@ import {
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { ComposioService } from '@/server/services/composio';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -2089,22 +2090,16 @@ export class AiAgentService {
       const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
-          // Personal pool (user principal) ∪ the current workspace's shared pool
-          // (workspace principal). Workspace devices are absent for non-workspace
-          // runs, so this is identical to the personal-only fetch there.
-          const [personalOnline, workspaceOnline] = await Promise.all([
-            deviceGateway.queryDeviceList(this.userId),
-            this.workspaceId
-              ? deviceGateway.queryDeviceList(this.userId, this.workspaceId)
-              : Promise.resolve([]),
-          ]);
-          // Tag scope so the systemRole device snapshot lets the model tell a
-          // personal machine apart from its workspace-enrolled counterpart (the
-          // same physical machine can appear under both principals).
-          onlineDevices = [
-            ...personalOnline.map((d) => ({ ...d, scope: 'personal' as const })),
-            ...workspaceOnline.map((d) => ({ ...d, scope: 'workspace' as const })),
-          ];
+          // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
+          // tagged with `scope` and the user-set `friendlyName` alias (see
+          // `getScopedOnlineDevices`) so the systemRole snapshot lets the model
+          // tell a personal machine apart from its workspace-enrolled counterpart
+          // (same physical machine under both principals). Keep only live devices:
+          // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
+          // online set.
+          onlineDevices = (
+            await getScopedOnlineDevices(this.db, this.userId, this.workspaceId)
+          ).filter((d) => d.online);
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);

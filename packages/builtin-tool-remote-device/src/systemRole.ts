@@ -7,9 +7,12 @@ export const generateSystemPrompt = (devices?: DeviceAttachment[]): string => {
 
   const deviceSection = onlineDevicesPrompt(
     onlineDevices.map((d) => ({
+      hostname: d.hostname,
       id: d.deviceId,
       lastSeen: d.lastSeen,
-      name: d.hostname,
+      // Prefer the user-set alias so the listed name matches what the user sees
+      // in device settings; fall back to the raw hostname.
+      name: d.friendlyName || d.hostname,
       os: d.platform,
       scope: d.scope,
     })),
