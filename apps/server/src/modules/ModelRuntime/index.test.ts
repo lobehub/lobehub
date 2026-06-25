@@ -183,6 +183,18 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
     });
 
+    it('Bedrock AI provider: preserves API key without server key selection', async () => {
+      const apiKey = 'user-bedrock-api-key-a,user-bedrock-api-key-b';
+      const jwtPayload: ClientSecretPayload = {
+        apiKey,
+        awsRegion: 'us-east-1',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
+      const token = await runtime['_runtime']['client'].config.token?.();
+
+      expect(token).toEqual({ token: apiKey });
+    });
+
     it('Bedrock AI provider: with legacy AWS credentials only', async () => {
       const jwtPayload: ClientSecretPayload = {
         awsAccessKeyId: 'user-aws-id',

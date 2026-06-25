@@ -223,7 +223,7 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         return {
           accessKeyId: payload.awsAccessKeyId,
           accessKeySecret: payload.awsSecretAccessKey,
-          apiKey: apiKeyManager.pick(payload.apiKey),
+          apiKey: payload.apiKey,
           region: payload.awsRegion || AWS_REGION,
           sessionToken: payload.awsSessionToken,
         };

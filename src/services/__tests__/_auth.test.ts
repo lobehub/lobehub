@@ -110,6 +110,16 @@ describe('getProviderAuthPayload', () => {
     });
   });
 
+  it('should preserve Bedrock API key without client key selection', () => {
+    const apiKey = 'bedrock-api-key-a,bedrock-api-key-b';
+    const payload = getProviderAuthPayload(ModelProvider.Bedrock, {
+      apiKey,
+      region: 'us-east-1',
+    });
+
+    expect(payload.apiKey).toBe(apiKey);
+  });
+
   it('should return correct payload for Azure provider', () => {
     // 假设的 Azure 配置
     const mockAzureConfig = {

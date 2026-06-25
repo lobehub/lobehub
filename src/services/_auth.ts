@@ -32,7 +32,7 @@ export const getProviderAuthPayload = (
       return {
         accessKeyId,
         accessKeySecret: awsSecretAccessKey,
-        apiKey: clientApiKeyManager.pick(apiKey),
+        apiKey,
         /** @deprecated */
         awsAccessKeyId,
         /** @deprecated */
