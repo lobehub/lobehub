@@ -66,10 +66,18 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
             lastSeen: live?.lastSeen ?? row.lastSeenAt.toISOString(),
             online: !!live,
             platform: live?.platform ?? row.platform ?? '',
+            scope: 'workspace' as const,
           };
         });
         // Gateway-reported workspace devices not yet auto-registered in the DB.
-        const workspaceTransient = workspaceOnline.filter((d) => !seen.has(d.deviceId));
+        const workspaceTransient = workspaceOnline
+          .filter((d) => !seen.has(d.deviceId))
+          .map((d) => ({ ...d, scope: 'workspace' as const }));
+
+        // Tag personal-pool devices so the model can tell an otherwise-identical
+        // personal machine apart from its workspace-enrolled counterpart (same
+        // physical machine, distinct ids under different principals).
+        const personalScoped = personal.map((d) => ({ ...d, scope: 'personal' as const }));
 
         log(
           'scope: contextWorkspaceId=%o resolvedWorkspaceId=%o agentId=%o | gateway personal=%d workspace=%d | db workspace rows=%d',
@@ -87,7 +95,7 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
           workspaceRows.map((d) => d.deviceId),
         );
 
-        return [...personal, ...workspaceMerged, ...workspaceTransient];
+        return [...personalScoped, ...workspaceMerged, ...workspaceTransient];
       },
     });
   },

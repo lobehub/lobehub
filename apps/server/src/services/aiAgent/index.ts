@@ -2098,7 +2098,13 @@ export class AiAgentService {
               ? deviceGateway.queryDeviceList(this.userId, this.workspaceId)
               : Promise.resolve([]),
           ]);
-          onlineDevices = [...personalOnline, ...workspaceOnline];
+          // Tag scope so the systemRole device snapshot lets the model tell a
+          // personal machine apart from its workspace-enrolled counterpart (the
+          // same physical machine can appear under both principals).
+          onlineDevices = [
+            ...personalOnline.map((d) => ({ ...d, scope: 'personal' as const })),
+            ...workspaceOnline.map((d) => ({ ...d, scope: 'workspace' as const })),
+          ];
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);

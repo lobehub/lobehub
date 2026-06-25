@@ -11,6 +11,7 @@ export const generateSystemPrompt = (devices?: DeviceAttachment[]): string => {
       lastSeen: d.lastSeen,
       name: d.hostname,
       os: d.platform,
+      scope: d.scope,
     })),
   );
 
@@ -29,6 +30,7 @@ ${deviceSection}
 - If no devices are online, inform the user that they need to have their desktop application running and connected.
 - When only one device is online, activate it directly without asking the user to choose.
 - When multiple devices are online, present the list and let the user choose which device to activate.
+- Each device carries a \`scope\`: \`personal\` is the user's own machine, \`workspace\` is a device shared with the workspace. The same physical machine may appear under both scopes (distinct ids). When the user refers to "the workspace device" (or the conversation is acting on workspace resources), prefer the \`workspace\`-scoped device; for "my machine"/personal work prefer the \`personal\` one. Surface the scope when listing devices so the user can disambiguate.
 </guidelines>
 `;
 };

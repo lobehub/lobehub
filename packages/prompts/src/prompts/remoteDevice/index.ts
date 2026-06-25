@@ -3,10 +3,13 @@ export interface DeviceItem {
   lastSeen?: string;
   name: string;
   os: string;
+  /** 'personal' = the user's own machine, 'workspace' = enrolled into the workspace. */
+  scope?: string;
 }
 
 export const devicePrompt = (device: DeviceItem) => {
   const attrs = [`id="${device.id}"`, `name="${device.name}"`, `os="${device.os}"`];
+  if (device.scope) attrs.push(`scope="${device.scope}"`);
   if (device.lastSeen) attrs.push(`last-seen="${device.lastSeen}"`);
   return `  <device ${attrs.join(' ')} />`;
 };

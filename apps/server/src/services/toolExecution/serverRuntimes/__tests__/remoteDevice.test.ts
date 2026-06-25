@@ -131,10 +131,11 @@ describe('remoteDeviceRuntime', () => {
       expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.content);
+      // Each device is tagged with its scope so the model can disambiguate.
       expect(parsed).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ deviceId: 'd-personal' }),
-          expect.objectContaining({ deviceId: 'd-workspace' }),
+          expect.objectContaining({ deviceId: 'd-personal', scope: 'personal' }),
+          expect.objectContaining({ deviceId: 'd-workspace', scope: 'workspace' }),
         ]),
       );
     });
