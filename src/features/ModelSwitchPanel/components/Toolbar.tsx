@@ -26,23 +26,29 @@ export const Toolbar = memo<ToolbarProps>(
         align="center"
         className={styles.toolbar}
         gap={4}
+        justify="space-between"
         paddingBlock={8}
         paddingInline={8}
+        width="100%"
       >
-        <SearchBar
-          allowClear
-          placeholder={t('ModelSwitchPanel.searchPlaceholder')}
-          size="small"
-          style={{ flex: 1 }}
-          value={searchKeyword}
-          variant="borderless"
-          onChange={(e) => onSearchKeywordChange(e.target.value)}
-          onKeyDown={stopPropagation}
-        />
+        <Flexbox flex={1} width="100%">
+          <SearchBar
+            allowClear
+            placeholder={t('ModelSwitchPanel.searchPlaceholder')}
+            size="small"
+            style={{ width: '100%' }}
+            styles={{ input: { width: '100%' } }}
+            value={searchKeyword}
+            variant="borderless"
+            onChange={(e) => onSearchKeywordChange(e.target.value)}
+            onKeyDown={stopPropagation}
+          />
+        </Flexbox>
         {showGroupModeSwitch && (
           <Tabs
             activeKey={groupMode}
             size="small"
+            style={{ minWidth: 0, width: 'fit-content' }}
             items={[
               {
                 key: 'byModel',
