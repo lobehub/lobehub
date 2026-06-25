@@ -11,8 +11,10 @@ const {
   taskUpdateStatus,
   briefCreate,
   serviceUpdateStatus,
+  deliverMock,
 } = vi.hoisted(() => ({
   briefCreate: vi.fn(),
+  deliverMock: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
   runSetMetadata: vi.fn(),
@@ -40,6 +42,10 @@ vi.mock('@/database/models/brief', () => ({
 vi.mock('@/server/services/task', () => ({
   TaskService: vi.fn(() => ({ updateStatus: serviceUpdateStatus })),
 }));
+// The deferred creator callback, also resolved via dynamic import.
+vi.mock('@/server/services/taskResultBridge', () => ({
+  TaskResultBridgeService: vi.fn(() => ({ deliver: deliverMock })),
+}));
 
 const db = {} as any;
 
@@ -53,8 +59,9 @@ describe('driveTaskFromVerify (LOBE-10624)', () => {
       taskUpdateStatus,
       briefCreate,
       serviceUpdateStatus,
+      deliverMock,
     ].forEach((m) => m.mockReset());
-    opFindById.mockResolvedValue({ taskId: 'task-1' });
+    opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
       assigneeAgentId: 'a1',
       id: 'task-1',
@@ -64,19 +71,29 @@ describe('driveTaskFromVerify (LOBE-10624)', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('passed → completes the task (with cascade) and stamps the idempotency marker', async () => {
+  it('passed → completes the task (with cascade), delivers the creator callback, marks done', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    // Deferred creator callback fires here (not in onTopicComplete), reason 'done'.
+    expect(deliverMock).toHaveBeenCalledTimes(1);
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({
+      reason: 'done',
+      taskId: 'task-1',
+      taskIdentifier: 'T-1',
+      topicId: 'topic-done',
+    });
     expect(runSetMetadata).toHaveBeenCalled();
   });
 
-  it('failed → raises an urgent brief and pauses the task', async () => {
+  it('failed → urgent brief + pauses, delivers a failure creator callback', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(briefCreate).toHaveBeenCalled();
     expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    // Creator is told it failed verification (reason 'error'), not a passed result.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
   it('skips when the run has not terminally settled (verifying/repairing)', async () => {

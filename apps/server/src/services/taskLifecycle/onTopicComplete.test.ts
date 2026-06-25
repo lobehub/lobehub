@@ -267,6 +267,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       verifyFindByOperation.mockResolvedValue({ planConfirmedAt: new Date() });
       vi.spyOn(service as any, 'synthesizeTopicBrief').mockResolvedValue(undefined);
       vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const bridge = vi.spyOn(service as any, 'bridgeResultToCreator').mockResolvedValue(undefined);
 
       await service.onTopicComplete({
         lastAssistantContent: 'enough content to count as substantive output',
@@ -279,6 +280,28 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
       // Did not pause — driveTaskFromVerify will complete/pause the task on settle.
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      // The creator callback is DEFERRED to the verify settle path, not fired here.
+      expect(bridge).not.toHaveBeenCalled();
+    });
+
+    it('non-verify-bound task → fires the creator callback at onTopicComplete', async () => {
+      const task = baseTask({ automationMode: null });
+      findById.mockResolvedValue(task);
+      verifyFindByOperation.mockResolvedValue(undefined); // no verify run
+      vi.spyOn(service as any, 'synthesizeTopicBrief').mockResolvedValue(undefined);
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const bridge = vi.spyOn(service as any, 'bridgeResultToCreator').mockResolvedValue(undefined);
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'enough content to count as substantive output',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(bridge).toHaveBeenCalledTimes(1);
     });
   });
 

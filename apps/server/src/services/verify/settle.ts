@@ -76,6 +76,25 @@ export const driveTaskFromVerify = async (
       log('verify failed → task %s paused + brief', op.taskId);
     }
 
+    // Deferred creator callback (LOBE-10625 × LOBE-10624): verify-bound runs defer
+    // the taskCallback from `onTopicComplete` to HERE so the creator only sees the
+    // result once verify has accepted (passed) or rejected (failed) the delivery —
+    // never an unaccepted output it might act on before a later verify failure.
+    // Best-effort; must not block the idempotency marker below.
+    try {
+      const { TaskResultBridgeService } = await import('@/server/services/taskResultBridge');
+      await new TaskResultBridgeService(db, userId, workspaceId).deliver({
+        operationId,
+        reason: run.status === 'passed' ? 'done' : 'error',
+        taskId: op.taskId,
+        taskIdentifier: task.identifier,
+        topicId: op.topicId ?? undefined,
+        ...(run.status === 'failed' && { errorMessage: 'Delivery did not pass verification.' }),
+      });
+    } catch (error) {
+      log('verify-settle creator callback failed for task %s (non-fatal): %O', op.taskId, error);
+    }
+
     await runModel.setMetadata(run.id, { taskDrivenAt: new Date().toISOString() });
   } catch (error) {
     log('driveTaskFromVerify failed for op %s (non-fatal): %O', operationId, error);

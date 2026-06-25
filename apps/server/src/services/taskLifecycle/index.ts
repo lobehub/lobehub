@@ -114,6 +114,13 @@ export class TaskLifecycleService {
 
     const currentTask = await this.taskModel.findById(taskId);
 
+    // Whether a confirmed verify plan owns this run's delivery acceptance. Set in
+    // the 'done' branch; gates both the pause-for-review skip and (below) the
+    // creator callback — for verify-bound runs the callback is deferred to the
+    // verify settle path (driveTaskFromVerify) so the creator never consumes an
+    // output before verify has accepted it.
+    let verifyBound = false;
+
     if (reason === 'done') {
       // 1. Update topic status
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
@@ -172,7 +179,6 @@ export class TaskLifecycleService {
       // (driveTaskFromVerify completes / pauses the task on settle), so we must
       // NOT pause-for-review here — the task stays running until verify settles.
       // Best-effort: a verify-read failure must never break the task lifecycle.
-      let verifyBound = false;
       try {
         const verifyRun = await new VerifyRunModel(
           this.db,
@@ -223,7 +229,12 @@ export class TaskLifecycleService {
     // racing `on-topic-complete` could observe the pre-transition status and
     // silently drop the only callback for automation tasks that become terminal
     // in this path (e.g. a scheduled task hitting its execution cap).
-    await this.bridgeResultToCreator(params);
+    //
+    // Verify-bound runs DEFER the callback to the verify settle path
+    // (driveTaskFromVerify): the delivery isn't accepted until verify settles, so
+    // the creator must not receive/act on the output here — if verify later fails,
+    // the unaccepted output would already have been consumed.
+    if (!verifyBound) await this.bridgeResultToCreator(params);
 
     // Heartbeat re-arm: re-read task state (status / context may have just
     // been mutated by the branches above) and decide whether to publish the
