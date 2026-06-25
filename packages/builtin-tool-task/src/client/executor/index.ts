@@ -19,6 +19,7 @@ import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { taskService } from '@/services/task';
+import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
 
@@ -78,6 +79,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
     const store = getTaskStoreState();
     const identifier = extractIdentifier(params, result);
+
+    // Auto-expand the freshly created task's detail in the right-side portal so
+    // the user can review it without leaving the conversation. This fires once
+    // per `createTask` tool call (on the gateway `tool_end` event), which is why
+    // it lives here rather than in the renderer: the gateway re-fetches and
+    // remounts the message after `tool_end`, so a render-mount effect never sees
+    // the undefined → defined identifier transition and would never open.
+    if (apiName === TaskApiName.createTask && identifier) {
+      getChatStoreState().openTaskDetail(identifier);
+    }
 
     // Build the set of task-detail keys to revalidate. Mirrors the pattern
     // used by `updateTask` in the detail slice so subtask deletions / edits

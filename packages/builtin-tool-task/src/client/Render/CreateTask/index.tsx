@@ -4,7 +4,7 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PanelRight, PanelRightClose } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
@@ -13,10 +13,6 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import type { CreateTaskParams, CreateTaskState } from '../../../types';
-
-// Tracks task identifiers we've already auto-expanded so re-mounting the card
-// (scrolling the message back into view) doesn't reopen a portal the user closed.
-const autoOpened = new Set<string>();
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -48,8 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        expanded detail panel. */
     overflow: hidden;
     max-height: 132px;
-
-    mask-image: linear-gradient(to bottom, black 78%, transparent);
 
     mask-image: linear-gradient(to bottom, black 78%, transparent);
   `,
@@ -93,19 +87,9 @@ export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, Create
     );
 
     const identifier = pluginState?.identifier;
-    // Identifier present at first render means this card mounted already-resolved
-    // (e.g. an old task when reopening the conversation) — only the fresh
-    // undefined → defined transition counts as "just created".
-    const identifierAtMount = useRef(identifier);
-
-    // Once the task is freshly created, auto-expand its detail in the right-side
-    // portal so the user can review it without leaving the conversation.
-    useEffect(() => {
-      if (!identifier || identifierAtMount.current === identifier) return;
-      if (autoOpened.has(identifier)) return;
-      autoOpened.add(identifier);
-      openTaskDetail(identifier);
-    }, [identifier, openTaskDetail]);
+    // Auto-expanding the freshly created task's detail portal is driven by the
+    // executor's `onAfterCall` hook (gateway `tool_end`), not a render effect —
+    // see `client/executor`. The card itself only handles the manual toggle.
 
     // Prefer the resolved task (`pluginState`); fall back to `args` while the
     // call is still streaming and no result has landed yet.
