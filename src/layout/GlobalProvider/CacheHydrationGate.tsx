@@ -3,10 +3,14 @@
 import type { PropsWithChildren } from 'react';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 
+import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration, isCacheHydrationBlocked } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+
+// first-write-wins: keyed by scope remounts must not overwrite the initial mark
+let firstPaintMarked = false;
 
 const HYDRATION_TIMEOUT = 1500;
 
@@ -59,6 +63,10 @@ const CacheHydrationGateInner = ({ children, scope }: CacheHydrationGateInnerPro
   useLayoutEffect(() => {
     if (booting) return;
 
+    if (!firstPaintMarked) {
+      firstPaintMarked = true;
+      bootTiming.mark('first-paint');
+    }
     document.getElementById('loading-screen')?.remove();
   }, [booting]);
 
