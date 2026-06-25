@@ -302,7 +302,9 @@ export default defineConfig({
     host: true,
     port: isMobile
       ? Number(process.env.MOBILE_SPA_PORT) || 3012
-      : Number(process.env.SPA_PORT) || 9876,
+      : isAuth
+        ? Number(process.env.AUTH_SPA_PORT) || 3013
+        : Number(process.env.SPA_PORT) || 9876,
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,
