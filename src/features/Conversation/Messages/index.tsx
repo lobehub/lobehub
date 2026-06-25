@@ -19,7 +19,6 @@ import AssistantGroupMessage from './AssistantGroup';
 import type { WorkflowExpandLevelDefault } from './AssistantGroup/components/WorkflowCollapse';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import SupervisorMessage from './Supervisor';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
 import TasksMessage from './Tasks';
@@ -149,9 +148,15 @@ const MessageItem = memo<MessageItemProps>(
         }
 
         case 'supervisor': {
+          // Supervisor messages render through the rich AssistantGroup component
+          // (workflow collapse / taskCompletions / signalCallbacks) — it swaps in
+          // the group's avatar + name + 主管 badge when the message is a supervisor
+          // turn. Keeps a single code path instead of a thinner duplicate.
           return (
-            <SupervisorMessage
+            <AssistantGroupMessage
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
+              footerRender={footerRender}
               id={id}
               index={index}
               isLatestItem={isLatestItem}

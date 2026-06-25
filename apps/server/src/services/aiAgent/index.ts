@@ -1292,6 +1292,19 @@ export class AiAgentService {
       log('execAgent: created user message %s', userMessageRecord.id);
     }
 
+    // Snapshot the author's group orchestration role onto the assistant message
+    // so the role survives the server round-trip (gateway step_start snapshot /
+    // message.getMessages). Without this the client's optimistic isSupervisor flag
+    // is lost on refetch and the supervisor renders as a generic assistant.
+    // The persisted message `role` stays 'assistant' — only metadata carries the
+    // orchestration role, keeping the data training-friendly.
+    const orchestrationMetadata = appContext?.orchestrationRole
+      ? {
+          ...(appContext.orchestrationRole === 'supervisor' ? { isSupervisor: true } : {}),
+          orchestrationRole: appContext.orchestrationRole,
+        }
+      : undefined;
+
     // Assistant placeholder (shows the spinner in the UI). A hetero run seeds
     // ONLY the provider — the CLI reports the real model later via `stream_start`
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
@@ -1303,6 +1316,7 @@ export class AiAgentService {
       // Stamp groupId so the assistant turn is visible in the group read path
       // (MessageModel.query filters group chats by messages.groupId).
       groupId: appContext?.groupId ?? undefined,
+      metadata: orchestrationMetadata,
       model: isHeteroAgent ? undefined : model,
       parentId: parentMessageId ?? userMessageRecord?.id,
       provider: isHeteroAgent ? heteroType : provider,
@@ -3166,10 +3180,13 @@ export class AiAgentService {
       log('execGroupAgent: created new topic %s with groupId %s', topicId, groupId);
     }
 
-    // 2. Delegate to execAgent with groupId in appContext
+    // 2. Delegate to execAgent with groupId in appContext.
+    // execGroupAgent always runs the group's supervisor, so stamp the
+    // orchestration role onto the run — it lands on the assistant message
+    // metadata and drives supervisor-flavored UI rendering.
     const result = await this.execAgent({
       agentId,
-      appContext: { groupId, topicId },
+      appContext: { groupId, orchestrationRole: 'supervisor', topicId },
       autoStart: true,
       prompt: message,
       trigger: RequestTrigger.Chat,
@@ -3343,6 +3360,7 @@ export class AiAgentService {
 
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
+      orchestrationRole: 'member',
       scope: 'group',
       topicId,
     };

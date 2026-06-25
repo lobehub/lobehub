@@ -6,6 +6,15 @@ import type { MessageCollector } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
 
 /**
+ * Whether a message was authored by the group's supervisor agent.
+ * Reads the canonical `metadata.orchestrationRole` snapshot, falling back to the
+ * deprecated boolean `metadata.isSupervisor` for messages written before the
+ * field existed.
+ */
+const isSupervisorMessage = (message: Message | undefined): boolean =>
+  message?.metadata?.orchestrationRole === 'supervisor' || !!message?.metadata?.isSupervisor;
+
+/**
  * FlatListBuilder - Builds flat message list following the active path
  *
  * Handles:
@@ -153,7 +162,7 @@ export class FlatListBuilder {
                   } else if (
                     // Check if it's a supervisor message without tools (content-only)
                     taskGrandchild.role === 'assistant' &&
-                    taskGrandchild.metadata?.isSupervisor &&
+                    isSupervisorMessage(taskGrandchild) &&
                     (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
                   ) {
                     const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
@@ -222,7 +231,7 @@ export class FlatListBuilder {
       if (
         message.role === 'assistant' &&
         ((message.tools && message.tools.length > 0) ||
-          (!message.metadata?.isSupervisor && this.messageCollector.isToolChainHead(message)))
+          (!isSupervisorMessage(message) && this.messageCollector.isToolChainHead(message)))
       ) {
         // Collect the entire assistant group chain
         const assistantChain: Message[] = [];
@@ -288,7 +297,7 @@ export class FlatListBuilder {
       // Transform to supervisor role with content in children array
       if (
         message.role === 'assistant' &&
-        message.metadata?.isSupervisor &&
+        isSupervisorMessage(message) &&
         (!message.tools || message.tools.length === 0)
       ) {
         const supervisorMessage = this.createSupervisorContentMessage(message);
@@ -966,7 +975,7 @@ export class FlatListBuilder {
     }
 
     // Determine role: use 'supervisor' for supervisor messages, otherwise 'assistantGroup'
-    const isSupervisor = firstAssistant.metadata?.isSupervisor;
+    const isSupervisor = isSupervisorMessage(firstAssistant);
     const role = isSupervisor ? 'supervisor' : 'assistantGroup';
 
     const result: Message = {
@@ -991,9 +1000,10 @@ export class FlatListBuilder {
       result.metadata = groupMetadata;
     }
 
-    // Preserve isSupervisor in metadata for supervisor messages
+    // Preserve supervisor identity in metadata for supervisor messages so the
+    // virtual message keeps driving supervisor-flavored rendering downstream.
     if (isSupervisor) {
-      result.metadata = { ...result.metadata, isSupervisor: true };
+      result.metadata = { ...result.metadata, isSupervisor: true, orchestrationRole: 'supervisor' };
     }
 
     // Snapshot signal-callback blocks onto the virtual group message
@@ -1141,8 +1151,8 @@ export class FlatListBuilder {
     if (msgPerformance) result.performance = msgPerformance;
     if (msgUsage) result.usage = msgUsage;
 
-    // Preserve isSupervisor in metadata
-    result.metadata = { isSupervisor: true, ...otherMetadata };
+    // Preserve supervisor identity in metadata
+    result.metadata = { isSupervisor: true, orchestrationRole: 'supervisor', ...otherMetadata };
 
     return result;
   }
