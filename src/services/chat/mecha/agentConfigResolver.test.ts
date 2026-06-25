@@ -1069,12 +1069,17 @@ describe('resolveAgentConfig', () => {
     });
   });
 
-  describe('sub-agent filtering (isSubAgent)', () => {
+  // lobe-agent's sub-agent / group trimming moved into resolveLobeAgentManifest
+  // (manifest resolver, applied at tools-engine build time). resolveAgentConfig no
+  // longer drops lobe-agent from the plugins list based on isSubAgent — it stays so
+  // its plan / todo / visual-media APIs remain available; only callSubAgent is hidden
+  // downstream (covered by resolveManifest.test.ts).
+  describe('isSubAgent keeps lobe-agent in plugins (trimming moved to manifest resolver)', () => {
     beforeEach(() => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
     });
 
-    it('should filter out lobe-agent when isSubAgent is true for regular agent', () => {
+    it('keeps lobe-agent when isSubAgent is true for regular agent', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1088,8 +1093,7 @@ describe('resolveAgentConfig', () => {
         isSubAgent: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-agent');
-      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+      expect(result.plugins).toEqual(['lobe-agent', 'plugin-a', 'plugin-b']);
     });
 
     it('should keep lobe-agent when isSubAgent is false', () => {
@@ -1124,7 +1128,7 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toContain('lobe-agent');
     });
 
-    it('should filter lobe-agent in page scope when isSubAgent is true', () => {
+    it('keeps lobe-agent in page scope when isSubAgent is true (and still injects page-agent)', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1142,11 +1146,11 @@ describe('resolveAgentConfig', () => {
         isSubAgent: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-agent');
+      expect(result.plugins).toContain('lobe-agent');
       expect(result.plugins).toContain(PageAgentIdentifier);
     });
 
-    it('should filter lobe-agent for builtin agent when isSubAgent is true', () => {
+    it('keeps lobe-agent for builtin agent when isSubAgent is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
         () => 'agent-builder',
       );
@@ -1160,7 +1164,7 @@ describe('resolveAgentConfig', () => {
         isSubAgent: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-agent');
+      expect(result.plugins).toContain('lobe-agent');
       expect(result.plugins).toContain('runtime-plugin');
     });
 

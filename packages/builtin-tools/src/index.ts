@@ -15,7 +15,7 @@ import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
@@ -128,7 +128,7 @@ export const runtimeManagedToolIds = [
   WebBrowsingManifest.identifier,
 ];
 
-export const builtinTools: LobeBuiltinTool[] = [
+const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
@@ -326,6 +326,8 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
+    // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.
+    resolveManifest: resolveLobeAgentManifest,
     type: 'builtin',
   },
   {
@@ -334,6 +336,21 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
 ];
+
+/**
+ * Hoist each tool's `manifest.meta` identity (title / avatar / description / tags)
+ * onto the top level, so context-free consumers (UI lists, discovery, settings,
+ * token estimation) read `tool.title` / `tool.avatar` directly instead of reaching
+ * into `manifest.meta`. This keeps identity stable and decoupled from `manifest`,
+ * which may be produced per-turn by a context-aware `resolveManifest`.
+ */
+export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) => ({
+  ...tool,
+  avatar: tool.manifest.meta.avatar,
+  description: tool.manifest.meta.description,
+  tags: tool.manifest.meta.tags,
+  title: tool.manifest.meta.title,
+}));
 
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),

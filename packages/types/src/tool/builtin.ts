@@ -236,11 +236,62 @@ export const BuiltinToolManifestSchema = z.object({
   type: z.literal('builtin').optional(),
 });
 
+/**
+ * Runtime context handed to a builtin tool's manifest resolver so the tool can
+ * self-trim per conversation context instead of relying on scattered, hard-coded
+ * filters in the consuming layers (agentConfigResolver / toolSetComposer).
+ *
+ * Mirror of the builtin-agent `runtime: (ctx) => config` pattern, but for tools.
+ * Extend this with new signals (e.g. isDesktop, isPageEditorReady, groupId) as
+ * more tools migrate their context-based trimming here.
+ */
+export interface BuiltinToolResolveContext {
+  /**
+   * True when running inside a sub-agent execution. A nested sub-agent must not
+   * be able to dispatch further sub-agents.
+   */
+  isSubAgent?: boolean;
+  /**
+   * Conversation scope, e.g. 'main' | 'page' | 'task' | 'group' | 'group_agent'
+   * | 'thread' | 'sub_agent'. Kept as a string to avoid coupling the tool layer
+   * to the operation/message scope unions.
+   */
+  scope?: string;
+}
+
+/**
+ * Context-aware manifest factory for a builtin tool. Return a trimmed manifest
+ * (e.g. with certain APIs filtered out) for the given context, or `null` to make
+ * the tool unavailable entirely in that context.
+ */
+export type BuiltinManifestResolver = (
+  context: BuiltinToolResolveContext,
+) => BuiltinToolManifest | null;
+
 export interface LobeBuiltinTool {
+  /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */
+  avatar?: string;
+  /** Identity (hoisted from `manifest.meta`): short description shown in UI. */
+  description?: string;
   discoverable?: boolean;
   hidden?: boolean;
   identifier: string;
   manifest: BuiltinToolManifest;
+  /**
+   * Optional context-aware override for `manifest`. When present AND a resolve
+   * context is supplied (the agent runtime / tools-engine path), the resolver's
+   * result replaces the static `manifest` for that turn, letting the tool gate
+   * its own availability or hide specific APIs based on context.
+   *
+   * The static `manifest` stays the full-capability set used by context-free
+   * consumers (UI tool lists, discovery, settings, token estimation), so adding
+   * a resolver never breaks those synchronous reads.
+   */
+  resolveManifest?: BuiltinManifestResolver;
+  /** Identity (hoisted from `manifest.meta`): tags shown in UI / discovery. */
+  tags?: string[];
+  /** Identity (hoisted from `manifest.meta`): display name. Falls back to `identifier`. */
+  title?: string;
   type: 'builtin';
 }
 

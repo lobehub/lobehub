@@ -457,11 +457,11 @@ const SkillList = memo<SkillListProps>(
             builtinToolItems.map((item) => {
               if (item.type !== 'builtin') return null;
               const localizedTitle = t(`tools.builtins.${item.builtinTool.identifier}.title`, {
-                defaultValue: item.builtinTool.manifest.meta?.title || item.builtinTool.identifier,
+                defaultValue: item.builtinTool.title || item.builtinTool.identifier,
               });
               return (
                 <BuiltinSkillItem
-                  avatar={item.builtinTool.manifest.meta?.avatar}
+                  avatar={item.builtinTool.avatar}
                   identifier={item.builtinTool.identifier}
                   isSelected={selectedIdentifier === item.builtinTool.identifier}
                   key={item.builtinTool.identifier}

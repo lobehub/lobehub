@@ -1,4 +1,3 @@
-import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest, ToolsGenerationResult } from '@lobechat/context-engine';
 import { generateToolsFromManifest } from '@lobechat/context-engine';
@@ -27,27 +26,8 @@ const makeToolsDetailed = (manifests: LobeToolManifest[]): ToolsGenerationResult
   tools: manifests.length > 0 ? manifests.flatMap((m) => generateToolsFromManifest(m)) : undefined,
 });
 
-const makeMultiApiManifest = (identifier: string, apiNames: string[]): LobeToolManifest => ({
-  api: apiNames.map((name) => ({
-    description: `${identifier}.${name}`,
-    name,
-    parameters: { properties: {}, type: 'object' },
-  })),
-  identifier,
-  meta: { avatar: '🔧', description: identifier, title: identifier },
-  systemRole: '',
-  type: 'builtin',
-});
-
 const PAGE_AGENT_MANIFEST = makeManifest(PageAgentIdentifier, 'initPage');
 const OTHER_MANIFEST = makeManifest('lobe-agent-documents', 'readDocument');
-// Mirrors the real lobe-agent manifest: callSubAgent bundled with plan/todo APIs.
-const LOBE_AGENT_MANIFEST = makeMultiApiManifest(LobeAgentIdentifier, [
-  LobeAgentApiName.createPlan,
-  LobeAgentApiName.createTodos,
-  LobeAgentApiName.callSubAgent,
-]);
-const subAgentToolName = `${LobeAgentIdentifier}____${LobeAgentApiName.callSubAgent}`;
 
 describe('composeEnabledTools', () => {
   describe('mergeInjectedManifests', () => {
@@ -171,55 +151,6 @@ describe('composeEnabledTools', () => {
 
       expect(result.enabledToolIds).toEqual(['lobe-agent-documents']);
       expect(result.enabledManifests).toEqual([OTHER_MANIFEST]);
-      expect(result.tools).toEqual(toolsDetailed.tools);
-    });
-  });
-
-  describe('dropSubAgentInGroup', () => {
-    it.each(['group', 'group_agent'])(
-      'drops only callSubAgent (keeping plan/todo + manifest) when scope is %s',
-      (scope) => {
-        const result = composeEnabledTools({
-          context: { scope },
-          toolsDetailed: makeToolsDetailed([LOBE_AGENT_MANIFEST]),
-        });
-
-        // manifest and toolId are preserved — the rest of lobe-agent stays usable
-        expect(result.enabledToolIds).toContain(LobeAgentIdentifier);
-        expect(result.enabledManifests).toContainEqual(LOBE_AGENT_MANIFEST);
-
-        // only callSubAgent is removed from the schema sent to the LLM
-        expect(result.tools?.some((t) => t.function?.name === subAgentToolName)).toBe(false);
-        expect(
-          result.tools?.some(
-            (t) => t.function?.name === `${LobeAgentIdentifier}____${LobeAgentApiName.createPlan}`,
-          ),
-        ).toBe(true);
-        expect(
-          result.tools?.some(
-            (t) => t.function?.name === `${LobeAgentIdentifier}____${LobeAgentApiName.createTodos}`,
-          ),
-        ).toBe(true);
-      },
-    );
-
-    it('keeps callSubAgent outside group scopes', () => {
-      const result = composeEnabledTools({
-        context: { scope: 'main' },
-        toolsDetailed: makeToolsDetailed([LOBE_AGENT_MANIFEST]),
-      });
-
-      expect(result.tools?.some((t) => t.function?.name === subAgentToolName)).toBe(true);
-    });
-
-    it('is a no-op in group scope when lobe-agent is not enabled', () => {
-      const toolsDetailed = makeToolsDetailed([OTHER_MANIFEST]);
-
-      const result = composeEnabledTools({
-        context: { scope: 'group' },
-        toolsDetailed,
-      });
-
       expect(result.tools).toEqual(toolsDetailed.tools);
     });
   });

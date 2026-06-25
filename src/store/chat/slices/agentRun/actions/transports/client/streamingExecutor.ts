@@ -218,6 +218,10 @@ export class StreamingExecutorActionImpl {
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
       effectivePluginIds,
+      // Context-aware builtin manifests: lobe-agent hides callSubAgent in group /
+      // sub-agent runs. Replaces the former dropSubAgentInGroup + applyPluginFilters
+      // isSubAgent hard-coding.
+      { isSubAgent, scope },
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
