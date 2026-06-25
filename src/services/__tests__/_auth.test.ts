@@ -1,6 +1,6 @@
 import { act } from '@testing-library/react';
 import { ModelProvider } from 'model-bank';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
 
@@ -18,6 +18,16 @@ const mockTogetherAIAPIKey = 'togetherai-api-key';
 // mock the traditional zustand
 vi.mock('zustand/traditional');
 
+const mockCryptoValue = (value: number) => {
+  vi.stubGlobal('crypto', {
+    getRandomValues: vi.fn((array: Uint32Array) => {
+      array[0] = value;
+
+      return array;
+    }),
+  });
+};
+
 const setModelProviderConfig = (provider: string, config: any) => {
   useUserStore.setState({
     settings: { keyVaults: { [provider]: config } },
@@ -25,6 +35,11 @@ const setModelProviderConfig = (provider: string, config: any) => {
 };
 
 describe('getProviderAuthPayload', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('should return correct payload for ZhiPu provider', () => {
     const payload = getProviderAuthPayload(ModelProvider.ZhiPu, { apiKey: mockZhiPuAPIKey });
     expect(payload).toEqual({ apiKey: mockZhiPuAPIKey });
@@ -110,14 +125,16 @@ describe('getProviderAuthPayload', () => {
     });
   });
 
-  it('should preserve Bedrock API key without client key selection', () => {
+  it('should pick one Bedrock API key with client key selection', () => {
     const apiKey = 'bedrock-api-key-a,bedrock-api-key-b';
+    mockCryptoValue(1);
+
     const payload = getProviderAuthPayload(ModelProvider.Bedrock, {
       apiKey,
       region: 'us-east-1',
     });
 
-    expect(payload.apiKey).toBe(apiKey);
+    expect(payload.apiKey).toBe('bedrock-api-key-b');
   });
 
   it('should return correct payload for Azure provider', () => {

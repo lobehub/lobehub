@@ -192,7 +192,7 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeBedrockAI);
     });
 
-    it('Bedrock AI provider: preserves API key without server key selection', async () => {
+    it('Bedrock AI provider: picks one API key with server key selection', async () => {
       const apiKey = 'user-bedrock-api-key-a,user-bedrock-api-key-b';
       const jwtPayload: ClientSecretPayload = {
         apiKey,
@@ -202,7 +202,7 @@ describe('initModelRuntimeWithUserPayload method', () => {
       const bedrockRuntime = runtime['_runtime'] as unknown as InspectableBedrockRuntime;
       const token = await bedrockRuntime.client.config.token?.();
 
-      expect(token).toEqual({ token: apiKey });
+      expect(apiKey.split(',')).toContain(token?.token);
     });
 
     it('Bedrock AI provider: with legacy AWS credentials only', async () => {
