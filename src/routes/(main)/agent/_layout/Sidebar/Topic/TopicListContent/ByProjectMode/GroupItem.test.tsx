@@ -94,7 +94,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 }));
 
 vi.mock('@/const/url', () => ({
-  SESSION_CHAT_URL: (agentId: string) => `/agent/${agentId}`,
+  AGENT_CHAT_URL: (agentId: string) => `/agent/${agentId}`,
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: true }));

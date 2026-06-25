@@ -6,7 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { SESSION_CHAT_URL } from '@/const/url';
+import { AGENT_CHAT_URL } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
@@ -31,7 +31,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const mapData = (item: AgentRankItem) => {
     const isInbox = item.id === inboxAgentId;
-    const path = SESSION_CHAT_URL(item.id, mobile);
+    const path = AGENT_CHAT_URL(item.id, mobile);
     const link = mobile
       ? qs.stringifyUrl({ query: { showMobileWorkspace: true }, url: path })
       : path;

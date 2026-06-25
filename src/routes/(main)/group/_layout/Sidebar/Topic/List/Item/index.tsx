@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import DotsLoading from '@/components/DotsLoading';
+import { GROUP_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -100,7 +101,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeGroupId || !id) return undefined;
-    return buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug);
+    return buildWorkspaceAwarePath(GROUP_CHAT_TOPIC_URL(activeGroupId, id), activeWorkspaceSlug);
   }, [activeGroupId, activeWorkspaceSlug, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
@@ -148,7 +149,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
       toggleMobileTopic(false);
       return;
     }
-    addTab(buildWorkspaceAwarePath(`/group/${activeGroupId}?topic=${id}`, activeWorkspaceSlug));
+    addTab(buildWorkspaceAwarePath(GROUP_CHAT_TOPIC_URL(activeGroupId, id), activeWorkspaceSlug));
     switchTopic(id);
     toggleMobileTopic(false);
   }, [

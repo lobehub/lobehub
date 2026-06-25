@@ -2,7 +2,7 @@ import type { TaskStatus } from '@lobechat/types';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { AGENT_CHAT_TOPIC_URL } from '@/const/url';
 import { RecentModel } from '@/database/models/recent';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -46,7 +46,7 @@ export const recentRouter = router({
             if (item.routeGroupId) {
               routePath = `/group/${item.routeGroupId}?topic=${item.id}`;
             } else if (item.routeId) {
-              routePath = SESSION_CHAT_TOPIC_URL(item.routeId, item.id);
+              routePath = AGENT_CHAT_TOPIC_URL(item.routeId, item.id);
             } else {
               routePath = '/';
             }

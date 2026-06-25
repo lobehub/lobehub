@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router';
 
 import { message } from '@/components/AntdStaticMethods';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { SESSION_CHAT_URL } from '@/const/url';
+import { AGENT_CHAT_URL } from '@/const/url';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -205,7 +205,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
           <Button
             type={'primary'}
             onClick={() => {
-              navigate(SESSION_CHAT_URL(target.id));
+              navigate(AGENT_CHAT_URL(target.id));
               close();
             }}
           >

@@ -8,7 +8,7 @@ import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { AGENT_CHAT_TOPIC_URL } from '@/const/url';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
@@ -95,7 +95,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         toggleSelected(topic.id);
         return;
       }
-      navigate(SESSION_CHAT_TOPIC_URL(agentId, topic.id));
+      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
     },
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );

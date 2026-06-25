@@ -42,7 +42,7 @@ vi.mock('@/components/RenameModal', () => ({
 }));
 
 vi.mock('@/const/url', () => ({
-  SESSION_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
+  AGENT_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
 }));
 
 vi.mock('@/const/version', () => ({

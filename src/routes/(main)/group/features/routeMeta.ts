@@ -32,7 +32,7 @@ const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
     const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(s);
     return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
   });
-  const topicTitle = useTopicTitle(params.gid, params.topic, routeWorkspaceId);
+  const topicTitle = useTopicTitle(params.gid, params.topicId ?? params.topic, routeWorkspaceId);
 
   usePublishDynamicRouteMeta(
     {

@@ -4,7 +4,7 @@ import { memo } from 'react';
 import LazyLoad from 'react-lazy-load';
 import { Link } from 'react-router';
 
-import { SESSION_CHAT_URL } from '@/const/index';
+import { AGENT_CHAT_URL } from '@/const/index';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { getSessionStoreState, useSessionStore } from '@/store/session';
@@ -43,7 +43,7 @@ const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton
       <LazyLoad className={styles} key={id}>
         <Link
           aria-label={id}
-          to={SESSION_CHAT_URL((res as any).config?.id, mobile)}
+          to={AGENT_CHAT_URL((res as any).config?.id, mobile)}
           onClick={(e) => {
             e.preventDefault();
             navigateToAgent((res as any).config?.id);

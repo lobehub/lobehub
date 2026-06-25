@@ -1,6 +1,6 @@
 'use client';
 
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback } from 'react';
 
@@ -30,7 +30,7 @@ const DesktopFileMenuBridge = () => {
       useChatStore.getState().switchTopic(null);
       return;
     }
-    navigate(SESSION_CHAT_URL(inboxAgentId, false));
+    navigate(AGENT_CHAT_URL(inboxAgentId, false));
   }, [activeAgentId, inboxAgentId, navigate]);
 
   // Handle create new agent from File menu

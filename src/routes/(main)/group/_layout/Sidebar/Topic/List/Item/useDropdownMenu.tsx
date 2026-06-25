@@ -19,6 +19,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { GROUP_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -118,7 +119,7 @@ export const useTopicItemDropdownMenu = ({
               onClick: () => {
                 if (!activeGroupId) return;
                 const url = buildWorkspaceAwarePath(
-                  `/group/${activeGroupId}?topic=${id}`,
+                  GROUP_CHAT_TOPIC_URL(activeGroupId, id),
                   activeWorkspaceSlug,
                 );
                 addTab(url);
@@ -153,7 +154,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeGroupId) return;
-          const url = `${appOrigin}/group/${activeGroupId}?topic=${id}`;
+          const url = `${appOrigin}${GROUP_CHAT_TOPIC_URL(activeGroupId, id)}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },

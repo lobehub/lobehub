@@ -1,9 +1,4 @@
-import {
-  GROUP_CHAT_URL,
-  isDesktop,
-  SESSION_CHAT_TOPIC_URL,
-  SESSION_CHAT_URL,
-} from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL, GROUP_CHAT_URL, isDesktop } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -30,9 +25,9 @@ export const resolveNotificationNavigatePath = (
 ): string | undefined => {
   if (context.groupId) return GROUP_CHAT_URL(context.groupId);
   if (context.agentId && context.topicId) {
-    return SESSION_CHAT_TOPIC_URL(context.agentId, context.topicId);
+    return AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId);
   }
-  if (context.agentId) return SESSION_CHAT_URL(context.agentId);
+  if (context.agentId) return AGENT_CHAT_URL(context.agentId);
   return undefined;
 };
 

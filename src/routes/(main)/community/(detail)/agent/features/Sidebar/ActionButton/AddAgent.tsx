@@ -8,7 +8,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SESSION_CHAT_URL } from '@/const/url';
+import { AGENT_CHAT_URL } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
@@ -104,7 +104,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
     try {
       const result = await createAgentWithMarketIdentifier(true);
       message.success(t('assistants.addAgentSuccess'));
-      navigate(SESSION_CHAT_URL(result!.agentId, mobile));
+      navigate(AGENT_CHAT_URL(result!.agentId, mobile));
     } finally {
       setIsLoading(false);
     }

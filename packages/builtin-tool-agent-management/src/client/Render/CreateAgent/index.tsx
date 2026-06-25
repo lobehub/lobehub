@@ -1,6 +1,6 @@
 'use client';
 
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Markdown, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -71,7 +71,7 @@ export const CreateAgentRender = memo<BuiltinRenderProps<CreateAgentParams, Crea
     const handleNavigateToSession = useCallback(() => {
       const targetId = pluginState?.sessionId ?? pluginState?.agentId;
       if (!targetId) return;
-      navigate(SESSION_CHAT_URL(targetId));
+      navigate(AGENT_CHAT_URL(targetId));
     }, [navigate, pluginState?.sessionId, pluginState?.agentId]);
 
     // After tool execution succeeds, render a clickable agent card

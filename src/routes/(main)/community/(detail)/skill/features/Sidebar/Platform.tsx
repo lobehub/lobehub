@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
 import {
   Avatar,
@@ -205,7 +205,7 @@ const Platform = memo<PlatformProps>(
       });
 
       // Navigate to LobeAI chat session
-      navigate(SESSION_CHAT_URL(inboxAgentId, mobile));
+      navigate(AGENT_CHAT_URL(inboxAgentId, mobile));
     }, [agentPrompt, inboxAgentId, mobile, navigate, sendMessage]);
 
     return (

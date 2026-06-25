@@ -19,7 +19,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { AGENT_CHAT_TOPIC_URL } from '@/const/url';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -76,7 +76,7 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'topic': {
           if (result.agentId) {
-            navigate(SESSION_CHAT_TOPIC_URL(result.agentId, result.id));
+            navigate(AGENT_CHAT_TOPIC_URL(result.agentId, result.id));
           } else {
             navigate(`/chat?topic=${result.id}`);
           }
@@ -85,7 +85,7 @@ const SearchResults = memo<SearchResultsProps>(
         case 'message': {
           // Navigate to the topic/agent where the message is
           if (result.topicId && result.agentId) {
-            navigate(`${SESSION_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
+            navigate(`${AGENT_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
           } else if (result.topicId) {
             navigate(`/chat?topic=${result.topicId}#${result.id}`);
           } else if (result.agentId) {
