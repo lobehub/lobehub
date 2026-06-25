@@ -461,6 +461,86 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       return { content: formatTaskEdited(task.identifier, changes), success: true };
     },
 
+    setTaskVerify: async (args: {
+      enabled?: boolean | null;
+      identifier: string;
+      maxIterations?: number | null;
+      requirement?: string | null;
+      verifierAgentId?: string | null;
+      verifyCriteriaIds?: string[] | null;
+      verifyRubricId?: string | null;
+    }) => {
+      const task = await taskModel().resolve(args.identifier);
+      if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
+
+      // Mirrors the client executor: only forward keys the caller actually
+      // provided. The TRPC contract (task.updateVerifyConfig) treats `null` as
+      // "clear" and omission as "leave untouched", so an undefined field must
+      // NOT reach the payload.
+      const verify: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: string[] | null;
+        verifyRubricId?: string | null;
+      } = {};
+      const changes: string[] = [];
+
+      if (args.enabled !== undefined) {
+        verify.enabled = args.enabled;
+        changes.push(
+          args.enabled === null
+            ? 'verify enabled cleared'
+            : `verify ${args.enabled ? 'enabled' : 'disabled'}`,
+        );
+      }
+      if (args.requirement !== undefined) {
+        verify.requirement = args.requirement;
+        changes.push(
+          args.requirement ? 'acceptance requirement set' : 'acceptance requirement cleared',
+        );
+      }
+      if (args.maxIterations !== undefined) {
+        verify.maxIterations = args.maxIterations;
+        changes.push(
+          args.maxIterations === null
+            ? 'max iterations cleared'
+            : `max iterations → ${args.maxIterations}`,
+        );
+      }
+      if (args.verifierAgentId !== undefined) {
+        verify.verifierAgentId = args.verifierAgentId;
+        changes.push(
+          args.verifierAgentId
+            ? `verifier agent → ${args.verifierAgentId}`
+            : 'verifier agent cleared',
+        );
+      }
+      if (args.verifyRubricId !== undefined) {
+        verify.verifyRubricId = args.verifyRubricId;
+        changes.push(
+          args.verifyRubricId ? `verify rubric → ${args.verifyRubricId}` : 'verify rubric cleared',
+        );
+      }
+      if (args.verifyCriteriaIds !== undefined) {
+        verify.verifyCriteriaIds = args.verifyCriteriaIds;
+        changes.push(
+          args.verifyCriteriaIds?.length
+            ? `verify criteria → ${args.verifyCriteriaIds.length} item(s)`
+            : 'verify criteria cleared',
+        );
+      }
+
+      if (Object.keys(verify).length === 0) {
+        return { content: 'No verify fields provided; nothing to update.', success: false };
+      }
+
+      await taskCaller().updateVerifyConfig({ id: task.id, verify });
+
+      return { content: formatTaskEdited(task.identifier, changes), success: true };
+    },
+
     runTask: async (args: { continueTopicId?: string; identifier?: string; prompt?: string }) => {
       const id = args.identifier?.trim() || taskId;
       if (!id) {
