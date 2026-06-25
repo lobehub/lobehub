@@ -3,12 +3,11 @@ import {
   RemoteDeviceIdentifier,
 } from '@lobechat/builtin-tool-remote-device';
 import debug from 'debug';
-import { eq } from 'drizzle-orm';
 
 import { DeviceModel } from '@/database/models/device';
-import { agents } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 // Enable with DEBUG=lobe-server:remote-device (works in prod via the env var).
@@ -36,26 +35,12 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
       // workspace device the DB knows about could silently drop out — diverging
       // from the settings page and from `list_document`, which are DB-backed.
       queryDeviceList: async () => {
-        // Resolve the workspace scope. Prefer the run-scoped workspaceId; if it
-        // was lost on the way to this tool call (some dispatch / resume paths do
-        // not thread it through to `ToolExecutionContext`), recover it from the
-        // running agent's durable `workspace_id`. Otherwise a workspace agent
-        // silently degrades to the personal-only pool. The lookup is unscoped by
-        // id on purpose: the run already authorized this agent, we only read
-        // which workspace it belongs to.
-        let workspaceId = contextWorkspaceId;
-        if (!workspaceId && agentId && serverDB) {
-          try {
-            const [row] = await serverDB
-              .select({ workspaceId: agents.workspaceId })
-              .from(agents)
-              .where(eq(agents.id, agentId))
-              .limit(1);
-            workspaceId = row?.workspaceId ?? undefined;
-          } catch (error) {
-            log('failed to recover workspaceId from agent %s: %O', agentId, error);
-          }
-        }
+        // Resolve the workspace scope used to decide which workspace device pool
+        // to include. Recovers from the running agent when the run-scoped
+        // workspaceId was lost on the way to this tool call — see
+        // `resolveRunWorkspaceId`. Otherwise a workspace agent would silently
+        // degrade to the personal-only pool.
+        const workspaceId = await resolveRunWorkspaceId(context);
 
         const deviceModel = serverDB ? new DeviceModel(serverDB, userId, workspaceId) : undefined;
 
