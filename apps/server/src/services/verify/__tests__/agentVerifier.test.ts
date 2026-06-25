@@ -145,4 +145,30 @@ describe('createVerifierAgentRunner', () => {
 
     expect(execParams().prompt).not.toContain('## Captured evidence');
   });
+
+  it('attaches file-backed evidence to the verifier run so it can see the artifact', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({
+      ...runnerArgs,
+      evidence: [
+        { description: 'toolbar', fileId: 'file-shot-1', type: 'screenshot' },
+        { content: 'inline only', type: 'dom_snapshot' }, // no fileId
+        { description: 'demo', fileId: 'file-vid-1', type: 'video' },
+      ],
+    });
+
+    // Only the file-backed artifacts are forwarded to execAgent (inline-text has none).
+    expect(execParams().fileIds).toEqual(['file-shot-1', 'file-vid-1']);
+  });
+
+  it('does not pass fileIds when no evidence is file-backed', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({ ...runnerArgs, evidence: [{ content: 'text', type: 'text' }] });
+
+    expect(execParams().fileIds).toBeUndefined();
+  });
 });

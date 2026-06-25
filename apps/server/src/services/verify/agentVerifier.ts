@@ -131,6 +131,13 @@ export const createVerifierAgentRunner = (params: {
       return null;
     }
 
+    // Attach the builder-captured file artifacts (screenshots / videos / large
+    // text) so a multimodal verifier can SEE them — the prompt only references
+    // them by presence + caption, which is blind for visual checks (LOBE-10638).
+    const evidenceFileIds = (evidence ?? [])
+      .map((e) => e.fileId)
+      .filter((id): id is string => Boolean(id));
+
     // Dynamic import breaks the static cycle: aiAgent → agentRuntime completion
     // → verify lifecycle → this runner → aiAgent.
     const { AiAgentService } = await import('@/server/services/aiAgent');
@@ -139,6 +146,7 @@ export const createVerifierAgentRunner = (params: {
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
       appContext: { threadId: thread.id, topicId },
       autoStart: true,
+      ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       // Only the builtin fallback inherits the parent run's model/provider; a
       // pinned agent keeps its own (critical for heterogeneous runtimes).
       ...(inheritModel && model ? { model } : {}),
