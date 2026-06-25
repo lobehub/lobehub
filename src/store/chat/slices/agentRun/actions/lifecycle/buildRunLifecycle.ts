@@ -209,8 +209,12 @@ export const buildRunLifecycle = (
         console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
       };
 
+      // Use the full conversation context (incl. groupId/threadId) so group
+      // topics read their real messages instead of an empty main-scope bucket —
+      // an empty read makes topic-title generation summarize nothing and emit a
+      // degenerate "空对话标题" title.
       const readStoreChats = () =>
-        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey({ agentId, topicId }))(get());
+        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(context))(get());
 
       // New topic → always title. Use caller-provided messages when present
       // (client's freshly-created rows aren't in the store under topicId yet);

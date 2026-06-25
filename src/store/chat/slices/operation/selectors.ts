@@ -21,10 +21,18 @@ const getAllOperations = (s: ChatStoreState): Operation[] => {
  * Get operations for current context (active agent and topic)
  */
 const getCurrentContextOperations = (s: ChatStoreState): Operation[] => {
-  const { activeAgentId, activeTopicId } = s;
+  const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = s;
   if (!activeAgentId) return [];
 
-  const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+  // Must include groupId/threadId so the key matches how operations are stored
+  // (operationsByContext is keyed by the full messageMapKey(context)); otherwise
+  // group operations are never found.
+  const contextKey = messageMapKey({
+    agentId: activeAgentId,
+    groupId: activeGroupId,
+    threadId: activeThreadId,
+    topicId: activeTopicId,
+  });
   const operationIds = s.operationsByContext[contextKey] || [];
   return operationIds.map((id) => s.operations[id]).filter(Boolean);
 };
