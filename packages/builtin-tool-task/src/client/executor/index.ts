@@ -194,7 +194,18 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           priority: task.priority,
           status: task.status,
         }),
-        state: { identifier: task.identifier, success: true },
+        // Structure the freshly-created task into `state` so the renderer and
+        // the Debug "skill state" panel have real data without re-deriving from
+        // `args` (the only other source after a conversation reopen).
+        state: {
+          description: task.description,
+          identifier: task.identifier,
+          name: task.name,
+          parentIdentifier,
+          priority: task.priority,
+          status: task.status as TaskStatus,
+          success: true,
+        },
         success: true,
       };
     } catch (error) {

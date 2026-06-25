@@ -55,7 +55,17 @@ export interface CreateTaskParams {
 }
 
 export interface CreateTaskState {
+  /** Short human-facing description, when the task has one. */
+  description?: string | null;
   identifier?: string;
+  /** Display name of the created task. */
+  name?: string | null;
+  /** Parent task identifier when created as a subtask. */
+  parentIdentifier?: string;
+  /** Priority level (0 = none … 4 = low). */
+  priority?: number | null;
+  /** Lifecycle status the task was created in (usually `backlog`). */
+  status?: TaskStatus;
   success: boolean;
 }
 
