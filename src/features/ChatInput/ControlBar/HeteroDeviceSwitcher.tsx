@@ -93,6 +93,17 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
   `,
+  deviceList: css`
+    overflow-y: auto;
+
+    /* Cap the device section so a long list (servers/CLI fleets) stays scrollable
+       inside the popover instead of growing past the viewport. */
+    max-height: 240px;
+
+    /* Room for the scrollbar so rows don't sit flush against it. */
+    margin-inline-end: -4px;
+    padding-inline-end: 4px;
+  `,
   empty: css`
     padding-block: 8px;
     padding-inline: 8px;
@@ -556,22 +567,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {showDeviceGroups ? (
-        <>
-          {personalDevices.length > 0 ? (
+      {deviceRows.length > 0 ? (
+        <div className={styles.deviceList}>
+          {showDeviceGroups ? (
             <>
+              {personalDevices.length > 0 ? (
+                <>
+                  <div className={styles.groupLabel}>
+                    {t('heteroAgent.executionTarget.personalGroup')}
+                  </div>
+                  {personalDevices.map((d) => renderDeviceRow(d))}
+                </>
+              ) : null}
               <div className={styles.groupLabel}>
-                {t('heteroAgent.executionTarget.personalGroup')}
+                {t('heteroAgent.executionTarget.workspaceGroup')}
               </div>
-              {personalDevices.map((d) => renderDeviceRow(d))}
+              {workspaceDevices.map((d) => renderDeviceRow(d))}
             </>
-          ) : null}
-          <div className={styles.groupLabel}>{t('heteroAgent.executionTarget.workspaceGroup')}</div>
-          {workspaceDevices.map((d) => renderDeviceRow(d))}
-        </>
-      ) : (
-        personalDevices.map((d) => renderDeviceRow(d))
-      )}
+          ) : (
+            personalDevices.map((d) => renderDeviceRow(d))
+          )}
+        </div>
+      ) : null}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}

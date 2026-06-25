@@ -339,6 +339,7 @@ export default {
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
   'devices.actions.edit': 'Edit',
   'devices.actions.remove': 'Remove',
+  'devices.actions.removeSelected': 'Remove ({{count}})',
   'devices.channel.connected': 'Connected {{time}}',
   'devices.currentBadge': 'This device',
   'devices.detail.addDir': 'Add directory',
@@ -404,6 +405,11 @@ export default {
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
+  'devices.remove.confirmMany': 'Remove {{count}} devices?',
+  'devices.remove.confirmManyDesc':
+    'This disconnects the selected devices from your account. They are not signed out, and each can re-register on next connect.',
+  'devices.selection.selected': '{{count}} selected',
+  'devices.selection.total': '{{count}} devices',
   'devices.status.offline': 'Offline',
   'devices.status.online': 'Online',
   'devices.title': 'My Devices',
