@@ -482,6 +482,17 @@ export class AgentSliceActionImpl {
     this.#set({ agentMap }, false, 'dispatchAgentMap');
   };
 
+  #syncAgentConfigCache = (id: string): void => {
+    const config = this.#get().agentMap[id];
+    if (!config) return;
+
+    void mutate(
+      agentConfigKeys.config(id),
+      (cached?: LobeAgentConfig) => merge(cached ?? {}, config) as LobeAgentConfig,
+      { revalidate: false },
+    );
+  };
+
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
@@ -511,6 +522,9 @@ export class AgentSliceActionImpl {
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
+    // New-topic mount can replay stale SWR cache after a model switch but
+    // before executeClientAgent reads the store, so keep both sources aligned.
+    this.#syncAgentConfigCache(id);
     updateSaveStatus('saving');
 
     try {
@@ -520,6 +534,7 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        this.#syncAgentConfigCache(id);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
