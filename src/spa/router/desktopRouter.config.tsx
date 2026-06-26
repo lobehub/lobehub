@@ -112,6 +112,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/agent/stats'),
+              'Desktop > Chat > Stats',
+            ),
+            path: 'stats',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/agent/tasks'),
               'Desktop > Chat > Tasks',
             ),

@@ -3,7 +3,14 @@ import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
-import { BotMessageSquareIcon, Download, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
+import {
+  BarChart3,
+  BotMessageSquareIcon,
+  Download,
+  MoreHorizontal,
+  Settings2Icon,
+  Trash,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -185,6 +192,14 @@ const Header = memo(() => {
           settingsModalRef.current = openAgentSettingsModal();
         },
       },
+      {
+        icon: <Icon icon={BarChart3} />,
+        key: 'usage-stats',
+        label: t('usageStats.entry', { ns: 'setting' }),
+        onClick: () => {
+          if (activeAgentId) navigate(`/agent/${activeAgentId}/stats`);
+        },
+      },
       { type: 'divider' as const },
       {
         children: [
@@ -212,7 +227,16 @@ const Header = memo(() => {
         onClick: handleDelete,
       },
     ].filter(Boolean);
-  }, [canEdit, handleExportMarkdown, handleDelete, t, importMenuItem, transferMenuItems]);
+  }, [
+    activeAgentId,
+    canEdit,
+    handleExportMarkdown,
+    handleDelete,
+    navigate,
+    t,
+    importMenuItem,
+    transferMenuItems,
+  ]);
 
   return (
     <NavHeader

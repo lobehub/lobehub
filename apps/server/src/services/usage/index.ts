@@ -87,6 +87,7 @@ export class UsageRecordService {
   /**
    * @description Find usage records by month.
    * @param mo Month
+   * @param agentId When provided, only count messages produced by this agent.
    * @returns UsageRecordItem[]
    */
   findByMonth = async (mo?: string, agentId?: string): Promise<UsageRecordItem[]> => {
@@ -193,6 +194,7 @@ export class UsageRecordService {
   /**
    * @description Find usage grouped by day for a custom date range (e.g. past 12 months).
    * Does not pad missing days for large ranges.
+   * @param agentId When provided, only count messages produced by this agent.
    */
   findAndGroupByDateRange = async (
     startAt: string,
