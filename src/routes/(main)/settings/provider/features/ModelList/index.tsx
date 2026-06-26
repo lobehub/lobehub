@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
@@ -139,6 +140,7 @@ const Content = memo<ContentProps>(({ id }) => {
         items={tabs}
         size="small"
         style={{ marginBottom: 12, marginLeft: -6 }}
+        variant="square"
         onChange={setActiveTab}
       />
       <EnabledModelList activeTab={currentActiveTab} />

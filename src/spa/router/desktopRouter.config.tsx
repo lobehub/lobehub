@@ -20,6 +20,7 @@ import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
@@ -29,6 +30,11 @@ import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
+
+const groupChatElement = dynamicElement(
+  () => import('@/routes/(main)/group'),
+  'Desktop > Agent Group',
+);
 
 /**
  * Children shared between the root tree (`/`) and the workspace tree
@@ -150,7 +156,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/group'), 'Desktop > Agent Group'),
+            element: groupChatElement,
             handle: { meta: groupRouteMeta },
             index: true,
           },
@@ -160,6 +166,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Agent Group > Profile',
             ),
             path: 'profile',
+          },
+          {
+            element: groupChatElement,
+            handle: { meta: groupRouteMeta },
+            path: ':topicId',
           },
         ],
         element: dynamicLayout(
@@ -759,6 +770,7 @@ export const desktopRoutes: RouteObject[] = [
           // the outer main layout (mirrors how `/` index is empty here). Adding
           // an element would render Home twice on top of `DesktopHomeLayout`.
           {
+            handle: { meta: workspaceHomeRouteMeta },
             index: true,
           },
           ...sharedMainAreaChildren,

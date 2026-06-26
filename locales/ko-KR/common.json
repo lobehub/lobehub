@@ -272,6 +272,7 @@
   "generation.hero.taglinePrefix": "시작하세요, 창작을",
   "generation.promptModeration.blocked": "콘텐츠 정책 확인에 실패했습니다. 프롬프트를 수정해주세요.",
   "getDesktopApp": "데스크톱 앱 받기",
+  "goToTarget": "대상으로 이동",
   "historyRange": "기록 범위",
   "home.suggestQuestions": "이런 예시를 시도해 보세요",
   "import": "가져오기",

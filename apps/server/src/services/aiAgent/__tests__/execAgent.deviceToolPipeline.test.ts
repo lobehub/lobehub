@@ -211,8 +211,10 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       // Override deviceGateway.isConfigured
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+      // The gateway only ever returns connected devices, each with `online: true`
+      // (see deviceGateway.queryDeviceList) — the snapshot filters on `online`.
       mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' },
+        { deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' },
       ]);
 
       mockGetAgentConfig.mockResolvedValue(

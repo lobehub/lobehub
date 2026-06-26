@@ -90,6 +90,21 @@ export class HomeInputActionImpl {
         groupId,
       });
 
+      // Sync the editing target into the chat store BEFORE the builder message
+      // is sent. Gateway mode reads `chatStore.activeAgentId` at send time to
+      // forward `editingAgentId` (see gateway.ts executeGatewayAgent), and the
+      // AgentBuilder tool `onAfterCall` reads it to refresh the correct agent's
+      // config. Setting it here — instead of waiting for AgentBuilderProvider's
+      // mount effect — removes the create-time race where the first tool call
+      // could target / refresh the wrong agent (left profile not refreshed).
+      if (result.agentId) {
+        useChatStore.setState(
+          { activeAgentId: result.agentId },
+          false,
+          'sendAsAgent/syncEditingAgentId',
+        );
+      }
+
       if (message.trim()) {
         useGlobalStore.getState().toggleAgentBuilderPanel(true);
       }

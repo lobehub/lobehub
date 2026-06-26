@@ -6,10 +6,21 @@ import CreateGenerationPage from '@/routes/(main)/(create)/features/CreateGenera
 
 import ImageWorkspace from './features/ImageWorkspace';
 import PromptInput from './features/PromptInput';
+import { useImageReferenceUpload } from './features/PromptInput/useImageReferenceUpload';
 
-const DesktopImagePage = memo(() => (
-  <CreateGenerationPage PromptInput={PromptInput} Workspace={ImageWorkspace} path="/image" />
-));
+const DesktopImagePage = memo(() => {
+  const { canDropImage, handleUploadFiles } = useImageReferenceUpload();
+
+  return (
+    <CreateGenerationPage
+      PromptInput={PromptInput}
+      Workspace={ImageWorkspace}
+      dragDisabled={!canDropImage}
+      path="/image"
+      onUploadFiles={handleUploadFiles}
+    />
+  );
+});
 
 DesktopImagePage.displayName = 'DesktopImagePage';
 

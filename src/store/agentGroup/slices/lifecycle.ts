@@ -1,5 +1,5 @@
+import { GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { type NewChatGroup } from '@lobechat/types';
-import urlJoin from 'url-join';
 
 import { chatGroupService } from '@/services/chatGroup';
 import { useChatStore } from '@/store/chat';
@@ -74,10 +74,12 @@ export class ChatGroupLifecycleAction {
     // Update chat store's activeTopicId
     useChatStore.getState().switchTopic(topicId ?? undefined);
 
-    // Navigate with replace to avoid stale query params
-    router.push(urlJoin('/group', activeGroupId), {
-      query: { topic: topicId ?? null },
-      replace: true,
-    });
+    // Navigate to the topic path (or group root for a new topic), aligning with
+    // the agent route's `/agent/:aid/:topicId` scheme. Replace to avoid stacking
+    // history entries on rapid topic switches.
+    const target = topicId
+      ? GROUP_CHAT_TOPIC_URL(activeGroupId, topicId)
+      : GROUP_CHAT_URL(activeGroupId);
+    router.push(target, { replace: true });
   };
 }

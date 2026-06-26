@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Khung hình kết thúc",
   "config.generateAudio.label": "Tạo âm thanh",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "Bạn có thể thêm tối đa {{count}} hình ảnh tham khảo",
   "config.imageUrl.label": "Khung hình bắt đầu",
   "config.prompt.placeholder": "Mô tả video bạn muốn tạo",
   "config.prompt.placeholderWithRef": "Mô tả cảnh bạn muốn tạo với hình ảnh",

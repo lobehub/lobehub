@@ -132,6 +132,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'globLocalFiles': {
         return {
+          limit: params.limit,
           pattern: params.pattern,
           scope: params.directory,
         };

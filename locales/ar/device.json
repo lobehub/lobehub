@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "جارٍ تحميل التغييرات…",
   "workingDirectory.filesModified": "تم التعديل",
   "workingDirectory.ghMissing": "قم بتثبيت وتسجيل الدخول إلى GitHub CLI (`gh`) لرؤية طلبات السحب المرتبطة",
+  "workingDirectory.heteroHint": "يعمل هذا الوكيل دائمًا داخل دليل عمل. حتى تختار واحدًا، فإنه يستخدم مجلدًا افتراضيًا — اختر آخر أدناه لتغييره.",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "لا توجد أدلة حديثة",
   "workingDirectory.notSet": "انقر لتعيين دليل العمل",

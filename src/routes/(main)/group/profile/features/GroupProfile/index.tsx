@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
@@ -19,7 +20,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
-import AgentSettings from '../AgentSettings';
+import { openGroupAgentSettingsModal } from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
@@ -39,13 +40,21 @@ const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const theme = useTheme();
-  const [showAgentSetting, setShowAgentSetting] = useState(false);
   const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
 
   // Collaborative edit lock for workspace groups (same model as pages): read-only
   // when another member is editing; acquired implicitly on the first edit.
@@ -167,7 +176,8 @@ const GroupProfile = memo(() => {
             onClick={() => {
               if (!canEdit) return;
 
-              setShowAgentSetting(true);
+              settingsModalRef.current?.close();
+              settingsModalRef.current = openGroupAgentSettingsModal();
             }}
           >
             {t('advancedSettings')}
@@ -189,8 +199,6 @@ const GroupProfile = memo(() => {
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
         onContentChange={onContentChange}
       />
-      {/* Advanced Settings Modal */}
-      <AgentSettings open={showAgentSetting} onCancel={() => setShowAgentSetting(false)} />
     </>
   );
 });

@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert, Flexbox, Tag } from '@lobehub/ui';
-import { Button, Form as AntdForm, type FormInstance } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Save, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';

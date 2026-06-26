@@ -7,6 +7,7 @@
   "config.header.title": "Pintura",
   "config.height.label": "Altura",
   "config.imageNum.label": "Número de imágenes",
+  "config.imageUpload.maxCountReached": "Puedes agregar hasta {{count}} imágenes de referencia",
   "config.imageUrl.label": "Imagen de referencia",
   "config.imageUrls.label": "Imágenes de referencia",
   "config.model.label": "Modelo",

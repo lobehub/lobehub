@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
   "features.fleet.desc": "Mostra la voce Fleet nella barra del titolo — un pannello affiancato di tutte le attività in corso tra i tuoi agenti.",
   "features.fleet.title": "Vista Fleet",
+  "features.foldFinishedTurn.desc": "Comprimi il processo (ragionamento e chiamate agli strumenti) dei turni dell'agente completati e non più recenti sotto un'intestazione \"Elaborato\". La risposta finale rimane visibile; clicca per espandere il processo.",
+  "features.foldFinishedTurn.title": "Comprimi Turni Completati",
   "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
   "features.groupChat.title": "Chat di Gruppo (Multi-Agente)",
   "features.imessage.desc": "Collega gli agenti a iMessage tramite il bridge locale LobeHub Desktop BlueBubbles.",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "Rendering Markdown in Input",
   "features.platformAgent.desc": "Mostra la voce \"Connetti Agente\" nel menu di creazione. Gli agenti connessi (ad esempio OpenClaw, Hermes) funzionano sui tuoi dispositivi e comunicano tramite lh connect.",
   "features.platformAgent.title": "Connetti Agente",
+  "features.taskVerify.desc": "Aggiungi una sezione di accettazione della consegna al dettaglio del compito: descrivi l'accettazione in una frase e lascia che l'IA generi criteri di verifica modificabili.",
+  "features.taskVerify.title": "Accettazione della Consegna del Compito",
   "title": "Laboratori"
 }

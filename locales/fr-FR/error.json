@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Votre quota d'abonnement est épuisé. Veuillez recharger votre crédit ou configurer une API personnalisée.",
   "response.SystemTimeNotMatchError": "Désolé, l'heure de votre système ne correspond pas à celle du serveur. Veuillez la corriger et réessayer.",
   "response.UnknownChatFetchError": "Désolé, une erreur inconnue s'est produite. Veuillez consulter les informations ci-dessous ou réessayer.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Cet agent appartient à un espace de travail, il ne peut donc lier que des appareils accessibles à toute l'équipe. Les appareils personnels restent avec l'utilisateur qui les a enregistrés — choisissez plutôt un appareil de l'espace de travail ou inscrivez cet appareil dans l'espace de travail en premier.",
   "response.WorkspaceFrozenByAdmin": "Cet espace de travail est gelé par un administrateur et ne peut pas exécuter de requêtes. Veuillez contacter le propriétaire de l'espace de travail pour résoudre le problème.",
   "response.WorkspaceFrozenByRiskControl": "Cet espace de travail a été automatiquement gelé par le contrôle des risques et ne peut pas exécuter de requêtes. Veuillez contacter le support pour examiner le statut.",
   "stt.responseError": "Échec de la requête du service, veuillez vérifier la configuration ou réessayer",

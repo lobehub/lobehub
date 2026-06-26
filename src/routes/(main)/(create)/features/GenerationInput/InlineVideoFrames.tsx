@@ -49,6 +49,10 @@ interface InlineVideoFramesProps {
   onImageChange: (data: UploadData | null) => void;
   onImageUrlsChange?: (data: UploadData) => void;
   onRemoveImageUrl?: (url: string) => void;
+  /** Optional batch upload handler to enable multi-select on the add card. */
+  onUploadFiles?: (files: File[]) => void | Promise<void>;
+  /** In-flight upload previews (object URLs) rendered with a spinner. */
+  uploadingPreviews?: string[];
 }
 
 const InlineVideoFrames = memo<InlineVideoFramesProps>(
@@ -60,9 +64,11 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     onEndImageChange,
     onImageUrlsChange,
     onRemoveImageUrl,
+    onUploadFiles,
     isSupportEndImage = true,
     maxCount = 5,
     maxFileSize,
+    uploadingPreviews = [],
   }) => {
     const { t } = useTranslation('video');
     const [isHovered, setIsHovered] = useState(false);
@@ -78,8 +84,10 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     }, [imageUrl, imageUrls]);
 
     const hasRefFrames = refFrameUrls.length > 0;
-    const canAddMore = refFrameUrls.length < maxCount;
-    const shouldCollapse = hasRefFrames && !isHovered;
+    const totalCount = refFrameUrls.length + uploadingPreviews.length;
+    const hasItems = totalCount > 0;
+    const canAddMore = totalCount < maxCount;
+    const shouldCollapse = hasItems && !isHovered;
     const showEndFrame = isSupportEndImage && hasRefFrames;
 
     return (
@@ -127,14 +135,37 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
             );
           })}
 
+          {/* In-flight upload placeholders (with spinner) */}
+          {uploadingPreviews.map((url, index) => (
+            <UploadCard
+              loading
+              imageUrl={url}
+              key={`uploading-${url}`}
+              maxFileSize={maxFileSize}
+              style={{
+                marginInlineStart:
+                  refFrameUrls.length + index > 0
+                    ? shouldCollapse
+                      ? STACK_OFFSET
+                      : EXPAND_OFFSET
+                    : 0,
+                zIndex: refFrameUrls.length + index + 1,
+              }}
+              onRemove={() => {}}
+              onUpload={() => {}}
+            />
+          ))}
+
           {/* Add new frame button */}
           {canAddMore &&
             (shouldCollapse ? (
               <UploadCard
                 className={styles.addCirclePos}
                 maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
                 variant="circle"
                 onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
                 onUpload={(data) => {
                   if (onImageUrlsChange) {
                     onImageUrlsChange(data);
@@ -148,11 +179,13 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
                 imageUrl={null}
                 label={t('config.referenceImage.label')}
                 maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
                 style={{
-                  marginInlineStart: hasRefFrames ? EXPAND_OFFSET : 0,
-                  zIndex: refFrameUrls.length + 1,
+                  marginInlineStart: hasItems ? EXPAND_OFFSET : 0,
+                  zIndex: totalCount + 1,
                 }}
                 onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
                 onUpload={(data) => {
                   if (hasRefFrames) {
                     if (onImageUrlsChange) {

@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Ihr Abonnement ist aufgebraucht. Bitte Guthaben aufladen oder API konfigurieren.",
   "response.SystemTimeNotMatchError": "Ihre Systemzeit stimmt nicht mit dem Server überein. Bitte Zeit prüfen.",
   "response.UnknownChatFetchError": "Unbekannter Fehler bei der Anfrage. Bitte prüfen Sie die Details.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Dieser Agent befindet sich in einem Arbeitsbereich, daher können nur Geräte verbunden werden, die das gesamte Team erreichen kann. Persönliche Geräte bleiben bei dem Benutzer, der sie registriert hat – wählen Sie stattdessen ein Arbeitsbereichsgerät aus oder melden Sie dieses Gerät zuerst im Arbeitsbereich an.",
   "response.WorkspaceFrozenByAdmin": "Dieser Arbeitsbereich wurde von einem Administrator eingefroren und kann keine Anfragen ausführen. Bitte wenden Sie sich an den Eigentümer des Arbeitsbereichs, um das Problem zu lösen.",
   "response.WorkspaceFrozenByRiskControl": "Dieser Arbeitsbereich wurde automatisch durch die Risikokontrolle eingefroren und kann keine Anfragen ausführen. Bitte wenden Sie sich an den Support, um den Status zu überprüfen.",
   "stt.responseError": "Dienstanfrage fehlgeschlagen. Bitte Konfiguration prüfen.",

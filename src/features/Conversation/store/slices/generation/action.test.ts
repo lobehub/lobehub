@@ -10,6 +10,7 @@ import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/typ
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
+import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
 
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
@@ -1290,6 +1291,48 @@ describe('Generation Actions', () => {
       expect(mockStartOperation).not.toHaveBeenCalled();
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
       expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('heterogeneous overloaded auto-retry counter', () => {
+    const context: ConversationContext = {
+      agentId: 'session-1',
+      threadId: null,
+      topicId: 'topic-1',
+    };
+
+    it('increments the counter keyed by parent user message id', () => {
+      const store = createStore({ context });
+
+      act(() => {
+        store.getState().recordHeteroOverloadRetry('user-1');
+        store.getState().recordHeteroOverloadRetry('user-1');
+        store.getState().recordHeteroOverloadRetry('user-2');
+      });
+
+      expect(store.getState().heteroOverloadRetryAttempts).toEqual({ 'user-1': 2, 'user-2': 1 });
+    });
+
+    it('resets a single scope without touching others', () => {
+      const store = createStore({ context });
+
+      act(() => {
+        store.getState().recordHeteroOverloadRetry('user-1');
+        store.getState().recordHeteroOverloadRetry('user-2');
+        store.getState().resetHeteroOverloadRetry('user-1');
+      });
+
+      expect(store.getState().heteroOverloadRetryAttempts).toEqual({ 'user-2': 1 });
+    });
+
+    it('pins the counter to the cap when marked exhausted (cancel)', () => {
+      const store = createStore({ context });
+
+      act(() => {
+        store.getState().markHeteroOverloadRetryExhausted('user-1');
+      });
+
+      expect(store.getState().heteroOverloadRetryAttempts['user-1']).toBe(MAX_HETERO_AUTO_RETRIES);
     });
   });
 });

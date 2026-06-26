@@ -31,11 +31,14 @@ export const resolveTab = (
   isActive: boolean,
   t: Translate,
   liveDynamic?: DynamicRouteMeta | null,
-  liveDynamicTabId?: string | null,
+  liveDynamicUrl?: string | null,
 ): ResolvedTab => {
   const staticMeta = matchRouteMeta(routes, tab.url).static;
 
-  const live = isActive && liveDynamicTabId === tab.id ? liveDynamic : undefined;
+  const live =
+    isActive && liveDynamicUrl && normalizeTabUrl(tab.url) === normalizeTabUrl(liveDynamicUrl)
+      ? liveDynamic
+      : undefined;
 
   const title =
     pickMeaningful(live?.title) ??
@@ -68,7 +71,6 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
   const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const translate = t as unknown as Translate;
-  const currentRouteMetaTabId = currentRouteMetaUrl ? normalizeTabUrl(currentRouteMetaUrl) : null;
 
   const tabs = useMemo(
     () =>
@@ -79,10 +81,10 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
           tab.id === activeTabId,
           translate,
           currentRouteMeta,
-          currentRouteMetaTabId,
+          currentRouteMetaUrl,
         ),
       ),
-    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaTabId, translate],
+    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaUrl, translate],
   );
 
   return { activeTabId, tabs };

@@ -121,6 +121,15 @@ Quick reference for assigning issues based on labels.
 
 - Assign to @arvinxx for general issues
 
+**MCP marketplace listing/submission requests — do NOT mention (auto-handled):**
+
+Requests to **add / submit / list a new MCP server** to the marketplace are now processed automatically by the **MCP Submission Handler** workflow (it redirects installable servers to the self-service CLI and closes them, and labels remote-only servers `mcp:remote` for manual review). For these, **do NOT post any @mention comment — apply labels only.**
+
+- Recognize them by: titles like `[Request] Add <name> to the MCP marketplace`, `[MCP] Add/Submit <name>`, `[MCP Submission] …`, `[MCP Plugin] …`; the body asks to list/index a specific MCP server and links its repo or endpoint.
+- This does **NOT** apply to the following — they still get a normal @mention:
+  - Bugs about the marketplace pipeline or an existing listing — e.g. "scoring stuck", "shows outdated version", "rescan/re-index listing", "not syncing". → `@ONLY-yours @arvinxx`
+  - Feature requests about the marketplace product itself (search, catalog browser, etc.). → `@ONLY-yours`
+
 ## Comment Templates
 
 **Single owner:**

@@ -109,6 +109,21 @@ finalDecision: varchar('final_decision', { length: 32 })
   .default('unknown');
 ```
 
+### Database Enums
+
+Default to **not** using PostgreSQL/Drizzle `pgEnum`. Database enums are
+expensive to evolve safely: adding members needs migrations, removing or
+renaming members is awkward, and deployment order becomes more fragile.
+
+For product/business states, use `text()` or `varchar()` with a TypeScript value
+type via `$type<...>()`. Keep those TS-only value types in the domain/shared type
+module, then import them into the schema. For cloud DB schemas, that usually
+means `cloudDB/types.ts`.
+
+Do not copy existing DB enums as a pattern. Treat them as legacy or explicitly
+reviewed exceptions. If a new `pgEnum` seems necessary, stop and justify why the
+value set is effectively immutable and why the migration cost is acceptable.
+
 ### Field Descriptions
 
 For columns whose meaning is not obvious from the name alone, add JSDoc on the

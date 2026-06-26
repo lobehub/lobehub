@@ -115,7 +115,28 @@ export class ChatGroupChatActionImpl {
         });
       }
 
-      // 4. Switch to new topic if created
+      // 4. Create execContext with updated topicId from server response
+      const execContext = { ...context, topicId: result.topicId || topicId };
+
+      // 5. Populate the new topic's message bucket BEFORE switching into it.
+      //
+      // Temp messages live under the original (topicId: null) bucket. switchTopic
+      // both clears that bucket (clearNewKey) AND points the active view at the new
+      // topicId. If we switched first, the view would land on the still-empty new
+      // bucket for a frame — StoreUpdater resets displayMessages/messagesInit and
+      // ChatList renders <SkeletonList/>, so the just-sent message visibly
+      // disappears and then reappears once replaceMessages runs. Writing the new
+      // bucket first means the view always finds messages already present on switch.
+      //
+      // Messages include assistant message with error if operation failed to start.
+      if (result.messages) {
+        this.#get().replaceMessages(result.messages, {
+          action: n('sendGroupMessage/syncMessages'),
+          context: execContext,
+        });
+      }
+
+      // 6. Switch to new topic if created (its bucket is already populated above)
       if (result.isCreateNewTopic && result.topicId) {
         await this.#get().switchTopic(result.topicId, {
           clearNewKey: true,
@@ -123,24 +144,18 @@ export class ChatGroupChatActionImpl {
         });
       }
 
-      // 5. Create execContext with updated topicId from server response
-      const execContext = { ...context, topicId: result.topicId || topicId };
-
-      // 6. Replace temp messages with server messages
-      // Messages include assistant message with error if operation failed to start
+      // 7. Clean up temp messages from the original bucket.
+      // For the new-topic path switchTopic's clearNewKey already wiped them; for the
+      // same-topic path replaceMessages above overwrote the bucket. This dispatch is
+      // a defensive no-op in both cases, kept to guard partial-result edge cases.
       if (result.messages) {
-        this.#get().replaceMessages(result.messages, {
-          action: n('sendGroupMessage/syncMessages'),
-          context: execContext,
-        });
-        // Delete temp messages - use execOperationId for correct context
         this.#get().internal_dispatchMessage(
           { ids: [tempUserId, tempAssistantId], type: 'deleteMessages' },
           { operationId: execOperationId },
         );
       }
 
-      // 7. Check if operation failed to start (e.g., QStash unavailable)
+      // 8. Check if operation failed to start (e.g., QStash unavailable)
       // In this case, messages are synced but we skip SSE connection
       if (result.success === false) {
         log('Agent operation failed to start: %s', result.error);
@@ -152,7 +167,7 @@ export class ChatGroupChatActionImpl {
         return;
       }
 
-      // 8. Create streaming context - use assistantMessageId from backend response
+      // 9. Create streaming context - use assistantMessageId from backend response
       const streamContext = {
         assistantId: result.assistantMessageId,
         content: '',
@@ -160,7 +175,7 @@ export class ChatGroupChatActionImpl {
         tmpAssistantId: tempAssistantId, // Used for cleanup if needed
       };
 
-      // 9. Start child operation for SSE stream using backend operationId
+      // 10. Start child operation for SSE stream using backend operationId
       this.#get().startOperation({
         context: { ...execContext, messageId: result.assistantMessageId },
         label: 'Group Agent Stream',
@@ -175,7 +190,7 @@ export class ChatGroupChatActionImpl {
       this.#get().associateMessageWithOperation(result.assistantMessageId, execOperationId);
       this.#get().associateMessageWithOperation(result.assistantMessageId, result.operationId);
 
-      // 10. Connect to SSE stream
+      // 11. Connect to SSE stream
       // Server will automatically close the connection after sending agent_runtime_end event
       const eventSource = agentRuntimeClient.createStreamConnection(result.operationId, {
         includeHistory: false,
@@ -204,7 +219,7 @@ export class ChatGroupChatActionImpl {
         },
       });
 
-      // 11. Register cancel handler for aborting SSE stream
+      // 12. Register cancel handler for aborting SSE stream
       this.#get().onOperationCancel(result.operationId, () => {
         log('Cancelling SSE stream for operation %s', result.operationId);
         eventSource.abort();

@@ -12,11 +12,14 @@ import { MessageAggregationContext } from '../../Contexts/MessageAggregationCont
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
+  formatReasoningDuration,
   getPostToolAnswerSplitIndex,
   scoreBlockContentAsAnswerLike,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
+import ProcessFold from './ProcessFold';
+import { type GroupRenderSegment, shouldFoldProcess, splitFinalAnswer } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 import WorkflowCollapse, { type WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
@@ -36,21 +39,40 @@ interface GroupChildrenProps {
   contentId?: string;
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
+  /** Lab flag: fold finished non-latest turns' process under a "已处理" header. */
+  enableProcessFold?: boolean;
   id: string;
+  /** Whether this turn is the latest item in the conversation. */
+  isLatestItem?: boolean;
   messageIndex: number;
 }
 
-interface AnswerSegment {
-  block: RenderableAssistantContentBlock;
-  kind: 'answer';
-}
-
-interface WorkflowSegment {
-  blocks: RenderableAssistantContentBlock[];
-  kind: 'workflow';
-}
-
-type GroupRenderSegment = AnswerSegment | WorkflowSegment;
+/**
+ * Wall-clock span of a turn = last − first `createdAt` across the turn's own
+ * assistant-step messages (the group's child blocks resolved against the raw
+ * `dbMessages`). The group record's own `createdAt/updatedAt` only covers its
+ * final step, so it under-reports multi-step turns.
+ */
+const getTurnDurationMs = (
+  dbMessages: { createdAt?: Date | number | string | null; id: string }[] | undefined,
+  blocks: AssistantContentBlock[],
+): number => {
+  if (!Array.isArray(dbMessages) || blocks.length < 2) return 0;
+  const ids = new Set(blocks.map((block) => block.id));
+  let min = Infinity;
+  let max = -Infinity;
+  for (const message of dbMessages) {
+    if (!ids.has(message.id) || message.createdAt == null) continue;
+    const time =
+      message.createdAt instanceof Date
+        ? message.createdAt.getTime()
+        : new Date(message.createdAt).getTime();
+    if (Number.isNaN(time)) continue;
+    if (time < min) min = time;
+    if (time > max) max = time;
+  }
+  return max > min ? max - min : 0;
+};
 
 interface PartitionedBlocks {
   /** True while generating if long post-tool answer was moved outside the fold (tool phase UI may show “done”). */
@@ -367,11 +389,14 @@ const Group = memo<GroupChildrenProps>(
     messageIndex,
     id,
     content,
+    isLatestItem,
+    enableProcessFold,
   }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
+    const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
     const lastBlockId = blocks.at(-1)?.id;
 
@@ -406,64 +431,93 @@ const Group = memo<GroupChildrenProps>(
       );
     }
 
-    return (
-      <MessageAggregationContext value={contextValue}>
-        <Flexbox className={styles.container} gap={8}>
-          {segments.map((segment, index) => {
-            if (segment.kind === 'workflow') {
-              if (segment.blocks.length === 0) return null;
+    const renderSegment = (segment: GroupRenderSegment, index: number) => {
+      if (segment.kind === 'workflow') {
+        if (segment.blocks.length === 0) return null;
 
-              if (shouldInlineWorkflowSegment(segment.blocks)) {
-                return segment.blocks.map((block, blockIndex) => {
-                  const item = withMarkdownStreamingState(block, lastBlockId);
-                  if (!isGenerating && isEmptyBlock(item)) return null;
-
-                  return (
-                    <GroupItem
-                      {...item}
-                      assistantId={id}
-                      contentId={contentId}
-                      disableEditing={disableEditing}
-                      key={item.renderKey ?? `${id}.workflow-inline.${index}.${blockIndex}`}
-                      messageIndex={messageIndex}
-                    />
-                  );
-                });
-              }
-
-              return (
-                <WorkflowCollapse
-                  assistantMessageId={id}
-                  defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
-                  disableEditing={disableEditing}
-                  key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
-                  blocks={segment.blocks.map((block) =>
-                    withMarkdownStreamingState(block, lastBlockId),
-                  )}
-                  workflowChromeComplete={
-                    workflowChromeComplete ||
-                    (hasRenderedContentAfter(segments, index) &&
-                      !hasPendingIntervention(segment.blocks))
-                  }
-                />
-              );
-            }
-
-            const item = segment.block;
+        if (shouldInlineWorkflowSegment(segment.blocks)) {
+          return segment.blocks.map((block, blockIndex) => {
+            const item = withMarkdownStreamingState(block, lastBlockId);
             if (!isGenerating && isEmptyBlock(item)) return null;
 
             return (
               <GroupItem
-                {...withMarkdownStreamingState(item, lastBlockId)}
+                {...item}
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}
-                key={item.renderKey ?? `${id}.${item.id}.${index}`}
+                key={item.renderKey ?? `${id}.workflow-inline.${index}.${blockIndex}`}
                 messageIndex={messageIndex}
               />
             );
-          })}
-          {showTailRunningIndicator && <ContentLoading id={id} />}
+          });
+        }
+
+        return (
+          <WorkflowCollapse
+            assistantMessageId={id}
+            defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
+            disableEditing={disableEditing}
+            key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
+            blocks={segment.blocks.map((block) => withMarkdownStreamingState(block, lastBlockId))}
+            workflowChromeComplete={
+              workflowChromeComplete ||
+              (hasRenderedContentAfter(segments, index) && !hasPendingIntervention(segment.blocks))
+            }
+          />
+        );
+      }
+
+      const item = segment.block;
+      if (!isGenerating && isEmptyBlock(item)) return null;
+
+      return (
+        <GroupItem
+          {...withMarkdownStreamingState(item, lastBlockId)}
+          assistantId={id}
+          contentId={contentId}
+          disableEditing={disableEditing}
+          key={item.renderKey ?? `${id}.${item.id}.${index}`}
+          messageIndex={messageIndex}
+        />
+      );
+    };
+
+    // Codex-style turn folding: once a turn is finished and no longer the latest
+    // one, fold its whole process (reasoning + tools + intermediate prose) under
+    // a single "已处理 {duration}" header, leaving the final answer always
+    // visible. The latest / still-generating turn renders in full.
+    const { processSegments, finalSegments } = splitFinalAnswer(segments);
+    const foldProcess = shouldFoldProcess({
+      enabled: enableProcessFold,
+      isGenerating,
+      isLatestItem,
+      processSegments,
+    });
+
+    const durationText =
+      turnDurationMs >= 1000 ? formatReasoningDuration(turnDurationMs) : undefined;
+
+    return (
+      <MessageAggregationContext value={contextValue}>
+        <Flexbox className={styles.container} gap={8}>
+          {foldProcess ? (
+            <>
+              <ProcessFold durationText={durationText}>
+                <Flexbox gap={8}>
+                  {processSegments.map((segment, index) => renderSegment(segment, index))}
+                </Flexbox>
+              </ProcessFold>
+              {finalSegments.map((segment, index) =>
+                renderSegment(segment, processSegments.length + index),
+              )}
+            </>
+          ) : (
+            <>
+              {segments.map((segment, index) => renderSegment(segment, index))}
+              {showTailRunningIndicator && <ContentLoading id={id} />}
+            </>
+          )}
         </Flexbox>
       </MessageAggregationContext>
     );

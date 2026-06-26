@@ -12,6 +12,8 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   inputMessage: '',
 
   // MessageState
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
   messageEditingIds: [],
   messageLoadingIds: [],
   pendingArgsUpdates: new Map(),

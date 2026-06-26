@@ -305,6 +305,7 @@ export default {
   'document': 'User Manual',
   'download': 'Download',
   'getDesktopApp': 'Get Desktop App',
+  'goToTarget': 'Go to target',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
   'errors.invalidFileFormat': 'Invalid file format',

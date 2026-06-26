@@ -168,6 +168,8 @@ export interface ListFilesResult {
 export interface GlobFilesParams {
   /** Legacy alias for `scope`. Honored when set; prefer `scope` for new callers. */
   cwd?: string;
+  /** Maximum number of results to collect. When omitted, callers may apply their own default. */
+  limit?: number;
   pattern: string;
   /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
   scope?: string;

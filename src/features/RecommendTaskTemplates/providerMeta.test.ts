@@ -16,6 +16,12 @@ describe('getProviderMeta', () => {
     expect(meta?.icon).toBeDefined();
   });
 
+  it('resolves posthog as a lobehub source provider', () => {
+    const meta = getProviderMeta({ identifier: 'posthog', source: 'lobehub' });
+    expect(meta).toMatchObject({ identifier: 'posthog', label: 'PostHog', source: 'lobehub' });
+    expect(meta?.icon).toBeDefined();
+  });
+
   it('resolves composio source via COMPOSIO_APP_TYPES', () => {
     const meta = getProviderMeta({ identifier: 'gmail', source: 'composio' });
     expect(meta).toMatchObject({ identifier: 'gmail', label: 'Gmail', source: 'composio' });

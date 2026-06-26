@@ -132,6 +132,25 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 };
 
+/**
+ * Extract a short, human-readable reason string from a failed operation's
+ * `state.error`, for inlining into the tool-result `content` a parent agent
+ * sees. Without this the supervising agent only gets the opaque generic note
+ * ("Sub-agent did not complete (error).") and cannot tell *why* a `callAgent`
+ * dispatch failed — so it can't retry, switch target, or report the cause; it
+ * silently falls back to answering itself (issue #16257). The full structured
+ * error still rides on `pluginError`; this is just the readable summary.
+ */
+const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const message = formatErrorForMetadata(error)?.message;
+  if (typeof message !== 'string') return undefined;
+  const trimmed = message.trim();
+  if (!trimmed) return undefined;
+  // Keep the tool result compact — a runaway provider error body would otherwise
+  // bloat the parent's LLM context.
+  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
+};
+
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
 ) => {
@@ -600,10 +619,14 @@ export class AgentRuntimeService {
   async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
     const agentId: string | undefined = agentState?.metadata?.agentId;
     const topicId: string | undefined = agentState?.metadata?.topicId;
+    // groupId scopes group conversations. Without it the query falls into the
+    // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
+    // the step_start uiMessages snapshot would be empty and clobber the client.
+    const groupId: string | undefined = agentState?.metadata?.groupId;
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({ agentId, topicId });
+      return await this.messageService.queryMessages({ agentId, groupId, topicId });
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
@@ -1934,8 +1957,11 @@ export class AgentRuntimeService {
     const lastAssistant = [...messages]
       .reverse()
       .find((m: { role?: string }) => m?.role === 'assistant');
+    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const content = failed
-      ? `Sub-agent did not complete (${reason}).`
+      ? errorReason
+        ? `Sub-agent did not complete (${reason}): ${errorReason}`
+        : `Sub-agent did not complete (${reason}).`
       : (lastAssistant?.content as string | undefined) ||
         'Sub-agent completed without a textual answer.';
 
@@ -2102,8 +2128,11 @@ export class AgentRuntimeService {
       .reverse()
       .find((m: { role?: string }) => m?.role === 'assistant');
     const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
+    const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const anchorContent = failed
-      ? `Agent member did not complete (${reason}).`
+      ? memberErrorReason
+        ? `Agent member did not complete (${reason}): ${memberErrorReason}`
+        : `Agent member did not complete (${reason}).`
       : mode === 'in_group'
         ? `Agent ${agentLabel} responded in the group.`
         : (lastAssistant?.content as string | undefined) ||
@@ -2264,6 +2293,10 @@ export class AgentRuntimeService {
     const dbMessages = await this.messageModel.query(
       {
         agentId: state.metadata?.agentId,
+        // Group runs must pass groupId, else the query filters `groupId IS NULL`
+        // and returns no group messages — the next LLM step then gets an empty
+        // context and the provider rejects it ("at least one message is required").
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
@@ -2412,6 +2445,9 @@ export class AgentRuntimeService {
     try {
       const dbMessages = await this.messageModel.query({
         agentId: state.metadata?.agentId,
+        // Group runs need groupId or the query returns no group messages
+        // (standard branch filters `groupId IS NULL`), losing the device context.
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       });

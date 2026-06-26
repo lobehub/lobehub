@@ -11,7 +11,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useElectronStore } from '@/store/electron';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
-import { normalizeTabUrl } from '../TabBar/url';
+import { isSameTabTarget } from '../TabBar/scope';
 import { useStyles } from './styles';
 
 interface PageItemProps {
@@ -30,11 +30,11 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
   const unpinPage = useElectronStore((s) => s.unpinPage);
 
   const { meta, tab } = item;
-  const currentId = normalizeTabUrl(location.pathname + location.search);
-  const isActive = tab.id === currentId;
+  const currentUrl = location.pathname + location.search;
+  const isActive = isSameTabTarget(tab, currentUrl);
 
   const handleClick = () => {
-    navigate(tab.url);
+    navigate(tab.url, { escape: true });
     onClose();
   };
 

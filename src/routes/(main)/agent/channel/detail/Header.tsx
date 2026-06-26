@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Button, Switch } from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,17 +126,12 @@ const Header = memo<HeaderProps>(
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
           {currentConfig && (
-            <>
-              <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 14 }}>
-                {effectiveEnabled ? t('channel.enabled') : t('channel.disabled')}
-              </span>
-              <Switch
-                checked={effectiveEnabled}
-                disabled={disabled}
-                loading={toggleLoading}
-                onChange={onToggleEnable}
-              />
-            </>
+            <Switch
+              checked={effectiveEnabled}
+              disabled={disabled}
+              loading={toggleLoading}
+              onChange={onToggleEnable}
+            />
           )}
         </Flexbox>
       </Flexbox>

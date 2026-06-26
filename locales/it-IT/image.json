@@ -7,6 +7,7 @@
   "config.header.title": "Dipinto",
   "config.height.label": "Altezza",
   "config.imageNum.label": "Numero di immagini",
+  "config.imageUpload.maxCountReached": "Puoi aggiungere fino a {{count}} immagini di riferimento",
   "config.imageUrl.label": "Immagine di riferimento",
   "config.imageUrls.label": "Immagini di riferimento",
   "config.model.label": "Modello",

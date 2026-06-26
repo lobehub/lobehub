@@ -1,7 +1,7 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -60,101 +60,119 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DeviceItemProps {
+  /** Whether this row is ticked for bulk actions. */
+  checked?: boolean;
   device: DeviceListItem;
   isCurrent?: boolean;
+  /** Toggle the bulk-selection checkbox. When provided the checkbox is shown. */
+  onCheckChange?: (checked: boolean) => void;
   onSelect: () => void;
   selected?: boolean;
 }
 
-const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selected }) => {
-  const { t } = useTranslation('setting');
+const DeviceItem = memo<DeviceItemProps>(
+  ({ checked, device, isCurrent, onCheckChange, onSelect, selected }) => {
+    const { t } = useTranslation('setting');
 
-  // Workspace devices are owner-gated + workspace-scoped on the server; personal
-  // devices stay userId-scoped. Route by the device's own scope.
-  const onRemoveSuccess = () => refreshDeviceList();
-  const removePersonal = lambdaQuery.device.removeDevice.useMutation({
-    onSuccess: onRemoveSuccess,
-  });
-  const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation({
-    onSuccess: onRemoveSuccess,
-  });
-  const removeDevice = device.scope === 'workspace' ? removeWorkspace : removePersonal;
-
-  const displayName = device.friendlyName || device.hostname || device.deviceId;
-  const isFallback = device.identitySource === 'fallback';
-  // Online when the device has at least one live connection in `device.channels`.
-  const channels = device.channels ?? [];
-  const online = channels.length > 0;
-  const statusTooltip = online
-    ? t('devices.channel.connected', {
-        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
-      })
-    : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
-
-  const handleRemove = () =>
-    confirmModal({
-      content: t('devices.remove.confirmDesc'),
-      okButtonProps: { danger: true },
-      okText: t('devices.actions.remove'),
-      onOk: async () => {
-        await removeDevice.mutateAsync({ deviceId: device.deviceId });
-      },
-      title: t('devices.remove.confirm'),
+    // Workspace devices are owner-gated + workspace-scoped on the server; personal
+    // devices stay userId-scoped. Route by the device's own scope.
+    const onRemoveSuccess = () => refreshDeviceList();
+    const removePersonal = lambdaQuery.device.removeDevice.useMutation({
+      onSuccess: onRemoveSuccess,
     });
+    const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation({
+      onSuccess: onRemoveSuccess,
+    });
+    const removeDevice = device.scope === 'workspace' ? removeWorkspace : removePersonal;
 
-  return (
-    <Flexbox
-      horizontal
-      align={'flex-start'}
-      className={cx(styles.row, selected && styles.rowActive)}
-      gap={12}
-      onClick={onSelect}
-    >
-      <span className={styles.icon} style={{ marginBlockStart: 2 }}>
-        {getDeviceIcon(device.platform)}
-      </span>
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Text ellipsis weight={500}>
-            {displayName}
-          </Text>
-          <Tooltip title={statusTooltip}>
-            <span className={online ? styles.dotOnline : styles.dotOffline} />
-          </Tooltip>
-          {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
-          {isFallback && (
-            <Tooltip title={t('devices.fallbackTooltip')}>
-              <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
+    const displayName = device.friendlyName || device.hostname || device.deviceId;
+    const isFallback = device.identitySource === 'fallback';
+    // Online when the device has at least one live connection in `device.channels`.
+    const channels = device.channels ?? [];
+    const online = channels.length > 0;
+    const statusTooltip = online
+      ? t('devices.channel.connected', {
+          time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
+        })
+      : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
+
+    const handleRemove = () =>
+      confirmModal({
+        content: t('devices.remove.confirmDesc'),
+        okButtonProps: { danger: true },
+        okText: t('devices.actions.remove'),
+        onOk: async () => {
+          await removeDevice.mutateAsync({ deviceId: device.deviceId });
+        },
+        title: t('devices.remove.confirm'),
+      });
+
+    return (
+      <Flexbox
+        horizontal
+        align={'flex-start'}
+        className={cx(styles.row, selected && styles.rowActive)}
+        gap={12}
+        onClick={onSelect}
+      >
+        {onCheckChange && (
+          <span
+            style={{ marginBlockStart: 2 }}
+            onClick={(e) => {
+              // Ticking a row is a bulk-select action, not a "open detail" click.
+              e.stopPropagation();
+              onCheckChange(!checked);
+            }}
+          >
+            <Checkbox checked={checked} />
+          </span>
+        )}
+        <span className={styles.icon} style={{ marginBlockStart: 2 }}>
+          {getDeviceIcon(device.platform)}
+        </span>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Text ellipsis weight={500}>
+              {displayName}
+            </Text>
+            <Tooltip title={statusTooltip}>
+              <span className={online ? styles.dotOnline : styles.dotOffline} />
             </Tooltip>
+            {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+            {isFallback && (
+              <Tooltip title={t('devices.fallbackTooltip')}>
+                <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
+              </Tooltip>
+            )}
+          </Flexbox>
+          {device.defaultCwd && (
+            <Flexbox horizontal align={'center'} gap={6}>
+              <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
+              <Text className={styles.cwd} style={{ fontSize: 12 }} type={'secondary'}>
+                {device.defaultCwd}
+              </Text>
+            </Flexbox>
           )}
         </Flexbox>
-        {device.defaultCwd && (
-          <Flexbox horizontal align={'center'} gap={6}>
-            <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
-            <Text className={styles.cwd} style={{ fontSize: 12 }} type={'secondary'}>
-              {device.defaultCwd}
-            </Text>
-          </Flexbox>
-        )}
+        <span onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu
+            items={[
+              {
+                danger: true,
+                icon: <Icon icon={Trash2Icon} />,
+                key: 'remove',
+                label: t('devices.actions.remove'),
+                onClick: handleRemove,
+              },
+            ]}
+          >
+            <ActionIcon icon={MoreVerticalIcon} />
+          </DropdownMenu>
+        </span>
       </Flexbox>
-      <span onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu
-          items={[
-            {
-              danger: true,
-              icon: <Icon icon={Trash2Icon} />,
-              key: 'remove',
-              label: t('devices.actions.remove'),
-              onClick: handleRemove,
-            },
-          ]}
-        >
-          <ActionIcon icon={MoreVerticalIcon} />
-        </DropdownMenu>
-      </span>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 DeviceItem.displayName = 'DeviceItem';
 

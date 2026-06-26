@@ -21,6 +21,8 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
@@ -33,18 +35,14 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../s
 import TodoProgress from '../TodoProgress';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
-import { getConversationChatInputUiState } from './utils';
+import {
+  getContextWindowMessages,
+  getConversationChatInputUiState,
+  toChatInputMessages,
+} from './utils';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
-
-const toChatInputMessages = (messages: ReturnType<typeof dataSelectors.dbMessages>) =>
-  messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
-    .map((m) => ({
-      content: typeof m.content === 'string' ? m.content : '',
-      role: m.role as 'user' | 'assistant' | 'system',
-    }));
 
 const InputCompletionErrorAlertContent = memo<{
   inputCompletionError: InputCompletionError;
@@ -225,14 +223,8 @@ const ChatInput = memo<ChatInputProps>(
   }) => {
     const { t } = useTranslation('chat');
 
-    const dbMessages = useConversationStore(dataSelectors.dbMessages);
-    const contextWindowMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const getMessages = useCallback(
-      () => contextWindowMessages.slice(-MAX_CONTEXT_MESSAGES),
-      [contextWindowMessages],
-    );
-
     // ConversationStore state
+    const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const draftKey = useMemo(() => messageMapKey(context), [context]);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
@@ -241,6 +233,23 @@ const ChatInput = memo<ChatInputProps>(
       s.sendMessage,
       s.stopGenerating,
     ]);
+    const [enableHistoryCount, historyCount] = useAgentStore((s) => [
+      chatConfigByIdSelectors.getEnableHistoryCountById(agentId || '')(s),
+      chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
+    ]);
+    const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
+    const contextWindowMessages = useMemo(
+      () =>
+        getContextWindowMessages(dbMessages, {
+          enableHistoryCount,
+          historyCount,
+        }),
+      [dbMessages, enableHistoryCount, historyCount],
+    );
+    const getMessages = useCallback(
+      () => chatInputMessages.slice(-MAX_CONTEXT_MESSAGES),
+      [chatInputMessages],
+    );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);

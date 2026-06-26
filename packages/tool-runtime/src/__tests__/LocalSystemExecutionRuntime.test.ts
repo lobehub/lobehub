@@ -69,3 +69,28 @@ describe('LocalSystemExecutionRuntime.editFile', () => {
     expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
   });
 });
+
+describe('LocalSystemExecutionRuntime.globFiles', () => {
+  it('forwards limit into the local-system service glob params', async () => {
+    const service = createService({
+      globFiles: vi.fn().mockResolvedValue({
+        files: ['/tmp/a.ts'],
+        success: true,
+        total_files: 1,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.globFiles({
+      directory: '/tmp',
+      limit: 42,
+      pattern: '**/*.ts',
+    });
+
+    expect(service.globFiles).toHaveBeenCalledWith({
+      limit: 42,
+      pattern: '**/*.ts',
+      scope: '/tmp',
+    });
+  });
+});

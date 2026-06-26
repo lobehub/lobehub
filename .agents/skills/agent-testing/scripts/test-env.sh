@@ -230,6 +230,25 @@ apply_shell_overrides() {
   done < <(keys)
 }
 
+# Read the ports auto-allocated by init-dev-env.sh (.records/env/agent-testing-ports.env)
+# so test-env / setup-auth target the exact port the dev server actually bound to.
+# Lower priority than explicit .env / shell, higher than the workspace-offset default.
+apply_ports_file() {
+  local root="$1"
+  local file="${AGENT_TESTING_PORTS_FILE:-$root/.records/env/agent-testing-ports.env}"
+  [[ -f "$file" ]] || return 0
+  local ss sp
+  ss="$(grep -E '^ALLOC_SERVER_PORT=' "$file" 2> /dev/null | tail -1 | cut -d= -f2 || true)"
+  sp="$(grep -E '^ALLOC_SPA_PORT=' "$file" 2> /dev/null | tail -1 | cut -d= -f2 || true)"
+  if [[ -n "$ss" ]]; then
+    [[ -z "$VALUE_PORT" ]] && set_value PORT "$ss" "ports-file"
+    [[ -z "$VALUE_APP_URL" ]] && set_value APP_URL "http://localhost:$ss" "ports-file"
+  fi
+  if [[ -n "$sp" && -z "$VALUE_SPA_PORT" ]]; then
+    set_value SPA_PORT "$sp" "ports-file"
+  fi
+}
+
 resolve_defaults() {
   local app_port spa_port mobile_spa_port desktop_port
   app_port="$(default_port 3020 3010)"
@@ -354,6 +373,7 @@ EOF
 ROOT="$(workspace_root)"
 apply_env_files "$ROOT"
 apply_shell_overrides
+apply_ports_file "$ROOT"
 resolve_defaults
 
 case "${1:-}" in

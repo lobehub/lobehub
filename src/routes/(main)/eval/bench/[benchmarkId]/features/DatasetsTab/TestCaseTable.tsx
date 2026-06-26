@@ -1,5 +1,5 @@
-import { Button, Flexbox, Input } from '@lobehub/ui';
-import { Dropdown, Pagination, Table } from 'antd';
+import { Button, DropdownMenu, Flexbox, Input } from '@lobehub/ui';
+import { Pagination, Table } from 'antd';
 import { type ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Ellipsis, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -208,26 +208,24 @@ const TestCaseTable = memo<TestCaseTableProps>(
           key: 'actions',
           render: (_: any, record: any) => (
             <div onClick={(e) => e.stopPropagation()}>
-              <Dropdown
+              <DropdownMenu
                 trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      icon: <Pencil size={14} />,
-                      key: 'edit',
-                      label: t('common.edit'),
-                      onClick: () => onEdit?.(record),
-                    },
-                    { type: 'divider' },
-                    {
-                      danger: true,
-                      icon: <Trash2 size={14} />,
-                      key: 'delete',
-                      label: t('common.delete'),
-                      onClick: () => onDelete?.(record),
-                    },
-                  ],
-                }}
+                items={[
+                  {
+                    icon: <Pencil size={14} />,
+                    key: 'edit',
+                    label: t('common.edit'),
+                    onClick: () => onEdit?.(record),
+                  },
+                  { type: 'divider' as const },
+                  {
+                    danger: true,
+                    icon: <Trash2 size={14} />,
+                    key: 'delete',
+                    label: t('common.delete'),
+                    onClick: () => onDelete?.(record),
+                  },
+                ]}
               >
                 <Button
                   icon={Ellipsis}
@@ -240,7 +238,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
                     width: 28,
                   }}
                 />
-              </Dropdown>
+              </DropdownMenu>
             </div>
           ),
           width: 48,

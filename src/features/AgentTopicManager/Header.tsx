@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Input, Segmented, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Text, Tooltip } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
 import { memo } from 'react';
@@ -33,7 +34,7 @@ const Header = memo<HeaderProps>(({ agentId }) => {
 
   return (
     <NavHeader
-      styles={{ center: { maxWidth: 560, paddingInline: 16 } }}
+      styles={{ center: { maxWidth: 560, paddingInline: 16 }, left: { paddingInlineStart: 24 } }}
       left={
         <AntBreadcrumb
           separator={<Icon icon={ChevronRight} size={14} />}
@@ -59,31 +60,36 @@ const Header = memo<HeaderProps>(({ agentId }) => {
       }
       right={
         <Flexbox horizontal align={'center'} gap={6}>
-          <Segmented
+          <Tabs
+            activeKey={viewMode}
             size={'small'}
-            value={viewMode}
-            variant={'borderless'}
-            options={[
+            items={[
               {
-                icon: <Icon icon={LayoutGrid} />,
-                title: t('management.view.card'),
-                value: 'card',
+                key: 'card',
+                label: (
+                  <Tooltip title={t('management.view.card')}>
+                    <Icon icon={LayoutGrid} />
+                  </Tooltip>
+                ),
               },
               {
-                icon: <Icon icon={ListIcon} />,
-                title: t('management.view.list'),
-                value: 'list',
+                key: 'list',
+                label: (
+                  <Tooltip title={t('management.view.list')}>
+                    <Icon icon={ListIcon} />
+                  </Tooltip>
+                ),
               },
             ]}
-            onChange={(v) => setViewMode(v as 'card' | 'list')}
+            onChange={(key) => setViewMode(key as 'card' | 'list')}
           />
         </Flexbox>
       }
     >
       <Input
         placeholder={t('management.searchPlaceholder')}
-        prefix={<Icon icon={Search} size={'small'} />}
-        size={'middle'}
+        prefix={<Icon icon={Search} size={'small'} style={{ marginInlineEnd: 4 }} />}
+        size={'small'}
         value={search}
         variant={'filled'}
         onChange={(e) => setSearch(e.target.value)}

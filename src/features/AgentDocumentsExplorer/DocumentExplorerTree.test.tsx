@@ -64,6 +64,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/features/ExplorerTree', () => {
   interface MockExplorerTreeProps {
     canDrag?: (node: ExplorerTreeNode<unknown>) => boolean;
+    defaultExpandedIds?: string[];
     getContextMenuItems?: (node: ExplorerTreeNode<unknown>) => unknown[] | undefined;
     header?: ReactNode;
     nodes: ExplorerTreeNode<unknown>[];
@@ -78,6 +79,7 @@ vi.mock('@/features/ExplorerTree', () => {
 
   const ExplorerTree = ({
     canDrag,
+    defaultExpandedIds,
     getContextMenuItems,
     header,
     nodes,
@@ -121,7 +123,10 @@ vi.mock('@/features/ExplorerTree', () => {
         });
 
     return (
-      <div data-testid="explorer-tree">
+      <div
+        data-default-expanded-ids={JSON.stringify(defaultExpandedIds ?? [])}
+        data-testid="explorer-tree"
+      >
         {header}
         {renderNodes(null)}
       </div>
@@ -299,6 +304,34 @@ describe('DocumentExplorerTree', () => {
 
     expect(openDocumentMock).toHaveBeenCalledWith('doc-content-1', 'agent-doc-row-1');
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not default-expand document folders', () => {
+    const data = [
+      createDocument({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Notes',
+        id: 'folder-row',
+        isFolder: true,
+        title: 'Notes',
+      }),
+      createDocument({
+        documentId: 'nested-folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Archive',
+        id: 'nested-folder-row',
+        isFolder: true,
+        parentId: 'folder-doc',
+        title: 'Archive',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
+      wrapper: MemoryRouter,
+    });
+
+    expect(screen.getByTestId('explorer-tree')).toHaveAttribute('data-default-expanded-ids', '[]');
   });
 
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {

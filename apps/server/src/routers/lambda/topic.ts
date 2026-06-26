@@ -3,6 +3,7 @@ import {
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
+  serializedAgentHookSchema,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { inArray } from 'drizzle-orm';
@@ -683,13 +684,7 @@ export const topicRouter = router({
           runningOperation: z
             .object({
               assistantMessageId: z.string(),
-              completionWebhook: z
-                .object({
-                  body: z.record(z.unknown()).optional(),
-                  delivery: z.enum(['fetch', 'qstash']).optional(),
-                  url: z.string(),
-                })
-                .optional(),
+              hooks: z.array(serializedAgentHookSchema).optional(),
               operationId: z.string(),
               scope: z.string().optional(),
               threadId: z.string().nullish(),

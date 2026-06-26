@@ -343,6 +343,7 @@
   "builtins.lobe-task.apiName.runTask": "Executar tarefa",
   "builtins.lobe-task.apiName.runTasks": "Executar tarefas",
   "builtins.lobe-task.apiName.setTaskSchedule": "Definir agendamento",
+  "builtins.lobe-task.apiName.setTaskVerify": "Definir verificação",
   "builtins.lobe-task.apiName.updateTaskComment": "Atualizar comentário",
   "builtins.lobe-task.apiName.updateTaskStatus": "Atualizar status",
   "builtins.lobe-task.apiName.viewTask": "Visualizar tarefa",

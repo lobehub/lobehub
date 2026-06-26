@@ -6,6 +6,7 @@ import {
 
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -48,6 +49,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
       throw new Error('activeDeviceId is required for Local System device proxy execution');
     }
 
+    // Resolve the workspace scope the same way `remote-device` does, recovering
+    // it from the running agent when the run-scoped `context.workspaceId` was
+    // lost (see `resolveRunWorkspaceId`). Without this, a workspace device the
+    // model just activated via listOnlineDevices would be addressed under the
+    // personal principal and every filesystem/shell call against it would miss.
+    // Resolved once, shared by every api call in this step.
+    let workspaceIdPromise: Promise<string | undefined> | undefined;
+    const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
+
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of LocalSystemManifest.api) {
@@ -67,8 +77,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             userId: context.userId!,
             // Workspace devices live under the `workspace:<id>` principal in
             // the gateway, so the relay needs the workspaceId to address the
-            // right DO pool. Personal device runs leave it undefined.
-            workspaceId: context.workspaceId,
+            // right DO pool. Personal device runs resolve to undefined.
+            workspaceId: await getDeviceWorkspaceId(),
           },
           {
             apiName: api.name,

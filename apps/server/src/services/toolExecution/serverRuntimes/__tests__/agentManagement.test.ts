@@ -158,6 +158,29 @@ describe('agentManagementRuntime', () => {
       expect(result.deferred).toBeUndefined();
     });
 
+    it('surfaces the underlying start error so the failure is diagnosable', async () => {
+      const run = vi.fn().mockResolvedValue({
+        error: 'Agent not found: agent-target',
+        started: false,
+        threadId: '',
+      });
+      const runtime = createRuntime();
+
+      const result = await runtime.callAgent(
+        { agentId: 'agent-target', instruction: 'Do delegated work' },
+        { subAgent: { run }, toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe(
+        'Agent "agent-target" failed to start: Agent not found: agent-target',
+      );
+      expect(result.error).toMatchObject({
+        code: 'AGENT_CALL_START_FAILED',
+        message: 'Agent "agent-target" failed to start: Agent not found: agent-target',
+      });
+    });
+
     it('rejects nested server callAgent execution', async () => {
       const run = vi.fn();
       const runtime = createRuntime();
@@ -217,7 +240,7 @@ describe('agentManagementRuntime', () => {
 
       expect(mockQueryAgents).toHaveBeenCalledWith({ keyword: undefined, limit: 20, offset: 0 });
       expect(result.content).toContain(
-        'requested limit 50 exceeds the maximum of 20, so results were capped at 20',
+        'Requested limit 50 exceeds the maximum of 20; results were capped at 20 per call.',
       );
       expect(result.state).toMatchObject({ hasMore: false });
     });
@@ -230,7 +253,7 @@ describe('agentManagementRuntime', () => {
       const result = await runtime.searchAgent({ keyword: 'nonexistent', source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents found matching your search criteria.');
+      expect(result.content).toContain('No agents matched');
     });
 
     it('explains an out-of-range offset instead of claiming no matches', async () => {
@@ -241,7 +264,31 @@ describe('agentManagementRuntime', () => {
       const result = await runtime.searchAgent({ offset: 200, source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents at offset 200; only 37 agents match');
+      expect(result.content).toContain('No agents at offset 200; only 37 match');
+    });
+
+    it('surfaces heteroType for heterogeneous workspace agents', async () => {
+      mockQueryAgents.mockResolvedValue([
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: null,
+          heteroType: 'claude-code',
+          id: 'agent-cc',
+          title: 'CC 2号机',
+        },
+      ]);
+      mockCountAgents.mockResolvedValue(1);
+
+      const runtime = createRuntime();
+      const result = await runtime.searchAgent({ source: 'user' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('heteroType="claude-code"');
+      expect(result.content).toContain('heterogeneous agents');
+      expect(result.state).toMatchObject({
+        agents: [expect.objectContaining({ id: 'agent-cc', heteroType: 'claude-code' })],
+      });
     });
 
     it('searches the marketplace without counting workspace agents', async () => {

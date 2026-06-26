@@ -125,6 +125,14 @@ const styles = createStaticStyles(({ css }) => ({
   form: css`
     margin: 0;
   `,
+  formSidebar: css`
+    display: flex;
+    flex: 1;
+
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  `,
   header: css`
     display: flex;
     gap: 12px;
@@ -720,7 +728,7 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   }, []);
 
   return (
-    <div className={styles.form}>
+    <div className={cx(styles.form, variant === 'sidebar' && styles.formSidebar)}>
       <div className={cx(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
         <div className={styles.header}>
           <span className={styles.headerTitle}>{panelTitle}</span>

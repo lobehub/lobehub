@@ -28,7 +28,6 @@ export default {
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
-  'channel.disabled': 'Disabled',
   'channel.discord.description':
     'Connect this agent to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
@@ -41,7 +40,6 @@ export default {
   'channel.importSuccess': 'Configuration imported successfully',
   'channel.importFailed': 'Failed to import configuration',
   'channel.importInvalidFormat': 'Invalid configuration file format',
-  'channel.enabled': 'Enabled',
   'channel.encryptKey': 'Encrypt Key',
   'channel.encryptKeyHint': 'Optional. Used to decrypt encrypted event payloads.',
   'channel.encryptKeyPlaceholder': 'Optional encryption key',

@@ -7,6 +7,7 @@
   "config.header.title": "Obraz",
   "config.height.label": "Wysokość",
   "config.imageNum.label": "Liczba obrazów",
+  "config.imageUpload.maxCountReached": "Możesz dodać maksymalnie {{count}} obrazów referencyjnych",
   "config.imageUrl.label": "Obraz referencyjny",
   "config.imageUrls.label": "Obrazy referencyjne",
   "config.model.label": "Model",

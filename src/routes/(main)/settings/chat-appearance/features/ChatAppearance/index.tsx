@@ -6,11 +6,10 @@ import {
   highlighterThemes,
   Icon,
   mermaidThemes,
-  Segmented,
   Skeleton,
   SliderWithInput,
 } from '@lobehub/ui';
-import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -51,24 +50,23 @@ const ChatAppearance = memo(() => {
             {loadingStates.transitionMode && (
               <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
             )}
-            <Segmented
-              value={general.transitionMode}
-              variant={'outlined'}
-              options={[
+            <Tabs
+              activeKey={general.transitionMode}
+              items={[
                 {
+                  key: 'none',
                   label: t('settingChatAppearance.transitionMode.options.none.value'),
-                  value: 'none',
                 },
                 {
+                  key: 'fadeIn',
                   label: t('settingChatAppearance.transitionMode.options.fadeIn'),
-                  value: 'fadeIn',
                 },
                 {
+                  key: 'smooth',
                   label: t('settingChatAppearance.transitionMode.options.smooth'),
-                  value: 'smooth',
                 },
               ]}
-              onChange={(value) => handleChange('transitionMode', value)}
+              onChange={(key) => handleChange('transitionMode', key)}
             />
           </Flexbox>
         }

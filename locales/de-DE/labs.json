@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
   "features.fleet.desc": "Zeigt den Fleet-Eintrag in der Titelleiste an – ein nebeneinander angeordnetes Dashboard aller laufenden Aufgaben über Ihre Agenten hinweg.",
   "features.fleet.title": "Flottenansicht",
+  "features.foldFinishedTurn.desc": "Klappen Sie den Prozess (Argumentation und Werkzeugaufrufe) abgeschlossener, nicht letzter Agenten-Züge unter einer \"Verarbeitet\"-Überschrift zusammen. Die endgültige Antwort bleibt sichtbar; klicken Sie, um den Prozess zu erweitern.",
+  "features.foldFinishedTurn.title": "Abgeschlossene Züge einklappen",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
   "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
   "features.imessage.desc": "Verbinden Sie Agenten mit iMessage über die lokale LobeHub Desktop BlueBubbles-Bridge.",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
   "features.platformAgent.desc": "Zeigt den Eintrag \"Agent verbinden\" im Erstellungsmenü an. Verbundene Agenten (z. B. OpenClaw, Hermes) laufen auf Ihren eigenen Geräten und kommunizieren über LH Connect zurück.",
   "features.platformAgent.title": "Agent verbinden",
+  "features.taskVerify.desc": "Fügen Sie einen Abschnitt zur Lieferannahme in die Aufgabenbeschreibung hinzu: Beschreiben Sie die Annahme in einem Satz und lassen Sie die KI bearbeitbare Überprüfungskriterien erstellen.",
+  "features.taskVerify.title": "Aufgabenlieferung und -annahme",
   "title": "Labs"
 }

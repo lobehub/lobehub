@@ -59,6 +59,7 @@
   "codeInterpreter.files": "فایل‌ها:",
   "codeInterpreter.output": "خروجی:",
   "codeInterpreter.returnValue": "مقدار بازگشتی:",
+  "connector.add.title": "افزودن اتصال‌دهنده سفارشی",
   "dalle.autoGenerate": "تولید خودکار",
   "dalle.downloading": "لینک‌های تصویر تولیدشده توسط DALL·E3 فقط به مدت ۱ ساعت معتبر هستند، در حال ذخیره‌سازی محلی تصاویر...",
   "dalle.generate": "تولید",

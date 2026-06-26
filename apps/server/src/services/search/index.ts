@@ -18,6 +18,28 @@ const parseImplEnv = (envString: string = '') => {
   return envValue.split(',').filter(Boolean);
 };
 
+const buildSearchParams = ({
+  searchCategories,
+  searchEngines,
+  searchTimeRange,
+}: SearchParams): SearchParams | undefined => {
+  const params: SearchParams = {};
+
+  if (searchCategories?.length) {
+    params.searchCategories = searchCategories;
+  }
+
+  if (searchEngines?.length) {
+    params.searchEngines = searchEngines;
+  }
+
+  if (searchTimeRange && searchTimeRange !== 'anytime') {
+    params.searchTimeRange = searchTimeRange;
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined;
+};
+
 const getMemorySnapshot = () => {
   if (typeof process === 'undefined' || typeof process.memoryUsage !== 'function') {
     return 'non-node';
@@ -185,23 +207,24 @@ export class SearchService {
         }
       } catch {}
 
-      let data = await this.queryWithImpl(impl, query, {
+      let currentParams = buildSearchParams({
         searchCategories,
-        searchEngines,
+        searchEngines: impl.useAutoSearchEngineSelection ? undefined : searchEngines,
         searchTimeRange,
       });
+      let data = await this.queryWithImpl(impl, query, currentParams);
 
       // First retry: remove search engine restrictions if no results found
-      if (data.results.length === 0 && searchEngines && searchEngines?.length > 0) {
-        data = await this.queryWithImpl(impl, query, {
+      if (data.results.length === 0 && currentParams?.searchEngines?.length) {
+        currentParams = buildSearchParams({
           searchCategories,
-          searchEngines: undefined,
           searchTimeRange,
         });
+        data = await this.queryWithImpl(impl, query, currentParams);
       }
 
       // Second retry: remove all restrictions if still no results found
-      if (data.results.length === 0) {
+      if (data.results.length === 0 && currentParams) {
         data = await this.queryWithImpl(impl, query);
       }
 

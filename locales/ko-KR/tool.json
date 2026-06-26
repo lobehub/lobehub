@@ -59,6 +59,7 @@
   "codeInterpreter.files": "파일:",
   "codeInterpreter.output": "출력:",
   "codeInterpreter.returnValue": "반환값:",
+  "connector.add.title": "사용자 지정 커넥터 추가",
   "dalle.autoGenerate": "자동 생성",
   "dalle.downloading": "DallE3로 생성된 이미지 링크는 1시간 동안만 유효합니다. 이미지를 로컬에 캐시하는 중...",
   "dalle.generate": "생성",

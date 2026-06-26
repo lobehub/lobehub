@@ -72,6 +72,18 @@ export const isKimiNativeThinkingModel = (model: string): boolean => {
   );
 };
 
+export const isKimiAlwaysPreserveThinkingModel = (model: string): boolean => {
+  const parsed = parseKimiModelId(model);
+  if (!parsed) return false;
+
+  return (
+    parsed.majorVersion === 2 &&
+    hasVariant(parsed, 'code') &&
+    parsed.minorVersion !== undefined &&
+    parsed.minorVersion >= 7
+  );
+};
+
 export const isKimiThinkingToggleModel = (model: string): boolean => {
   const parsed = parseKimiModelId(model);
   if (!parsed) return false;
@@ -81,4 +93,11 @@ export const isKimiThinkingToggleModel = (model: string): boolean => {
     parsed.minorVersion !== undefined &&
     !isKimiNativeThinkingModel(model)
   );
+};
+
+export const isKimiPreserveThinkingModel = (model: string): boolean => {
+  const parsed = parseKimiModelId(model);
+  if (!parsed) return false;
+
+  return parsed.majorVersion === 2 && parsed.minorVersion === 6;
 };

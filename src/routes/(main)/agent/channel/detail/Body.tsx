@@ -1,15 +1,8 @@
 'use client';
 
 import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
-import {
-  Button,
-  Form as AntdForm,
-  type FormInstance,
-  InputNumber,
-  Popconfirm,
-  Select,
-  Switch,
-} from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm, Select } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Fragment, memo, useCallback, useMemo, useState } from 'react';

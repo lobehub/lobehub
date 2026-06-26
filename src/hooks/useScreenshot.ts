@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { type SegmentedProps } from '@lobehub/ui';
+import { type TabsItem } from '@lobehub/ui/base-ui';
 import { snapdom } from '@zumer/snapdom';
 import dayjs from 'dayjs';
 import { useCallback, useState } from 'react';
@@ -11,23 +11,11 @@ export enum ImageType {
   WEBP = 'webp',
 }
 
-export const imageTypeOptions: SegmentedProps['options'] = [
-  {
-    label: 'JPG',
-    value: ImageType.JPG,
-  },
-  {
-    label: 'PNG',
-    value: ImageType.PNG,
-  },
-  {
-    label: 'SVG',
-    value: ImageType.SVG,
-  },
-  {
-    label: 'WEBP',
-    value: ImageType.WEBP,
-  },
+export const imageTypeOptions: TabsItem[] = [
+  { key: ImageType.JPG, label: 'JPG' },
+  { key: ImageType.PNG, label: 'PNG' },
+  { key: ImageType.SVG, label: 'SVG' },
+  { key: ImageType.WEBP, label: 'WEBP' },
 ];
 
 export const getImageUrl = async ({

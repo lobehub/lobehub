@@ -1471,6 +1471,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    */
   spawnLhHeteroExec(params: {
     agentType: string;
+    /** Resolved `lh hetero exec` wrapper args. */
+    args?: string[];
     cwd?: string;
     /** Image attachments (signed URLs) appended as image content blocks. */
     imageList?: HeteroExecImageRef[];
@@ -1484,6 +1486,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }): void {
     const {
       agentType,
+      args: extraArgs,
       cwd,
       imageList,
       jwt,
@@ -1521,6 +1524,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       workDir,
       ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
       ...(rawDumpDir ? ['--raw-dump', rawDumpDir] : []),
+      ...(extraArgs ?? []),
     ];
 
     const env = {

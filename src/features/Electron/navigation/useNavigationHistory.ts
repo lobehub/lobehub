@@ -40,14 +40,14 @@ export const useNavigationHistory = () => {
     if (!canGoBackFn()) return;
 
     const targetEntry = storeGoBack();
-    if (targetEntry) navigate(targetEntry.url);
+    if (targetEntry) navigate(targetEntry.url, { escape: true });
   }, [canGoBackFn, storeGoBack, navigate]);
 
   const goForward = useCallback(() => {
     if (!canGoForwardFn()) return;
 
     const targetEntry = storeGoForward();
-    if (targetEntry) navigate(targetEntry.url);
+    if (targetEntry) navigate(targetEntry.url, { escape: true });
   }, [canGoForwardFn, storeGoForward, navigate]);
 
   useEffect(() => {

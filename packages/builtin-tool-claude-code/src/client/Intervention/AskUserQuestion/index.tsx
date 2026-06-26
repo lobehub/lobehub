@@ -81,7 +81,6 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     <Flexbox gap={12}>
       {!escapeActive && isMulti && (
         <Tabs
-          compact
           activeKey={activeTab}
           items={questions.map((q, idx) => {
             const done = isQuestionAnswered(q, picks, custom);
@@ -95,7 +94,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
               ),
             };
           })}
-          onChange={(key) => setActiveTab(key as string)}
+          onChange={(key: string) => setActiveTab(key)}
         />
       )}
 

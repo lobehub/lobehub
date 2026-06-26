@@ -27,10 +27,18 @@ export interface GeneratePlanParams {
   enableAiGeneration?: boolean;
   /** The user's task / instruction text the run must satisfy. */
   goal: string;
+  /**
+   * When the run opted into verify but produced no decomposed criteria, synthesize
+   * a single agent-type holistic check (the coarse "one broad agent verify"
+   * default) instead of leaving an empty plan (→ verify no-op).
+   */
+  holisticFallback?: boolean;
   maxAiCriteria?: number;
   /** Required only when `enableAiGeneration` is true. */
   modelConfig?: { model: string; provider: string };
   operationId: string;
+  /** One-sentence acceptance the holistic check verifies against (falls back to `goal`). */
+  requirement?: string;
   /** Ad-hoc criteria mounted on the agent (`agencyConfig.verifyCriteriaIds`). */
   verifyCriteriaIds?: string[];
   /** Reusable rubric mounted on the agent (`agencyConfig.verifyRubricId`). */
@@ -56,6 +64,30 @@ export interface CriterionDraft {
   verifierConfig?: Record<string, unknown>;
   verifierType?: VerifyCheckItem['verifierType'];
 }
+
+/**
+ * Synthesize a single `agent`-type holistic check from the task's acceptance
+ * requirement (or its goal). The agent verifier investigates the whole
+ * deliverable and submits one verdict — the coarse "one broad agent verify"
+ * default for tasks that opted into verify without decomposing into criteria
+ * No `requiredEvidence` hard gate: the agent self-captures, so the
+ * structural gate never marks it uncertain for "missing evidence".
+ */
+const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyCheckItem => {
+  const acceptance = requirement?.trim() || goal?.trim() || 'The deliverable fulfills the task.';
+  return {
+    description: acceptance,
+    id: randomUUID(),
+    index: 0,
+    // Delegate the fail decision to the task bridge (pass→completed / fail→brief)
+    // rather than the operation-level auto-repair loop.
+    onFail: 'manual',
+    required: true,
+    title: 'Task delivery acceptance',
+    verifierConfig: {},
+    verifierType: 'agent',
+  };
+};
 
 const criterionToCheckItem = (
   criterion: VerifyCriterionItem,
@@ -316,6 +348,14 @@ export class VerifyPlanGeneratorService {
         // AI generation is best-effort — a failure must not block the run.
         log('AI criteria generation failed: %O', error);
       }
+    }
+
+    // 4. Holistic fallback: opted into verify but nothing decomposed into
+    //    criteria — synthesize one agent-type check over the whole deliverable
+    //    so verify actually runs (instead of an empty plan → no-op).
+    if (items.length === 0 && params.holisticFallback) {
+      items.push(buildHolisticAgentItem(params.requirement, params.goal));
+      log('synthesized holistic agent check for op %s', params.operationId);
     }
 
     const run = await this.runModel.ensureForOperation(params.operationId, { goal: params.goal });

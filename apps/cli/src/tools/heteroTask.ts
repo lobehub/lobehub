@@ -92,16 +92,19 @@ async function sendAutoNotify(
 }
 
 /**
- * Signal remote hetero task completion to the server so it can publish
- * `agent_runtime_end` to the gateway WS and close the frontend subscription.
- * Called on clean process exit (code=0, no signal) — error exits go through
- * `sendAutoNotify` which writes an error message AND triggers completion via
- * the `done` flag.
+ * Signal remote hetero task termination to the server so it can publish
+ * `agent_runtime_end`, close the frontend subscription, and fire the run's
+ * lifecycle hooks (task lifecycle + IM bot callback).
+ *
+ * Pass `error` to finalize the run as FAILED (non-zero process exit) — the
+ * server marks the owning task failed and renders the error. Omit it for a
+ * clean completion (the agent already sent its final message via `lh notify`).
  */
-async function sendDoneSignal(
+async function sendTerminalSignal(
   topicId: string,
   agentId?: string,
   workspaceId?: string,
+  error?: { message: string; type?: string },
 ): Promise<void> {
   try {
     const client = await getTrpcClient(workspaceId);
@@ -109,11 +112,12 @@ async function sendDoneSignal(
       agentId,
       content: '',
       done: true,
+      ...(error ? { error } : {}),
       role: 'assistant',
       topicId,
     });
   } catch (err) {
-    log.error('Failed to send done signal:', err instanceof Error ? err.message : String(err));
+    log.error('Failed to send terminal signal:', err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -224,23 +228,32 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     log.info(`OpenClaw task started: taskId=${taskId} pid=${pid} agent=${openclawAgent}`);
 
     // On exit: notify the server so it can close the frontend gateway WS subscription.
-    // - Abnormal exit (signal or non-zero code): write an error message bubble.
+    // - Failed exit (non-zero code, no signal): write an error bubble AND finalize
+    //   the run as failed so the owning task is marked failed.
+    // - Cancelled (killed by signal, e.g. interruptTask): write a notice + a plain
+    //   terminal signal — cancellation is not a failure.
     // - Clean exit (code=0, no signal): openclaw already sent its final message via
-    //   `lh notify`; just send a done signal to publish `agent_runtime_end`.
+    //   `lh notify`; just send a terminal signal to publish `agent_runtime_end`.
     child.on('close', (code, signal) => {
       removeTask(taskId);
       if (code !== 0 || signal !== null) {
-        const text = signal
+        const cancelled = signal !== null;
+        const text = cancelled
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        // Send error message first, THEN signal done (sequential).
-        // Fire-and-forget both, but ensure done is always sent even if notify fails.
+        // Write the notice bubble first, THEN signal terminal (sequential).
+        // Fire-and-forget both, but ensure the terminal signal is always sent.
         void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
-          sendDoneSignal(topicId, agentId, workspaceId),
+          sendTerminalSignal(
+            topicId,
+            agentId,
+            workspaceId,
+            cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+          ),
         );
       } else {
         // Clean exit — openclaw already sent its final message; just signal done.
-        void sendDoneSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, workspaceId);
       }
     });
 
@@ -301,11 +314,17 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       removeTask(taskId);
 
       if (code !== 0 || signal !== null) {
-        const text = signal
+        const cancelled = signal !== null;
+        const text = cancelled
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
         void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
-          sendDoneSignal(topicId, agentId, workspaceId),
+          sendTerminalSignal(
+            topicId,
+            agentId,
+            workspaceId,
+            cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+          ),
         );
         return;
       }
@@ -319,10 +338,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
 
       if (response) {
         void sendAutoNotify(topicId, taskId, response, agentId, workspaceId).finally(() =>
-          sendDoneSignal(topicId, agentId, workspaceId),
+          sendTerminalSignal(topicId, agentId, workspaceId),
         );
       } else {
-        void sendDoneSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, workspaceId);
       }
     });
 

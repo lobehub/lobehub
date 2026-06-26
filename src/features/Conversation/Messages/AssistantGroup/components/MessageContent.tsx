@@ -33,7 +33,10 @@ const MessageContent = memo<MessageContentProps>(
     const hasTools = hasToolsOverride ?? storeHasTools;
 
     const message = normalizeThinkTags(processWithArtifact(content ?? ''));
-    const { drawer, markdownProps } = useMarkdown(id, disableStreaming);
+    // Once a tool call exists below this block's text, the text is already
+    // finalized — skip the streaming/fade-in animation so settled content above
+    // a tool doesn't keep re-animating.
+    const { drawer, markdownProps } = useMarkdown(id, disableStreaming || hasTools);
 
     if (!content && !hasTools) return <ContentLoading id={id} />;
 

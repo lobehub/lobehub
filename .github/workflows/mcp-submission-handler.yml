@@ -1,0 +1,46 @@
+name: MCP Submission Handler
+# Auto-close "Add my MCP server to the marketplace" issues and redirect to the self-service CLI
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to (re)process'
+        required: true
+        type: string
+
+jobs:
+  handle-mcp-submission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Run on new issues, on a manual `trigger:mcp-triage` label, or manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'trigger:mcp-triage')
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Handle MCP submission issue
+        run: bun run .github/scripts/auto-handle-mcp-submission.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+
+      - name: Remove trigger label
+        if: github.event.action == 'labeled' && github.event.label.name == 'trigger:mcp-triage'
+        run: gh issue edit ${{ github.event.issue.number }} --remove-label "trigger:mcp-triage"
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

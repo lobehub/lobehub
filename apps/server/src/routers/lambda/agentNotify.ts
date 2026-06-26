@@ -10,6 +10,8 @@ import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { dispatchTerminalHooks } from '@/server/services/agentRuntime/hooks';
+import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 // Module-level singleton so we don't create a new Redis connection per request.
@@ -53,6 +55,16 @@ const NotifySchema = z.object({
    */
   done: z.boolean().optional(),
   /**
+   * Terminal error for a remote hetero run (openclaw / hermes). The notify
+   * channel otherwise only carries success, so a remote agent that crashes /
+   * fails has no way to fail its run. When present the run is finalized as
+   * FAILED instead of succeeded — `agent_runtime_end` carries `reason='error'`
+   * and the onError/onComplete hooks fire with this message, so the owning task
+   * is marked failed and any IM bot callback renders the error. Implies a
+   * terminal signal (treated like `done: true`).
+   */
+  error: z.object({ message: z.string(), type: z.string().optional() }).optional(),
+  /**
    * When role is 'assistant': update an existing message instead of creating a
    * new one. The caller is responsible for passing the messageId returned by the
    * first notify call. Subsequent calls with this id will overwrite the content
@@ -89,8 +101,13 @@ export const agentNotifyRouter = router({
       role = 'user',
       continue: shouldContinue = false,
       done = false,
+      error: terminalError,
       messageId,
     } = input;
+
+    // An error is itself a terminal signal — finalize the run even if the
+    // remote agent didn't also set `done`.
+    const isTerminal = done || !!terminalError;
 
     log(
       'notify: topicId=%s, agentId=%s, role=%s, continue=%s, done=%s, messageId=%s, content=%s',
@@ -134,15 +151,49 @@ export const agentNotifyRouter = router({
       if (!remoteOperationId) return;
       try {
         const stream = getStreamManager();
-        if (done) {
+        if (isTerminal) {
           // Signal task completion — frontend gateway WS subscription closes.
+          // A `terminalError` finalizes the run as failed; otherwise it succeeded.
           await stream.publishAgentRuntimeEnd({
-            finalState: { reason: 'success' },
+            finalState: terminalError
+              ? { error: terminalError.message, reason: 'error' }
+              : { reason: 'success' },
             operationId: remoteOperationId,
-            reason: 'success',
-            reasonDetail: 'Remote hetero agent task completed',
+            reason: terminalError ? 'error' : 'success',
+            reasonDetail: terminalError?.message ?? 'Remote hetero agent task completed',
             stepIndex: 0,
           });
+
+          // Remote hetero (openclaw / hermes) has no `heteroFinish` callback, so
+          // this is its terminal funnel. Fire the run's onComplete (+ onError on
+          // failure) hooks through the shared dispatcher — the same mechanism the
+          // CLI / normal LLM paths use — so the task lifecycle (onTopicComplete →
+          // task done/failed) and any IM bot completion callback run. Hooks were
+          // serialized onto runningOperation at dispatch time.
+          const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
+            | SerializedHook[]
+            | undefined;
+          let lastAssistantContent: string | undefined = content || undefined;
+          if (!lastAssistantContent && writtenMessageId) {
+            const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
+            lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
+          }
+          await dispatchTerminalHooks({
+            agentId,
+            ...(terminalError
+              ? { errorMessage: terminalError.message, errorType: terminalError.type }
+              : {}),
+            lastAssistantContent,
+            operationId: remoteOperationId,
+            reason: terminalError ? 'error' : 'done',
+            serializedHooks,
+            topicId,
+            userId: ctx.userId,
+          });
+
+          // The operation is finished — drop the running marker so a duplicate
+          // terminal signal / reconnect doesn't re-fire the hooks.
+          await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -184,9 +235,14 @@ export const agentNotifyRouter = router({
             });
           }
 
-          // done=true with empty content + existing placeholder → just signal completion, no update.
-          if (done && !content) {
-            void publishRemoteHeteroEvent();
+          // Terminal signal (done or error) with empty content + existing
+          // placeholder → just finalize the run, no message update. Pass the
+          // resolved id so the finalizer can reload the agent's final reply
+          // (written in-place via earlier `lh notify` calls) into
+          // `lastAssistantContent` — bot completion callbacks and the task
+          // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
+          if (isTerminal && !content) {
+            void publishRemoteHeteroEvent(resolvedMessageId);
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
           await ctx.messageModel.update(resolvedMessageId, { content });
@@ -205,8 +261,9 @@ export const agentNotifyRouter = router({
           return { messageId: resolvedMessageId, operationId: undefined, topicId };
         }
 
-        // done=true with no messageId and empty content → just signal completion, no DB write.
-        if (done && !content) {
+        // Terminal signal (done or error) with no messageId and empty content →
+        // just finalize the run, no DB write.
+        if (isTerminal && !content) {
           void publishRemoteHeteroEvent();
           return { messageId: undefined, operationId: undefined, topicId };
         }

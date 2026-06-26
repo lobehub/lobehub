@@ -135,98 +135,95 @@ const SkillSuggestionPanel = memo<SkillSuggestionPanelProps>(
 );
 
 interface SkillInstalledPanelProps {
-  inboxAgentName: string;
   onClose: () => void;
   onOpenSkills?: (identifier: string) => void;
   skill: InstalledSkill;
 }
 
-const SkillInstalledPanel = memo<SkillInstalledPanelProps>(
-  ({ inboxAgentName, onClose, onOpenSkills, skill }) => {
-    const { t } = useTranslation('chat');
+const SkillInstalledPanel = memo<SkillInstalledPanelProps>(({ onClose, onOpenSkills, skill }) => {
+  const { t } = useTranslation('chat');
 
-    return (
-      <Flexbox
-        align={'center'}
-        gap={20}
-        style={{
-          paddingBlock: 8,
-        }}
-      >
-        <Flexbox align={'center'} gap={8} style={{ textAlign: 'center' }}>
-          <Flexbox
-            align={'center'}
-            justify={'center'}
-            style={{
-              background: cssVar.colorSuccessBg,
-              borderRadius: '50%',
-              height: 48,
-              width: 48,
-            }}
-          >
-            <CheckCircle2 color={cssVar.colorSuccess} size={28} />
-          </Flexbox>
-          <Text fontSize={18} style={{ fontWeight: 600 }}>
-            {t('createModal.skillSuggestion.installed.title')}
-          </Text>
-          <Text
-            color={cssVar.colorTextSecondary}
-            fontSize={13}
-            style={{ maxWidth: 360, textAlign: 'center' }}
-          >
-            {t('createModal.skillSuggestion.installed.description', { name: inboxAgentName })}
-          </Text>
-        </Flexbox>
+  return (
+    <Flexbox
+      align={'center'}
+      gap={20}
+      style={{
+        paddingBlock: 8,
+      }}
+    >
+      <Flexbox align={'center'} gap={8} style={{ textAlign: 'center' }}>
         <Flexbox
-          horizontal
           align={'center'}
-          gap={12}
-          justify={'space-between'}
+          justify={'center'}
           style={{
-            background: cssVar.colorFillQuaternary,
-            border: `1px solid ${cssVar.colorFillTertiary}`,
-            borderRadius: 12,
-            padding: 12,
-            width: '100%',
+            background: cssVar.colorSuccessBg,
+            borderRadius: '50%',
+            height: 48,
+            width: 48,
           }}
         >
-          <Flexbox
-            align={'center'}
-            justify={'center'}
-            style={{
-              background: cssVar.colorBgContainer,
-              border: `1px solid ${cssVar.colorFillTertiary}`,
-              borderRadius: 10,
-              flex: 'none',
-              height: 38,
-              width: 38,
-            }}
-          >
-            <Blocks color={cssVar.colorTextSecondary} size={18} />
-          </Flexbox>
-          <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-            <Text ellipsis fontSize={13} style={{ fontWeight: 500 }}>
-              {skill.name}
-            </Text>
-            <Text color={cssVar.colorTextTertiary} fontSize={12}>
-              {t('createModal.skillSuggestion.installed.ready', { name: inboxAgentName })}
-            </Text>
-          </Flexbox>
+          <CheckCircle2 color={cssVar.colorSuccess} size={28} />
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={8} justify={'center'} style={{ width: '100%' }}>
-          {onOpenSkills && (
-            <Button onClick={() => onOpenSkills(skill.identifier)}>
-              {t('createModal.skillSuggestion.actions.openSkills')}
-            </Button>
-          )}
-          <Button type={'primary'} onClick={onClose}>
-            {t('createModal.skillSuggestion.actions.tryInLobeAI', { name: inboxAgentName })}
-          </Button>
+        <Text fontSize={18} style={{ fontWeight: 600 }}>
+          {t('createModal.skillSuggestion.installed.title')}
+        </Text>
+        <Text
+          color={cssVar.colorTextSecondary}
+          fontSize={13}
+          style={{ maxWidth: 360, textAlign: 'center' }}
+        >
+          {t('createModal.skillSuggestion.installed.description')}
+        </Text>
+      </Flexbox>
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={12}
+        justify={'space-between'}
+        style={{
+          background: cssVar.colorFillQuaternary,
+          border: `1px solid ${cssVar.colorFillTertiary}`,
+          borderRadius: 12,
+          padding: 12,
+          width: '100%',
+        }}
+      >
+        <Flexbox
+          align={'center'}
+          justify={'center'}
+          style={{
+            background: cssVar.colorBgContainer,
+            border: `1px solid ${cssVar.colorFillTertiary}`,
+            borderRadius: 10,
+            flex: 'none',
+            height: 38,
+            width: 38,
+          }}
+        >
+          <Blocks color={cssVar.colorTextSecondary} size={18} />
+        </Flexbox>
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+          <Text ellipsis fontSize={13} style={{ fontWeight: 500 }}>
+            {skill.name}
+          </Text>
+          <Text color={cssVar.colorTextTertiary} fontSize={12}>
+            {t('createModal.skillSuggestion.installed.ready')}
+          </Text>
         </Flexbox>
       </Flexbox>
-    );
-  },
-);
+      <Flexbox horizontal align={'center'} gap={8} justify={'center'} style={{ width: '100%' }}>
+        {onOpenSkills && (
+          <Button onClick={() => onOpenSkills(skill.identifier)}>
+            {t('createModal.skillSuggestion.actions.openSkills')}
+          </Button>
+        )}
+        <Button type={'primary'} onClick={onClose}>
+          {t('createModal.skillSuggestion.actions.tryInLobeAI')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
+});
 
 interface ExampleItemProps {
   description: string;
@@ -310,7 +307,6 @@ const Examples = memo<ExamplesProps>(({ suggestMode, onExampleClick }) => {
 
 export interface CreateAgentModalProps {
   agentId?: string;
-  inboxAgentName?: string;
   onClose: () => void;
   onCreateBlank: () => Promise<void> | void;
   onOpenSkills?: (identifier: string) => void;
@@ -321,19 +317,8 @@ export interface CreateAgentModalProps {
 }
 
 export const CreateAgentModal = memo<CreateAgentModalProps>(
-  ({
-    open,
-    type,
-    agentId,
-    inboxAgentName,
-    onClose,
-    onOpenSkills,
-    onSubmit,
-    onCreateBlank,
-    onTryInLobeAI,
-  }) => {
+  ({ open, type, agentId, onClose, onOpenSkills, onSubmit, onCreateBlank, onTryInLobeAI }) => {
     const { t } = useTranslation('chat');
-    const displayInboxAgentName = inboxAgentName || t('inbox.title');
     const editorRef = useRef<ChatInputEditor | null>(null);
     const contentRef = useRef('');
     const examplePromptRef = useRef('');
@@ -565,7 +550,6 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
               <ActionIcon icon={X} onClick={handleClose} />
             </Flexbox>
             <SkillInstalledPanel
-              inboxAgentName={displayInboxAgentName}
               skill={installedSkill}
               onClose={handleTryInLobeAI}
               onOpenSkills={onOpenSkills ? handleOpenInstalledSkill : undefined}

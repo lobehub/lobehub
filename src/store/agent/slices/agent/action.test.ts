@@ -513,6 +513,47 @@ describe('AgentSlice Actions', () => {
       });
     });
 
+    it('should send the latest local agencyConfig when persisting a nested patch', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const latestAgencyConfig = {
+        boundDeviceId: 'current-device',
+        executionTarget: 'local',
+        heterogeneousProvider: {
+          command: 'claude',
+          env: { CLAUDE_CODE_CRED_KEY: 'cred-key' },
+          type: 'claude-code',
+        },
+        workingDirByDevice: { 'current-device': '/repos/lobehub' },
+      } as const;
+      const nextAgencyConfig = {
+        ...latestAgencyConfig,
+        heterogeneousProvider: { ...latestAgencyConfig.heterogeneousProvider, effort: 'high' },
+      };
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: { agencyConfig: nextAgencyConfig } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { agencyConfig: latestAgencyConfig } as any },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          agencyConfig: { heterogeneousProvider: { effort: 'high' } },
+        } as any);
+      });
+
+      expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { agencyConfig: nextAgencyConfig },
+        expect.any(AbortSignal),
+      );
+    });
+
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
   });

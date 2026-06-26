@@ -80,11 +80,11 @@ ffmpeg -y -i ./proof/demo.mp4 \
 ## Upload
 
 ```bash
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type gif \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type gif \
   --file ./proof/flow.gif --by agent-browser \
   --desc "Response streams in token-by-token after send"
 
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type video \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type video \
   --file ./proof/demo.mp4 --by cdp --desc "End-to-end import flow completes"
 ```
 

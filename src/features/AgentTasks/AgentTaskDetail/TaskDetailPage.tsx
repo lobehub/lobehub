@@ -38,7 +38,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
 
   if (isNotFound) {
     return (
-      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, position: 'relative' }}>
         <NavHeader
           left={<Breadcrumb taskId={taskId} />}
           styles={{ left: { paddingLeft: 4, gap: 8 } }}
@@ -59,7 +59,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
   }
 
   return (
-    <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
+    <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, position: 'relative' }}>
       <NavHeader
         left={
           <>

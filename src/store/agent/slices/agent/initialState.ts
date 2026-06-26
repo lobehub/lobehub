@@ -44,7 +44,6 @@ export interface AgentSliceState {
    * Save status for showing auto-save hint
    */
   saveStatus: SaveStatus;
-  showAgentSetting: boolean;
   /**
    * Content being streamed for system role update
    */
@@ -74,7 +73,6 @@ export const initialAgentSliceState: AgentSliceState = {
     title: false,
   },
   saveStatus: 'idle',
-  showAgentSetting: false,
   streamingSystemRole: undefined,
   streamingSystemRoleInProgress: false,
 };

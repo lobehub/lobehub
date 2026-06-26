@@ -54,6 +54,9 @@ const styles = createStaticStyles(({ css }) => ({
       display: none;
     }
   `,
+  rightGroup: css`
+    flex: none;
+  `,
 }));
 
 const HeteroControlBar = memo(() => {
@@ -64,11 +67,13 @@ const HeteroControlBar = memo(() => {
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
 
   // On web there's no full-access badge / skeleton — just the workspace controls
-  // (the cloud repo switcher is rendered inside WorkspaceControls).
+  // (the cloud repo switcher is rendered inside WorkspaceControls). The CLI
+  // model + thinking-effort selector now lives in the input's bottom-left action
+  // bar (see HeterogeneousChatInput), not in this strip.
   if (!isDesktop) {
     if (!agentId) return null;
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} className={styles.bar}>
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
@@ -97,7 +102,9 @@ const HeteroControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
         <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
-      <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+      <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+        <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+      </Flexbox>
     </Flexbox>
   );
 });

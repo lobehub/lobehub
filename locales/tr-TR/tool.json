@@ -59,6 +59,7 @@
   "codeInterpreter.files": "Dosyalar:",
   "codeInterpreter.output": "Çıktı:",
   "codeInterpreter.returnValue": "Dönüş Değeri:",
+  "connector.add.title": "Özel Bağlayıcı Ekle",
   "dalle.autoGenerate": "Otomatik Oluştur",
   "dalle.downloading": "DALL·E3 tarafından oluşturulan görsel bağlantıları yalnızca 1 saat geçerlidir, görseller yerel olarak önbelleğe alınıyor...",
   "dalle.generate": "Oluştur",

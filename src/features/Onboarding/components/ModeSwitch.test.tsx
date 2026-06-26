@@ -119,8 +119,14 @@ describe('ModeSwitch', () => {
       renderModeSwitch({ enabled: true, showLabel: true });
 
       expect(screen.getByText('Choose a setup method')).toBeInTheDocument();
-      expect(screen.getByRole('radio', { name: 'Conversational setup' })).toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Manual setup' })).not.toBeChecked();
+      expect(screen.getByRole('tab', { name: 'Conversational setup' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(screen.getByRole('tab', { name: 'Manual setup' })).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
     },
     TEST_TIMEOUT_MS,
   );
@@ -130,8 +136,8 @@ describe('ModeSwitch', () => {
     () => {
       renderModeSwitch({ enabled: false });
 
-      expect(screen.queryByRole('radio', { name: 'Conversational setup' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('radio', { name: 'Manual setup' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Conversational setup' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Manual setup' })).not.toBeInTheDocument();
       expect(screen.queryByText('Choose a setup method')).not.toBeInTheDocument();
     },
     TEST_TIMEOUT_MS,
@@ -140,8 +146,8 @@ describe('ModeSwitch', () => {
   it('hides the onboarding switch until server config is initialized', () => {
     renderModeSwitch({ enabled: true, serverConfigInit: false });
 
-    expect(screen.queryByRole('radio', { name: 'Conversational setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Manual setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Conversational setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Manual setup' })).not.toBeInTheDocument();
   });
 
   it('keeps action buttons visible when agent onboarding is disabled', () => {
@@ -151,21 +157,21 @@ describe('ModeSwitch', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Conversational setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Manual setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Conversational setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Manual setup' })).not.toBeInTheDocument();
   });
 
   it('does not render the switch on desktop builds', () => {
     renderModeSwitch({ desktop: true, enabled: true });
 
-    expect(screen.queryByRole('radio', { name: 'Conversational setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Manual setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Conversational setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Manual setup' })).not.toBeInTheDocument();
   });
 
   it('hides the switch when AGENT_ONBOARDING_ENABLED master switch is off', () => {
     renderModeSwitch({ AGENT_ONBOARDING_ENABLED: false, enabled: true });
 
-    expect(screen.queryByRole('radio', { name: 'Conversational setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Manual setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Conversational setup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Manual setup' })).not.toBeInTheDocument();
   });
 });

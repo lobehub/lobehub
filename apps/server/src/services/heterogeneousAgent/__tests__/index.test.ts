@@ -1,11 +1,29 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
+import type { AgentHook, SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 
 import type { HeterogeneousPersistenceHandler } from '..';
 import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
+
+// Force queue/production mode so the terminal funnel takes the serialized-webhook
+// delivery path (the hetero cross-process path), not the in-memory handler path.
+// Default to local (false) so the existing in-memory-handler tests are unaffected.
+vi.mock('@/server/services/queue/impls', () => ({
+  isQueueAgentRuntimeEnabled: vi.fn(() => false),
+}));
+
+const mockPublishJSON = vi.hoisted(() => vi.fn());
+vi.mock('@upstash/qstash', () => ({
+  Client: class {
+    publishJSON = mockPublishJSON;
+  },
+}));
+
+const { isQueueAgentRuntimeEnabled } = await import('@/server/services/queue/impls');
 
 const createFakeStreamManager = () => {
   const published: Array<{ event: any; operationId: string }> = [];
@@ -261,6 +279,318 @@ describe('HeterogeneousAgentService', () => {
         operationId: 'op-3',
         reason: 'cancelled',
       });
+    });
+
+    // The unified terminal funnel: heteroFinish must drive the run's lifecycle
+    // hooks through the shared hookDispatcher (the same mechanism the normal LLM
+    // path uses), which is what marks the owning task done/failed and fires any
+    // IM bot completion callback. These register a local-mode handler hook for
+    // the operation and assert heteroFinish dispatches it.
+    const registerHook = (operationId: string): { onComplete: any; onError: any } => {
+      const onComplete = vi.fn(async () => {});
+      const onError = vi.fn(async () => {});
+      const hooks: AgentHook[] = [
+        { handler: onComplete, id: 'task-on-complete', type: 'onComplete' },
+        { handler: onError, id: 'task-on-error', type: 'onError' },
+      ];
+      hookDispatcher.register(operationId, hooks);
+      return { onComplete, onError };
+    };
+
+    it('fires onComplete (reason=done) hooks on a successful run', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-success');
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-hook-success',
+        result: 'success',
+        topicId: 'topic-hook-1',
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onComplete.mock.calls[0][0]).toMatchObject({
+        operationId: 'op-hook-success',
+        reason: 'done',
+      });
+      expect(onError).not.toHaveBeenCalled();
+      // Hooks are unregistered after dispatch so a replay can't double-fire.
+      expect(hookDispatcher.hasHooks('op-hook-success')).toBe(false);
+    });
+
+    it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-error');
+
+      await service.heteroFinish({
+        agentType: 'codex',
+        error: { message: 'auth required', type: 'AuthRequired' },
+        operationId: 'op-hook-error',
+        result: 'error',
+        topicId: 'topic-hook-2',
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0][0]).toMatchObject({
+        errorMessage: 'auth required',
+        errorType: 'AuthRequired',
+        operationId: 'op-hook-error',
+        reason: 'error',
+      });
+    });
+
+    it('does NOT fire hooks on a cancelled run (the real result fires them)', async () => {
+      const { service } = createService();
+      const { onComplete, onError } = registerHook('op-hook-cancelled');
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-hook-cancelled',
+        result: 'cancelled',
+        topicId: 'topic-hook-3',
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      // Still registered — the subsequent success/error call will dispatch them.
+      expect(hookDispatcher.hasHooks('op-hook-cancelled')).toBe(true);
+      hookDispatcher.unregister('op-hook-cancelled');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // The hetero terminal funnel in PRODUCTION (queue) mode. This is the path the
+  // device/sandbox runs actually take: execAgent (process A) serializes the run's
+  // lifecycle hooks onto `topic.metadata.runningOperation.hooks`; heteroFinish
+  // (process B — the device callback / CLI exit, a different Lambda) reads them
+  // back and must deliver each webhook. There is NO in-memory handler to fall
+  // back on across that process boundary, so the in-memory-handler tests above
+  // (which run in local mode) never exercise it. This guards the
+  // read(runningOperation.hooks) → dispatch → deliverWebhook round-trip — the
+  // link that, if broken, leaves a finished hetero task's `task_topics.status`
+  // stuck at `running` because `onTopicComplete` never fires.
+  describe('heteroFinish — queue-mode terminal webhook delivery (regression guard)', () => {
+    const originalToken = process.env.QSTASH_TOKEN;
+    const originalAppUrl = process.env.APP_URL;
+
+    const taskHook: SerializedHook = {
+      id: 'task-on-complete',
+      type: 'onComplete',
+      webhook: {
+        body: { taskId: 'task_q', taskIdentifier: 'T-Q', userId: 'user-test' },
+        delivery: 'qstash',
+        url: '/api/workflows/task/on-topic-complete',
+      },
+    };
+
+    const makeService = (hooks: SerializedHook[] | undefined) => {
+      const topicModel = {
+        // Mirror what execAgent persisted at dispatch: the serialized hooks live
+        // under runningOperation. heteroFinish must read them from here.
+        findById: vi.fn(async () => ({
+          id: 'topic-q',
+          metadata: { runningOperation: { hooks, operationId: 'op-q' } },
+        })),
+        updateMetadata: vi.fn(async () => {}),
+      } as any;
+      const { manager } = createFakeStreamManager();
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler: createFakePersistenceHandler(),
+        snapshotStore: null,
+        streamEventManager: manager,
+        topicModel,
+      });
+      return { service, topicModel };
+    };
+
+    beforeEach(() => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      mockPublishJSON.mockReset();
+      mockPublishJSON.mockResolvedValue(undefined);
+      process.env.QSTASH_TOKEN = 'test-token';
+      process.env.APP_URL = 'https://app.test';
+    });
+
+    afterEach(() => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(false);
+      if (originalToken === undefined) delete process.env.QSTASH_TOKEN;
+      else process.env.QSTASH_TOKEN = originalToken;
+      if (originalAppUrl === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = originalAppUrl;
+    });
+
+    it('delivers the task-on-complete webhook read from runningOperation.hooks (reason=done)', async () => {
+      const { service } = makeService([taskHook]);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-q',
+        result: 'success',
+        topicId: 'topic-q',
+      });
+
+      expect(mockPublishJSON).toHaveBeenCalledTimes(1);
+      const arg = mockPublishJSON.mock.calls[0][0];
+      expect(arg.url).toContain('/api/workflows/task/on-topic-complete');
+      expect(arg.body).toMatchObject({
+        hookId: 'task-on-complete',
+        hookType: 'onComplete',
+        reason: 'done',
+        taskId: 'task_q',
+        topicId: 'topic-q',
+      });
+    });
+
+    it('negative control: delivers nothing when runningOperation.hooks is empty', async () => {
+      const { service } = makeService([]);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-q',
+        result: 'success',
+        topicId: 'topic-q',
+      });
+
+      expect(mockPublishJSON).not.toHaveBeenCalled();
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // End-to-end DATA-FLOW reproduction of the runtime path: seed the run's hooks
+  // the way execAgent does (real hookDispatcher.register → getSerializedHooks →
+  // persist onto runningOperation via a shared in-memory topic store with REAL
+  // shallow-merge semantics), then run the REAL heteroFinish against the SAME
+  // store. This exercises the cross-process round-trip the isolated unit tests
+  // hand-wave, and lets us reproduce the production "stuck task_topics" symptom
+  // by injecting the suspected lost-update race on topic.metadata.
+  describe('heteroFinish — seed→read→deliver round-trip + lost-update repro', () => {
+    const originalToken = process.env.QSTASH_TOKEN;
+    const originalAppUrl = process.env.APP_URL;
+    const TOPIC = 'topic-int';
+
+    // The exact hook taskRunner attaches: a handler (local) PLUS a qstash webhook.
+    const taskHook: AgentHook = {
+      handler: async () => {},
+      id: 'task-on-complete',
+      type: 'onComplete',
+      webhook: {
+        body: { taskId: 'task_x', taskIdentifier: 'T-X', userId: 'user-test' },
+        delivery: 'qstash',
+        url: '/api/workflows/task/on-topic-complete',
+      },
+    };
+
+    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata:
+    // a non-atomic read-modify-write that shallow-merges the patch over a
+    // snapshot. `mergeBase` lets a test force the "read a stale snapshot" race.
+    const makeStore = () => {
+      let meta: Record<string, any> = {};
+      const topicModel = {
+        findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
+        updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
+          meta = { ...(mergeBase ?? meta), ...patch };
+        }),
+      } as any;
+      return { get: () => meta, topicModel };
+    };
+
+    // Reproduce execAgent's seed step exactly.
+    const seed = (store: ReturnType<typeof makeStore>, operationId: string) => {
+      hookDispatcher.register(operationId, [taskHook]);
+      const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+      return store.topicModel.updateMetadata(TOPIC, {
+        runningOperation: { assistantMessageId: 'asst-1', hooks: serializedHooks, operationId },
+      });
+    };
+
+    const makeService = (store: ReturnType<typeof makeStore>) =>
+      new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler: createFakePersistenceHandler(),
+        snapshotStore: null,
+        streamEventManager: createFakeStreamManager().manager,
+        topicModel: store.topicModel,
+      });
+
+    beforeEach(() => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      mockPublishJSON.mockReset();
+      mockPublishJSON.mockResolvedValue(undefined);
+      process.env.QSTASH_TOKEN = 'test-token';
+      process.env.APP_URL = 'https://app.test';
+    });
+
+    afterEach(() => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(false);
+      hookDispatcher.unregister('op-int');
+      if (originalToken === undefined) delete process.env.QSTASH_TOKEN;
+      else process.env.QSTASH_TOKEN = originalToken;
+      if (originalAppUrl === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = originalAppUrl;
+    });
+
+    it('happy path: a fresh-read heteroIngest write preserves hooks → heteroFinish delivers', async () => {
+      const store = makeStore();
+      await seed(store, 'op-int');
+
+      // A normal mid-run ingest write reads the CURRENT snapshot, so the
+      // shallow-merge keeps runningOperation intact.
+      await store.topicModel.updateMetadata(TOPIC, {
+        heteroCurrentMsgId: { msgId: 'm1', operationId: 'op-int' },
+      });
+      expect(store.get().runningOperation?.hooks).toHaveLength(1);
+
+      // heteroFinish runs in a DIFFERENT process/Lambda than execAgent, so the
+      // in-memory hookDispatcher has nothing for this op — it relies purely on
+      // the serialized hooks read from runningOperation. Drop the in-memory
+      // registration to model that boundary faithfully.
+      hookDispatcher.unregister('op-int');
+
+      await makeService(store).heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-int',
+        result: 'success',
+        topicId: TOPIC,
+      });
+
+      expect(mockPublishJSON).toHaveBeenCalledTimes(1);
+      expect(mockPublishJSON.mock.calls[0][0].url).toContain(
+        '/api/workflows/task/on-topic-complete',
+      );
+    });
+
+    it('REPRO: a stale-read ingest write clobbers runningOperation.hooks → heteroFinish delivers nothing (the stuck-task symptom)', async () => {
+      const store = makeStore();
+      // Snapshot BEFORE the seed commits — what a racing reader would have seen.
+      const preSeedSnapshot = { ...store.get() };
+      await seed(store, 'op-int');
+      expect(store.get().runningOperation?.hooks).toHaveLength(1);
+
+      // A concurrent heteroIngest whose read-modify-write started from the
+      // pre-seed snapshot (replica lag / interleave): merging its patch over the
+      // STALE base drops runningOperation entirely — a classic lost update.
+      await store.topicModel.updateMetadata(
+        TOPIC,
+        { heteroCurrentMsgId: { msgId: 'm1', operationId: 'op-int' } },
+        preSeedSnapshot,
+      );
+      expect(store.get().runningOperation).toBeUndefined();
+
+      // Model the process boundary: heteroFinish's in-memory dispatcher is empty,
+      // so the clobbered runningOperation is its ONLY source of the hook.
+      hookDispatcher.unregister('op-int');
+
+      await makeService(store).heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-int',
+        result: 'success',
+        topicId: TOPIC,
+      });
+
+      // Exactly the production failure: the run finished, but the terminal hook
+      // had nothing to deliver, so onTopicComplete never fires and the task
+      // topic is stranded at `running`.
+      expect(mockPublishJSON).not.toHaveBeenCalled();
     });
   });
 });

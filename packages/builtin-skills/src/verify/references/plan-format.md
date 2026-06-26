@@ -1,8 +1,10 @@
 # Verify plan — machine-readable format
 
 The plan is the contract between the task config and you, the builder. It is
-exposed through two `lh` reads keyed off your operation id. This file documents
-their shapes and how to join them into a per-criterion worklist.
+exposed through `lh verify plan state` keyed off your operation id. This file
+documents its shape and how to turn it into a per-criterion worklist. You submit
+each criterion's evidence by its `checkItemId` — no separate upload handle to
+resolve.
 
 ## (a) `lh verify plan state $LOBE_OPERATION_ID --json`
 
@@ -39,46 +41,41 @@ confirmed):
 - `hint` is guidance for what the artifact should show — it is not validated, but
   follow it so the reviewer can recognize the proof.
 
-## (b) `lh verify result list --operation $LOBE_OPERATION_ID --json`
+## Your worklist → submit by checkItemId
 
-Returns one pending **check result** row per plan item — these carry the upload
-handle:
+The plan (a) is all you need. For each `verifyPlan[]` item with non-empty
+`requiredEvidence`, capture each `type` and submit it by `checkItemId`:
+
+| checkItemId  | title                            | requiredEvidence |
+| ------------ | -------------------------------- | ---------------- |
+| `vci_a1b2c3` | Login flow reaches the workspace | `screenshot`     |
+
+```bash
+OP="$LOBE_OPERATION_ID"
+lh verify submit --operation "$OP" --item vci_a1b2c3 --type screenshot \
+  --file ./proof/home.png --by agent-browser --desc "…"
+```
+
+`lh verify submit` resolves the session from the operation id and **creates the
+check-result row for you** (idempotent on `checkItemId`), then attaches the
+evidence — there is no `checkResultId` to look up first.
+
+## Self-check after submitting (optional)
+
+Once you've submitted, the result rows exist. To confirm coverage, read them back
+and list each row's evidence:
 
 ```jsonc
+// lh verify result list --operation "$OP" --json
 [
   {
-    "id": "vcr_x9y8z7", // checkResultId — pass this to upload-evidence
+    "id": "vcr_x9y8z7", // checkResultId (created by submit)
     "checkItemId": "vci_a1b2c3", // joins back to verifyPlan[].id
-    "checkItemTitle": "Login flow reaches the workspace",
-    "required": true,
-    "status": "pending",
+    "status": "running",
   },
 ]
 ```
 
-If this returns rows with `status: "pending"`, the handles are ready. If it is
-empty, the run did not pre-build result handles — surface that rather than
-guessing an id.
-
-## The join → your worklist
-
-Join (a) and (b) on `checkItemId` to get, per criterion, _what to prove_ and
-_where to attach it_:
-
-| checkItemId  | title                            | requiredEvidence | checkResultId |
-| ------------ | -------------------------------- | ---------------- | ------------- |
-| `vci_a1b2c3` | Login flow reaches the workspace | `screenshot`     | `vcr_x9y8z7`  |
-
-For each row with non-empty `requiredEvidence`: capture each type, then
-`lh verify evidence upload --check "$CHECK_RESULT_ID" --type TYPE …`.
-
-To build the worklist, dump both reads and join them in your runtime:
-
 ```bash
-OP="$LOBE_OPERATION_ID"
-lh verify plan state "$OP" --json > /tmp/plan.json
-lh verify result list --operation "$OP" --json > /tmp/results.json
-# join on the id fields:
-#   plan:   verifyPlan[].id          == checkItemId
-#   result: [].checkItemId → [].id   == checkResultId
+lh verify evidence list "$CHECK_RESULT_ID" --json # confirm each required type is present
 ```

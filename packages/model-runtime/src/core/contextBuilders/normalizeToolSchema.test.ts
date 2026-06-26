@@ -15,7 +15,7 @@ describe('normalizeToolJsonSchema', () => {
     expect(normalizeToolJsonSchema('foo')).toBe('foo');
   });
 
-  // LOBE-10066: deepseek variant — array property with `items: true`
+  // DeepSeek variant — array property with `items: true`
   it('rewrites `items: true` to an empty object schema', () => {
     const result = normalizeToolJsonSchema({
       properties: {
@@ -28,7 +28,7 @@ describe('normalizeToolJsonSchema', () => {
     expect(result.properties.sourceIds.type).toBe('array');
   });
 
-  // LOBE-10066: gemini variant — array property carrying `items` but missing `type`
+  // Gemini variant — array property carrying `items` but missing `type`
   it('backfills `type: array` on a node that carries `items` without a type', () => {
     const result = normalizeToolJsonSchema({
       properties: {

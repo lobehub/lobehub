@@ -1,5 +1,6 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Form, Icon, Popover, Segmented, Select } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Form, Icon, Popover, Select } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -159,18 +160,21 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
 
   const panelContent = (
     <Flexbox gap={12} width={280}>
-      <Segmented
-        block
-        value={viewMode}
-        options={[
-          { icon: <Icon icon={LayoutList} />, label: t('taskList.view.list'), value: 'list' },
+      <Tabs
+        activeKey={viewMode}
+        items={[
+          { icon: <Icon icon={LayoutList} />, key: 'list', label: t('taskList.view.list') },
           {
             icon: <Icon icon={LayoutGrid} />,
+            key: 'kanban',
             label: t('taskList.view.board'),
-            value: 'kanban',
           },
         ]}
-        onChange={(value) => setViewMode(value as 'kanban' | 'list')}
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => setViewMode(key as 'kanban' | 'list')}
       />
       {viewMode === 'list' && (
         <Form

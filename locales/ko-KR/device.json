@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "변경 사항 로드 중…",
   "workingDirectory.filesModified": "수정됨",
   "workingDirectory.ghMissing": "GitHub CLI(`gh`)를 설치하고 로그인하여 연결된 풀 리퀘스트를 확인하세요",
+  "workingDirectory.heteroHint": "이 에이전트는 항상 작업 디렉토리 내에서 실행됩니다. 작업 디렉토리를 선택하기 전까지 기본 폴더를 사용합니다 — 아래에서 변경하려면 다른 폴더를 선택하세요.",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "최근 디렉토리 없음",
   "workingDirectory.notSet": "작업 디렉토리를 설정하려면 클릭하세요",
