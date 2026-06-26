@@ -1,59 +1,4 @@
 {
-  "packages/builtin-tool-agent-builder/src/client/Render/SearchMarketTools.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-claude-code/src/client/Intervention/AskUserQuestion/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-claude-code/src/client/Render/Agent/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-claude-code/src/client/Streaming/Agent/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-lobe-agent/src/client/Render/CallSubAgent/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-web-browsing/src/client/Portal/PageContent/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-web-browsing/src/client/Render/Search/ConfigForm/Form.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-web-browsing/src/client/Render/Search/ConfigForm/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-web-browsing/src/client/Render/Search/SearchResult/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "packages/builtin-tool-web-browsing/src/client/components/SearchBar.tsx": {
-    "no-restricted-imports": {
-      "count": 2
-    }
-  },
-  "packages/builtin-tool-web-onboarding/src/agentMarketplace/client/Intervention/PickAgents/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/components/404/index.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -570,11 +515,6 @@
     }
   },
   "src/features/Electron/connection/Waiting.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/features/Electron/updater/UpdateNotification.tsx": {
     "no-restricted-imports": {
       "count": 1
     }
