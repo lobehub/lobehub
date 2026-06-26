@@ -78,7 +78,7 @@ describe('useCanEditDevice', () => {
   });
 
   describe('workspace scope', () => {
-    it('is editable when the caller is a workspace owner — even on ghost rows', () => {
+    it('is editable when the caller is a workspace owner on a persisted row', () => {
       mocks.isOwner.current = true;
       const { result } = renderHook(() => useCanEditDevice());
       expect(
@@ -86,7 +86,15 @@ describe('useCanEditDevice', () => {
           buildDevice({ enroller: buildEnroller('someone-else'), scope: 'workspace' }),
         ),
       ).toBe(true);
-      expect(result.current(buildDevice({ enroller: null, scope: 'workspace' }))).toBe(true);
+    });
+
+    it('is fail-closed for a workspace owner on a ghost row', () => {
+      // No DB row yet → updateWorkspaceDevice / removeWorkspaceDevice would
+      // throw NOT_FOUND. The UI must not expose controls that the server will
+      // reject.
+      mocks.isOwner.current = true;
+      const { result } = renderHook(() => useCanEditDevice());
+      expect(result.current(buildDevice({ enroller: null, scope: 'workspace' }))).toBe(false);
     });
 
     it('is editable for a member when they are the enroller', () => {

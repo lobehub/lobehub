@@ -14,10 +14,13 @@ import { userProfileSelectors } from '@/store/user/selectors';
  *
  * Rules:
  *   - Personal devices belong solely to the caller → always editable.
- *   - Workspace devices are editable by any workspace owner, OR by the member
- *     whose `enrollerUserId` matches the current user. Ghost rows (no
- *     persisted enroller) are fail-closed for non-owners — there is no row to
- *     edit until the device auto-registers.
+ *   - Workspace ghost rows (gateway-only, not yet auto-registered → no
+ *     persisted enroller) are fail-closed for everyone, owners included: the
+ *     workspace update / remove mutations look the device up by id first and
+ *     would throw NOT_FOUND, so exposing the controls only sets up a failing
+ *     action. Wait for the row to materialise.
+ *   - Workspace persisted rows are editable by any workspace owner, OR by the
+ *     member whose `enrollerUserId` matches the current user.
  */
 export const useCanEditDevice = () => {
   const isOwner = useIsWorkspaceOwner();
@@ -26,8 +29,9 @@ export const useCanEditDevice = () => {
   return useCallback(
     (device: DeviceListItem): boolean => {
       if (device.scope === 'personal') return true;
+      if (!device.enroller) return false;
       if (isOwner) return true;
-      if (!device.enroller || !currentUserId) return false;
+      if (!currentUserId) return false;
       return device.enroller.userId === currentUserId;
     },
     [isOwner, currentUserId],

@@ -1421,6 +1421,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.planBadge.active': 'Active',
   'workspace.billingPage.billing.planBadge.cancelled': 'Cancelled',
   'workspace.billingPage.billing.planBadge.cancelling': 'Cancelling',
+  'workspace.billingPage.billing.planBadge.free': 'Free',
   'workspace.billingPage.billing.planBadge.inactive': 'Inactive',
   'workspace.billingPage.billing.pending.cancelCta': 'Cancel',
   'workspace.billingPage.billing.pending.cancelSuccess': 'Subscription change canceled.',

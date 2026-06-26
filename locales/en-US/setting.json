@@ -1388,6 +1388,7 @@
   "workspace.billingPage.billing.planBadge.active": "Active",
   "workspace.billingPage.billing.planBadge.cancelled": "Cancelled",
   "workspace.billingPage.billing.planBadge.cancelling": "Cancelling",
+  "workspace.billingPage.billing.planBadge.free": "Free",
   "workspace.billingPage.billing.planBadge.inactive": "Inactive",
   "workspace.billingPage.billing.resumeCta": "Resume subscription",
   "workspace.billingPage.billing.resumeSuccess": "Cancellation reversed. Your subscription will renew normally.",

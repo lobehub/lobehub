@@ -1388,6 +1388,7 @@
   "workspace.billingPage.billing.planBadge.active": "活跃",
   "workspace.billingPage.billing.planBadge.cancelled": "已取消",
   "workspace.billingPage.billing.planBadge.cancelling": "取消中",
+  "workspace.billingPage.billing.planBadge.free": "免费",
   "workspace.billingPage.billing.planBadge.inactive": "非活动",
   "workspace.billingPage.billing.resumeCta": "恢复订阅",
   "workspace.billingPage.billing.resumeSuccess": "取消已撤销。您的订阅将正常续订。",

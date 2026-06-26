@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
+  requireWorkspaceRole,
   type WorkspaceRole,
   wsCompatProcedure,
   wsProcedure,
@@ -46,6 +47,13 @@ const canEditWorkspaceDevice = (
   actorUserId: string,
   enrollerUserId: string,
 ): boolean => role === 'owner' || enrollerUserId === actorUserId;
+
+/**
+ * Workspace-write gate: membership + at least `member` role (excludes viewer).
+ * Enrolling a device mutates the shared workspace device pool, so read-only
+ * viewers must not pass — `wsProcedure` alone only checks membership.
+ */
+const wsWritableProcedure = wsProcedure.use(requireWorkspaceRole('member'));
 
 // Workspace-aware (compat): with an `X-Workspace-Id` header the device list also
 // surfaces the workspace's shared devices; without it, the personal path is
@@ -717,26 +725,30 @@ export const deviceRouter = router({
 
   /**
    * Mint a short-lived connect token for enrolling a WORKSPACE-owned device.
-   * Any workspace member can call — enrolling a machine into the shared pool
-   * is self-service so members don't have to chase an owner to join their dev
-   * box. The signed token carries the `workspace_id` claim the device gateway
-   * trusts to route the device to the `workspace:<id>` principal. The CLI
-   * (`lh connect --workspace`) / settings page use this.
+   * Workspace members (and owners) can call — enrolling a machine into the
+   * shared pool is self-service so members don't have to chase an owner to
+   * join their dev box. Viewers are blocked: writing a row to the workspace
+   * device pool is a mutation, not a read. The signed token carries the
+   * `workspace_id` claim the device gateway trusts to route the device to the
+   * `workspace:<id>` principal. The CLI (`lh connect --workspace`) / settings
+   * page use this.
    */
-  mintWorkspaceConnectToken: wsProcedure.mutation(async ({ ctx }) => {
+  mintWorkspaceConnectToken: wsWritableProcedure.mutation(async ({ ctx }) => {
     const token = await signWorkspaceDeviceToken(ctx.workspaceId);
     return { token, workspaceId: ctx.workspaceId };
   }),
 
   /**
-   * Enroll the calling machine as a device of the current workspace. Any
-   * workspace member may call; `devices.userId` records the first enroller of
-   * each `(workspaceId, deviceId)` pair and is preserved on re-enroll (see
-   * `DeviceModel.registerWorkspaceDevice`), which `updateWorkspaceDevice` /
-   * `removeWorkspaceDevice` use to gate writes to "self or owner". Used by
-   * `lh connect --workspace` after minting the connect token.
+   * Enroll the calling machine as a device of the current workspace.
+   * Workspace members (and owners) may call — viewers are blocked because
+   * enrollment writes a row to the shared pool. `devices.userId` records the
+   * first enroller of each `(workspaceId, deviceId)` pair and is preserved on
+   * re-enroll (see `DeviceModel.registerWorkspaceDevice`), which
+   * `updateWorkspaceDevice` / `removeWorkspaceDevice` use to gate writes to
+   * "self or owner". Used by `lh connect --workspace` after minting the
+   * connect token.
    */
-  registerWorkspaceDevice: wsProcedure
+  registerWorkspaceDevice: wsWritableProcedure
     .use(serverDatabase)
     .input(
       z.object({
@@ -757,7 +769,7 @@ export const deviceRouter = router({
    * the pool; members may edit only devices they enrolled themselves. Mirrors
    * {@link deviceRouter.updateDevice} but for the workspace pool.
    */
-  updateWorkspaceDevice: wsProcedure
+  updateWorkspaceDevice: wsWritableProcedure
     .use(serverDatabase)
     .input(
       z.object({
@@ -796,7 +808,7 @@ export const deviceRouter = router({
    * {@link canEditWorkspaceDevice}: owners may remove any device in the pool;
    * members may remove only devices they enrolled themselves.
    */
-  removeWorkspaceDevice: wsProcedure
+  removeWorkspaceDevice: wsWritableProcedure
     .use(serverDatabase)
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
