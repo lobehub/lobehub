@@ -1345,6 +1345,7 @@
   "workspace.billingPage.billing.downgradePlanModal.body": "您当前的计划将在当前计费周期结束后降级为 {{targetPlan}}。",
   "workspace.billingPage.billing.downgradePlanModal.bodyWithDate": "您当前的计划将在 {{date}}（当前计费周期结束）降级为 {{targetPlan}}。",
   "workspace.billingPage.billing.downgradePlanModal.continueCta": "继续",
+  "workspace.billingPage.billing.downgradePlanModal.intervalSuffix": "，并切换为{{interval}}",
   "workspace.billingPage.billing.downgradePlanModal.keepCta": "保留计划",
   "workspace.billingPage.billing.downgradePlanModal.limitDesc": "{{targetPlan}} 工作区最多支持 {{maxSeats}} 个席位。",
   "workspace.billingPage.billing.downgradePlanModal.loseFeatures": "降级生效后，您将无法继续使用 {{currentPlan}} 的功能。",

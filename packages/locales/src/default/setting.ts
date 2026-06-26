@@ -1284,6 +1284,8 @@ When I am ___, I need ___
     'Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period.',
   'workspace.billingPage.billing.downgradePlanModal.bodyWithDate':
     'Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period on {{date}}.',
+  'workspace.billingPage.billing.downgradePlanModal.intervalSuffix':
+    ' and switched to {{interval}}',
   'workspace.billingPage.billing.downgradePlanModal.continueCta': 'Continue',
   'workspace.billingPage.billing.downgradePlanModal.keepCta': 'Keep plan',
   'workspace.billingPage.billing.downgradePlanModal.limitDesc':

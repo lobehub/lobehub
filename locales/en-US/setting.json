@@ -1345,6 +1345,7 @@
   "workspace.billingPage.billing.downgradePlanModal.body": "Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period.",
   "workspace.billingPage.billing.downgradePlanModal.bodyWithDate": "Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period on {{date}}.",
   "workspace.billingPage.billing.downgradePlanModal.continueCta": "Continue",
+  "workspace.billingPage.billing.downgradePlanModal.intervalSuffix": " and switched to {{interval}}",
   "workspace.billingPage.billing.downgradePlanModal.keepCta": "Keep plan",
   "workspace.billingPage.billing.downgradePlanModal.limitDesc": "{{targetPlan}} workspaces support up to {{maxSeats}} seats.",
   "workspace.billingPage.billing.downgradePlanModal.loseFeatures": "You will lose access to {{currentPlan}} features after that date.",
