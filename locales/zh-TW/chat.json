@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "驗收已禁用",
   "verifyConfig.done": "完成",
   "verifyConfig.edit": "編輯",
+  "verifyConfig.empty.materializeHint": "此要求已經生效。您可以進一步將其分解為結構化的逐項清單。",
   "verifyConfig.empty.subtitle": "用一句話描述您希望如何驗收結果，AI 將其轉化為可編輯的清單。",
   "verifyConfig.empty.title": "交付驗收",
   "verifyConfig.enable": "啟用驗收檢查",

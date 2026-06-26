@@ -7,6 +7,7 @@
   "config.header.title": "نقاشی",
   "config.height.label": "ارتفاع",
   "config.imageNum.label": "تعداد تصاویر",
+  "config.imageUpload.maxCountReached": "شما می‌توانید تا {{count}} تصویر مرجع اضافه کنید",
   "config.imageUrl.label": "تصویر مرجع",
   "config.imageUrls.label": "تصاویر مرجع",
   "config.model.label": "مدل",

@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "تم تعطيل القبول",
   "verifyConfig.done": "تم",
   "verifyConfig.edit": "تعديل",
+  "verifyConfig.empty.materializeHint": "هذا المتطلب قيد التنفيذ بالفعل. يمكنك تفصيله بشكل أكبر إلى قائمة تحقق منظمة، عنصرًا تلو الآخر.",
   "verifyConfig.empty.subtitle": "صف كيف تريد قبول النتيجة في جملة واحدة، وسيحولها الذكاء الاصطناعي إلى قائمة تحقق قابلة للتعديل.",
   "verifyConfig.empty.title": "قبول التسليم",
   "verifyConfig.enable": "تمكين فحص القبول",

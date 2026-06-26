@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Acceptatie uitgeschakeld",
   "verifyConfig.done": "Klaar",
   "verifyConfig.edit": "Bewerken",
+  "verifyConfig.empty.materializeHint": "Deze vereiste is al van kracht. U kunt het verder opsplitsen in een gestructureerde, item-voor-item checklist.",
   "verifyConfig.empty.subtitle": "Beschrijf in één zin hoe je het resultaat wilt accepteren, en AI zet het om in een bewerkbare checklist.",
   "verifyConfig.empty.title": "Leveringsacceptatie",
   "verifyConfig.enable": "Acceptatiecontrole inschakelen",

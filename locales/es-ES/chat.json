@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Aceptación deshabilitada",
   "verifyConfig.done": "Hecho",
   "verifyConfig.edit": "Editar",
+  "verifyConfig.empty.materializeHint": "Este requisito ya está en vigor. Puedes desglosarlo aún más en una lista estructurada, elemento por elemento.",
   "verifyConfig.empty.subtitle": "Describe cómo deseas aceptar el resultado en una frase, y la IA lo convertirá en una lista de verificación editable.",
   "verifyConfig.empty.title": "Aceptación de entrega",
   "verifyConfig.enable": "Habilitar verificación de aceptación",

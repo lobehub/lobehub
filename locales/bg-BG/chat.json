@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Приемането е деактивирано",
   "verifyConfig.done": "Готово",
   "verifyConfig.edit": "Редактиране",
+  "verifyConfig.empty.materializeHint": "Това изискване вече е в сила. Можете да го разделите допълнително на структурирана, точка по точка контролен списък.",
   "verifyConfig.empty.subtitle": "Опишете как искате да приемете резултата в едно изречение, и AI ще го превърне в редактиращ се списък.",
   "verifyConfig.empty.title": "Приемане на доставка",
   "verifyConfig.enable": "Активиране на проверка за приемане",

@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Đang tải các thay đổi…",
   "workingDirectory.filesModified": "Đã sửa đổi",
   "workingDirectory.ghMissing": "Cài đặt và đăng nhập vào GitHub CLI (`gh`) để xem các yêu cầu kéo liên kết",
+  "workingDirectory.heteroHint": "Agent này luôn chạy bên trong một thư mục làm việc. Cho đến khi bạn chọn một thư mục, nó sẽ sử dụng thư mục mặc định — chọn thư mục khác bên dưới để thay đổi.",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "Không có thư mục gần đây",
   "workingDirectory.notSet": "Nhấp để đặt thư mục làm việc",

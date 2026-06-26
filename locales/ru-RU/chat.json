@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Принятие отключено",
   "verifyConfig.done": "Готово",
   "verifyConfig.edit": "Редактировать",
+  "verifyConfig.empty.materializeHint": "Этот требование уже действует. Вы можете разбить его на структурированный, пункт за пунктом контрольный список.",
   "verifyConfig.empty.subtitle": "Опишите, как вы хотите принять результат в одном предложении, и ИИ превратит это в редактируемый чек-лист.",
   "verifyConfig.empty.title": "Принятие результата",
   "verifyConfig.enable": "Включить проверку принятия",

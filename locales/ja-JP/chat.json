@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "受け入れが無効",
   "verifyConfig.done": "完了",
   "verifyConfig.edit": "編集",
+  "verifyConfig.empty.materializeHint": "この要件はすでに適用されています。さらに分解して、構造化された項目ごとのチェックリストにすることができます。",
   "verifyConfig.empty.subtitle": "結果を受け入れる方法を1文で記述すると、AIが編集可能なチェックリストに変換します。",
   "verifyConfig.empty.title": "納品受け入れ",
   "verifyConfig.enable": "受け入れチェックを有効化",

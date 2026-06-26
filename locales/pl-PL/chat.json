@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Akceptacja wyłączona",
   "verifyConfig.done": "Gotowe",
   "verifyConfig.edit": "Edytuj",
+  "verifyConfig.empty.materializeHint": "Ten wymóg jest już wprowadzony. Możesz go rozbić na bardziej szczegółową, punktową listę kontrolną.",
   "verifyConfig.empty.subtitle": "Opisz w jednym zdaniu, jak chcesz zaakceptować wynik, a AI przekształci to w edytowalną listę kontrolną.",
   "verifyConfig.empty.title": "Akceptacja dostawy",
   "verifyConfig.enable": "Włącz sprawdzanie akceptacji",

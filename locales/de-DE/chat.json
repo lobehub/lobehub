@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Akzeptanz deaktiviert",
   "verifyConfig.done": "Fertig",
   "verifyConfig.edit": "Bearbeiten",
+  "verifyConfig.empty.materializeHint": "Diese Anforderung ist bereits in Kraft. Sie können sie weiter in eine strukturierte, punktweise Checkliste unterteilen.",
   "verifyConfig.empty.subtitle": "Beschreiben Sie in einem Satz, wie Sie das Ergebnis akzeptieren möchten, und die KI wird es in eine bearbeitbare Checkliste umwandeln.",
   "verifyConfig.empty.title": "Lieferungsakzeptanz",
   "verifyConfig.enable": "Akzeptanzprüfung aktivieren",

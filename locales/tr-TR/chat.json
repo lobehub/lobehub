@@ -978,6 +978,7 @@
   "verifyConfig.disabled": "Kabul devre dışı",
   "verifyConfig.done": "Tamamlandı",
   "verifyConfig.edit": "Düzenle",
+  "verifyConfig.empty.materializeHint": "Bu gereklilik zaten yürürlükte. Bunu daha fazla yapılandırılmış, madde madde bir kontrol listesine dönüştürebilirsiniz.",
   "verifyConfig.empty.subtitle": "Sonucu nasıl kabul etmek istediğinizi bir cümleyle tanımlayın, AI bunu düzenlenebilir bir kontrol listesine dönüştürsün.",
   "verifyConfig.empty.title": "Teslimat Kabulü",
   "verifyConfig.enable": "Kabul kontrolünü etkinleştir",
