@@ -156,10 +156,10 @@ export default {
   'credits.topUp.unitPrice': 'Unit Price',
   'credits.topUp.unitPriceFormat': '${{price}} / 1M {{creditLabel}}',
   'credits.topUp.unitPriceSuffix': '/ 1M {{creditLabel}}',
-  'credits.topUp.bestValue.cta': 'View Ultimate annual',
+  'credits.topUp.bestValue.cta': 'View {{plan}} annual',
   'credits.topUp.bestValue.savings': 'Save ${{savings}} on this purchase',
   'credits.topUp.bestValue.title':
-    '{{plan}} annual unlocks the lowest top-up rate: ${{price}} / 1M {{creditLabel}}',
+    'Upgrade to {{plan}} annual — credits as low as ${{price}} / 1M {{creditLabel}}',
   'credits.topUp.upgradePrefix': 'Upgrade to',
   'credits.topUp.upgradeSuffix': 'to save ${{savings}}',
   'credits.topUp.validityInfo': '{{months}} months validity',
