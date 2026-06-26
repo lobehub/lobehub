@@ -1,7 +1,7 @@
 /**
- * Rendered above the home sidebar footer. Open-source builds keep this slot
- * empty; cloud overrides it via the `@/business/...` path alias to surface a
- * contextual upgrade CTA for users on a free-tier plan.
+ * Rendered above the home sidebar footer. The open-source build keeps this
+ * slot empty; downstream builds can override the module via their own
+ * `@/business/...` mapping to surface optional sidebar content here.
  */
 const NavPanelUpgradeEntry = () => null;
 
