@@ -1239,7 +1239,7 @@ When I am ___, I need ___
     'Cancellation scheduled. Your subscription stops renewing at the end of the current billing cycle — the workspace then falls back to Free.',
   'workspace.billingPage.billing.banner.cancelledTitle': 'Subscription pending cancellation',
   'workspace.billingPage.billing.banner.expiredDesc':
-    'Your subscription has ended. Re-subscribe to restore Pro features, or downgrade to Solo.',
+    'Your subscription has ended. Re-subscribe to restore Pro features, or downgrade to Free.',
   'workspace.billingPage.billing.banner.expiredTitle': 'Subscription cancelled',
   'workspace.billingPage.billing.banner.inactiveDesc':
     'Subscription is inactive — credits will not refresh until you re-subscribe.',
@@ -1384,14 +1384,14 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.title': 'Upgrade?',
   'workspace.billingPage.billing.upgradePlanModal.totalSummary': '{{seats}} seats after upgrade',
   'workspace.billingPage.billing.downgrade.confirmBody':
-    'This immediately downgrades the workspace to Solo. The current billing period is non-refundable, and every member except the primary owner will be removed from this workspace.',
+    'This immediately downgrades the workspace to Free. The current billing period is non-refundable. Members and shared resources are preserved; the workspace becomes read-only until you re-subscribe.',
   'workspace.billingPage.billing.downgrade.confirmCta': 'Downgrade now',
   'workspace.billingPage.billing.downgrade.confirmInputLabel':
     'Type the workspace name "{{name}}" to confirm:',
   'workspace.billingPage.billing.downgrade.confirmInputPlaceholder': 'Workspace name',
-  'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Solo?',
+  'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Free?',
   'workspace.billingPage.billing.downgrade.failedToast': 'Failed to downgrade.',
-  'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Solo.',
+  'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Free.',
   'workspace.billingPage.billing.basic.subtitle':
     'Basic workspace · shared monthly pool · no paid seats',
   'workspace.billingPage.billing.basic.title': 'Basic workspace',
@@ -2188,12 +2188,12 @@ When I am ___, I need ___
   'workspace.wizard.step2.totalLimitReached':
     "You've reached the maximum of {{limit}} workspaces. Leave one before creating another.",
   'workspace.wizard.step2.features.basic.share': 'First 3 members are free, including you',
-  'workspace.wizard.step2.features.basic.solo': 'Up to 3 members, no paid seats',
+  'workspace.wizard.step2.features.basic.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.basic.onDemand':
     'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.basic.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.free.share': 'First 3 members are free, including you',
-  'workspace.wizard.step2.features.free.solo': 'Up to 3 members, no paid seats',
+  'workspace.wizard.step2.features.free.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.free.onDemand':
     'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.free.upgradable': 'Upgrade anytime for more seats',

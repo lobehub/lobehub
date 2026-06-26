@@ -184,6 +184,7 @@ export default {
   'workspaceBillingInactive.bannerHint': 'Click for details',
   'workspaceBillingInactive.bannerTitle': 'Workspace subscription inactive',
   'workspaceBillingInactive.confirm': 'Got it',
+  'workspaceBillingInactive.renew': 'Go to billing',
   'workspaceBillingInactive.description':
     "This workspace's paid subscription has lapsed. Sending messages and other paid actions are paused until the subscription is restored — you can still browse shared content in the meantime.",
   'workspaceBillingInactive.title': 'Workspace subscription inactive',
