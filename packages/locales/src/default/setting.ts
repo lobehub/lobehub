@@ -1377,6 +1377,7 @@ When I am ___, I need ___
     'This change will take effect after the current billing cycle ends. You will not be charged now.',
   'workspace.billingPage.billing.upgradePlanModal.scheduledTarget':
     'Your workspace will change to the {{plan}} {{interval}} plan after the current billing cycle ends.',
+  'workspace.billingPage.billing.upgradePlanModal.purchaseSeats': 'Purchase seats',
   'workspace.billingPage.billing.upgradePlanModal.seatAdjustment': 'Seat adjustment',
   'workspace.billingPage.billing.upgradePlanModal.target':
     'Your workspace will upgrade immediately to the {{plan}} {{interval}} plan.',

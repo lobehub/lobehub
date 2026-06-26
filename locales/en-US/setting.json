@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Current payment method",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Payment method",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "A prorated charge will be applied immediately to your current payment method.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Purchase seats",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Prepaid extra seats",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "View billing",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "Seat changes saved.",
