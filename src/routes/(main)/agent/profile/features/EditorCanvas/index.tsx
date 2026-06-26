@@ -71,6 +71,13 @@ const EditorCanvas = memo(() => {
   const streamingInProgress = useAgentStore((s) => s.streamingSystemRoleInProgress);
   const prevStreamingRef = useRef<string | undefined>(undefined);
   const wasStreamingRef = useRef(false);
+  // Guards programmatic editor writes (external Agent Builder updates) so they
+  // are not mistaken for user edits — avoids latching edit-intent / acquiring
+  // the lock and echoing a redundant save.
+  const programmaticSyncRef = useRef(false);
+  // Last systemRole pushed into the editor on the external-update (editorData
+  // empty) path, so we don't re-push the same value on every render.
+  const lastSyncedRoleRef = useRef<string | undefined>(undefined);
 
   // Collaborative edit-lock state, peeked-on-open and driven by the always-mounted
   // EditLockDriver (see ../EditLockDriver) so it's resolved before this editor
@@ -88,6 +95,10 @@ const EditorCanvas = memo(() => {
     if (!editable) return;
     // Don't trigger save during streaming
     if (streamingInProgress) return;
+    // Skip programmatic external re-sync (Agent Builder updated systemRole) —
+    // it's not a user edit, so don't latch edit-intent / acquire the lock or
+    // echo a redundant save.
+    if (programmaticSyncRef.current) return;
     // Latch edit-intent so the lock driver acquires the lock on the first real
     // edit. Streaming systemRole writes are programmatic and skipped above.
     setHasEdited(true);
@@ -137,6 +148,9 @@ const EditorCanvas = memo(() => {
         editor.setDocument('json', editorData);
       } else if (systemRole) {
         editor.setDocument('markdown', systemRole);
+        // Record the displayed role so the external-update re-sync below doesn't
+        // redundantly re-push the same value right after init.
+        lastSyncedRoleRef.current = systemRole;
       }
       // If no editorData and no systemRole, leave editor empty to show placeholder
       setContentInit(true);
@@ -144,6 +158,46 @@ const EditorCanvas = memo(() => {
       console.error('[EditorCanvas] Failed to init editor content:', error);
     }
   }, [editorInit, contentInit, editor, editorData, systemRole, streamingInProgress]);
+
+  // Re-sync the editor when the agent's systemRole is updated EXTERNALLY — the
+  // Agent Builder's updatePrompt / updateConfig clears editorData and sets a new
+  // systemRole. The content-init effect above only runs ONCE, so without this an
+  // external update with empty editorData leaves the editor blank even though a
+  // systemRole exists. A real user edit keeps editorData populated, so gating on
+  // "editorData empty" restores the original "fall back to systemRole" behavior
+  // without clobbering local edits. Skipped during streaming (the streaming
+  // effect owns the editor then).
+  useEffect(() => {
+    if (!editor || !editorInit || !contentInit) return;
+    if (streamingInProgress) return;
+
+    const hasEditorData = !!editorData && editorData?.root !== undefined;
+    if (hasEditorData) {
+      // Editor-backed content is the source of truth; allow a later clear to
+      // re-sync from systemRole again.
+      lastSyncedRoleRef.current = undefined;
+      return;
+    }
+
+    const role = systemRole ?? '';
+    if (lastSyncedRoleRef.current === role) return;
+    lastSyncedRoleRef.current = role;
+
+    programmaticSyncRef.current = true;
+    try {
+      editor.setDocument('markdown', role);
+    } catch {
+      // ignore
+    }
+    // Release the guard after the editor's onTextChange has had a chance to fire.
+    const timer = setTimeout(() => {
+      programmaticSyncRef.current = false;
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      programmaticSyncRef.current = false;
+    };
+  }, [editor, editorInit, contentInit, editorData, systemRole, streamingInProgress]);
 
   return (
     <Flexbox className={styles.root} gap={16}>

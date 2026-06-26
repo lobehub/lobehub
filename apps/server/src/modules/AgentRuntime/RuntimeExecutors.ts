@@ -23,6 +23,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
+  type AgentBuilderContext,
   type AgentContextDocument,
   type AgentGroupConfig,
   type BotPlatformContext,
@@ -75,6 +76,7 @@ import debug from 'debug';
 import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
+import { AgentModel } from '@/database/models/agent';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -1232,8 +1234,54 @@ export const createRuntimeExecutors = (
           }
         }
 
+        // Agent Builder (gateway / server mode): the `<current_agent_context>`
+        // that tells the builder LLM WHICH agent it is editing is built
+        // CLIENT-side in chat mode (services/chat/index.ts). In gateway mode that
+        // client code never runs, so without this the context is never injected
+        // and the builder answers with its OWN config instead of the edited
+        // agent's. `state.metadata.editingAgentId` is the agent being configured
+        // (the builder builtin is `state.metadata.agentId`).
+        let agentBuilderContext: AgentBuilderContext | undefined;
+        const editingAgentId = state.metadata?.editingAgentId;
+        if (editingAgentId && ctx.serverDB && ctx.userId) {
+          try {
+            const editingAgentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+            const editingConfig = (await editingAgentModel.getAgentConfigById(
+              editingAgentId,
+            )) as Record<string, any> | null;
+            if (editingConfig) {
+              agentBuilderContext = {
+                config: {
+                  chatConfig: editingConfig.chatConfig ?? undefined,
+                  model: editingConfig.model ?? undefined,
+                  openingMessage: editingConfig.openingMessage ?? undefined,
+                  openingQuestions: editingConfig.openingQuestions ?? undefined,
+                  params: editingConfig.params ?? undefined,
+                  plugins: editingConfig.plugins ?? undefined,
+                  provider: editingConfig.provider ?? undefined,
+                  systemRole: editingConfig.systemRole ?? undefined,
+                },
+                meta: {
+                  avatar: editingConfig.avatar ?? undefined,
+                  backgroundColor: editingConfig.backgroundColor ?? undefined,
+                  description: editingConfig.description ?? undefined,
+                  tags: editingConfig.tags ?? undefined,
+                  title: editingConfig.title ?? undefined,
+                },
+              };
+            }
+          } catch (error) {
+            log(
+              'Failed to build agentBuilderContext for editing agent %s: %O',
+              editingAgentId,
+              error,
+            );
+          }
+        }
+
         const contextEngineInput = {
           agentDocuments,
+          ...(agentBuilderContext && { agentBuilderContext }),
           agentGroup: buildBotAgentGroupContext({
             agentConfig,
             agentId: state.metadata?.agentId,
