@@ -9,6 +9,7 @@ import {
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DeviceModel } from '@/database/models/device';
+import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
@@ -599,6 +600,26 @@ export const deviceRouter = router({
       wsId ? deviceGateway.queryDeviceList(ctx.userId, wsId) : Promise.resolve([]),
     ]);
 
+    // Resolve display info for every enroller in a single roundtrip, so each
+    // row can ship a self-contained `enroller` for the picker / settings UI.
+    // Personal rows always belong to the caller, but the same lookup keeps the
+    // shape uniform across scopes.
+    const enrollerIds = [...new Set([...personalRows, ...workspaceRows].map((d) => d.userId))];
+    const enrollerRows = enrollerIds.length
+      ? await UserModel.findByIds(ctx.serverDB, enrollerIds)
+      : [];
+    const enrollerById = new Map(
+      enrollerRows.map((u) => [
+        u.id,
+        {
+          avatar: u.avatar ?? null,
+          fullName: u.fullName ?? null,
+          userId: u.id,
+          username: u.username ?? null,
+        },
+      ]),
+    );
+
     // The gateway already groups by device, exposing live sessions as nested
     // `channels`. Flatten one connection into the UI-facing channel shape; fall
     // back to a single synthetic channel for a legacy gateway that omits the field.
@@ -641,8 +662,16 @@ export const deviceRouter = router({
           deviceId: d.deviceId,
           // For personal rows this is always the caller; for workspace rows it
           // is the first enroller, surfaced so the UI can gate writes to "self
-          // or workspace owner" without a separate fetch.
-          enrollerUserId: d.userId,
+          // or workspace owner" and render the enroller's avatar without a
+          // separate fetch. Falls back to a userId-only stub if the user row
+          // was deleted (cascade nullifies devices.userId? no — FK is set, so
+          // a stub keeps the gate fail-closed).
+          enroller: enrollerById.get(d.userId) ?? {
+            avatar: null,
+            fullName: null,
+            userId: d.userId,
+            username: null,
+          },
           friendlyName: d.friendlyName,
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
@@ -664,7 +693,7 @@ export const deviceRouter = router({
             defaultCwd: null,
             deviceId,
             // No row yet → no enroller; UI gates treat this as not-editable.
-            enrollerUserId: null,
+            enroller: null,
             friendlyName: null,
             hostname: channels[0]?.hostname ?? null,
             identitySource: null,

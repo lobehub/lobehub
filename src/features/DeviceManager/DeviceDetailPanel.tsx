@@ -2,7 +2,17 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  Flexbox,
+  Icon,
+  Input,
+  SortableList,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
@@ -200,6 +210,21 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         </Flexbox>
       )}
 
+      {/* ─── Enrolled by (workspace only) ─── */}
+      {device.scope === 'workspace' && device.enroller && (
+        <Flexbox gap={6}>
+          <span className={styles.label}>{t('workspaceSetting.devices.enrolledByLabel')}</span>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
+            <Text style={{ fontSize: 13 }}>
+              {device.enroller.fullName ||
+                device.enroller.username ||
+                t('workspaceSetting.devices.unknownEnroller')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+      )}
+
       {/* ─── Connections ─── */}
       <Flexbox gap={8}>
         <span className={styles.label}>{t('devices.detail.connections')}</span>
@@ -241,10 +266,14 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             onChange={(e) => setName(e.target.value)}
             onPressEnter={commitName}
           />
-        ) : (
+        ) : device.friendlyName ? (
           // Read-only: render the canonical value (not the local draft), so a
           // value the caller can't actually commit never bleeds through.
-          <Text style={{ fontSize: 13 }}>{device.friendlyName || '—'}</Text>
+          <Text style={{ fontSize: 13 }}>{device.friendlyName}</Text>
+        ) : (
+          <Text style={{ fontSize: 13 }} type={'secondary'}>
+            —
+          </Text>
         )}
       </Flexbox>
 
@@ -266,8 +295,14 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
               </Button>
             )}
           </Flexbox>
+        ) : device.defaultCwd ? (
+          // Code font only when there's an actual path to read; empty falls back
+          // to the same dash style as Name so the two fields look consistent.
+          <Text className={styles.path}>{device.defaultCwd}</Text>
         ) : (
-          <Text className={styles.path}>{device.defaultCwd || '—'}</Text>
+          <Text style={{ fontSize: 13 }} type={'secondary'}>
+            —
+          </Text>
         )}
       </Flexbox>
 

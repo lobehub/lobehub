@@ -2345,6 +2345,8 @@ When I am ___, I need ___
   'workspaceSetting.devices.empty': 'No workspace devices yet.',
   'workspaceSetting.devices.enrollDesc':
     'Run this on the machine you want to share with the workspace:',
+  'workspaceSetting.devices.enrolledBy': 'Enrolled by {{name}}',
+  'workspaceSetting.devices.enrolledByLabel': 'Enrolled by',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
   'workspaceSetting.devices.heroDesc':
     'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
@@ -2353,6 +2355,7 @@ When I am ___, I need ___
   'workspaceSetting.devices.online': 'Online',
   'workspaceSetting.devices.readonlyHint':
     'Only the member who enrolled this device or a workspace owner can rename or remove it.',
+  'workspaceSetting.devices.unknownEnroller': 'an unknown member',
   'workspaceSetting.group.admin': 'Admin',
   'workspaceSetting.group.agent': 'Agent',
   'workspaceSetting.group.general': 'General',

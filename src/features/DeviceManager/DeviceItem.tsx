@@ -1,7 +1,17 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Checkbox,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -157,23 +167,46 @@ const DeviceItem = memo<DeviceItemProps>(
             </Flexbox>
           )}
         </Flexbox>
-        {canEdit && (
-          <span onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu
-              items={[
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2Icon} />,
-                  key: 'remove',
-                  label: t('devices.actions.remove'),
-                  onClick: handleRemove,
-                },
-              ]}
+        {/* Right cluster — avatar + dropdown stay vertically centered with the
+            first text row (the name) regardless of whether the row also shows
+            a cwd line below it. Without this, the larger avatar pushes itself
+            down relative to the smaller dropdown icon under `flex-start`. */}
+        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none', marginBlockStart: 2 }}>
+          {device.scope === 'workspace' && device.enroller && (
+            // Enroller avatar — the at-a-glance "who put this here" answer for
+            // shared workspace pools. Hidden in personal scope (always the
+            // caller) and for ghost rows (no row yet).
+            <Tooltip
+              title={t('workspaceSetting.devices.enrolledBy', {
+                name:
+                  device.enroller.fullName ||
+                  device.enroller.username ||
+                  t('workspaceSetting.devices.unknownEnroller'),
+              })}
             >
-              <ActionIcon icon={MoreVerticalIcon} />
-            </DropdownMenu>
-          </span>
-        )}
+              <span onClick={(e) => e.stopPropagation()}>
+                <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+              </span>
+            </Tooltip>
+          )}
+          {canEdit && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu
+                items={[
+                  {
+                    danger: true,
+                    icon: <Icon icon={Trash2Icon} />,
+                    key: 'remove',
+                    label: t('devices.actions.remove'),
+                    onClick: handleRemove,
+                  },
+                ]}
+              >
+                <ActionIcon icon={MoreVerticalIcon} />
+              </DropdownMenu>
+            </span>
+          )}
+        </Flexbox>
       </Flexbox>
     );
   },

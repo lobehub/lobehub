@@ -27,8 +27,8 @@ export const useCanEditDevice = () => {
     (device: DeviceListItem): boolean => {
       if (device.scope === 'personal') return true;
       if (isOwner) return true;
-      if (!device.enrollerUserId || !currentUserId) return false;
-      return device.enrollerUserId === currentUserId;
+      if (!device.enroller || !currentUserId) return false;
+      return device.enroller.userId === currentUserId;
     },
     [isOwner, currentUserId],
   );
