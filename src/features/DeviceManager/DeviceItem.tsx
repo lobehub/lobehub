@@ -13,6 +13,7 @@ import { lambdaQuery } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
+import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   cwd: css`
@@ -73,9 +74,11 @@ interface DeviceItemProps {
 const DeviceItem = memo<DeviceItemProps>(
   ({ checked, device, isCurrent, onCheckChange, onSelect, selected }) => {
     const { t } = useTranslation('setting');
+    const canEdit = useCanEditDevice()(device);
 
-    // Workspace devices are owner-gated + workspace-scoped on the server; personal
-    // devices stay userId-scoped. Route by the device's own scope.
+    // Workspace devices are self-or-owner-gated + workspace-scoped on the
+    // server; personal devices stay userId-scoped. Route by the device's own
+    // scope.
     const onRemoveSuccess = () => refreshDeviceList();
     const removePersonal = lambdaQuery.device.removeDevice.useMutation({
       onSuccess: onRemoveSuccess,
@@ -154,21 +157,23 @@ const DeviceItem = memo<DeviceItemProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <span onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu
-            items={[
-              {
-                danger: true,
-                icon: <Icon icon={Trash2Icon} />,
-                key: 'remove',
-                label: t('devices.actions.remove'),
-                onClick: handleRemove,
-              },
-            ]}
-          >
-            <ActionIcon icon={MoreVerticalIcon} />
-          </DropdownMenu>
-        </span>
+        {canEdit && (
+          <span onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu
+              items={[
+                {
+                  danger: true,
+                  icon: <Icon icon={Trash2Icon} />,
+                  key: 'remove',
+                  label: t('devices.actions.remove'),
+                  onClick: handleRemove,
+                },
+              ]}
+            >
+              <ActionIcon icon={MoreVerticalIcon} />
+            </DropdownMenu>
+          </span>
+        )}
       </Flexbox>
     );
   },

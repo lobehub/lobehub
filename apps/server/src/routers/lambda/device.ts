@@ -639,6 +639,10 @@ export const deviceRouter = router({
           channels,
           defaultCwd: d.defaultCwd,
           deviceId: d.deviceId,
+          // For personal rows this is always the caller; for workspace rows it
+          // is the first enroller, surfaced so the UI can gate writes to "self
+          // or workspace owner" without a separate fetch.
+          enrollerUserId: d.userId,
           friendlyName: d.friendlyName,
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
@@ -659,6 +663,8 @@ export const deviceRouter = router({
             channels,
             defaultCwd: null,
             deviceId,
+            // No row yet → no enroller; UI gates treat this as not-editable.
+            enrollerUserId: null,
             friendlyName: null,
             hostname: channels[0]?.hostname ?? null,
             identitySource: null,

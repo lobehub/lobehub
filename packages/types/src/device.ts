@@ -100,6 +100,17 @@ export interface DeviceListItem {
   channels: DeviceChannel[];
   defaultCwd: string | null;
   deviceId: string;
+  /**
+   * The user who owns this device row:
+   *   - personal scope → the only owner (always equal to the caller).
+   *   - workspace scope → the first member who enrolled the machine; preserved
+   *     on re-enroll. The UI uses this to gate writes to "self or workspace
+   *     owner" so a member can manage their own enrollment without touching
+   *     other members' devices.
+   *   - `null` for ghost rows (online but not yet persisted) — no row to edit
+   *     yet, so any UI gate treats it as not-editable.
+   */
+  enrollerUserId: string | null;
   friendlyName: string | null;
   hostname: string | null;
   identitySource: string | null;
