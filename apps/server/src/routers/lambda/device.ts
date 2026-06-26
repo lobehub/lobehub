@@ -1,10 +1,12 @@
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type { DeviceChannel, DeviceListItem, DeviceScope, WorkingDirEntry } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
+  type WorkspaceRole,
   wsCompatProcedure,
-  wsOwnerProcedure,
+  wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DeviceModel } from '@/database/models/device';
 import { router } from '@/libs/trpc/lambda';
@@ -26,6 +28,23 @@ const remotePlatformEnum = z.enum(
 
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
+
+/**
+ * A workspace device's user-editable fields (rename, working dirs, remove) may
+ * be modified by:
+ *   1. any workspace owner — managing shared infra is an owner privilege, OR
+ *   2. the workspace member who originally enrolled the device (`devices.userId`
+ *      stores the first enroller for workspace rows, never overwritten on
+ *      re-enroll — see `DeviceModel.registerWorkspaceDevice`).
+ *
+ * Members can therefore self-serve their own machines without touching anyone
+ * else's enrollment, while shared cleanup remains an owner action.
+ */
+const canEditWorkspaceDevice = (
+  role: WorkspaceRole | undefined,
+  actorUserId: string,
+  enrollerUserId: string,
+): boolean => role === 'owner' || enrollerUserId === actorUserId;
 
 // Workspace-aware (compat): with an `X-Workspace-Id` header the device list also
 // surfaces the workspace's shared devices; without it, the personal path is
@@ -663,22 +682,26 @@ export const deviceRouter = router({
 
   /**
    * Mint a short-lived connect token for enrolling a WORKSPACE-owned device.
-   * Owner-only (`wsOwnerProcedure`) — the server verifies the caller is an admin
-   * of the workspace, then signs a token carrying the `workspace_id` claim that
-   * the device gateway trusts to route the device to the `workspace:<id>`
-   * principal. The CLI (`lh connect --workspace`) / settings page use this.
+   * Any workspace member can call — enrolling a machine into the shared pool
+   * is self-service so members don't have to chase an owner to join their dev
+   * box. The signed token carries the `workspace_id` claim the device gateway
+   * trusts to route the device to the `workspace:<id>` principal. The CLI
+   * (`lh connect --workspace`) / settings page use this.
    */
-  mintWorkspaceConnectToken: wsOwnerProcedure.mutation(async ({ ctx }) => {
+  mintWorkspaceConnectToken: wsProcedure.mutation(async ({ ctx }) => {
     const token = await signWorkspaceDeviceToken(ctx.workspaceId);
     return { token, workspaceId: ctx.workspaceId };
   }),
 
   /**
-   * Enroll the calling machine as a device of the current workspace. Owner-only;
-   * stamps `workspace_id` so the row belongs to the workspace. Used by
+   * Enroll the calling machine as a device of the current workspace. Any
+   * workspace member may call; `devices.userId` records the first enroller of
+   * each `(workspaceId, deviceId)` pair and is preserved on re-enroll (see
+   * `DeviceModel.registerWorkspaceDevice`), which `updateWorkspaceDevice` /
+   * `removeWorkspaceDevice` use to gate writes to "self or owner". Used by
    * `lh connect --workspace` after minting the connect token.
    */
-  registerWorkspaceDevice: wsOwnerProcedure
+  registerWorkspaceDevice: wsProcedure
     .use(serverDatabase)
     .input(
       z.object({
@@ -694,11 +717,12 @@ export const deviceRouter = router({
     }),
 
   /**
-   * Rename / set working dirs of a WORKSPACE device — scoped by `workspace_id`,
-   * owner-gated, so any workspace owner can manage it (not just the enroller).
-   * Mirrors {@link deviceRouter.updateDevice} but for the workspace pool.
+   * Rename / set working dirs of a WORKSPACE device. Scoped by `workspace_id`
+   * and gated by {@link canEditWorkspaceDevice}: owners may edit any device in
+   * the pool; members may edit only devices they enrolled themselves. Mirrors
+   * {@link deviceRouter.updateDevice} but for the workspace pool.
    */
-  updateWorkspaceDevice: wsOwnerProcedure
+  updateWorkspaceDevice: wsProcedure
     .use(serverDatabase)
     .input(
       z.object({
@@ -714,22 +738,45 @@ export const deviceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
       const { deviceId, workingDirs, ...value } = input;
+      const row = await model.findWorkspaceDeviceById(deviceId);
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+      }
+      const role = (ctx as { workspaceRole?: WorkspaceRole }).workspaceRole;
+      if (!canEditWorkspaceDevice(role, ctx.userId, row.userId)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the enrolling member or a workspace owner can modify this device.',
+        });
+      }
       const nextWorkingDirs = workingDirs
-        ? preserveWorkspaceCache(
-            workingDirs,
-            (await model.findWorkspaceDeviceById(deviceId))?.workingDirs ?? [],
-          )
+        ? preserveWorkspaceCache(workingDirs, row.workingDirs ?? [])
         : undefined;
       await model.updateWorkspaceDevice(deviceId, { ...value, workingDirs: nextWorkingDirs });
       return { success: true };
     }),
 
-  /** Remove a WORKSPACE device — scoped by `workspace_id`, owner-gated. */
-  removeWorkspaceDevice: wsOwnerProcedure
+  /**
+   * Remove a WORKSPACE device. Scoped by `workspace_id` and gated by
+   * {@link canEditWorkspaceDevice}: owners may remove any device in the pool;
+   * members may remove only devices they enrolled themselves.
+   */
+  removeWorkspaceDevice: wsProcedure
     .use(serverDatabase)
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const row = await model.findWorkspaceDeviceById(input.deviceId);
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+      }
+      const role = (ctx as { workspaceRole?: WorkspaceRole }).workspaceRole;
+      if (!canEditWorkspaceDevice(role, ctx.userId, row.userId)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the enrolling member or a workspace owner can remove this device.',
+        });
+      }
       await model.deleteWorkspaceDevice(input.deviceId);
       return { success: true };
     }),
