@@ -85,6 +85,18 @@ describe('LobeAiHubMixAI', () => {
       expect(baseOf('google')).toBe('https://my-aihubmix-mirror.com/gemini');
       expect(baseOf('openai')).toBe('https://my-aihubmix-mirror.com/v1');
 
+      // A custom endpoint that already includes the API version is normalized,
+      // so the route suffixes are not doubled (…/v1/v1, …/v1/gemini).
+      const versioned = (params.routers as any)(
+        { apiKey: 'test', baseURL: 'https://my-aihubmix-mirror.com/v1' },
+        {},
+      );
+      const vBaseOf = (apiType: string) =>
+        versioned.find((r: any) => r.apiType === apiType).options.baseURL;
+      expect(vBaseOf('anthropic')).toBe('https://my-aihubmix-mirror.com');
+      expect(vBaseOf('google')).toBe('https://my-aihubmix-mirror.com/gemini');
+      expect(vBaseOf('openai')).toBe('https://my-aihubmix-mirror.com/v1');
+
       // Falls back to the default gateway when no custom baseURL is set
       const def = (params.routers as any)({ apiKey: 'test' }, {});
       expect(def.find((r: any) => r.apiType === 'anthropic').options.baseURL).toBe(

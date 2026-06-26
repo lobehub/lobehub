@@ -196,7 +196,10 @@ export const params: CreateRouterRuntimeOptions = {
     }
   },
   routers: (options, runtimeContext) => {
-    const baseURL = options.baseURL?.trim() || DEFAULT_BASE_URL;
+    // Normalize the configured endpoint: strip a trailing version suffix (e.g. /v1)
+    // so the per-route suffixes below aren't doubled (…/v1/v1, …/v1/gemini) when a
+    // user sets a baseURL that already includes the version.
+    const baseURL = options.baseURL?.trim().replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
 
     return [
       {
