@@ -30,7 +30,7 @@ export interface GeneratePlanParams {
   /**
    * When the run opted into verify but produced no decomposed criteria, synthesize
    * a single agent-type holistic check (the coarse "one broad agent verify"
-   * default, LOBE-10755) instead of leaving an empty plan (→ verify no-op).
+   * default) instead of leaving an empty plan (→ verify no-op).
    */
   holisticFallback?: boolean;
   maxAiCriteria?: number;
@@ -70,7 +70,7 @@ export interface CriterionDraft {
  * requirement (or its goal). The agent verifier investigates the whole
  * deliverable and submits one verdict — the coarse "one broad agent verify"
  * default for tasks that opted into verify without decomposing into criteria
- * (LOBE-10755). No `requiredEvidence` hard gate: the agent self-captures, so the
+ * No `requiredEvidence` hard gate: the agent self-captures, so the
  * structural gate never marks it uncertain for "missing evidence".
  */
 const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyCheckItem => {

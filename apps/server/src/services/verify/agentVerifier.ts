@@ -20,7 +20,7 @@ const log = debug('lobe-server:verify-agent-verifier');
  * sub-agent reports its verdict by calling the `submitVerifyResult` tool with the
  * `checkItemId` injected here — it does not write to the DB directly.
  *
- * `evidence` is what the builder self-captured during the run (LOBE-10638): the
+ * `evidence` is what the builder self-captured during the run: the
  * verifier judges against the run goal AND this evidence — it's the verifier's
  * primary Data, not a competing verdict.
  */
@@ -134,7 +134,7 @@ export const createVerifierAgentRunner = (params: {
 
     // Attach the builder-captured file artifacts (screenshots / videos / large
     // text) so a multimodal verifier can SEE them — the prompt only references
-    // them by presence + caption, which is blind for visual checks (LOBE-10638).
+    // them by presence + caption, which is blind for visual checks.
     const evidenceFileIds = (evidence ?? [])
       .map((e) => e.fileId)
       .filter((id): id is string => Boolean(id));

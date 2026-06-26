@@ -23,7 +23,7 @@ interface ReportContext {
 }
 
 /**
- * Drive the bound task from a settled verify run (LOBE-10624). This is the single
+ * Drive the bound task from a settled verify run. This is the single
  * convergence for BOTH settle paths — the inline LLM/program judge
  * (`runVerifyOnCompletion`) and the async agent-verifier writeback
  * (`submitVerifyResult`) — so the task is driven from exactly one place.
@@ -77,7 +77,7 @@ export const driveTaskFromVerify = async (
       log('verify failed → task %s paused + brief', op.taskId);
     }
 
-    // Deferred creator callback (LOBE-10625 × LOBE-10624): verify-bound runs defer
+    // Deferred creator callback: verify-bound runs defer
     // the taskCallback from `onTopicComplete` to HERE so the creator only sees the
     // result once verify has accepted (passed) or rejected (failed) the delivery —
     // never an unaccepted output it might act on before a later verify failure.

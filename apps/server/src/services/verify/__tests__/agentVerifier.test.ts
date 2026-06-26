@@ -118,7 +118,7 @@ describe('createVerifierAgentRunner', () => {
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
-  it('injects the builder-captured evidence into the verifier prompt (LOBE-10638)', async () => {
+  it('injects the builder-captured evidence into the verifier prompt', async () => {
     getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
 
     const runner = createVerifierAgentRunner({ ...baseParams })!;

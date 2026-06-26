@@ -537,7 +537,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         // Normalize tool parameter schemas before they fan out to the
         // Chat-Completions / Responses paths. User MCP tools may emit boolean
         // sub-schemas (`items: true`) or array properties missing `type`, which
-        // upstream validators (OpenAI/DeepSeek, Gemini) reject. See LOBE-10066.
+        // upstream validators (OpenAI/DeepSeek, Gemini) reject.
         if (payload.tools) payload.tools = normalizeToolsParameters(payload.tools as any) as any;
 
         let processedPayload: any = payload;

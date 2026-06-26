@@ -14,7 +14,7 @@ vi.mock('@/server/services/taskScheduler', () => ({
 }));
 
 // onTopicComplete reads the op's verify run to decide whether to "let go" for
-// async Verify-driven completion (LOBE-10624). Mock it; default = no verify run.
+// async Verify-driven completion. Mock it; default = no verify run.
 const verifyFindByOperation = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),

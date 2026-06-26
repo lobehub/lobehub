@@ -419,7 +419,7 @@ export interface MessageMetadata {
 /**
  * Pointer carried on a `role='taskCallback'` message — the result-bridge card
  * that reports a finished task's handoff back to its creator conversation
- * (LOBE-10625). The handoff summary itself lives in the message `content`; this
+ * The handoff summary itself lives in the message `content`; this
  * pointer drives the card header (identifier + outcome) and the jump link.
  */
 export interface MessageTaskCallback {

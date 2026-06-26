@@ -49,7 +49,7 @@ vi.mock('@/server/services/taskResultBridge', () => ({
 
 const db = {} as any;
 
-describe('driveTaskFromVerify (LOBE-10624)', () => {
+describe('driveTaskFromVerify', () => {
   beforeEach(() => {
     [
       runFindByOperation,

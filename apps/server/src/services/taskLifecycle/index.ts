@@ -136,7 +136,7 @@ export class TaskLifecycleService {
         );
       }
 
-      // 3. Delivery acceptance now runs through Verify (LOBE-10624): the verify
+      // 3. Delivery acceptance now runs through Verify: the verify
       //    run settles asynchronously (agent verifier) and drives the task to its
       //    terminal state via `driveTaskFromVerify`. The legacy eval-rubric
       //    auto-review is removed; this branch only lets the task go on to the
@@ -224,7 +224,7 @@ export class TaskLifecycleService {
     }
 
     // Bridge the finished task's handoff back to the creator conversation
-    // (LOBE-10625). Runs HERE — after all status transitions above — so the
+    // Runs HERE — after all status transitions above — so the
     // bridge reads the settled task status. Doing it as a separate webhook
     // racing `on-topic-complete` could observe the pre-transition status and
     // silently drop the only callback for automation tasks that become terminal

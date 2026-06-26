@@ -50,7 +50,7 @@ export interface TaskRuntimeDeps {
   assistantMessageId?: string;
   // Pointers to the conversation that invoked the createTask tool. Recorded into
   // `tasks.context.origin` so the task's handoff result can later be delivered
-  // back to this session (LOBE-10625). All optional — a task can be created
+  // back to this session. All optional — a task can be created
   // outside an agent turn (e.g. via the API).
   operationId?: string;
   // Resolves the base URL for task deep-links: app origin + optional `/{slug}`
@@ -125,7 +125,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
     // Capture where this task was spawned from so the lifecycle can later
-    // bridge the handoff result back to the creator conversation (LOBE-10625).
+    // bridge the handoff result back to the creator conversation.
     // Only persist the pocket when we actually have a creator agent + topic;
     // tasks created outside an agent turn (e.g. via API) have no origin.
     const origin =

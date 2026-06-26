@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VerifyPlanGeneratorService } from '../planGenerator';
 
-// Mock the model modules the generator constructs (LOBE-10755 holistic fallback).
+// Mock the model modules the generator constructs (holistic fallback).
 const { setPlanMock, ensureForOperationMock, getCriteriaMock, findByIdsMock } = vi.hoisted(() => ({
   ensureForOperationMock: vi.fn(async () => ({ id: 'run-1' })),
   findByIdsMock: vi.fn(async () => [] as any[]),
@@ -29,7 +29,7 @@ vi.mock('@/server/services/aiGeneration', () => ({ AiGenerationService: vi.fn(()
 const db = {} as any;
 const lastPlan = (): VerifyCheckItem[] => setPlanMock.mock.calls.at(-1)![1] as VerifyCheckItem[];
 
-describe('generateDraftPlan — holistic fallback (LOBE-10755)', () => {
+describe('generateDraftPlan — holistic fallback', () => {
   beforeEach(() => {
     setPlanMock.mockClear();
     getCriteriaMock.mockResolvedValue([]);

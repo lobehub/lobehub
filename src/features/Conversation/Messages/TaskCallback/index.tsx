@@ -50,7 +50,7 @@ const reasonMeta: Record<
 
 /**
  * Renders a `role='taskCallback'` message — the result-bridge card that reports
- * a finished task's handoff back into its creator conversation (LOBE-10625). The
+ * a finished task's handoff back into its creator conversation. The
  * task pointer (identifier / reason / taskId) is carried on
  * `metadata.taskCallback`; the handoff summary lives in the message content.
  * Renders as a standalone card (no avatar bubble), like the verify card.

@@ -387,7 +387,7 @@ export const buildGoogleMessages = async (
 export const sanitizeGeminiSchema = (schema: any): any => {
   // A boolean schema (`items: true`) is valid JSON Schema but rejected by
   // Gemini's proto validator. Collapse it to the permissive empty object schema.
-  // See https://linear.app/lobehub/issue/LOBE-10066
+  // See the tool schema array-items normalizer (normalizeToolSchema.ts).
   if (typeof schema === 'boolean') return {};
   if (!schema || typeof schema !== 'object') return schema;
 
@@ -446,7 +446,7 @@ export const sanitizeGeminiSchema = (schema: any): any => {
 
   // Recursively sanitize items (for array types). A node carrying `items` is an
   // array node; backfill a missing `type` so Gemini's predicate validator
-  // (`$type == Type.ARRAY`) accepts it. See LOBE-10066.
+  // (`$type == Type.ARRAY`) accepts it. normalized centrally by normalizeToolSchema.
   if ('items' in sanitized) {
     sanitized.items = sanitizeGeminiSchema(sanitized.items);
     if (sanitized.type === undefined) sanitized.type = 'array';

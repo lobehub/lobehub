@@ -39,7 +39,7 @@ export const instantiateVerifyPlanOnStart = async (
     // Opt-in to verify, then pick the plan shape:
     //  - rubric / ad-hoc criteria  → decomposed multi-item plan (existing path)
     //  - else explicitly enabled OR a one-sentence acceptance requirement set
-    //    → coarse single holistic agent check (LOBE-10755)
+    //    → coarse single holistic agent check
     //  - no signal at all          → verify stays off
     if (!verifyConfig || verifyConfig.enabled === false) return;
     const hasCriteria = Boolean(
