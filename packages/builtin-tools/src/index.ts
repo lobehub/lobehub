@@ -343,13 +343,17 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
  * token estimation) read `tool.title` / `tool.avatar` directly instead of reaching
  * into `manifest.meta`. This keeps identity stable and decoupled from `manifest`,
  * which may be produced per-turn by a context-aware `resolveManifest`.
+ *
+ * Optional chaining is defensive: this runs at module load, and tests routinely
+ * mock individual builtin-tool packages (a stubbed manifest may lack `meta`). In
+ * production every builtin manifest has a `meta`, so the hoisted fields are real.
  */
 export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) => ({
   ...tool,
-  avatar: tool.manifest.meta.avatar,
-  description: tool.manifest.meta.description,
-  tags: tool.manifest.meta.tags,
-  title: tool.manifest.meta.title,
+  avatar: tool.manifest?.meta?.avatar,
+  description: tool.manifest?.meta?.description,
+  tags: tool.manifest?.meta?.tags,
+  title: tool.manifest?.meta?.title,
 }));
 
 const recommendedBuiltinIds = new Set(
