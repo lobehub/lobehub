@@ -1335,7 +1335,7 @@
   "workspace.billingPage.billing.currentPlan.descFree": "最多 3 名成员免费的工作区",
   "workspace.billingPage.billing.currentPlan.descPro": "团队工作区，包含月度积分配额",
   "workspace.billingPage.billing.currentPlan.title": "当前计划",
-  "workspace.billingPage.billing.downgrade.confirmBody": "这将立即将工作区降级为免费版。当前计费周期不可退款。成员和共享内容会保留，工作区将进入只读状态直到你重新订阅。",
+  "workspace.billingPage.billing.downgrade.confirmBody": "工作区将立即变成 Free 版本。成员和共享内容会保留，工作区从只读恢复可编辑。可随时重新订阅以恢复 Pro 功能。",
   "workspace.billingPage.billing.downgrade.confirmCta": "立即降级",
   "workspace.billingPage.billing.downgrade.confirmInputLabel": "输入工作区名称 \"{{name}}\" 以确认：",
   "workspace.billingPage.billing.downgrade.confirmInputPlaceholder": "工作区名称",

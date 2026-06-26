@@ -1384,7 +1384,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.title': 'Upgrade?',
   'workspace.billingPage.billing.upgradePlanModal.totalSummary': '{{seats}} seats after upgrade',
   'workspace.billingPage.billing.downgrade.confirmBody':
-    'This immediately downgrades the workspace to Free. The current billing period is non-refundable. Members and shared resources are preserved; the workspace becomes read-only until you re-subscribe.',
+    'The workspace becomes Free right away. Members and shared resources are preserved; the workspace exits the read-only state. Re-subscribe at any time to restore Pro features.',
   'workspace.billingPage.billing.downgrade.confirmCta': 'Downgrade now',
   'workspace.billingPage.billing.downgrade.confirmInputLabel':
     'Type the workspace name "{{name}}" to confirm:',

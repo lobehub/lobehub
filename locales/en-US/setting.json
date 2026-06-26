@@ -1335,7 +1335,7 @@
   "workspace.billingPage.billing.currentPlan.descFree": "Free workspace for up to 3 members",
   "workspace.billingPage.billing.currentPlan.descPro": "Team workspace with monthly credits allowance",
   "workspace.billingPage.billing.currentPlan.title": "Current plan",
-  "workspace.billingPage.billing.downgrade.confirmBody": "This immediately downgrades the workspace to Free. The current billing period is non-refundable. Members and shared resources are preserved; the workspace becomes read-only until you re-subscribe.",
+  "workspace.billingPage.billing.downgrade.confirmBody": "The workspace becomes Free right away. Members and shared resources are preserved; the workspace exits the read-only state. Re-subscribe at any time to restore Pro features.",
   "workspace.billingPage.billing.downgrade.confirmCta": "Downgrade now",
   "workspace.billingPage.billing.downgrade.confirmInputLabel": "Type the workspace name \"{{name}}\" to confirm:",
   "workspace.billingPage.billing.downgrade.confirmInputPlaceholder": "Workspace name",
