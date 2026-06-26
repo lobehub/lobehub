@@ -9,11 +9,12 @@ export type WorkspaceSlugStatus =
   | { status: 'no-slug' }
   | { status: 'loading'; slug: string }
   | { status: 'not-found'; slug: string }
+  | { status: 'locked-out'; workspaceId: string; slug: string }
   | { status: 'ok'; workspaceId: string; slug: string };
 
 /**
  * Reads the `:workspaceSlug` URL param and resolves it to a status used by
- * `WorkspaceSlugBoundary` for the 404 screen.
+ * `WorkspaceSlugBoundary` for the 404 / billing-inactive screens.
  *
  * Store synchronisation (URL → activeWorkspaceId) lives in
  * `useWorkspaceUrlSync`, which is mounted globally — this hook is purely
@@ -27,7 +28,12 @@ export const useWorkspaceFromSlug = (): WorkspaceSlugStatus => {
   const matched = workspaceSlug ? (workspaces.find((w) => w.slug === workspaceSlug) ?? null) : null;
 
   if (!workspaceSlug) return { status: 'no-slug' };
-  if (matched) return { status: 'ok', workspaceId: matched.id, slug: workspaceSlug };
+  if (matched) {
+    if (matched.lockedOut) {
+      return { status: 'locked-out', workspaceId: matched.id, slug: workspaceSlug };
+    }
+    return { status: 'ok', workspaceId: matched.id, slug: workspaceSlug };
+  }
   if (isLoading) return { status: 'loading', slug: workspaceSlug };
   return { status: 'not-found', slug: workspaceSlug };
 };

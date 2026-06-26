@@ -12,6 +12,9 @@ import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
  *
  * - Calls `useWorkspaceFromSlug` to resolve the slug → status.
  * - Renders a 404-style empty state when the slug doesn't match any workspace.
+ * - Renders a billing-inactive state page when the workspace's subscription
+ *   has lapsed and the caller is not the primary owner (no silent demote to
+ *   personal mode — strict workspace/personal isolation).
  * - Renders `<Outlet />` when the workspace is found (or still loading).
  */
 const WorkspaceSlugBoundary: FC = () => {
@@ -30,6 +33,19 @@ const WorkspaceSlugBoundary: FC = () => {
         <div style={{ fontWeight: 600, fontSize: 20 }}>{t('notFound.title')}</div>
         <div style={{ opacity: 0.6 }}>{t('notFound.check')}</div>
         <Button onClick={() => navigate('/')}>{t('notFound.backHome')}</Button>
+      </Center>
+    );
+  }
+
+  if (result.status === 'locked-out') {
+    return (
+      <Center gap={16} height={'100%'} style={{ flexDirection: 'column' }} width={'100%'}>
+        <div style={{ fontSize: 48 }}>🔒</div>
+        <div style={{ fontWeight: 600, fontSize: 20 }}>{t('workspaceBillingInactive.title')}</div>
+        <div style={{ maxWidth: 480, opacity: 0.6, textAlign: 'center' }}>
+          {t('workspaceBillingInactive.description')}
+        </div>
+        <Button onClick={() => navigate('/')}>{t('workspaceBillingInactive.backHome')}</Button>
       </Center>
     );
   }

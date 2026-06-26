@@ -1830,6 +1830,7 @@
   "workspace.general.url.renameWarning": "Renaming will break existing links to this workspace.",
   "workspace.general.url.taken": "This URL is already taken.",
   "workspace.general.url.title": "Workspace URL",
+  "workspace.inactiveTag": "Inactive",
   "workspace.invitePage.accept": "Accept Invitation",
   "workspace.invitePage.acceptedSubtitle": "You have been added to the workspace.",
   "workspace.invitePage.acceptedTitle": "Invitation Accepted",
