@@ -88,6 +88,7 @@ vi.mock('@/store/chat', () => ({
     getState: () => ({
       sendMessage: sendMessageMock,
     }),
+    setState: vi.fn(),
   },
 }));
 

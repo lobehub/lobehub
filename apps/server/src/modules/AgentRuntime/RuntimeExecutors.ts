@@ -20,6 +20,7 @@ import {
   generateCredsList,
 } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
@@ -30,6 +31,7 @@ import {
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
+  type OfficialToolItem,
   type OnboardingContext,
   type OperationToolSet,
   type ResolvedToolSet,
@@ -1291,6 +1293,64 @@ export const createRuntimeExecutors = (
               editingAgentId,
             )) as Record<string, any> | null;
             if (editingConfig) {
+              // Build the `<available_official_tools>` list the same way the
+              // client does (services/chat/index.ts). Without it the builder
+              // prompt — which now relies on injected official tools instead of a
+              // search API — can't see installable builtin/Composio tools or their
+              // enabled/connected status, so the model may pick invalid ids or
+              // claim a supported tool is unavailable.
+              const enabledPlugins: string[] = Array.isArray(editingConfig.plugins)
+                ? (editingConfig.plugins as string[])
+                : [];
+              const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
+              const officialTools: OfficialToolItem[] = [];
+
+              // Builtin tools — exclude hidden/infra tools (mirrors the client's
+              // `metaList`) and Composio entries (listed separately below).
+              for (const tool of builtinTools) {
+                if (tool.hidden) continue;
+                if (composioIdentifiers.has(tool.identifier)) continue;
+                officialTools.push({
+                  description: tool.manifest?.meta?.description,
+                  enabled: enabledPlugins.includes(tool.identifier),
+                  identifier: tool.identifier,
+                  installed: true,
+                  name: tool.manifest?.meta?.title || tool.identifier,
+                  type: 'builtin',
+                });
+              }
+
+              // Composio MCP servers — only when Composio is configured for this
+              // deployment. Connection status mirrors the existing
+              // {{COMPOSIO_SERVICES_LIST}} logic (ACTIVE composio plugin rows).
+              if (composioEnv.COMPOSIO_API_KEY) {
+                try {
+                  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+                  const allPlugins = await pluginModel.query();
+                  const connectedComposioIds = new Set(
+                    allPlugins
+                      .filter(
+                        (p) =>
+                          composioIdentifiers.has(p.identifier) &&
+                          (p.customParams as any)?.composio?.status === 'ACTIVE',
+                      )
+                      .map((p) => p.identifier),
+                  );
+                  for (const t of COMPOSIO_APP_TYPES) {
+                    officialTools.push({
+                      description: `LobeHub Mcp Server: ${t.label}`,
+                      enabled: enabledPlugins.includes(t.identifier),
+                      identifier: t.identifier,
+                      installed: connectedComposioIds.has(t.identifier),
+                      name: t.label,
+                      type: 'composio',
+                    });
+                  }
+                } catch (composioError) {
+                  log('Failed to load Composio status for agentBuilderContext: %O', composioError);
+                }
+              }
+
               agentBuilderContext = {
                 config: {
                   chatConfig: editingConfig.chatConfig ?? undefined,
@@ -1309,6 +1369,7 @@ export const createRuntimeExecutors = (
                   tags: editingConfig.tags ?? undefined,
                   title: editingConfig.title ?? undefined,
                 },
+                ...(officialTools.length > 0 && { officialTools }),
               };
             }
           } catch (error) {
