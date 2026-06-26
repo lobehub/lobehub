@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "加载中…",
   "workingDirectory.filesModified": "修改",
   "workingDirectory.ghMissing": "安装并登录 GitHub CLI（gh）即可显示关联的 Pull Request",
+  "workingDirectory.heteroHint": "该 Agent 始终在某个工作目录中运行。在你手动选择之前，会使用默认目录——可在下方选择其他目录。",
   "workingDirectory.newBranchPlaceholder": "feature/新分支名称",
   "workingDirectory.noRecent": "暂无最近目录",
   "workingDirectory.notSet": "点击设置工作目录",

@@ -16,6 +16,7 @@ import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
@@ -850,6 +851,8 @@ export class ChatTopicActionImpl {
 
     await topicService.removeTopicsByAgentId(activeAgentId);
     await refreshTopic();
+    // drop every deleted topic's message cache (all belong to this agent)
+    void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
 
     // switch to default topic
     switchTopic(null);
@@ -868,6 +871,9 @@ export class ChatTopicActionImpl {
     }
 
     await refreshTopic();
+    // drop the deleted topics' message caches
+    const removed = new Set(topicIds);
+    void evictMessageCache((ctx) => !!ctx.topicId && removed.has(ctx.topicId));
 
     // switch to default topic
     switchTopic(null);
@@ -878,6 +884,8 @@ export class ChatTopicActionImpl {
 
     await topicService.removeAllTopic();
     await refreshTopic();
+    // every topic is gone — wipe all cached message lists
+    void evictMessageCache(() => true);
   };
 
   removeTopic = async (id: string): Promise<void> => {
@@ -889,6 +897,8 @@ export class ChatTopicActionImpl {
     await topicService.removeTopic(id);
     this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     await refreshTopic();
+    // drop the deleted topic's message cache so it doesn't orphan in IndexedDB
+    void evictMessageCache((ctx) => ctx.topicId === id);
 
     // switch back to default topic
     if (activeTopicId === id) switchTopic(null);
@@ -901,6 +911,9 @@ export class ChatTopicActionImpl {
 
     await topicService.batchRemoveTopics(topicIds);
     await refreshTopic();
+    // drop the deleted topics' message caches
+    const removed = new Set(topicIds);
+    void evictMessageCache((ctx) => !!ctx.topicId && removed.has(ctx.topicId));
 
     // Switch to default topic
     switchTopic(null);
@@ -919,6 +932,10 @@ export class ChatTopicActionImpl {
       this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'batchMoveTopicsToAgent'),
     );
     await refreshTopic();
+    // the moved topics' message cache is keyed by the old agent — drop it so the
+    // next view under the target agent refetches instead of reading a stale key
+    const moved = new Set(topicIds);
+    void evictMessageCache((ctx) => !!ctx.topicId && moved.has(ctx.topicId));
 
     // If the active topic was moved away, fall back to the default topic.
     if (activeTopicId && topicIds.includes(activeTopicId)) switchTopic(null);

@@ -51,6 +51,9 @@ describe('createCommonSlice', () => {
       expect(
         isTaskTemplateRecommendationKey(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN')),
       ).toBe(true);
+      expect(
+        isTaskTemplateRecommendationKey(['taskTemplate:listDailyRecommend', 'seed', 3, 'zh-CN']),
+      ).toBe(false);
       expect(isTaskTemplateRecommendationKey(userKeys.initState())).toBe(false);
     });
   });

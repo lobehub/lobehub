@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Крайна рамка",
   "config.generateAudio.label": "Генерирай аудио",
   "config.header.title": "Видео",
+  "config.imageUpload.maxCountReached": "Можете да добавите до {{count}} референтни изображения",
   "config.imageUrl.label": "Начална рамка",
   "config.prompt.placeholder": "Опишете видеото, което искате да генерирате",
   "config.prompt.placeholderWithRef": "Опишете сцената, която искате да създадете с изображението",

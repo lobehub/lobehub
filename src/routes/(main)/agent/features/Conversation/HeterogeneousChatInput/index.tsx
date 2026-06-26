@@ -4,8 +4,9 @@ import {
   HETEROGENEOUS_TYPE_LABELS,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
+import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Button, Flexbox } from '@lobehub/ui';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 import urlJoin from 'url-join';
@@ -13,6 +14,7 @@ import urlJoin from 'url-join';
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
+import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -23,12 +25,15 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
+import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
-// Heterogeneous agents (e.g. Claude Code) bring their own toolchain, memory,
-// and model, so LobeHub-side pickers don't apply. Typo is kept so the user
-// can still toggle the rich-text formatting bar.
+// Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
+// so most LobeHub-side pickers don't apply. Typo is kept so the user can still
+// toggle the rich-text formatting bar. The CLI model + thinking-effort selector
+// is injected right after it via `extraActionItems`, so it sits in the input's
+// bottom-left corner (consistent with where the model picker lives in a normal
+// agent chat), rather than off in the control-bar strip below the box.
 const leftActions: ActionKeys[] = ['typo'];
-const rightActions: ActionKeys[] = [];
 
 /**
  * GuardBanner
@@ -90,6 +95,27 @@ const HeterogeneousChatInput = memo(() => {
     clientExecutionAvailable: isDesktop,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
+
+  // The model + thinking-effort selector only applies to local-CLI providers
+  // (claude-code / codex) and only when this surface actually dispatches the run.
+  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
+  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
+  // gate the control bar applied before the selector moved into the input.
+  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  const showHeteroModel =
+    isSelectableHeteroProvider &&
+    shouldShowHeteroModelSelector({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      isDesktopClient: isDesktop,
+    });
+  const extraActionItems = useMemo<ChatInputActionsProps['items']>(
+    () =>
+      showHeteroModel
+        ? [{ alwaysDisplay: true, children: <HeteroModel />, key: 'heteroModel' }]
+        : [],
+    [showHeteroModel],
+  );
 
   // A run goes to an `lh connect` device when the provider is a remote-only type
   // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
@@ -174,8 +200,8 @@ const HeterogeneousChatInput = memo(() => {
       {renderDeviceGuard()}
       <ChatInput
         controlBarSlot={<HeteroControlBar />}
+        extraActionItems={extraActionItems}
         leftActions={leftActions}
-        rightActions={rightActions}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
         skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {

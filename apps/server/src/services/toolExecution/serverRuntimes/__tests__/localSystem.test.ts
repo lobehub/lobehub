@@ -142,6 +142,38 @@ describe('localSystemRuntime', () => {
         undefined,
       );
     });
+
+    it('recovers the workspace scope from the running agent when context.workspaceId is missing', async () => {
+      // Minimal drizzle-like chain resolving the agent's workspace_id.
+      const serverDB = {
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve([{ workspaceId: 'ws-1' }]) }),
+          }),
+        }),
+      } as any;
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-ws',
+        agentId: 'agt-1',
+        serverDB,
+        toolManifestMap: {},
+        userId: 'user-1',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      // The follow-up filesystem call routes to the recovered workspace pool.
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-ws', userId: 'user-1', workspaceId: 'ws-1' }),
+        expect.objectContaining({ apiName, identifier: LocalSystemIdentifier }),
+        undefined,
+      );
+    });
   });
 
   describe('working directory injection', () => {

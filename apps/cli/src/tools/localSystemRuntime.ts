@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type {
+  BaseFileSearch,
   EditFileParams,
   GetCommandOutputParams,
   GlobFilesParams,
@@ -12,15 +13,14 @@ import type {
   SearchFilesParams,
   WriteFileParams,
 } from '@lobechat/local-file-shell';
+import { createFileSearchModule } from '@lobechat/local-file-shell';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import {
   editLocalFile,
-  globLocalFiles,
   grepContent,
   listLocalFiles,
   readLocalFile,
-  searchLocalFiles,
   writeLocalFile,
 } from './file';
 import { getCommandOutput, killCommand, runCommand } from './shell';
@@ -45,6 +45,19 @@ export interface LocalSystemToolOutput {
  */
 const unsupported = (method: string) => (): Promise<never> =>
   Promise.reject(new Error(`${method} is not supported by the LobeHub CLI`));
+
+const DEFAULT_FILE_SEARCH_LIMIT = 100;
+
+const fileSearch: BaseFileSearch = createFileSearchModule();
+
+const normalizeLimit = (limit?: number) =>
+  Number.isFinite(limit) && limit && limit > 0 ? Math.floor(limit) : DEFAULT_FILE_SEARCH_LIMIT;
+
+const globLocalFiles = async (params: GlobFilesParams) =>
+  fileSearch.glob({ ...params, limit: normalizeLimit(params.limit) });
+
+const searchLocalFiles = async (params: SearchFilesParams) =>
+  fileSearch.search({ ...params, limit: normalizeLimit(params.limit) });
 
 /**
  * Adapter wiring the CLI's `@lobechat/local-file-shell` functions (file ops) and
@@ -151,7 +164,11 @@ export async function runLocalSystemTool(
         args as SearchFilesParams & { scope?: string },
         'directory',
       );
-      return runtime.searchFiles({ ...resolved, directory: resolved.directory || '' } as never);
+      return runtime.searchFiles({
+        ...resolved,
+        directory: resolved.directory || '',
+        limit: normalizeLimit(resolved.limit),
+      } as never);
     }
 
     case 'grepContent': {
@@ -162,7 +179,11 @@ export async function runLocalSystemTool(
     case 'globFiles': {
       const p = args as GlobFilesParams;
       // Honor both `scope` (current manifest) and the `cwd` legacy alias.
-      return runtime.globFiles({ directory: p.scope ?? p.cwd, pattern: p.pattern });
+      return runtime.globFiles({
+        directory: p.scope ?? p.cwd,
+        limit: normalizeLimit(p.limit),
+        pattern: p.pattern,
+      });
     }
 
     case 'runCommand': {

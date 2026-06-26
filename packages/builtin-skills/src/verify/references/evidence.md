@@ -43,7 +43,7 @@ Backend / CLI behavior is best proven by the command output itself — upload in
 no file:
 
 ```bash
-lh verify evidence upload --check "$CHECK_RESULT_ID" --type text \
+lh verify submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
   --content "$(your-cli command --json)" \
   --by cli --desc "command reports success after the change"
 ```

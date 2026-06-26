@@ -59,6 +59,7 @@
   "codeInterpreter.files": "Tệp:",
   "codeInterpreter.output": "Kết quả:",
   "codeInterpreter.returnValue": "Giá trị trả về:",
+  "connector.add.title": "Thêm Trình Kết Nối Tùy Chỉnh",
   "dalle.autoGenerate": "Tự động tạo",
   "dalle.downloading": "Liên kết hình ảnh do DALL·E3 tạo chỉ có hiệu lực trong 1 giờ, đang lưu trữ hình ảnh cục bộ...",
   "dalle.generate": "Tạo",

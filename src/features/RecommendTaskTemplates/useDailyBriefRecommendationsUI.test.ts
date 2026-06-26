@@ -5,7 +5,7 @@ import type { TaskTemplate } from '@lobechat/const';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { taskTemplateKeys } from '@/libs/swr/keys';
+import { TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION, taskTemplateKeys } from '@/libs/swr/keys';
 import { taskTemplateService } from '@/services/taskTemplate';
 
 import {
@@ -142,6 +142,9 @@ describe('resolveDailyBriefRecommendationRequest', () => {
 
     expect(ai.key).toEqual(research.key);
     expect(ai.key).toEqual(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN'));
+    expect(ai.key?.[0]).toBe(
+      `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`,
+    );
   });
 
   it('keeps refresh seed, count, and locale in the cache key', () => {
@@ -268,6 +271,136 @@ describe('useDailyBriefRecommendationsUI', () => {
       locale: 'en-US',
       refreshSeed: undefined,
     });
+  });
+
+  it('drops recommendations that are missing connectors', () => {
+    const templateWithoutConnectors = {
+      category: 'engineering',
+      cronPattern: '0 9 * * *',
+      description: 'Description',
+      id: 102,
+      identifier: 'legacy-daily-engineering',
+      instruction: 'Instruction',
+      interests: ['coding'],
+      title: 'Legacy title',
+    } satisfies Omit<TaskTemplate, 'connectors'>;
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithoutConnectors], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
+  it('drops recommendations with malformed connector entries', () => {
+    const templateWithMalformedConnectors = {
+      ...template,
+      connectors: [null],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithMalformedConnectors], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
+  it('drops recommendations with unknown connector identifiers', () => {
+    const templateWithUnknownConnector = {
+      ...template,
+      connectors: [{ identifier: 'nonexistent-x', required: true, source: 'lobehub' }],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [templateWithUnknownConnector], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
+  it('treats non-array recommendation payloads as empty data', () => {
+    mockUseSWR.mockReturnValue({
+      data: { data: { ...template }, success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
+  });
+
+  it('normalizes cached rows before removing a card', () => {
+    mockUseSWR.mockReturnValue({
+      data: { data: [template, null], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current.mode).toBe('cards');
+    if (result.current.mode !== 'cards') return;
+
+    result.current.onCreated(template.id);
+
+    const updater = mockMutate.mock.calls[0][0] as (current?: {
+      data: unknown;
+      success: boolean;
+    }) => unknown;
+    expect(updater({ data: [template, null], success: true })).toEqual({
+      data: [],
+      success: true,
+    });
+    expect(updater({ data: { ...template }, success: true })).toEqual({
+      data: [],
+      success: true,
+    });
+    expect(mockMutate.mock.calls[0][1]).toEqual({ revalidate: false });
+  });
+
+  it('drops legacy recommendations from pre-Market task-template servers', () => {
+    const legacyServerTemplate = {
+      category: 'engineering',
+      cronPattern: '0 9 * * *',
+      id: 'oss-intel-daily',
+      interests: ['coding'],
+      requiresSkills: [{ provider: 'github', source: 'lobehub' }],
+    };
+    mockUseSWR.mockReturnValue({
+      data: { data: [legacyServerTemplate], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    expect(result.current).toEqual({ mode: 'hidden' });
+    expect(mockUseFetchUserComposioConnections).toHaveBeenCalledWith(false);
+    expect(mockUseFetchLobehubConnectorConnections).toHaveBeenCalledWith(false);
   });
 
   it('logs recommendation request errors instead of treating them as normal empty data', async () => {

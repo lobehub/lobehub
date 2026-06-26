@@ -192,6 +192,73 @@ describe('hetero exec command', () => {
     expect(call.operationId).toBe('op-server-allocated');
   });
 
+  it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--model',
+      'opus',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'opus', '--effort', 'high'],
+    });
+  });
+
+  it('translates Codex --effort to native model_reasoning_effort config', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.5',
+      '--effort',
+      'xhigh',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'gpt-5.5', '-c', 'model_reasoning_effort="xhigh"'],
+    });
+  });
+
+  it('passes native agent args through --agent-arg without treating them as wrapper options', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--agent-arg=-c',
+      '--agent-arg=model = "gpt-5.4"',
+      '--effort',
+      'xhigh',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      command: undefined,
+      extraArgs: ['-c', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="xhigh"'],
+    });
+  });
+
   it('streams events to stdout as JSONL, one line per event', async () => {
     const events = [
       { data: { foo: 1 }, operationId: 'op-1', stepIndex: 0, timestamp: 1, type: 'stream_start' },

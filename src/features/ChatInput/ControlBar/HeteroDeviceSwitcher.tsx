@@ -93,6 +93,17 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
   `,
+  deviceList: css`
+    overflow-y: auto;
+
+    /* Cap the device section so a long list (servers/CLI fleets) stays scrollable
+       inside the popover instead of growing past the viewport. */
+    max-height: 240px;
+
+    /* Room for the scrollbar so rows don't sit flush against it. */
+    margin-inline-end: -4px;
+    padding-inline-end: 4px;
+  `,
   empty: css`
     padding-block: 8px;
     padding-inline: 8px;
@@ -332,6 +343,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  // Workspace-scoped agent: every workspace member runs through one device pool,
+  // so personal devices (only reachable by their registering user) must be
+  // suppressed from the picker. The server enforces the same rule on writes.
+  const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
+  const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -403,7 +419,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // header link — avoid showing the same CTA twice.
   const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
 
-  const personalDevices = (devices ?? []).filter((d) => d.scope === 'personal');
+  // Workspace agents drop the personal section entirely — only workspace
+  // devices are reachable to every member, so no one should see (let alone
+  // pick) a teammate's personal machine.
+  const personalDevices = isWorkspaceAgent
+    ? []
+    : (devices ?? []).filter((d) => d.scope === 'personal');
   const workspaceDevices = (devices ?? []).filter((d) => d.scope === 'workspace');
   // Only split into Personal / Workspace sections once a workspace device exists;
   // otherwise (personal mode / OSS) the list stays flat, exactly as before.
@@ -546,22 +567,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {showDeviceGroups ? (
-        <>
-          {personalDevices.length > 0 ? (
+      {deviceRows.length > 0 ? (
+        <div className={styles.deviceList}>
+          {showDeviceGroups ? (
             <>
+              {personalDevices.length > 0 ? (
+                <>
+                  <div className={styles.groupLabel}>
+                    {t('heteroAgent.executionTarget.personalGroup')}
+                  </div>
+                  {personalDevices.map((d) => renderDeviceRow(d))}
+                </>
+              ) : null}
               <div className={styles.groupLabel}>
-                {t('heteroAgent.executionTarget.personalGroup')}
+                {t('heteroAgent.executionTarget.workspaceGroup')}
               </div>
-              {personalDevices.map((d) => renderDeviceRow(d))}
+              {workspaceDevices.map((d) => renderDeviceRow(d))}
             </>
-          ) : null}
-          <div className={styles.groupLabel}>{t('heteroAgent.executionTarget.workspaceGroup')}</div>
-          {workspaceDevices.map((d) => renderDeviceRow(d))}
-        </>
-      ) : (
-        personalDevices.map((d) => renderDeviceRow(d))
-      )}
+          ) : (
+            personalDevices.map((d) => renderDeviceRow(d))
+          )}
+        </div>
+      ) : null}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}

@@ -87,17 +87,20 @@ const mergedHooksCaptured = vi.hoisted(() => ({
 
 vi.mock('@/features/Conversation', () => ({
   ChatInput: ({
+    allowExpand,
     compact,
     leftActions,
     rightActions,
     showControlBar,
   }: {
+    allowExpand?: boolean;
     compact?: boolean;
     leftActions?: string[];
     rightActions?: string[];
     showControlBar?: boolean;
   }) => (
     <div
+      data-allow-expand={String(allowExpand ?? true)}
       data-compact={String(compact ?? false)}
       data-left-actions={JSON.stringify(leftActions ?? [])}
       data-right-actions={JSON.stringify(rightActions ?? [])}
@@ -250,6 +253,7 @@ describe('FloatingChatPanel', () => {
   it('renders a minimal ChatInput while collapsed (no left/right actions)', () => {
     const { getByTestId } = render(<FloatingChatPanel agentId="a" topicId="t" />);
     const input = getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.leftActions).toBe('[]');
     expect(input.dataset.rightActions).toBe('[]');
   });
@@ -267,6 +271,7 @@ describe('FloatingChatPanel', () => {
     expect(sheet.dataset.activeSnap).toBe('420');
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('false');
     const input = getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.leftActions).toBe(JSON.stringify(['typo']));
     expect(input.dataset.rightActions).toBe(JSON.stringify(['contextWindow']));
   });

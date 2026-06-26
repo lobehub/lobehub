@@ -151,7 +151,7 @@ class LobeAgentExecutionRuntime {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
 
-    const { started, threadId, subOperationId } = await ctx.subAgent.run({
+    const { started, error, threadId, subOperationId } = await ctx.subAgent.run({
       description,
       instruction,
       timeout,
@@ -162,7 +162,10 @@ class LobeAgentExecutionRuntime {
     // (non-deferred) tool error so the parent's LLM sees the failure and the
     // batch continues instead of hanging in `waiting_for_async_tool`.
     if (!started) {
-      return buildError('Sub-agent failed to start.', 'SUB_AGENT_START_FAILED');
+      return buildError(
+        error ? `Sub-agent failed to start: ${error}` : 'Sub-agent failed to start.',
+        'SUB_AGENT_START_FAILED',
+      );
     }
 
     return {

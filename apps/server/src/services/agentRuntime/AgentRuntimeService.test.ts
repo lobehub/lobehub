@@ -2102,7 +2102,10 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('writes an error note + pluginError when the child failed', async () => {
+    it('writes an error note + pluginError when the child failed, surfacing the real reason', async () => {
+      // The parent agent's LLM only sees `content`; without the inlined reason it
+      // gets the opaque generic note and cannot tell why the dispatch failed
+      // (issue #16257). The structured error still rides on pluginError.
       await service.completeSubAgentBridge({
         ...bridgeParams,
         finalState: { ...childState, error: { message: 'boom' } } as any,
@@ -2112,11 +2115,39 @@ describe('AgentRuntimeService', () => {
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({
-          content: 'Sub-agent did not complete (error).',
+          content: 'Sub-agent did not complete (error): boom',
           pluginError: { message: 'boom' },
           pluginState: expect.objectContaining({ status: 'error' }),
         }),
       );
+    });
+
+    it('falls back to the generic note when the failed child has no error detail', async () => {
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: { ...childState, error: undefined } as any,
+        reason: 'error',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({
+          content: 'Sub-agent did not complete (error).',
+          pluginState: expect.objectContaining({ status: 'error' }),
+        }),
+      );
+    });
+
+    it('truncates an oversized child error so it cannot bloat the parent context', async () => {
+      const huge = 'x'.repeat(500);
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: { ...childState, error: { message: huge } } as any,
+        reason: 'error',
+      });
+
+      const call = updateToolMessage.mock.calls.at(-1)?.[1];
+      expect(call.content).toBe(`Sub-agent did not complete (error): ${'x'.repeat(300)}…`);
     });
 
     it('throws when the backfill reports success: false so the webhook path redelivers', async () => {

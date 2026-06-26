@@ -1,6 +1,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { exportFile } from '@lobechat/utils/client';
-import { Block, Button, Flexbox, Highlighter, HtmlPreview, Segmented } from '@lobehub/ui';
+import { Block, Button, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Drawer } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Code2, Download, Eye } from 'lucide-react';
@@ -51,29 +52,29 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   const Title = (
     <Flexbox horizontal align={'center'} justify={'space-between'} style={{ width: '100%' }}>
       {t('HtmlPreview.title')}
-      <Segmented
-        value={mode}
-        options={[
+      <Tabs
+        activeKey={mode}
+        items={[
           {
+            key: 'preview',
             label: (
               <Flexbox horizontal align={'center'} gap={6}>
                 <Eye size={16} />
                 {t('HtmlPreview.mode.preview')}
               </Flexbox>
             ),
-            value: 'preview',
           },
           {
+            key: 'code',
             label: (
               <Flexbox horizontal align={'center'} gap={6}>
                 <Code2 size={16} />
                 {t('HtmlPreview.mode.code')}
               </Flexbox>
             ),
-            value: 'code',
           },
         ]}
-        onChange={(v) => setMode(v as 'preview' | 'code')}
+        onChange={(key) => setMode(key as 'preview' | 'code')}
       />
       <Button
         color={'default'}

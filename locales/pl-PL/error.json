@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Wyczerpałeś punkty subskrypcji i nie możesz korzystać z tej funkcji. Doładuj konto lub skonfiguruj własny model API.",
   "response.SystemTimeNotMatchError": "Przepraszamy, czas systemowy nie zgadza się z czasem serwera. Sprawdź ustawienia czasu i spróbuj ponownie.",
   "response.UnknownChatFetchError": "Przepraszamy, wystąpił nieznany błąd żądania. Sprawdź szczegóły poniżej lub spróbuj ponownie.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Ten agent działa w przestrzeni roboczej, więc może łączyć tylko urządzenia dostępne dla całego zespołu. Urządzenia osobiste pozostają z użytkownikiem, który je zarejestrował — wybierz urządzenie przestrzeni roboczej lub najpierw zarejestruj to urządzenie w przestrzeni roboczej.",
   "response.WorkspaceFrozenByAdmin": "To środowisko pracy zostało zamrożone przez administratora i nie może wykonywać żądań. Skontaktuj się z właścicielem środowiska pracy, aby rozwiązać problem.",
   "response.WorkspaceFrozenByRiskControl": "To środowisko pracy zostało automatycznie zamrożone przez kontrolę ryzyka i nie może wykonywać żądań. Skontaktuj się z pomocą techniczną, aby sprawdzić status.",
   "stt.responseError": "Błąd żądania usługi. Sprawdź konfigurację lub spróbuj ponownie.",

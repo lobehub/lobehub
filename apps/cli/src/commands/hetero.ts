@@ -18,6 +18,7 @@ import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
+const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -54,10 +55,13 @@ const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
   RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
 interface ExecOptions {
+  agentArg?: string[];
   command?: string;
   cwd?: string;
+  effort?: string;
   image?: string[];
   inputJson?: string;
+  model?: string;
   operationId?: string;
   prompt?: string;
   /**
@@ -86,6 +90,27 @@ interface ExecOptions {
 }
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
+const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
+
+const buildExtraArgs = (
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'type'>,
+): string[] | undefined => {
+  const selectorArgs =
+    options.type === 'codex'
+      ? [
+          ...(options.model ? ['--model', options.model] : []),
+          ...(options.effort
+            ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+            : []),
+        ]
+      : [
+          ...(options.model ? ['--model', options.model] : []),
+          ...(options.effort ? ['--effort', options.effort] : []),
+        ];
+  const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
+
+  return extraArgs.length > 0 ? extraArgs : undefined;
+};
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -638,11 +663,13 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // ─── First run (with --resume if provided) ───────────────────────────────
 
   const interceptResume = !!options.resume;
+  const extraArgs = buildExtraArgs(options);
   const first = await runOneAgent(
     {
       agentType: options.type,
       command: options.command,
       cwd: options.cwd || process.cwd(),
+      extraArgs,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -672,6 +699,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         agentType: options.type,
         command: options.command,
         cwd: options.cwd || process.cwd(),
+        extraArgs,
         operationId,
         prompt: resolved.prompt,
         // No resumeSessionId — start fresh
@@ -756,6 +784,13 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
+    .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
+    .option(
+      '--agent-arg <arg>',
+      'Forward one native agent CLI argument after wrapper parsing (repeatable)',
+      collectAgentArg,
+    )
     .option(
       '-c, --command <bin>',
       'Override the agent CLI binary name (default: `claude` or `codex`)',

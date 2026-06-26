@@ -7,6 +7,7 @@
   "config.header.title": "Gemälde",
   "config.height.label": "Höhe",
   "config.imageNum.label": "Anzahl der Bilder",
+  "config.imageUpload.maxCountReached": "Sie können bis zu {{count}} Referenzbilder hinzufügen",
   "config.imageUrl.label": "Referenzbild",
   "config.imageUrls.label": "Referenzbilder",
   "config.model.label": "Modell",

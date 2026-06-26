@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Has agotado tus puntos de suscripción. Recarga créditos o configura una API personalizada.",
   "response.SystemTimeNotMatchError": "Lo sentimos, la hora de tu sistema no coincide con la del servidor.",
   "response.UnknownChatFetchError": "Lo sentimos, ocurrió un error desconocido en la solicitud.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Este agente pertenece a un espacio de trabajo, por lo que solo puede vincular dispositivos accesibles para todo el equipo. Los dispositivos personales permanecen con el usuario que los registró; elige un dispositivo del espacio de trabajo en su lugar o registra este dispositivo en el espacio de trabajo primero.",
   "response.WorkspaceFrozenByAdmin": "Este espacio de trabajo está congelado por un administrador y no puede ejecutar solicitudes. Por favor, contacte al propietario del espacio de trabajo para resolver el problema.",
   "response.WorkspaceFrozenByRiskControl": "Este espacio de trabajo fue congelado automáticamente por control de riesgos y no puede ejecutar solicitudes. Por favor, contacte al soporte para revisar el estado.",
   "stt.responseError": "Error en la solicitud del servicio. Verifica la configuración.",

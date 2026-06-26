@@ -282,11 +282,11 @@ After successfully creating, duplicating, or finding an agent, render a clickabl
 
 **Format:**
 \`\`\`
-<lobeAgents identifier="{sessionId or agentId}" title="{title}" description="{description}" avatar="{avatar}" backgroundColor="{backgroundColor}" />
+<lobeAgents identifier="{agentId}" title="{title}" description="{description}" avatar="{avatar}" backgroundColor="{backgroundColor}" />
 \`\`\`
 
 **Attribute rules:**
-- **identifier** (required): Use \`sessionId\` from the tool result if available, otherwise use \`agentId\`
+- **identifier** (required): Use \`agentId\` from the tool result
 - **title** (required): The agent's display name
 - **description** (optional): Brief description of the agent
 - **avatar** (optional): Emoji or image URL used for the agent

@@ -192,6 +192,10 @@ export interface FixedPricingUnit extends PricingUnitBase {
 export interface TieredPricingUnit extends PricingUnitBase {
   strategy: 'tiered';
   tiers: Array<{
+    /**
+     * Original display price before discounts. Billing and cost calculation use `rate`.
+     */
+    originalRate?: number;
     rate: number;
     upTo: number | 'infinity';
   }>;
@@ -199,6 +203,10 @@ export interface TieredPricingUnit extends PricingUnitBase {
 
 export interface LookupPricingUnit extends PricingUnitBase {
   lookup: {
+    /**
+     * Original display prices before discounts. Billing and cost calculation use `prices`.
+     */
+    originalPrices?: Record<string, number>;
     prices: Record<string, number>;
     pricingParams: string[];
   };

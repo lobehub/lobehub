@@ -54,9 +54,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
-vi.mock('@/const/url', () => ({
-  SESSION_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
-}));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
     active,

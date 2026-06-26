@@ -1,4 +1,5 @@
 import { type AgentState } from '@lobechat/agent-runtime';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +23,11 @@ const mockBuiltinModels = vi.hoisted(() => [
     id: 'qwen3.6-plus',
     providerId: 'qwen',
     settings: { extendParams: ['preserveThinking'] },
+  },
+  {
+    abilities: { functionCall: true, video: true, vision: true },
+    id: 'kimi-k2.7-code',
+    providerId: 'moonshot',
   },
   {
     abilities: { functionCall: false, video: false, vision: false },
@@ -68,6 +74,14 @@ vi.mock('@lobechat/model-runtime', () => ({
   // retry classifier path.
   ERROR_CODE_SPECS: {},
   getErrorCodeSpec: () => undefined,
+  isDeepSeekThinkingEligibleModel: (model: string) =>
+    typeof model === 'string' &&
+    (model.toLowerCase().includes('deepseek-reasoner') ||
+      model.toLowerCase().includes('deepseek-v4')),
+  isDeepSeekV4FamilyModel: (model: string) =>
+    typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
+  isKimiAlwaysPreserveThinkingModel: (model: string) =>
+    /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
   refineErrorCode: () => undefined,
 }));
 
@@ -555,6 +569,98 @@ describe('RuntimeExecutors', () => {
 
         expect(assistant.reasoning).toEqual({
           content: 'preserved reasoning',
+        });
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ preserveThinking: true }),
+          expect.anything(),
+        );
+      });
+
+      it('should force assistant reasoning replay for Kimi K2.7 Code even when preserveThinking is disabled', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onThinking?.('kimi preserved reasoning');
+          await options?.callback?.onText?.('answer');
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { preserveThinking: false },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          modelRuntimeConfig: {
+            model: 'kimi-k2.7-code',
+            provider: 'moonshot',
+          },
+        });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'kimi-k2.7-code',
+            provider: 'moonshot',
+          },
+          type: 'call_llm' as const,
+        };
+
+        const result = await executors.call_llm!(instruction, state);
+        const assistant = result.newState.messages.at(-1) as any;
+
+        expect(assistant.reasoning).toEqual({
+          content: 'kimi preserved reasoning',
+        });
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ preserveThinking: true }),
+          expect.anything(),
+        );
+      });
+
+      it('should force assistant reasoning replay for Kimi K2.7 Code under aggregation provider (e.g. lobehub) even when preserveThinking is disabled', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onThinking?.('kimi preserved reasoning from lobehub');
+          await options?.callback?.onText?.('answer');
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { preserveThinking: false },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          modelRuntimeConfig: {
+            model: 'kimi-k2.7-code',
+            provider: BRANDING_PROVIDER,
+          },
+        });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'kimi-k2.7-code',
+            provider: BRANDING_PROVIDER,
+          },
+          type: 'call_llm' as const,
+        };
+
+        const result = await executors.call_llm!(instruction, state);
+        const assistant = result.newState.messages.at(-1) as any;
+
+        expect(assistant.reasoning).toEqual({
+          content: 'kimi preserved reasoning from lobehub',
         });
         expect(mockChat).toHaveBeenCalledWith(
           expect.objectContaining({ preserveThinking: true }),

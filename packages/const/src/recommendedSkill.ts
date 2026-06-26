@@ -19,6 +19,7 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'lobe-message', type: RecommendedSkillType.Builtin },
   // LobeHub skills
   { id: 'notion', type: RecommendedSkillType.Lobehub },
+  { id: 'posthog', type: RecommendedSkillType.Lobehub },
   { id: 'twitter', type: RecommendedSkillType.Lobehub },
   // Composio skills
   { id: 'gmail', type: RecommendedSkillType.Composio },

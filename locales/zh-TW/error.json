@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "您的訂閱點數已用盡，無法使用此功能。請儲值點數或設定自訂模型 API 以繼續使用。",
   "response.SystemTimeNotMatchError": "很抱歉，您的系統時間與伺服器不匹配，請檢查您的系統時間後重試",
   "response.UnknownChatFetchError": "很抱歉，遇到未知請求錯誤，請根據以下資訊排查或重試",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "此代理位於工作空間中，因此只能綁定整個團隊都能使用的設備。個人設備會保留在註冊它的使用者名下——請選擇工作空間設備，或者先將此設備註冊到工作空間中。",
   "response.WorkspaceFrozenByAdmin": "此工作區已被管理員凍結，無法執行請求。請聯繫工作區擁有者以解決此問題。",
   "response.WorkspaceFrozenByRiskControl": "此工作區因風險控制自動凍結，無法執行請求。請聯繫支援以檢視狀態。",
   "stt.responseError": "服務請求失敗，請檢查配置或重試",

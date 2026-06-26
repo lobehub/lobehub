@@ -26,7 +26,12 @@ import type {
   MessageMapScope,
   UIChatMessage,
 } from '@lobechat/types';
-import { AgentRuntimeErrorType, ThreadStatus, ThreadType } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  buildHeteroSpawnArgs,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
@@ -40,7 +45,6 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -1056,7 +1060,7 @@ export const executeHeterogeneousAgent = async (
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: heterogeneousProvider.args,
+      args: buildHeteroSpawnArgs(heterogeneousProvider),
       command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
       env: heterogeneousProvider.env,
@@ -1361,17 +1365,14 @@ export const executeHeterogeneousAgent = async (
 
         // Signal completion to the user — dock badge + (window-hidden) notification,
         // delegated to the shared `afterRunComplete` hook. It does the same
-        // showNotification + setBadgeCount fan-out for non-client runtimes.
-        // The body is resolved here from the
-        // in-memory accumulated content (the store snapshot isn't durable yet).
+        // showNotification + setBadgeCount fan-out for non-client runtimes. We pass
+        // the in-memory accumulated content (the store snapshot isn't durable yet);
+        // the shared helper strips markdown + caps length + resolves the title.
         // Skip for aborted runs and for error terminations.
         if (!isAborted() && !isErrorTerminal) {
-          const body = finalContent
-            ? markdownToTxt(finalContent)
-            : t('notification.finishChatGeneration', { ns: 'electron' });
           await runLifecycle.afterRunComplete({
             context,
-            notification: { body },
+            notification: { content: finalContent },
             operationId,
             runId: operationId,
             runScope,

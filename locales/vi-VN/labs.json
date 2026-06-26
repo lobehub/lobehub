@@ -15,5 +15,7 @@
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
   "features.platformAgent.desc": "Hiển thị mục \"Kết nối Agent\" trong menu tạo. Các agent được kết nối (ví dụ: OpenClaw, Hermes) chạy trên thiết bị của bạn và giao tiếp lại thông qua lh connect.",
   "features.platformAgent.title": "Kết nối Agent",
+  "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",
+  "features.taskVerify.title": "Chấp Nhận Giao Nhiệm Vụ",
   "title": "Phòng Thí Nghiệm"
 }

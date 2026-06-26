@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Fotogramma Finale",
   "config.generateAudio.label": "Genera Audio",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "Puoi aggiungere fino a {{count}} immagini di riferimento",
   "config.imageUrl.label": "Fotogramma Iniziale",
   "config.prompt.placeholder": "Descrivi il video che vuoi generare",
   "config.prompt.placeholderWithRef": "Descrivi la scena che vuoi generare con l'immagine",

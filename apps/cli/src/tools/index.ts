@@ -2,6 +2,7 @@ import { log } from '../utils/logger';
 import { checkPlatformCapability } from './checkPlatformCapability';
 import { getAgentProfile } from './getAgentProfile';
 import { cancelHeteroTask, runHeteroTask } from './heteroTask';
+import { executeToolCallInWorker, shouldRunInWorker } from './isolatedWorker';
 import { runLocalSystemTool } from './localSystemRuntime';
 
 /**
@@ -26,6 +27,8 @@ export async function executeToolCall(
   state?: unknown;
   success: boolean;
 }> {
+  if (shouldRunInWorker(apiName)) return executeToolCallInWorker(apiName, argsStr, timeout);
+
   let args: Record<string, any>;
   try {
     args = JSON.parse(argsStr);

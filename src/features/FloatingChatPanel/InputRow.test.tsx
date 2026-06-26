@@ -8,17 +8,20 @@ import InputRow from './InputRow';
 
 vi.mock('@/features/Conversation', () => ({
   ChatInput: ({
+    allowExpand,
     compact,
     leftActions,
     rightActions,
     showControlBar,
   }: {
+    allowExpand?: boolean;
     compact?: boolean;
     leftActions?: string[];
     rightActions?: string[];
     showControlBar?: boolean;
   }) => (
     <div
+      data-allow-expand={String(allowExpand ?? true)}
       data-compact={String(compact ?? false)}
       data-left-actions={JSON.stringify(leftActions ?? [])}
       data-right-actions={JSON.stringify(rightActions ?? [])}
@@ -36,6 +39,7 @@ describe('FloatingChatPanel InputRow', () => {
   it('renders ChatInput in compact mode with empty actions and no control bar while collapsed', () => {
     render(<InputRow isCollapsed onExpand={() => {}} />);
     const input = screen.getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('true');
     expect(input.dataset.leftActions).toBe('[]');
     expect(input.dataset.rightActions).toBe('[]');
@@ -45,10 +49,11 @@ describe('FloatingChatPanel InputRow', () => {
   it('renders ChatInput at full size with all actions while expanded', () => {
     render(<InputRow isCollapsed={false} onExpand={() => {}} />);
     const input = screen.getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('false');
     expect(input.dataset.leftActions).toBe(JSON.stringify(['typo']));
     expect(input.dataset.rightActions).toBe(JSON.stringify(['contextWindow']));
-    expect(input.dataset.showControlBar).toBe('true');
+    expect(input.dataset.showControlBar).toBe('false');
   });
 
   it('keeps the expand bar hidden while collapsed and unfocused — hover alone never reveals it', () => {
@@ -112,10 +117,11 @@ describe('FloatingChatPanel InputRow', () => {
     expect(input.dataset.compact).toBe('true');
 
     fireEvent.focus(screen.getByTestId('floating-chat-panel-input-row'));
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('false');
     expect(input.dataset.leftActions).toBe(JSON.stringify(['typo']));
     expect(input.dataset.rightActions).toBe(JSON.stringify(['contextWindow']));
-    expect(input.dataset.showControlBar).toBe('true');
+    expect(input.dataset.showControlBar).toBe('false');
   });
 
   it('restores compact rendering once focus leaves the row entirely', () => {

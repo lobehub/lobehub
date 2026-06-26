@@ -4,6 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
+import { type CreateImageMethodOptions } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskStatus, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -144,19 +145,20 @@ export const imageRouter = router({
           // Check if operation has been cancelled
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
+          const runtimeOptions: CreateImageMethodOptions = {
+            metadata: {
+              generationBatchId,
+              generationId,
+              taskId,
+              trigger: RequestTrigger.Image,
+            },
+          };
           const response = await modelRuntime.createImage!(
             {
               model: resolvedModelId,
               params: params as unknown as RuntimeImageGenParams,
             },
-            {
-              metadata: {
-                generationBatchId,
-                generationId,
-                taskId,
-                trigger: RequestTrigger.Image,
-              },
-            },
+            runtimeOptions,
           );
 
           if (!response) {
@@ -277,6 +279,7 @@ export const imageRouter = router({
                 }),
               },
               modelUsage,
+              pricingContext: runtimeOptions.pricingContext,
               provider,
               userId: ctx.userId,
               workspaceId,

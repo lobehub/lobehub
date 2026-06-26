@@ -1,10 +1,11 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider, Switch } from 'antd';
 import { Images } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
@@ -30,7 +31,6 @@ import {
   SeedNumberInput,
   SizeSelect,
   StepsSliderInput,
-  useAutoDimensions,
 } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import ImageModelItem from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/ImageModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -44,6 +44,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import PromptTitle from './Title';
+import { useImageReferenceUpload } from './useImageReferenceUpload';
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -83,22 +84,27 @@ const PromptExtendItem = memo(() => {
   const { value, setValue, enumValues } = useGenerationConfigParam('promptExtend');
 
   if (enumValues && enumValues.length > 0) {
-    const options = enumValues.map((item) => ({ label: item, value: item }));
+    const options = enumValues.map((item) => ({
+      disabled: !canCreate,
+      key: item,
+      label: item,
+    }));
 
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          disabled={!canCreate}
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => {
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
             if (!canCreate) return;
 
-            setValue(String(next) as any);
+            setValue(key as any);
           }}
         />
       </Flexbox>
@@ -126,22 +132,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { t } = useTranslation('image');
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useGenerationConfigParam('prompt');
-  const { value: imageUrl, setValue: setImageUrl } = useGenerationConfigParam('imageUrl');
   const {
-    value: imageUrls,
-    setValue: setImageUrls,
-    maxCount: imageUrlsMaxCount,
-    maxFileSize: imageUrlsMaxFileSize,
-  } = useGenerationConfigParam('imageUrls');
-  const { maxFileSize: imageUrlMaxFileSize } = useGenerationConfigParam('imageUrl');
+    canDropImage,
+    handleAddImage,
+    handleRemoveImage,
+    handleUploadFiles,
+    imagePreviewUrls,
+    maxCount,
+    maxFileSize,
+    uploadingPreviews,
+  } = useImageReferenceUpload();
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const currentProvider = useImageStore(imageGenerationConfigSelectors.provider);
   const isInit = useImageStore((s) => s.isInit);
-  const isSupportImageUrl = useImageStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useImageStore(isSupportedParamSelector('imageUrls'));
   const isSupportQuality = useImageStore(isSupportedParamSelector('quality'));
   const isSupportResolution = useImageStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useImageStore(isSupportedParamSelector('size'));
@@ -154,7 +160,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
   const { showDimensionControl } = useDimensionControl();
-  const { autoSetDimensions, extractUrlAndDimensions } = useAutoDimensions();
 
   useFetchAiImageConfig();
 
@@ -208,65 +213,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     }
   }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createImage]);
 
-  const imagePreviewUrls = useMemo(
-    () => [imageUrl, ...(imageUrls ?? [])].filter(Boolean) as string[],
-    [imageUrl, imageUrls],
-  );
-
-  const handleAddImage = useCallback(
-    (data: string | { dimensions?: { height: number; width: number }; url: string }) => {
-      if (!canCreate) return;
-
-      const { url, dimensions } = extractUrlAndDimensions(data);
-      if (!url) return;
-
-      if (dimensions) {
-        autoSetDimensions(dimensions);
-      }
-
-      if (isSupportImageUrl && !imageUrl) {
-        setImageUrl(url);
-      } else if (isSupportImageUrls) {
-        setImageUrls([...(imageUrls ?? []), url] as any);
-      } else if (isSupportImageUrl) {
-        setImageUrl(url);
-      }
-    },
-    [
-      isSupportImageUrl,
-      isSupportImageUrls,
-      imageUrl,
-      imageUrls,
-      setImageUrl,
-      setImageUrls,
-      autoSetDimensions,
-      extractUrlAndDimensions,
-      canCreate,
-    ],
-  );
-
-  const handleRemoveImage = useCallback(
-    (url: string) => {
-      if (!canCreate) return;
-
-      if (url === imageUrl) {
-        setImageUrl(null);
-      } else {
-        setImageUrls((imageUrls ?? []).filter((item) => item !== url) as any);
-      }
-    },
-    [canCreate, imageUrl, imageUrls, setImageUrl, setImageUrls],
-  );
-
-  const showInlineRef = isSupportImageUrl || isSupportImageUrls;
+  const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
-
-  const maxCount = useMemo(() => {
-    let count = 0;
-    if (isSupportImageUrl) count += 1;
-    if (isSupportImageUrls) count += imageUrlsMaxCount ?? 4;
-    return count;
-  }, [isSupportImageUrl, isSupportImageUrls, imageUrlsMaxCount]);
 
   return (
     <Flexbox gap={32} width={'100%'}>
@@ -284,9 +232,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             <InlineImageReference
               images={imagePreviewUrls}
               maxCount={maxCount}
-              maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+              maxFileSize={maxFileSize}
+              uploadingPreviews={uploadingPreviews}
               onAdd={handleAddImage}
               onRemove={handleRemoveImage}
+              onUploadFiles={handleUploadFiles}
             />
           ) : undefined
         }

@@ -561,7 +561,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           },
         );
 
-        const pricing = await getModelPricing(payload.model, this.id);
+        const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
         const pricingOptions = await chatCompletion?.getPricingOptions?.(payload, postPayload);
         const streamOptions = {
           callbacks: options?.callback,
@@ -694,7 +694,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       }
 
       try {
-        const pricing = await getModelPricing(payload.model, this.id);
+        const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
         return await generateObject(this.client, payload, options, pricing, {
           requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
         });

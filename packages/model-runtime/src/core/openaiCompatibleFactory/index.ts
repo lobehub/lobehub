@@ -33,7 +33,11 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import type {
   CreateVideoPayload,
   CreateVideoResponse,
@@ -121,7 +125,11 @@ type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParams
 ) &
   OpenAIExtraParams;
-export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> &
+// Exclude openai's own `provider` (added in openai SDK 6.45.0 as `provider?: Provider`
+// for its third-party-provider feature) — otherwise intersecting it with our
+// `provider: string` collapses to `Provider & string`, breaking every call site
+// that passes a plain provider id string.
+export type CreateImageOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
   ModelIdMappingOptions & {
     apiKey: string;
     provider: string;
@@ -155,7 +163,8 @@ const getGenerateObjectResponsesReasoningParams = ({
     : {};
 };
 
-export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> &
+// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
+export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
   ModelIdMappingOptions & {
     apiKey: string;
     provider: string;
@@ -286,6 +295,11 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
+  /**
+   * Additional provider-specific model patterns that support `prompt_cache_key`.
+   * OpenAI models are handled by the factory default; other providers must opt in.
+   */
+  promptCacheKeyModels?: Array<string | RegExp>;
   provider: string;
   responses?: {
     handlePayload?: (
@@ -306,6 +320,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   models,
   customClient,
   responses,
+  promptCacheKeyModels,
   createImage: customCreateImage,
   createVideo: customCreateVideo,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
@@ -474,8 +489,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private resolvePromptCacheKey(model?: string, user?: string) {
       if (!user) return;
 
-      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
+      // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
       if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
+        return `lobe:${user}:${model}`;
+      }
+
+      const matchesProviderPromptCacheModel = promptCacheKeyModels?.some((item) => {
+        if (!model) return false;
+        if (typeof item === 'string') return model.includes(item);
+
+        item.lastIndex = 0;
+        return item.test(model);
+      });
+      if (matchesProviderPromptCacheModel) {
         return `lobe:${user}:${model}`;
       }
     }
@@ -629,7 +655,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             apiMode: 'chat_completions',
             includeUsageRequested,
             model: payload.model,
-            pricing: await getModelPricing(payload.model, this.id),
+            pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
           },
         };
@@ -751,7 +777,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
     }
 
-    async createImage(payload: CreateImagePayload) {
+    async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
       const log = debug(`${this.logPrefix}:createImage`);
 
       // If custom createImage implementation is provided, use it
@@ -768,6 +794,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
       return createOpenAICompatibleImage(this.client, payload, this.id, {
+        pricingContext: options?.pricingContext,
         pricingModel: payload.model,
         requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
         routingModel: payload.model,
@@ -976,7 +1003,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           !!schema,
         );
 
-        const pricing = await getModelPricing(model, this.id);
+        const pricing = await getModelPricing(model, this.id, options?.pricingContext);
         const usagePayload = { model, pricing, provider: this.id };
 
         if (tools) {
@@ -1133,7 +1160,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         );
 
         if (res.usage && options?.onUsage) {
-          const pricing = await getModelPricing(payload.model, this.id);
+          const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
           await options.onUsage(
             convertOpenAIUsage(res.usage as any, {
               model: payload.model,
@@ -1445,7 +1472,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         payload: {
           apiMode: 'responses',
           model: usageModel,
-          pricing: await getModelPricing(usageModel, this.id),
+          pricing: await getModelPricing(usageModel, this.id, options?.pricingContext),
           provider: this.id,
         },
       };

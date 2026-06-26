@@ -3,8 +3,21 @@ import type { ComponentType } from 'react';
 
 export type HeterogeneousAgentStatusGuideVariant = 'compact' | 'embedded' | 'inline';
 
+/**
+ * Present while an `overloaded` error is auto-retrying. When absent, the
+ * overloaded guide renders its static manual-retry card.
+ */
+export interface HeterogeneousAgentAutoRetryState {
+  attempt: number;
+  maxAttempts: number;
+  onCancel: () => void;
+  onRetryNow: () => void;
+  secondsLeft: number;
+}
+
 export interface HeterogeneousAgentStatusGuideProps {
   agentType?: string;
+  autoRetry?: HeterogeneousAgentAutoRetryState;
   error?: HeterogeneousAgentSessionError | null;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
@@ -25,6 +38,7 @@ export interface HeterogeneousAgentGuideConfig {
 }
 
 export interface HeterogeneousAgentGuideStateProps {
+  autoRetry?: HeterogeneousAgentAutoRetryState;
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
   onOpenSystemTools?: () => void;

@@ -152,6 +152,7 @@ describe('Group', () => {
 
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -183,6 +184,7 @@ describe('Group', () => {
   it('keeps a short mixed status block inline when there is only one tool call', () => {
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -215,6 +217,7 @@ describe('Group', () => {
 
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -271,6 +274,7 @@ describe('Group', () => {
   it('folds consecutive short mixed single-tool blocks into one workflow segment', () => {
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -315,6 +319,7 @@ describe('Group', () => {
   it('keeps assistant runtime errors outside the workflow collapse', () => {
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -367,6 +372,7 @@ describe('Group', () => {
   it('renders a single tool call inline instead of folding it', () => {
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -397,6 +403,7 @@ describe('Group', () => {
     mockIsGenerating = true;
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -416,6 +423,7 @@ describe('Group', () => {
     mockIsGenerating = true;
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -435,6 +443,7 @@ describe('Group', () => {
     mockIsGenerating = false;
     render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -453,6 +462,7 @@ describe('Group', () => {
   it('only animates the last block in a multi-block group', () => {
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -489,6 +499,7 @@ describe('Group', () => {
 
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[
@@ -523,6 +534,7 @@ describe('Group', () => {
 
     const { container } = render(
       <Group
+        isLatestItem
         id="assistant-1"
         messageIndex={0}
         blocks={[

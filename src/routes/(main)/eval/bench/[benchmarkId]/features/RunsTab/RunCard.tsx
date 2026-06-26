@@ -1,7 +1,7 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Card, Dropdown, Progress } from 'antd';
+import { App, Card, Progress } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
   AlertTriangle,
@@ -200,7 +200,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
     onEdit?.(run);
   };
 
-  const menuItems = [
+  const menuItems: DropdownItem[] = [
     ...(canStart
       ? [
           {
@@ -319,7 +319,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
           )}
 
           {/* Actions dropdown */}
-          <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={['click']}>
+          <DropdownMenu items={menuItems} placement="bottomRight">
             <span
               className={styles.dropdownTrigger}
               onClick={(e) => {
@@ -329,7 +329,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
             >
               <Ellipsis size={16} />
             </span>
-          </Dropdown>
+          </DropdownMenu>
 
           <Icon className={styles.arrowIcon} icon={ArrowRight} size={16} />
         </Flexbox>

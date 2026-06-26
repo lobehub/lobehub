@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Tabs, type TabsProps } from 'antd';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
@@ -14,7 +14,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
@@ -79,7 +78,7 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const heterogeneousTabItems: TabsProps['items'] = heterogeneousProvider
+  const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
           ? [
@@ -165,8 +164,6 @@ const ProfileEditor = memo(() => {
           editor here to avoid a control that looks effective but isn't (mirrors the
           ModelSelect hiding above). */}
       {!isHeterogeneous && <EditorCanvas />}
-      {/* Advanced Settings Modal */}
-      <AgentSettings />
     </>
   );
 });

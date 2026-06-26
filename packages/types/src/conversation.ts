@@ -169,6 +169,12 @@ export interface ConversationContext {
    */
   isSupervisor?: boolean;
   /**
+   * Orchestration role of the current agent within a group conversation.
+   * Canonical replacement for {@link isSupervisor} — stamped onto the assistant
+   * message's `metadata.orchestrationRole` so the role snapshot persists.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
+  /**
    * Scope type for the conversation
    * - 'main': Agent main conversation (default)
    * - 'thread': Agent thread conversation

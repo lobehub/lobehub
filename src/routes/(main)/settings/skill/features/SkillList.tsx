@@ -65,12 +65,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
     align-items: center;
 
-    padding-block: 8px 2px;
-    padding-inline: 0;
+    padding-block: 12px 4px;
+    padding-inline: 4px;
 
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
       color: ${cssVar.colorText};

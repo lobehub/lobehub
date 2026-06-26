@@ -105,7 +105,9 @@ export const List: FC<ListProps> = ({
       className={styles.list}
       flex={1}
       ref={listRef}
-      style={{ height: listHeight }}
+      // No fixed height: flex-shrink within the height-capped panel so the list
+      // scrolls internally on short viewports while the toolbar stays pinned.
+      style={{ minHeight: 0 }}
       onScroll={handleListScroll}
     >
       {listItems.map((item, index) => {

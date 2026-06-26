@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Değişiklikler yükleniyor…",
   "workingDirectory.filesModified": "Değiştirildi",
   "workingDirectory.ghMissing": "Bağlantılı çekme isteklerini görmek için GitHub CLI (`gh`) yükleyin ve oturum açın",
+  "workingDirectory.heteroHint": "Bu ajan her zaman bir çalışma dizini içinde çalışır. Birini seçene kadar varsayılan bir klasör kullanır — değiştirmek için aşağıdan başka birini seçin.",
   "workingDirectory.newBranchPlaceholder": "feature/yeni-dal-adi",
   "workingDirectory.noRecent": "Son dizin yok",
   "workingDirectory.notSet": "Çalışma dizini ayarlamak için tıklayın",

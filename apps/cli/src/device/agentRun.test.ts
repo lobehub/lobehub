@@ -103,6 +103,19 @@ describe('spawnHeteroAgentRun', () => {
     expect(args).toContain('sess-9');
   });
 
+  it('forwards resolved args to lh hetero exec', () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    void spawnHeteroAgentRun({
+      ...baseParams,
+      args: ['--model', 'opus', '--effort', 'high'],
+    });
+
+    const [, args] = spawnMock.mock.calls[0];
+    expect(args.slice(-4)).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
   it('sends a content-block array to stdin when systemContext is provided', async () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);

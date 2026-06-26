@@ -10,6 +10,8 @@ export const labPreferSelectors = {
   enableAgentSelfIteration: (s: UserState): boolean =>
     s.preference.lab?.enableAgentSelfIteration ?? false,
   enableFleet: (s: UserState): boolean => s.preference.lab?.enableFleet ?? false,
+  enableFoldFinishedTurn: (s: UserState): boolean =>
+    s.preference.lab?.enableFoldFinishedTurn ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,

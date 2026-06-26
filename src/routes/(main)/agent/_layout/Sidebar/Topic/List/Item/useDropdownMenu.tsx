@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
@@ -21,12 +22,13 @@ import {
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openRenameModal } from '@/components/RenameModal';
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -50,6 +52,7 @@ export const useTopicItemDropdownMenu = ({
   const { t } = useTranslation(['topic', 'common']);
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
@@ -151,9 +154,12 @@ export const useTopicItemDropdownMenu = ({
               label: t('actions.openInNewTab'),
               onClick: () => {
                 if (!activeAgentId) return;
-                const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
+                const url = buildWorkspaceAwarePath(
+                  AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+                  activeWorkspaceSlug,
+                );
                 addTab(url);
-                navigate(url);
+                navigate(url, { escape: true });
               },
             },
             {
@@ -184,7 +190,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeAgentId) return;
-          const url = `${appOrigin}${SESSION_CHAT_TOPIC_URL(activeAgentId, id)}`;
+          const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(activeAgentId, id)}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },
@@ -248,6 +254,7 @@ export const useTopicItemDropdownMenu = ({
     canCreateTopic,
     canEditTopic,
     activeAgentId,
+    activeWorkspaceSlug,
     appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,

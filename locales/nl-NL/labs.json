@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
   "features.fleet.desc": "Toon de Fleet-invoer in de titelbalk — een zij-aan-zij dashboard van alle lopende taken over uw agents.",
   "features.fleet.title": "Fleet-weergave",
+  "features.foldFinishedTurn.desc": "Vouw het proces (redenering en hulpmiddeloproepen) van voltooide, niet-laatste agentbeurten onder een kop \"Verwerkt\". Het uiteindelijke antwoord blijft zichtbaar; klik om het proces uit te vouwen.",
+  "features.foldFinishedTurn.title": "Vouw Voltooide Beurten",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
   "features.imessage.desc": "Verbind agents met iMessage via de lokale LobeHub Desktop BlueBubbles-bridge.",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
   "features.platformAgent.desc": "Toon de optie \"Agent Verbinden\" in het aanmaakmenu. Verbonden agents (bijv. OpenClaw, Hermes) draaien op je eigen apparaten en communiceren terug via lh connect.",
   "features.platformAgent.title": "Agent Verbinden",
+  "features.taskVerify.desc": "Voeg een sectie voor leveringsacceptatie toe aan de taakdetails: beschrijf de acceptatie in één zin en laat AI bewerkbare verificatiecriteria genereren.",
+  "features.taskVerify.title": "Taak Leveringsacceptatie",
   "title": "Labs"
 }

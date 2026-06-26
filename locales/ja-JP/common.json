@@ -272,6 +272,7 @@
   "generation.hero.taglinePrefix": "作成を始めましょう",
   "generation.promptModeration.blocked": "コンテンツポリシーのチェックに失敗しました。プロンプトを修正してください。",
   "getDesktopApp": "デスクトップアプリを入手",
+  "goToTarget": "ターゲットに移動",
   "historyRange": "履歴範囲",
   "home.suggestQuestions": "次の例をお試しください",
   "import": "インポート",

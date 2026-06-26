@@ -138,10 +138,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       })),
     [documents, resolveNodeName, resolveParentRowId],
   );
-  const defaultExpandedIds = useMemo(
-    () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
-    [nodes],
-  );
   const treeStyleVars = useMemo(
     () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
@@ -395,7 +391,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           canDrag={canDrag}
           canDrop={canDrop}
           canRename={canRename}
-          defaultExpandedIds={defaultExpandedIds}
           getContextMenuItems={getContextMenuItems}
           header={toolbar}
           iconSet="complete"

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { UserModel } from '@/database/models/user';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
@@ -14,11 +15,13 @@ import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
+import { listSkillToolsWithLiveFallback } from '@/server/services/market/listSkillToolsWithLiveFallback';
 import {
   contentBlocksToString,
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
 import { createSandboxService } from '@/server/services/sandbox';
+import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { scheduleToolCallReport } from './_helpers';
 import {
@@ -56,7 +59,6 @@ const marketToolProcedure = wsCompatProcedure
   .use(telemetry)
   .use(marketUserInfo)
   .use(async ({ ctx, next }) => {
-    const { UserModel } = await import('@/database/models/user');
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
     // In a workspace context, sandbox runtime calls are attributed to the
@@ -190,8 +192,6 @@ const execInSandboxHandler = async ({
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
     if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
-      const { preprocessLhCommand } =
-        await import('@/server/services/toolExecution/preprocessLhCommand');
       const lhResult = await preprocessLhCommand(params.command, userId);
 
       if (lhResult.error) {
@@ -425,6 +425,7 @@ export const marketRouter = router({
 
         return {
           data: response.data,
+          error: (response as any).error,
           success: response.success,
         };
       } catch (error) {
@@ -594,7 +595,17 @@ export const marketRouter = router({
       log('connectListTools: provider=%s', input.provider);
 
       try {
-        const response = await ctx.marketSDK.skills.listTools(input.provider);
+        const response = await listSkillToolsWithLiveFallback(
+          ctx.marketSDK.skills,
+          input.provider,
+          (error) => {
+            log(
+              'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+              input.provider,
+              error,
+            );
+          },
+        );
         return {
           provider: input.provider,
           tools: response.tools || [],

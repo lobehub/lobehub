@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "Je abonnementspunten zijn op. Vul je tegoed aan of configureer een aangepaste model-API om verder te gaan.",
   "response.SystemTimeNotMatchError": "Sorry, je systeemtijd komt niet overeen met de server. Controleer je tijdinstellingen en probeer opnieuw.",
   "response.UnknownChatFetchError": "Sorry, er is een onbekende fout opgetreden bij het verzoek. Controleer de informatie hieronder of probeer opnieuw.",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "Deze agent bevindt zich in een werkruimte, dus hij kan alleen apparaten koppelen die het hele team kan bereiken. Persoonlijke apparaten blijven bij de gebruiker die ze heeft geregistreerd — kies in plaats daarvan een werkruimte-apparaat, of registreer dit apparaat eerst bij de werkruimte.",
   "response.WorkspaceFrozenByAdmin": "Deze werkruimte is bevroren door een beheerder en kan geen verzoeken uitvoeren. Neem contact op met de eigenaar van de werkruimte om het probleem op te lossen.",
   "response.WorkspaceFrozenByRiskControl": "Deze werkruimte is automatisch bevroren door risicobeheer en kan geen verzoeken uitvoeren. Neem contact op met de ondersteuning om de status te beoordelen.",
   "stt.responseError": "Serviceverzoek mislukt. Controleer de configuratie of probeer opnieuw.",

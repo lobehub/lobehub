@@ -48,7 +48,7 @@ export class RemoteDeviceExecutionRuntime {
       }
 
       return {
-        content: `Device "${target.hostname}" (${target.platform}) activated successfully. Local System tools are now available.`,
+        content: `Device "${target.friendlyName || target.hostname}" (${target.platform}) activated successfully. Local System tools are now available.`,
         state: {
           activatedDevice: target,
           metadata: { activeDeviceId: args.deviceId },

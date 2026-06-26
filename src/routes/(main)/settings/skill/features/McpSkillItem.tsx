@@ -9,6 +9,7 @@ import MCPTag from '@/components/Plugins/MCPTag';
 import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import PluginDetailModal from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -37,6 +38,23 @@ const McpSkillItem = memo<McpSkillItemProps>(
     const [detailOpen, setDetailOpen] = useState(false);
 
     const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
+
+    if (onSelect) {
+      return (
+        <NavItem
+          active={isSelected}
+          title={title}
+          icon={() =>
+            avatar && avatar !== 'MCP_AVATAR' ? (
+              <Avatar avatar={avatar} shape="square" size={18} />
+            ) : (
+              <Icon icon={McpIcon} size={18} />
+            )
+          }
+          onClick={onSelect}
+        />
+      );
+    }
 
     return (
       <>

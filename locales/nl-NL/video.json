@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Eindframe",
   "config.generateAudio.label": "Audio Genereren",
   "config.header.title": "Video",
+  "config.imageUpload.maxCountReached": "Je kunt maximaal {{count}} referentieafbeeldingen toevoegen",
   "config.imageUrl.label": "Startframe",
   "config.prompt.placeholder": "Beschrijf de video die je wilt genereren",
   "config.prompt.placeholderWithRef": "Beschrijf de scène die je wilt genereren met de afbeelding",

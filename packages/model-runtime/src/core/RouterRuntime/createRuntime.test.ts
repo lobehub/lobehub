@@ -1041,7 +1041,7 @@ describe('createRouterRuntime', () => {
 
       const result = await runtime.createImage(payload);
       expect(result).toEqual({ imageUrl: 'https://example.com/image.png' });
-      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+      expect(mockCreateImage).toHaveBeenCalledWith(payload, undefined);
     });
 
     it('should forward options.metadata to onRouteAttempt', async () => {
@@ -1070,10 +1070,14 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       const payload = { model: 'gpt-image-1', params: { prompt: 'a cat' } };
       const metadata = { trigger: 'image' };
+      const options = {
+        metadata,
+        pricingContext: { plan: 'premium', scope: 'personal' },
+      } as const;
 
-      await runtime.createImage(payload, { metadata });
+      await runtime.createImage(payload, options);
 
-      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+      expect(mockCreateImage).toHaveBeenCalledWith(payload, options);
       expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
     });
   });
@@ -1103,7 +1107,7 @@ describe('createRouterRuntime', () => {
 
       const result = await runtime.createVideo(payload);
       expect(result).toEqual({ inferenceId: 'job-1' });
-      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload, undefined);
     });
 
     it('should forward options.metadata to onRouteAttempt', async () => {
@@ -1130,10 +1134,14 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       const payload = { model: 'sora-1', params: { prompt: 'a cat' } } as any;
       const metadata = { trigger: 'video' };
+      const options = {
+        metadata,
+        pricingContext: { plan: 'premium', scope: 'personal' },
+      } as const;
 
-      await runtime.createVideo(payload, { metadata });
+      await runtime.createVideo(payload, options);
 
-      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload, options);
       expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
     });
 

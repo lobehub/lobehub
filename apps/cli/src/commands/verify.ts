@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { Command } from 'commander';
@@ -72,6 +72,63 @@ export function registerVerifyCommand(program: Command) {
   const verify = program
     .command('verify')
     .description('Manage the Agent Run delivery checker (criteria, rubrics, plans, results)');
+
+  // ════════════ init (materialize the portable verify skill) ════════════
+  verify
+    .command('init')
+    .description('Write the portable verify skill into a working dir (.claude/skills/verify)')
+    .option('--dir <path>', 'Target working directory (default: current dir)')
+    .option('--skill <id>', 'Skill identifier to pull', 'verify')
+    .option('--force', 'Overwrite existing skill files')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        dir?: string;
+        force?: boolean;
+        json?: boolean | string;
+        skill: string;
+      }) => {
+        const client = await getTrpcClient();
+        // Pulled live from the server's deployed builtin-skills — always the latest.
+        const bundle = await client.verify.getSkillBundle.query({ identifier: options.skill });
+
+        const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
+        const skillDir = path.join(baseDir, '.claude', 'skills', bundle.identifier);
+
+        // path → content for SKILL.md plus every resource file.
+        const entries: [string, string][] = [
+          ['SKILL.md', bundle.content],
+          ...Object.entries(bundle.files),
+        ];
+
+        const written: string[] = [];
+        const skipped: string[] = [];
+        for (const [rel, content] of entries) {
+          const dest = path.join(skillDir, rel);
+          if (existsSync(dest) && !options.force) {
+            skipped.push(rel);
+            continue;
+          }
+          mkdirSync(path.dirname(dest), { recursive: true });
+          writeFileSync(dest, content, 'utf8');
+          written.push(rel);
+        }
+
+        const result = { dir: skillDir, skill: bundle.identifier, skipped, written };
+        if (options.json !== undefined) {
+          outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
+        );
+        console.log(
+          `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`,
+        );
+        if (skipped.length > 0)
+          console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
+      },
+    );
 
   // ════════════ criteria ════════════
   const criterion = verify.command('criterion').description('Reusable pass/fail standards');
@@ -589,6 +646,89 @@ export function registerVerifyCommand(program: Command) {
       printResults(results);
     });
 
+  // ════════════ submit (builder self-evidence: result + evidence in one call) ════════════
+  verify
+    .command('submit')
+    .description('Submit a check item — upsert its result and attach evidence in one call')
+    .option('--run <verifyRunId>', 'Target verification session (or use --operation)')
+    .option('--operation <operationId>', 'Resolve the session from an Agent Run operation id')
+    .requiredOption('--item <checkItemId>', 'Plan item id (checkItemId)')
+    .option('--type <type>', 'screenshot|gif|video|text|dom_snapshot|transcript')
+    .option('--file <path>', 'Local file to upload as the evidence artifact')
+    .option('--content <text>', 'Inline text payload (instead of a file)')
+    .option('--verdict <verdict>', 'passed|failed|uncertain')
+    .option('--title <text>', 'Check item title snapshot')
+    .option('--by <capturedBy>', 'agent-browser|cdp|cli|program|llm_judge', 'cli')
+    .option('--desc <text>', 'Human-readable caption for the evidence')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        by?: string;
+        content?: string;
+        desc?: string;
+        file?: string;
+        item: string;
+        json?: boolean | string;
+        operation?: string;
+        run?: string;
+        title?: string;
+        type?: string;
+        verdict?: string;
+      }) => {
+        if (!options.run && !options.operation) {
+          log.error('Provide --run <verifyRunId> or --operation <operationId>');
+          process.exit(1);
+        }
+        const hasEvidence = Boolean(options.file) || Boolean(options.content);
+        if (Boolean(options.file) && Boolean(options.content)) {
+          log.error('Provide at most one of --file or --content');
+          process.exit(1);
+        }
+        if (hasEvidence && !options.type) {
+          log.error('--type is required when attaching evidence');
+          process.exit(1);
+        }
+        if (!hasEvidence && !options.verdict) {
+          log.error('Provide evidence (--file/--content) and/or a --verdict');
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        let fileId: string | undefined;
+        if (options.file) {
+          const uploaded = await uploadLocalFile(client, options.file);
+          fileId = uploaded.id;
+        }
+        const evidence = hasEvidence
+          ? [
+              {
+                capturedBy: options.by as any,
+                content: options.content,
+                description: options.desc,
+                fileId,
+                type: options.type as any,
+              },
+            ]
+          : undefined;
+        const res = await client.verify.submitCheckEvidence.mutate({
+          checkItemId: options.item,
+          checkItemTitle: options.title,
+          evidence,
+          operationId: options.operation,
+          verdict: options.verdict as any,
+          verifyRunId: options.run,
+        });
+        if (options.json !== undefined) {
+          outputJson(res, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Submitted ${pc.bold(res.checkResult.id)}` +
+            `${res.checkResult.verdict ? ` (${res.checkResult.verdict})` : ''}` +
+            `${res.evidence.length > 0 ? ` +${res.evidence.length} evidence` : ''}`,
+        );
+      },
+    );
+
   // ════════════ evidence (artifact entity) ════════════
   const evidence = verify.command('evidence').description('Evidence artifacts (verify_evidence)');
 
@@ -662,6 +802,20 @@ export function registerVerifyCommand(program: Command) {
         ]),
         ['ID', 'TYPE', 'BY', 'PAYLOAD', 'DESC'],
       );
+    });
+
+  evidence
+    .command('delete <evidenceId>')
+    .description('Delete an evidence artifact')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (evidenceId: string, options: { json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const result = await client.verify.deleteEvidence.mutate({ id: evidenceId });
+      if (options.json !== undefined) {
+        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      console.log(`${pc.green('✓')} Deleted evidence ${pc.bold(result.id)}`);
     });
 
   // ════════════ report (narrative entity) ════════════

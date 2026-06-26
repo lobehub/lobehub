@@ -1,5 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox, Modal, Segmented, Tabs } from '@lobehub/ui';
+import { Flexbox, Modal } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -68,24 +69,13 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
       onCancel={onCancel}
     >
       <Flexbox gap={isMobile ? 8 : 24}>
-        <Segmented
-          block
-          style={{ width: '100%' }}
-          value={tab}
-          variant={'filled'}
-          options={tabItems.map((item) => {
-            return {
-              label: item?.label,
-              value: item?.key,
-            };
-          })}
-          onChange={(value) => setTab(value as Tab)}
-        />
         <Tabs
           activeKey={tab}
-          indicator={{ align: 'center', size: (origin) => origin - 20 }}
           items={tabItems}
-          renderTabBar={() => <></>}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
           onChange={(key) => setTab(key as Tab)}
         />
       </Flexbox>

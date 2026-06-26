@@ -191,6 +191,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,
     avatar: typeof avatar === 'string' ? avatar : undefined,
+    backgroundColor: backgroundColor || undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,

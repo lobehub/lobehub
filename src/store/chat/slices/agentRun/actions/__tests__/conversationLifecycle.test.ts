@@ -807,7 +807,7 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             groupId: 'test-group-id',
             newAssistantMessage: expect.objectContaining({
-              metadata: { isSupervisor: true },
+              metadata: { isSupervisor: true, orchestrationRole: 'supervisor' },
             }),
           }),
           expect.any(AbortController),
@@ -894,7 +894,7 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             newAssistantMessage: expect.objectContaining({
-              metadata: { isSupervisor: true },
+              metadata: { isSupervisor: true, orchestrationRole: 'supervisor' },
             }),
           }),
           expect.any(AbortController),

@@ -346,9 +346,11 @@ export class ConversationLifecycleActionImpl {
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
-      // Only set isSupervisor for actual group supervisors — NOT for @agent mentions.
-      // isSupervisor triggers group-specific UI rendering (SupervisorMessage with group avatars).
-      ...(isGroupSupervisor && { isSupervisor: true }),
+      // Only set the supervisor markers for actual group supervisors — NOT for
+      // @agent mentions. These drive group-specific UI rendering (SupervisorMessage
+      // with group avatars). orchestrationRole is the canonical field; isSupervisor
+      // is kept for back-compat.
+      ...(isGroupSupervisor && { isSupervisor: true, orchestrationRole: 'supervisor' as const }),
       ...(activePageDocumentId ? { documentId: activePageDocumentId } : {}),
     };
 
@@ -533,7 +535,9 @@ export class ConversationLifecycleActionImpl {
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         // Pass isSupervisor metadata for group orchestration (consistent with server)
-        metadata: operationContext.isSupervisor ? { isSupervisor: true } : undefined,
+        metadata: operationContext.isSupervisor
+          ? { isSupervisor: true, orchestrationRole: 'supervisor' as const }
+          : undefined,
       },
       { operationId, tempMessageId: tempAssistantId },
     );
@@ -881,7 +885,9 @@ export class ConversationLifecycleActionImpl {
           groupId: operationContext.groupId ?? undefined,
           newAssistantMessage: {
             // Pass isSupervisor metadata for group orchestration
-            metadata: operationContext.isSupervisor ? { isSupervisor: true } : undefined,
+            metadata: operationContext.isSupervisor
+              ? { isSupervisor: true, orchestrationRole: 'supervisor' as const }
+              : undefined,
             model,
             provider: provider!,
           },

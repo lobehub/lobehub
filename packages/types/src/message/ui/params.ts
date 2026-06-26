@@ -18,7 +18,8 @@ export type CreateMessageRoleType =
   | 'tool'
   | 'task'
   | 'supervisor'
-  | 'verify';
+  | 'verify'
+  | 'taskCallback';
 
 export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
@@ -174,7 +175,14 @@ export interface SendGroupMessageParams {
 
 // ========== Zod Schemas ========== //
 
-const UIMessageRoleTypeSchema = z.enum(['user', 'assistant', 'tool', 'task', 'supervisor']);
+const UIMessageRoleTypeSchema = z.enum([
+  'user',
+  'assistant',
+  'tool',
+  'task',
+  'supervisor',
+  'taskCallback',
+]);
 
 const ChatPluginPayloadSchema = z.object({
   apiName: z.string(),

@@ -4,7 +4,7 @@ import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
 import numeral from 'numeral';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
@@ -13,17 +13,20 @@ import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
 import ActionPopover from '../components/ActionPopover';
 import TokenProgress from './TokenProgress';
+import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
 
 const toolNameResolver = new ToolNameResolver();
 
@@ -39,15 +42,57 @@ const Token = memo(() => {
   );
 
   const agentId = useAgentId();
-  const [systemRole, model, provider] = useAgentStore((s) => {
+  const [
+    activeAgentId,
+    systemRole,
+    model,
+    provider,
+    enableAgentMode,
+    searchMode,
+    useModelBuiltinSearch,
+    skillActivateMode,
+    agentMemoryEnabled,
+    runtimeMode,
+    hasEnabledKnowledgeBases,
+  ] = useAgentStore((s) => {
+    const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(s);
+
     return [
+      s.activeAgentId,
       agentByIdSelectors.getAgentSystemRoleById(agentId)(s),
       agentByIdSelectors.getAgentModelById(agentId)(s),
       agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-      // add these two params to enable the component to re-render
-      chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
-      chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
+      chatConfig.enableAgentMode,
+      chatConfig.searchMode,
+      chatConfig.useModelBuiltinSearch,
+      chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
+      chatConfig.memory?.enabled,
+      chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
+      agentByIdSelectors
+        .getAgentKnowledgeBasesById(agentId)(s)
+        .some((item) => item.enabled),
     ];
+  });
+  const globalMemoryEnabled = useUserStore(settingsSelectors.memoryEnabled);
+  const effectiveMemoryEnabled = agentMemoryEnabled ?? globalMemoryEnabled;
+  const [isProviderHasBuiltinSearch, isModelHasBuiltinSearch, isModelBuiltinSearchInternal] =
+    useAiInfraStore((s) => [
+      aiProviderSelectors.isProviderHasBuiltinSearch(provider)(s),
+      aiModelSelectors.isModelHasBuiltinSearch(model, provider)(s),
+      aiModelSelectors.isModelBuiltinSearchInternal(model, provider)(s),
+    ]);
+  const toolContextRefreshKey = getToolContextRefreshKey({
+    agentId: activeAgentId || agentId,
+    enableAgentMode,
+    hasEnabledKnowledgeBases,
+    isModelBuiltinSearchInternal,
+    isModelHasBuiltinSearch,
+    isProviderHasBuiltinSearch,
+    memoryEnabled: effectiveMemoryEnabled,
+    runtimeMode,
+    searchMode,
+    skillActivateMode,
+    useModelBuiltinSearch,
   });
 
   const maxTokens = useModelContextWindowTokens(model, provider);
@@ -56,34 +101,39 @@ const Token = memo(() => {
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
-  const toolsString = useToolStore(() => {
-    const toolsEngine = createAgentToolsEngine({ model, provider });
+  const toolsString = useToolStore(
+    useCallback(() => {
+      const toolsEngine = createAgentToolsEngine({ model, provider });
 
-    const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
-      model,
-      provider,
-      toolIds: pluginIds,
-    });
-    const schemaNumber = tools?.map((i) => JSON.stringify(i)).join('') || '';
+      const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
+        excludeDefaultToolIds: getToolExcludeDefaultToolIds(skillActivateMode),
+        model,
+        provider,
+        toolIds: pluginIds,
+      });
+      const schemaNumber = tools?.map((i) => JSON.stringify(i)).join('') || '';
 
-    // Generate plugin system roles from enabledManifests
-    const toolsSystemRole =
-      enabledManifests.length > 0
-        ? pluginPrompts({
-            tools: enabledManifests.map((manifest) => ({
-              apis: manifest.api.map((api) => ({
-                desc: api.description,
-                name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+      // Generate plugin system roles from enabledManifests
+      const toolsSystemRole =
+        enabledManifests.length > 0
+          ? pluginPrompts({
+              tools: enabledManifests.map((manifest) => ({
+                apis: manifest.api.map((api) => ({
+                  desc: api.description,
+                  name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+                })),
+                identifier: manifest.identifier,
+                name: pluginHelpers.getPluginTitle(manifest.meta) || manifest.identifier,
+                systemRole: manifest.systemRole,
               })),
-              identifier: manifest.identifier,
-              name: pluginHelpers.getPluginTitle(manifest.meta) || manifest.identifier,
-              systemRole: manifest.systemRole,
-            })),
-          })
-        : '';
+            })
+          : '';
 
-    return toolsSystemRole + schemaNumber;
-  });
+      return toolsSystemRole + schemaNumber;
+      // toolContextRefreshKey tracks implicit createAgentToolsEngine inputs from other stores.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [model, pluginIds, provider, skillActivateMode, toolContextRefreshKey]),
+  );
 
   const toolsToken = useTokenCount(canUseTool ? toolsString : '');
 

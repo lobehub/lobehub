@@ -1,6 +1,7 @@
 export * from './abstractChunk';
 export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
+export * from './builderSuggestion';
 export * from './compressContext';
 export * from './generateBrief';
 export * from './generateSkillMeta';

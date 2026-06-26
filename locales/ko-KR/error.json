@@ -99,6 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "구독 포인트가 모두 소진되어 이 기능을 사용할 수 없습니다. 계속 사용하려면 크레딧을 충전하거나 사용자 지정 모델 API를 설정해 주세요.",
   "response.SystemTimeNotMatchError": "시스템 시간이 서버와 일치하지 않습니다. 시스템 시간을 조정한 후 다시 시도하세요",
   "response.UnknownChatFetchError": "요청이 실패했습니다(알 수 없는 오류). 다음 정보를 기반으로 문제를 해결하거나 다시 시도하세요",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "이 에이전트는 워크스페이스에 속해 있으므로 팀 전체가 접근할 수 있는 장치만 연결할 수 있습니다. 개인 장치는 등록한 사용자에게만 속하므로 워크스페이스 장치를 선택하거나 먼저 이 장치를 워크스페이스에 등록하세요.",
   "response.WorkspaceFrozenByAdmin": "이 워크스페이스는 관리자가 동결하여 요청을 실행할 수 없습니다. 문제를 해결하려면 워크스페이스 소유자에게 문의하세요.",
   "response.WorkspaceFrozenByRiskControl": "이 워크스페이스는 리스크 관리에 의해 자동으로 동결되어 요청을 실행할 수 없습니다. 상태를 검토하려면 지원팀에 문의하세요.",
   "stt.responseError": "요청이 실패했습니다. 설정을 확인한 후 다시 시도하세요",

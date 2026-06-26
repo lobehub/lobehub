@@ -2,6 +2,7 @@ import { LobeDeliveryCheckerIdentifier } from '@lobechat/builtin-tool-lobe-deliv
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { VerifyPlanGeneratorService } from '@/server/services/verify';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -66,7 +67,6 @@ class LobeDeliveryCheckerExecutionRuntime {
     // Agent-authored path: the model enumerated the checks, so create the
     // criteria + a rubric, snapshot it onto this operation, and confirm it. The
     // tool call is human-reviewed (humanIntervention); this runs post-approval.
-    const { VerifyPlanGeneratorService } = await import('@/server/services/verify');
     const planGenerator = new VerifyPlanGeneratorService(this.db, this.userId, this.workspaceId);
     const { items, rubricId } = await planGenerator.createPlanFromCriteria({
       criteria,

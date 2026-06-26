@@ -19,10 +19,14 @@
   "editMessage.title": "Chỉnh Sửa Tin Nhắn",
   "navigateToChat.desc": "Chuyển sang tab Trò chuyện và vào Lobe AI",
   "navigateToChat.title": "Chuyển Đến Trò Chuyện Mặc Định",
+  "nextTab.desc": "Chuyển sang tab kiểu trình duyệt tiếp theo trong ứng dụng Desktop; quay lại tab đầu tiên khi đến cuối",
+  "nextTab.title": "Tab Tiếp Theo",
   "openChatSettings.desc": "Xem và chỉnh sửa cài đặt cho cuộc trò chuyện hiện tại",
   "openChatSettings.title": "Mở Cài Đặt Trò Chuyện",
   "openHotkeyHelper.desc": "Xem hướng dẫn cho tất cả phím tắt",
   "openHotkeyHelper.title": "Mở Trợ Giúp Phím Tắt",
+  "prevTab.desc": "Chuyển sang tab trước đó trong ứng dụng Desktop; quay lại tab cuối cùng khi bắt đầu",
+  "prevTab.title": "Tab Trước",
   "regenerateMessage.desc": "Tạo lại tin nhắn cuối cùng",
   "regenerateMessage.title": "Tạo Lại Tin Nhắn",
   "saveDocument.desc": "Lưu ngay tất cả thay đổi trên trang hiện tại",
@@ -35,10 +39,10 @@
   "showApp.title": "Hiện Cửa Sổ Chính",
   "switchAgent.desc": "Chuyển đổi giữa các tác nhân đã ghim trong thanh bên bằng cách giữ Ctrl và nhấn các số từ 0-9",
   "switchAgent.title": "Chuyển Nhanh Tác Nhân",
+  "switchTab.desc": "Chuyển đến một tab cụ thể theo vị trí của nó (1–9) trên thanh tab của ứng dụng Desktop",
+  "switchTab.title": "Chuyển Đến Tab Theo Số",
   "toggleLeftPanel.desc": "Hiện hoặc ẩn bảng bên trái",
   "toggleLeftPanel.title": "Bật/Tắt Bảng Bên Trái",
   "toggleRightPanel.desc": "Hiện hoặc ẩn bảng bên phải",
-  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải",
-  "toggleZenMode.desc": "Trong chế độ tập trung, chỉ hiển thị cuộc trò chuyện hiện tại và ẩn các thành phần giao diện khác",
-  "toggleZenMode.title": "Bật/Tắt Chế Độ Tập Trung"
+  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải"
 }

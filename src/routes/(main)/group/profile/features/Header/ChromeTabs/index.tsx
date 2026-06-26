@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar, DropdownMenu, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -114,13 +114,18 @@ interface ChromeTabsProps {
   activeId: string;
   addDisabled?: boolean;
   addDisabledReason?: string;
+  /**
+   * When provided, the add button becomes a dropdown trigger showing these items.
+   * Otherwise it falls back to calling `onAdd` directly on click.
+   */
+  addMenuItems?: MenuProps['items'];
   items: ChromeTabItem[];
   onAdd?: () => void;
   onChange: (id: string) => void;
 }
 
 const ChromeTabs = memo<ChromeTabsProps>(
-  ({ items, activeId, onChange, onAdd, addDisabled, addDisabledReason }) => {
+  ({ items, activeId, onChange, onAdd, addMenuItems, addDisabled, addDisabledReason }) => {
     const { t } = useTranslation('chat');
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -166,19 +171,35 @@ const ChromeTabs = memo<ChromeTabsProps>(
             </div>
           );
         })}
-        {onAdd && (
-          <Tooltip title={addDisabled ? addDisabledReason : undefined}>
-            <div
-              className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
-              onClick={() => {
-                if (addDisabled) return;
-                onAdd();
-              }}
+        {(addMenuItems || onAdd) &&
+          (addMenuItems ? (
+            <DropdownMenu
+              disabled={addDisabled}
+              items={addMenuItems}
+              nativeButton={false}
+              placement="bottomLeft"
+              trigger={['click']}
             >
-              <Plus size={16} />
-            </div>
-          </Tooltip>
-        )}
+              <div
+                className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
+                title={addDisabled ? addDisabledReason : undefined}
+              >
+                <Plus size={16} />
+              </div>
+            </DropdownMenu>
+          ) : (
+            <Tooltip title={addDisabled ? addDisabledReason : undefined}>
+              <div
+                className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
+                onClick={() => {
+                  if (addDisabled) return;
+                  onAdd?.();
+                }}
+              >
+                <Plus size={16} />
+              </div>
+            </Tooltip>
+          ))}
       </div>
     );
   },

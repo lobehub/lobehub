@@ -1,8 +1,11 @@
+import { FILE_URL } from '@lobechat/business-const';
 import debug from 'debug';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
+import { createGuideModal } from '@/components/GuideModal';
+import GuideVideo from '@/components/GuideVideo';
 import { type DocumentAction } from '@/store/file/slices/document/action';
 import { unzipFile } from '@/utils/unzipFile';
 
@@ -24,20 +27,19 @@ const useNotionImport = ({
   t,
 }: UseNotionImportOptions) => {
   const notionInputRef = useRef<HTMLInputElement>(null);
-  const [notionGuideOpen, setNotionGuideOpen] = useState(false);
 
   const handleOpenNotionGuide = useCallback(() => {
-    setNotionGuideOpen(true);
-  }, []);
-
-  const handleCloseNotionGuide = useCallback(() => {
-    setNotionGuideOpen(false);
-  }, []);
-
-  const handleStartNotionImport = useCallback(() => {
-    notionInputRef.current?.click();
-    setNotionGuideOpen(false);
-  }, []);
+    createGuideModal({
+      cancelText: t('header.actions.notionGuide.cancel'),
+      cover: <GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />,
+      desc: t('header.actions.notionGuide.desc'),
+      okText: t('header.actions.notionGuide.ok'),
+      onOk: () => {
+        notionInputRef.current?.click();
+      },
+      title: t('header.actions.notionGuide.title'),
+    });
+  }, [t]);
 
   const handleNotionImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +49,6 @@ const useNotionImport = ({
       try {
         const { message } = await import('antd');
 
-        // Show loading message
         const loadingKey = 'notion-import';
         message.loading({
           content: t('header.actions.notion.importing'),
@@ -55,7 +56,6 @@ const useNotionImport = ({
           key: loadingKey,
         });
 
-        // Unzip the file
         let files = await unzipFile(file);
 
         log(
@@ -63,7 +63,6 @@ const useNotionImport = ({
           files.map((f) => ({ name: f.name, type: f.type })),
         );
 
-        // Check if there are nested ZIP files (common in Notion exports)
         const nestedZips = files.filter((f) => f.name.toLowerCase().endsWith('.zip'));
 
         if (nestedZips.length > 0) {
@@ -86,7 +85,6 @@ const useNotionImport = ({
             }
           }
 
-          // Replace files with nested content
           files = allNestedFiles;
         }
 
@@ -95,7 +93,6 @@ const useNotionImport = ({
           files.map((f) => ({ name: f.name, type: f.type })),
         );
 
-        // Filter for markdown files (case-insensitive, support both .md and .markdown)
         const mdFiles = files.filter((f) => {
           const name = f.name.toLowerCase();
           return name.endsWith('.md') || name.endsWith('.markdown');
@@ -114,32 +111,25 @@ const useNotionImport = ({
           return;
         }
 
-        // Process each markdown file
         let successCount = 0;
         let failedCount = 0;
 
         for (const mdFile of mdFiles) {
           try {
-            // Read file content
             let content = await mdFile.text();
             let title = '';
 
-            // Check if first line is a heading (# Title)
             const lines = content.split('\n');
             const firstLine = lines[0]?.trim() || '';
 
             if (firstLine.startsWith('#')) {
-              // Extract title from heading (remove # symbols and trim)
               title = firstLine.replace(/^#+\s*/, '').trim();
-              // Remove the first line from content
               content = lines.slice(1).join('\n').trim();
             } else {
-              // Fallback to filename without extension
               const filename = mdFile.name.split('/').pop() || 'Untitled';
               title = filename.replace(/\.md$/, '');
             }
 
-            // Create document
             await createDocument({
               content,
               knowledgeBaseId: libraryId ?? undefined,
@@ -154,7 +144,6 @@ const useNotionImport = ({
           }
         }
 
-        // Show completion message
         message.destroy(loadingKey);
 
         if (failedCount === 0) {
@@ -179,18 +168,14 @@ const useNotionImport = ({
         message.error(t('header.actions.notion.error'));
       }
 
-      // Reset input to allow re-uploading
       event.target.value = '';
     },
     [createDocument, currentFolderId, libraryId, refetchResources, t],
   );
 
   return {
-    handleCloseNotionGuide,
     handleNotionImport,
     handleOpenNotionGuide,
-    handleStartNotionImport,
-    notionGuideOpen,
     notionInputRef,
   };
 };

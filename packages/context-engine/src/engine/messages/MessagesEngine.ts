@@ -17,6 +17,7 @@ import {
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   SupervisorRoleRestoreProcessor,
+  TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
   ToolCallProcessor,
@@ -411,6 +412,9 @@ export class MessagesEngine {
       // Verify (delivery-checker) cards: drop empty UI-only ones; surface
       // auto-repair failure feedback as a user turn for the repair run
       new VerifyMessageProcessor(),
+      // Task-callback cards: surface a finished task's handoff as a user turn
+      // so the creator agent reads it and continues (LOBE-10625)
+      new TaskCallbackMessageProcessor(),
       // Supervisor role restore
       new SupervisorRoleRestoreProcessor(),
       // Compressed group role transform

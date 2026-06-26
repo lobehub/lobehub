@@ -126,6 +126,38 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
       code: 'NOT_FOUND',
     });
   });
+
+  it('defers (not NOT_FOUND) for customPlugin+mcp rows whose manifest is NULL', async () => {
+    // This is the exact #15674 victim profile: legacy custom MCP whose
+    // `tools/list` never succeeded after the v2.2.3 break, so `manifest` is
+    // NULL on the row. The customPlugin migration guard MUST run before the
+    // manifest check, otherwise the user gets a NOT_FOUND, the SkillDetail
+    // fallback never renders, and the migration modal never surfaces.
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'customPlugin',
+      manifest: null,
+      customParams: { mcp: { type: 'http', url: 'http://10.9.16.224:9100/mcp' } },
+    });
+
+    const result = await callerFor().syncPluginTools({ identifier: 'dockpit' });
+
+    expect(result).toEqual({ connectorId: null, toolCount: 0 });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+  });
+
+  it('still throws NOT_FOUND for non-customPlugin rows with no manifest', async () => {
+    // Marketplace rows are expected to always carry a manifest. If a plugin
+    // row exists but its manifest is missing AND it isn't a customPlugin with
+    // an MCP blob to migrate, we can't bootstrap a connector from it — the
+    // NOT_FOUND signal stays as it was for that genuinely broken case.
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      manifest: null,
+    });
+    await expect(
+      callerFor().syncPluginTools({ identifier: 'broken-marketplace' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
 });
 
 describe('connectorRouter.create — sourceType handling on existing rows', () => {

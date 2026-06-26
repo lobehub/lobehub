@@ -67,13 +67,13 @@ export interface TerminalPersistedEvent extends RunLifecycleEventBase {
 export interface RunCompleteEvent extends RunLifecycleEventBase {
   assistantMessageId?: string;
   /**
-   * Pre-resolved desktop-notification payload for transports whose final content
-   * lives in executor memory rather than the store (hetero's `accContent`). When
-   * present, {@link AgentRunLifecycle.afterRunComplete} shows it verbatim instead
-   * of deriving the body from `messagesMap`. The client adapter omits it (it reads
-   * the store); gateway/hetero supply it.
+   * Final assistant content (raw markdown) for transports whose reply lives in
+   * executor memory rather than the store (hetero's `accContent`). When present,
+   * {@link AgentRunLifecycle.afterRunComplete} feeds it to the notification body
+   * instead of deriving from `messagesMap`. The client adapter omits it (it reads
+   * the store); hetero supplies it.
    */
-  notification?: { body: string; title?: string };
+  notification?: { content?: string };
   operationStatus?: OperationStatus;
   /**
    * Raw runtime terminal/parked status (client `AgentState['status']`), used to

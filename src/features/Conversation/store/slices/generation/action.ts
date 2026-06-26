@@ -31,6 +31,7 @@ import {
 import { getElectronStoreState } from '@/store/electron';
 
 import { type Store as ConversationStore } from '../../action';
+import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
 
 const buildRetryInitialContext = (editorData: Record<string, any> | null | undefined) => {
   const normalizedEditorData = editorData ?? undefined;
@@ -224,10 +225,42 @@ export interface GenerationAction {
   delAndResendThreadMessage: (messageId: string) => Promise<void>;
 
   /**
+   * Start (or reuse) the long-lived `autoRetryPending` operation for a turn so
+   * the input/turn stays in its loading state during the auto-retry countdown.
+   * Idempotent: reuses an existing still-running wait op for the scope.
+   */
+  internal_beginHeteroOverloadWait: (scopeId: string) => void;
+
+  /**
+   * End the `autoRetryPending` operation for a turn (the countdown handed off to
+   * a real retry attempt, or the sequence ended).
+   */
+  internal_endHeteroOverloadWait: (scopeId: string) => void;
+
+  /**
+   * Whether the turn's `autoRetryPending` operation was cancelled out from under
+   * us (e.g. the global Stop button) — the scheduled retry must then abort.
+   */
+  isHeteroOverloadWaitAborted: (scopeId: string) => boolean;
+
+  /**
+   * Pin the heterogeneous "overloaded" auto-retry counter past the cap so
+   * scheduling stops and the guide falls back to manual retry (used by the
+   * user's "cancel auto-retry" action).
+   */
+  markHeteroOverloadRetryExhausted: (scopeId: string) => void;
+
+  /**
    * Open thread creator
    * @deprecated Temporary bridge to ChatStore
    */
   openThreadCreator: (messageId: string) => void;
+
+  /**
+   * Increment the heterogeneous "overloaded" auto-retry counter for a turn,
+   * keyed by its parent user message id.
+   */
+  recordHeteroOverloadRetry: (scopeId: string) => void;
 
   /**
    * Regenerate an assistant message
@@ -249,6 +282,12 @@ export interface GenerationAction {
    * Resend a thread message
    */
   resendThreadMessage: (messageId: string) => Promise<void>;
+
+  /**
+   * Clear the heterogeneous "overloaded" auto-retry counter for a turn so a
+   * fresh auto-retry budget is granted (used when a human retries manually).
+   */
+  resetHeteroOverloadRetry: (scopeId: string) => void;
 
   /**
    * Stop current generation
@@ -453,6 +492,84 @@ export const generationSlice: StateCreator<
   reInvokeToolMessage: async (messageId: string) => {
     const chatStore = useChatStore.getState();
     await chatStore.reInvokeToolMessage(messageId);
+  },
+
+  internal_beginHeteroOverloadWait: (scopeId: string) => {
+    const chatStore = useChatStore.getState();
+    const existingId = get().heteroOverloadWaitOpIds[scopeId];
+    // Reuse an existing wait op that's still running (effect re-runs / remounts).
+    if (existingId && chatStore.operations[existingId]?.status === 'running') return;
+
+    const { context } = get();
+    const { operationId } = chatStore.startOperation({
+      context: {
+        agentId: context.agentId,
+        messageId: scopeId,
+        threadId: context.threadId ?? undefined,
+        topicId: context.topicId ?? undefined,
+      },
+      label: 'Auto-retry pending',
+      type: 'autoRetryPending',
+    });
+    set(
+      { heteroOverloadWaitOpIds: { ...get().heteroOverloadWaitOpIds, [scopeId]: operationId } },
+      false,
+      'internal_beginHeteroOverloadWait',
+    );
+  },
+
+  internal_endHeteroOverloadWait: (scopeId: string) => {
+    const opId = get().heteroOverloadWaitOpIds[scopeId];
+    if (!opId) return;
+    const chatStore = useChatStore.getState();
+    // Only complete a still-running op; if it was already cancelled (Stop), leave
+    // its terminal state intact.
+    if (chatStore.operations[opId]?.status === 'running') chatStore.completeOperation(opId);
+    const next = { ...get().heteroOverloadWaitOpIds };
+    delete next[scopeId];
+    set({ heteroOverloadWaitOpIds: next }, false, 'internal_endHeteroOverloadWait');
+  },
+
+  isHeteroOverloadWaitAborted: (scopeId: string) => {
+    const opId = get().heteroOverloadWaitOpIds[scopeId];
+    // A missing id means the wait was already torn down (cancel/Stop cleanup
+    // can race the timer near the deadline) — treat that as aborted so a stale
+    // queued retry doesn't run after the user asked to stop.
+    if (!opId) return true;
+    const op = useChatStore.getState().operations[opId];
+    return !op || op.status !== 'running';
+  },
+
+  markHeteroOverloadRetryExhausted: (scopeId: string) => {
+    set(
+      {
+        heteroOverloadRetryAttempts: {
+          ...get().heteroOverloadRetryAttempts,
+          [scopeId]: MAX_HETERO_AUTO_RETRIES,
+        },
+      },
+      false,
+      'markHeteroOverloadRetryExhausted',
+    );
+  },
+
+  recordHeteroOverloadRetry: (scopeId: string) => {
+    const current = get().heteroOverloadRetryAttempts;
+    set(
+      {
+        heteroOverloadRetryAttempts: { ...current, [scopeId]: (current[scopeId] ?? 0) + 1 },
+      },
+      false,
+      'recordHeteroOverloadRetry',
+    );
+  },
+
+  resetHeteroOverloadRetry: (scopeId: string) => {
+    const current = get().heteroOverloadRetryAttempts;
+    if (!(scopeId in current)) return;
+    const next = { ...current };
+    delete next[scopeId];
+    set({ heteroOverloadRetryAttempts: next }, false, 'resetHeteroOverloadRetry');
   },
 
   regenerateAssistantMessage: async (messageId: string) => {

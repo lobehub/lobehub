@@ -1,19 +1,23 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
-import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
-import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
+import { dispatchTerminalHooks } from '@/server/services/agentRuntime/hooks';
+import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
+import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 
 import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
+import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
@@ -49,6 +53,8 @@ export interface HeterogeneousFinishParams {
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
+  snapshotStore?: ISnapshotStore | null;
   /** Inject a pre-built manager (used by tests). */
   streamEventManager?: IStreamEventManager;
   /** Inject a pre-built TopicModel (used by tests for the resume helper). */
@@ -74,9 +80,11 @@ export interface HeterogeneousAgentServiceOptions {
 export class HeterogeneousAgentService {
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
+  private readonly operationModel: AgentOperationModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
+  private readonly traceRecorder: HeteroTraceRecorder;
   private readonly userId: string;
 
   constructor(
@@ -88,8 +96,12 @@ export class HeterogeneousAgentService {
     this.userId = userId;
     const workspaceId = options.workspaceId;
     this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.traceRecorder = new HeteroTraceRecorder(
+      options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
+    );
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
@@ -144,6 +156,14 @@ export class HeterogeneousAgentService {
         type: event.type,
       });
     }
+
+    // Accumulate the execution-trace snapshot LAST. The recorder has no
+    // per-event idempotency, so it must run only after every step that can throw
+    // and trigger a BatchIngester retry of this same batch — otherwise a publish
+    // failure above would re-fold these events and double-count the snapshot.
+    // It's the final statement and best-effort (never throws), so it folds each
+    // batch exactly once (on the attempt that gets this far).
+    await this.traceRecorder.appendBatch(operationId, events);
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
@@ -181,27 +201,27 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
-    // Fire the IM bot-callback completion webhook if one was registered.
-    // The hetero path bypasses the normal AgentHook registration flow, so
-    // we persist the webhook config in topic.metadata.runningOperation and
-    // deliver it here instead.
+    // Drive the run's lifecycle hooks (onComplete / onError) through the same
+    // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
+    // (onTopicComplete → task done/failed) and any IM bot completion callback
+    // fire uniformly. The hooks were registered in-memory (local mode) and
+    // serialized onto runningOperation (queue mode) at dispatch time.
     //
     // Skip on `cancelled` — heteroFinish may be called twice: first with
     // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation on cancelled
-    // so the subsequent success/error call can still find completionWebhook
-    // and assistantMessageId. runningOperation is only cleared on the
-    // delivering call (success/error) so reconnect doesn't retrigger after
-    // completion — mirrors RuntimeExecutors cleanup for the normal LLM path.
-    // Transport-level retries of the same result are accepted: BotCallbackService
-    // reads the latest DB content each time, so duplicates are idempotent.
+    // (normal process exit). We must NOT clear runningOperation or fire hooks on
+    // cancelled so the subsequent success/error call still finds the hooks +
+    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
+    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
+    // branch — and suppresses a spurious bot "stopped" message before the real
+    // result lands.)
     if (result === 'cancelled') return;
 
-    let completionWebhook: AgentHookWebhook | undefined;
+    let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId: string | undefined;
     try {
       const topic = await this.topicModel.findById(topicId);
-      completionWebhook = topic?.metadata?.runningOperation?.completionWebhook;
+      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
       // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
       // on every step boundary, so it refers to the LAST assistant message with
       // the complete final content.  Fall back to the initial placeholder id
@@ -217,37 +237,70 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    if (completionWebhook?.url) {
+    // Read the final assistant content + owning agent so the bot-callback
+    // handler has lastAssistantContent to render and the event carries agentId.
+    let lastAssistantContent: string | undefined;
+    let agentId: string | undefined;
+    if (assistantMessageId) {
       try {
-        // Read the final assistant message content so BotCallbackService.handleCompletion
-        // has lastAssistantContent to render.  Without it the handler skips delivery.
-        let lastAssistantContent: string | undefined;
-        if (assistantMessageId) {
-          const msg = await this.messageModel.findById(assistantMessageId);
-          lastAssistantContent = msg?.content as string | undefined;
-        }
-
-        // Map hetero result → reason expected by handleCompletion
-        const reason = result === 'success' ? 'done' : 'error';
-
-        await deliverWebhook(completionWebhook, {
-          // Dynamic completion fields (event-like payload)
-          ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
-          hookId: 'bot-completion',
-          hookType: 'onComplete',
-          lastAssistantContent,
-          operationId,
-          reason,
-          // Static IM context stored at hook registration time — spread last so
-          // platform fields (applicationId, platformThreadId, type, userPrompt)
-          // are authoritative, matching HookDispatcher's { ...event, ...body } order.
-          ...completionWebhook.body,
-        });
-        log('heteroFinish: completionWebhook delivered for op=%s result=%s', operationId, result);
+        const msg = await this.messageModel.findById(assistantMessageId);
+        lastAssistantContent = msg?.content as string | undefined;
+        agentId = msg?.agentId ?? undefined;
       } catch (err) {
-        log('heteroFinish: completionWebhook delivery failed (non-fatal): %O', err);
+        log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
     }
+
+    // Finalize the trace snapshot + write the operation's terminal state. Runs
+    // on the real terminal only (cancelled returned above), so a run gets one
+    // snapshot + one completion. Aggregates come from the accumulated steps;
+    // missing fields stay null (schema treats null as "not measured"). This
+    // makes the hetero run a verify/tracing peer of the built-in agent.
+    // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
+    const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
+    try {
+      const totals = await this.traceRecorder.finalize(operationId, {
+        agentId,
+        completionReason,
+        error,
+        topicId,
+        userId: this.userId,
+      });
+      await this.operationModel.recordCompletion(operationId, {
+        completedAt: new Date(),
+        completionReason,
+        error: error ?? null,
+        llmCalls: totals?.llmCalls ?? null,
+        // Backfill the real executed model/provider resolved from the CLI stream
+        // (recordStart could only seed provider=heteroType + model=null at
+        // dispatch). Spread conditionally so a run without a model event keeps the
+        // seeded values instead of getting clobbered back to null.
+        ...(totals?.model ? { model: totals.model } : {}),
+        ...(totals?.provider ? { provider: totals.provider } : {}),
+        status: completionReason,
+        stepCount: totals?.stepCount ?? null,
+        toolCalls: totals?.toolCalls ?? null,
+        totalCost: totals?.totalCost ?? null,
+        totalInputTokens: totals?.totalInputTokens ?? null,
+        totalOutputTokens: totals?.totalOutputTokens ?? null,
+        totalTokens: totals?.totalTokens ?? null,
+        traceS3Key: totals?.traceS3Key ?? null,
+      });
+    } catch (err) {
+      log('heteroFinish: recordCompletion/finalize failed (non-fatal): %O', err);
+    }
+
+    await dispatchTerminalHooks({
+      agentId,
+      ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
+      lastAssistantContent,
+      operationId,
+      reason: result === 'success' ? 'done' : 'error',
+      serializedHooks,
+      topicId,
+      userId: this.userId,
+    });
+    log('heteroFinish: dispatched terminal hooks for op=%s result=%s', operationId, result);
   }
 
   /**

@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiGithub, SiLinear, SiVercel, SiX } from '@icons-pack/react-simple-icons';
+import { SiGithub, SiLinear, SiPosthog, SiVercel, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -93,6 +93,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     readme:
       'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
     label: 'Notion',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
+      'PostHog is an open-source product analytics platform for analyzing events, funnels, cohorts, feature flags, experiments, and user behavior.',
+    icon: SiPosthog,
+    id: 'posthog',
+    label: 'PostHog',
+    readme:
+      'Connect to PostHog to query product analytics, inspect dashboards, review feature flags and experiments, and understand user behavior through natural conversation with your AI assistant.',
   },
   {
     author: 'LobeHub',
