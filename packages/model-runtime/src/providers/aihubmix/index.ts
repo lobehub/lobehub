@@ -141,7 +141,10 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
   };
 };
 
-const baseURL = 'https://aihubmix.com';
+// Default AiHubMix gateway. Users can point the provider at a custom or backup
+// endpoint (e.g. a mirror domain) via the "API endpoint" setting (keyVaults.baseURL);
+// the configured baseURL flows through every route below and the model-list fetch.
+const DEFAULT_BASE_URL = 'https://aihubmix.com';
 
 export const params: CreateRouterRuntimeOptions = {
   debug: {
@@ -154,6 +157,12 @@ export const params: CreateRouterRuntimeOptions = {
   models: async ({ client }) => {
     const apiKey = (client as any).apiKey as string;
 
+    // Derive the gateway root from the configured client baseURL (stripping the
+    // trailing /v1 etc.), falling back to the default gateway. This way a user who
+    // points AiHubMix at a custom/backup endpoint fetches the model list from it too.
+    const clientBaseURL = ((client as any).baseURL as string) || urlJoin(DEFAULT_BASE_URL, '/v1');
+    const rootBaseURL = clientBaseURL.replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
+
     // AiHubMix exposes two model list endpoints:
     // - https://aihubmix.com/v1/models     — returns per-user-group list only (~256 models)
     // - https://aihubmix.com/api/v1/models — returns the complete model catalog (800+)
@@ -164,7 +173,7 @@ export const params: CreateRouterRuntimeOptions = {
     const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
     try {
-      const response = await fetch('https://aihubmix.com/api/v1/models', {
+      const response = await fetch(urlJoin(rootBaseURL, '/api/v1/models'), {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'APP-Code': 'LobeHub',
@@ -186,51 +195,55 @@ export const params: CreateRouterRuntimeOptions = {
       clearTimeout(timeoutId);
     }
   },
-  routers: (_options, runtimeContext) => [
-    {
-      apiType: 'anthropic',
-      models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-        (id) => detectModelProvider(id) === 'anthropic',
-      ),
-      options: { baseURL },
-    },
-    {
-      apiType: 'google',
-      models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-        (id) => detectModelProvider(id) === 'google',
-      ),
-      options: { baseURL: urlJoin(baseURL, '/gemini') },
-    },
-    {
-      apiType: 'xai',
-      models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-        (id) => detectModelProvider(id) === 'xai',
-      ),
-      options: { baseURL: urlJoin(baseURL, '/v1') },
-    },
-    {
-      apiType: 'deepseek',
-      // Match the whole DeepSeek family (deepseek-v4*, deepseek-chat, ...), not
-      // just the two legacy ids — the deepseek runtime simulates structured
-      // output via tool calling, while the generic openai fallback sends
-      // response_format json_schema which DeepSeek upstreams reject.
-      models: resolveProviderRouteModels(
-        'deepseek',
-        LOBE_DEFAULT_MODEL_LIST,
-        runtimeContext?.model,
-      ),
-      options: { baseURL: urlJoin(baseURL, '/v1') },
-    },
-    {
-      apiType: 'openai',
-      options: {
-        baseURL: urlJoin(baseURL, '/v1'),
-        chatCompletion: {
-          useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
+  routers: (options, runtimeContext) => {
+    const baseURL = options.baseURL?.trim() || DEFAULT_BASE_URL;
+
+    return [
+      {
+        apiType: 'anthropic',
+        models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+          (id) => detectModelProvider(id) === 'anthropic',
+        ),
+        options: { baseURL },
+      },
+      {
+        apiType: 'google',
+        models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+          (id) => detectModelProvider(id) === 'google',
+        ),
+        options: { baseURL: urlJoin(baseURL, '/gemini') },
+      },
+      {
+        apiType: 'xai',
+        models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+          (id) => detectModelProvider(id) === 'xai',
+        ),
+        options: { baseURL: urlJoin(baseURL, '/v1') },
+      },
+      {
+        apiType: 'deepseek',
+        // Match the whole DeepSeek family (deepseek-v4*, deepseek-chat, ...), not
+        // just the two legacy ids — the deepseek runtime simulates structured
+        // output via tool calling, while the generic openai fallback sends
+        // response_format json_schema which DeepSeek upstreams reject.
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: { baseURL: urlJoin(baseURL, '/v1') },
+      },
+      {
+        apiType: 'openai',
+        options: {
+          baseURL: urlJoin(baseURL, '/v1'),
+          chatCompletion: {
+            useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
+          },
         },
       },
-    },
-  ],
+    ];
+  },
 };
 
 export const LobeAiHubMixAI = createRouterRuntime(params);
