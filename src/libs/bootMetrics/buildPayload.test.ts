@@ -44,6 +44,32 @@ describe('buildBootMetricsPayload', () => {
     });
   });
 
+  describe('rounding (integer ms columns)', () => {
+    it('rounds totalMs and span startMs/durMs to integers', () => {
+      const result = buildBootMetricsPayload({
+        dimensions: baseDimensions,
+        snapshot: {
+          marks: { 'first-paint': 1746.4000000059605 },
+          spans: [{ durMs: 1415.2, name: 'bundle', startMs: 46.7000000029 }],
+        },
+      });
+      expect(result.totalMs).toBe(1746);
+      expect(result.spans[0]).toEqual({ durMs: 1415, name: 'bundle', startMs: 47 });
+    });
+
+    it('rounds derived spans (ttfb/fcp) to integers', () => {
+      const result = buildBootMetricsPayload({
+        dimensions: baseDimensions,
+        fcpMs: 900.5,
+        navResponseStartMs: 23.9,
+        snapshot: { marks: { 'first-paint': 1000 }, spans: [] },
+      });
+      const byName = Object.fromEntries(result.spans.map((s) => [s.name, s]));
+      expect(byName.ttfb.durMs).toBe(24);
+      expect(byName.fcp.durMs).toBe(901);
+    });
+  });
+
   describe('dimensions pass-through', () => {
     it('propagates all dimension fields', () => {
       const result = buildBootMetricsPayload({

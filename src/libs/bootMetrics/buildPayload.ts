@@ -85,9 +85,14 @@ export const buildBootMetricsPayload = (input: BuildPayloadInput): BootMetricPay
     }
   }
 
+  // performance.now() yields sub-millisecond floats; the metrics columns are integer, so round.
+  const spans = [...snapshotSpans, ...derived]
+    .slice(0, 64)
+    .map((s) => ({ durMs: Math.round(s.durMs), name: s.name, startMs: Math.round(s.startMs) }));
+
   return {
     ...dimensions,
-    spans: [...snapshotSpans, ...derived].slice(0, 64),
-    totalMs,
+    spans,
+    totalMs: Math.round(totalMs),
   };
 };
