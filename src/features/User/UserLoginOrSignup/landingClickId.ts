@@ -28,12 +28,14 @@ const fromUrl = (): string => {
 };
 
 /**
- * Resolve the landing click id, preferring the value the shell beacon stashed in
- * `sessionStorage` and falling back to the current URL (e.g. a direct
- * `/signup?lh_cid=...` deep link the beacon may not have processed). Returns
- * `undefined` when absent so callers can omit the property entirely.
+ * Resolve the landing click id, preferring the **current URL** value (the
+ * in-flight click — correct for a fresh `?lh_cid=...` landing/deep link, even
+ * when an older id from an earlier click lingers in `sessionStorage` in the same
+ * tab) and falling back to `sessionStorage` (where the shell beacon stashed it,
+ * for SPA navigations where the URL no longer carries it). Returns `undefined`
+ * when absent so callers can omit the property entirely.
  */
 export const resolveLandingClickId = (): string | undefined => {
-  const cid = fromSessionStorage() || fromUrl();
+  const cid = fromUrl() || fromSessionStorage();
   return cid || undefined;
 };

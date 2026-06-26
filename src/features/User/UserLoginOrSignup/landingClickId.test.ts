@@ -29,9 +29,9 @@ describe('resolveLandingClickId', () => {
     expect(resolveLandingClickId()).toBe('cid-from-url');
   });
 
-  it('prefers sessionStorage over the URL param', () => {
-    window.sessionStorage.setItem(LANDING_CLICK_ID_KEY, 'cid-from-storage');
-    window.history.replaceState({}, '', '/signup?lh_cid=cid-from-url');
-    expect(resolveLandingClickId()).toBe('cid-from-storage');
+  it('prefers the current URL param over a stale sessionStorage id', () => {
+    window.sessionStorage.setItem(LANDING_CLICK_ID_KEY, 'stale-cid-from-storage');
+    window.history.replaceState({}, '', '/signup?lh_cid=fresh-cid-from-url');
+    expect(resolveLandingClickId()).toBe('fresh-cid-from-url');
   });
 });
