@@ -1830,7 +1830,6 @@
   "workspace.general.url.renameWarning": "重命名将破坏现有链接到此工作区。",
   "workspace.general.url.taken": "此 URL 已被占用。",
   "workspace.general.url.title": "工作区 URL",
-  "workspace.inactiveTag": "已失效",
   "workspace.invitePage.accept": "接受邀请",
   "workspace.invitePage.acceptedSubtitle": "您已被添加到工作区。",
   "workspace.invitePage.acceptedTitle": "邀请已接受",

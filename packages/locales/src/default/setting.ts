@@ -2061,7 +2061,6 @@ When I am ___, I need ___
   'workspace.name.placeholder': 'Workspace name',
   'workspace.name.title': 'Name',
   'workspace.newWorkspace': 'New Workspace',
-  'workspace.inactiveTag': 'Inactive',
   'workspace.personalTag': 'Personal',
   'workspace.switchWorkspace': 'Switch workspace',
   'workspace.upgradeModal.alreadyUpgraded': 'Already upgraded',

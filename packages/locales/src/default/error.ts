@@ -181,9 +181,11 @@ export default {
     'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
   'response.WorkspaceFrozenByRiskControl':
     'This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.',
-  'workspaceBillingInactive.backHome': 'Back to personal workspace',
+  'workspaceBillingInactive.bannerHint': 'Click for details',
+  'workspaceBillingInactive.bannerTitle': 'Workspace subscription inactive',
+  'workspaceBillingInactive.confirm': 'Got it',
   'workspaceBillingInactive.description':
-    "This workspace's paid subscription has lapsed and is currently inactive. The workspace owner needs to renew the subscription to restore access. In the meantime you can switch to another workspace or use your personal workspace.",
+    "This workspace's paid subscription has lapsed. Sending messages and other paid actions are paused until the subscription is restored — you can still browse shared content in the meantime.",
   'workspaceBillingInactive.title': 'Workspace subscription inactive',
   'workspaceFrozenByAdmin.bannerDescription': 'Contact support to review the reason and unfreeze.',
   'workspaceFrozenByAdmin.bannerHint': 'Click for details',

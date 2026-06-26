@@ -87,18 +87,6 @@ describe('useWorkspaceFromSlug', () => {
     expect(result.current).toEqual({ slug: 'missing', status: 'not-found' });
   });
 
-  it('returns locked-out for a billing-inactive workspace match (non-primary member)', () => {
-    mockWorkspaceStore(
-      createState({ workspaces: [{ id: 'ws-1', lockedOut: true, slug: 'acme' }] }),
-    );
-
-    const { result } = renderHook(() => useWorkspaceFromSlug(), {
-      wrapper: createRouteWrapper('/acme/settings'),
-    });
-
-    expect(result.current).toEqual({ slug: 'acme', status: 'locked-out', workspaceId: 'ws-1' });
-  });
-
   it('returns no-slug outside the workspace route tree', () => {
     mockWorkspaceStore(createState());
 

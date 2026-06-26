@@ -20,7 +20,8 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
     case ChatErrorType.FreePlanLimit:
     case ChatErrorType.InsufficientBudgetForModel:
     case ChatErrorType.WorkspaceFrozenByAdmin:
-    case ChatErrorType.WorkspaceFrozenByRiskControl: {
+    case ChatErrorType.WorkspaceFrozenByRiskControl:
+    case ChatErrorType.WorkspaceSubscriptionInactive: {
       return 403;
     }
 
