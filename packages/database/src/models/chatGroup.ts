@@ -326,13 +326,17 @@ export class ChatGroupModel {
   }
 
   /**
-   * Read-only roster of a group's agents joined with their agent meta
+   * Read-only roster of a group's **enabled** agents joined with their agent meta
    * (title/description) and membership role, ordered by member order.
    *
    * Used to inject the group member list — with the real `agt_*` IDs — into the
    * supervisor/member runtime context so the orchestration model dispatches
    * members by their actual IDs instead of hallucinating role names (which then
    * fail to resolve to an agent, surfacing as "Agent member(s) failed to start").
+   *
+   * Disabled members are excluded (matching `getEnabledGroupAgents`): advertising
+   * them in `<group_participants>` would let the supervisor invoke a disabled
+   * agent, since the group-management runtime accepts whatever id it dispatches.
    */
   async getGroupAgentsWithMeta(groupId: string): Promise<
     Array<{
@@ -351,7 +355,13 @@ export class ChatGroupModel {
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.enabled, true),
+          this.agentsOwnership(),
+        ),
+      )
       .orderBy(chatGroupsAgents.order);
   }
 
