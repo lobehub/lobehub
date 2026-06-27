@@ -46,8 +46,9 @@ const SAVE_DEBOUNCE_MS = 600;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   collapsedRequirement: css`
-    /* full requirement, wrapping to as many lines as it needs — readable at a glance */
-    max-width: 480px;
+    /* full requirement, wrapping to as many lines as it needs — readable at a glance.
+       Inset past the trigger icon so it reads flat under the title, not as a clickable row. */
+    padding-inline: 32px 8px;
     line-height: 1.5;
   `,
   list: css`
@@ -365,15 +366,16 @@ const TaskVerifyConfig = memo(() => {
     // Treat that as "configured" too, so the panel never reads as "never set".
     const requirementPreview = requirement.trim();
     const isConfigured = savedCount > 0 || requirementPreview.length > 0;
-    // When the gate is a requirement sentence (no structured criteria), show the
-    // full requirement wrapping below the title — readable at a glance, not a weak
-    // one-line ellipsis. Criteria-count / hint variants stay as a compact pill.
+    // When the gate is a requirement sentence (no structured criteria), render the
+    // requirement as flat body text BELOW the trigger — it's readable content, not
+    // a clickable target. Only the compact title row stays clickable-to-expand, so
+    // hovering the requirement doesn't light up a big clickable block.
     const showRequirement = savedCount === 0 && requirementPreview.length > 0;
-    return (
+    const trigger = (
       <Block
         clickable
         horizontal
-        align={showRequirement ? 'flex-start' : 'center'}
+        align={'center'}
         gap={8}
         paddingBlock={4}
         paddingInline={8}
@@ -385,32 +387,27 @@ const TaskVerifyConfig = memo(() => {
           color={cssVar.colorTextDescription}
           icon={isConfigured ? ShieldCheck : Plus}
           size={16}
-          style={showRequirement ? { marginTop: 2 } : undefined}
         />
-        {showRequirement ? (
-          <Flexbox gap={2}>
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('verifyConfig.empty.title')}
-            </Text>
-            <Text className={styles.collapsedRequirement} fontSize={14}>
-              {requirementPreview}
-            </Text>
-          </Flexbox>
-        ) : (
-          <>
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('verifyConfig.empty.title')}
-            </Text>
-            {savedCount > 0 ? (
-              <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
-            ) : (
-              <Text className={styles.subtitle} fontSize={12}>
-                {t('verifyConfig.collapsedHint')}
-              </Text>
-            )}
-          </>
+        <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+          {t('verifyConfig.empty.title')}
+        </Text>
+        {savedCount > 0 ? (
+          <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
+        ) : showRequirement ? null : (
+          <Text className={styles.subtitle} fontSize={12}>
+            {t('verifyConfig.collapsedHint')}
+          </Text>
         )}
       </Block>
+    );
+    if (!showRequirement) return trigger;
+    return (
+      <Flexbox gap={2}>
+        {trigger}
+        <Text className={styles.collapsedRequirement} fontSize={14}>
+          {requirementPreview}
+        </Text>
+      </Flexbox>
     );
   }
 
