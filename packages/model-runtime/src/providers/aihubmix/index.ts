@@ -148,7 +148,7 @@ const DEFAULT_BASE_URL = 'https://aihubmix.com';
 // Resolve the gateway for a request from the configured baseURL (default
 // DEFAULT_BASE_URL), stripping a trailing version suffix (e.g. /v1) so the
 // per-route suffixes below aren't doubled (…/v1/v1, …/v1/gemini).
-const resolveBaseURL = (options: { baseURL?: string }) =>
+const resolveBaseURL = (options: { baseURL?: string | null }) =>
   options.baseURL?.trim().replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
 
 export const params: CreateRouterRuntimeOptions = {
