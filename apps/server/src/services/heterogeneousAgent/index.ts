@@ -1,5 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
@@ -237,15 +237,22 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    // Read the final assistant content + owning agent so the bot-callback
-    // handler has lastAssistantContent to render and the event carries agentId.
+    // The owning agentId is authoritatively encoded in the operationId
+    // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
+    // agent), so derive it from there. Reading it back off the final assistant
+    // message is unreliable: the message pointer (heteroCurrentMsgId /
+    // runningOperation.assistantMessageId) is absent on single-step desktop
+    // runs, which dropped agentId and landed the trace snapshot under
+    // agent-traces/unknown/... and left terminal hooks without an agentId.
+    const agentId = parseOperationId(operationId)?.agentId;
+
+    // Still read the assistant message for its content so the bot-callback
+    // handler has lastAssistantContent to render.
     let lastAssistantContent: string | undefined;
-    let agentId: string | undefined;
     if (assistantMessageId) {
       try {
         const msg = await this.messageModel.findById(assistantMessageId);
         lastAssistantContent = msg?.content as string | undefined;
-        agentId = msg?.agentId ?? undefined;
       } catch (err) {
         log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
