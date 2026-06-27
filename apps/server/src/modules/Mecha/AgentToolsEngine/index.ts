@@ -21,6 +21,7 @@ import {
   builtinTools,
   chatModeAllowedToolIds,
   defaultToolIds,
+  groupSupervisorToolIds,
 } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -136,6 +137,7 @@ export const createServerAgentToolsEngine = (
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
     isBotConversation = false,
+    isGroupSupervisor = false,
     model,
     provider,
   } = params;
@@ -230,6 +232,10 @@ export const createServerAgentToolsEngine = (
     [MemoryManifest.identifier]: globalMemoryEnabled,
     // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
     ...(isBotConversation && { [MessageManifest.identifier]: true }),
+    // Group supervisor: enable the orchestration toolset (see
+    // `groupSupervisorToolIds`). The same list also feeds the candidate set
+    // below, so the bundle has a single source of truth.
+    ...(isGroupSupervisor && Object.fromEntries(groupSupervisorToolIds.map((id) => [id, true]))),
     // Remote-device proxy: shown only for device-capable targets when the
     // server has a proxy, no specific device is auto-activated yet, AND the
     // user has NOT explicitly selected a device. Once a device is explicitly
@@ -258,11 +264,16 @@ export const createServerAgentToolsEngine = (
     builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration. Custom mode = exactly the
     // agent's plugins; chat mode = strict allow-list; agent mode = full defaults.
+    // Agent mode: the supervisor's orchestration tools are neither in the
+    // agent's plugins nor in `defaultToolIds`, so add them to the candidate set
+    // here (the `agentModeRules` above then enable them). Enabling a tool that
+    // isn't a candidate is a no-op — the checker only filters
+    // `union(toolIds, defaultToolIds)`.
     defaultToolIds: isCustomMode
       ? (agentConfig.plugins ?? [])
       : isChatMode
         ? chatModeAllowedToolIds
-        : defaultToolIds,
+        : [...defaultToolIds, ...(isGroupSupervisor ? groupSupervisorToolIds : [])],
     // Post-merge wall: a plugin or Skill/Composio manifest claiming a
     // device identifier survives `buildAllowedBuiltinTools` (which only
     // filters the builtin source). Excluding the identifiers here drops

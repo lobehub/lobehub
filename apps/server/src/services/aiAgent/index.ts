@@ -51,6 +51,7 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
@@ -2199,6 +2200,31 @@ export class AiAgentService {
         activeDeviceId ?? 'none',
       );
 
+      // `appContext.orchestrationRole` is client-supplied (the execAgent /
+      // execAgents schema accepts it, and execGroupAgent stamps it for whatever
+      // agentId the caller passed), so it must NOT alone authorize the
+      // group-orchestration toolset — otherwise any run marked
+      // `{ orchestrationRole: 'supervisor', groupId }` could dispatch group
+      // members. Verify against the persisted, ownership-scoped membership that
+      // the executing agent really is this group's supervisor.
+      let isGroupSupervisor = false;
+      if (appContext?.orchestrationRole === 'supervisor' && appContext?.groupId) {
+        const groupAgents = await new ChatGroupModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).getGroupAgents(appContext.groupId);
+        isGroupSupervisor = groupAgents.some(
+          (member) => member.agentId === resolvedAgentId && member.role === 'supervisor',
+        );
+        if (!isGroupSupervisor)
+          log(
+            'execAgent: orchestrationRole=supervisor but agent %s is not the supervisor of group %s — denying group tools',
+            resolvedAgentId,
+            appContext.groupId,
+          );
+      }
+
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [
           ...lobehubSkillManifests,
@@ -2223,6 +2249,7 @@ export class AiAgentService {
         globalMemoryEnabled,
         hasEnabledKnowledgeBases,
         isBotConversation,
+        isGroupSupervisor,
         model,
         provider,
       });

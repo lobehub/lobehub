@@ -105,6 +105,14 @@ export interface ServerCreateAgentToolsEngineParams {
   hasEnabledKnowledgeBases?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */
   isBotConversation?: boolean;
+  /**
+   * Whether this run is the group's supervisor (orchestrationRole === 'supervisor').
+   * The group-orchestration tools ship only with the builtin group-supervisor
+   * agent, so a user agent acting as supervisor would otherwise have no tool to
+   * dispatch members and would silently degrade to a single-agent monologue.
+   * When true the engine auto-enables the group-management + agent-builder tools.
+   */
+  isGroupSupervisor?: boolean;
   /** Model name for function calling compatibility check */
   model: string;
   /** Provider name for function calling compatibility check */
