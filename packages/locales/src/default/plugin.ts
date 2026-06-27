@@ -317,6 +317,7 @@ export default {
   'builtins.lobe-page-agent.apiName.updateNode': 'Update node',
   'builtins.lobe-page-agent.apiName.wrapNodes': 'Wrap nodes',
   'builtins.lobe-page-agent.title': 'Page',
+  'builtins.linear.render.updatedAt': 'Updated {{time}}',
   'builtins.lobe-activator.apiName.activateTools': 'Activate Tools',
   'builtins.lobe-activator.inspector.activateTools.notFoundCount': '{{count}} not found',
   'builtins.lobe-skill-store.apiName.importFromMarket': 'Import from Market',
