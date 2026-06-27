@@ -6,6 +6,7 @@ import { mobileSubscriptionRouter } from '@/business/server/mobile-routers/mobil
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from '../lambda/agent';
+import { agentSkillsRouter } from '../lambda/agentSkills';
 import { aiAgentRouter } from '../lambda/aiAgent';
 import { aiChatRouter } from '../lambda/aiChat';
 import { aiModelRouter } from '../lambda/aiModel';
@@ -31,6 +32,7 @@ import { userRouter } from '../lambda/user';
 
 export const mobileRouter = router({
   agent: agentRouter,
+  agentSkills: agentSkillsRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   brief: briefRouter,
