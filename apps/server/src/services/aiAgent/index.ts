@@ -1742,6 +1742,34 @@ export class AiAgentService {
         // `canUseDevice` degrades device-capable targets to the sandbox for
         // denied senders (e.g. external bot users) — without it a synced
         // local/device binding would let them run on the owner's machine.
+
+        // Register the op with the agent-gateway DO before dispatch, mirroring
+        // the remote-hetero branch above. Local CLI hetero (claude-code / codex)
+        // streams back via heteroIngest, which forwards live events the DO can
+        // relay even without an init — so the FIRST run renders fine. But a later
+        // `reconnectToGatewayOperation` (task topic drawer open / page reload)
+        // sends a `resume` that asks the DO for the op's status; with no session
+        // record the DO answers terminal, the client fires `session_complete`,
+        // and `onSessionComplete` clears `topic.metadata.runningOperation`. The
+        // still-running CC's next heteroIngest batch then hits
+        // StaleHeteroOperationError and is silently dropped — the agent appears
+        // to stop the moment the window is opened. Seeding the init keeps the DO
+        // reporting `running`, so resume stays connected and keeps streaming.
+        // Best-effort: a stream-manager/Redis failure must never block dispatch —
+        // the init only powers reconnect, not the run. `createStreamEventManager`
+        // probes Redis synchronously, so guard construction too, not just publish.
+        try {
+          await createStreamEventManager().publishAgentRuntimeInit(operationId, {
+            agentId: resolvedAgentId,
+            assistantMessageId: assistantMessageRecord.id,
+            heteroType,
+            topicId,
+            userId: this.userId,
+          });
+        } catch (err) {
+          log('execAgent: failed to init stream for local hetero: %O', err);
+        }
+
         const heteroPlan = resolveExecutionPlan({
           agencyConfig: agentConfig.agencyConfig,
           canUseDevice,

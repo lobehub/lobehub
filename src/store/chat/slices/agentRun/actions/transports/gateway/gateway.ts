@@ -735,11 +735,23 @@ export class GatewayActionImpl {
       gatewayUrl: agentGatewayUrl,
       onEvent: eventHandler,
       onSessionComplete: ({ succeeded, terminalReceived }) => {
-        // See executeGatewayAgent's onSessionComplete: the handler owns op
-        // completion via the run lifecycle; complete here only as the
-        // terminal-missing fallback.
-        if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
+
+        // A reconnect is a passive re-subscribe — it must never be the authority
+        // that ENDS a run. When we never witnessed a real terminal event
+        // (agent_runtime_end / error), `session_complete` was driven by a bare
+        // `resume_complete` terminal *status* (or auth_failed) for an op the
+        // gateway DO has no live session for — typically a heterogeneous CC run
+        // that streams via heteroIngest. Clearing runningOperation here would
+        // black-hole every subsequent heteroIngest batch (StaleHeteroOperationError)
+        // and silently kill the still-running agent. So on a non-terminal close,
+        // only tear down our local connection op and bail — leave the authoritative
+        // run state to the real terminal sites (heteroFinish / the watchdog).
+        if (!terminalReceived) {
+          this.#get().completeOperation(gatewayOpId);
+          return;
+        }
+
         // See executeGatewayAgent's onSessionComplete: a clean background
         // completion is left to markTopicUnread (status: 'unread').
         const viewing = this.#get().activeTopicId === topicId;

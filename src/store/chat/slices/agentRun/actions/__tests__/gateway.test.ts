@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
+import { topicService } from '@/services/topic';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
@@ -1045,6 +1046,97 @@ describe('GatewayActionImpl', () => {
           metadata: expect.not.objectContaining({ startTime: expect.anything() }),
         }),
       );
+    });
+
+    // Captures the onSessionComplete handed to connectToGateway so we can drive
+    // both close paths directly. Provides the methods that callback reaches.
+    function createOnSessionCompleteHarness() {
+      const captured: { onSessionComplete?: (p: any) => void } = {};
+      const completeOperation = vi.fn();
+      const updateTopicStatus = vi.fn();
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-reconnect' }));
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'topic-1',
+        gatewayConnections: {},
+        messagesMap: { 'agent-1_topic-1': [{ createdAt: 1, id: 'ast-1' }] },
+        topicDataMap: {},
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        completeOperation,
+        connectToGateway: (params: any) => {
+          captured.onSessionComplete = params.onSessionComplete;
+        },
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel: vi.fn(),
+        startOperation,
+        updateTopicStatus,
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+      vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({
+        token: 'fresh-token',
+      } as any);
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+
+      return { action, captured, completeOperation, updateTopicStatus };
+    }
+
+    // The core black-hole guard: a reconnect that closes WITHOUT witnessing a
+    // real terminal event (e.g. the gateway DO reports a terminal status for a
+    // heterogeneous CC op it has no live session for) must NOT clear
+    // runningOperation — otherwise the still-running agent's next heteroIngest
+    // batch is dropped as stale and it silently stops.
+    it('does NOT clear runningOperation on a non-terminal reconnect close', async () => {
+      const { action, captured, completeOperation, updateTopicStatus } =
+        createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.updateTopicMetadata).mockClear().mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({ succeeded: false, terminalReceived: false });
+
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
+      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(updateTopicStatus).not.toHaveBeenCalled();
+    });
+
+    // A genuine terminal event (agent_runtime_end / error) still finalizes the
+    // run: clear runningOperation so the topic doesn't reconnect forever.
+    it('clears runningOperation when a real terminal event was received', async () => {
+      const { action, captured, completeOperation } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.updateTopicMetadata).mockClear().mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({ succeeded: true, terminalReceived: true });
+
+      // The run lifecycle owns completion when a terminal event arrives, so the
+      // reconnect path must not double-complete its local op here.
+      expect(completeOperation).not.toHaveBeenCalled();
+      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        runningOperation: null,
+      });
     });
   });
 });
