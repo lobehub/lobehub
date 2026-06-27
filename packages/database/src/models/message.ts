@@ -2380,7 +2380,34 @@ export class MessageModel {
    * turn onto a callback would orphan it under the read side's tool-only signal
    * collection.
    */
-  getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> => {
+  getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> =>
+    this.getLatestSpineMessageId({ topicId, threadId: null });
+
+  /**
+   * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
+   * the latest "spine" message (the most recent message that is NOT a tool and
+   * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
+   * (`threadId IS NULL`) or to a specific thread.
+   *
+   * Like the main-thread query it EXCLUDES `role:'tool'` and signal-tagged
+   * assistants: tools are inline children of their assistant turn, so the
+   * conversation head a new turn parents off is the assistant, never the tool
+   * result that landed under it.
+   *
+   * Used by `sendMessageInServer` to make `parentId` server-authoritative and
+   * close the concurrent-append race: the client computes `parentId` from a
+   * local snapshot whose spine tail may already have advanced (e.g. another
+   * assistant turn was written while the user was composing), so trusting it
+   * would fork the new turn off a stale node. Ordering by `createdAt` is safe
+   * because a topic runs at most one operation at a time.
+   */
+  getLatestSpineMessageId = async ({
+    topicId,
+    threadId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<string | undefined> => {
     const [row] = await this.db
       .select({ id: messages.id })
       .from(messages)
@@ -2388,7 +2415,7 @@ export class MessageModel {
         and(
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
-          isNull(messages.threadId),
+          threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
           sql`${messages.metadata} -> 'signal' IS NULL`,
           this.ownership(),
         ),
