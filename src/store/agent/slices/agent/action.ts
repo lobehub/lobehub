@@ -511,28 +511,18 @@ export class AgentSliceActionImpl {
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
-    // Drop the stale SWR snapshot before the save finishes. Example: after
-    // model A -> B, cached A must not replay through useFetchAgentConfig and
-    // overwrite the optimistic B before the server response is applied.
-    void mutate(agentConfigKeys.config(id), undefined, { revalidate: false });
     updateSaveStatus('saving');
 
     try {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentConfig(id, mergedData, signal);
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
-        const confirmedConfig = this.#get().agentMap[id];
-
-        if (confirmedConfig) {
-          // Only seed the cache after success. If model A -> B fails or aborts,
-          // later hydration should not treat unconfirmed B as saved.
-          void mutate(agentConfigKeys.config(id), structuredClone(confirmedConfig), {
-            revalidate: false,
-          });
-        }
+        // Refresh agent:config so cached model A cannot replay after a
+        // successful model A -> B update.
+        await this.#get().internal_refreshAgentConfig(id);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');

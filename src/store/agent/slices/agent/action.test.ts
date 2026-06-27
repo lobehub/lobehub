@@ -560,7 +560,7 @@ describe('AgentSlice Actions', () => {
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
 
-    it('should sync agent config SWR cache after a confirmed config update', async () => {
+    it('should refresh agent config SWR cache after a confirmed config update', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
       setScopedMutate(scopedMutate as any);
@@ -586,70 +586,10 @@ describe('AgentSlice Actions', () => {
       const configCacheCalls = scopedMutate.mock.calls.filter(
         ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
       );
-      expect(configCacheCalls).toHaveLength(2);
-
-      const [, clearedCacheConfig, clearOptions] = configCacheCalls[0];
-      expect(clearedCacheConfig).toBeUndefined();
-      expect(clearOptions).toEqual({ revalidate: false });
-
-      const [, committedCacheConfig, options] = configCacheCalls[1];
-      expect(options).toEqual({ revalidate: false });
-      expect(committedCacheConfig).toMatchObject({
-        id: 'agent-1',
-        model: 'model-b',
-        provider: 'lobehub',
-      });
+      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
     });
 
-    it('should not preserve deleted nested config keys when syncing agent config cache', async () => {
-      const { result } = renderHook(() => useAgentStore());
-      const scopedMutate = vi.fn().mockResolvedValue(undefined);
-      setScopedMutate(scopedMutate as any);
-
-      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
-        agent: {
-          agencyConfig: { workingDirByDevice: { 'device-b': '/b' } },
-          id: 'agent-1',
-        } as any,
-        success: true,
-      });
-
-      act(() => {
-        useAgentStore.setState({
-          agentMap: {
-            'agent-1': {
-              agencyConfig: {
-                workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' },
-              },
-              id: 'agent-1',
-            } as any,
-          },
-        });
-      });
-
-      await act(async () => {
-        await result.current.updateAgentConfigById('agent-1', {
-          agencyConfig: { workingDirByDevice: { 'device-a': undefined } },
-        } as any);
-      });
-
-      const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
-      );
-      expect(configCacheCalls).toHaveLength(2);
-
-      const [, committedCacheConfig] = configCacheCalls[1];
-
-      expect(committedCacheConfig).toMatchObject({
-        agencyConfig: {
-          workingDirByDevice: { 'device-b': '/b' },
-        },
-        id: 'agent-1',
-      });
-      expect(committedCacheConfig.agencyConfig.workingDirByDevice).not.toHaveProperty('device-a');
-    });
-
-    it('should not persist optimistic agent config SWR cache when save fails', async () => {
+    it('should not refresh agent config SWR cache when save fails', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
       vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -673,11 +613,7 @@ describe('AgentSlice Actions', () => {
       const configCacheCalls = scopedMutate.mock.calls.filter(
         ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
       );
-      expect(configCacheCalls).toHaveLength(1);
-
-      const [, clearedCacheConfig, options] = configCacheCalls[0];
-      expect(clearedCacheConfig).toBeUndefined();
-      expect(options).toEqual({ revalidate: false });
+      expect(configCacheCalls).toHaveLength(0);
       expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
     });
   });
