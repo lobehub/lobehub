@@ -105,6 +105,27 @@ export const chatModeAllowedToolIds = [
 ];
 
 /**
+ * Tool IDs that make up the group supervisor's orchestration toolset:
+ * dispatching members (speak / broadcast / delegate / executeAgentTask).
+ *
+ * These ship only with the builtin `group-supervisor` agent, but a group can
+ * run a user's own agent as supervisor (`execGroupAgent` passes the configured
+ * supervisor agentId, not the builtin slug). Such a run is verified as the
+ * group's supervisor, and the tools engine uses this list — the single source
+ * of truth — to both add these tools to the agent-mode candidate set and enable
+ * them. Without it the supervisor has no way to dispatch members and degrades
+ * to a single-agent monologue.
+ *
+ * NOTE: `lobe-group-agent-builder` (member CRUD: searchAgent / inviteAgent /
+ * createAgent) is deliberately excluded — it has no server runtime registered
+ * (`apps/server/.../serverRuntimes`), so advertising it on a server-side
+ * supervisor run would throw `Builtin tool "lobe-group-agent-builder" is not
+ * implemented` the moment the model called it. Add it back here once a server
+ * runtime exists.
+ */
+export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
+
+/**
  * Tool IDs whose enabled state is decided by runtime / system conditions
  * (e.g. cloud runtime, agent has documents attached, knowledge base configured,
  * desktop gateway available), NOT by the user's plugin selection.

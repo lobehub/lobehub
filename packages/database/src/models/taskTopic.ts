@@ -222,6 +222,10 @@ export class TaskTopicModel {
   async findWithHandoff(taskId: string, limit: number) {
     return this.db
       .select({
+        // The agent that actually ran this topic — used so each activity row
+        // keeps its own avatar instead of inheriting the task's *current*
+        // assignee (which changes when the task is reassigned).
+        agentId: topics.agentId,
         completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,

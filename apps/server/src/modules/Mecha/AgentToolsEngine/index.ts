@@ -21,10 +21,15 @@ import {
   builtinTools,
   chatModeAllowedToolIds,
   defaultToolIds,
+  groupSupervisorToolIds,
 } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
+import {
+  type BuiltinToolManifest,
+  type RuntimeEnvMode,
+  type RuntimePlatform,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -71,6 +76,7 @@ export const createServerToolsEngine = (
     builtinTools: builtinToolsOverride = builtinTools,
     defaultToolIds,
     excludeIdentifiers,
+    manifestContext,
   } = config;
 
   // Get plugin manifests from installed plugins (from database)
@@ -84,7 +90,21 @@ export const createServerToolsEngine = (
   // and . The enableChecker rules below are defense-in-depth
   // because `allowExplicitActivation` lets activator-driven activation
   // bypass them.
-  const builtinManifests = builtinToolsOverride.map((tool) => tool.manifest as LobeToolManifest);
+  //
+  // When a manifest context is supplied (agent runtime path), context-aware
+  // tools resolve their manifest for it — trimming APIs (e.g. lobe-agent hides
+  // callSubAgent inside a sub-agent / group, both list AND systemRole) or opting
+  // out entirely via `null`. This MUST mirror the frontend `createToolsEngine`:
+  // a sub-agent run server-side that skipped this would still be handed
+  // `callSubAgent`, letting the model recurse into nested sub-agents that the
+  // runtime then rejects — a dead loop that ends in the inactivity watchdog.
+  const builtinManifests = builtinToolsOverride
+    .map((tool) =>
+      manifestContext && tool.resolveManifest
+        ? tool.resolveManifest(manifestContext)
+        : tool.manifest,
+    )
+    .filter((m): m is BuiltinToolManifest => !!m) as LobeToolManifest[];
 
   // Combine all manifests, then drop anything whose identifier the caller
   // has explicitly forbidden for this turn. The post-merge filter closes
@@ -136,6 +156,8 @@ export const createServerAgentToolsEngine = (
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
     isBotConversation = false,
+    isGroupSupervisor = false,
+    manifestContext,
     model,
     provider,
   } = params;
@@ -230,6 +252,10 @@ export const createServerAgentToolsEngine = (
     [MemoryManifest.identifier]: globalMemoryEnabled,
     // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
     ...(isBotConversation && { [MessageManifest.identifier]: true }),
+    // Group supervisor: enable the orchestration toolset (see
+    // `groupSupervisorToolIds`). The same list also feeds the candidate set
+    // below, so the bundle has a single source of truth.
+    ...(isGroupSupervisor && Object.fromEntries(groupSupervisorToolIds.map((id) => [id, true]))),
     // Remote-device proxy: shown only for device-capable targets when the
     // server has a proxy, no specific device is auto-activated yet, AND the
     // user has NOT explicitly selected a device. Once a device is explicitly
@@ -258,17 +284,25 @@ export const createServerAgentToolsEngine = (
     builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration. Custom mode = exactly the
     // agent's plugins; chat mode = strict allow-list; agent mode = full defaults.
+    // Agent mode: the supervisor's orchestration tools are neither in the
+    // agent's plugins nor in `defaultToolIds`, so add them to the candidate set
+    // here (the `agentModeRules` above then enable them). Enabling a tool that
+    // isn't a candidate is a no-op — the checker only filters
+    // `union(toolIds, defaultToolIds)`.
     defaultToolIds: isCustomMode
       ? (agentConfig.plugins ?? [])
       : isChatMode
         ? chatModeAllowedToolIds
-        : defaultToolIds,
+        : [...defaultToolIds, ...(isGroupSupervisor ? groupSupervisorToolIds : [])],
     // Post-merge wall: a plugin or Skill/Composio manifest claiming a
     // device identifier survives `buildAllowedBuiltinTools` (which only
     // filters the builtin source). Excluding the identifiers here drops
     // them from the combined `manifestSchemas` so the activator cannot
     // resolve them regardless of which manifest source declared them.
     excludeIdentifiers: canUseDevice ? undefined : DEVICE_TOOL_IDENTIFIERS,
+    // Conversation context for context-aware builtin manifests (scope /
+    // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
+    manifestContext,
     enableChecker: createEnableChecker({
       // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron).
       // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.

@@ -51,6 +51,7 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
@@ -2199,6 +2200,31 @@ export class AiAgentService {
         activeDeviceId ?? 'none',
       );
 
+      // `appContext.orchestrationRole` is client-supplied (the execAgent /
+      // execAgents schema accepts it, and execGroupAgent stamps it for whatever
+      // agentId the caller passed), so it must NOT alone authorize the
+      // group-orchestration toolset — otherwise any run marked
+      // `{ orchestrationRole: 'supervisor', groupId }` could dispatch group
+      // members. Verify against the persisted, ownership-scoped membership that
+      // the executing agent really is this group's supervisor.
+      let isGroupSupervisor = false;
+      if (appContext?.orchestrationRole === 'supervisor' && appContext?.groupId) {
+        const groupAgents = await new ChatGroupModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).getGroupAgents(appContext.groupId);
+        isGroupSupervisor = groupAgents.some(
+          (member) => member.agentId === resolvedAgentId && member.role === 'supervisor',
+        );
+        if (!isGroupSupervisor)
+          log(
+            'execAgent: orchestrationRole=supervisor but agent %s is not the supervisor of group %s — denying group tools',
+            resolvedAgentId,
+            appContext.groupId,
+          );
+      }
+
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [
           ...lobehubSkillManifests,
@@ -2223,6 +2249,15 @@ export class AiAgentService {
         globalMemoryEnabled,
         hasEnabledKnowledgeBases,
         isBotConversation,
+        isGroupSupervisor,
+        // Context-aware builtin manifests: inside a sub-agent (or group) run,
+        // lobe-agent drops `callSubAgent` so the model can't recurse into nested
+        // sub-agents (which the runtime rejects, looping until the inactivity
+        // watchdog kills the op). Mirrors the frontend `createAgentToolsEngine`.
+        manifestContext: {
+          isSubAgent: appContext?.isSubAgent,
+          scope: appContext?.scope ?? undefined,
+        },
         model,
         provider,
       });
@@ -3026,6 +3061,10 @@ export class AiAgentService {
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           isSubAgent: appContext?.isSubAgent,
+          // Persist the orchestration role on state.metadata so the
+          // inactivity-watchdog abandon path can distinguish an isolated group
+          // member ('member') from a genuine callSubAgent child.
+          orchestrationRole: appContext?.orchestrationRole,
           scope: appContext?.scope,
           sourceMessageId: userMessageRecord?.id ?? parentMessageId ?? undefined,
           taskId: operationTaskId,
@@ -3281,6 +3320,9 @@ export class AiAgentService {
             }),
           isSubAgent: true,
           logScope: 'execVirtualSubAgent',
+          // Tag the op as a group member so the abandon path routes its parent
+          // resume through the group bridge (its own timeout), not the sub-agent one.
+          orchestrationRole: 'member',
           resumeParentOnComplete: true,
         },
       );
@@ -3432,6 +3474,15 @@ export class AiAgentService {
       bridgeHookFactory?: (threadId: string) => AgentHook;
       isSubAgent: boolean;
       logScope: 'execSubAgent' | 'execVirtualSubAgent';
+      /**
+       * Marks the run's orchestration role on its operation metadata. Isolated
+       * group members pass `'member'` so the inactivity-watchdog abandon path can
+       * tell them apart from genuine `callSubAgent` children — both share
+       * `isSubAgent: true` and an isolation thread, but a member's parent is
+       * resumed through the group K=N bridge (via its own group-member timeout),
+       * NOT `completeSubAgentBridge`.
+       */
+      orchestrationRole?: 'member';
       resumeParentOnComplete?: boolean;
     },
   ): Promise<ExecSubAgentResult> {
@@ -3519,6 +3570,7 @@ export class AiAgentService {
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
       isSubAgent: options.isSubAgent,
+      orchestrationRole: options.orchestrationRole,
       threadId: thread.id,
       topicId,
     };

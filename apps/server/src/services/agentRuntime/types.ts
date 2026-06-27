@@ -320,6 +320,13 @@ export interface OperationCreationParams {
     documentId?: string | null;
     groupId?: string | null;
     isSubAgent?: boolean;
+    /**
+     * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
+     * Lets the inactivity-watchdog abandon path tell an isolated group member
+     * (`'member'`, resumed via the group K=N bridge) apart from a genuine
+     * callSubAgent child (which shares `isSubAgent: true`).
+     */
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;

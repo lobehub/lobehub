@@ -3,7 +3,9 @@ import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 // Direct file import (not the barrel) to avoid pulling in RuntimeExecutors and
 // its workspace-package transitive deps in the unit-test environment.
@@ -19,6 +21,21 @@ interface AbandonOperationOptions {
   snapshotStore?: ISnapshotStore | null;
 }
 
+/**
+ * Linkage for resuming the parent of an abandoned sub-agent. Surfaced so the
+ * caller can run the `completeSubAgentBridge` — the watchdog-abandon path
+ * otherwise skips the child's onComplete bridge and strands the parent in
+ * `waiting_for_async_tool` forever (the orphaned-parent bug).
+ */
+export interface AbandonedSubAgentResume {
+  parentOperationId: string;
+  threadId: string;
+  /** The parent's placeholder `role: 'tool'` message to backfill (= thread.sourceMessageId). */
+  toolMessageId: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 export interface FinalizeAbandonedResult {
   /** Whether the assistant message was successfully marked as errored. */
   assistantMessageUpdated: boolean;
@@ -26,6 +43,11 @@ export interface FinalizeAbandonedResult {
   finalized: boolean;
   /** Whether agent state was found in Redis. */
   found: boolean;
+  /**
+   * Set when the abandoned op was a sub-agent parked under a parent's
+   * `callSubAgent`. The caller MUST bridge this to resume the parent.
+   */
+  subAgentResume?: AbandonedSubAgentResume;
 }
 
 /**
@@ -72,6 +94,9 @@ export class AbandonOperationService {
 
     const metadata = (state.metadata ?? {}) as {
       assistantMessageId?: string;
+      isSubAgent?: boolean;
+      orchestrationRole?: 'supervisor' | 'member';
+      threadId?: string | null;
       userId?: string;
       workspaceId?: string;
     };
@@ -118,10 +143,66 @@ export class AbandonOperationService {
       }
     }
 
-    try {
-      await this.coordinator.deleteAgentOperation(operationId);
-    } catch (e) {
-      log('[%s] coordinator cleanup failed (non-fatal): %O', operationId, e);
+    // Resolve sub-agent → parent linkage. The watchdog killed this op without
+    // firing its onComplete bridge, so a parent parked on `callSubAgent` would
+    // otherwise wait on this slot forever. We surface the ids the caller needs
+    // to backfill the placeholder tool message and CAS-resume the parent.
+    // parentOperationId + threadId live on the (persistent) operation row;
+    // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
+    // set when the sub-agent was dispatched. When this is set, the coordinator
+    // cleanup below is SKIPPED so the durable resume can still resolve userId.
+    //
+    // Isolated group members ALSO run with `isSubAgent: true` and an isolation
+    // thread, but their parent (supervisor) is resumed through the group K=N
+    // bridge (`completeGroupActionMember`, driven by the member's own
+    // `scheduleGroupMemberTimeout`) — routing them through the sub-agent bridge
+    // would backfill the wrong message and never satisfy the group barrier. They
+    // are tagged `orchestrationRole: 'member'`, so skip them here.
+    if (metadata.isSubAgent && metadata.orchestrationRole !== 'member' && metadata.userId) {
+      try {
+        const opRow = await new AgentOperationModel(
+          this.db,
+          metadata.userId,
+          metadata.workspaceId,
+        ).findById(operationId);
+        const parentOperationId = opRow?.parentOperationId ?? undefined;
+        const threadId = opRow?.threadId ?? metadata.threadId ?? undefined;
+        if (parentOperationId && threadId) {
+          const thread = await new ThreadModel(
+            this.db,
+            metadata.userId,
+            metadata.workspaceId,
+          ).findById(threadId);
+          const toolMessageId = thread?.sourceMessageId ?? undefined;
+          if (toolMessageId) {
+            result.subAgentResume = {
+              parentOperationId,
+              threadId,
+              toolMessageId,
+              userId: metadata.userId,
+              workspaceId: metadata.workspaceId,
+            };
+          } else {
+            log('[%s] sub-agent abandon: thread %s has no sourceMessageId', operationId, threadId);
+          }
+        }
+      } catch (e) {
+        // Non-fatal: the parent still has the bounded async-tool verify watchdog
+        // as a fallback. Log so a failed resume hand-off stays observable.
+        log('[%s] sub-agent parent-resume linkage lookup failed: %O', operationId, e);
+      }
+    }
+
+    // Skip coordinator cleanup when a parent resume is still pending. The
+    // durable subagent-callback (queue mode) re-resolves THIS op's userId from
+    // the coordinator metadata, so deleting it now would 401 every redelivery
+    // and strand the parent. The lingering state expires on its own Redis TTL.
+    if (!result.subAgentResume) {
+      try {
+        await this.coordinator.deleteAgentOperation(operationId);
+      } catch (e) {
+        log('[%s] coordinator cleanup failed (non-fatal): %O', operationId, e);
+      }
     }
 
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
