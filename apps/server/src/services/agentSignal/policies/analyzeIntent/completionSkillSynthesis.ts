@@ -9,10 +9,10 @@ import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import type { RuntimeProcessorContext } from '../../runtime/context';
 import { defineSourceHandler } from '../../runtime/middleware';
-import type {
+import {
   type ActionSkillManagementHandle,
   AGENT_SIGNAL_POLICY_ACTION_TYPES,
-  AgentSignalFeedbackEvidence,
+  type AgentSignalFeedbackEvidence,
 } from '../types';
 import type { SkillManagementActionHandlerOptions } from './actions';
 import { executeSkillManagementAction } from './actions';
@@ -205,6 +205,13 @@ export const createCompletionSkillSynthesisSourceHandler = (
       // Self-iteration runs (including the skill-management run itself) carry a
       // marker-derived selfIteration payload — never re-synthesize from them.
       if (payload.selfIteration) return;
+      // `agent.execution.completed` is reused for non-terminal pauses
+      // (waiting_for_async_tool / waiting_for_human): the turn's final assistant
+      // product doesn't exist yet, so synthesizing now would read a partial
+      // trajectory and consume the parked candidate before the real completion.
+      if (payload.reason === 'waiting_for_async_tool' || payload.reason === 'waiting_for_human') {
+        return;
+      }
       if (!options.selfIterationEnabled) return;
 
       const skillIntentRecords = options.procedureState?.skillIntentRecords;

@@ -268,6 +268,11 @@ export class CompletionLifecycle {
                   anchorMessageId: assistantMessageId,
                   assistantMessageId,
                   operationId,
+                  // Carry the completion reason so completion-stage consumers can
+                  // tell a finished turn from a non-terminal pause
+                  // (waiting_for_async_tool / waiting_for_human), which reuse this
+                  // same source.
+                  reason,
                   // Self-iteration runs carry their finalState tool outcomes here
                   // (the one point finalState is in hand) so the completion policy
                   // can project receipts. Undefined for every other agent.

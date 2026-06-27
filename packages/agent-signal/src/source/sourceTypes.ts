@@ -41,6 +41,12 @@ export interface AgentSignalSourcePayloadMap {
     assistantMessageId?: string;
     operationId: string;
     /**
+     * Completion reason as classified by the producer. Non-terminal pauses
+     * (`waiting_for_async_tool` / `waiting_for_human`) reuse this same source, so
+     * completion-stage consumers that need a finished turn must filter on it.
+     */
+    reason?: string;
+    /**
      * Opaque completion side-effect payload attached by the executor for
      * builtin background agents (e.g. self-iteration tool outcomes used for
      * receipt projection). Carried as-is; the producing layer owns its shape.

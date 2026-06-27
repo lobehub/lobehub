@@ -242,6 +242,22 @@ describe('createCompletionSkillSynthesisSourceHandler', () => {
     expect(read).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  // `agent.execution.completed` is reused for non-terminal pauses — the turn's
+  // final assistant product doesn't exist yet, so the handler must not read or
+  // consume the parked candidate (the later real completion does the synthesis).
+  it.each(['waiting_for_async_tool', 'waiting_for_human'])(
+    'skips the non-terminal park completion %s without consuming the candidate',
+    async (reason) => {
+      const { dispatch, findFirst, handler, read } = createHarness();
+
+      await handler.handle(createSource({ reason }), createContext());
+
+      expect(read).not.toHaveBeenCalled();
+      expect(findFirst).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+    },
+  );
 });
 
 /**
