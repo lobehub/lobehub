@@ -24,12 +24,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
 
-    min-width: 360px;
+    min-width: 430px;
 
     color: ${cssVar.colorText};
 
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 85%, transparent);
-    backdrop-filter: blur(20px) saturate(1.5);
+    background: ${cssVar.colorBgElevated};
+    backdrop-filter: none;
     box-shadow: ${cssVar.boxShadowSecondary};
   `,
   closeButton: css`
@@ -117,7 +117,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   labelStack: css`
     display: flex;
     flex: 1;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 6px;
+    align-items: baseline;
+
+    min-width: 0;
   `,
   promptActions: css`
     display: flex;
@@ -137,14 +141,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     line-height: 1.2;
     color: ${cssVar.colorText};
+    white-space: nowrap;
   `,
   version: css`
-    margin-block-start: 2px;
-
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
-    letter-spacing: -0.01em;
+    white-space: nowrap;
+    letter-spacing: 0;
   `,
 }));
 
