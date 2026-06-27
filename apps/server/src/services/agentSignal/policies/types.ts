@@ -317,6 +317,12 @@ export interface AgentSignalPolicyActionPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle]: {
     agentId?: string;
+    /**
+     * Assistant message that completed the turn. When present (deferred
+     * completion-stage synthesis, LOBE-10802) the skill seed anchors here
+     * instead of under the user message, so it is not a floating mainline root.
+     */
+    assistantMessageId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;

@@ -2,6 +2,7 @@
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle } from '../CompletionLifecycle';
@@ -224,6 +225,50 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.errorType).toBeUndefined();
     expect(event.errorAttribution).toBeUndefined();
   });
+
+  it('resolves assistantMessageId from the final assistant message row when metadata omits it', () => {
+    // Regression (LOBE-10802): a server execAgent turn carries operation-level
+    // metadata ({} in DB) with no assistantMessageId, so the completion event
+    // previously shipped assistantMessageId=undefined and the deferred
+    // skill-synthesis handler no-oped. The id must fall back to the persisted
+    // id on the final assistant message row in state.
+    const state = {
+      messages: [
+        { content: 'user prompt', id: 'msg-user', role: 'user' },
+        { content: 'tool result', id: 'msg-tool', role: 'tool' },
+        { content: 'final answer', id: 'msg-assistant', role: 'assistant' },
+        { content: 'trailing tool result', id: 'msg-tool-2', role: 'tool' },
+      ],
+      metadata: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { assistantMessageId } = callBuild(state, 'done');
+
+    expect(assistantMessageId).toBe('msg-assistant');
+  });
+
+  it('prefers metadata.assistantMessageId over the state row (client runtime path)', () => {
+    // The client runtime path supplies assistantMessageId on operation metadata;
+    // it must win over the state-row fallback so the anchor stays the id the
+    // client already persisted the parked candidate against.
+    const state = {
+      messages: [{ content: 'final answer', id: 'msg-from-state', role: 'assistant' }],
+      metadata: { agentId: 'agent-1', assistantMessageId: 'msg-from-metadata' },
+    };
+
+    const { assistantMessageId } = callBuild(state, 'done');
+
+    expect(assistantMessageId).toBe('msg-from-metadata');
+  });
+
+  it('leaves assistantMessageId undefined when neither metadata nor a state row carries it', () => {
+    const { assistantMessageId } = callBuild(
+      { messages: [{ content: 'just a user prompt', role: 'user' }], metadata: {} },
+      'done',
+    );
+
+    expect(assistantMessageId).toBeUndefined();
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
@@ -362,5 +407,41 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
     expect(dispatchSpy).toHaveBeenCalledWith('op-1', 'onComplete', expect.anything(), []);
     expect(unregisterSpy).toHaveBeenCalledWith('op-1');
+  });
+});
+
+describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('ships the resolved assistantMessageId on the completed payload for a server turn', async () => {
+    // Regression (LOBE-10802): on a server execAgent turn the operation metadata
+    // has no assistantMessageId, so the agent.execution.completed event used to
+    // carry assistantMessageId=undefined and the deferred skill-synthesis handler
+    // no-oped. The payload must now anchor to the final assistant message row.
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+
+    const lifecycle = buildLifecycle();
+    const state = {
+      messages: [
+        { content: 'user prompt', id: 'msg-user', role: 'user' },
+        { content: 'final answer', id: 'msg-assistant', role: 'assistant' },
+      ],
+      metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+      stepCount: 2,
+    };
+
+    await lifecycle.emitSignalEvents('op-1', state, 'done');
+
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+    const [emission] = emitSpy.mock.calls[0];
+    expect(emission.sourceType).toBe('agent.execution.completed');
+    expect(emission.payload).toMatchObject({
+      anchorMessageId: 'msg-assistant',
+      assistantMessageId: 'msg-assistant',
+    });
   });
 });

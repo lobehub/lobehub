@@ -3,6 +3,7 @@ import type {
   RuntimeProcessorResult,
 } from '@lobechat/agent-signal';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { RequestTrigger } from '@lobechat/types';
 
 import type {
   AgentSignalProcedureMarker,
@@ -32,7 +33,7 @@ import { createDefaultActionServices } from '../../services/actionServices';
 import type { ProcedureMarkerSuppressInput, ProcedureStateService } from '../../services/types';
 import type { SignalFeedbackDomainMemory } from '../types';
 import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES } from '../types';
-import type { RecordedSkillIntent } from './skillIntentRecord';
+import type { PendingSkillSynthesis, RecordedSkillIntent } from './skillIntentRecord';
 
 /**
  * Weak positive skill feedback needs repeated observations before the accumulator emits.
@@ -123,6 +124,39 @@ const detectClientComplete = (signal: FeedbackDomainSignal) => {
   return signal.payload.trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete;
 };
 
+/**
+ * Detects a server execAgent inbound skill candidate that should be parked and
+ * synthesized after the run finishes (LOBE-10802), rather than dispatched on the
+ * user message alone. The client-runtime lane parks/synthesizes through its own
+ * `client.runtime.start` / `client.runtime.complete` pair and is never re-routed
+ * here; agent-signal self-iteration runs are suppressed upstream but guarded too.
+ */
+const detectServerInboundDeferredSkill = (signal: FeedbackDomainSignal): boolean => {
+  const { trigger } = signal.payload;
+  if (!trigger) return false;
+  if (trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart) return false;
+  if (trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete) return false;
+  if (trigger === RequestTrigger.AgentSignal) return false;
+
+  return true;
+};
+
+/**
+ * Builds the synthesis payload parked with a deferred server-inbound skill
+ * candidate. Carries only the inbound-stage facts the completion handler cannot
+ * recover on its own; the trajectory evidence is assembled fresh at completion.
+ */
+const buildPendingSkillSynthesis = (
+  signal: NonSatisfiedSkillActionServiceSignal,
+): PendingSkillSynthesis => ({
+  ...(signal.payload.agentId ? { agentId: signal.payload.agentId } : {}),
+  ...(signal.payload.conflictPolicy ? { conflictPolicy: signal.payload.conflictPolicy } : {}),
+  ...(signal.payload.evidence?.length ? { evidence: signal.payload.evidence } : {}),
+  message: signal.payload.message,
+  ...(signal.payload.sourceHints ? { sourceHints: signal.payload.sourceHints } : {}),
+  ...(signal.payload.topicId ? { topicId: signal.payload.topicId } : {}),
+});
+
 const findCompletionHintedDocumentReceipts = async (
   signal: FeedbackDomainSignal,
   context: RuntimeProcessorContext,
@@ -185,6 +219,7 @@ const createHintedDocumentSkillSignal = (
 const createRecordedSkillIntent = (
   signal: NonSatisfiedSkillActionServiceSignal,
   context: RuntimeProcessorContext,
+  options?: { withSynthesis?: boolean },
 ): RecordedSkillIntent => ({
   ...(signal.payload.skillActionIntent ? { actionIntent: signal.payload.skillActionIntent } : {}),
   ...(typeof signal.payload.skillIntentConfidence === 'number'
@@ -193,6 +228,7 @@ const createRecordedSkillIntent = (
   createdAt: context.now(),
   explicitness: signal.payload.skillIntentExplicitness ?? 'weak_positive',
   feedbackMessageId: signal.payload.messageId,
+  ...(options?.withSynthesis ? { pendingSynthesis: buildPendingSkillSynthesis(signal) } : {}),
   ...(signal.payload.skillIntentReason || signal.payload.reason
     ? { reason: signal.payload.skillIntentReason ?? signal.payload.reason }
     : {}),
@@ -446,6 +482,24 @@ export const createFeedbackActionPlannerSignalHandler = (
 
           return {
             concluded: { reason: 'skill intent recorded until client.runtime.complete' },
+            status: 'conclude',
+          };
+        }
+
+        // Defer server execAgent inbound synthesis to agent.execution.completed
+        // (LOBE-10802): park the candidate with its synthesis payload so the
+        // completion-stage handler synthesizes from the full trajectory (tool
+        // sequence + final product) instead of the user prompt alone. Only when
+        // the intent-record store is wired — otherwise fall through to the legacy
+        // inbound dispatch so synthesis is never silently dropped.
+        const skillIntentWriter = options.procedure?.procedureState?.skillIntentRecords?.write;
+        if (skillIntentWriter && detectServerInboundDeferredSkill(signal)) {
+          await skillIntentWriter(
+            createRecordedSkillIntent(signal, procedureContext, { withSynthesis: true }),
+          );
+
+          return {
+            concluded: { reason: 'skill candidate parked until agent.execution.completed' },
             status: 'conclude',
           };
         }

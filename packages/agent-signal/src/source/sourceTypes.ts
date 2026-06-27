@@ -31,6 +31,14 @@ export type AgentSignalSourceType = ValueOf<typeof AGENT_SIGNAL_SOURCE_TYPES>;
 export interface AgentSignalSourcePayloadMap {
   [AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted]: {
     agentId?: string;
+    /**
+     * Message the deferred skill synthesis should anchor to — the assistant turn
+     * that completed this run. Lets completion-stage skill synthesis seed under
+     * the assistant group instead of as a floating `parent_id=null` mainline root.
+     */
+    anchorMessageId?: string;
+    /** Assistant message id for the completed turn; used to hydrate the trajectory. */
+    assistantMessageId?: string;
     operationId: string;
     /**
      * Opaque completion side-effect payload attached by the executor for
@@ -41,6 +49,8 @@ export interface AgentSignalSourcePayloadMap {
     serializedContext?: string;
     steps: number;
     topicId?: string;
+    /** User message that initiated this turn, when known by the producer. */
+    triggerMessageId?: string;
     turnCount?: number;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.agentExecutionFailed]: {

@@ -216,14 +216,16 @@ export class CompletionLifecycle {
    */
   async emitSignalEvents(operationId: string, state: any, reason: string): Promise<SignalEvent[]> {
     try {
-      const { metadata } = this.buildLifecycleEvent(operationId, state, reason);
+      const { assistantMessageId, metadata } = this.buildLifecycleEvent(operationId, state, reason);
       const selfIteration =
         reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
       if (reason !== 'error') {
         log(
-          '[completion-lifecycle] emit agent.execution.completed op=%s userId=%s selfIteration=%s',
+          '[completion-lifecycle] emit agent.execution.completed op=%s userId=%s assistant=%s metaAssistant=%s selfIteration=%s',
           operationId,
           metadata?.userId || this.userId,
+          assistantMessageId ?? 'undefined',
+          metadata?.assistantMessageId ?? 'undefined',
           selfIteration
             ? `kind=${selfIteration.marker?.kind} mutations=${selfIteration.mutations?.length}`
             : 'ABSENT',
@@ -257,6 +259,14 @@ export class CompletionLifecycle {
               {
                 payload: {
                   agentId: metadata?.agentId,
+                  // Anchor the deferred skill synthesis to the completed assistant
+                  // turn (LOBE-10802): the completion-stage skill handler walks
+                  // this id back to the user message to read the parked candidate
+                  // and seeds the skill under the assistant group. Resolved from
+                  // the final assistant message row when operation metadata omits
+                  // it (the server execAgent path).
+                  anchorMessageId: assistantMessageId,
+                  assistantMessageId,
                   operationId,
                   // Self-iteration runs carry their finalState tool outcomes here
                   // (the one point finalState is in hand) so the completion policy
@@ -450,10 +460,18 @@ export class CompletionLifecycle {
     const lastAssistantMessage = messages
       .slice()
       .reverse()
-      .find((m: { content?: unknown; role: string }) => m.role === 'assistant');
+      .find((m: { content?: unknown; id?: string; role: string }) => m.role === 'assistant');
     const lastAssistantContent = lastAssistantMessage
       ? extractTextFromMessageContent(lastAssistantMessage.content)
       : undefined;
+
+    // Operation-level metadata only carries `assistantMessageId` on the client
+    // runtime path; a server `execAgent` turn leaves it unset (`{}` in DB). Fall
+    // back to the persisted id on the final assistant message row in state so the
+    // completion event can anchor deferred skill synthesis to this turn
+    // (LOBE-10802). A metadata value, when present, still wins.
+    const assistantMessageId =
+      metadata?.assistantMessageId ?? (lastAssistantMessage as { id?: string } | undefined)?.id;
 
     const attachments = extractOutboundAttachments(messages);
 
@@ -470,6 +488,7 @@ export class CompletionLifecycle {
     const formattedError = state?.error ? formatErrorForState(state.error) : undefined;
 
     return {
+      assistantMessageId,
       event: {
         agentId: metadata?.agentId || '',
         attachments: attachments.length > 0 ? attachments : undefined,

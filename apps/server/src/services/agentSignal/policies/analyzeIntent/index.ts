@@ -8,6 +8,7 @@ import type {
   UserMemoryActionHandlerOptions,
 } from './actions';
 import { defineSkillManagementActionHandler, defineUserMemoryActionHandler } from './actions';
+import { createCompletionSkillSynthesisSourceHandler } from './completionSkillSynthesis';
 import { createFeedbackActionPlannerSignalHandler } from './feedbackAction';
 import type { CreateFeedbackDomainJudgePolicyOptions } from './feedbackDomain';
 import {
@@ -81,6 +82,13 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
     ...(options.skillManagement
       ? [
           defineSkillManagementActionHandler({
+            ...options.skillManagement,
+            procedureState:
+              options.skillManagement.procedureState ?? options.procedure?.procedureState,
+          }),
+          // Deferred skill synthesis (LOBE-10802): synthesize the parked skill
+          // candidate after `agent.execution.completed`, off the full trajectory.
+          createCompletionSkillSynthesisSourceHandler({
             ...options.skillManagement,
             procedureState:
               options.skillManagement.procedureState ?? options.procedure?.procedureState,

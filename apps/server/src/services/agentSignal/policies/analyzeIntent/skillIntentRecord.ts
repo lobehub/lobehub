@@ -2,12 +2,43 @@ import { z } from 'zod';
 
 import type { AgentSignalPolicyStateStore } from '../../store/types';
 import type {
+  AgentSignalFeedbackDomainConflictPolicy,
+  AgentSignalFeedbackEvidence,
+  AgentSignalFeedbackSourceHints,
   AgentSignalSkillActionIntent,
   AgentSignalSkillIntentExplicitness,
   AgentSignalSkillIntentRoute,
 } from '../types';
 
 const POLICY_ID = 'analyze-intent:skill-intent-records';
+
+/**
+ * Synthesis payload parked alongside a detect-stage skill candidate so the
+ * deferred completion-stage handler can dispatch the skill-management run from
+ * the original user request without re-running domain classification.
+ *
+ * Trajectory evidence (tool sequence + final product) is assembled fresh at
+ * completion; this carries only the inbound-stage facts the completion handler
+ * cannot otherwise recover.
+ */
+const PendingSkillSynthesisSchema = z.object({
+  agentId: z.string().optional(),
+  conflictPolicy: z
+    .object({
+      // Mirror AgentSignalFeedbackDomainTarget so the parsed record stays
+      // assignable to RecordedSkillIntent.pendingSynthesis (a bare z.string()
+      // widens to string[] and breaks the conflictPolicy type).
+      forbiddenWith: z.array(z.enum(['memory', 'none', 'prompt', 'skill'])).optional(),
+      mode: z.enum(['exclusive', 'fanout']),
+      priority: z.number(),
+    })
+    .optional(),
+  evidence: z.array(z.object({ cue: z.string(), excerpt: z.string() })).optional(),
+  message: z.string(),
+  sourceHints: z.record(z.unknown()).optional(),
+  threadId: z.string().optional(),
+  topicId: z.string().optional(),
+});
 
 const RecordedSkillIntentSchema = z.object({
   actionIntent: z.enum(['create', 'refine', 'consolidate', 'maintain', 'noop']).optional(),
@@ -20,11 +51,32 @@ const RecordedSkillIntentSchema = z.object({
     'non_skill_preference',
   ]),
   feedbackMessageId: z.string(),
+  pendingSynthesis: PendingSkillSynthesisSchema.optional(),
   reason: z.string().optional(),
   route: z.enum(['direct_decision', 'accumulate', 'non_skill']),
   scopeKey: z.string(),
   sourceId: z.string(),
 });
+
+/**
+ * Synthesis payload parked alongside a detect-stage skill candidate.
+ */
+export interface PendingSkillSynthesis {
+  /** Reviewed user agent the skill receipt should attribute to. */
+  agentId?: string;
+  /** Inbound-stage conflict policy carried through to the deferred action. */
+  conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
+  /** Inbound-stage evidence, supplemented by trajectory evidence at completion. */
+  evidence?: AgentSignalFeedbackEvidence[];
+  /** Original user request text that the deferred skill synthesis acts on. */
+  message: string;
+  /** Structured source hints attached to the inbound feedback source. */
+  sourceHints?: AgentSignalFeedbackSourceHints;
+  /** Thread the turn ran under, when scoped to a thread. */
+  threadId?: string;
+  /** Topic the turn ran under. */
+  topicId?: string;
+}
 
 /**
  * Recorded skill intent stored between user-message and completion analysis stages.
@@ -40,6 +92,13 @@ export interface RecordedSkillIntent {
   explicitness: AgentSignalSkillIntentExplicitness;
   /** User feedback message id that produced this record. */
   feedbackMessageId: string;
+  /**
+   * Synthesis payload for the deferred completion-stage skill run. Present when
+   * a server execAgent inbound turn parked a candidate to synthesize after
+   * `agent.execution.completed` (LOBE-10802); absent for the client-runtime
+   * lane, which re-derives the source at `client.runtime.complete`.
+   */
+  pendingSynthesis?: PendingSkillSynthesis;
   /** Optional private-safe reason suitable for traces and eval assertions. */
   reason?: string;
   /** Runtime route selected before completion-stage evidence is available. */
