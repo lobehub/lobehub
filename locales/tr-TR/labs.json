@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Temsilci Mesaj Gruplama",
   "features.fleet.desc": "Başlık çubuğunda Filo girişini göster — ajanlarınız arasında çalışan tüm görevlerin yan yana gösterildiği bir kontrol paneli.",
   "features.fleet.title": "Filo Görünümü",
+  "features.foldFinishedTurn.desc": "Tamamlanmış, en son olmayan ajan dönüşlerinin sürecini (akıl yürütme ve araç çağrıları) \"İşlenmiş\" başlığı altında daraltın. Nihai cevap görünür kalır; süreci genişletmek için tıklayın.",
+  "features.foldFinishedTurn.title": "Tamamlanmış Dönüşleri Daralt",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
   "features.imessage.desc": "Ajanları, yerel LobeHub Masaüstü BlueBubbles köprüsü aracılığıyla iMessage'a bağlayın.",

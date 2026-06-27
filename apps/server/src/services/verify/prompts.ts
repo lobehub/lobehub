@@ -52,6 +52,12 @@ export const buildPlanPrompt = ({
 export interface JudgeEvidence {
   content?: string | null;
   description?: string | null;
+  /**
+   * Stored artifact id (screenshot / video / large text). The text prompt only
+   * references it by presence + caption; the agent verifier attaches the actual
+   * file to its run via `execAgent({ fileIds })` so it can SEE the artifact.
+   */
+  fileId?: string | null;
   type: VerifyEvidenceType;
 }
 
@@ -68,7 +74,7 @@ export interface JudgePromptInput {
   mode: 'single' | 'batch';
 }
 
-const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
+export const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
   if (!evidence?.length) return '';
   const lines = evidence.map((e) => {
     const caption = e.description ? ` — ${e.description}` : '';

@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "Änderungen werden geladen…",
   "workingDirectory.filesModified": "Geändert",
   "workingDirectory.ghMissing": "Installieren und melden Sie sich bei der GitHub-CLI (`gh`) an, um verknüpfte Pull-Requests anzuzeigen",
+  "workingDirectory.heteroHint": "Dieser Agent läuft immer in einem Arbeitsverzeichnis. Bis Sie eines auswählen, wird ein Standardordner verwendet – wählen Sie unten einen anderen aus, um ihn zu ändern.",
   "workingDirectory.newBranchPlaceholder": "feature/neuer-zweig-name",
   "workingDirectory.noRecent": "Keine kürzlichen Verzeichnisse",
   "workingDirectory.notSet": "Klicken, um Arbeitsverzeichnis festzulegen",

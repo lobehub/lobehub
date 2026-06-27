@@ -68,17 +68,18 @@ export interface ResolveExecutionTargetOptions {
  * - `sandbox` → server cloud sandbox
  * - `device`  → remote device (dispatched to `boundDeviceId`)
  *
- * `local` and `device` are transport-distinct even if the bound device is this
- * very machine: an explicit `device` target is server-dispatched, while `local`
- * is the desktop in-process path. Do not collapse a stored `device` target into
- * `local`; the UI can still choose to show the current machine only once as an
- * execution location.
+ * `local` and `device` stay DISTINCT even when the bound device is this very
+ * machine: `device` dispatches through the server gateway, so progress streams
+ * to every client (mobile/web can follow the run); `local` is the faster
+ * in-process IPC path whose run lives only in this desktop session. Which one
+ * to use is the user's observability/latency trade-off — never auto-collapse
+ * `device(currentDeviceId)` into the in-process path.
  *
  * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
- * (no local filesystem), so an unbound stored `local` (synced from desktop)
- * resolves to `sandbox`. A desktop `local` selection that has already been
- * bound to that desktop's `deviceId` resolves to `device` on web, so the same
- * machine remains the selected execution environment through Device Connection.
+ * (no local filesystem), so a stored `local` (synced from desktop) usually
+ * resolves to `sandbox`. For heterogeneous CLI agents, a desktop `local`
+ * selection that has already been bound to that desktop's `deviceId` resolves
+ * to `device` on web, so the same machine can execute through `lh connect`.
  *
  * Bot triggers (`trigger === bot`) upgrade a `local` target (a bot has no UI
  * to pick a device and `local` in-process IPC is unreachable from the cloud
@@ -92,7 +93,7 @@ export const resolveExecutionTarget = (
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (clientExecutionAvailable ? 'local' : 'none');
-  if (!clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
+  if (isHetero && !clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
     return 'device';
   }
   if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';

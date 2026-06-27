@@ -117,4 +117,58 @@ describe('createVerifierAgentRunner', () => {
     expect(existsByIdMock).not.toHaveBeenCalled();
     expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
+
+  it('injects the builder-captured evidence into the verifier prompt', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({
+      ...runnerArgs,
+      evidence: [
+        { description: 'toolbar screenshot', type: 'screenshot' },
+        { content: 'aria-label="Send"', description: 'DOM', type: 'dom_snapshot' },
+      ],
+    });
+
+    const prompt: string = execParams().prompt;
+    expect(prompt).toContain('## Captured evidence');
+    expect(prompt).toContain('toolbar screenshot');
+    expect(prompt).toContain('[artifact captured]'); // screenshot referenced by presence
+    expect(prompt).toContain('aria-label="Send"'); // inline dom text quoted
+  });
+
+  it('omits the captured-evidence section when no evidence was provided', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner(runnerArgs);
+
+    expect(execParams().prompt).not.toContain('## Captured evidence');
+  });
+
+  it('attaches file-backed evidence to the verifier run so it can see the artifact', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({
+      ...runnerArgs,
+      evidence: [
+        { description: 'toolbar', fileId: 'file-shot-1', type: 'screenshot' },
+        { content: 'inline only', type: 'dom_snapshot' }, // no fileId
+        { description: 'demo', fileId: 'file-vid-1', type: 'video' },
+      ],
+    });
+
+    // Only the file-backed artifacts are forwarded to execAgent (inline-text has none).
+    expect(execParams().fileIds).toEqual(['file-shot-1', 'file-vid-1']);
+  });
+
+  it('does not pass fileIds when no evidence is file-backed', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams })!;
+    await runner({ ...runnerArgs, evidence: [{ content: 'text', type: 'text' }] });
+
+    expect(execParams().fileIds).toBeUndefined();
+  });
 });

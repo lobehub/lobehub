@@ -21,6 +21,8 @@ import { localFileService } from '@/services/electron/localFileService';
 import { LocalSystemIdentifier } from '../../types';
 import { resolveArgsWithScope } from '../../utils/path';
 
+const DEFAULT_FILE_SEARCH_LIMIT = 100;
+
 const LocalSystemApiEnum = {
   editFile: 'editFile' as const,
   getCommandOutput: 'getCommandOutput' as const,
@@ -232,6 +234,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result = await this.runtime.globFiles({
         directory: params.scope,
+        limit:
+          Number.isFinite(params.limit) && params.limit && params.limit > 0
+            ? Math.floor(params.limit)
+            : DEFAULT_FILE_SEARCH_LIMIT,
         pattern: params.pattern,
       });
       return this.toResult(result);

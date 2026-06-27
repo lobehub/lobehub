@@ -28,6 +28,13 @@ export interface ServerSubAgentRunParams {
 
 export interface ServerSubAgentRunResult {
   /**
+   * Reason the child failed to start, when `started` is false. Surfaced to the
+   * parent agent's tool result so a `callAgent` dispatch failure is diagnosable
+   * (e.g. "Agent not found", config/scheduling error) instead of an opaque
+   * "failed to start" — see issue #16257.
+   */
+  error?: string;
+  /**
    * Whether the child op was actually forked. `false` means the child failed to
    * start (e.g. the operation row could not be created/scheduled): no completion
    * bridge will ever fire, so the caller must surface an inline tool error

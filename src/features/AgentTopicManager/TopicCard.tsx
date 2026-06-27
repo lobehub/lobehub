@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -8,7 +9,6 @@ import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
@@ -95,7 +95,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         toggleSelected(topic.id);
         return;
       }
-      navigate(SESSION_CHAT_TOPIC_URL(agentId, topic.id));
+      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
     },
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );

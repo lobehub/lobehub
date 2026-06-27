@@ -9,6 +9,7 @@ import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import { VerifyStatusService } from './statusService';
 
@@ -106,7 +107,6 @@ export const createRepairRunner = (params: {
     // off history instead of injecting a user turn; `instruction` is passed only
     // for the operation title / logs. `verifyMessageId` parents the new turn under
     // the verify card it responds to.
-    const { AiAgentService } = await import('@/server/services/aiAgent');
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       agentId,
       appContext: { topicId },

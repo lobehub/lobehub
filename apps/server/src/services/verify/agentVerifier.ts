@@ -8,8 +8,10 @@ import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import type { VerifierAgentRunner } from './executor';
+import { describeEvidence, type JudgeEvidence } from './prompts';
 
 const log = debug('lobe-server:verify-agent-verifier');
 
@@ -17,21 +19,30 @@ const log = debug('lobe-server:verify-agent-verifier');
  * Build the instruction for a verifier sub-agent investigating one check. The
  * sub-agent reports its verdict by calling the `submitVerifyResult` tool with the
  * `checkItemId` injected here — it does not write to the DB directly.
+ *
+ * `evidence` is what the builder self-captured during the run: the
+ * verifier judges against the run goal AND this evidence — it's the verifier's
+ * primary Data, not a competing verdict.
  */
 export const buildVerifierPrompt = (params: {
   checkItem: VerifyCheckItem;
   deliverable: string;
+  evidence?: JudgeEvidence[];
   goal: string;
   instruction?: string;
 }): string => {
-  const { checkItem, deliverable, goal, instruction } = params;
+  const { checkItem, deliverable, evidence, goal, instruction } = params;
+  const capturedEvidence = describeEvidence(evidence);
   return [
     `## Check to verify\ncheckItemId: ${checkItem.id}\nTitle: ${checkItem.title}`,
     checkItem.description ? `Summary: ${checkItem.description}` : '',
     instruction ? `\n## Judging instruction\n${instruction}` : '',
     `\n## Run goal\n${goal}`,
     deliverable ? `\n## Deliverable / final output\n${deliverable}` : '',
-    `\n## Your task\nInvestigate whether the deliverable satisfies this check, following the judging instruction. Gather concrete evidence. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
+    capturedEvidence
+      ? `\n## Captured evidence (builder self-evidence — primary Data, weight above prose)${capturedEvidence}`
+      : '',
+    `\n## Your task\nInvestigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -69,7 +80,7 @@ export const createVerifierAgentRunner = (params: {
     params;
   if (!topicId) return undefined;
 
-  return async ({ checkItem, goal, operationId }) => {
+  return async ({ checkItem, evidence, goal, operationId }) => {
     // The detailed instruction is the criterion's rule body, stored in a document.
     const instruction = checkItem.documentId
       ? ((await new DocumentModel(db, userId, workspaceId).findById(checkItem.documentId))
@@ -121,19 +132,27 @@ export const createVerifierAgentRunner = (params: {
       return null;
     }
 
-    // Dynamic import breaks the static cycle: aiAgent → agentRuntime completion
-    // → verify lifecycle → this runner → aiAgent.
-    const { AiAgentService } = await import('@/server/services/aiAgent');
+    // Attach the builder-captured file artifacts (screenshots / videos / large
+    // text) so a multimodal verifier can SEE them — the prompt only references
+    // them by presence + caption, which is blind for visual checks.
+    const evidenceFileIds = (evidence ?? [])
+      .map((e) => e.fileId)
+      .filter((id): id is string => Boolean(id));
+
+    // The aiAgent → agentRuntime completion → verify lifecycle → this runner →
+    // aiAgent import cycle is safe statically: every use here is call-time (inside
+    // this runner), so the module is fully initialized before it runs.
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       // Inject the verify writeback tool for pinned agents (no-op list otherwise).
       ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
       appContext: { threadId: thread.id, topicId },
       autoStart: true,
+      ...(evidenceFileIds.length ? { fileIds: evidenceFileIds } : {}),
       // Only the builtin fallback inherits the parent run's model/provider; a
       // pinned agent keeps its own (critical for heterogeneous runtimes).
       ...(inheritModel && model ? { model } : {}),
       parentOperationId: operationId,
-      prompt: buildVerifierPrompt({ checkItem, deliverable, goal, instruction }),
+      prompt: buildVerifierPrompt({ checkItem, deliverable, evidence, goal, instruction }),
       ...(inheritModel && provider ? { provider } : {}),
       ...agentRef,
       userInterventionConfig: { approvalMode: 'headless' },

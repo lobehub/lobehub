@@ -378,6 +378,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
       name: LocalSystemApiName.globFiles,
       parameters: {
         properties: {
+          limit: {
+            description:
+              'Maximum number of matches to collect during execution. When omitted, the runtime applies a conservative default limit.',
+            type: 'number',
+          },
           pattern: {
             description:
               'The glob pattern to match files against (e.g. "**/*.js", "src/**/*.ts"). Relative patterns are resolved against the scope.',

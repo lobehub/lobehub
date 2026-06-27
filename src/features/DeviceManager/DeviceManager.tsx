@@ -2,30 +2,34 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope } from '@lobechat/types';
-import { Button, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Button, Checkbox, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRightIcon,
   FolderCogIcon,
   type LucideIcon,
   MonitorDownIcon,
-  MonitorUpIcon,
   ServerIcon,
   ShieldCheckIcon,
   TerminalIcon,
+  Trash2Icon,
+  ZapIcon,
 } from 'lucide-react';
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import { DEVICE_LIST_SWR_KEY } from './const';
+import { DEVICE_LIST_SWR_KEY, refreshDeviceList } from './const';
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
+import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -39,20 +43,37 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorPrimaryBg};
   `,
-  detailPlaceholder: css`
-    min-height: 320px;
-    padding: 32px;
-  `,
-  detailCol: css`
-    overflow: hidden;
-    align-self: stretch;
-
-    min-width: 0;
-    min-height: 360px;
+  capabilityCard: css`
+    padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
+
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: ${cssVar.colorPrimaryBorder};
+    }
+  `,
+  capabilityIcon: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 36px;
+    height: 36px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
+  detailCol: css`
+    align-self: stretch;
+    min-width: 0;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   emptyCard: css`
     overflow: hidden;
@@ -68,48 +89,6 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
 
     background: ${cssVar.colorFillQuaternary};
-  `,
-  managerGrid: css`
-    display: grid;
-    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-
-    @media (width <= 920px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  overviewCard: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  overviewGrid: css`
-    display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    gap: 16px;
-    align-items: start;
-
-    @media (width <= 860px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  overviewIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
   `,
   heroIcon: css`
     display: flex;
@@ -128,12 +107,22 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
   `,
   listHeader: css`
-    padding-block: 6px 8px;
-    padding-inline: 8px;
+    padding-block: 8px;
+    padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  listScroll: css`
+    overflow-y: auto;
+
+    /* Cap the list so long fleets (servers / CLI agents) stay scrollable instead
+       of pushing the page — pairs with the detail panel sitting beside it. */
+    max-height: 480px;
+  `,
+  selectAll: css`
+    cursor: pointer;
+    user-select: none;
   `,
   option: css`
     cursor: pointer;
@@ -150,33 +139,6 @@ const styles = createStaticStyles(({ css }) => ({
     grid-template-columns: 1fr 1fr;
     gap: 1px;
     background: ${cssVar.colorBorderSecondary};
-  `,
-  placeholderIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 52px;
-    height: 52px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  placeholderItemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
   `,
   optionIcon: css`
     display: flex;
@@ -195,15 +157,6 @@ const styles = createStaticStyles(({ css }) => ({
   subtitle: css`
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
-  `,
-  securityList: css`
-    margin: 0;
-    padding-inline-start: 18px;
-    color: ${cssVar.colorTextSecondary};
-
-    li + li {
-      margin-block-start: 6px;
-    }
   `,
 }));
 
@@ -233,123 +186,49 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
   </Flexbox>
 ));
 
-interface DeviceOverviewProps {
-  scope: DeviceScope;
-}
-
-const DeviceOverview = memo<DeviceOverviewProps>(({ scope }) => {
+const Capabilities = memo(() => {
   const { t } = useTranslation('setting');
-  const isWorkspace = scope === 'workspace';
-  const securityItems = isWorkspace
-    ? [
-        t('devices.security.workspace.members'),
-        t('devices.security.workspace.onlineOnly'),
-        t('devices.security.workspace.scope'),
-      ]
-    : [
-        t('devices.security.personal.metadata'),
-        t('devices.security.personal.onlineOnly'),
-        t('devices.security.personal.stop'),
-      ];
-
+  const items: { desc: string; icon: LucideIcon; title: string }[] = [
+    {
+      desc: t('devices.capabilities.files.desc'),
+      icon: FolderCogIcon,
+      title: t('devices.capabilities.files.title'),
+    },
+    {
+      desc: t('devices.capabilities.commands.desc'),
+      icon: TerminalIcon,
+      title: t('devices.capabilities.commands.title'),
+    },
+    {
+      desc: t('devices.capabilities.tools.desc'),
+      icon: ZapIcon,
+      title: t('devices.capabilities.tools.title'),
+    },
+  ];
   return (
-    <div className={styles.overviewCard}>
-      <div className={styles.overviewGrid}>
-        <Flexbox horizontal align={'flex-start'} gap={12}>
-          <span className={styles.overviewIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={18} />
-          </span>
-          <Flexbox gap={4}>
-            <Text style={{ fontSize: 14, fontWeight: 600 }}>
-              {t(
-                isWorkspace
-                  ? 'devices.overview.workspace.title'
-                  : 'devices.overview.personal.title',
-              )}
-            </Text>
-            <Text className={styles.subtitle} style={{ lineHeight: 1.6 }}>
-              {t(
-                isWorkspace ? 'devices.overview.workspace.desc' : 'devices.overview.personal.desc',
-              )}
-            </Text>
-          </Flexbox>
-        </Flexbox>
-
-        <Flexbox horizontal align={'flex-start'} gap={12}>
-          <span className={styles.overviewIcon}>
-            <Icon icon={ShieldCheckIcon} size={18} />
-          </span>
-          <Flexbox gap={6}>
-            <Text style={{ fontSize: 14, fontWeight: 600 }}>{t('devices.security.title')}</Text>
-            <ul className={styles.securityList}>
-              {securityItems.map((item) => (
-                <li key={item}>
-                  <Text style={{ fontSize: 12, lineHeight: 1.6 }} type={'secondary'}>
-                    {item}
-                  </Text>
-                </li>
-              ))}
-            </ul>
-          </Flexbox>
-        </Flexbox>
-      </div>
-    </div>
-  );
-});
-
-DeviceOverview.displayName = 'DeviceManager.DeviceOverview';
-
-interface DetailPlaceholderProps {
-  scope: DeviceScope;
-}
-
-const DetailPlaceholder = memo<DetailPlaceholderProps>(({ scope }) => {
-  const { t } = useTranslation('setting');
-  const isWorkspace = scope === 'workspace';
-  const items: { icon: LucideIcon; text: string }[] = isWorkspace
-    ? [
-        { icon: TerminalIcon, text: t('devices.placeholder.workspace.connection') },
-        { icon: FolderCogIcon, text: t('devices.placeholder.workspace.cwd') },
-        { icon: ShieldCheckIcon, text: t('devices.placeholder.workspace.security') },
-      ]
-    : [
-        { icon: TerminalIcon, text: t('devices.placeholder.connection') },
-        { icon: FolderCogIcon, text: t('devices.placeholder.cwd') },
-        { icon: ShieldCheckIcon, text: t('devices.placeholder.security') },
-      ];
-
-  return (
-    <Flexbox align={'center'} className={styles.detailPlaceholder} gap={18} justify={'center'}>
-      <span className={styles.placeholderIcon}>
-        <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={26} />
-      </span>
-      <Flexbox align={'center'} gap={6}>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>{t('devices.placeholder.title')}</Text>
-        <Text
-          align={'center'}
-          className={styles.subtitle}
-          style={{ maxWidth: 360, lineHeight: 1.6 }}
-        >
-          {t('devices.placeholder.desc')}
-        </Text>
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Icon icon={ShieldCheckIcon} size={16} style={{ color: cssVar.colorPrimary }} />
+        <Text style={{ fontSize: 14, fontWeight: 500 }}>{t('devices.capabilities.title')}</Text>
       </Flexbox>
-      <Flexbox gap={8} style={{ maxWidth: 360, width: '100%' }}>
-        {items.map((item) => (
-          <Flexbox horizontal align={'center'} gap={10} key={item.text}>
-            <span className={styles.placeholderItemIcon}>
-              <Icon icon={item.icon} size={14} />
+      <Flexbox horizontal gap={16}>
+        {items.map((cap) => (
+          <Flexbox className={styles.capabilityCard} flex={1} gap={12} key={cap.title}>
+            <span className={styles.capabilityIcon}>
+              <Icon icon={cap.icon} size={18} />
             </span>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {item.text}
-            </Text>
+            <Flexbox gap={2}>
+              <Text style={{ fontSize: 14, fontWeight: 500 }}>{cap.title}</Text>
+              <Text className={styles.subtitle} style={{ fontSize: 12 }}>
+                {cap.desc}
+              </Text>
+            </Flexbox>
           </Flexbox>
         ))}
       </Flexbox>
     </Flexbox>
   );
 });
-
-DetailPlaceholder.displayName = 'DeviceManager.DetailPlaceholder';
 
 interface DeviceManagerProps {
   /** Open the enrollment wizard (the modal is owned by the route, by the header button). */
@@ -381,7 +260,7 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   );
   // `listDevices` is workspace-aware and returns both pools — keep each surface
   // to its own scope.
-  const devices = useMemo(() => (data ?? []).filter((d) => d.scope === scope), [data, scope]);
+  const devices = (data ?? []).filter((d) => d.scope === scope);
 
   // The machine the user is on right now (desktop only) — personal pool only;
   // a workspace device is never "this machine" in the personal sense.
@@ -391,69 +270,56 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const currentDeviceId = !isWorkspace && isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
   const [selectedId, setSelectedId] = useState<string>();
-  const hasAutoSelectedRef = useRef(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
 
-  useLayoutEffect(() => {
-    if (devices.length === 0) {
-      if (selectedId) setSelectedId(undefined);
-      hasAutoSelectedRef.current = false;
-      return;
-    }
+  // Bulk remove routes by the managed scope (the list is single-scope), mirroring
+  // the per-row mutation choice in `DeviceItem`.
+  const removePersonal = lambdaQuery.device.removeDevice.useMutation();
+  const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation();
+  const removeMutation = isWorkspace ? removeWorkspace : removePersonal;
 
-    if (selectedId && !devices.some((device) => device.deviceId === selectedId)) {
-      setSelectedId(undefined);
-      hasAutoSelectedRef.current = false;
-      return;
-    }
-
-    if (selectedId || hasAutoSelectedRef.current) return;
-
-    const currentDevice = currentDeviceId
-      ? devices.find((device) => device.deviceId === currentDeviceId)
-      : undefined;
-    const autoSelectedDevice = currentDevice ?? (devices.length === 1 ? devices[0] : undefined);
-
-    if (autoSelectedDevice) {
-      setSelectedId(autoSelectedDevice.deviceId);
-      hasAutoSelectedRef.current = true;
-    }
-  }, [currentDeviceId, devices, selectedId]);
+  // Hook must run before any early return so render order stays stable.
+  const canEditDevice = useCanEditDevice();
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
 
-  // ─── Empty state: onboarding hero + connect options ───
+  // ─── Empty state: onboarding hero + connect options + capabilities ───
   if (devices.length === 0) {
     return (
-      <Flexbox className={styles.emptyCard}>
-        <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
-          <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
-          </span>
-          <Text style={{ fontSize: 18, fontWeight: 600 }}>
-            {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
-          </Text>
-          <Text className={styles.subtitle} style={{ maxWidth: 440 }}>
-            {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
-          </Text>
+      <Flexbox gap={32}>
+        <Flexbox className={styles.emptyCard}>
+          <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
+            <span className={styles.heroIcon}>
+              <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+            </span>
+            <Text style={{ fontSize: 18, fontWeight: 600 }}>
+              {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
+            </Text>
+            <Text className={styles.subtitle} style={{ maxWidth: 440 }}>
+              {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
+            </Text>
+          </Flexbox>
+
+          <div className={isWorkspace ? undefined : styles.optionGrid}>
+            {!isWorkspace && (
+              <ConnectOption
+                badge={t('devices.empty.methodDesktop.badge')}
+                desc={t('devices.empty.methodDesktop.desc')}
+                icon={MonitorDownIcon}
+                title={t('devices.empty.methodDesktop.title')}
+                onClick={() => onConnect('desktop')}
+              />
+            )}
+            <ConnectOption
+              desc={t('devices.empty.methodCli.desc')}
+              icon={TerminalIcon}
+              title={t('devices.empty.methodCli.title')}
+              onClick={() => onConnect('cli')}
+            />
+          </div>
         </Flexbox>
 
-        <div className={isWorkspace ? undefined : styles.optionGrid}>
-          {!isWorkspace && (
-            <ConnectOption
-              badge={t('devices.empty.methodDesktop.badge')}
-              desc={t('devices.empty.methodDesktop.desc')}
-              icon={MonitorDownIcon}
-              title={t('devices.empty.methodDesktop.title')}
-              onClick={() => onConnect('desktop')}
-            />
-          )}
-          <ConnectOption
-            desc={t('devices.empty.methodCli.desc')}
-            icon={TerminalIcon}
-            title={t('devices.empty.methodCli.title')}
-            onClick={() => onConnect('cli')}
-          />
-        </div>
+        <Capabilities />
       </Flexbox>
     );
   }
@@ -461,57 +327,119 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
 
-  return (
-    <Flexbox gap={20}>
-      <DeviceOverview scope={scope} />
+  // Bulk-selection set excludes rows the user can't edit so the toolbar only
+  // ever offers actions the server would actually accept, mirroring the
+  // self-or-owner gate. `canEditDevice` is a stable callback so deriving from
+  // it on render is fine.
+  const editableDevices = devices.filter((d) => canEditDevice(d));
 
-      <div className={styles.managerGrid}>
-        <Flexbox className={styles.listCol} padding={4}>
+  // Only count ids that still exist in the current scope's editable list, so a
+  // stale tick (e.g. a device removed elsewhere) never inflates the toolbar
+  // count.
+  const checkedCount = editableDevices.filter((d) => checkedIds.has(d.deviceId)).length;
+  const allChecked = editableDevices.length > 0 && checkedCount === editableDevices.length;
+  const someChecked = checkedCount > 0 && !allChecked;
+
+  const toggleChecked = (deviceId: string, next: boolean) =>
+    setCheckedIds((prev) => {
+      const draft = new Set(prev);
+      if (next) draft.add(deviceId);
+      else draft.delete(deviceId);
+      return draft;
+    });
+
+  const toggleAll = () =>
+    setCheckedIds(allChecked ? new Set() : new Set(editableDevices.map((d) => d.deviceId)));
+
+  const handleBulkRemove = () => {
+    const ids = editableDevices.filter((d) => checkedIds.has(d.deviceId)).map((d) => d.deviceId);
+    if (ids.length === 0) return;
+    confirmModal({
+      content: t('devices.remove.confirmManyDesc', { count: ids.length }),
+      okButtonProps: { danger: true },
+      okText: t('devices.actions.removeSelected', { count: ids.length }),
+      onOk: async () => {
+        await Promise.all(ids.map((deviceId) => removeMutation.mutateAsync({ deviceId })));
+        await refreshDeviceList();
+        setCheckedIds(new Set());
+        if (selectedId && ids.includes(selectedId)) setSelectedId(undefined);
+      },
+      title: t('devices.remove.confirmMany', { count: ids.length }),
+    });
+  };
+
+  return (
+    <Flexbox horizontal align={'flex-start'} gap={16}>
+      <Flexbox className={styles.listCol} flex={1}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.listHeader}
+          justify={'space-between'}
+        >
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.listHeader}
-            distribution={'space-between'}
-            gap={12}
+            className={editableDevices.length > 0 ? styles.selectAll : undefined}
+            gap={8}
+            onClick={editableDevices.length > 0 ? toggleAll : undefined}
           >
-            <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
-              {t('tab.devices')} · {devices.length}
+            {editableDevices.length > 0 && (
+              <Checkbox checked={allChecked} indeterminate={someChecked} />
+            )}
+            <Text style={{ fontSize: 13 }} type={'secondary'}>
+              {checkedCount > 0
+                ? t('devices.selection.selected', { count: checkedCount })
+                : t('devices.selection.total', { count: devices.length })}
             </Text>
-            <Button
-              icon={<Icon icon={MonitorUpIcon} />}
-              size={'small'}
-              type={'text'}
-              onClick={() => onConnect()}
-            >
-              {t('devices.actions.connectAnother')}
-            </Button>
           </Flexbox>
-          {devices.map((device) => (
-            <DeviceItem
-              device={device}
-              isCurrent={isCurrent(device.deviceId)}
-              key={device.deviceId}
-              selected={device.deviceId === selectedId}
-              onSelect={() =>
-                setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
-              }
-            />
-          ))}
-        </Flexbox>
-        <Flexbox className={styles.detailCol}>
-          {selected ? (
-            /* keyed on deviceId so the form state resets when the selection changes */
-            <DeviceDetailPanel
-              device={selected}
-              isCurrent={isCurrent(selected.deviceId)}
-              key={selected.deviceId}
-              onClose={() => setSelectedId(undefined)}
-            />
-          ) : (
-            <DetailPlaceholder scope={scope} />
+          {checkedCount > 0 && (
+            <Button
+              danger
+              icon={<Icon icon={Trash2Icon} />}
+              loading={removeMutation.isPending}
+              size={'small'}
+              onClick={handleBulkRemove}
+            >
+              {t('devices.actions.removeSelected', { count: checkedCount })}
+            </Button>
           )}
         </Flexbox>
-      </div>
+        <Flexbox className={styles.listScroll} padding={4}>
+          {devices.map((device) => {
+            const editable = canEditDevice(device);
+            return (
+              <DeviceItem
+                checked={checkedIds.has(device.deviceId)}
+                device={device}
+                isCurrent={isCurrent(device.deviceId)}
+                key={device.deviceId}
+                selected={device.deviceId === selectedId}
+                // Withholding the handler also withholds the checkbox; non-
+                // editable rows render without a tick so bulk selection only
+                // ever includes devices the server would accept.
+                onCheckChange={
+                  editable ? (next) => toggleChecked(device.deviceId, next) : undefined
+                }
+                onSelect={() =>
+                  setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
+                }
+              />
+            );
+          })}
+        </Flexbox>
+      </Flexbox>
+      {selected && (
+        <Flexbox className={styles.detailCol} flex={1}>
+          {/* keyed on deviceId so the form state resets when the selection changes */}
+          <DeviceDetailPanel
+            device={selected}
+            isCurrent={isCurrent(selected.deviceId)}
+            key={selected.deviceId}
+            onClose={() => setSelectedId(undefined)}
+          />
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

@@ -125,7 +125,11 @@ type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParams
 ) &
   OpenAIExtraParams;
-export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> &
+// Exclude openai's own `provider` (added in openai SDK 6.45.0 as `provider?: Provider`
+// for its third-party-provider feature) — otherwise intersecting it with our
+// `provider: string` collapses to `Provider & string`, breaking every call site
+// that passes a plain provider id string.
+export type CreateImageOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
   ModelIdMappingOptions & {
     apiKey: string;
     provider: string;
@@ -159,7 +163,8 @@ const getGenerateObjectResponsesReasoningParams = ({
     : {};
 };
 
-export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> &
+// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
+export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
   ModelIdMappingOptions & {
     apiKey: string;
     provider: string;
@@ -532,7 +537,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         // Normalize tool parameter schemas before they fan out to the
         // Chat-Completions / Responses paths. User MCP tools may emit boolean
         // sub-schemas (`items: true`) or array properties missing `type`, which
-        // upstream validators (OpenAI/DeepSeek, Gemini) reject. See LOBE-10066.
+        // upstream validators (OpenAI/DeepSeek, Gemini) reject.
         if (payload.tools) payload.tools = normalizeToolsParameters(payload.tools as any) as any;
 
         let processedPayload: any = payload;

@@ -109,6 +109,9 @@ describe('HeteroTraceRecorder', () => {
 
     expect(totals).toMatchObject({
       llmCalls: 1,
+      // resolved from stream_start, so heteroFinish can backfill the op row
+      model: 'sonnet',
+      provider: 'anthropic',
       stepCount: 2,
       toolCalls: 1,
       totalInputTokens: 12,

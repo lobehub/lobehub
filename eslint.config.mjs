@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { eslint } from '@lobehub/lint';
+import { restrictedImports } from '@lobehub/ui/eslint';
 import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
@@ -52,6 +53,7 @@ export default eslint(
       },
     },
   },
+  restrictedImports,
   // Global rule overrides
   {
     rules: {

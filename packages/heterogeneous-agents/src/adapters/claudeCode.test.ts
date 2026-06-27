@@ -152,6 +152,54 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[1].data).toMatchObject({ code: 'overloaded', message: rawError });
     });
 
+    it('replays a real session that streamed a turn then overloaded → overloaded + clears echo', () => {
+      // Faithful transport-layer replay of a captured CC session shape: init →
+      // a streamed assistant turn → the exact upstream throttle the user hit
+      // (api_error_status 429 + the "not your usage limit" wording, alongside a
+      // generic rate_limit_event with no reset window). This is how the
+      // overloaded guide is driven without waiting on a real upstream outage.
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
+
+      adapter.adapt({
+        model: 'claude-opus-4-8',
+        session_id: 'sess_replay',
+        subtype: 'init',
+        type: 'system',
+      });
+      // A turn that already streamed content before the throttle landed.
+      adapter.adapt({
+        message: {
+          content: [{ text: 'Let me read loadEvidence and the runner', type: 'text' }],
+          id: 'msg_replay',
+          role: 'assistant',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      const errorEvent = events.find((e) => e.type === 'error');
+      expect(errorEvent?.data).toMatchObject({
+        agentType: 'claude-code',
+        // The UI keys auto-retry on this exact code; clearEchoedContent wipes
+        // the half-streamed turn so the guide stands in for the whole bubble.
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+      });
+    });
+
     it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = 'API Error: 429 · Rate limited';

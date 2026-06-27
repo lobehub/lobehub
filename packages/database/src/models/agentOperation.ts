@@ -59,7 +59,13 @@ export interface RecordOperationCompletionParams {
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
   llmCalls?: number | null;
+  /** Backfill the executed model when it's only known at completion (e.g. a
+   * heterogeneous run learns its real model from the CLI mid-stream). Omit to
+   * keep the value seeded at `recordStart`. */
+  model?: string | null;
   processingTimeMs?: number | null;
+  /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
+  provider?: string | null;
   status:
     | 'running'
     | 'waiting_for_human'
@@ -148,6 +154,8 @@ export class AgentOperationModel {
       updates.totalOutputTokens = params.totalOutputTokens;
     if (params.llmCalls !== undefined) updates.llmCalls = params.llmCalls;
     if (params.toolCalls !== undefined) updates.toolCalls = params.toolCalls;
+    if (params.model !== undefined) updates.model = params.model;
+    if (params.provider !== undefined) updates.provider = params.provider;
     if (params.cost !== undefined) updates.cost = params.cost;
     if (params.usage !== undefined) updates.usage = params.usage;
     if (params.error !== undefined) updates.error = params.error;

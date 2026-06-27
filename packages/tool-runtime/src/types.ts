@@ -71,6 +71,7 @@ export interface RenameFileParams {
 
 export interface GlobFilesParams {
   directory?: string;
+  limit?: number;
   pattern: string;
 }
 

@@ -11,6 +11,9 @@ export default {
   'features.fleet.desc':
     'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
   'features.fleet.title': 'Fleet View',
+  'features.foldFinishedTurn.desc':
+    'Collapse the process (reasoning and tool calls) of finished, non-latest agent turns under a "Processed" header. The final answer stays visible; click to expand the process.',
+  'features.foldFinishedTurn.title': 'Fold Finished Turns',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',

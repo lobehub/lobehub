@@ -85,4 +85,39 @@ describe('UnixFileSearch glob fallback root', () => {
     expect(options.ignore).toContain('**/node_modules/**');
     expect(options.ignore).toContain('**/.git/**');
   });
+
+  it('passes the execution limit through to fd glob', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('fd'),
+    };
+    execaMock.mockResolvedValue({
+      exitCode: 0,
+      stdout: '/repo/packages/a.ts\n/repo/packages/b.ts\n',
+    });
+
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+    await impl.glob({ limit: 7, pattern: '**/*.ts', scope: '/repo/packages' });
+
+    expect(execaMock).toHaveBeenCalledWith(
+      'fd',
+      expect.arrayContaining(['--max-results', '7']),
+      expect.anything(),
+    );
+  });
+
+  it('does not force a glob execution limit when the caller omits it', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('fd'),
+    };
+    execaMock.mockResolvedValue({
+      exitCode: 0,
+      stdout: '/repo/packages/a.ts\n',
+    });
+
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+    await impl.glob({ pattern: '**/*.ts', scope: '/repo/packages' });
+
+    const [, args] = execaMock.mock.calls[0] as [string, string[]];
+    expect(args).not.toContain('--max-results');
+  });
 });

@@ -2,10 +2,20 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  Flexbox,
+  Icon,
+  Input,
+  SortableList,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
+import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +28,7 @@ import { nextWorkingDirs } from '@/store/device';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
+import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -63,12 +74,14 @@ interface DeviceDetailPanelProps {
 
 const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
   const { t } = useTranslation(['setting', 'device']);
+  const canEdit = useCanEditDevice()(device);
 
   const [name, setName] = useState(device.friendlyName ?? '');
   const [cwd, setCwd] = useState(device.defaultCwd ?? '');
 
-  // Workspace devices commit via the owner-gated, workspace-scoped mutation;
-  // personal devices stay userId-scoped. Route by the device's own scope.
+  // Workspace devices commit via the self-or-owner-gated, workspace-scoped
+  // mutation; personal devices stay userId-scoped. Route by the device's own
+  // scope.
   const onUpdateSuccess = () => refreshDeviceList();
   const updatePersonal = lambdaQuery.device.updateDevice.useMutation({
     onSuccess: onUpdateSuccess,
@@ -184,6 +197,34 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>
 
+      {/* Visible hint when the caller can't mutate the row — explains why the
+          fields below are read-only without the user needing to try and hit a
+          403. Only renders for workspace devices that aren't the caller's own
+          enrollment (personal scope is always editable). */}
+      {!canEdit && (
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon icon={LockIcon} size={12} style={{ color: cssVar.colorTextTertiary }} />
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('workspaceSetting.devices.readonlyHint')}
+          </Text>
+        </Flexbox>
+      )}
+
+      {/* ─── Enrolled by (workspace only) ─── */}
+      {device.scope === 'workspace' && device.enroller && (
+        <Flexbox gap={6}>
+          <span className={styles.label}>{t('workspaceSetting.devices.enrolledByLabel')}</span>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
+            <Text style={{ fontSize: 13 }}>
+              {device.enroller.fullName ||
+                device.enroller.username ||
+                t('workspaceSetting.devices.unknownEnroller')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+      )}
+
       {/* ─── Connections ─── */}
       <Flexbox gap={8}>
         <span className={styles.label}>{t('devices.detail.connections')}</span>
@@ -217,50 +258,72 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       {/* ─── Name ─── */}
       <Flexbox gap={6}>
         <span className={styles.label}>{t('devices.edit.friendlyName')}</span>
-        <Input
-          placeholder={t('devices.edit.friendlyNamePlaceholder')}
-          value={name}
-          onBlur={commitName}
-          onChange={(e) => setName(e.target.value)}
-          onPressEnter={commitName}
-        />
+        {canEdit ? (
+          <Input
+            placeholder={t('devices.edit.friendlyNamePlaceholder')}
+            value={name}
+            onBlur={commitName}
+            onChange={(e) => setName(e.target.value)}
+            onPressEnter={commitName}
+          />
+        ) : device.friendlyName ? (
+          // Read-only: render the canonical value (not the local draft), so a
+          // value the caller can't actually commit never bleeds through.
+          <Text style={{ fontSize: 13 }}>{device.friendlyName}</Text>
+        ) : (
+          <Text style={{ fontSize: 13 }} type={'secondary'}>
+            —
+          </Text>
+        )}
       </Flexbox>
 
       {/* ─── Default working directory ─── */}
       <Flexbox gap={6}>
         <span className={styles.label}>{t('devices.edit.defaultCwd')}</span>
-        <Flexbox horizontal gap={8}>
-          <Input
-            placeholder={t('devices.edit.defaultCwdPlaceholder')}
-            value={cwd}
-            onBlur={handleCwdBlur}
-            onChange={(e) => setCwd(e.target.value)}
-            onPressEnter={handleCwdBlur}
-          />
-          {canBrowse && (
-            <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
-              {t('devices.edit.browse')}
-            </Button>
-          )}
-        </Flexbox>
+        {canEdit ? (
+          <Flexbox horizontal gap={8}>
+            <Input
+              placeholder={t('devices.edit.defaultCwdPlaceholder')}
+              value={cwd}
+              onBlur={handleCwdBlur}
+              onChange={(e) => setCwd(e.target.value)}
+              onPressEnter={handleCwdBlur}
+            />
+            {canBrowse && (
+              <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
+                {t('devices.edit.browse')}
+              </Button>
+            )}
+          </Flexbox>
+        ) : device.defaultCwd ? (
+          // Code font only when there's an actual path to read; empty falls back
+          // to the same dash style as Name so the two fields look consistent.
+          <Text className={styles.path}>{device.defaultCwd}</Text>
+        ) : (
+          <Text style={{ fontSize: 13 }} type={'secondary'}>
+            —
+          </Text>
+        )}
       </Flexbox>
 
       {/* ─── Recent directories ─── */}
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} distribution={'space-between'}>
           <span className={styles.label}>{t('devices.detail.recentDirs')}</span>
-          <ActionIcon
-            icon={FolderPlusIcon}
-            size={'small'}
-            title={t('devices.detail.addDir')}
-            onClick={handleAddRecent}
-          />
+          {canEdit && (
+            <ActionIcon
+              icon={FolderPlusIcon}
+              size={'small'}
+              title={t('devices.detail.addDir')}
+              onClick={handleAddRecent}
+            />
+          )}
         </Flexbox>
         {device.workingDirs.length === 0 ? (
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('devices.detail.noRecent')}
           </Text>
-        ) : (
+        ) : canEdit ? (
           <SortableList
             items={device.workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
             renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
@@ -279,6 +342,17 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             )}
             onChange={handleReorderRecent}
           />
+        ) : (
+          // Read-only listing: same row layout minus the drag handle and the
+          // remove button. Keeps the path + repo type icon visible for context.
+          device.workingDirs.map((d) => (
+            <Flexbox horizontal align={'center'} className={styles.recentItem} gap={8} key={d.path}>
+              <DirIcon repoType={d.repoType} />
+              <Text className={styles.path} title={d.path}>
+                {d.path}
+              </Text>
+            </Flexbox>
+          ))
         )}
       </Flexbox>
     </Flexbox>

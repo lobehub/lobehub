@@ -1,5 +1,5 @@
 name: Claude Issue Dedupe
-description: Automatically dedupe GitHub issues using Claude Code
+# Automatically dedupe GitHub issues using Claude Code
 on:
   issues:
     types: [opened]

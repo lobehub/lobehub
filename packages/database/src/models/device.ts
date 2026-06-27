@@ -171,8 +171,9 @@ export class DeviceModel {
 
   /**
    * Update a WORKSPACE device's user-editable fields, scoped by `workspace_id`
-   * (not the enrolling admin's userId), so any workspace owner can manage it.
-   * Caller must be a workspace owner — enforced at the router (`wsOwnerProcedure`).
+   * (not the enrolling user's `userId`), so any authorized caller can manage
+   * any device in the pool. Permission (workspace owner, or the enroller acting
+   * on their own device) is enforced at the router via `canEditWorkspaceDevice`.
    */
   updateWorkspaceDevice = async (deviceId: string, value: UpdateDeviceParams) => {
     if (!this.workspaceId) return;
@@ -182,7 +183,11 @@ export class DeviceModel {
       .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)));
   };
 
-  /** Remove a WORKSPACE device, scoped by `workspace_id`. Owner-gated at the router. */
+  /**
+   * Remove a WORKSPACE device, scoped by `workspace_id`. Permission
+   * (workspace owner, or the enroller acting on their own device) is enforced
+   * at the router via `canEditWorkspaceDevice`.
+   */
   deleteWorkspaceDevice = async (deviceId: string) => {
     if (!this.workspaceId) return;
     return this.db

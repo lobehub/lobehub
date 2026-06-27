@@ -96,10 +96,35 @@ export type DeviceScope = 'personal' | 'workspace';
  * The server query is annotated to return `DeviceListItem[]`, so this type is the
  * contract rather than something inferred from the router.
  */
+/**
+ * Display-ready info for the user who owns / enrolled a device row, used by
+ * the settings page to show "enrolled by @xxx" and to gate write actions to
+ * "self or workspace owner". The caller can always derive this from `userId`
+ * via a workspace members lookup, but the device list inlines it so the
+ * picker / settings page can render without a second round-trip.
+ */
+export interface DeviceEnroller {
+  avatar: string | null;
+  fullName: string | null;
+  userId: string;
+  username: string | null;
+}
+
 export interface DeviceListItem {
   channels: DeviceChannel[];
   defaultCwd: string | null;
   deviceId: string;
+  /**
+   * The user who owns this device row:
+   *   - personal scope → the only owner (always equal to the caller).
+   *   - workspace scope → the first member who enrolled the machine; preserved
+   *     on re-enroll. The UI uses this to gate writes to "self or workspace
+   *     owner" so a member can manage their own enrollment without touching
+   *     other members' devices.
+   *   - `null` for ghost rows (online but not yet persisted) — no row to edit
+   *     yet, so any UI gate treats it as not-editable.
+   */
+  enroller: DeviceEnroller | null;
   friendlyName: string | null;
   hostname: string | null;
   identitySource: string | null;

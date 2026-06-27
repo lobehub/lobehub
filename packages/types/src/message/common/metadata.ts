@@ -184,6 +184,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  orchestrationRole: z.enum(['supervisor', 'member']).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
   // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
@@ -304,11 +305,20 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
-
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
+
+  /**
+   * Orchestration role of the message author within a group conversation.
+   * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated
+   * member agent. Persisted as a snapshot at write time (not derived at render)
+   * so historical transcripts stay stable across later membership/role changes,
+   * and so the standard message `role` stays `'assistant'` (training-friendly).
+   * Supersedes the boolean {@link isSupervisor}, which is kept for back-compat.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
   /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
@@ -409,7 +419,7 @@ export interface MessageMetadata {
 /**
  * Pointer carried on a `role='taskCallback'` message — the result-bridge card
  * that reports a finished task's handoff back to its creator conversation
- * (LOBE-10625). The handoff summary itself lives in the message `content`; this
+ * The handoff summary itself lives in the message `content`; this
  * pointer drives the card header (identifier + outcome) and the jump link.
  */
 export interface MessageTaskCallback {

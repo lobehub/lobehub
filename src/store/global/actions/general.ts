@@ -1,8 +1,8 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalKeys } from '@/libs/swr/keys';
@@ -69,7 +69,7 @@ export class GlobalGeneralActionImpl {
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/agent/${agentId}/${topicId}`;
-    const browserUrl = SESSION_CHAT_TOPIC_URL(agentId, topicId);
+    const browserUrl = AGENT_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
@@ -100,7 +100,7 @@ export class GlobalGeneralActionImpl {
 
   openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/group/${groupId}/${topicId}`;
-    const browserUrl = `/group/${groupId}?topic=${topicId}`;
+    const browserUrl = GROUP_CHAT_TOPIC_URL(groupId, topicId);
 
     if (isDesktop) {
       try {

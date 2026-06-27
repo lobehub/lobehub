@@ -172,9 +172,9 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
       onCancel={onClose}
     >
       <Flexbox gap={20}>
-        {isWorkspace && (
-          <Text className={styles.subtitle}>{t('workspaceSetting.devices.desc')}</Text>
-        )}
+        <Text className={styles.subtitle}>
+          {isWorkspace ? t('workspaceSetting.devices.desc') : t('devices.connectWizard.subtitle')}
+        </Text>
 
         {isWorkspace ? null : (
           <Tabs

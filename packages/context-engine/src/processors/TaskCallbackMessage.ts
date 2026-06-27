@@ -16,7 +16,7 @@ const log = debug('context-engine:processor:TaskCallbackMessageProcessor');
  *
  * `role='taskCallback'` messages are the result-bridge cards: when a task
  * dispatched from this conversation finishes, the lifecycle injects one carrying
- * the handoff summary (LOBE-10625). `taskCallback` is not a valid model role, so
+ * the handoff summary. `taskCallback` is not a valid model role, so
  * it can't reach the model as-is. We surface it as a `user` turn wrapped in a
  * `<task_result>` tag — so the creator agent reads it as the task reporting back
  * (not as human input) and continues the conversation off it.

@@ -86,6 +86,13 @@ export interface ExecAgentAppContext {
    * recursive sub-agent dispatch.
    */
   isSubAgent?: boolean;
+  /**
+   * Orchestration role of the agent for this group run. `'supervisor'` for the
+   * group's coordinating agent (execGroupAgent), `'member'` for delegated members
+   * (execAgentMember). Stamped onto the assistant message's
+   * `metadata.orchestrationRole` so the role snapshot persists for rendering.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */

@@ -340,14 +340,15 @@ describe('WindowsMenu', () => {
       expect(mockApp.browserManager.retrieveByIdentifier).toHaveBeenCalledWith('devtools');
     });
 
-    it('should use role for developer tools (accelerator handled by Electron)', () => {
+    it('should use explicit handler for developer tools', () => {
       windowsMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const devMenu = template.find((item: any) => item.label === 'Developer');
       const devToolsItem = devMenu.submenu.find((item: any) => item.label === 'Developer Tools');
 
-      expect(devToolsItem.role).toBe('toggleDevTools');
+      expect(typeof devToolsItem.click).toBe('function');
+      expect(devToolsItem.role).toBeUndefined();
     });
   });
 

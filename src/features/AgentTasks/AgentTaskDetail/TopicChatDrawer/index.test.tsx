@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TopicChatDrawer from './index';
@@ -52,43 +52,74 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+const serializeSize = (size: unknown) =>
+  size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
+
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: ({
     disabled,
+    icon,
     onClick,
+    size,
     title,
   }: {
     disabled?: boolean;
+    icon?: { name?: string };
     onClick?: () => void;
+    size?: unknown;
     title?: string;
   }) => (
-    <button disabled={disabled} title={title} onClick={onClick}>
+    <button
+      data-icon={icon?.name}
+      data-size={serializeSize(size)}
+      data-testid="header-action-icon"
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+    >
       {title}
     </button>
   ),
   copyToClipboard: vi.fn(),
   Drawer: ({
     children,
+    closeIconProps,
     extra,
     open,
+    styles,
     title,
   }: {
     children?: ReactNode;
+    closeIconProps?: { size?: unknown };
     extra?: ReactNode;
     open?: boolean;
+    styles?: { title?: CSSProperties };
     title?: ReactNode;
   }) =>
     open ? (
       <div data-testid="topic-drawer">
-        {title}
+        <div data-testid="drawer-title-slot" style={styles?.title}>
+          {title}
+        </div>
         {extra}
+        <button data-size={serializeSize(closeIconProps?.size)} data-testid="drawer-close-icon" />
         {children}
       </div>
     ) : null,
   DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Flexbox: ({
+    children,
+    flex,
+    style,
+  }: {
+    children?: ReactNode;
+    flex?: CSSProperties['flex'];
+    style?: CSSProperties;
+  }) => <div style={{ flex, ...style }}>{children}</div>,
   Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
+    <span style={style}>{children}</span>
+  ),
 }));
 
 vi.mock('antd-style', () => ({
@@ -195,5 +226,32 @@ describe('TopicChatDrawer', () => {
     const { getByTitle } = render(<TopicChatDrawer />);
 
     expect(getByTitle('requires member')).toBeDisabled();
+  });
+
+  it('constrains long drawer titles before the header actions', () => {
+    const { getByTestId, getByText } = render(<TopicChatDrawer />);
+
+    const title = getByText('Topic 1');
+
+    expect(title).toHaveStyle({ flex: '0 1 auto', minWidth: '0' });
+    expect(title.parentElement).toHaveStyle({ maxWidth: '100%', overflow: 'hidden' });
+    expect(getByTestId('drawer-title-slot')).toHaveStyle({
+      boxSizing: 'border-box',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      paddingInlineEnd: '48px',
+    });
+  });
+
+  it('keeps the share button box aligned with the default close button', () => {
+    const { getAllByTestId, getByTestId } = render(<TopicChatDrawer />);
+
+    const icons = getAllByTestId('header-action-icon');
+    const moreIcon = icons.find((icon) => !icon.getAttribute('title'));
+    const shareIcon = icons.find((icon) => icon.getAttribute('title') === 'share');
+
+    expect(moreIcon).toHaveAttribute('data-size', 'small');
+    expect(shareIcon).toHaveAttribute('data-size', JSON.stringify({ blockSize: 36, size: 18 }));
+    expect(getByTestId('drawer-close-icon')).toHaveAttribute('data-size', '');
   });
 });

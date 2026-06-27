@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Группировка сообщений агента",
   "features.fleet.desc": "Показывать запись Fleet в заголовке — панель управления, отображающая все выполняемые задачи на ваших агентах бок о бок.",
   "features.fleet.title": "Просмотр Fleet",
+  "features.foldFinishedTurn.desc": "Свернуть процесс (рассуждения и вызовы инструментов) завершённых, не последних ходов агента под заголовком «Обработано». Окончательный ответ остаётся видимым; нажмите, чтобы развернуть процесс.",
+  "features.foldFinishedTurn.title": "Свернуть завершённые ходы",
   "features.groupChat.desc": "Включите координацию группового чата с несколькими агентами.",
   "features.groupChat.title": "Групповой чат (мультиагентный)",
   "features.imessage.desc": "Подключайте агентов к iMessage через локальный мост LobeHub Desktop BlueBubbles.",

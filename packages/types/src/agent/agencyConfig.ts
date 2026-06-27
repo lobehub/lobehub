@@ -393,15 +393,14 @@ export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sand
 export interface LobeAgentAgencyConfig {
   /**
    * Device ID of the machine connected via `lh connect`.
-   * Required when `executionTarget === 'device'`. Also persisted for desktop
-   * `local` selections so non-desktop clients can resolve "this machine" to the
-   * concrete connected device instead of falling back to the sandbox.
+   * Required when `executionTarget === 'device'` (and always set for remote
+   * hetero agents `openclaw` / `hermes`).
    */
   boundDeviceId?: string;
   /**
-   * Execution target for this agent. When omitted, resolves to a platform
-   * default: `'local'` on desktop, `'none'` on web (or `'device'` for remote
-   * hetero providers).
+   * Execution target for the hetero agent. When omitted, resolves to a
+   * platform default: `'local'` on desktop, `'none'` on web (or `'device'` for
+   * remote hetero providers).
    */
   executionTarget?: DeviceExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;

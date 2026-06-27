@@ -1,7 +1,7 @@
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 import { useParams } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
@@ -21,8 +21,8 @@ export const useThreadNavigation = () => {
   const isInAgentSubRoute = useCallback(() => {
     if (!params.aid) return false;
     const agentBasePath = params.topicId
-      ? SESSION_CHAT_TOPIC_URL(params.aid, params.topicId)
-      : SESSION_CHAT_URL(params.aid);
+      ? AGENT_CHAT_TOPIC_URL(params.aid, params.topicId)
+      : AGENT_CHAT_URL(params.aid);
 
     // If pathname has more segments after /agent/:aid, it's a sub-route
     return (
@@ -38,8 +38,8 @@ export const useThreadNavigation = () => {
       if (isInAgentSubRoute() && params.aid) {
         router.push(
           params.topicId
-            ? SESSION_CHAT_TOPIC_URL(params.aid, params.topicId)
-            : SESSION_CHAT_URL(params.aid),
+            ? AGENT_CHAT_TOPIC_URL(params.aid, params.topicId)
+            : AGENT_CHAT_URL(params.aid),
         );
       }
 

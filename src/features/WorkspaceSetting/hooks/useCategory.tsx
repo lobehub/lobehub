@@ -42,6 +42,7 @@ export interface WorkspaceSettingCategoryGroup {
 export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tSubscription } = useTranslation('subscription');
   const showApiKey = useShowWorkspaceApiKey();
   const isOwner = useIsWorkspaceOwner();
 
@@ -61,6 +62,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('workspaceSetting.tab.members'),
             },
             {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
@@ -74,26 +80,26 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             {
               icon: Map,
               key: WorkspaceSettingsTabs.Plans,
-              label: t('workspaceSetting.tab.plans'),
+              label: tSubscription('tab.plans'),
             },
             {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Usage,
-              label: t('workspaceSetting.tab.usage'),
+              label: t('tab.usage'),
             },
             {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
-              label: t('workspaceSetting.tab.credits'),
+              label: tSubscription('tab.credits'),
             },
             {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
-              label: t('workspaceSetting.tab.billing'),
+              label: tSubscription('tab.billing'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Subscription,
-          title: t('workspaceSetting.group.subscription'),
+          title: t('group.subscription'),
         },
         {
           items: [
@@ -126,16 +132,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // The Admin group (workspace devices / storage / API keys) is owner-only —
-        // managing shared infra is an owner action. Members reach workspace devices
-        // via the run-device picker, not this page.
+        // The Admin group (workspace storage / API keys) is owner-only — managing
+        // shared infra is an owner action.
         isOwner && {
           items: [
-            {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
-            },
             {
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,
@@ -151,6 +151,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, showApiKey, isOwner],
+    [t, tAuth, tSubscription, showApiKey, isOwner],
   );
 };

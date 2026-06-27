@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
@@ -22,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openRenameModal } from '@/components/RenameModal';
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -159,7 +159,7 @@ export const useDropdownMenu = ({
                 onClick: () => {
                   if (!agentId) return;
                   const url = buildWorkspaceAwarePath(
-                    SESSION_CHAT_TOPIC_URL(agentId, topicId),
+                    AGENT_CHAT_TOPIC_URL(agentId, topicId),
                     activeWorkspaceSlug,
                   );
                   addTab(url);
@@ -199,7 +199,7 @@ export const useDropdownMenu = ({
           label: t('actions.copyLink', { ns: 'topic' }),
           onClick: () => {
             if (!agentId) return;
-            const url = `${appOrigin}${SESSION_CHAT_TOPIC_URL(agentId, topicId)}`;
+            const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(agentId, topicId)}`;
             void navigator.clipboard.writeText(url);
             message.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },

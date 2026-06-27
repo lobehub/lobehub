@@ -1,5 +1,7 @@
 'use client';
 
+import { Button, Icon } from '@lobehub/ui';
+import { MonitorUpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +14,14 @@ const WorkspaceDevicesSetting = memo(() => {
 
   return (
     <>
-      <SettingHeader title={t('tab.devices')} />
+      <SettingHeader
+        title={t('tab.devices')}
+        extra={
+          <Button icon={<Icon icon={MonitorUpIcon} />} size={'small'} onClick={() => setOpen(true)}>
+            {t('devices.connectWizard.button')}
+          </Button>
+        }
+      />
 
       <DeviceManager scope={'workspace'} onConnect={() => setOpen(true)} />
 

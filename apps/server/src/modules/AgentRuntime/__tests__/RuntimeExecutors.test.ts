@@ -74,6 +74,12 @@ vi.mock('@lobechat/model-runtime', () => ({
   // retry classifier path.
   ERROR_CODE_SPECS: {},
   getErrorCodeSpec: () => undefined,
+  isDeepSeekThinkingEligibleModel: (model: string) =>
+    typeof model === 'string' &&
+    (model.toLowerCase().includes('deepseek-reasoner') ||
+      model.toLowerCase().includes('deepseek-v4')),
+  isDeepSeekV4FamilyModel: (model: string) =>
+    typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
   isKimiAlwaysPreserveThinkingModel: (model: string) =>
     /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
   refineErrorCode: () => undefined,

@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "正在載入更改…",
   "workingDirectory.filesModified": "修改",
   "workingDirectory.ghMissing": "安裝並登入 GitHub CLI (`gh`) 以查看相關的拉取請求",
+  "workingDirectory.heteroHint": "此代理始終在工作目錄中運行。在您選擇之前，它會使用預設資料夾——若要更改，請在下方選擇其他資料夾。",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "沒有最近的目錄",
   "workingDirectory.notSet": "點擊以設定工作目錄",

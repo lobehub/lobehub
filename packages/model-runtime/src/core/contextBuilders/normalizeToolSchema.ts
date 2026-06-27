@@ -20,7 +20,7 @@ import type OpenAI from 'openai';
  * enum / required sanitizers), so we clean the schema before it reaches any
  * provider rather than letting the request fail anonymously upstream.
  *
- * @see https://linear.app/lobehub/issue/LOBE-10066
+ *
  */
 export const normalizeToolJsonSchema = (schema: any): any => {
   // A boolean schema (`true` = accept anything, `false` = accept nothing) is

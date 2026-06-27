@@ -7,10 +7,14 @@ export const generateSystemPrompt = (devices?: DeviceAttachment[]): string => {
 
   const deviceSection = onlineDevicesPrompt(
     onlineDevices.map((d) => ({
+      hostname: d.hostname,
       id: d.deviceId,
       lastSeen: d.lastSeen,
-      name: d.hostname,
+      // Prefer the user-set alias so the listed name matches what the user sees
+      // in device settings; fall back to the raw hostname.
+      name: d.friendlyName || d.hostname,
       os: d.platform,
+      scope: d.scope,
     })),
   );
 
@@ -29,6 +33,7 @@ ${deviceSection}
 - If no devices are online, inform the user that they need to have their desktop application running and connected.
 - When only one device is online, activate it directly without asking the user to choose.
 - When multiple devices are online, present the list and let the user choose which device to activate.
+- Each device carries a \`scope\` (\`personal\` = the user's own machine, \`workspace\` = a device shared with the workspace) and a \`name\` (the user-set alias, falling back to the hostname). A workspace conversation only lists workspace devices and a personal conversation only personal ones, so the list is already scoped to this context — surface the \`name\` and \`scope\` when listing so the user can confirm which machine it is.
 </guidelines>
 `;
 };

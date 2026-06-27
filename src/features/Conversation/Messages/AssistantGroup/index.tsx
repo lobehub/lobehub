@@ -1,24 +1,37 @@
 'use client';
 
 import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  userGeneralSettingsSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import {
+  contextSelectors,
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+} from '../../store';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -51,7 +64,7 @@ interface GroupMessageProps {
 }
 
 const GroupMessage = memo<GroupMessageProps>(
-  ({ defaultWorkflowExpandLevel, id, index, disableEditing, footerRender }) => {
+  ({ defaultWorkflowExpandLevel, id, index, disableEditing, footerRender, isLatestItem }) => {
     // Get message and actionsConfig from ConversationStore
     const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
@@ -69,6 +82,19 @@ const GroupMessage = memo<GroupMessageProps>(
       taskCompletions,
     } = item;
     const avatar = useAgentMeta(agentId);
+
+    // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
+    // rather than the supervisor agent's own bare meta (whose title is literally
+    // "Supervisor" with no avatar). The flag is a persisted snapshot on the
+    // message metadata; see metadata.orchestrationRole.
+    const isSupervisor = metadata?.orchestrationRole === 'supervisor' || !!metadata?.isSupervisor;
+    const groupId = useConversationStore(contextSelectors.groupId);
+    const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(groupId ?? '')(s));
+    const memberAvatars = useAgentGroupStore(
+      (s) => agentGroupSelectors.getGroupMemberAvatars(groupId ?? '')(s),
+      isEqual,
+    );
+    const { t } = useTranslation('chat');
 
     // Collect fileList from all children blocks
     const aggregatedFileList = useMemo(() => {
@@ -99,6 +125,7 @@ const GroupMessage = memo<GroupMessageProps>(
     const interrupted = groupInterrupted || blockInterrupted;
 
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const enableProcessFold = useUserStore(labPreferSelectors.enableFoldFinishedTurn);
     const addReaction = useConversationStore((s) => s.addReaction);
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
@@ -154,10 +181,11 @@ const GroupMessage = memo<GroupMessageProps>(
     return (
       <ChatItem
         showTitle
-        avatar={avatar}
+        avatar={isSupervisor ? { ...avatar, title: groupMeta.title } : avatar}
         id={id}
         placement={'left'}
         time={createdAt}
+        titleAddon={isSupervisor ? <Tag>{t('supervisor.label')}</Tag> : undefined}
         actions={
           !disableEditing && (
             <>
@@ -171,6 +199,17 @@ const GroupMessage = memo<GroupMessageProps>(
               {actionBarHolder}
             </>
           )
+        }
+        customAvatarRender={
+          isSupervisor
+            ? () => (
+                <AgentGroupAvatar
+                  avatar={groupMeta.avatar}
+                  backgroundColor={groupMeta.backgroundColor}
+                  memberAvatars={memberAvatars}
+                />
+              )
+            : undefined
         }
         onAvatarClick={onAvatarClick}
         onMouseEnter={onMouseEnter}
@@ -191,7 +230,9 @@ const GroupMessage = memo<GroupMessageProps>(
               contentId={contentId}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
+              enableProcessFold={enableProcessFold}
               id={id}
+              isLatestItem={isLatestItem}
               messageIndex={index}
             />
           )}

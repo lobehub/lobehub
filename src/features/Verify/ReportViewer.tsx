@@ -20,6 +20,7 @@ import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { VerifyEvidenceWithUrl, VerifyResultWithEvidence } from '@/services/verify';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
@@ -41,6 +42,13 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-block: 0;
     margin-inline: auto;
     padding: 24px;
+  `,
+  containerMobile: css`
+    width: 100%;
+    max-width: 100%;
+    margin-block: 0;
+    margin-inline: auto;
+    padding: 16px;
   `,
   docTrigger: css`
     cursor: pointer;
@@ -191,12 +199,12 @@ const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string |
 
     return (
       <Block className={styles.scopeBlock} gap={2}>
-        <ScopeRow label="Branch" value={branch} />
-        <ScopeRow label="Commit" value={commit} />
-        <ScopeRow label="Date" value={date} />
-        <ScopeRow label="Surface" value={surface} />
-        <ScopeRow label="Entry" value={entry} />
         <ScopeRow label="Focus" value={focus} />
+        <ScopeRow label="Branch" value={branch} />
+        <ScopeRow label="Surface" value={surface} />
+        <ScopeRow label="Date" value={date} />
+        <ScopeRow label="Commit" value={commit} />
+        <ScopeRow label="Entry" value={entry} />
       </Block>
     );
   },
@@ -265,7 +273,54 @@ const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }
   );
 });
 
-const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
+/**
+ * Renders a check's evidence artifacts (screenshots / video / documents / inline
+ * text). Screenshots are capped at `imageMaxHeight` and constrained to the
+ * container width so a wide capture never overflows on a narrow viewport.
+ */
+const EvidenceList = memo<{
+  evidence: VerifyResultWithEvidence['evidence'];
+  imageMaxHeight?: number;
+}>(({ evidence, imageMaxHeight = 360 }) => {
+  const { styles } = useStyles();
+  if (evidence.length === 0) return null;
+  return (
+    <Flexbox gap={8}>
+      {evidence.map((e) => (
+        <Flexbox gap={4} key={e.id}>
+          {e.description && (
+            <Text fontSize={12} type="secondary">
+              {e.description}
+            </Text>
+          )}
+          {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
+            <Flexbox align={'flex-start'} style={{ maxWidth: '100%' }}>
+              <Image
+                alt={e.description ?? e.type}
+                maxHeight={imageMaxHeight}
+                objectFit={'contain'}
+                src={e.fileUrl}
+                style={{ maxWidth: '100%' }}
+                variant={'outlined'}
+              />
+            </Flexbox>
+          ) : e.fileUrl && e.type === 'video' ? (
+            <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+          ) : e.fileUrl ? (
+            <DocumentEvidence evidence={e} />
+          ) : e.content ? (
+            <div className={styles.evidenceText}>{e.content}</div>
+          ) : (
+            <Tag>{e.type}</Tag>
+          )}
+        </Flexbox>
+      ))}
+    </Flexbox>
+  );
+});
+
+/** A single check — a stacked card with its title, verdict, reasoning and evidence. */
+const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   const { styles } = useStyles();
   return (
     <Block className={styles.resultCard} gap={6}>
@@ -286,38 +341,7 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
           {result.suggestion}
         </Text>
       )}
-      {result.evidence.length > 0 && (
-        <Flexbox gap={8}>
-          {result.evidence.map((e) => (
-            <Flexbox gap={4} key={e.id}>
-              {e.description && (
-                <Text fontSize={12} type="secondary">
-                  {e.description}
-                </Text>
-              )}
-              {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
-                <Flexbox align={'flex-start'}>
-                  <Image
-                    alt={e.description ?? e.type}
-                    maxHeight={360}
-                    objectFit={'contain'}
-                    src={e.fileUrl}
-                    variant={'outlined'}
-                  />
-                </Flexbox>
-              ) : e.fileUrl && e.type === 'video' ? (
-                <video controls className={styles.evidenceVideo} src={e.fileUrl} />
-              ) : e.fileUrl ? (
-                <DocumentEvidence evidence={e} />
-              ) : e.content ? (
-                <div className={styles.evidenceText}>{e.content}</div>
-              ) : (
-                <Tag>{e.type}</Tag>
-              )}
-            </Flexbox>
-          ))}
-        </Flexbox>
-      )}
+      <EvidenceList evidence={result.evidence} />
     </Block>
   );
 });
@@ -325,10 +349,14 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
 /**
  * Standalone viewer for a verification session's report, addressed purely by
  * `?id=<verifyRunId>` — no Agent Run / chat context required. Renders the report
- * narrative plus every check result and its evidence.
+ * narrative plus every check result and its evidence. Checks render as stacked
+ * cards (the screenshot is the most valuable part, so it stays full-width and
+ * prominent); the layout just tightens padding and wraps the stats row on
+ * mobile so a narrow viewport never overflows horizontally.
  */
 const ReportViewer = memo(() => {
-  const { styles } = useStyles();
+  const { styles, cx } = useStyles();
+  const isMobile = useIsMobile();
   const { runId } = useParams<{ runId: string }>();
   const verifyRunId = runId ?? null;
   const { data, isLoading } = useVerifyReportBundle(verifyRunId);
@@ -341,16 +369,19 @@ const ReportViewer = memo(() => {
   const { run, report, results } = data;
 
   return (
-    <Flexbox className={styles.container} gap={24}>
+    <Flexbox className={cx(isMobile ? styles.containerMobile : styles.container)} gap={24}>
       <Flexbox gap={12}>
-        <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <Text as="h2">{run.title || 'Verification report'}</Text>
-          <VerdictTag verdict={report?.verdict} />
-        </Flexbox>
+        <Text as="h2">{run.title || 'Verification report'}</Text>
         {run.scenario !== 'coding' && run.goal && <Text type="secondary">{run.goal}</Text>}
         <ScopeBlock context={run.context} scenario={run.scenario} />
         {report?.summary && <Text type="secondary">{report.summary}</Text>}
-        <Flexbox horizontal gap={24}>
+        <Flexbox
+          horizontal
+          align="center"
+          gap={isMobile ? 16 : 24}
+          wrap={isMobile ? 'wrap' : 'nowrap'}
+        >
+          <VerdictTag verdict={report?.verdict} />
           <Flexbox>
             <span className={styles.stat}>{report?.totalChecks ?? results.length}</span>
             <Text fontSize={12} type="secondary">
@@ -387,12 +418,12 @@ const ReportViewer = memo(() => {
       <Flexbox gap={8}>
         <Text as="h3">Checks</Text>
         {results.map((r) => (
-          <ResultItem key={r.id} result={r} />
+          <ResultCard key={r.id} result={r} />
         ))}
       </Flexbox>
 
       {/* Narrative detail (verification commands / score / notes). The scope and
-          per-check table are already structured above, so a well-formed report
+          per-check cards are already structured above, so a well-formed report
           body carries only the non-duplicate prose. */}
       {report?.content && (
         <Flexbox gap={8}>

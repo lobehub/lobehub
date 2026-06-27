@@ -29,6 +29,7 @@
   "workingDirectory.filesLoading": "در حال بارگذاری تغییرات…",
   "workingDirectory.filesModified": "تغییر یافته",
   "workingDirectory.ghMissing": "برای مشاهده درخواست‌های مرتبط، GitHub CLI (`gh`) را نصب و وارد شوید",
+  "workingDirectory.heteroHint": "این عامل همیشه در یک پوشه کاری اجرا می‌شود. تا زمانی که یکی را انتخاب کنید، از یک پوشه پیش‌فرض استفاده می‌کند — برای تغییر آن، یکی دیگر را در زیر انتخاب کنید.",
   "workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "workingDirectory.noRecent": "هیچ دایرکتوری اخیر وجود ندارد",
   "workingDirectory.notSet": "برای تنظیم دایرکتوری کاری کلیک کنید",

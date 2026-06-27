@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../parse';
 import type { Message } from '../types/shared';
 
-// A task-callback card injected by the result-bridge (LOBE-10625) must survive
+// A task-callback card injected by the result-bridge must survive
 // the display-flow transform as a standalone `role='taskCallback'` node so the
 // renderer can show it as a card — both as a leaf and mid-chain (when the
 // creator agent's continuation parents under it).

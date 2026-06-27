@@ -71,6 +71,7 @@ import {
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
+import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -106,11 +107,14 @@ import {
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { ComposioService } from '@/server/services/composio';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -1183,7 +1187,7 @@ export class AiAgentService {
         // `topics.groupId`), so the conversation silently "disappears" from the
         // group. execGroupAgent normally pre-creates the topic, but any path
         // that reaches execAgent without a topicId (e.g. the async/queue run)
-        // must carry the groupId through too. (LOBE-10604 / LOBE-10627)
+        // must carry the groupId through too (group topic sidebar + ownership fix).
         groupId: appContext?.groupId,
         metadata,
         title:
@@ -1277,7 +1281,7 @@ export class AiAgentService {
           files: runAttachments.fileIds,
           // Group reads filter on messages.groupId (MessageModel.query group
           // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened. (LOBE-10604 / LOBE-10627)
+          // shows when the topic is reopened (group topic sidebar + ownership fix).
           groupId: appContext?.groupId ?? undefined,
           metadata: requestTriggerMetadata,
           role: 'user',
@@ -1288,6 +1292,19 @@ export class AiAgentService {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
     }
+
+    // Snapshot the author's group orchestration role onto the assistant message
+    // so the role survives the server round-trip (gateway step_start snapshot /
+    // message.getMessages). Without this the client's optimistic isSupervisor flag
+    // is lost on refetch and the supervisor renders as a generic assistant.
+    // The persisted message `role` stays 'assistant' — only metadata carries the
+    // orchestration role, keeping the data training-friendly.
+    const orchestrationMetadata = appContext?.orchestrationRole
+      ? {
+          ...(appContext.orchestrationRole === 'supervisor' ? { isSupervisor: true } : {}),
+          orchestrationRole: appContext.orchestrationRole,
+        }
+      : undefined;
 
     // Assistant placeholder (shows the spinner in the UI). A hetero run seeds
     // ONLY the provider — the CLI reports the real model later via `stream_start`
@@ -1300,6 +1317,7 @@ export class AiAgentService {
       // Stamp groupId so the assistant turn is visible in the group read path
       // (MessageModel.query filters group chats by messages.groupId).
       groupId: appContext?.groupId ?? undefined,
+      metadata: orchestrationMetadata,
       model: isHeteroAgent ? undefined : model,
       parentId: parentMessageId ?? userMessageRecord?.id,
       provider: isHeteroAgent ? heteroType : provider,
@@ -1344,7 +1362,9 @@ export class AiAgentService {
 
     if (isHeteroAgent) {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
-      const operationId = nanoid();
+      // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
+      // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
+      const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
       // Persist a first-class agent_operations row for the hetero run. The id is
       // generated here (authoritative) and flows through to heteroIngest /
@@ -1359,9 +1379,14 @@ export class AiAgentService {
           agentId: persistAgentId,
           chatGroupId: appContext?.groupId ?? null,
           maxSteps,
-          model,
+          // Seed the heterogeneous provider (claude-code / codex / …), NOT the
+          // agent's configured chat provider — the run executes on the CLI, so
+          // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
+          // irrelevant. `model` is intentionally left unset: the real executed
+          // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
+          // assistant-message seeding above (provider: heteroType, model: undefined).
           operationId,
-          provider,
+          provider: heteroType,
           taskId: operationTaskId ?? null,
           threadId: appContext?.threadId ?? null,
           topicId,
@@ -1438,8 +1463,6 @@ export class AiAgentService {
       }
 
       // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
-      const { buildCloudHeteroContext } =
-        await import('@/server/services/heterogeneousAgent/cloudHeteroContext');
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
         conversationHistory,
@@ -1721,8 +1744,6 @@ export class AiAgentService {
           // device-specific context instead of reusing the cloud-sandbox one
           // (which describes an ephemeral /workspace + pre-cloned repos and
           // would mislead the agent).
-          const { buildRemoteDeviceHeteroContext } =
-            await import('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext');
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
@@ -1766,6 +1787,10 @@ export class AiAgentService {
         } else {
           // Cloud sandbox path — only for local CLI agents (claude-code / codex).
           // Remote agents (openclaw / hermes) always require a bound device.
+          // Lazy-loaded on purpose: `sandboxRunner` pulls the sandbox-service graph
+          // (which eagerly touches server-only ModelRuntime env at module init), so
+          // importing it statically would couple that whole subsystem into every
+          // `aiAgent` import. Only this cloud-CLI branch needs it.
           const { spawnHeteroSandbox } =
             await import('@/server/services/heterogeneousAgent/sandboxRunner');
           spawnHeteroSandbox({
@@ -1997,9 +2022,6 @@ export class AiAgentService {
         pluginsWithoutConnectors.length > 0
       ) {
         try {
-          const { patchManifestWithPermissions } =
-            await import('@/libs/mcp/connectorPermissionCheck');
-          const { ConnectorToolModel } = await import('@/database/models/connectorTool');
           const allIdentifiers = [
             ...lobehubSkillManifests.map((m) => m.identifier),
             ...composioManifests.map((m) => m.identifier),
@@ -2075,16 +2097,16 @@ export class AiAgentService {
       const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
-          // Personal pool (user principal) ∪ the current workspace's shared pool
-          // (workspace principal). Workspace devices are absent for non-workspace
-          // runs, so this is identical to the personal-only fetch there.
-          const [personalOnline, workspaceOnline] = await Promise.all([
-            deviceGateway.queryDeviceList(this.userId),
-            this.workspaceId
-              ? deviceGateway.queryDeviceList(this.userId, this.workspaceId)
-              : Promise.resolve([]),
-          ]);
-          onlineDevices = [...personalOnline, ...workspaceOnline];
+          // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
+          // tagged with `scope` and the user-set `friendlyName` alias (see
+          // `getScopedOnlineDevices`) so the systemRole snapshot lets the model
+          // tell a personal machine apart from its workspace-enrolled counterpart
+          // (same physical machine under both principals). Keep only live devices:
+          // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
+          // online set.
+          onlineDevices = (
+            await getScopedOnlineDevices(this.db, this.userId, this.workspaceId)
+          ).filter((d) => d.online);
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);
@@ -3166,10 +3188,13 @@ export class AiAgentService {
       log('execGroupAgent: created new topic %s with groupId %s', topicId, groupId);
     }
 
-    // 2. Delegate to execAgent with groupId in appContext
+    // 2. Delegate to execAgent with groupId in appContext.
+    // execGroupAgent always runs the group's supervisor, so stamp the
+    // orchestration role onto the run — it lands on the assistant message
+    // metadata and drives supervisor-flavored UI rendering.
     const result = await this.execAgent({
       agentId,
-      appContext: { groupId, topicId },
+      appContext: { groupId, orchestrationRole: 'supervisor', topicId },
       autoStart: true,
       prompt: message,
       trigger: RequestTrigger.Chat,
@@ -3343,6 +3368,7 @@ export class AiAgentService {
 
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
+      orchestrationRole: 'member',
       scope: 'group',
       topicId,
     };

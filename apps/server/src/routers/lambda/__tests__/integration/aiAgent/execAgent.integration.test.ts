@@ -257,7 +257,7 @@ describe('execAgent', () => {
       expect(result.operationId).toBeDefined();
     });
 
-    // Regression: LOBE-10604 / LOBE-10627 — a group conversation that reaches
+    // Regression: group conversation that reaches
     // execAgent without a pre-created topicId must persist groupId on BOTH the
     // new topic AND the user/assistant messages. Otherwise:
     //   - the topic is group-less and never appears in the group sidebar

@@ -34,7 +34,7 @@ describeIfKey('Search1APIImpl integration', { timeout: 30_000 }, () => {
     expect(Array.isArray(result.results)).toBe(true);
   });
 
-  it('should support multiple search engines', async () => {
+  it('should keep using auto mode when searchEngines are provided', async () => {
     const result = await impl.query('TypeScript', {
       searchEngines: ['google', 'bing'],
     });
@@ -57,17 +57,15 @@ describeIfKey('Search1APIImpl integration', { timeout: 30_000 }, () => {
     }
   });
 
-  it('should handle single search engine param', async () => {
+  it('should handle legacy single search engine param with auto mode', async () => {
     const result = await impl.query('OpenAI', {
       searchEngines: ['google'],
     });
 
     expect(result.results.length).toBeGreaterThan(0);
-    // When single engine specified, engines field should contain it
-    expect(result.results[0].engines).toContain('google');
   });
 
-  it('should handle single engine with week time range', async () => {
+  it('should handle week time range when legacy searchEngines are provided', async () => {
     const result = await impl.query('latest open source AI frameworks', {
       searchEngines: ['google'],
       searchTimeRange: 'week',
@@ -78,7 +76,7 @@ describeIfKey('Search1APIImpl integration', { timeout: 30_000 }, () => {
     expect(Array.isArray(result.results)).toBe(true);
   });
 
-  it('should handle multiple engines with week time range', async () => {
+  it('should handle week time range when multiple legacy searchEngines are provided', async () => {
     const result = await impl.query('best practices for TypeScript monorepo setup', {
       searchEngines: ['google', 'bing'],
       searchTimeRange: 'week',

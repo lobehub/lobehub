@@ -7,7 +7,7 @@ import { CircleAlert, CircleCheck, CircleSlash, SquareArrowOutUpRight } from 'lu
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useChatStore } from '@/store/chat';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
@@ -50,7 +50,7 @@ const reasonMeta: Record<
 
 /**
  * Renders a `role='taskCallback'` message — the result-bridge card that reports
- * a finished task's handoff back into its creator conversation (LOBE-10625). The
+ * a finished task's handoff back into its creator conversation. The
  * task pointer (identifier / reason / taskId) is carried on
  * `metadata.taskCallback`; the handoff summary lives in the message content.
  * Renders as a standalone card (no avatar bubble), like the verify card.
@@ -58,7 +58,9 @@ const reasonMeta: Record<
 const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const { styles, theme } = useStyles();
   const { t } = useTranslation('chat');
-  const navigateToTask = useNavigateToTaskDetail();
+  // Open the task in the right-side detail portal (in-context), instead of
+  // navigating away from the conversation to the full task page.
+  const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
 
   const callback = item?.metadata?.taskCallback;
@@ -81,7 +83,7 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
             icon={SquareArrowOutUpRight}
             size={'small'}
             type={'text'}
-            onClick={() => navigateToTask(callback.taskId)}
+            onClick={() => openTaskDetail(callback.identifier)}
           >
             {t('taskCallback.viewTask')}
           </Button>

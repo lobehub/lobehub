@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
   "features.fleet.desc": "Hiển thị mục Fleet trong thanh tiêu đề — một bảng điều khiển song song của tất cả các tác vụ đang chạy trên các tác nhân của bạn.",
   "features.fleet.title": "Chế Độ Xem Fleet",
+  "features.foldFinishedTurn.desc": "Thu gọn quy trình (lập luận và các cuộc gọi công cụ) của các lượt tác nhân đã hoàn thành, không phải lượt mới nhất, dưới tiêu đề \"Đã xử lý\". Câu trả lời cuối cùng vẫn hiển thị; nhấp để mở rộng quy trình.",
+  "features.foldFinishedTurn.title": "Thu gọn các lượt đã hoàn thành",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.imessage.desc": "Kết nối các đại lý với iMessage thông qua cầu nối BlueBubbles LobeHub Desktop cục bộ.",

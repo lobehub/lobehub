@@ -126,27 +126,24 @@ describe('WorkspaceModel', () => {
     expect(workspace?.primaryOwnerId).toBe(secondOwnerId);
   });
 
-  it('downgrades to solo by removing non-primary members and clearing grace period', async () => {
+  it('downgrades to Free by clearing the grace period without touching members', async () => {
     const workspaceId = await createWorkspace();
 
-    const result = await new WorkspaceModel(serverDB, ownerId).downgradeToSolo(workspaceId);
+    const result = await new WorkspaceModel(serverDB, ownerId).downgradeToFree(workspaceId);
 
-    expect(result.removedUserIds.sort()).toEqual([memberId, secondOwnerId].sort());
     expect(result.workspace.settings).toEqual({ keep: true });
 
-    const activeMembers = await serverDB.query.workspaceMembers.findMany({
+    // Members stay — Free supports multiple members and the billing-inactive
+    // lockout handles the view-only state instead of evicting the team.
+    const allMembers = await serverDB.query.workspaceMembers.findMany({
       where: eq(workspaceMembers.workspaceId, workspaceId),
     });
-    expect(activeMembers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ deletedAt: null, userId: ownerId }),
-        expect.objectContaining({ userId: memberId }),
-        expect.objectContaining({ userId: secondOwnerId }),
-      ]),
-    );
     expect(
-      activeMembers.filter((member) => !member.deletedAt).map((member) => member.userId),
-    ).toEqual([ownerId]);
+      allMembers
+        .filter((member) => !member.deletedAt)
+        .map((member) => member.userId)
+        .sort(),
+    ).toEqual([memberId, ownerId, secondOwnerId].sort());
   });
 
   it('sets and clears grace period without dropping unrelated settings', async () => {
@@ -380,17 +377,17 @@ describe('WorkspaceModel', () => {
     await expect(model.countOtherOwners(workspaceId, ownerId)).resolves.toBe(0);
   });
 
-  describe('downgradeToSolo and setGracePeriod errors', () => {
-    it('rejects downgradeToSolo when the workspace does not exist', async () => {
+  describe('downgradeToFree and setGracePeriod errors', () => {
+    it('rejects downgradeToFree when the workspace does not exist', async () => {
       await expect(
-        new WorkspaceModel(serverDB, ownerId).downgradeToSolo('missing'),
+        new WorkspaceModel(serverDB, ownerId).downgradeToFree('missing'),
       ).rejects.toThrow('Workspace not found');
     });
 
-    it('rejects downgradeToSolo when actor is not the primary owner', async () => {
+    it('rejects downgradeToFree when actor is not the primary owner', async () => {
       const workspaceId = await createWorkspace();
       await expect(
-        new WorkspaceModel(serverDB, secondOwnerId).downgradeToSolo(workspaceId),
+        new WorkspaceModel(serverDB, secondOwnerId).downgradeToFree(workspaceId),
       ).rejects.toThrow('Only the primary owner can downgrade this workspace');
     });
 

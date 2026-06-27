@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Конечный кадр",
   "config.generateAudio.label": "Создать аудио",
   "config.header.title": "Видео",
+  "config.imageUpload.maxCountReached": "Вы можете добавить до {{count}} эталонных изображений",
   "config.imageUrl.label": "Начальный кадр",
   "config.prompt.placeholder": "Опишите видео, которое хотите создать",
   "config.prompt.placeholderWithRef": "Опишите сцену, которую вы хотите создать с изображением",

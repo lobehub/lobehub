@@ -8,7 +8,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
+        'a search service with automatic engine selection. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
       name: WebBrowsingApiName.search,
       parameters: {
         properties: {
@@ -20,33 +20,6 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
             description: 'The search categories you can set:',
             items: {
               enum: ['general', 'images', 'news', 'science', 'videos'],
-              type: 'string',
-            },
-            type: 'array',
-          },
-          searchEngines: {
-            description: 'The search engines you can use:',
-            items: {
-              enum: [
-                'google',
-                'bilibili',
-                'bing',
-                'duckduckgo',
-                'npm',
-                'pypi',
-                'github',
-                'arxiv',
-                'google scholar',
-                'z-library',
-                'reddit',
-                'imdb',
-                'brave',
-                'wikipedia',
-                'pinterest',
-                'unsplash',
-                'vimeo',
-                'youtube',
-              ],
               type: 'string',
             },
             type: 'array',
@@ -99,9 +72,9 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🌐',
     description:
-      'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges.',
+      'Search the web for current information and crawl web pages to extract content. Supports automatic engine selection, categories, and time ranges.',
     readme:
-      'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
+      'Search the web for current information and crawl web pages to extract content. Supports automatic engine selection, categories, and time ranges for comprehensive research.',
     title: 'Web Browsing',
   },
   systemRole: systemPrompt(dayjs(new Date()).format('YYYY-MM-DD')),
