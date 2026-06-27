@@ -2,11 +2,11 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Button, Icon } from '@lobehub/ui';
+import { SplitButton } from '@lobehub/ui/base-ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SplitButton from '@/components/SplitButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 

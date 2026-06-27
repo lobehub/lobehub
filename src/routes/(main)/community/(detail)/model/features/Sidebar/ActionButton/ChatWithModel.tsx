@@ -2,12 +2,12 @@
 
 import { ProviderIcon } from '@lobehub/icons';
 import { Button, DropdownMenu } from '@lobehub/ui';
+import { SplitButton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import SplitButton from '@/components/SplitButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
