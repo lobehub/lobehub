@@ -10,7 +10,8 @@ import { electronSystemService } from '@/services/electron/system';
 import { gitService } from '@/services/git';
 import {
   useFetchGitAheadBehind,
-  useFetchGitInfo,
+  useFetchGitBranch,
+  useFetchGitLinkedPR,
   useFetchGitWorkingTreeStatus,
 } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
@@ -155,7 +156,12 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const { t } = useTranslation('device');
   // Transport (Electron IPC vs device RPC) is decided inside the service; the
   // component just reads, identically for local and remote.
-  const { data, mutate } = useFetchGitInfo(deviceId, path, isGithub);
+  // Branch (cheap, refreshes promptly on dir switch) and the linked-PR lookup
+  // (expensive `gh` call, throttled) are deliberately separate cache entries.
+  const { data: branchData, mutate: mutateBranch } = useFetchGitBranch(deviceId, path);
+  const branch = branchData?.branch;
+  const detached = branchData?.detached;
+  const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(deviceId, path, branch, isGithub);
   const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
     deviceId,
     path,
@@ -170,10 +176,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
   const handleOpenPr = useCallback(() => {
-    if (data?.pullRequest?.url) {
-      void electronSystemService.openExternalLink(data.pullRequest.url);
+    if (prData?.pullRequest?.url) {
+      void electronSystemService.openExternalLink(prData.pullRequest.url);
     }
-  }, [data?.pullRequest?.url]);
+  }, [prData?.pullRequest?.url]);
 
   const handleToggleReview = useCallback(() => {
     if (showRightPanel && workingSidebarTab === 'review') {
@@ -185,27 +191,18 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
 
   const refreshAfterSync = useCallback(async () => {
-    await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
-  }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
+    await Promise.all([mutateBranch(), mutatePR(), mutateWorkingStatus(), mutateAheadBehind()]);
+  }, [mutateBranch, mutatePR, mutateWorkingStatus, mutateAheadBehind]);
 
-  // Flip the displayed branch instantly on checkout; clear the old branch's PR
-  // (the new branch's is unknown until revalidate). No revalidate here — the
-  // switcher's onAfterCheckout reconciles once the checkout lands.
+  // Flip the displayed branch instantly on checkout. No revalidate here — the
+  // switcher's onAfterCheckout reconciles once the checkout lands. The linked-PR
+  // hook is keyed by branch, so it re-keys to the new branch on its own (its
+  // cache starts empty there, hiding the stale PR until the lookup resolves).
   const handleOptimisticCheckout = useCallback(
-    (branch: string) => {
-      void mutate(
-        (prev) => ({
-          ...prev,
-          branch,
-          detached: false,
-          extraCount: undefined,
-          ghMissing: undefined,
-          pullRequest: null,
-        }),
-        { revalidate: false },
-      );
+    (nextBranch: string) => {
+      void mutateBranch({ branch: nextBranch, detached: false }, { revalidate: false });
     },
-    [mutate],
+    [mutateBranch],
   );
 
   const syncBusy = pulling || pushing;
@@ -250,20 +247,18 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     }
   }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
 
-  if (!data?.branch) return null;
+  if (!branch) return null;
 
-  const branchTooltip = data.detached
-    ? t('workingDirectory.detachedHead', { sha: data.branch })
-    : data.branch;
+  const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
 
-  const prTooltip = data.pullRequest
-    ? data.extraCount
+  const prTooltip = prData?.pullRequest
+    ? prData.extraCount
       ? t('workingDirectory.prTooltipWithExtra', {
-          count: data.extraCount,
-          title: data.pullRequest.title,
+          count: prData.extraCount,
+          title: prData.pullRequest.title,
         })
-      : data.pullRequest.title
-    : data.ghMissing
+      : prData.pullRequest.title
+    : prData?.ghMissing
       ? t('workingDirectory.ghMissing')
       : undefined;
 
@@ -286,17 +281,17 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const branchTrigger = (
     <div className={styles.trigger}>
       <Icon icon={GitBranchIcon} size={12} />
-      <span className={styles.branchLabel}>{data.branch}</span>
+      <span className={styles.branchLabel}>{branch}</span>
     </div>
   );
 
-  const branchNode = data.detached ? (
+  const branchNode = detached ? (
     // Detached HEAD → plain branch label (nothing to switch to).
     <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
   ) : (
     // Local switches over IPC; a remote device switches over RPC (deviceId set).
     <BranchSwitcher
-      currentBranch={data.branch}
+      currentBranch={branch}
       deviceId={deviceId}
       open={switcherOpen}
       path={path}
@@ -304,7 +299,8 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       onOpenChange={setSwitcherOpen}
       onOptimisticCheckout={handleOptimisticCheckout}
       onAfterCheckout={() => {
-        void mutate();
+        void mutateBranch();
+        void mutatePR();
         void mutateWorkingStatus();
         void mutateAheadBehind();
       }}
@@ -388,13 +384,13 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       {pullNode}
       {pushNode}
       {diffNode}
-      {data.pullRequest && (
+      {prData?.pullRequest && (
         <>
           <div className={styles.separator} />
           <Tooltip title={prTooltip}>
             <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
               <Icon icon={GitPullRequest} size={12} />
-              <span>#{data.pullRequest.number}</span>
+              <span>#{prData.pullRequest.number}</span>
             </div>
           </Tooltip>
         </>

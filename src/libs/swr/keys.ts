@@ -412,10 +412,21 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
+  gitBranch: def('device:gitBranch', (deviceId: string, path: string) => [
+    'device:gitBranch',
+    deviceId,
+    path,
+  ]),
   gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
     'device:gitBranches',
     deviceId,
     path,
+  ]),
+  gitLinkedPR: def('device:gitLinkedPR', (deviceId: string, path: string, branch: string) => [
+    'device:gitLinkedPR',
+    deviceId,
+    path,
+    branch,
   ]),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
@@ -432,12 +443,6 @@ export const deviceKeys = {
       baseRef,
     ],
   ),
-  gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
-    'device:gitInfo',
-    deviceId,
-    path,
-    isGithub,
-  ]),
   gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
     'device:gitWorkingTreeStatus',
     deviceId,
