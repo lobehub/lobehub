@@ -60,12 +60,14 @@ const mockBrowserWindow = {
 };
 
 const mockMainWindow = {
+  broadcast: vi.fn(),
   browserWindow: mockBrowserWindow,
   show: vi.fn(),
 };
 
 const mockBrowserManager = {
   getMainWindow: vi.fn(() => mockMainWindow),
+  showMainWindow: vi.fn(),
 };
 
 const mockApp = {
@@ -329,8 +331,9 @@ describe('NotificationCtr', () => {
       // Simulate click
       clickHandler();
 
-      expect(mockMainWindow.show).toHaveBeenCalled();
-      expect(mockBrowserWindow.focus).toHaveBeenCalled();
+      // Delegates to the shared show path, which restores a minimized window
+      // before showing/focusing — a bare `show()` cannot un-minimize on macOS.
+      expect(mockBrowserManager.showMainWindow).toHaveBeenCalled();
     });
 
     it('should handle notification error', async () => {
