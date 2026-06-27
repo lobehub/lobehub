@@ -296,13 +296,17 @@ export const aiChatRouter = router({
       // turn, so a new user turn parents off the assistant, never a tool result.
       // A brand-new topic (no prior messages) or a brand-new thread (must anchor
       // on its explicit branch point / sourceMessageId) keep the client parentId.
+      //
+      // Fall back to the client parentId when the spine head is absent (no spine
+      // message yet), so we never orphan the turn by overwriting it to undefined.
       if (topicId && !input.newTopic && !input.newThread) {
-        parentId = await runTimedStage(
+        const resolvedParentId = await runTimedStage(
           timingContext,
           'lambda.aiChat.resolveParentId',
           () => ctx.messageModel.getLatestSpineMessageId({ threadId, topicId }),
           { hasThreadId: !!threadId },
         );
+        parentId = resolvedParentId ?? parentId;
       }
 
       if (input.preloadMessages?.length) {
