@@ -586,9 +586,13 @@ describe('AgentSlice Actions', () => {
       const configCacheCalls = scopedMutate.mock.calls.filter(
         ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
       );
-      expect(configCacheCalls).toHaveLength(1);
+      expect(configCacheCalls).toHaveLength(2);
 
-      const [, committedCacheConfig, options] = configCacheCalls[0];
+      const [, clearedCacheConfig, clearOptions] = configCacheCalls[0];
+      expect(clearedCacheConfig).toBeUndefined();
+      expect(clearOptions).toEqual({ revalidate: false });
+
+      const [, committedCacheConfig, options] = configCacheCalls[1];
       expect(options).toEqual({ revalidate: false });
       expect(committedCacheConfig).toMatchObject({
         id: 'agent-1',
@@ -632,9 +636,9 @@ describe('AgentSlice Actions', () => {
       const configCacheCalls = scopedMutate.mock.calls.filter(
         ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
       );
-      expect(configCacheCalls).toHaveLength(1);
+      expect(configCacheCalls).toHaveLength(2);
 
-      const [, committedCacheConfig] = configCacheCalls[0];
+      const [, committedCacheConfig] = configCacheCalls[1];
 
       expect(committedCacheConfig).toMatchObject({
         agencyConfig: {
@@ -669,7 +673,11 @@ describe('AgentSlice Actions', () => {
       const configCacheCalls = scopedMutate.mock.calls.filter(
         ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
       );
-      expect(configCacheCalls).toHaveLength(0);
+      expect(configCacheCalls).toHaveLength(1);
+
+      const [, clearedCacheConfig, options] = configCacheCalls[0];
+      expect(clearedCacheConfig).toBeUndefined();
+      expect(options).toEqual({ revalidate: false });
       expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
     });
   });

@@ -489,6 +489,10 @@ export class AgentSliceActionImpl {
     void mutate(agentConfigKeys.config(id), structuredClone(config), { revalidate: false });
   };
 
+  #clearAgentConfigCache = (id: string): void => {
+    void mutate(agentConfigKeys.config(id), undefined, { revalidate: false });
+  };
+
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
@@ -518,6 +522,9 @@ export class AgentSliceActionImpl {
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
+    // Prevent stale persisted cache from replaying model A over optimistic
+    // model B before the save returns. The confirmed config is cached below.
+    this.#clearAgentConfigCache(id);
     updateSaveStatus('saving');
 
     try {
