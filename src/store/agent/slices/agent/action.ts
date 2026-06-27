@@ -482,13 +482,13 @@ export class AgentSliceActionImpl {
     this.#set({ agentMap }, false, 'dispatchAgentMap');
   };
 
-  #syncAgentConfigCache = (id: string): void => {
-    const config = this.#get().agentMap[id];
-    if (!config) return;
-
+  #syncAgentConfigCache = (
+    id: string,
+    config: LobeAgentConfig | null | undefined = this.#get().agentMap[id],
+  ): void => {
     void mutate(
       agentConfigKeys.config(id),
-      merge({}, config) as LobeAgentConfig,
+      config ? (merge({}, config) as LobeAgentConfig) : undefined,
       { revalidate: false },
     );
   };
@@ -525,6 +525,7 @@ export class AgentSliceActionImpl {
     // New-topic mount can replay stale SWR cache after a model switch but
     // before executeClientAgent reads the store, so keep both sources aligned.
     this.#syncAgentConfigCache(id);
+    const optimisticConfig = this.#get().agentMap[id];
     updateSaveStatus('saving');
 
     try {
@@ -540,8 +541,14 @@ export class AgentSliceActionImpl {
       updateSaveStatus('saved');
     } catch (error: any) {
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        if (isEqual(this.#get().agentMap[id], optimisticConfig)) {
+          this.#syncAgentConfigCache(id, null);
+        }
         updateSaveStatus('idle');
       } else {
+        if (isEqual(this.#get().agentMap[id], optimisticConfig)) {
+          this.#syncAgentConfigCache(id, null);
+        }
         console.error('[AgentStore] Failed to save config:', error);
         updateSaveStatus('idle');
       }

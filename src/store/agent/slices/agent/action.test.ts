@@ -642,6 +642,41 @@ describe('AgentSlice Actions', () => {
       });
       expect(optimisticCacheConfig.agencyConfig.workingDirByDevice).not.toHaveProperty('device-a');
     });
+
+    it('should clear optimistic agent config SWR cache when save fails', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { id: 'agent-1', model: 'model-a', provider: 'lobehub' } },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          model: 'model-b',
+          provider: 'lobehub',
+        });
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      expect(configCacheCalls).toHaveLength(2);
+
+      const [, optimisticCacheConfig, optimisticOptions] = configCacheCalls[0];
+      expect(optimisticCacheConfig).toMatchObject({ model: 'model-b' });
+      expect(optimisticOptions).toEqual({ revalidate: false });
+
+      const [, rollbackCacheConfig, rollbackOptions] = configCacheCalls[1];
+      expect(rollbackCacheConfig).toBeUndefined();
+      expect(rollbackOptions).toEqual({ revalidate: false });
+    });
   });
 
   describe('optimisticUpdateAgentMeta', () => {
