@@ -142,13 +142,14 @@ export class AbandonOperationService {
       }
     }
 
-    // Resolve sub-agent → parent linkage BEFORE deleting the Redis state. The
-    // watchdog killed this op without firing its onComplete bridge, so a parent
-    // parked on `callSubAgent` would otherwise wait on this slot forever. We
-    // surface the ids the caller needs to backfill the placeholder tool message
-    // and CAS-resume the parent. parentOperationId + threadId live on the
-    // (persistent) operation row; toolMessageId is the thread's sourceMessageId
-    // (the parent's placeholder), set when the sub-agent was dispatched.
+    // Resolve sub-agent → parent linkage. The watchdog killed this op without
+    // firing its onComplete bridge, so a parent parked on `callSubAgent` would
+    // otherwise wait on this slot forever. We surface the ids the caller needs
+    // to backfill the placeholder tool message and CAS-resume the parent.
+    // parentOperationId + threadId live on the (persistent) operation row;
+    // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
+    // set when the sub-agent was dispatched. When this is set, the coordinator
+    // cleanup below is SKIPPED so the durable resume can still resolve userId.
     if (metadata.isSubAgent && metadata.userId) {
       try {
         const opRow = await new AgentOperationModel(
@@ -184,10 +185,16 @@ export class AbandonOperationService {
       }
     }
 
-    try {
-      await this.coordinator.deleteAgentOperation(operationId);
-    } catch (e) {
-      log('[%s] coordinator cleanup failed (non-fatal): %O', operationId, e);
+    // Skip coordinator cleanup when a parent resume is still pending. The
+    // durable subagent-callback (queue mode) re-resolves THIS op's userId from
+    // the coordinator metadata, so deleting it now would 401 every redelivery
+    // and strand the parent. The lingering state expires on its own Redis TTL.
+    if (!result.subAgentResume) {
+      try {
+        await this.coordinator.deleteAgentOperation(operationId);
+      } catch (e) {
+        log('[%s] coordinator cleanup failed (non-fatal): %O', operationId, e);
+      }
     }
 
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);

@@ -253,6 +253,9 @@ describe('AbandonOperationService', () => {
       userId: 'user_x',
       workspaceId: 'ws_1',
     });
+    // Coordinator state is kept alive so the durable parent-resume can still
+    // resolve this op's userId; it expires via its own Redis TTL.
+    expect(coord.deleteAgentOperation).not.toHaveBeenCalled();
   });
 
   it('omits subAgentResume for a non-sub-agent abandoned op', async () => {
