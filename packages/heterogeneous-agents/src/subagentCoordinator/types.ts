@@ -101,7 +101,7 @@ export const createSubagentRunsState = (): SubagentRunsState => ({
  * state in a module-level map that a COLD serverless replica starts empty — and
  * if that empty state reaches `reduce`, the next subagent event hits the
  * `!existing` branch of `ensureRun` and forks a BRAND-NEW thread for a
- * `parentToolCallId` that already has one (the "大量无意义的 Subagent" bug). The
+ * `parentToolCallId` that already has one (the "excessive redundant Subagent" bug). The
  * server rebuilds main-agent state from DB on cold start; this lets it rebuild
  * the subagent runs the same way.
  *

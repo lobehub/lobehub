@@ -238,7 +238,7 @@ export interface VerifyEvidence {
   /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
   content?: string | null;
   createdAt: Date;
-  /** Human-readable caption, e.g. "首页首屏完整渲染". */
+  /** Human-readable caption, e.g. "Home page first-screen full render". */
   description?: string | null;
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
