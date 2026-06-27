@@ -433,4 +433,58 @@ describe('AI Agent Router Integration Tests', () => {
       expect(assistantMessages[0].parentId).toBe(userMsg.id);
     });
   });
+
+  describe('heteroIngest/heteroFinish ownership guard', () => {
+    // Build a context that drives heteroOperationAuth to the desired kind:
+    // - omit `purpose` → a normal user OIDC token → kind 'user' (ownership-gated)
+    // - `purpose: 'hetero-operation'` → the server-minted token → kind 'operation'
+    const heteroCtx = (opts: { purpose?: string; sub?: string } = {}) => {
+      const sub = opts.sub ?? userId;
+      return {
+        jwtPayload: { userId: sub },
+        oidcAuth: { sub, ...(opts.purpose ? { purpose: opts.purpose } : {}) },
+        userId: sub,
+      };
+    };
+
+    // A schema-valid event so the request passes input validation and reaches
+    // the ownership guard (the guard throws before any event is processed).
+    const sampleEvent = {
+      data: {},
+      operationId: 'op-x',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'stream_chunk' as const,
+    };
+
+    it('rejects an owner token targeting a topic it does not own', async () => {
+      const caller = aiAgentRouter.createCaller(heteroCtx() as any);
+
+      await expect(
+        caller.heteroIngest({
+          agentType: 'claude-code',
+          events: [sampleEvent],
+          operationId: 'op-x',
+          topicId: 'topic-not-owned',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('rejects an owner token on heteroFinish for a topic it does not own', async () => {
+      const caller = aiAgentRouter.createCaller(heteroCtx() as any);
+
+      await expect(
+        caller.heteroFinish({
+          agentType: 'claude-code',
+          operationId: 'op-x',
+          result: 'success',
+          topicId: 'topic-not-owned',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    // The operation-token path (kind 'operation', whose sub may be a workspaceId
+    // that never matches topics.userId) is intentionally exempt from this guard;
+    // that kind assignment is covered by heteroOperationAuth.test.ts.
+  });
 });
