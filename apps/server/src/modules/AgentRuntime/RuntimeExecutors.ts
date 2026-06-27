@@ -156,38 +156,6 @@ const LLM_RETRY_MAX_DELAY_MS = 30_000;
  */
 const EMPTY_COMPLETION_MAX_RETRIES = 2;
 
-const buildBotAgentGroupContext = (params: {
-  agentConfig?: any;
-  agentId?: string;
-  botContext?: unknown;
-}): AgentGroupConfig | undefined => {
-  if (!params.botContext || !params.agentId) return undefined;
-
-  const title = params.agentConfig?.title;
-  const description = params.agentConfig?.description;
-  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
-
-  return {
-    agentMap: {
-      [params.agentId]: {
-        name,
-        role: 'participant',
-      },
-    },
-    currentAgentId: params.agentId,
-    currentAgentName: name,
-    currentAgentRole: 'participant',
-    members: [
-      {
-        id: params.agentId,
-        name,
-        role: 'participant',
-      },
-    ],
-    systemPrompt: typeof description === 'string' ? description : undefined,
-  };
-};
-
 /**
  * Output-token count at or below this — combined with no content, reasoning,
  * tool calls, or images — marks a turn as an empty completion.
@@ -1384,11 +1352,11 @@ export const createRuntimeExecutors = (
         const contextEngineInput = {
           agentDocuments,
           ...(agentBuilderContext && { agentBuilderContext }),
-          agentGroup: buildBotAgentGroupContext({
-            agentConfig,
-            agentId: state.metadata?.agentId,
-            botContext: state.metadata?.botContext ?? ctx.botContext,
-          }),
+          // The group/bot member roster is resolved once at op creation
+          // (AiAgentService.execAgent → buildGroupAgentContext) and snapshotted
+          // into op metadata, mirroring agentConfig/botContext — no per-step DB
+          // lookup here.
+          agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
           additionalVariables: {
             ...state.metadata?.deviceSystemInfo,
             ...lobehubSkillVariables,

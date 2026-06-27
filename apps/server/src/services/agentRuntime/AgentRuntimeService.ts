@@ -395,6 +395,7 @@ export class AgentRuntimeService {
       operationId,
       initialContext,
       agentConfig,
+      agentGroup,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -486,6 +487,7 @@ export class AgentRuntimeService {
         metadata: {
           activeDeviceId,
           agentConfig,
+          agentGroup,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,

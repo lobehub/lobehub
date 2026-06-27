@@ -16,6 +16,7 @@ import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
+  AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
   LobeToolManifest,
@@ -178,6 +179,72 @@ const isVisualUnderstandingConfigured = () => {
     // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
     return false;
   }
+};
+
+/**
+ * Build the multi-agent group context from a group's member roster, mirroring
+ * the client `contextEngineering.ts` `agentGroup` build. Carries every member's
+ * real `agt_*` ID so the supervisor dispatches members by ID instead of role
+ * name (role names don't resolve → "Agent member(s) failed to start."). Resolves
+ * the responding agent's own role/name so GroupContextInjector marks it with
+ * `you="true"` and the orchestration filter activates for participants.
+ */
+const buildGroupAgentContext = (
+  currentAgentId: string,
+  group: { content?: string | null; title?: string | null } | undefined,
+  roster: Array<{ agentId: string; role: string | null; title: string | null }>,
+): AgentGroupConfig | undefined => {
+  if (roster.length === 0) return undefined;
+
+  const agentMap: AgentGroupConfig['agentMap'] = {};
+  const members: NonNullable<AgentGroupConfig['members']> = [];
+  let currentAgentName: string | undefined;
+  let currentAgentRole: 'supervisor' | 'participant' | undefined;
+
+  for (const member of roster) {
+    const role = member.role === 'supervisor' ? 'supervisor' : 'participant';
+    const name = member.title?.trim() || 'Untitled Agent';
+    agentMap[member.agentId] = { name, role };
+    members.push({ id: member.agentId, name, role });
+
+    if (member.agentId === currentAgentId) {
+      currentAgentName = name;
+      currentAgentRole = role;
+    }
+  }
+
+  return {
+    agentMap,
+    currentAgentId,
+    currentAgentName,
+    currentAgentRole,
+    groupTitle: group?.title || undefined,
+    members,
+    systemPrompt: group?.content || undefined,
+  };
+};
+
+/**
+ * Bot-conversation fallback: a single bot agent has no real group, so build a
+ * degenerate one-member context purely to give it its `<group_context>`
+ * identity block. Only used when there is no `groupId`.
+ */
+const buildBotConversationGroupContext = (
+  currentAgentId: string,
+  agentConfig: { description?: unknown; title?: unknown } | undefined,
+): AgentGroupConfig => {
+  const title = agentConfig?.title;
+  const description = agentConfig?.description;
+  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
+
+  return {
+    agentMap: { [currentAgentId]: { name, role: 'participant' } },
+    currentAgentId,
+    currentAgentName: name,
+    currentAgentRole: 'participant',
+    members: [{ id: currentAgentId, name, role: 'participant' }],
+    systemPrompt: typeof description === 'string' ? description : undefined,
+  };
 };
 
 /**
@@ -1847,6 +1914,9 @@ export class AiAgentService {
     const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
     let globalMemoryEnabled = agentMemoryEnabled ?? false;
     let userTimezone: string | undefined;
+    // Resolved once below (alongside the group-tool authorization fetch) and
+    // forwarded into op metadata for the per-step context engine.
+    let operationAgentGroup: AgentGroupConfig | undefined;
     try {
       const userModel = new UserModel(this.db, this.userId);
       const settings = await userModel.getUserSettings();
@@ -2200,29 +2270,38 @@ export class AiAgentService {
         activeDeviceId ?? 'none',
       );
 
-      // `appContext.orchestrationRole` is client-supplied (the execAgent /
-      // execAgents schema accepts it, and execGroupAgent stamps it for whatever
-      // agentId the caller passed), so it must NOT alone authorize the
-      // group-orchestration toolset — otherwise any run marked
-      // `{ orchestrationRole: 'supervisor', groupId }` could dispatch group
-      // members. Verify against the persisted, ownership-scoped membership that
-      // the executing agent really is this group's supervisor.
+      // Resolve the operation's group context ONCE here and snapshot it into op
+      // metadata below — the per-step context engine reads it back without a DB
+      // lookup, mirroring agentConfig/botContext. The same roster fetch also
+      // authorizes the group-orchestration toolset.
       let isGroupSupervisor = false;
-      if (appContext?.orchestrationRole === 'supervisor' && appContext?.groupId) {
-        const groupAgents = await new ChatGroupModel(
-          this.db,
-          this.userId,
-          this.workspaceId,
-        ).getGroupAgents(appContext.groupId);
-        isGroupSupervisor = groupAgents.some(
-          (member) => member.agentId === resolvedAgentId && member.role === 'supervisor',
-        );
-        if (!isGroupSupervisor)
-          log(
-            'execAgent: orchestrationRole=supervisor but agent %s is not the supervisor of group %s — denying group tools',
-            resolvedAgentId,
-            appContext.groupId,
+      if (appContext?.groupId) {
+        const chatGroupModel = new ChatGroupModel(this.db, this.userId, this.workspaceId);
+        const [group, roster] = await Promise.all([
+          chatGroupModel.findById(appContext.groupId),
+          chatGroupModel.getGroupAgentsWithMeta(appContext.groupId),
+        ]);
+
+        // `appContext.orchestrationRole` is client-supplied (execGroupAgent stamps
+        // it for whatever agentId the caller passed), so it must NOT alone
+        // authorize the group-orchestration toolset — otherwise any run marked
+        // `{ orchestrationRole: 'supervisor', groupId }` could dispatch members.
+        // Verify against the persisted, ownership-scoped membership instead.
+        if (appContext.orchestrationRole === 'supervisor') {
+          isGroupSupervisor = roster.some(
+            (member) => member.agentId === resolvedAgentId && member.role === 'supervisor',
           );
+          if (!isGroupSupervisor)
+            log(
+              'execAgent: orchestrationRole=supervisor but agent %s is not the supervisor of group %s — denying group tools',
+              resolvedAgentId,
+              appContext.groupId,
+            );
+        }
+
+        operationAgentGroup = buildGroupAgentContext(resolvedAgentId, group, roster);
+      } else if (botContext) {
+        operationAgentGroup = buildBotConversationGroupContext(resolvedAgentId, agentConfig);
       }
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
@@ -3035,6 +3114,7 @@ export class AiAgentService {
       const result = await this.agentRuntimeService.createOperation({
         activeDeviceId,
         agentConfig,
+        agentGroup: operationAgentGroup,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         executionPlan,
         userTimezone,

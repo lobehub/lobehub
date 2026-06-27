@@ -325,6 +325,36 @@ export class ChatGroupModel {
     });
   }
 
+  /**
+   * Read-only roster of a group's agents joined with their agent meta
+   * (title/description) and membership role, ordered by member order.
+   *
+   * Used to inject the group member list — with the real `agt_*` IDs — into the
+   * supervisor/member runtime context so the orchestration model dispatches
+   * members by their actual IDs instead of hallucinating role names (which then
+   * fail to resolve to an agent, surfacing as "Agent member(s) failed to start").
+   */
+  async getGroupAgentsWithMeta(groupId: string): Promise<
+    Array<{
+      agentId: string;
+      description: string | null;
+      role: string | null;
+      title: string | null;
+    }>
+  > {
+    return this.db
+      .select({
+        agentId: chatGroupsAgents.agentId,
+        description: agents.description,
+        role: chatGroupsAgents.role,
+        title: agents.title,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()))
+      .orderBy(chatGroupsAgents.order);
+  }
+
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
