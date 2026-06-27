@@ -8,6 +8,7 @@ import ContentLoading from '@/features/Conversation/Messages/components/ContentL
 import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
+import CouncilList from '../../AgentCouncil/components/CouncilList';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
@@ -86,6 +87,7 @@ const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
 const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   (!block.content || block.content === LOADING_FLAT) &&
   (!block.tools || block.tools.length === 0) &&
+  (!block.council || block.council.length === 0) &&
   !block.error &&
   !block.reasoning;
 
@@ -469,6 +471,20 @@ const Group = memo<GroupChildrenProps>(
       }
 
       const item = segment.block;
+
+      // AgentCouncil block: broadcast members rendered as parallel columns inside
+      // the supervisor's bubble.
+      if (item.council && item.council.length > 0) {
+        return (
+          <CouncilList
+            activeTab={0}
+            displayMode={'horizontal'}
+            key={item.renderKey ?? `${id}.${item.id}.${index}`}
+            members={item.council}
+          />
+        );
+      }
+
       if (!isGenerating && isEmptyBlock(item)) return null;
 
       return (

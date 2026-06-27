@@ -411,18 +411,38 @@ describe('parse', () => {
   });
 
   describe('AgentCouncil Mode', () => {
-    it('should parse simple agentCouncil (broadcast) correctly', () => {
+    // The council renders as a `council` block INSIDE the supervisor's assistant
+    // group (parallel columns), not as a separate top-level agentCouncil message.
+    const findCouncilBlock = (result: ReturnType<typeof parse>): any => {
+      for (const msg of result.flatList) {
+        const block = (msg as any).children?.find(
+          (b: any) => Array.isArray(b?.council) && b.council.length > 0,
+        );
+        if (block) return block;
+      }
+      return undefined;
+    };
+
+    it('should render a simple broadcast as an in-bubble council block', () => {
       const result = parse(inputs.agentCouncil.simple);
 
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.simple);
+      // No separate agentCouncil message; the council is a block in the group bubble.
+      expect(result.flatList.some((m) => m.role === 'agentCouncil')).toBe(false);
+      const council = findCouncilBlock(result);
+      expect(council).toBeDefined();
+      expect(council.council.map((m: any) => m.id)).toEqual([
+        'msg-agent-backend-1',
+        'msg-agent-devops-1',
+        'msg-agent-architect-1',
+      ]);
     });
 
     // Regression (server runtime tree): the server-side group orchestration parents
     // per-member completion anchors (`role: 'tool'`) under the broadcast tool message
     // for its K=N barrier, alongside the member assistant responses. Those anchors are
-    // bookkeeping, not council members — the council must render exactly the assistant
-    // members and the anchors must never surface as members or as orphan tool messages.
-    it('should ignore server-runtime barrier anchors and render only assistant council members', () => {
+    // bookkeeping, not council members — the council block must hold exactly the
+    // assistant members and the anchors must never surface anywhere.
+    it('should ignore server-runtime barrier anchors and keep only assistant council members', () => {
       const broadcastToolId = 'msg-broadcast-tool-1';
       const anchors = [0, 1, 2].map((i) => ({
         content: '',
@@ -440,11 +460,10 @@ describe('parse', () => {
 
       const result = parse(messages as any);
 
-      const council = result.flatList.find((m) => m.role === 'agentCouncil') as any;
+      const council = findCouncilBlock(result);
       expect(council).toBeDefined();
       // Exactly the 3 assistant members — no anchors mixed in.
-      expect(council.members).toHaveLength(3);
-      expect(council.members.map((m: any) => m.id)).toEqual([
+      expect(council.council.map((m: any) => m.id)).toEqual([
         'msg-agent-backend-1',
         'msg-agent-devops-1',
         'msg-agent-architect-1',
@@ -456,9 +475,9 @@ describe('parse', () => {
 
     // Regression (new server runtime tree): broadcast members are parented to the
     // SUPERVISOR ASSISTANT message (siblings of the council tool), not to the tool.
-    // The per-member barrier anchors stay UNDER the council tool. The council must
-    // still group exactly the assistant members and never surface the anchors.
-    it('should render the council when members are siblings of the council tool (assistant-parented)', () => {
+    // The per-member barrier anchors stay UNDER the council tool. The council block
+    // must still hold exactly the assistant members and never surface the anchors.
+    it('should build the council block when members are siblings of the council tool (assistant-parented)', () => {
       const supervisorId = 'msg-supervisor-1';
       const broadcastToolId = 'msg-broadcast-tool-1';
       const memberIds = ['msg-agent-backend-1', 'msg-agent-devops-1', 'msg-agent-architect-1'];
@@ -481,31 +500,26 @@ describe('parse', () => {
 
       const result = parse([...base, ...anchors] as any);
 
-      const council = result.flatList.find((m) => m.role === 'agentCouncil') as any;
+      const council = findCouncilBlock(result);
       expect(council).toBeDefined();
-      expect(council.members.map((m: any) => m.id)).toEqual(memberIds);
+      expect(council.council.map((m: any) => m.id)).toEqual(memberIds);
       // The supervisor bubble still renders, and the anchors never leak.
       const flatIds = result.flatList.map((m) => m.id);
       expect(flatIds).toContain(supervisorId);
       for (const anchor of anchors) expect(flatIds).not.toContain(anchor.id);
     });
 
-    it('should parse agentCouncil with supervisor final reply correctly', () => {
+    it('should render the supervisor final reply after the in-bubble council', () => {
       const result = parse(inputs.agentCouncil.withSupervisorReply);
 
-      // The critical assertions:
-      // 1. flatList should have 4 items: user, supervisor(+tool), agentCouncil(3 agents), supervisor-summary
-      expect(result.flatList).toHaveLength(4);
+      // flatList: user, supervisor group (tool-use + council block), supervisor summary.
+      expect(result.flatList).toHaveLength(3);
       expect(result.flatList[0].role).toBe('user');
-      expect(result.flatList[1].role).toBe('supervisor'); // supervisor with tools gets role='supervisor'
-      expect(result.flatList[2].role).toBe('agentCouncil');
-      expect(result.flatList[3].role).toBe('supervisor'); // supervisor final reply
-      expect(result.flatList[3].id).toBe('msg-supervisor-summary');
-
-      // 2. agentCouncil should have 3 members (not 4, supervisor summary is separate)
-      expect((result.flatList[2] as any).members).toHaveLength(3);
-
-      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.withSupervisorReply);
+      expect(result.flatList[1].role).toBe('supervisor');
+      expect(result.flatList[2].id).toBe('msg-supervisor-summary');
+      // No separate agentCouncil message; the council is a block with 3 members.
+      expect(result.flatList.some((m) => m.role === 'agentCouncil')).toBe(false);
+      expect(findCouncilBlock(result)?.council).toHaveLength(3);
     });
 
     // Regression: the supervisor's post-council reply must surface no matter which council
