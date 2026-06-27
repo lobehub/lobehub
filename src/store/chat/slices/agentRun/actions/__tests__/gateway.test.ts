@@ -1110,7 +1110,7 @@ describe('GatewayActionImpl', () => {
       });
 
       vi.mocked(topicService.updateTopicMetadata).mockClear().mockResolvedValue(undefined as never);
-      captured.onSessionComplete!({ succeeded: false, terminalReceived: false });
+      captured.onSessionComplete!({ authFailed: false, succeeded: false, terminalReceived: false });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
       expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
@@ -1129,11 +1129,33 @@ describe('GatewayActionImpl', () => {
       });
 
       vi.mocked(topicService.updateTopicMetadata).mockClear().mockResolvedValue(undefined as never);
-      captured.onSessionComplete!({ succeeded: true, terminalReceived: true });
+      captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: true });
 
       // The run lifecycle owns completion when a terminal event arrives, so the
       // reconnect path must not double-complete its local op here.
       expect(completeOperation).not.toHaveBeenCalled();
+      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        runningOperation: null,
+      });
+    });
+
+    // auth_failed (or a failed token refresh) is authoritative that the op is
+    // gone: clear the stale marker AND complete the local op, so reloads / drawer
+    // opens stop reconnecting to a dead operation. Without this the persisted
+    // runningOperation lingers forever.
+    it('clears runningOperation and completes the local op on auth failure', async () => {
+      const { action, captured, completeOperation } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.updateTopicMetadata).mockClear().mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({ authFailed: true, succeeded: false, terminalReceived: false });
+
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
       expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         runningOperation: null,
       });
