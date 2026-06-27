@@ -482,15 +482,11 @@ export class AgentSliceActionImpl {
     this.#set({ agentMap }, false, 'dispatchAgentMap');
   };
 
-  #syncAgentConfigCache = (
-    id: string,
-    config: LobeAgentConfig | null | undefined = this.#get().agentMap[id],
-  ): void => {
-    void mutate(
-      agentConfigKeys.config(id),
-      config ? (merge({}, config) as LobeAgentConfig) : undefined,
-      { revalidate: false },
-    );
+  #syncAgentConfigCache = (id: string): void => {
+    const config = this.#get().agentMap[id];
+    if (!config) return;
+
+    void mutate(agentConfigKeys.config(id), structuredClone(config), { revalidate: false });
   };
 
   #mergeLatestAgencyConfigPatch = (
@@ -522,10 +518,6 @@ export class AgentSliceActionImpl {
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
-    // New-topic mount can replay stale SWR cache after a model switch but
-    // before executeClientAgent reads the store, so keep both sources aligned.
-    this.#syncAgentConfigCache(id);
-    const optimisticConfig = this.#get().agentMap[id];
     updateSaveStatus('saving');
 
     try {
@@ -535,20 +527,17 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        // `agent:config` is IndexedDB-backed. Example: if model A -> B is saved
+        // optimistically but the request aborts, persisting B here would replay an
+        // unconfirmed model on the next launch.
         this.#syncAgentConfigCache(id);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
     } catch (error: any) {
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
-        if (isEqual(this.#get().agentMap[id], optimisticConfig)) {
-          this.#syncAgentConfigCache(id, null);
-        }
         updateSaveStatus('idle');
       } else {
-        if (isEqual(this.#get().agentMap[id], optimisticConfig)) {
-          this.#syncAgentConfigCache(id, null);
-        }
         console.error('[AgentStore] Failed to save config:', error);
         updateSaveStatus('idle');
       }
