@@ -247,6 +247,11 @@ export interface MessageMetadata {
   activeBranchIndex?: number;
   activeColumn?: boolean;
   /**
+   * Marks a `role: 'tool'` message (a group broadcast tool call) as an
+   * AgentCouncil: its member responses render as one parallel-streaming block.
+   */
+  agentCouncil?: boolean;
+  /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */

@@ -290,6 +290,14 @@ export interface ExecGroupMemberParams {
   onComplete: GroupActionOnComplete;
   /** Parent (supervisor) operation id. */
   parentOperationId: string;
+  /**
+   * Supervisor ASSISTANT message id that owns the group-management tool call.
+   * In-group council members parent their response to THIS message — so the
+   * member assistants are siblings of the council tool under the supervisor
+   * turn and the renderer groups them into one council — while the per-member
+   * anchors stay under `groupToolMessageId` for the K=N barrier.
+   */
+  supervisorMessageId?: string;
   /** Per-member timeout (ms), isolated mode. */
   timeout?: number;
   /** Group topic id. */

@@ -73,7 +73,11 @@ export class FlatListBuilder {
     // This handles the case when we continue from a tool message that triggered broadcast
     if (parentId) {
       const parentMessage = this.messageMap.get(parentId);
-      if (parentMessage && this.isAgentCouncilMode(parentMessage) && children.length > 1) {
+      if (
+        parentMessage &&
+        this.isAgentCouncilMode(parentMessage) &&
+        this.councilMemberChildIds(children).length > 1
+      ) {
         // Create agentCouncil virtual message from the parent tool message
         const agentCouncilMessage = this.createAgentCouncilMessageFromChildIds(
           parentMessage,
@@ -283,6 +287,10 @@ export class FlatListBuilder {
           processedIds.add(completion.id);
         }
 
+        // Emit the AgentCouncil (broadcast members are assistant siblings of the
+        // council tool) before draining the rest of the continuation.
+        this.buildSupervisorCouncil(allToolMessages, flatList, processedIds, allMessages);
+
         this.continueAfterAssistantGroup(
           assistantChain,
           allToolMessages,
@@ -343,7 +351,10 @@ export class FlatListBuilder {
       }
 
       // Priority 3b: AgentCouncil mode (from message metadata, typically on tool messages)
-      if (this.isAgentCouncilMode(message) && childMessages.length > 1) {
+      if (
+        this.isAgentCouncilMode(message) &&
+        this.councilMemberChildIds(childMessages).length > 1
+      ) {
         // Create agentCouncil virtual message with proper handling of AssistantGroups
         const agentCouncilMessage = this.createAgentCouncilMessageFromChildIds(
           message,
@@ -526,6 +537,8 @@ export class FlatListBuilder {
     assistantChain.forEach((m) => processedIds.add(m.id));
     allToolMessages.forEach((m) => processedIds.add(m.id));
 
+    this.buildSupervisorCouncil(allToolMessages, flatList, processedIds, allMessages);
+
     this.continueAfterAssistantGroup(
       assistantChain,
       allToolMessages,
@@ -565,6 +578,55 @@ export class FlatListBuilder {
         allMessages,
       );
     }
+  }
+
+  /**
+   * New-shape AgentCouncil: a supervisor turn whose tool call carries
+   * `agentCouncil` metadata renders its broadcast members — the ASSISTANT
+   * children of the supervisor message, siblings of the council tool — as one
+   * council group. The council tool's OWN children are server-runtime barrier
+   * anchors (`role: 'tool'`), never council members; they are marked processed
+   * so they don't surface as standalone tool bubbles.
+   *
+   * Returns true when a council was emitted. The legacy shape (members parented
+   * directly under the tool message) carries no member siblings on the
+   * supervisor message, so this returns false and the `buildFlatListRecursive`
+   * council pre-loop handles it instead.
+   */
+  private buildSupervisorCouncil(
+    allToolMessages: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): boolean {
+    const councilTool = allToolMessages.find((tool) => this.isAgentCouncilMode(tool));
+    const supervisorId = councilTool?.parentId;
+    if (!councilTool || !supervisorId) return false;
+
+    const memberIds = this.councilMemberChildIds(this.childrenMap.get(supervisorId) ?? []).filter(
+      (id) => !processedIds.has(id),
+    );
+    if (memberIds.length <= 1) return false;
+
+    const agentCouncilMessage = this.createAgentCouncilMessageFromChildIds(
+      councilTool,
+      memberIds,
+      allMessages,
+      processedIds,
+    );
+    flatList.push(agentCouncilMessage);
+
+    // Barrier anchors under the council tool are bookkeeping, not members — keep
+    // them out of the flat list.
+    for (const anchorId of this.childrenMap.get(councilTool.id) ?? []) {
+      processedIds.add(anchorId);
+    }
+
+    // Surface the supervisor's post-council reply, which attaches to one member.
+    for (const memberId of memberIds) {
+      this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+    }
+    return true;
   }
 
   private buildFlatListRecursiveForChild(
@@ -626,6 +688,17 @@ export class FlatListBuilder {
    */
   private isAgentCouncilMode(message: Message): boolean {
     return (message.metadata as any)?.agentCouncil === true;
+  }
+
+  /**
+   * The council members under a broadcast tool message are its non-tool children
+   * (the member assistant responses). The server runtime also parents per-member
+   * barrier anchors (`role: 'tool'`) under the same tool message; those are
+   * completion bookkeeping, not council members, so they are excluded here. On
+   * the client the tool message has only assistant children, so this is a no-op.
+   */
+  private councilMemberChildIds(childIds: string[]): string[] {
+    return childIds.filter((id) => this.messageMap.get(id)?.role !== 'tool');
   }
 
   /**
@@ -733,8 +806,16 @@ export class FlatListBuilder {
     const members: Message[] = [];
     const memberIds: string[] = [];
 
-    // Process each child (member)
+    // Council members are the non-tool children; the server runtime's per-member
+    // barrier anchors (role: 'tool') are excluded. Mark those anchors processed
+    // so they don't surface later as orphan tool messages.
+    const memberChildIds = this.councilMemberChildIds(childIds);
     for (const childId of childIds) {
+      if (!memberChildIds.includes(childId)) processedIds.add(childId);
+    }
+
+    // Process each child (member)
+    for (const childId of memberChildIds) {
       const childMessage = this.messageMap.get(childId);
       if (!childMessage) continue;
 
@@ -783,7 +864,7 @@ export class FlatListBuilder {
     const agentCouncilId = `agentCouncil-${parentMessage.id}-${memberIdsStr}`;
 
     // Calculate timestamps from all member messages
-    const allMemberMessages = childIds.map((id) => this.messageMap.get(id)).filter(Boolean);
+    const allMemberMessages = memberChildIds.map((id) => this.messageMap.get(id)).filter(Boolean);
     const createdAt =
       allMemberMessages.length > 0
         ? Math.min(...allMemberMessages.map((m) => m!.createdAt))

@@ -3482,6 +3482,7 @@ export class AiAgentService {
       instruction,
       onComplete,
       parentOperationId,
+      supervisorMessageId,
       topicId,
     } = params;
 
@@ -3527,6 +3528,17 @@ export class AiAgentService {
     // shared group conversation (no isolation thread). The bridge backfills the
     // member anchor (a short receipt) and resumes/finishes the supervisor.
     //
+    // The member response attaches to the SUPERVISOR ASSISTANT message that owns
+    // this group-management tool call (`supervisorMessageId`), NOT to the tool
+    // message. For a multi-member broadcast the member assistants are therefore
+    // siblings of the `agentCouncil` tool under one supervisor turn, and the
+    // renderer groups them into a single parallel-streaming council card. The tool
+    // message stays a pure result and the per-member anchors stay under it for the
+    // K=N barrier only. This keeps the tool node clean and lets parallel speak/
+    // broadcast turns render without the UI discontinuity the old tool-parented
+    // shape caused. Falls back to the group tool message if no supervisor id was
+    // threaded through (e.g. single-member collapses onto the tool anyway).
+    //
     // The supervisor instruction is injected as an EPHEMERAL user message
     // (`suppressUserMessage` + `ephemeralUserMessage`): it drives the member's
     // response but is NOT persisted as a `role: 'user'` row, mirroring the
@@ -3549,7 +3561,7 @@ export class AiAgentService {
           parentOperationId,
         }),
       ],
-      parentMessageId: anchorMessageId,
+      parentMessageId: supervisorMessageId ?? groupToolMessageId,
       parentOperationId,
       prompt: speakerInstruction,
       suppressUserMessage: true,

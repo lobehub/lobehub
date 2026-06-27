@@ -417,6 +417,79 @@ describe('parse', () => {
       expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.simple);
     });
 
+    // Regression (server runtime tree): the server-side group orchestration parents
+    // per-member completion anchors (`role: 'tool'`) under the broadcast tool message
+    // for its K=N barrier, alongside the member assistant responses. Those anchors are
+    // bookkeeping, not council members — the council must render exactly the assistant
+    // members and the anchors must never surface as members or as orphan tool messages.
+    it('should ignore server-runtime barrier anchors and render only assistant council members', () => {
+      const broadcastToolId = 'msg-broadcast-tool-1';
+      const anchors = [0, 1, 2].map((i) => ({
+        content: '',
+        createdAt: 1_704_067_202_500 + i,
+        id: `msg-anchor-m${i}`,
+        metadata: {},
+        parentId: broadcastToolId,
+        pluginState: { status: 'pending' },
+        role: 'tool' as const,
+        tool_call_id: `call_broadcast_1::m${i}`,
+        updatedAt: 1_704_067_202_500 + i,
+      }));
+      // Anchors are created before the members fork, so they sort first under the tool.
+      const messages = [...inputs.agentCouncil.simple, ...anchors];
+
+      const result = parse(messages as any);
+
+      const council = result.flatList.find((m) => m.role === 'agentCouncil') as any;
+      expect(council).toBeDefined();
+      // Exactly the 3 assistant members — no anchors mixed in.
+      expect(council.members).toHaveLength(3);
+      expect(council.members.map((m: any) => m.id)).toEqual([
+        'msg-agent-backend-1',
+        'msg-agent-devops-1',
+        'msg-agent-architect-1',
+      ]);
+      // None of the anchors leak into the flat list (e.g. as orphan tool messages).
+      const flatIds = result.flatList.map((m) => m.id);
+      for (const anchor of anchors) expect(flatIds).not.toContain(anchor.id);
+    });
+
+    // Regression (new server runtime tree): broadcast members are parented to the
+    // SUPERVISOR ASSISTANT message (siblings of the council tool), not to the tool.
+    // The per-member barrier anchors stay UNDER the council tool. The council must
+    // still group exactly the assistant members and never surface the anchors.
+    it('should render the council when members are siblings of the council tool (assistant-parented)', () => {
+      const supervisorId = 'msg-supervisor-1';
+      const broadcastToolId = 'msg-broadcast-tool-1';
+      const memberIds = ['msg-agent-backend-1', 'msg-agent-devops-1', 'msg-agent-architect-1'];
+      // Re-parent the members onto the supervisor assistant (the new shape).
+      const base = inputs.agentCouncil.simple.map((m) =>
+        memberIds.includes(m.id) ? { ...m, parentId: supervisorId } : m,
+      );
+      // Barrier anchors live under the council tool, created before members stream.
+      const anchors = [0, 1, 2].map((i) => ({
+        content: '',
+        createdAt: 1_704_067_202_500 + i,
+        id: `msg-anchor-m${i}`,
+        metadata: {},
+        parentId: broadcastToolId,
+        pluginState: { status: 'completed' },
+        role: 'tool' as const,
+        tool_call_id: `call_broadcast_1::m${i}`,
+        updatedAt: 1_704_067_202_500 + i,
+      }));
+
+      const result = parse([...base, ...anchors] as any);
+
+      const council = result.flatList.find((m) => m.role === 'agentCouncil') as any;
+      expect(council).toBeDefined();
+      expect(council.members.map((m: any) => m.id)).toEqual(memberIds);
+      // The supervisor bubble still renders, and the anchors never leak.
+      const flatIds = result.flatList.map((m) => m.id);
+      expect(flatIds).toContain(supervisorId);
+      for (const anchor of anchors) expect(flatIds).not.toContain(anchor.id);
+    });
+
     it('should parse agentCouncil with supervisor final reply correctly', () => {
       const result = parse(inputs.agentCouncil.withSupervisorReply);
 
@@ -443,9 +516,7 @@ describe('parse', () => {
       'should surface supervisor final reply when it parents to council member %s',
       (memberId) => {
         const messages = inputs.agentCouncil.withSupervisorReply.map((message) =>
-          message.id === 'msg-supervisor-summary'
-            ? { ...message, parentId: memberId }
-            : message,
+          message.id === 'msg-supervisor-summary' ? { ...message, parentId: memberId } : message,
         );
 
         const result = parse(messages);

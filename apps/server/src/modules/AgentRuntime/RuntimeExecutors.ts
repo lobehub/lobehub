@@ -441,6 +441,14 @@ const buildServerAgentMemberRunner = (
       const expectedMembers = members.length;
       if (expectedMembers === 0) return { started: false, startedCount: 0 };
 
+      // In-group multi-member actions (broadcast) render as an AgentCouncil: each
+      // member speaks DIRECTLY under the group tool message and the UI groups them
+      // into one parallel-streaming block. This mirrors the client broadcast tree
+      // (`metadata.agentCouncil` + member messages parented to the tool message),
+      // so it reuses the same conversation-flow council path. No per-member receipt
+      // anchors — the member barrier counts completed member messages instead.
+      const isCouncil = mode === 'in_group' && expectedMembers > 1;
+
       // 1. Group tool placeholder — the parked tool call the supervisor op waits
       //    on. Stamped with the barrier target + finish disposition so the resume
       //    path (and verify watchdog) resolve resume-vs-finish on their own.
@@ -448,6 +456,7 @@ const buildServerAgentMemberRunner = (
         agentId,
         content: '',
         groupId,
+        ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { expectedMembers, onComplete, status: 'pending' },
@@ -458,7 +467,11 @@ const buildServerAgentMemberRunner = (
       });
 
       // 2. Per-member anchors. A single member collapses onto the group tool
-      //    message; multiple members each get a child anchor under it.
+      //    message; multiple members each get a child anchor under it. These
+      //    anchors drive the K=N completion barrier; for councils the member
+      //    responses themselves attach to the group tool message (see
+      //    execAgentMember), so the UI groups them while the anchors stay
+      //    barrier-only and are filtered out of the council member set.
       const anchorIds: string[] = [];
       if (expectedMembers === 1) {
         anchorIds.push(groupTool.id);
@@ -498,6 +511,9 @@ const buildServerAgentMemberRunner = (
               mode,
               onComplete,
               parentOperationId: ctx.operationId,
+              // The supervisor assistant message owning this tool call — council
+              // members parent their response here (siblings of the council tool).
+              supervisorMessageId: parentMessageId,
               timeout,
               topicId,
             });
