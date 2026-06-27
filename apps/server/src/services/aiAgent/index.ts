@@ -2250,6 +2250,14 @@ export class AiAgentService {
         hasEnabledKnowledgeBases,
         isBotConversation,
         isGroupSupervisor,
+        // Context-aware builtin manifests: inside a sub-agent (or group) run,
+        // lobe-agent drops `callSubAgent` so the model can't recurse into nested
+        // sub-agents (which the runtime rejects, looping until the inactivity
+        // watchdog kills the op). Mirrors the frontend `createAgentToolsEngine`.
+        manifestContext: {
+          isSubAgent: appContext?.isSubAgent,
+          scope: appContext?.scope ?? undefined,
+        },
         model,
         provider,
       });

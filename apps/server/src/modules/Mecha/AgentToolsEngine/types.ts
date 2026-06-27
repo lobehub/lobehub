@@ -1,5 +1,10 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import { type LobeAgentAgencyConfig, type LobeBuiltinTool, type LobeTool } from '@lobechat/types';
+import {
+  type BuiltinToolResolveContext,
+  type LobeAgentAgencyConfig,
+  type LobeBuiltinTool,
+  type LobeTool,
+} from '@lobechat/types';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 
@@ -44,6 +49,14 @@ export interface ServerAgentToolsEngineConfig {
    * This is the final post-merge wall referenced in .
    */
   excludeIdentifiers?: ReadonlySet<string>;
+  /**
+   * Runtime context for context-aware builtin manifests. When provided, each
+   * builtin tool with a `resolveManifest` produces its manifest for this context
+   * (e.g. lobe-agent drops `callSubAgent` + its systemRole section inside a
+   * sub-agent / group run). Omit for context-free callers — they get the full
+   * static manifests. Mirrors the frontend `ToolsEngineConfig.manifestContext`.
+   */
+  manifestContext?: BuiltinToolResolveContext;
 }
 
 /**
@@ -113,6 +126,13 @@ export interface ServerCreateAgentToolsEngineParams {
    * When true the engine auto-enables the group-management + agent-builder tools.
    */
   isGroupSupervisor?: boolean;
+  /**
+   * Conversation context for context-aware builtin manifests (scope,
+   * isSubAgent). Forwarded to `createServerToolsEngine` so tools like
+   * lobe-agent can self-trim — hiding `callSubAgent` (tool + systemRole)
+   * inside a sub-agent / group run.
+   */
+  manifestContext?: BuiltinToolResolveContext;
   /** Model name for function calling compatibility check */
   model: string;
   /** Provider name for function calling compatibility check */

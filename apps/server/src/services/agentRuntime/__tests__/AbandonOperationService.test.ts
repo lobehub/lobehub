@@ -30,6 +30,16 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({ update: messageUpdateMock })),
 }));
 
+const findOperationMock = vi.fn().mockResolvedValue(null);
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(() => ({ findById: findOperationMock })),
+}));
+
+const findThreadMock = vi.fn().mockResolvedValue(null);
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn().mockImplementation(() => ({ findById: findThreadMock })),
+}));
+
 const stateWith = (overrides: Record<string, any> = {}) => ({
   cost: { total: 0.1 },
   metadata: {
@@ -47,6 +57,8 @@ const stateWith = (overrides: Record<string, any> = {}) => ({
 describe('AbandonOperationService', () => {
   beforeEach(() => {
     messageUpdateMock.mockClear();
+    findOperationMock.mockReset().mockResolvedValue(null);
+    findThreadMock.mockReset().mockResolvedValue(null);
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -202,5 +214,62 @@ describe('AbandonOperationService', () => {
     expect(result.found).toBe(true);
     expect(result.finalized).toBe(true);
     expect(result.assistantMessageUpdated).toBe(false);
+  });
+
+  it('surfaces subAgentResume linkage when an abandoned op is a sub-agent', async () => {
+    findOperationMock.mockResolvedValue({
+      parentOperationId: 'op_parent',
+      threadId: 'thread_1',
+    });
+    findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_tool_placeholder' });
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {
+            assistantMessageId: 'msg_assist_1',
+            isSubAgent: true,
+            threadId: 'thread_1',
+            userId: 'user_x',
+            workspaceId: 'ws_1',
+          },
+        }),
+      ),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    const svc = new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+
+    const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.subAgentResume).toEqual({
+      parentOperationId: 'op_parent',
+      threadId: 'thread_1',
+      toolMessageId: 'msg_tool_placeholder',
+      userId: 'user_x',
+      workspaceId: 'ws_1',
+    });
+  });
+
+  it('omits subAgentResume for a non-sub-agent abandoned op', async () => {
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    const svc = new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+
+    const result = await svc.finalizeAbandoned('op_x', 'reason');
+
+    expect(result.subAgentResume).toBeUndefined();
+    expect(findOperationMock).not.toHaveBeenCalled();
   });
 });
