@@ -280,6 +280,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           presence_penalty,
           top_p,
           temperature,
+          apiMode,
           ...responseRest
         } = rest as any;
 
