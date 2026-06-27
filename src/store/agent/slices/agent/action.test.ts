@@ -588,24 +588,59 @@ describe('AgentSlice Actions', () => {
       );
       expect(configCacheCalls).toHaveLength(2);
 
-      const [, optimisticCacheUpdater, options] = configCacheCalls[0];
+      const [, optimisticCacheConfig, options] = configCacheCalls[0];
       expect(options).toEqual({ revalidate: false });
-
-      // Regression: new-topic mount can replay cached modelA after the user
-      // switched to modelB and before executeClientAgent reads the store.
-      expect(
-        optimisticCacheUpdater({
-          id: 'agent-1',
-          model: 'model-a',
-          provider: 'lobehub',
-          systemRole: 'keep me',
-        }),
-      ).toMatchObject({
+      expect(optimisticCacheConfig).toMatchObject({
         id: 'agent-1',
         model: 'model-b',
         provider: 'lobehub',
-        systemRole: 'keep me',
       });
+    });
+
+    it('should not preserve deleted nested config keys when syncing agent config cache', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: {
+          agencyConfig: { workingDirByDevice: { 'device-b': '/b' } },
+          id: 'agent-1',
+        } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: {
+            'agent-1': {
+              agencyConfig: {
+                workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' },
+              },
+              id: 'agent-1',
+            } as any,
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          agencyConfig: { workingDirByDevice: { 'device-a': undefined } },
+        } as any);
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      const [, optimisticCacheConfig] = configCacheCalls[0];
+
+      expect(optimisticCacheConfig).toMatchObject({
+        agencyConfig: {
+          workingDirByDevice: { 'device-b': '/b' },
+        },
+        id: 'agent-1',
+      });
+      expect(optimisticCacheConfig.agencyConfig.workingDirByDevice).not.toHaveProperty('device-a');
     });
   });
 

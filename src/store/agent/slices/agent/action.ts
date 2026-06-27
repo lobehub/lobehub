@@ -488,7 +488,7 @@ export class AgentSliceActionImpl {
 
     void mutate(
       agentConfigKeys.config(id),
-      (cached?: LobeAgentConfig) => merge(cached ?? {}, config) as LobeAgentConfig,
+      merge({}, config) as LobeAgentConfig,
       { revalidate: false },
     );
   };
