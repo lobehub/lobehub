@@ -258,6 +258,45 @@ describe('AbandonOperationService', () => {
     expect(coord.deleteAgentOperation).not.toHaveBeenCalled();
   });
 
+  it('omits subAgentResume for an isolated group member (orchestrationRole=member)', async () => {
+    findOperationMock.mockResolvedValue({
+      parentOperationId: 'op_supervisor',
+      threadId: 'thread_g',
+    });
+    findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_group_anchor' });
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {
+            assistantMessageId: 'msg_assist_1',
+            isSubAgent: true,
+            orchestrationRole: 'member',
+            threadId: 'thread_g',
+            userId: 'user_x',
+            workspaceId: 'ws_1',
+          },
+        }),
+      ),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    const svc = new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+
+    const result = await svc.finalizeAbandoned('op_member', 'inactivity_watchdog');
+
+    // Group members are resumed via the group K=N bridge (their own timeout),
+    // not the sub-agent bridge — so we must NOT surface subAgentResume, and the
+    // coordinator state is cleaned up normally.
+    expect(result.subAgentResume).toBeUndefined();
+    expect(findOperationMock).not.toHaveBeenCalled();
+    expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
+  });
+
   it('omits subAgentResume for a non-sub-agent abandoned op', async () => {
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),

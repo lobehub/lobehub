@@ -95,6 +95,7 @@ export class AbandonOperationService {
     const metadata = (state.metadata ?? {}) as {
       assistantMessageId?: string;
       isSubAgent?: boolean;
+      orchestrationRole?: 'supervisor' | 'member';
       threadId?: string | null;
       userId?: string;
       workspaceId?: string;
@@ -150,7 +151,14 @@ export class AbandonOperationService {
     // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
     // set when the sub-agent was dispatched. When this is set, the coordinator
     // cleanup below is SKIPPED so the durable resume can still resolve userId.
-    if (metadata.isSubAgent && metadata.userId) {
+    //
+    // Isolated group members ALSO run with `isSubAgent: true` and an isolation
+    // thread, but their parent (supervisor) is resumed through the group K=N
+    // bridge (`completeGroupActionMember`, driven by the member's own
+    // `scheduleGroupMemberTimeout`) — routing them through the sub-agent bridge
+    // would backfill the wrong message and never satisfy the group barrier. They
+    // are tagged `orchestrationRole: 'member'`, so skip them here.
+    if (metadata.isSubAgent && metadata.orchestrationRole !== 'member' && metadata.userId) {
       try {
         const opRow = await new AgentOperationModel(
           this.db,
