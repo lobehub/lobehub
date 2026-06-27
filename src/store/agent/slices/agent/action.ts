@@ -482,17 +482,6 @@ export class AgentSliceActionImpl {
     this.#set({ agentMap }, false, 'dispatchAgentMap');
   };
 
-  #syncAgentConfigCache = (id: string): void => {
-    const config = this.#get().agentMap[id];
-    if (!config) return;
-
-    void mutate(agentConfigKeys.config(id), structuredClone(config), { revalidate: false });
-  };
-
-  #clearAgentConfigCache = (id: string): void => {
-    void mutate(agentConfigKeys.config(id), undefined, { revalidate: false });
-  };
-
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
@@ -522,9 +511,10 @@ export class AgentSliceActionImpl {
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
-    // Prevent stale persisted cache from replaying model A over optimistic
-    // model B before the save returns. The confirmed config is cached below.
-    this.#clearAgentConfigCache(id);
+    // Drop the stale SWR snapshot before the save finishes. Example: after
+    // model A -> B, cached A must not replay through useFetchAgentConfig and
+    // overwrite the optimistic B before the server response is applied.
+    void mutate(agentConfigKeys.config(id), undefined, { revalidate: false });
     updateSaveStatus('saving');
 
     try {
@@ -534,10 +524,15 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
-        // `agent:config` is IndexedDB-backed. Example: if model A -> B is saved
-        // optimistically but the request aborts, persisting B here would replay an
-        // unconfirmed model on the next launch.
-        this.#syncAgentConfigCache(id);
+        const confirmedConfig = this.#get().agentMap[id];
+
+        if (confirmedConfig) {
+          // Only seed the cache after success. If model A -> B fails or aborts,
+          // later hydration should not treat unconfirmed B as saved.
+          void mutate(agentConfigKeys.config(id), structuredClone(confirmedConfig), {
+            revalidate: false,
+          });
+        }
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
