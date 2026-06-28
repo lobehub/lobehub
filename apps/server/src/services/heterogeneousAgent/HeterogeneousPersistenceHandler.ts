@@ -548,7 +548,7 @@ export class HeterogeneousPersistenceHandler {
    * thread when the run is ABSENT from this map. On a cold serverless replica
    * `createMainAgentRunState` seeds an empty map, so a subagent event whose
    * thread already exists (created by an earlier batch / another replica) would
-   * fork a brand-new thread — the "大量无意义的 Subagent" bug. `refreshMainStateFromDb`
+   * fork a brand-new thread — the "excessive-spurious-subagent" bug. `refreshMainStateFromDb`
    * rebuilds the main-agent half; this rebuilds the subagent half the same way.
    *
    * Merge semantics: only runs MISSING from the in-memory map are rehydrated, so
@@ -559,8 +559,8 @@ export class HeterogeneousPersistenceHandler {
    * spawn is never resurrected — that would mint spurious empty assistants and
    * re-finalize churn), but their `sourceToolCallId` IS recorded in
    * `finalizedParents` so a REPLAYED first-event on a cold replica can't fork a
-   * duplicate thread for a spawn that already finished (the "一模一样的两个
-   * thread" bug). This mirrors #15838's main-turn idempotency for the subagent
+   * duplicate thread for a spawn that already finished (the "duplicate-identical-thread"
+   * bug). This mirrors #15838's main-turn idempotency for the subagent
    * thread-create step: dedup keyed by the DB-homed `sourceToolCallId`,
    * independent of in-memory state and of thread status.
    *

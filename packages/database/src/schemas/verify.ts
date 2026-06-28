@@ -279,7 +279,7 @@ export const verifyEvidence = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey().notNull(),
 
-    /** Human-readable caption, e.g. "首页首屏完整渲染". */
+    /** Human-readable caption, e.g. "首页首屏完整渲染" (homepage first-screen full render). */
     description: text('description'),
 
     /** The check result this evidence backs; evidence dies with its result. */
