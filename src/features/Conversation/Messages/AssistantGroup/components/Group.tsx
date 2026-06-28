@@ -456,10 +456,10 @@ const Group = memo<GroupChildrenProps>(
         return (
           <WorkflowCollapse
             assistantMessageId={id}
+            blocks={segment.blocks.map((block) => withMarkdownStreamingState(block, lastBlockId))}
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             disableEditing={disableEditing}
             key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
-            blocks={segment.blocks.map((block) => withMarkdownStreamingState(block, lastBlockId))}
             workflowChromeComplete={
               workflowChromeComplete ||
               (hasRenderedContentAfter(segments, index) && !hasPendingIntervention(segment.blocks))
@@ -503,7 +503,7 @@ const Group = memo<GroupChildrenProps>(
         <Flexbox className={styles.container} gap={8}>
           {foldProcess ? (
             <>
-              <ProcessFold durationText={durationText}>
+              <ProcessFold durationText={durationText} stepCount={blocks.length}>
                 <Flexbox gap={8}>
                   {processSegments.map((segment, index) => renderSegment(segment, index))}
                 </Flexbox>
