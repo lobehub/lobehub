@@ -306,6 +306,45 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('disconnected');
     });
 
+    it('should NOT disconnect on a forwarded terminal for a different operationId', async () => {
+      // Multiplexed WS (LOBE-10868): a broadcast member's agent_runtime_end is
+      // mirrored onto the supervisor's channel. It must be emitted (so the member
+      // handler can finalize that member) but must NOT close the supervisor WS.
+      const client = createClient(); // operationId: 'op-123'
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].operationId).toBe('op-member-456');
+      // Connection stays alive for the supervisor + sibling members.
+      expect(client.connectionStatus).toBe('connected');
+
+      // The owner op's own terminal still ends the session.
+      ws.simulateMessage({
+        event: {
+          data: {},
+          operationId: 'op-123',
+          stepIndex: 1,
+          timestamp: 2,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
     it('should emit session_complete and disconnect', async () => {
       const client = createClient();
       const onComplete = vi.fn();

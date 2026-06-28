@@ -210,9 +210,16 @@ export class GatewayActionImpl {
       });
     };
 
-    // Forward agent events to caller, and track terminal events
+    // Forward agent events to caller, and track terminal events.
+    //
+    // Only THIS op's terminal counts. On a multiplexed connection (LOBE-10868)
+    // the supervisor's WS also carries forwarded member terminals; a member
+    // finishing must not mark the supervisor run complete or stomp its unread
+    // status. Match on the event's operationId (absent ⇒ legacy single-op WS,
+    // treat as this op's to preserve prior behavior).
     client.on('agent_event', (event) => {
-      if (event.type === 'agent_runtime_end' || event.type === 'error') {
+      const isOwnOp = !event.operationId || event.operationId === operationId;
+      if (isOwnOp && (event.type === 'agent_runtime_end' || event.type === 'error')) {
         receivedTerminalEvent = true;
       }
       // Only a clean completion counts as success — a cancel ('interrupted') or
@@ -220,6 +227,7 @@ export class GatewayActionImpl {
       // branch so onSessionComplete clears the run back to 'active' instead of
       // leaving the topic persisted as an unread completion.
       if (
+        isOwnOp &&
         event.type === 'agent_runtime_end' &&
         isCompletedRuntimeEnd((event.data as { reason?: string } | undefined)?.reason)
       ) {
