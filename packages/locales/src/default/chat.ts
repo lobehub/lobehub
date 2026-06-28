@@ -838,6 +838,7 @@ export default {
   'taskDetail.latestActivity.briefWithType': 'Brief ({{type}}): {{title}}',
   'taskDetail.latestActivity.briefWithTypeOnly': 'Brief ({{type}})',
   'taskDetail.latestActivity.topic': 'Topic: {{title}}',
+  'taskDetail.latestActivity.topicFromSubtask': '{{identifier}} · {{topic}}',
   'taskDetail.latestActivity.topicWithSeq': 'Topic #{{seq}}: {{title}}',
   'taskDetail.latestActivity.untitledTopic': 'Untitled topic',
   'taskDetail.cancelSchedule': 'Cancel schedule',
@@ -902,6 +903,7 @@ export default {
   'taskDetail.topicMenu.stopConfirm.content':
     'The current run will be canceled. Generated messages are kept and you can re-run the task later.',
   'taskDetail.topicMenu.stopConfirm.title': 'Stop Run?',
+  'taskDetail.topicSource': 'From {{identifier}}',
   'taskDetail.updateFailed': 'Failed to update task',
 
   'createTask.assignee': 'Assignee',

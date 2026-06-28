@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   Flexbox,
   Freeze,
+  Tag,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
@@ -169,6 +170,17 @@ const TopicChatDrawer = memo(() => {
       style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
     >
       <TopicStatusIcon size={16} status={status} />
+      {activity?.sourceTaskIdentifier && (
+        <Tag
+          size={'small'}
+          style={{ flex: 'none' }}
+          title={t('taskDetail.topicSource', {
+            identifier: activity.sourceTaskIdentifier,
+          })}
+        >
+          {activity.sourceTaskIdentifier}
+        </Tag>
+      )}
       <Text ellipsis style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
         {activity?.title || t('taskDetail.topicDrawer.untitled')}
       </Text>
