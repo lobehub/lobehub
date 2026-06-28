@@ -68,6 +68,12 @@ export class SkillStoreExecutionRuntime {
         result = await this.service.importFromUrl(url);
       }
 
+      // Refresh the skills list for the direct/local client invoke path
+      // (`invokeBuiltinTool`), which never dispatches the executor's
+      // `onAfterCall`. The gateway path covers itself via `onAfterCall` and
+      // routes import through the server runtime, so this never double-fires.
+      await this.service.onSkillImported?.();
+
       return {
         content: `Skill "${result.skill.name}" ${result.status} successfully.`,
         state: {
@@ -140,6 +146,9 @@ export class SkillStoreExecutionRuntime {
 
     try {
       const result = await this.service.importFromMarket(identifier);
+
+      // See importSkill: refresh for the direct/local client invoke path.
+      await this.service.onSkillImported?.();
 
       return {
         content: `Skill "${result.skill.name}" ${result.status} successfully from market.`,
