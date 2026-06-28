@@ -2,10 +2,12 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook, SerializedHook } from '@/server/services/agentRuntime/hooks/types';
+import * as verifyService from '@/server/services/verify';
 
 import type { HeterogeneousPersistenceHandler } from '..';
 import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
@@ -390,6 +392,77 @@ describe('HeterogeneousAgentService', () => {
       );
 
       finalizeSpy.mockRestore();
+      dispatchSpy.mockRestore();
+    });
+
+    // Cross-instance race guard: recordStart's in-memory verify-plan promise lives
+    // on a DIFFERENT CompletionLifecycle (execAgent), so heteroFinish can't await
+    // it. A fast run could reach the gate before the plan persists. heteroFinish
+    // must therefore re-run the idempotent durable instantiation and AWAIT it
+    // before dispatching the gate.
+    it('awaits durable verify-plan instantiation before the completion gate for a task-bound run', async () => {
+      const { service } = createService();
+
+      const findByIdSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'findById')
+        .mockResolvedValue({ parentOperationId: null, taskId: 'task-1' } as any);
+      const instantiateSpy = vi
+        .spyOn(verifyService, 'instantiateVerifyPlanOnStart')
+        .mockResolvedValue();
+      const dispatchSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'dispatchHooks')
+        .mockResolvedValue();
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-race-guard',
+        result: 'success',
+        topicId: 'topic-race-guard',
+      });
+
+      expect(instantiateSpy).toHaveBeenCalledTimes(1);
+      // Ensured with the run's own task id (3rd arg is the params object).
+      expect(instantiateSpy.mock.calls[0][2]).toMatchObject({
+        operationId: 'op-race-guard',
+        taskId: 'task-1',
+      });
+      // The durable ensure is awaited BEFORE the gate — otherwise
+      // runVerifyOnCompletion could read an empty plan and skip verify.
+      expect(instantiateSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        dispatchSpy.mock.invocationCallOrder[0],
+      );
+
+      findByIdSpy.mockRestore();
+      instantiateSpy.mockRestore();
+      dispatchSpy.mockRestore();
+    });
+
+    it('skips verify-plan instantiation for a non-task hetero run', async () => {
+      const { service } = createService();
+
+      const findByIdSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'findById')
+        .mockResolvedValue({ parentOperationId: null, taskId: null } as any);
+      const instantiateSpy = vi
+        .spyOn(verifyService, 'instantiateVerifyPlanOnStart')
+        .mockResolvedValue();
+      const dispatchSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'dispatchHooks')
+        .mockResolvedValue();
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-no-task',
+        result: 'success',
+        topicId: 'topic-no-task',
+      });
+
+      expect(instantiateSpy).not.toHaveBeenCalled();
+      // Still routes through the lifecycle — verify just has nothing to gate on.
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+
+      findByIdSpy.mockRestore();
+      instantiateSpy.mockRestore();
       dispatchSpy.mockRestore();
     });
 

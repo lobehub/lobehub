@@ -3,6 +3,7 @@ import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
@@ -11,6 +12,7 @@ import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
 import {
   HeterogeneousPersistenceHandler,
@@ -278,12 +280,38 @@ export class HeterogeneousAgentService {
       log('heteroFinish: trace finalize failed (non-fatal): %O', err);
     }
 
-    // Resolve the run goal (the task the run had to satisfy) for the delivery
-    // checker. Only needed on the `done` path — the verify gate doesn't run on
-    // error. `messages.find(role==='user')` mirrors the in-process runtime's goal
-    // extraction; pass the raw content through and let dispatchHooks extract text.
     let goalContent: unknown = '';
     if (completionReason === 'done') {
+      // Guarantee the task's verify plan is DURABLY persisted before the gate
+      // (dispatchHooks → runVerifyOnCompletion) reads it. The start-side
+      // instantiation in execAgent is fire-and-forget on a SEPARATE
+      // CompletionLifecycle instance, so its in-memory await (the homogeneous
+      // race guard) can't bridge to this finish — a different request/process.
+      // A fast hetero run could otherwise reach the gate before the plan lands
+      // and silently skip verify. instantiateVerifyPlanOnStart is idempotent
+      // (skips when a plan exists; verify_runs is unique on operationId), so
+      // awaiting it here creates the plan only when the start side hasn't yet,
+      // and is a no-op once it has. This is the durable handle the gate waits on.
+      try {
+        const op = await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          operationId,
+        );
+        if (op?.taskId && !op.parentOperationId) {
+          await instantiateVerifyPlanOnStart(
+            this.db,
+            this.userId,
+            { operationId, taskId: op.taskId },
+            this.workspaceId,
+          );
+        }
+      } catch (err) {
+        log('heteroFinish: ensure verify plan failed (non-fatal): %O', err);
+      }
+
+      // Resolve the run goal (the task the run had to satisfy) for the delivery
+      // checker. `messages.find(role==='user')` mirrors the in-process runtime's
+      // goal extraction; pass the raw content through and let dispatchHooks
+      // extract text.
       try {
         const history = await this.messageModel.query({ pageSize: 50, topicId });
         goalContent = history.find((m) => m.role === 'user')?.content ?? '';
