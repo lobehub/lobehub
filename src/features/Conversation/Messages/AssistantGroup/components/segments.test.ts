@@ -21,10 +21,26 @@ describe('splitFinalAnswer', () => {
     expect(finalSegments).toEqual([a('a1'), a('a2')]);
   });
 
-  it('folds everything when the turn ends on a workflow segment', () => {
+  it('keeps the final answer visible when a trailing bookkeeping tool follows it', () => {
+    // The agent writes its summary, then ends the turn on a "mark task done" tool
+    // call. The answer must stay out of the fold; only the trailing tool folds.
+    const segments = [w('t1'), a('intro'), w('t2'), a('summary'), w('mark-done')];
+    const { processSegments, finalSegments } = splitFinalAnswer(segments);
+    expect(processSegments).toEqual([w('t1'), a('intro'), w('t2'), w('mark-done')]);
+    expect(finalSegments).toEqual([a('summary')]);
+  });
+
+  it('surfaces the lone answer even when the turn ends on a workflow segment', () => {
     const segments = [a('intro'), w('t1')];
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([a('intro'), w('t1')]);
+    expect(processSegments).toEqual([w('t1')]);
+    expect(finalSegments).toEqual([a('intro')]);
+  });
+
+  it('folds everything when the turn has no answer segment at all', () => {
+    const segments = [w('t1'), w('t2')];
+    const { processSegments, finalSegments } = splitFinalAnswer(segments);
+    expect(processSegments).toEqual([w('t1'), w('t2')]);
     expect(finalSegments).toEqual([]);
   });
 

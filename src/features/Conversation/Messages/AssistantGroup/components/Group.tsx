@@ -505,12 +505,12 @@ const Group = memo<GroupChildrenProps>(
             <>
               <ProcessFold durationText={durationText} stepCount={blocks.length}>
                 <Flexbox gap={8}>
-                  {processSegments.map((segment, index) => renderSegment(segment, index))}
+                  {processSegments.map((segment) =>
+                    renderSegment(segment, segments.indexOf(segment)),
+                  )}
                 </Flexbox>
               </ProcessFold>
-              {finalSegments.map((segment, index) =>
-                renderSegment(segment, processSegments.length + index),
-              )}
+              {finalSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
             </>
           ) : (
             <>
