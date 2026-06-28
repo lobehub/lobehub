@@ -116,7 +116,7 @@ const ChatList = memo<ChatListProps>(
     // falling back to "Untitled Agent". Route-level layouts already init the
     // active agent, but secondary mounts never do — each Fleet column shows a
     // different agent, and the share page mounts an arbitrary author's agent;
-    // without this they render "未命名助理".
+    // without this they render "Untitled Agent".
     // Idempotent: SWR dedupes against any route-level init by the same key,
     // and is gated on isLogin (no fetch for anonymous share viewers).
     const isLogin = useUserStore(authSelectors.isLogin);

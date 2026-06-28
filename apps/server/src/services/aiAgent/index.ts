@@ -2407,7 +2407,7 @@ export class AiAgentService {
       // Same single-point deletion for the device tools: a `none` / `sandbox`
       // session must not expose the remote-device proxy either — leaving it
       // discoverable would let the model activate a device mid-run and bypass
-      // the execution plan ("无设备" means NO device, not "no device yet").
+      // the execution plan ("no-device" means NO device, not "no device yet").
       // Scoped to gateway deployments: in the standalone Electron deployment
       // (no DEVICE_GATEWAY) local-system routes in-process via the 'client'
       // executor marking below, and the desktop client owns the tool gate.
