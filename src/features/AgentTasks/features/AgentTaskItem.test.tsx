@@ -141,6 +141,14 @@ describe('AgentTaskItem', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22');
   });
 
+  it('opens an assigned task on the global detail route in global scope', () => {
+    render(<AgentTaskItem routeScope="global" task={createTask('agt_owner')} />);
+
+    fireEvent.click(screen.getByTestId('task-card'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
+  });
+
   it('falls back to the global task detail route when the task has no assignee', () => {
     render(<AgentTaskItem task={createTask(null)} />);
 
@@ -167,6 +175,26 @@ describe('AgentTaskItem', () => {
     fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-23');
+  });
+
+  it('opens a clicked subtask on the global route in global scope', () => {
+    mocks.taskDetailMap = {
+      'T-22': {
+        subtasks: [
+          {
+            assignee: { id: 'agt_child' },
+            identifier: 'T-23',
+            status: 'backlog',
+          },
+        ],
+      },
+    };
+
+    render(<AgentTaskItem routeScope="global" task={createTask('agt_parent')} />);
+
+    fireEvent.click(screen.getAllByTestId('subtask-progress')[0]);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-23');
   });
 
   it('falls back to the global route when the clicked subtask has no assignee', () => {

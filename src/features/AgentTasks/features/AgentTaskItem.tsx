@@ -18,7 +18,10 @@ import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
+export type TaskItemRouteScope = 'agent' | 'global';
+
 interface TaskItemProps {
+  routeScope?: TaskItemRouteScope;
   task: TaskListItem;
   variant?: 'compact' | 'default';
 }
@@ -38,15 +41,17 @@ const TASK_STATUS_SET = new Set<TaskStatus>([
 const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
-const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
+const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant = 'default' }) => {
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
 
   const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
-  const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } =
-    useTaskItemContextMenu(task);
+  const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } = useTaskItemContextMenu(
+    task,
+    routeScope,
+  );
   const navigate = useWorkspaceAwareNavigate();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
@@ -58,14 +63,19 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const hasName = Boolean(task.name?.trim());
 
   const handleClick = useCallback(() => {
-    navigate(taskDetailPath(task.identifier, task.assigneeAgentId ?? undefined));
-  }, [navigate, task.assigneeAgentId, task.identifier]);
+    navigate(
+      taskDetailPath(
+        task.identifier,
+        routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
+      ),
+    );
+  }, [navigate, routeScope, task.assigneeAgentId, task.identifier]);
 
   const handleSubtaskClick = useCallback(
     (identifier: string, assigneeAgentId?: string) => {
-      navigate(taskDetailPath(identifier, assigneeAgentId));
+      navigate(taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined));
     },
-    [navigate],
+    [navigate, routeScope],
   );
 
   const scheduledBadge =

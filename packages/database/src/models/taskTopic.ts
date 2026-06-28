@@ -195,6 +195,22 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
+  async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(taskTopics.seq));
+  }
+
   async findWithDetails(taskId: string) {
     return this.db
       .select({

@@ -256,6 +256,11 @@ export interface TaskDetailSubtaskAssignee {
   title: string | null;
 }
 
+export interface TaskDetailSubtaskRunningTopic {
+  id: string;
+  operationId?: string | null;
+}
+
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
   automationMode?: TaskAutomationMode | null;
@@ -265,6 +270,7 @@ export interface TaskDetailSubtask {
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }

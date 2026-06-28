@@ -38,6 +38,7 @@ import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
 
 type ActiveSubmenu = 'status' | 'priority' | null;
+type TaskItemRouteScope = 'agent' | 'global';
 
 interface TaskItemContextMenu {
   items: ContextMenuItem[];
@@ -58,7 +59,9 @@ export interface TaskContextMenuActions {
   installKeyboardHandlers: (task: TaskContextMenuTarget) => void;
 }
 
-export const useTaskContextMenuActions = (): TaskContextMenuActions => {
+export const useTaskContextMenuActions = (
+  routeScope: TaskItemRouteScope = 'agent',
+): TaskContextMenuActions => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
@@ -137,7 +140,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
       });
 
       const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
-        taskDetailPath(task.identifier, task.assigneeAgentId ?? undefined),
+        taskDetailPath(
+          task.identifier,
+          routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
+        ),
         activeWorkspaceSlug,
       )}`;
       const canRunNow = RUN_NOW_STATUSES.has(currentStatus);
@@ -305,11 +311,15 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
     deleteTask,
     runTask,
     inboxAgentId,
+    routeScope,
   ]);
 };
 
-export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
-  const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
+export const useTaskItemContextMenu = (
+  task: TaskContextMenuTarget,
+  routeScope?: TaskItemRouteScope,
+): TaskItemContextMenu => {
+  const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions(routeScope);
   const transferItems = useTaskTransferMenuItem(task.identifier) as ContextMenuItem[] | null;
   const items = useMemo(() => {
     const base = buildItems(task);

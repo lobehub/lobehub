@@ -62,6 +62,29 @@ describe('TaskTopicModel', () => {
       const topics = await topicModel.findByTaskId(task.id);
       expect(topics).toHaveLength(1);
     });
+
+    it('should find running topics for multiple tasks within the current owner scope', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const otherTaskModel = new TaskModel(serverDB, userId2);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const otherTopicModel = new TaskTopicModel(serverDB, userId2);
+      const task1 = await taskModel.create({ instruction: 'A' });
+      const task2 = await taskModel.create({ instruction: 'B' });
+      const otherTask = await otherTaskModel.create({ instruction: 'Other' });
+      await createTopic('tpc_a1');
+      await createTopic('tpc_a3');
+      await createTopic('tpc_b2');
+      await createTopic('tpc_theirs', userId2);
+
+      await topicModel.add(task1.id, 'tpc_a1', { seq: 1 });
+      await topicModel.add(task1.id, 'tpc_a3', { seq: 3 });
+      await topicModel.add(task2.id, 'tpc_b2', { seq: 2 });
+      await otherTopicModel.add(otherTask.id, 'tpc_theirs', { seq: 99 });
+      await topicModel.updateStatus(task1.id, 'tpc_a1', 'completed');
+
+      const rows = await topicModel.findRunningByTaskIds([task1.id, task2.id, otherTask.id]);
+      expect(rows.map((row) => row.topicId)).toEqual(['tpc_a3', 'tpc_b2']);
+    });
   });
 
   describe('updateStatus', () => {

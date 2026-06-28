@@ -491,16 +491,25 @@ export class TaskService {
     const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
     const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
 
-    // Build dependency map for all descendants
-    const allDescendantDeps =
+    const [allDescendantDeps, allDescendantTopics] =
       allDescendantIds.length > 0
-        ? await this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => [])
-        : [];
+        ? await Promise.all([
+            this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => []),
+            this.taskTopicModel.findRunningByTaskIds(allDescendantIds).catch(() => []),
+          ])
+        : [[], []];
+
+    // Build dependency map for all descendants
     const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
     const depMap = new Map<string, string>();
     for (const dep of allDescendantDeps) {
       const depId = idToIdentifier.get(dep.dependsOnId);
       if (depId) depMap.set(dep.taskId, depId);
+    }
+
+    const runningTopicByTaskId = new Map<string, (typeof allDescendantTopics)[number]>();
+    for (const topic of allDescendantTopics) {
+      if (!runningTopicByTaskId.has(topic.taskId)) runningTopicByTaskId.set(topic.taskId, topic);
     }
 
     // Build nested subtask tree
@@ -529,6 +538,7 @@ export class TaskService {
       if (!children || children.length === 0) return undefined;
       return children.map((s) => {
         const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
+        const runningTopic = runningTopicByTaskId.get(s.id);
         return {
           ...(agent
             ? {
@@ -547,6 +557,14 @@ export class TaskService {
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
+          ...(runningTopic?.topicId
+            ? {
+                runningTopic: {
+                  id: runningTopic.topicId,
+                  operationId: runningTopic.operationId ?? null,
+                },
+              }
+            : {}),
           ...(s.schedulePattern || s.scheduleTimezone
             ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
             : {}),
