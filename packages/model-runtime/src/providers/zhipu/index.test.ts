@@ -465,7 +465,7 @@ describe('LobeZhipuAI - custom features', () => {
     });
 
     describe('GLM-5.2 optional params', () => {
-      it('should forward reasoning_effort with thinking enabled', () => {
+      it('should forward reasoning_effort with thinking enabled for Z.ai', () => {
         const payload = params.chatCompletion.handlePayload({
           max_tokens: 4096,
           messages: [{ content: 'Hello', role: 'user' }],
@@ -477,6 +477,56 @@ describe('LobeZhipuAI - custom features', () => {
 
         expect(payload.reasoning_effort).toBe('max');
         expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should omit thinking when Fireworks handles GLM-5.2 reasoning_effort', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'enabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.reasoning_history).toBe('preserved');
+      });
+
+      it('should omit reasoning_effort when Fireworks handles disabled thinking', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBeUndefined();
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should keep disabled thinking with reasoning_effort for Z.ai', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'disabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'disabled' });
       });
     });
 

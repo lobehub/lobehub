@@ -24,6 +24,9 @@ interface ZhipuRuntimeOptions {
   disableToolStream?: boolean;
 }
 
+const isFireworksRuntime = (options: ZhipuRuntimeOptions) =>
+  typeof options.baseURL === 'string' && options.baseURL.includes('fireworks.ai');
+
 export const params = {
   baseURL: 'https://open.bigmodel.cn/api/paas/v4',
   chatCompletion: {
@@ -33,6 +36,7 @@ export const params = {
         max_tokens,
         model,
         preserveThinking,
+        reasoning_effort,
         stream,
         temperature,
         thinking,
@@ -114,14 +118,25 @@ export const params = {
       // Example: Fireworks serves GLM-5.2 but rejects the Z.ai-only `tool_stream` field.
       const shouldEnableToolStream =
         !options.disableToolStream && stream && isToolStreamSupportedGLMModel(model);
+      const isFireworks = isFireworksRuntime(options);
+      const shouldDropReasoningEffort = Boolean(
+        isFireworks && reasoning_effort && resolvedThinking?.type === 'disabled',
+      );
+      // Example rejected by Fireworks GLM-5.2:
+      // { thinking: { type: 'enabled' }, reasoning_effort: 'max' }.
+      const shouldDropThinking = Boolean(
+        isFireworks && reasoning_effort && resolvedThinking?.type !== 'disabled',
+      );
 
       return {
         ...rest,
         ...resolvedParams,
         messages,
         model,
+        ...(reasoning_effort && !shouldDropReasoningEffort ? { reasoning_effort } : {}),
+        ...(isFireworks && preserveThinking ? { reasoning_history: 'preserved' } : {}),
         stream,
-        thinking: resolvedThinking,
+        thinking: shouldDropThinking ? undefined : resolvedThinking,
         tool_stream: shouldEnableToolStream ? true : undefined,
         tools: zhipuTools,
       } as any;

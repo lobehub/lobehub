@@ -22,6 +22,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block-end: 8px;
   `,
+  description: css`
+    padding-block: 8px;
+    padding-inline: 8px;
+
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  `,
   row: css`
     padding-block: 4px;
     padding-inline: 8px;
@@ -104,8 +114,11 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
 
     if (!model) return null;
 
+    const description = model.description?.trim();
+
     return (
       <Flexbox className={styles.container}>
+        {description && <div className={styles.description}>{description}</div>}
         {/* Sections */}
         {(hasPricing || contextWindowLabel || hasAbilities) && (
           <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>

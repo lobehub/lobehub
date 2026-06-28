@@ -13,6 +13,7 @@ vi.mock('antd-style', () => ({
   createStaticStyles: () => ({
     actionText: 'actionText',
     container: 'container',
+    description: 'description',
     originalPriceText: 'originalPriceText',
     priceValue: 'priceValue',
     row: 'row',
@@ -137,6 +138,7 @@ const discountedTextPricing = {
 const createEnabledList = (
   provider: string,
   pricing: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
 ): EnabledProviderWithModels[] => [
   {
     children: [
@@ -147,6 +149,7 @@ const createEnabledList = (
         id: 'test-model',
         pricing,
         type: 'chat',
+        ...overrides,
       } as any,
     ],
     id: provider,
@@ -156,6 +159,22 @@ const createEnabledList = (
 ];
 
 describe('ModelDetailPanel pricing', () => {
+  it('renders the model description when provided', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="test-model"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fast variant with lower latency and higher cost.',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Fast variant with lower latency and higher cost.',
+    );
+  });
+
   it('renders branding provider token pricing in credits', () => {
     const { container } = render(
       <ModelDetailPanel
