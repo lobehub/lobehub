@@ -17,7 +17,7 @@ export type GroupRenderSegment = AnswerSegment | WorkflowSegment;
  *
  * The trailing run of `answer` segments is the final answer (always shown);
  * everything before it — tools, reasoning, intermediate prose — is the process
- * that folds under the Codex-style "已处理 {duration}" header.
+ * that folds under the Codex-style "Processed {duration}" header.
  */
 export const splitFinalAnswer = (
   segments: GroupRenderSegment[],
@@ -33,7 +33,7 @@ export const splitFinalAnswer = (
 };
 
 /**
- * Whether a turn folds its process under the "已处理" header. Gated by the
+ * Whether a turn folds its process under the "Processed" header. Gated by the
  * `enabled` lab flag, then: only a finished (not generating), non-latest turn
  * that actually has a workflow to fold. The latest / still-generating turn
  * always renders in full.

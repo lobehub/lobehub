@@ -51,7 +51,7 @@ export const UserLabSchema = z.object({
    */
   enableFleet: z.boolean().optional(),
   /**
-   * fold a finished, non-latest agent turn's process under a "已处理" header
+   * fold a finished, non-latest agent turn's process under a "Processed" header
    */
   enableFoldFinishedTurn: z.boolean().optional(),
   /**
