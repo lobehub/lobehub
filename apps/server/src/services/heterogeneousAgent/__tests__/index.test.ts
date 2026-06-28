@@ -3,11 +3,13 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook, SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 
 import type { HeterogeneousPersistenceHandler } from '..';
 import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
+import { HeteroTraceRecorder } from '../HeteroTraceRecorder';
 
 // Force queue/production mode so the terminal funnel takes the serialized-webhook
 // delivery path (the hetero cross-process path), not the in-memory handler path.
@@ -338,6 +340,57 @@ describe('HeterogeneousAgentService', () => {
         operationId: 'op-hook-error',
         reason: 'error',
       });
+    });
+
+    // Verify-lifecycle alignment: heteroFinish must route the terminal transition
+    // through CompletionLifecycle (the SAME owner the in-process runtime uses), not
+    // a stripped-down funnel. That single funnel is what runs the delivery-checker
+    // gate on success — and the gate bails unless op.model/provider are set, so the
+    // synthetic state MUST carry the model/provider backfilled from the CLI stream.
+    it('routes the terminal transition through CompletionLifecycle with backfilled model/provider', async () => {
+      const { service } = createService();
+
+      const finalizeSpy = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue({
+        llmCalls: 3,
+        model: 'claude-opus-4-8',
+        provider: 'anthropic',
+        stepCount: 5,
+        toolCalls: 2,
+        totalCost: 0.12,
+        totalInputTokens: 100,
+        totalOutputTokens: 200,
+        totalTokens: 300,
+        traceS3Key: 'trace-key',
+      } as any);
+      const dispatchSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'dispatchHooks')
+        .mockResolvedValue();
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-verify-align',
+        result: 'success',
+        topicId: 'topic-verify-align',
+      });
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const [opId, state, reason] = dispatchSpy.mock.calls[0] as [string, any, string];
+      expect(opId).toBe('op-verify-align');
+      expect(reason).toBe('done');
+      // model/provider gate the verify run (lifecycle.ts bails when either is absent).
+      expect(state).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
+      // Trace aggregates flow into the shape persistCompletion reads.
+      expect(state.usage?.llm?.tokens?.total).toBe(300);
+      // Synthetic goal + deliverable messages drive the delivery checker.
+      expect(state.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ role: 'user' }),
+          expect.objectContaining({ role: 'assistant' }),
+        ]),
+      );
+
+      finalizeSpy.mockRestore();
+      dispatchSpy.mockRestore();
     });
 
     it('does NOT fire hooks on a cancelled run (the real result fires them)', async () => {

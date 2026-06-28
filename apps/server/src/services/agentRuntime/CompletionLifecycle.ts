@@ -162,7 +162,16 @@ export class CompletionLifecycle {
         error: state?.error ?? null,
         interruption: state?.interruption ?? null,
         llmCalls: state?.usage?.llm?.apiCalls ?? null,
+        // Backfill the executed model/provider when the terminal state carries
+        // them. The in-process runtime sets neither on `state` (the op already
+        // holds them from recordStart) so these stay undefined and recordCompletion
+        // skips them — a no-op. A heterogeneous run, which only learns its real
+        // model from the CLI stream, feeds them in via the synthetic state built in
+        // heteroFinish; the verify gate keys off op.model/provider, so dropping this
+        // backfill would leave op.model null and silently skip verify.
+        model: state?.model,
         processingTimeMs,
+        provider: state?.provider,
         status,
         stepCount: state?.stepCount ?? null,
         toolCalls: state?.usage?.tools?.totalCalls ?? null,

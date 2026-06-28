@@ -14,19 +14,14 @@ import {
   reduceMainAgent,
   rehydrateSubagentRunsState,
 } from '@lobechat/heterogeneous-agents';
-import {
-  AgentRuntimeErrorType,
-  type ChatMessageError,
-  type ChatToolPayload,
-  ThreadStatus,
-  ThreadType,
-} from '@lobechat/types';
+import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
 import type { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
+import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 
 const log = debug('lobe-server:hetero-agent:persistence');
 
@@ -857,7 +852,11 @@ export class HeterogeneousPersistenceHandler {
       }
 
       case 'setError': {
-        const update: Record<string, any> = { error: this.toChatMessageError(intent.errorData) };
+        // Normalize the CLI agent's wire error data through the SAME canonical
+        // formatter the in-process runtime uses, so a hetero error is classified
+        // (attribution/category/retryable) identically and the renderer never sees
+        // a second, hetero-only error shape.
+        const update: Record<string, any> = { error: formatErrorForState(intent.errorData) };
         if (intent.clearContent) update.content = '';
         await this.deps.messageModel.update(intent.messageId, update);
         return;
@@ -916,16 +915,10 @@ export class HeterogeneousPersistenceHandler {
     if (state.main.accContent) updateValue.content = state.main.accContent;
     if (state.main.accReasoning) updateValue.reasoning = { content: state.main.accReasoning };
     if (error) {
-      // `error.type` is a free-form string from the CLI; coerce to the
-      // shared union via `as` since the runtime contract accepts arbitrary
-      // values (renderer-side error classifier already does the same).
-      const errType = (error.type ||
-        AgentRuntimeErrorType.AgentRuntimeError) as ChatMessageError['type'];
-      updateValue.error = {
-        body: { message: error.message },
-        message: error.message,
-        type: errType,
-      } satisfies ChatMessageError;
+      // Same canonical normalization as the in-stream `setError` path — the CLI's
+      // free-form `{ message, type }` runs through formatErrorForState so the
+      // terminal flush and the in-stream write produce one classified error shape.
+      updateValue.error = formatErrorForState(error);
     }
 
     if (Object.keys(updateValue).length > 0) {
@@ -946,24 +939,6 @@ export class HeterogeneousPersistenceHandler {
     if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
     if (Object.keys(state.main.turnMetadata).length > 0) update.metadata = state.main.turnMetadata;
     await this.deps.messageModel.update(state.main.currentAssistantId, update);
-  }
-
-  private toChatMessageError(data: unknown): ChatMessageError {
-    if (typeof data === 'object' && data && 'message' in data) {
-      const message =
-        typeof (data as any).message === 'string' ? (data as any).message : 'Agent runtime error';
-      return {
-        body: data as Record<string, unknown>,
-        message,
-        type: AgentRuntimeErrorType.AgentRuntimeError,
-      };
-    }
-    const message = typeof data === 'string' ? data : 'Agent runtime error';
-    return {
-      body: { message },
-      message,
-      type: AgentRuntimeErrorType.AgentRuntimeError,
-    };
   }
 
   private async applySubagentIntent(state: OperationState, intent: SubagentIntent) {

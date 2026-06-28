@@ -90,6 +90,7 @@ import type {
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { dispatchTerminalHooks, hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type {
@@ -1440,10 +1441,17 @@ export class AiAgentService {
       // operation lifecycle: verify (ensureForOperation), repair (parent chain),
       // judge (op.model/provider) and tracing all key off it. Terminal state +
       // the trace snapshot are written back in heteroFinish. Non-fatal: a
-      // tracing/op-row insert hiccup must never fail the user's run (verify just
-      // degrades to off for this run).
+      // tracing/op-row insert hiccup must never fail the user's run.
       try {
-        await this.agentOperationModel.recordStart({
+        // Route through CompletionLifecycle — NOT the raw operation model — so the
+        // hetero run is a first-class lifecycle peer of the in-process runtime.
+        // recordStart additionally instantiates the task's verify plan when this
+        // is a top-level task op (taskId && !parentOperationId); the hetero finish
+        // side (heteroFinish → CompletionLifecycle.dispatchHooks) then runs the
+        // delivery-checker gate against that plan. Calling the bare operation model
+        // here is exactly what silently degraded verify to off for every hetero
+        // task run (the plan was never created at start).
+        await new CompletionLifecycle(this.db, this.userId, this.workspaceId).recordStart({
           agentId: persistAgentId,
           chatGroupId: appContext?.groupId ?? null,
           maxSteps,
@@ -1454,6 +1462,10 @@ export class AiAgentService {
           // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
           // assistant-message seeding above (provider: heteroType, model: undefined).
           operationId,
+          // Top-level dispatch carries no parent; pass it through so the verify
+          // plan gate (taskId && !parentOperationId) reads the real lineage and a
+          // repair/verifier sub-run never re-instantiates its own plan here.
+          parentOperationId,
           provider: heteroType,
           taskId: operationTaskId ?? null,
           threadId: appContext?.threadId ?? null,
