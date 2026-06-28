@@ -63,33 +63,36 @@ export const REACT_ARTIFACT_DEFAULT_DEPENDENCIES: Record<string, string> = {
   '@radix-ui/react-tabs': 'latest',
   '@radix-ui/react-toast': 'latest',
   '@radix-ui/react-tooltip': 'latest',
-  antd: 'latest',
+  'antd': 'latest',
   'class-variance-authority': 'latest',
-  cmdk: 'latest',
-  clsx: 'latest',
+  'cmdk': 'latest',
+  'clsx': 'latest',
   'date-fns': 'latest',
   'embla-carousel-react': 'latest',
   'input-otp': 'latest',
   'lodash-es': 'latest',
-  'lucide-react': 'latest',
-  motion: 'latest',
-  react: '19.2.7',
+  // Pin to 0.x. lucide-react 1.x renamed/dropped several icons (notably
+  // `Github` and `Twitter`), but most LLM training data still emits the 0.x
+  // names. Until model knowledge catches up, prefer the stable 0.x line.
+  'lucide-react': '^0.544.0',
+  'motion': 'latest',
+  'react': '19.2.7',
   'react-day-picker': 'latest',
   'react-dom': '19.2.7',
   'react-router': 'latest',
-  recharts: 'latest',
-  sonner: 'latest',
+  'recharts': 'latest',
+  'sonner': 'latest',
   'tailwind-merge': 'latest',
-  vaul: 'latest',
-  zustand: 'latest',
+  'vaul': 'latest',
+  'zustand': 'latest',
 };
 
 export const REACT_ARTIFACT_DEFAULT_DEV_DEPENDENCIES: Record<string, string> = {
   '@types/react': 'latest',
   '@types/react-dom': 'latest',
   '@vitejs/plugin-react': 'latest',
-  typescript: 'latest',
-  vite: 'latest',
+  'typescript': 'latest',
+  'vite': 'latest',
 };
 
 export const REACT_ARTIFACT_TAILWIND_CDN = 'https://cdn.tailwindcss.com';
