@@ -923,6 +923,7 @@
   "tool.intervention.onboarding.userProfile.responseLanguage": "Response language",
   "tool.intervention.onboarding.userProfile.title": "Confirm your profile update",
   "tool.intervention.optionApprove": "Approve",
+  "tool.intervention.optionApproveRemember": "Approve, and don't ask again for similar actions",
   "tool.intervention.pending": "Pending",
   "tool.intervention.reject": "Reject",
   "tool.intervention.rejectOnly": "Reject",

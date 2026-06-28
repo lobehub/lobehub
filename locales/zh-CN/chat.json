@@ -923,6 +923,7 @@
   "tool.intervention.onboarding.userProfile.responseLanguage": "回复语言",
   "tool.intervention.onboarding.userProfile.title": "确认您的资料更新",
   "tool.intervention.optionApprove": "批准",
+  "tool.intervention.optionApproveRemember": "批准，且类似操作不再询问",
   "tool.intervention.pending": "等待中",
   "tool.intervention.reject": "拒绝",
   "tool.intervention.rejectOnly": "仅拒绝",
@@ -1240,5 +1241,12 @@
   "workingPanel.space": "空间",
   "workingPanel.title": "工作面板",
   "you": "你",
-  "zenMode": "专注模式"
+  "zenMode": "专注模式",
+  "globalApproval.collapse": "收起",
+  "globalApproval.goToConversation": "打开会话",
+  "globalApproval.pendingCount_one": "{{count}} 项待审批",
+  "globalApproval.pendingCount_other": "{{count}} 项待审批",
+  "globalApproval.subtitle": "等待你的审批",
+  "globalApproval.title": "需要审批",
+  "globalApproval.userRequestLabel": "用户请求"
 }

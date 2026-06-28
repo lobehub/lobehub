@@ -998,6 +998,7 @@ export default {
   'tool.intervention.approvalMode': 'Approval Mode',
   'tool.intervention.approve': 'Approve',
   'tool.intervention.optionApprove': 'Approve',
+  'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",
   'tool.intervention.submit': 'Submit',
   'tool.intervention.mode.allowList': 'Allow List',
