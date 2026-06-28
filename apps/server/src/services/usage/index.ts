@@ -24,8 +24,13 @@ export class UsageRecordService {
 
   /**
    * @description Find usage records by date range.
+   * @param agentId Optional agent id to attribute usage to a single agent.
    */
-  findByDateRange = async (startAt: string, endAt: string): Promise<UsageRecordItem[]> => {
+  findByDateRange = async (
+    startAt: string,
+    endAt: string,
+    agentId?: string,
+  ): Promise<UsageRecordItem[]> => {
     const spends = await this.db
       .select({
         createdAt: messages.createdAt,
@@ -46,6 +51,7 @@ export class UsageRecordService {
             { userId: messages.userId, workspaceId: messages.workspaceId },
           ),
           eq(messages.role, 'assistant'),
+          agentId ? eq(messages.agentId, agentId) : undefined,
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),
       )
@@ -83,7 +89,7 @@ export class UsageRecordService {
    * @param mo Month
    * @returns UsageRecordItem[]
    */
-  findByMonth = async (mo?: string): Promise<UsageRecordItem[]> => {
+  findByMonth = async (mo?: string, agentId?: string): Promise<UsageRecordItem[]> => {
     let startAt: string;
     let endAt: string;
     if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
@@ -93,7 +99,7 @@ export class UsageRecordService {
       startAt = dayjs().startOf('month').format('YYYY-MM-DD');
       endAt = dayjs().endOf('month').format('YYYY-MM-DD');
     }
-    return this.findByDateRange(startAt, endAt);
+    return this.findByDateRange(startAt, endAt, agentId);
   };
 
   /**
@@ -170,7 +176,7 @@ export class UsageRecordService {
     return paddedUsageLogs;
   };
 
-  findAndGroupByDay = async (mo?: string): Promise<UsageLog[]> => {
+  findAndGroupByDay = async (mo?: string, agentId?: string): Promise<UsageLog[]> => {
     let startAt: string;
     let endAt: string;
     if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
@@ -180,7 +186,7 @@ export class UsageRecordService {
       startAt = dayjs().startOf('month').format('YYYY-MM-DD');
       endAt = dayjs().endOf('month').format('YYYY-MM-DD');
     }
-    const spends = await this.findByDateRange(startAt, endAt);
+    const spends = await this.findByDateRange(startAt, endAt, agentId);
     return this.groupByDay(spends, startAt, endAt);
   };
 
@@ -188,8 +194,12 @@ export class UsageRecordService {
    * @description Find usage grouped by day for a custom date range (e.g. past 12 months).
    * Does not pad missing days for large ranges.
    */
-  findAndGroupByDateRange = async (startAt: string, endAt: string): Promise<UsageLog[]> => {
-    const spends = await this.findByDateRange(startAt, endAt);
+  findAndGroupByDateRange = async (
+    startAt: string,
+    endAt: string,
+    agentId?: string,
+  ): Promise<UsageLog[]> => {
+    const spends = await this.findByDateRange(startAt, endAt, agentId);
     return this.groupByDay(spends, startAt, endAt, false);
   };
 }

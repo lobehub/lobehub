@@ -162,6 +162,14 @@ describe('UsageRecordService', () => {
 
       expect(result).toHaveLength(0);
     });
+
+    it('forwards agentId to findByDateRange', async () => {
+      const spy = vi.spyOn(service, 'findByDateRange').mockResolvedValue([]);
+
+      await service.findByMonth('2024-01', 'agent-42');
+
+      expect(spy).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'agent-42');
+    });
   });
 
   describe('findAndGroupByDay', () => {
@@ -306,6 +314,14 @@ describe('UsageRecordService', () => {
         expect(dayLog.totalRequests).toBe(2);
         expect(dayLog.records).toHaveLength(2);
       }
+    });
+
+    it('forwards agentId to findByDateRange', async () => {
+      const spy = vi.spyOn(service, 'findByDateRange').mockResolvedValue([]);
+
+      await service.findAndGroupByDay('2024-01', 'agent-99');
+
+      expect(spy).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'agent-99');
     });
 
     it('should handle specific month parameter', async () => {

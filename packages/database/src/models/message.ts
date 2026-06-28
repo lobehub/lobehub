@@ -192,6 +192,111 @@ interface SplitCreateMessageParams {
   relations: CreateMessageRelationParams;
 }
 
+/**
+ * Shared, ownership-scoped filters for the analytics queries
+ * (count / countGroupByTopic / topicMessageStats). All of these are
+ * applied on top of the workspace ownership predicate, so the resulting
+ * query never leaks across `userId × workspace`.
+ */
+export interface MessageAnalyticsFilters {
+  agentId?: string;
+  endDate?: string;
+  range?: [string, string];
+  role?: string;
+  startDate?: string;
+  topicId?: string;
+}
+
+/** A single `{ topicId, count }` row from a per-topic count aggregation. */
+export interface TopicMessageCountItem {
+  count: number;
+  topicId: string;
+}
+
+/**
+ * Distribution of message counts per topic, computed server-side.
+ * Mirrors what a `SELECT count(*) ... GROUP BY topic_id` + percentile
+ * aggregation would produce, so the CLI receives only the summary instead
+ * of paginating raw rows.
+ */
+export interface TopicMessageStats {
+  /** Per distinct message-count value, how many topics have it. Ascending. */
+  histogram: { topics: number; userCount: number }[];
+  max: number;
+  mean: number;
+  median: number;
+  min: number;
+  /** Number of topics with exactly one matching message ("one-shot"). */
+  oneshot: number;
+  /** oneshot / topics, in [0, 1]. 0 when there are no topics. */
+  oneshotRatio: number;
+  p90: number;
+  p99: number;
+  /** Number of topics that have at least one matching message. */
+  topics: number;
+  /** Total matching messages across all topics. */
+  totalMessages: number;
+}
+
+/**
+ * Linear-interpolation percentile over an ascending-sorted array, matching
+ * PostgreSQL's `percentile_cont`. Returns 0 for an empty input.
+ */
+const percentileCont = (sorted: number[], q: number): number => {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  if (n === 1) return sorted[0];
+  const rank = q * (n - 1);
+  const lo = Math.floor(rank);
+  const hi = Math.ceil(rank);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (rank - lo);
+};
+
+/** Reduce a list of per-topic message counts into a {@link TopicMessageStats}. */
+const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
+  const topics = counts.length;
+  if (topics === 0) {
+    return {
+      histogram: [],
+      max: 0,
+      mean: 0,
+      median: 0,
+      min: 0,
+      oneshot: 0,
+      oneshotRatio: 0,
+      p90: 0,
+      p99: 0,
+      topics: 0,
+      totalMessages: 0,
+    };
+  }
+
+  const sorted = [...counts].sort((a, b) => a - b);
+  const totalMessages = sorted.reduce((acc, c) => acc + c, 0);
+  const oneshot = sorted.filter((c) => c === 1).length;
+
+  const bucket = new Map<number, number>();
+  for (const c of sorted) bucket.set(c, (bucket.get(c) ?? 0) + 1);
+  const histogram = [...bucket.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([userCount, topicCount]) => ({ topics: topicCount, userCount }));
+
+  return {
+    histogram,
+    max: sorted[topics - 1],
+    mean: totalMessages / topics,
+    median: percentileCont(sorted, 0.5),
+    min: sorted[0],
+    oneshot,
+    oneshotRatio: oneshot / topics,
+    p90: percentileCont(sorted, 0.9),
+    p99: percentileCont(sorted, 0.99),
+    topics,
+    totalMessages,
+  };
+};
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1460,32 +1565,75 @@ export class MessageModel {
     return result as DBMessageItem[];
   };
 
-  count = async (params?: {
-    endDate?: string;
-    range?: [string, string];
-    startDate?: string;
-  }): Promise<number> => {
+  /**
+   * Ownership-scoped analytics filter conditions, shared by count /
+   * countGroupByTopic / topicMessageStats. The first entry is always the
+   * `userId × workspace` ownership predicate; later entries are optional.
+   */
+  private analyticsConditions = (params?: MessageAnalyticsFilters) => [
+    this.ownership(),
+    params?.agentId ? eq(messages.agentId, params.agentId) : undefined,
+    params?.topicId ? eq(messages.topicId, params.topicId) : undefined,
+    params?.role ? eq(messages.role, params.role) : undefined,
+    params?.range
+      ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
+      : undefined,
+    params?.endDate
+      ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
+      : undefined,
+    params?.startDate
+      ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
+      : undefined,
+  ];
+
+  count = async (params?: MessageAnalyticsFilters): Promise<number> => {
     const result = await this.db
       .select({
         count: count(messages.id),
       })
       .from(messages)
-      .where(
-        genWhere([
-          this.ownership(),
-          params?.range
-            ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
-            : undefined,
-          params?.endDate
-            ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
-            : undefined,
-          params?.startDate
-            ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
-            : undefined,
-        ]),
-      );
+      .where(genWhere(this.analyticsConditions(params)));
 
     return result[0].count;
+  };
+
+  /**
+   * Count matching messages grouped by topic, sorted by count desc.
+   * Topics without a `topicId` are excluded. Pushes the GROUP BY to the DB
+   * so callers don't have to paginate raw rows and count client-side.
+   */
+  countGroupByTopic = async (
+    params?: MessageAnalyticsFilters,
+  ): Promise<TopicMessageCountItem[]> => {
+    const rows = await this.db
+      .select({
+        count: count(messages.id),
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
+      .groupBy(messages.topicId)
+      .orderBy(desc(sql`count`), asc(messages.topicId));
+
+    return rows.map((r) => ({ count: r.count, topicId: r.topicId! }));
+  };
+
+  /**
+   * Distribution of message counts per topic (topics / mean / median /
+   * p90 / p99 / min / max / one-shot ratio + histogram). The per-topic
+   * counts are aggregated in the DB; only the final summary is returned.
+   */
+  topicMessageStats = async (params?: MessageAnalyticsFilters): Promise<TopicMessageStats> => {
+    const rows = await this.db
+      .select({
+        count: count(messages.id),
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
+      .groupBy(messages.topicId);
+
+    return computeTopicMessageStats(rows.map((r) => r.count));
   };
 
   hasTopicMessages = async (topicId: string): Promise<boolean> => {

@@ -22,31 +22,38 @@ export const usageRouter = router({
   findAndGroupByDateRange: usageProcedure
     .input(
       z.object({
+        agentId: z.string().optional(),
         endAt: z.string(),
         startAt: z.string(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findAndGroupByDateRange(input.startAt, input.endAt);
+      return await ctx.usageRecordService.findAndGroupByDateRange(
+        input.startAt,
+        input.endAt,
+        input.agentId,
+      );
     }),
 
   findAndGroupByDay: usageProcedure
     .input(
       z.object({
+        agentId: z.string().optional(),
         mo: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findAndGroupByDay(input.mo);
+      return await ctx.usageRecordService.findAndGroupByDay(input.mo, input.agentId);
     }),
 
   findByMonth: usageProcedure
     .input(
       z.object({
+        agentId: z.string().optional(),
         mo: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findByMonth(input.mo);
+      return await ctx.usageRecordService.findByMonth(input.mo, input.agentId);
     }),
 });
