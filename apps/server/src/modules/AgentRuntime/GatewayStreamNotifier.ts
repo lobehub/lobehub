@@ -25,10 +25,40 @@ const MAX_INFLIGHT = 20; // bounded concurrency
 export class GatewayStreamNotifier implements IStreamEventManager {
   private inflight = 0;
 
+  /**
+   * `operationId → mirrorOperationId`. When an operation declares a
+   * `mirrorToOperationId` (an in-group broadcast/speak member pointing at its
+   * supervisor op), every Gateway push for that operation is additionally
+   * delivered to the mirror op's channel — so member streaming events ride down
+   * the supervisor's single WebSocket instead of stranding on a per-member
+   * channel nobody subscribes to (single-connection multiplexing, LOBE-10868).
+   *
+   * Two population paths, so this works both in-process AND across queue workers:
+   *  - fast path: set at `publishAgentRuntimeInit` from the initial state (the
+   *    in-memory runtime, and the process that created the op).
+   *  - queue path: in `AGENT_RUNTIME_MODE=queue` the member's chunks are emitted
+   *    by a QStash worker that never ran init for that op, so its map starts
+   *    empty. `pushEvent` then lazily resolves the target from PERSISTED op
+   *    metadata via `resolveMirrorTarget` (Redis) on the op's first event and
+   *    caches it — converging the worker onto the same mapping.
+   * Cleared at `publishAgentRuntimeEnd`.
+   */
+  private mirrorTargets = new Map<string, string>();
+  /** Ops whose mirror target has been resolved (target found OR confirmed none). */
+  private mirrorResolved = new Set<string>();
+  /** In-flight resolutions, deduped per op so concurrent events share one read. */
+  private mirrorResolving = new Map<string, Promise<string | undefined>>();
+
   constructor(
     private inner: IStreamEventManager,
     private gatewayUrl: string,
     private serviceToken: string,
+    /**
+     * Resolves an op's persisted `mirrorToOperationId` (from op metadata). Lets a
+     * queue worker — which never ran the op's init — still mirror its stream
+     * events onto the supervisor channel. Omitted ⇒ in-process map only.
+     */
+    private resolveMirrorTarget?: (operationId: string) => Promise<string | undefined>,
   ) {
     log('Gateway notifier initialized: %s', gatewayUrl);
   }
@@ -62,6 +92,15 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
   async publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string> {
     const result = await this.inner.publishAgentRuntimeInit(operationId, initialState);
+
+    // Register the mirror target (if any) before the first event flows, so this
+    // op's whole stream — including the events below — fans out to the
+    // supervisor's channel too.
+    const mirrorTo = initialState?.mirrorToOperationId;
+    if (typeof mirrorTo === 'string' && mirrorTo && mirrorTo !== operationId) {
+      this.mirrorTargets.set(operationId, mirrorTo);
+      log('mirror registered: %s → %s', operationId, mirrorTo);
+    }
 
     this.httpPost('/api/operations/init', {
       operationId,
@@ -103,6 +142,12 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       timestamp: Date.now(),
       type: 'agent_runtime_end',
     });
+
+    // Terminal event has been forwarded (including any mirror); drop the mapping
+    // so it can't leak across a reused operationId.
+    this.mirrorTargets.delete(operationId);
+    this.mirrorResolved.delete(operationId);
+    this.mirrorResolving.delete(operationId);
 
     return result;
   }
@@ -160,6 +205,60 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       event: sanitizedEvent,
       operationId,
     }).catch(() => {});
+
+    // Single-connection multiplexing: also deliver to the mirror op's channel so
+    // the event rides down that connection's WebSocket. The event payload keeps
+    // its own `operationId`, which the client's event router uses to demux it
+    // back to the right member column. Only the delivery channel changes.
+    const mirrorTo = this.mirrorTargets.get(operationId);
+    if (mirrorTo) {
+      this.mirrorPush(mirrorTo, sanitizedEvent);
+      return;
+    }
+    // Queue worker: target not in the in-process map. Resolve it from persisted
+    // metadata once, then mirror this (and future) events. Concurrent events for
+    // the same op share one resolution and fire their mirror pushes in order.
+    if (!this.mirrorResolved.has(operationId)) {
+      void this.resolveMirror(operationId).then((target) => {
+        if (target) this.mirrorPush(target, sanitizedEvent);
+      });
+    }
+  }
+
+  private mirrorPush(mirrorTo: string, event: Record<string, unknown>) {
+    this.httpPost('/api/operations/push-event', { event, operationId: mirrorTo }).catch(() => {});
+  }
+
+  /**
+   * Resolve and cache an op's mirror target from persisted metadata. Returns the
+   * target (cached in `mirrorTargets`) or undefined when the op has none. Deduped
+   * so many concurrent events trigger a single metadata read.
+   */
+  private resolveMirror(operationId: string): Promise<string | undefined> {
+    const cached = this.mirrorTargets.get(operationId);
+    if (cached) return Promise.resolve(cached);
+    if (this.mirrorResolved.has(operationId) || !this.resolveMirrorTarget) {
+      return Promise.resolve(undefined);
+    }
+    let pending = this.mirrorResolving.get(operationId);
+    if (!pending) {
+      pending = this.resolveMirrorTarget(operationId)
+        .then((target) => {
+          this.mirrorResolved.add(operationId);
+          this.mirrorResolving.delete(operationId);
+          if (target && target !== operationId) {
+            this.mirrorTargets.set(operationId, target);
+            return target;
+          }
+          return undefined;
+        })
+        .catch(() => {
+          this.mirrorResolving.delete(operationId);
+          return undefined;
+        });
+      this.mirrorResolving.set(operationId, pending);
+    }
+    return pending;
   }
 
   /**

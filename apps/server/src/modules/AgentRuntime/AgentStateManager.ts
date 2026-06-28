@@ -22,6 +22,14 @@ export interface AgentOperationMetadata {
   agentConfig?: any;
   createdAt: string;
   lastActiveAt: string;
+  /**
+   * When set, the Gateway stream notifier mirrors this operation's stream events
+   * onto the named operation's Gateway channel as well (single-connection
+   * multiplexing, LOBE-10868). Used so a broadcast member's streaming events
+   * also flow down the supervisor's existing WebSocket — the supervisor's own
+   * operationId — instead of stranding on a member channel nobody subscribes to.
+   */
+  mirrorToOperationId?: string;
   modelRuntimeConfig?: any;
   status: AgentState['status'];
   totalCost: number;
@@ -197,6 +205,7 @@ export class AgentStateManager {
         modelRuntimeConfig: metadata.modelRuntimeConfig
           ? JSON.parse(metadata.modelRuntimeConfig)
           : undefined,
+        mirrorToOperationId: metadata.mirrorToOperationId || undefined,
         status: metadata.status as AgentState['status'],
         totalCost: parseFloat(metadata.totalCost) || 0,
         totalSteps: parseInt(metadata.totalSteps) || 0,
@@ -216,6 +225,7 @@ export class AgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       userId?: string;
       workspaceId?: string;
@@ -228,6 +238,7 @@ export class AgentStateManager {
         agentConfig: data.agentConfig,
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
+        mirrorToOperationId: data.mirrorToOperationId,
         modelRuntimeConfig: data.modelRuntimeConfig,
         status: 'idle',
         totalCost: 0,
@@ -247,6 +258,8 @@ export class AgentStateManager {
 
       if (metadata.userId) redisData.userId = metadata.userId;
       if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
+      if (metadata.mirrorToOperationId)
+        redisData.mirrorToOperationId = metadata.mirrorToOperationId;
       if (metadata.modelRuntimeConfig)
         redisData.modelRuntimeConfig = JSON.stringify(metadata.modelRuntimeConfig);
       if (metadata.agentConfig) redisData.agentConfig = JSON.stringify(metadata.agentConfig);

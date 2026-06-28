@@ -524,9 +524,16 @@ export class AgentRuntimeService {
         userInterventionConfig,
       } as Partial<AgentState>;
 
-      // Use coordinator to create operation, automatically sends initialization event
+      // Use coordinator to create operation, automatically sends initialization event.
+      // For an in-group broadcast/speak member, mirror its Gateway stream events
+      // onto the supervisor op's channel (parentOperationId) so they flow down the
+      // supervisor's existing WebSocket — the client subscribes to one connection,
+      // not one per member (single-connection multiplexing, LOBE-10868).
+      const mirrorToOperationId =
+        appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {
         agentConfig,
+        mirrorToOperationId,
         modelRuntimeConfig,
         userId,
         workspaceId: this.workspaceId,

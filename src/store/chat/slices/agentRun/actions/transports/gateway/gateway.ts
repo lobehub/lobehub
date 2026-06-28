@@ -23,6 +23,8 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
+import { createGatewayEventRouter } from './gatewayEventRouter';
+import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
@@ -597,9 +599,21 @@ export class GatewayActionImpl {
       }),
     });
 
+    // Demux the supervisor's WebSocket: with single-connection multiplexing
+    // (LOBE-10868) this WS also carries each broadcast member's streaming events
+    // (forwarded server-side onto the supervisor op channel). Route owner events
+    // to the full handler and member events to render-only member handlers so a
+    // member's chunks stream into its own council column instead of corrupting
+    // the supervisor bubble.
+    const eventRouter = createGatewayEventRouter({
+      createMemberHandler: this.buildMemberHandlerFactory(execContext, gatewayOpId),
+      ownerHandler: eventHandler,
+      ownerOperationId: result.operationId,
+    });
+
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
-      onEvent: eventHandler,
+      onEvent: eventRouter,
       onSessionComplete: ({ succeeded, terminalReceived }) => {
         // The gateway event handler already completed the op via the shared run
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
@@ -745,9 +759,18 @@ export class GatewayActionImpl {
       }),
     });
 
+    // Same demux as the initial-run path: a reconnected supervisor WS can also
+    // receive forwarded member events, so route them away from the supervisor
+    // handler (and stream them when the reconnect context carries the group).
+    const eventRouter = createGatewayEventRouter({
+      createMemberHandler: this.buildMemberHandlerFactory(context, gatewayOpId),
+      ownerHandler: eventHandler,
+      ownerOperationId: operationId,
+    });
+
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
-      onEvent: eventHandler,
+      onEvent: eventRouter,
       onSessionComplete: ({ succeeded, terminalReceived, authFailed }) => {
         this.#get().internal_updateTopicLoading(topicId, false);
 
@@ -791,6 +814,41 @@ export class GatewayActionImpl {
       token,
       topicId,
     });
+  };
+
+  /**
+   * Build the `createMemberHandler` factory for a run's event router, with a
+   * single memoized group-tree hydration shared across all of that run's member
+   * handlers. The first member to stream triggers one `getMessages` +
+   * `replaceMessages` so the canonical council structure (the `agentCouncil` tool
+   * message + every member row) lands — which is what makes the members render as
+   * parallel columns rather than a stack — and concurrent members reuse the same
+   * promise instead of each re-replacing the bucket and clobbering live content.
+   */
+  private buildMemberHandlerFactory = (
+    context: ConversationContext,
+    parentOperationId: string,
+  ): ((memberOperationId: string) => (event: AgentStreamEvent) => void) => {
+    let hydration: Promise<void> | undefined;
+    const ensureGroupHydrated = () => {
+      if (!hydration) {
+        hydration = messageService
+          .getMessages(context)
+          .then((messages) => {
+            this.#get().replaceMessages(messages, { context });
+          })
+          .catch(() => {});
+      }
+      return hydration;
+    };
+
+    return (memberOperationId: string) =>
+      createGatewayMemberStreamHandler(this.#get, {
+        context,
+        ensureGroupHydrated,
+        memberOperationId,
+        parentOperationId,
+      });
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {

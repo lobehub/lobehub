@@ -91,6 +91,7 @@ export class AgentRuntimeCoordinator {
     operationId: string,
     data: {
       agentConfig?: any;
+      mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       userId?: string;
       workspaceId?: string;
