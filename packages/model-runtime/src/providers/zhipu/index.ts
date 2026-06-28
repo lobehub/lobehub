@@ -116,9 +116,12 @@ export const params = {
       );
 
       // Example: Fireworks serves GLM-5.2 but rejects the Z.ai-only `tool_stream` field.
-      const shouldEnableToolStream =
-        !options.disableToolStream && stream && isToolStreamSupportedGLMModel(model);
       const isFireworks = isFireworksRuntime(options);
+      const shouldEnableToolStream =
+        !isFireworks &&
+        !options.disableToolStream &&
+        stream &&
+        isToolStreamSupportedGLMModel(model);
       const shouldDropReasoningEffort = Boolean(
         isFireworks && reasoning_effort && resolvedThinking?.type === 'disabled',
       );

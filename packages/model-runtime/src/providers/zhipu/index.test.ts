@@ -462,6 +462,21 @@ describe('LobeZhipuAI - custom features', () => {
           { content: 'Hello', reasoning_content: 'cached thought', role: 'user' },
         ]);
       });
+
+      it('should suppress tool_stream for Fireworks-hosted GLM streams', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            stream: true,
+            temperature: 0.5,
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+      });
     });
 
     describe('GLM-5.2 optional params', () => {
