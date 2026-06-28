@@ -1,4 +1,4 @@
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
 import type { FC } from 'react';
@@ -23,12 +23,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block-end: 8px;
   `,
   description: css`
+    margin: 0;
     padding-block: 8px;
     padding-inline: 8px;
 
-    font-size: 12px;
     line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   `,
@@ -85,7 +84,7 @@ interface ModelDetailPanelProps {
 
 const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
   ({ model: modelId, provider, enabledList: enabledListProp, pricingMode }) => {
-    const { t } = useTranslation('components');
+    const { t } = useTranslation(['components', 'models']);
     const {
       approximatePriceLabel,
       contextWindowLabel,
@@ -114,11 +113,22 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
 
     if (!model) return null;
 
-    const description = model.description?.trim();
+    const description = model.description
+      ? String(
+          t(`${model.id}.description` as any, {
+            defaultValue: model.description,
+            ns: 'models',
+          }),
+        ).trim()
+      : undefined;
 
     return (
       <Flexbox className={styles.container}>
-        {description && <div className={styles.description}>{description}</div>}
+        {description && (
+          <Text as={'p'} className={styles.description} fontSize={12} type={'secondary'}>
+            {description}
+          </Text>
+        )}
         {/* Sections */}
         {(hasPricing || contextWindowLabel || hasAbilities) && (
           <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>
