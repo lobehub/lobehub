@@ -1758,11 +1758,16 @@ export class AgentRuntimeService {
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
     if (!state) {
-      // State expired (Redis TTL) or never persisted — nothing left to resume.
-      // Surface it: a missing state at completion time is how a parent silently
-      // strands. There is no stepCount/status to arm a verify against.
-      log('[%s] async-tool resume: parent state missing/expired, cannot resume', parentOperationId);
+      // State expired (Redis TTL) or never persisted. A missing state at
+      // completion time is a classic way a parent silently strands — but it is
+      // often transient: a read replica that hasn't seen the park yet, or the
+      // child outrunning the parent's park before its snapshot lands. Arm the
+      // bounded verify so a later re-check can resume once the state is visible,
+      // instead of giving up on the first miss. A genuinely-gone parent just
+      // exhausts the attempt cap (verify_exhausted) rather than stranding here.
+      log('[%s] async-tool resume: parent state missing/expired, arming verify', parentOperationId);
       asyncToolResumeCounter.add(1, { outcome: 'no_state' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, null, options);
       return false;
     }
 
@@ -1861,12 +1866,16 @@ export class AgentRuntimeService {
    */
   private async maybeScheduleAsyncToolVerify(
     parentOperationId: string,
-    state: AgentState,
+    state: AgentState | null,
     options?: { scheduleVerifyOnHold?: boolean; verifyAttempt?: number },
   ): Promise<void> {
     if (!options?.scheduleVerifyOnHold || !this.queueService) return;
 
-    const status = state.status as string;
+    // `state` is null when the parked snapshot is missing/expired at completion
+    // time (no_state). We can't read a status to skip a terminal op, but the
+    // bounded attempt cap below keeps a genuinely-gone parent from re-arming
+    // forever, so it's safe to retry instead of stranding on a transient miss.
+    const status = state?.status as string | undefined;
     if (status === 'done' || status === 'error' || status === 'interrupted') return;
 
     const attempt = options.verifyAttempt ?? 1;
@@ -1878,7 +1887,7 @@ export class AgentRuntimeService {
         '[%s] async-tool barrier verify exhausted after %d attempts, giving up (status: %s)',
         parentOperationId,
         ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
-        status,
+        status ?? 'missing',
       );
       asyncToolResumeCounter.add(1, { outcome: 'verify_exhausted' });
       return;
@@ -1891,7 +1900,7 @@ export class AgentRuntimeService {
       attempt,
       ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
       delay,
-      status,
+      status ?? 'missing',
     );
 
     try {
@@ -1902,7 +1911,7 @@ export class AgentRuntimeService {
         operationId: parentOperationId,
         payload: { asyncToolVerifyAttempt: attempt, verifyAsyncToolBarrier: true },
         priority: 'high',
-        stepIndex: state.stepCount,
+        stepIndex: state?.stepCount ?? 0,
       });
     } catch (error) {
       log(
