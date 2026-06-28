@@ -64,6 +64,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  // "+N more pending" hint shown when several conversations are waiting; only
+  // the top card is actionable at once.
+  moreHint: css`
+    align-self: center;
+
+    padding-block: 2px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+
+    pointer-events: auto;
+  `,
   // Collapsed "dynamic island" pill.
   pill: css`
     cursor: pointer;

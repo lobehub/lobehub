@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
@@ -85,13 +85,22 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   );
 
   const handleGoToConversation = useCallback(() => {
-    if (!context.topicId) return;
-    const url = buildWorkspaceAwarePath(
-      AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId),
-      workspaceSlug,
-    );
-    navigate(url);
-  }, [context.agentId, context.topicId, navigate, workspaceSlug]);
+    // Group conversations route under /group/<groupId>; agent runs under
+    // /agent/<agentId>/<topicId>. Routing a group approval through the agent URL
+    // would land on the agent's 1:1 chat instead of the paused group topic.
+    let path: string | undefined;
+    if (context.groupId) {
+      path = context.topicId
+        ? GROUP_CHAT_TOPIC_URL(context.groupId, context.topicId)
+        : GROUP_CHAT_URL(context.groupId);
+    } else if (context.topicId) {
+      path = AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId);
+    }
+    if (!path) return;
+    navigate(buildWorkspaceAwarePath(path, workspaceSlug));
+  }, [context.agentId, context.groupId, context.topicId, navigate, workspaceSlug]);
+
+  const canOpenConversation = !!(context.groupId || context.topicId);
 
   const activeIntervention = interventions[activeIndex];
 
@@ -140,7 +149,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
               {t('globalApproval.subtitle')}
             </div>
           </div>
-          {context.topicId && (
+          {canOpenConversation && (
             <ActionIcon
               icon={ArrowUpRight}
               size="small"

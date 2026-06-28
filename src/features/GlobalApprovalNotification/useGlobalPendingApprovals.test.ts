@@ -76,11 +76,12 @@ describe('collectGlobalApprovals', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('skips buckets with no resolvable operation context', () => {
+  it('skips buckets that resolve to neither an operation nor message fields', () => {
     const ctx = { agentId: 'agt_a', topicId: 'tpc_1' };
     const key = messageMapKey(ctx);
 
-    // Pending messages exist, but no operation pins this bucket → cannot mount.
+    // Pending message exists, but no operation pins the bucket AND the message
+    // carries no coordinates to reconstruct from → cannot mount.
     const groups = collectGlobalApprovals(
       { [key]: [pendingToolMessage('msg_1', 'call_1')] },
       {},
@@ -88,6 +89,28 @@ describe('collectGlobalApprovals', () => {
     );
 
     expect(groups).toHaveLength(0);
+  });
+
+  it('falls back to message fields when the parked run operation is gone', () => {
+    // A run parked for approval completes (and later GCs) its operation while
+    // the tool stays pending — the bucket must stay visible via the message's
+    // own agent/topic coordinates, verified to reproduce the same key.
+    const ctx = { agentId: 'agt_a', topicId: 'tpc_1' };
+    const key = messageMapKey(ctx);
+    const msg = {
+      agentId: 'agt_a',
+      id: 'msg_1',
+      plugin: { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-local-system' },
+      pluginIntervention: { status: 'pending' },
+      role: 'tool',
+      tool_call_id: 'call_1',
+      topicId: 'tpc_1',
+    } as unknown as UIChatMessage;
+
+    const groups = collectGlobalApprovals({ [key]: [msg] }, {}, null);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].context).toEqual({ agentId: 'agt_a', threadId: undefined, topicId: 'tpc_1' });
   });
 
   it('skips buckets without any pending intervention', () => {

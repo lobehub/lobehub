@@ -39,6 +39,12 @@ const GlobalApprovalNotification = memo(() => {
   }, [groups.length]);
 
   const hasApprovals = groups.length > 0;
+  // Only ONE card is actionable at a time: the reused `ApprovalActions`
+  // registers window-level Enter/1/2 shortcuts, so mounting a card per group
+  // would let a single Enter submit every pending approval at once. Extra
+  // approvals queue behind a count and surface as each one resolves.
+  const top = groups[0];
+  const extraCount = groups.length - 1;
 
   return (
     <div className={styles.wrapper} style={{ '--global-approval-top': `${TOP_OFFSET}px` } as any}>
@@ -77,20 +83,25 @@ const GlobalApprovalNotification = memo(() => {
                 />
               </m.div>
               <AnimatePresence mode="popLayout">
-                {groups.map((group) => (
+                {top && (
                   <m.div
                     layout
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: -16 }}
                     initial={{ opacity: 0, scale: 0.96, y: -16 }}
-                    key={group.key}
+                    key={top.key}
                     style={{ pointerEvents: 'auto', width: '100%' }}
                     transition={SPRING}
                   >
-                    <ApprovalCard group={group} />
+                    <ApprovalCard group={top} />
                   </m.div>
-                ))}
+                )}
               </AnimatePresence>
+              {extraCount > 0 && (
+                <div className={styles.moreHint}>
+                  {t('globalApproval.moreCount', { count: extraCount })}
+                </div>
+              )}
             </m.div>
           ))}
       </AnimatePresence>

@@ -8,6 +8,7 @@ import {
 } from '@/features/Conversation/store/slices/data/pendingInterventions';
 import { type ConversationContext } from '@/features/Conversation/types';
 import { useChatStore } from '@/store/chat';
+import { displayMessageSelectors } from '@/store/chat/selectors';
 import { type Operation } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -25,15 +26,38 @@ export interface GlobalApprovalGroup {
 }
 
 /**
+ * Best-effort context recovery from a bucket's own messages, used when no live
+ * operation pins the bucket (a parked run's `execAgentRuntime` op completes once
+ * it hits `waiting_for_human` and is GC'd ~30s later, while the tool message
+ * stays `pending`). We only trust a reconstruction that reproduces the exact
+ * bucket key, so group/page scopes — whose key can't be rebuilt from message
+ * fields — are skipped rather than mounted against the wrong bucket.
+ */
+const reconstructContextFromMessages = (
+  messages: UIChatMessage[],
+  key: string,
+): ConversationContext | undefined => {
+  const m = messages.find((msg) => msg.agentId && msg.agentId !== 'supervisor');
+  if (!m?.agentId) return undefined;
+
+  const context: ConversationContext = {
+    agentId: m.agentId,
+    threadId: m.threadId ?? undefined,
+    topicId: m.topicId ?? undefined,
+  };
+  return messageMapKey(context) === key ? context : undefined;
+};
+
+/**
  * Pure aggregation behind {@link useGlobalPendingApprovals}. Kept side-effect
  * free so the bucket → context resolution (the tricky part) is unit-testable
  * without a store.
  *
- * The bucket → context mapping is recovered from this client's operations,
- * whose captured `context` reproduces the exact `messageMapKey` the run used to
- * write into `dbMessagesMap`. This keeps us correct for group / thread / page
- * scopes (where the key can't be reversed from the message fields) and naturally
- * scopes the feature to runs started on this device.
+ * The bucket → context mapping is recovered first from this client's operations
+ * (whose captured `context` reproduces the exact `messageMapKey` the run used,
+ * staying correct for group / thread / page scopes), then falls back to the
+ * bucket's own messages so a parked approval stays visible after its operation
+ * is garbage-collected.
  */
 export const collectGlobalApprovals = (
   dbMessagesMap: Record<string, UIChatMessage[]>,
@@ -58,9 +82,9 @@ export const collectGlobalApprovals = (
     const interventions = getPendingInterventions(messages);
     if (interventions.length === 0) continue;
 
-    // Only surface runs we can resolve to a real context; without it we can't
-    // mount a ConversationProvider that reads the same bucket.
-    const context = contextByKey.get(key);
+    // Resolve a context we can mount a ConversationProvider against (operation
+    // first, then message-field fallback). Without it we can't read the bucket.
+    const context = contextByKey.get(key) ?? reconstructContextFromMessages(messages, key);
     if (!context) continue;
 
     groups.push({ context, interventions, key });
@@ -75,25 +99,19 @@ export const collectGlobalApprovals = (
  * `InterventionBar` already handles that one).
  */
 export const useGlobalPendingApprovals = (): GlobalApprovalGroup[] => {
-  const { dbMessagesMap, operations, activeAgentId, activeTopicId, activeThreadId } = useChatStore(
+  const { dbMessagesMap, operations } = useChatStore(
     useShallow((s) => ({
-      activeAgentId: s.activeAgentId,
-      activeThreadId: s.activeThreadId,
-      activeTopicId: s.activeTopicId,
       dbMessagesMap: s.dbMessagesMap,
       operations: s.operations,
     })),
   );
+  // Active conversation's bucket key — built from the full scoped context
+  // (agent / topic / thread / group) so a pending approval in the on-screen
+  // group/thread conversation is excluded, not duplicated.
+  const activeKey = useChatStore(displayMessageSelectors.currentDisplayChatKey);
 
-  return useMemo(() => {
-    const activeKey = activeAgentId
-      ? messageMapKey({
-          agentId: activeAgentId,
-          threadId: activeThreadId,
-          topicId: activeTopicId,
-        })
-      : null;
-
-    return collectGlobalApprovals(dbMessagesMap, operations, activeKey);
-  }, [dbMessagesMap, operations, activeAgentId, activeTopicId, activeThreadId]);
+  return useMemo(
+    () => collectGlobalApprovals(dbMessagesMap, operations, activeKey),
+    [dbMessagesMap, operations, activeKey],
+  );
 };

@@ -188,6 +188,8 @@
   "floatingChatPanel.expand": "展开聊天",
   "globalApproval.collapse": "收起",
   "globalApproval.goToConversation": "打开会话",
+  "globalApproval.moreCount_one": "还有 {{count}} 个待审批",
+  "globalApproval.moreCount_other": "还有 {{count}} 个待审批",
   "globalApproval.pendingCount_one": "{{count}} 项待审批",
   "globalApproval.pendingCount_other": "{{count}} 项待审批",
   "globalApproval.subtitle": "等待你的审批",

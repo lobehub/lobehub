@@ -591,6 +591,8 @@ export default {
   'floatingChatPanel.expand': 'Expand chat',
   'globalApproval.collapse': 'Collapse',
   'globalApproval.goToConversation': 'Open conversation',
+  'globalApproval.moreCount_one': '{{count}} more pending',
+  'globalApproval.moreCount_other': '{{count}} more pending',
   'globalApproval.pendingCount_one': '{{count}} approval pending',
   'globalApproval.pendingCount_other': '{{count}} approvals pending',
   'globalApproval.subtitle': 'Waiting for your approval',
