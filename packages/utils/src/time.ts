@@ -49,7 +49,7 @@ export const isNewReleaseDate = (date: string, days = 14) => {
 };
 
 /**
- * Locale-aware "3 days ago" / "3 天前" relative time. Returns an empty string
+ * Locale-aware "3 days ago" (or "3 天前" in Chinese) relative time. Returns an empty string
  * for missing or unparseable input so callers can render it unconditionally.
  */
 export const fromNow = (time?: string | Date | number | null): string => {
@@ -78,7 +78,7 @@ const ACTIVITY_TIME_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Format a timestamp for an activity-feed entry: relative (`from()`) when
- * recent, absolute date (`Apr 29` / `4月29日`) once the gap crosses one day.
+ * recent, absolute date (`Apr 29` in English / `4月29日` in Chinese) once the gap crosses one day.
  */
 export const formatActivityTime = (
   time?: string | Date | number | null,

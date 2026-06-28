@@ -35,7 +35,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
 
-  // Group conversations show a "群组" tag so they stand out from single agents.
+  // Group conversations show a "Group" tag so they stand out from single agents.
   const titleNode = (
     <Flexbox horizontal align="center" gap={4}>
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

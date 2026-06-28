@@ -2371,7 +2371,7 @@ export class MessageModel {
    * the in-memory current-assistant pointer — which can regress to the run's
    * seed placeholder on a cold / non-sticky serverless replica. Anchoring here
    * instead keeps consecutive cold-replica steps chained linearly rather than
-   * forking onto a stale node (the remote "断链" bug). No `createdAt` floor is
+   * forking onto a stale node (the remote "broken-link" bug). No `createdAt` floor is
    * needed: a topic runs at most one operation at a time, so the latest spine
    * message IS this run's continuation point.
    *
