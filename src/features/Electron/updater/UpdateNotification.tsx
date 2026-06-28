@@ -4,7 +4,7 @@ import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Button as BaseButton, createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { CircleFadingArrowUp } from 'lucide-react';
+import { CircleFadingArrowUp, X } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,53 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 1000;
     inset-block-end: 16px;
     inset-inline-start: 16px;
+  `,
+
+  installLaterCloseButton: css`
+    all: unset;
+
+    cursor: pointer;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: 6px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+  `,
+
+  installLaterToast: css`
+    position: fixed;
+    z-index: 1000;
+    inset-block-end: 20px;
+    inset-inline-start: 16px;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    max-inline-size: calc(100vw - 32px);
+    padding-block: 10px;
+    padding-inline: 16px 10px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadow};
   `,
 
   releaseNote: css`
@@ -117,20 +164,16 @@ export const UpdateNotification: React.FC = () => {
 
   if (installConfirmMode === 'installLater') {
     return (
-      <div
-        style={{
-          backgroundColor: cssVar.colorBgElevated,
-          borderRadius: cssVar.borderRadius,
-          bottom: 20,
-          boxShadow: cssVar.boxShadow,
-          color: cssVar.colorText,
-          left: 16,
-          padding: '10px 16px',
-          position: 'fixed',
-          zIndex: 1000,
-        }}
-      >
+      <div className={styles.installLaterToast}>
         {tElectron('updater.willInstallLater')}
+        <button
+          aria-label="Close"
+          className={styles.installLaterCloseButton}
+          type="button"
+          onClick={() => setInstallConfirmMode(null)}
+        >
+          <Icon icon={X} style={{ fontSize: 14 }} />
+        </button>
       </div>
     );
   }
