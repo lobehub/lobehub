@@ -301,7 +301,7 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 | Start / restart the local dev server | [references/dev-server.md](./references/dev-server.md)               |
 | `agent-browser` command reference    | [references/agent-browser.md](./references/agent-browser.md)         |
 | osascript patterns (general macOS)   | [references/osascript.md](./references/osascript.md)                 |
-| Agent gateway probing                | [references/agent-gateway.md](./references/agent-gateway.md)         |
+| Local gateway closed loop + probing  | [references/agent-gateway.md](./references/agent-gateway.md)         |
 | Screen recording                     | [references/record-app-screen.md](./references/record-app-screen.md) |
 
 ### Scripts
