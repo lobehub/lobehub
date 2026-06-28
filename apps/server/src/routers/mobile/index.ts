@@ -25,6 +25,7 @@ import { pushTokenRouter } from '../lambda/pushToken';
 import { sessionRouter } from '../lambda/session';
 import { sessionGroupRouter } from '../lambda/sessionGroup';
 import { taskRouter } from '../lambda/task';
+import { taskTemplateRouter } from '../lambda/taskTemplate';
 import { topicRouter } from '../lambda/topic';
 import { uploadRouter } from '../lambda/upload';
 import { userRouter } from '../lambda/user';
@@ -52,6 +53,7 @@ export const mobileRouter = router({
   sessionGroup: sessionGroupRouter,
   subscription: mobileSubscriptionRouter,
   task: taskRouter,
+  taskTemplate: taskTemplateRouter,
   topic: topicRouter,
   upload: uploadRouter,
   user: userRouter,
