@@ -22,6 +22,13 @@ vi.mock('antd-style', () => ({
   }),
 }));
 
+// Mock the council list so importing Group doesn't pull in the AgentCouncil
+// render chain (→ shared-tool-ui inspectors → antd-style `keyframes`), which is
+// out of scope for this unit test.
+vi.mock('../../AgentCouncil/components/CouncilList', () => ({
+  default: ({ members }: { members?: unknown[] }) => <div>council:{members?.length ?? 0}</div>,
+}));
+
 vi.mock('../../../store', () => ({
   messageStateSelectors: {
     isAssistantGroupItemGenerating: () => () => mockIsGenerating,
