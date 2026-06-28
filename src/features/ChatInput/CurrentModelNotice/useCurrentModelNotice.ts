@@ -1,7 +1,9 @@
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 interface CurrentModelNoticeModel {
   abilities?: {
@@ -10,25 +12,35 @@ interface CurrentModelNoticeModel {
 }
 
 interface ResolveCurrentModelNoticeKeyParams {
-  currentModel?: CurrentModelNoticeModel;
+  currentChatModel?: CurrentModelNoticeModel;
   enableAgentMode: boolean;
   isHeterogeneousAgent: boolean;
   isModelConfigReady: boolean;
 }
 
+const findEnabledChatModel = (
+  enabledChatModelList: EnabledProviderWithModels[],
+  model: string,
+  provider: string,
+) => {
+  return enabledChatModelList
+    .find((item) => item.id === provider)
+    ?.children.find((item) => item.id === model);
+};
+
 export const resolveCurrentModelNoticeKey = ({
-  currentModel,
+  currentChatModel,
   enableAgentMode,
   isHeterogeneousAgent,
   isModelConfigReady,
 }: ResolveCurrentModelNoticeKeyParams) => {
   if (isHeterogeneousAgent || !isModelConfigReady) return;
 
-  // Example: an agent still references a removed model like `gpt-4-32k`;
-  // missing model cards should read as unavailable, not as unsupported tool calls.
-  if (!currentModel) return 'input.modelUnavailable';
+  // Example: an agent still references `gpt-4-32k`, or a model reclassified to
+  // image/video; once absent from the chat selector, it should read as unavailable.
+  if (!currentChatModel) return 'input.modelUnavailable';
 
-  if (enableAgentMode && !currentModel.abilities?.functionCall)
+  if (enableAgentMode && !currentChatModel.abilities?.functionCall)
     return 'input.agentModeUnsupportedModel';
 };
 
@@ -42,13 +54,14 @@ export const useCurrentModelNotice = () => {
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
 
-  const [isModelConfigReady, currentModel] = useAiInfraStore((s) => [
+  const enabledChatModelList = useEnabledChatModels();
+  const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
-    aiModelSelectors.getEnabledModelById(model, provider)(s),
-  ]);
+  );
+  const currentChatModel = findEnabledChatModel(enabledChatModelList, model, provider);
 
   return resolveCurrentModelNoticeKey({
-    currentModel,
+    currentChatModel,
     enableAgentMode,
     isHeterogeneousAgent,
     isModelConfigReady,
