@@ -118,16 +118,16 @@ export class MessageCollector {
    * that starts at the first tool step (looks like a broken chain).
    *
    * Deliberately narrow:
-   * - Only a turn head (parent is a `user` message). A toolless step after a
-   *   tool result is a mid-chain answer handled elsewhere; folding those would
-   *   change unrelated grouping (and the contextTree path).
+   * - Only a turn head (parent is a `user` message). A toolless step wedged
+   *   mid-chain (between two tool steps) is bridged by `collectAssistantChain`
+   *   itself so the chain stays in one group — see the toolless-continuation
+   *   branch there; it must NOT also be opened as a head here or the same run
+   *   would split.
    * - The immediate continuation must ALREADY carry tools. We intentionally do
    *   not walk through intermediate toolless prose steps: `collectAssistantChain`
-   *   stops at the first toolless continuation (it only recurses through
-   *   tool-using steps), so classifying a multi-prose head would yield a
-   *   tools-less AssistantGroup and still leave the tool step split off. Such a
-   *   multi-prose prelude therefore falls back to standalone bubbles rather than
-   *   a malformed group.
+   *   bridges at most ONE toolless prose step before a tool step (a multi-prose
+   *   prelude — toolless → toolless — still falls back to standalone bubbles
+   *   rather than a malformed group).
    * - A fork (>1 same-agent non-signal continuation) returns false so branch
    *   handling stays untouched.
    */
@@ -202,9 +202,35 @@ export class MessageCollector {
         allToolMessages,
         processedIds,
       );
-    } else {
-      // Final assistant without tools — caller marks the whole chain processed
-      assistantChain.push(continuation);
+      return;
+    }
+
+    // Toolless continuation. By default this is the final narrated answer and the
+    // chain ends here. EXCEPTION: a single toolless prose step wedged BETWEEN two
+    // tool steps — the model narrates mid-turn right before its next tool call —
+    // is part of THIS chain. Ending here would split the following tool step into
+    // its own AssistantGroup and visually break one continuous run into two
+    // bubbles (regression). Mirror `isToolChainHead`, which already bridges this
+    // shape at a turn head (parent === user): walk through the prose step only
+    // when its sole continuation ALREADY carries tools. A multi-prose prelude
+    // (toolless → toolless) still ends here, matching the documented fallback.
+    assistantChain.push(continuation);
+    const onward = this.findFlatChainContinuation(
+      continuation,
+      [], // a toolless step owns no tool results
+      allMessages,
+      processedIds,
+      groupAgentId,
+    );
+    if (onward && onward.tools && onward.tools.length > 0) {
+      processedIds.add(continuation.id);
+      this.collectAssistantChain(
+        onward,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
     }
   }
 
