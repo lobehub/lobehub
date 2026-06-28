@@ -46,7 +46,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 6px;
     align-items: center;
-
     min-width: 0;
   `,
   timeItem: css`
@@ -198,7 +197,7 @@ const EntityCard = memo<{ entity: LinearEntity }>(({ entity }) => {
 
   // A bare UUID id only earns a slot when there's no title to carry the card
   // (e.g. comments / attachments, where it's also the link target). Human ids
-  // like `LOBE-123` always stay.
+  // like `LIN-123` always stay.
   const showId = Boolean(id) && (!title || !isUuidLike(id!));
 
   return (

@@ -5,7 +5,7 @@ import { buildLinearRenderModel, isUuidLike } from './utils';
 describe('isUuidLike', () => {
   it('matches bare UUIDs but not human Linear ids', () => {
     expect(isUuidLike('55a0597c-be21-4e73-a1ff-1a45aedf0184')).toBe(true);
-    expect(isUuidLike('LOBE-123')).toBe(false);
+    expect(isUuidLike('LIN-123')).toBe(false);
     expect(isUuidLike('TEST-456')).toBe(false);
     expect(isUuidLike('Engineering')).toBe(false);
   });

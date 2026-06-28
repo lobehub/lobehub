@@ -79,7 +79,7 @@ export interface LinearEntity {
 
 // A bare UUID (e.g. a team/comment internal id) carries no meaning for the
 // reader; suppress it when the entity already has a human-readable title. Linear
-// human ids like `LOBE-123` never match this shape, so they stay visible.
+// human ids like `LIN-123` never match this shape, so they stay visible.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 export const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
