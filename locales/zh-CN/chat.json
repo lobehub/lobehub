@@ -308,6 +308,7 @@
   "input.inputCompletionError.retry": "重试",
   "input.inputCompletionError.settings": "设置",
   "input.inputCompletionError.title": "输入补全已暂停",
+  "input.modelUnavailable": "当前模型已下线。请选择其他模型后继续使用。",
   "input.more": "更多",
   "input.send": "发送",
   "input.sendWithCmdEnter": "按 <key/> 发送",

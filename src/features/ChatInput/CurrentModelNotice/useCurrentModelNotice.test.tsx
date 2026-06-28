@@ -1,8 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import AgentModeNotice from './AgentModeNotice';
+import { useCurrentModelNotice } from './useCurrentModelNotice';
 
 interface TestModel {
   abilities?: {
@@ -27,19 +26,6 @@ const testState = vi.hoisted(() => ({
 
 type StoreSelector<T = unknown, S = Record<PropertyKey, unknown>> = (state: S) => T;
 
-vi.mock('@lobehub/ui', () => ({
-  Alert: ({ title }: { title: ReactNode }) => <div role="alert">{title}</div>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({ alert: 'alert' }),
-  cx: (...classes: string[]) => classes.filter(Boolean).join(' '),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({
   useAgentId: () => 'agent-id',
 }));
@@ -52,18 +38,17 @@ vi.mock('@/store/agent', () => ({
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgentEnableModeById: () => (s: typeof testState.agent) => s.enableAgentMode,
-    isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
-      Boolean(s.agencyConfig?.heterogeneousProvider),
     getAgentModelById: () => (s: typeof testState.agent) => s.model,
     getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
+    isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
+      Boolean(s.agencyConfig?.heterogeneousProvider),
   },
 }));
 
 vi.mock('@/store/aiInfra', () => ({
   aiModelSelectors: {
-    isModelSupportToolUse: (model: string, provider: string) => (s: typeof testState.aiInfra) =>
-      s.enabledAiModels.find((item) => item.id === model && item.providerId === provider)?.abilities
-        ?.functionCall || false,
+    getEnabledModelById: (model: string, provider: string) => (s: typeof testState.aiInfra) =>
+      s.enabledAiModels.find((item) => item.id === model && item.providerId === provider),
   },
   aiProviderSelectors: {
     isInitAiProviderRuntimeState: (s: typeof testState.aiInfra) => s.isInitAiProviderRuntimeState,
@@ -72,7 +57,7 @@ vi.mock('@/store/aiInfra', () => ({
     selector(testState.aiInfra),
 }));
 
-describe('AgentModeNotice', () => {
+describe('useCurrentModelNotice', () => {
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
     testState.agent.enableAgentMode = true;
@@ -82,55 +67,61 @@ describe('AgentModeNotice', () => {
     testState.aiInfra.isInitAiProviderRuntimeState = false;
   });
 
-  it('does not render before the model runtime config is ready', () => {
-    render(<AgentModeNotice />);
+  it('does not return a notice before the model runtime config is ready', () => {
+    const { result } = renderHook(() => useCurrentModelNotice());
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(result.current).toBeUndefined();
   });
 
-  it('renders after the model runtime config is ready when the model lacks tool use', () => {
+  it('returns unavailable model copy when the ready model config no longer contains the selected model', () => {
+    testState.agent.enableAgentMode = false;
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+
+    const { result } = renderHook(() => useCurrentModelNotice());
+
+    expect(result.current).toBe('input.modelUnavailable');
+  });
+
+  it('returns unsupported tool-use copy only when agent mode is enabled and the selected model exists but lacks tool calls', () => {
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.enabledAiModels = [
       { abilities: { functionCall: false }, id: 'gpt-4o', providerId: 'openai' },
     ];
 
-    render(<AgentModeNotice />);
+    const { result } = renderHook(() => useCurrentModelNotice());
 
-    expect(screen.getByRole('alert')).toHaveTextContent('input.agentModeUnsupportedModel');
+    expect(result.current).toBe('input.agentModeUnsupportedModel');
   });
 
-  it('does not render when the ready model supports tool use', () => {
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledAiModels = [
-      { abilities: { functionCall: true }, id: 'gpt-4o', providerId: 'openai' },
-    ];
-
-    render(<AgentModeNotice />);
-
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
-
-  it('does not render when agent mode is disabled', () => {
+  it('does not return unsupported tool-use copy when agent mode is disabled', () => {
     testState.agent.enableAgentMode = false;
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.enabledAiModels = [
       { abilities: { functionCall: false }, id: 'gpt-4o', providerId: 'openai' },
     ];
 
-    render(<AgentModeNotice />);
+    const { result } = renderHook(() => useCurrentModelNotice());
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(result.current).toBeUndefined();
   });
 
-  it('does not render for heterogeneous agents', () => {
-    testState.agent.agencyConfig = { heterogeneousProvider: { type: 'codex' } };
+  it('does not return a notice when the ready model supports tool use', () => {
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.enabledAiModels = [
-      { abilities: { functionCall: false }, id: 'gpt-4o', providerId: 'openai' },
+      { abilities: { functionCall: true }, id: 'gpt-4o', providerId: 'openai' },
     ];
 
-    render(<AgentModeNotice />);
+    const { result } = renderHook(() => useCurrentModelNotice());
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(result.current).toBeUndefined();
+  });
+
+  it('does not return a notice for heterogeneous agents', () => {
+    testState.agent.agencyConfig = { heterogeneousProvider: { type: 'codex' } };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+
+    const { result } = renderHook(() => useCurrentModelNotice());
+
+    expect(result.current).toBeUndefined();
   });
 });

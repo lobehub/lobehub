@@ -9,6 +9,7 @@ import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import CurrentModelNotice from '@/features/ChatInput/CurrentModelNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -25,7 +26,6 @@ import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
-import AgentModeNotice from './AgentModeNotice';
 import ContextContainer from './ContextContainer';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -166,7 +166,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         onDragOver={skillDrop.onDragOver}
         onDrop={skillDrop.onDrop}
       >
-        {!isConfigLoading && <AgentModeNotice />}
+        {!isConfigLoading && <CurrentModelNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}

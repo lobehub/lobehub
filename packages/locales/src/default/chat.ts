@@ -255,6 +255,8 @@ export default {
   'input.inputCompletionError.retry': 'Retry',
   'input.inputCompletionError.settings': 'Settings',
   'input.inputCompletionError.title': 'Input suggestions paused',
+  'input.modelUnavailable':
+    'The current model is no longer available. Choose another model to continue.',
   'input.more': 'More',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
