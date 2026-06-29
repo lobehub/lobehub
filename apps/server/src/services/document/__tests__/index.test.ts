@@ -110,7 +110,7 @@ describe('DocumentService', () => {
 
     mockDocumentHistoryService = {
       compareDocumentHistoryItems: vi.fn(),
-      createHistory: vi.fn(),
+      createHistory: vi.fn().mockResolvedValue({ id: 'history-default', savedAt: new Date() }),
       getDocumentHistoryItem: vi.fn(),
       listDocumentHistory: vi.fn(),
     };
@@ -912,6 +912,23 @@ describe('DocumentService', () => {
       );
     });
 
+    it('passes the acquired ownerId into the callback', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: 'server-owner',
+      });
+      vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      const fn = vi.fn().mockResolvedValue('written');
+
+      await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(fn).toHaveBeenCalledWith(expect.stringMatching(/^server:/));
+    });
+
     it('rejects when the same user already holds the lease in another edit session', async () => {
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
       vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
@@ -1142,7 +1159,10 @@ describe('DocumentService', () => {
   describe('saveDocumentHistory', () => {
     it('should create a history entry for an existing document', async () => {
       mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
-      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
 
       const result = await service.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
 
@@ -1154,12 +1174,16 @@ describe('DocumentService', () => {
           savedAt: expect.any(Date),
         }),
       );
+      expect(result.historyId).toBe('history-1');
       expect(result.savedAt).toBeInstanceOf(Date);
     });
 
     it('should create history with diff nodes normalized to their origin content', async () => {
       mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
-      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
 
       await service.saveDocumentHistory('doc-1', createEditorDataWithDiffNode(), 'llm_call');
 
@@ -1229,7 +1253,10 @@ describe('DocumentService', () => {
         root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
       };
       mockDocumentModel.findById.mockResolvedValue({ editorData, id: 'doc-1' });
-      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
 
       const result = await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call');
 
@@ -1241,6 +1268,7 @@ describe('DocumentService', () => {
           savedAt: expect.any(Date),
         }),
       );
+      expect(result?.historyId).toBe('history-1');
       expect(result?.savedAt).toBeInstanceOf(Date);
     });
 
@@ -1249,7 +1277,10 @@ describe('DocumentService', () => {
         editorData: createEditorDataWithDiffNode(),
         id: 'doc-1',
       });
-      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
 
       const result = await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call');
 
@@ -1260,6 +1291,7 @@ describe('DocumentService', () => {
           saveSource: 'llm_call',
         }),
       );
+      expect(result?.historyId).toBe('history-1');
       expect(result?.savedAt).toBeInstanceOf(Date);
     });
 

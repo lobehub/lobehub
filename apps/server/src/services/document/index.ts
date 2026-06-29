@@ -309,7 +309,7 @@ export class DocumentService {
    * Redis is down the underlying lock degrades to "unlocked" (fail-open), so
    * this never blocks a write.
    */
-  async runWithDocumentLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  async runWithDocumentLock<T>(id: string, fn: (lockOwnerId?: string) => Promise<T>): Promise<T> {
     if (!this.workspaceId) {
       // Diagnostic: distinguishes "no-op because workspaceId is
       // missing at runtime" from "lock actually evaluated".
@@ -348,7 +348,7 @@ export class DocumentService {
     }
 
     try {
-      return await fn();
+      return await fn(ownerId);
     } finally {
       // Only release a lease we freshly claimed. When the same user already
       // held it, leave their session alive — releasing would briefly flip
@@ -412,14 +412,14 @@ export class DocumentService {
 
     const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
     const savedAt = new Date();
-    await this.documentHistoryService.createHistory({
+    const history = await this.documentHistoryService.createHistory({
       documentId,
       editorData: normalizedEditorData,
       saveSource,
       savedAt,
     });
 
-    return { savedAt };
+    return { historyId: history.id, savedAt };
   }
 
   /**
@@ -436,14 +436,14 @@ export class DocumentService {
 
       const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
       const savedAt = new Date();
-      await this.documentHistoryService.createHistory({
+      const history = await this.documentHistoryService.createHistory({
         documentId,
         editorData: normalizedEditorData,
         saveSource,
         savedAt,
       });
 
-      return { savedAt };
+      return { historyId: history.id, savedAt };
     } catch (error) {
       console.error('[DocumentService] Failed to save current document history:', error);
       return undefined;

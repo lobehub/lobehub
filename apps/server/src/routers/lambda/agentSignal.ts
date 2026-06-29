@@ -8,7 +8,9 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { rollbackAgentSignalReceipt } from '@/server/services/agentSignal/services/receiptRollbackService';
 import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 import {
   AGENT_SIGNAL_TRIGGER_SOURCE_TYPES,
@@ -19,6 +21,10 @@ const log = debug('lobe-server:agent-signal:router');
 
 const agentSignalProcedure = wsCompatProcedure;
 const agentSignalWriteProcedure = agentSignalProcedure.use(withScopedPermission('message:create'));
+const agentSignalAgentWriteProcedure = agentSignalProcedure.use(
+  withScopedPermission('agent:update'),
+);
+const agentSignalAgentDatabaseWriteProcedure = agentSignalAgentWriteProcedure.use(serverDatabase);
 const clientSourceTypes = AGENT_SIGNAL_CLIENT_SOURCE_TYPES;
 
 type ClientSourceType = (typeof clientSourceTypes)[number];
@@ -106,6 +112,22 @@ export const agentSignalRouter = router({
         sinceCreatedAt: input.sinceCreatedAt,
         topicId: input.topicId,
         userId: ctx.userId,
+      });
+    }),
+  rollbackReceipt: agentSignalAgentDatabaseWriteProcedure
+    .input(
+      z.object({
+        agentDocumentId: z.string().min(1).optional(),
+        documentId: z.string().min(1),
+        historyId: z.string().min(1),
+        receiptId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return rollbackAgentSignalReceipt(input, {
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
     }),
 });

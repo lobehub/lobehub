@@ -198,9 +198,11 @@ const mergeReceiptRefresh = (
 ) => {
   if (newReceipts.length === 0) return currentReceipts;
 
-  const existingIds = new Set(currentReceipts.map((receipt) => receipt.id));
+  const mergedById = new Map(currentReceipts.map((receipt) => [receipt.id, receipt]));
 
-  return [...newReceipts.filter((receipt) => !existingIds.has(receipt.id)), ...currentReceipts]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 20);
+  for (const receipt of newReceipts) {
+    mergedById.set(receipt.id, receipt);
+  }
+
+  return [...mergedById.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 };
