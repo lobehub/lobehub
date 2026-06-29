@@ -1,6 +1,7 @@
 import { type StateCreator } from 'zustand/vanilla';
 
 import { removeDraft } from '../draftStorage';
+import { addInputHistory } from '../inputHistoryStorage';
 import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
 
@@ -48,12 +49,20 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (!editor) return;
     if (get().sendButtonProps?.disabled) return;
 
-    get().onSend?.({
+    const onSend = get().onSend;
+    const markdown = get().getMarkdownContent();
+    const json = get().getJSONState();
+
+    onSend?.({
       clearContent: () => editor?.cleanDocument(),
       editor: editor!,
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
     });
+
+    if (onSend && (get().feature?.inputHistory ?? true)) {
+      addInputHistory({ json, markdown });
+    }
 
     const { draftKey } = get();
     if (draftKey) removeDraft(draftKey);

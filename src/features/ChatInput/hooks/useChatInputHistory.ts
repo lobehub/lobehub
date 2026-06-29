@@ -1,0 +1,194 @@
+import type { IEditor } from '@lobehub/editor';
+import type { RefObject } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+
+import type { ChatInputHistoryEntry } from '../inputHistoryStorage';
+import { getInputHistory } from '../inputHistoryStorage';
+
+interface InputHistoryNavigatorOptions {
+  applyEntry: (entry: ChatInputHistoryEntry) => void;
+  clearInput: () => void;
+  getEntries: () => ChatInputHistoryEntry[];
+  getMarkdownContent: () => string;
+}
+
+export interface InputHistoryNavigator {
+  handleKeyDown: (event: KeyboardEvent) => boolean;
+  reset: () => void;
+}
+
+export const createInputHistoryNavigator = ({
+  applyEntry,
+  clearInput,
+  getEntries,
+  getMarkdownContent,
+}: InputHistoryNavigatorOptions): InputHistoryNavigator => {
+  let entries: ChatInputHistoryEntry[] = [];
+  let cursor = -1;
+
+  const reset = () => {
+    entries = [];
+    cursor = -1;
+  };
+
+  const applyCurrentEntry = () => {
+    const entry = entries[cursor];
+    if (!entry) return false;
+
+    applyEntry(entry);
+    return true;
+  };
+
+  const showOlderEntry = () => {
+    if (cursor === -1) {
+      // Empty input is the only entry point. Once history mode starts, users can
+      // keep pressing ArrowUp/ArrowDown even though restored entries are non-empty.
+      // Example: with "line 1\nline 2" in the editor, ArrowUp should move the
+      // cursor up instead of replacing the draft with the previous prompt.
+      if (getMarkdownContent().trim().length > 0) return false;
+
+      entries = getEntries();
+      if (entries.length === 0) return false;
+
+      cursor = 0;
+      return applyCurrentEntry();
+    }
+
+    cursor = Math.min(cursor + 1, entries.length - 1);
+    return applyCurrentEntry();
+  };
+
+  const showNewerEntry = () => {
+    if (cursor === -1) return false;
+
+    if (cursor === 0) {
+      reset();
+      clearInput();
+      return true;
+    }
+
+    cursor -= 1;
+    return applyCurrentEntry();
+  };
+
+  return {
+    handleKeyDown: (event) => {
+      if (event.key === 'ArrowUp') return showOlderEntry();
+      if (event.key === 'ArrowDown') return showNewerEntry();
+
+      reset();
+      return false;
+    },
+    reset,
+  };
+};
+
+export const shouldIgnoreInputHistoryKeyDown = (
+  event: KeyboardEvent,
+  isComposing: boolean,
+): boolean =>
+  event.defaultPrevented ||
+  event.isComposing ||
+  isComposing ||
+  event.altKey ||
+  event.ctrlKey ||
+  event.metaKey ||
+  event.shiftKey;
+
+interface UseChatInputHistoryOptions {
+  editor?: IEditor;
+  enabled: boolean;
+  getMarkdownContent: () => string;
+  isComposingRef: RefObject<boolean>;
+}
+
+const focusEditorAfterHistoryNavigation = (editor: IEditor) => {
+  requestAnimationFrame(() => {
+    // setDocument/cleanDocument can make the Lexical root lose focus; keep
+    // keyboard navigation active so ArrowUp can continue walking prompt history.
+    editor.focus();
+  });
+};
+
+export const useChatInputHistory = ({
+  editor,
+  enabled,
+  getMarkdownContent,
+  isComposingRef,
+}: UseChatInputHistoryOptions) => {
+  const navigatorRef = useRef<InputHistoryNavigator | null>(null);
+  const skipNextChangeResetRef = useRef(false);
+
+  const restoreEntry = useCallback(
+    (entry: ChatInputHistoryEntry) => {
+      if (!editor) return;
+
+      skipNextChangeResetRef.current = true;
+
+      if (entry.json) {
+        editor.setDocument('json', entry.json, { keepHistory: true });
+        focusEditorAfterHistoryNavigation(editor);
+        return;
+      }
+
+      editor.setDocument('markdown', entry.markdown, { keepHistory: true });
+      focusEditorAfterHistoryNavigation(editor);
+    },
+    [editor],
+  );
+
+  const clearInput = useCallback(() => {
+    if (!editor) return;
+
+    skipNextChangeResetRef.current = true;
+    editor.cleanDocument();
+    focusEditorAfterHistoryNavigation(editor);
+  }, [editor]);
+
+  const getNavigator = useCallback(() => {
+    if (!navigatorRef.current) {
+      navigatorRef.current = createInputHistoryNavigator({
+        applyEntry: restoreEntry,
+        clearInput,
+        getEntries: getInputHistory,
+        getMarkdownContent,
+      });
+    }
+
+    return navigatorRef.current;
+  }, [clearInput, getMarkdownContent, restoreEntry]);
+
+  useEffect(() => {
+    navigatorRef.current = null;
+  }, [getNavigator]);
+
+  const reset = useCallback(() => {
+    navigatorRef.current?.reset();
+  }, []);
+
+  const handleEditorChange = useCallback(() => {
+    if (skipNextChangeResetRef.current) {
+      skipNextChangeResetRef.current = false;
+      return;
+    }
+
+    reset();
+  }, [reset]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (!enabled || !editor) return false;
+
+      if (shouldIgnoreInputHistoryKeyDown(event, isComposingRef.current)) return false;
+
+      return getNavigator().handleKeyDown(event);
+    },
+    [editor, enabled, getNavigator, isComposingRef],
+  );
+
+  return {
+    handleEditorChange,
+    handleKeyDown,
+    reset,
+  };
+};

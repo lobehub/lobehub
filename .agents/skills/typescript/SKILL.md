@@ -58,11 +58,12 @@ user-invocable: false
 
 ## Performance
 
-- Reuse existing utils in `packages/utils` or installed npm packages
 - Query only required columns from database
 
-## Time Consistency
+## Reusability
 
+- Reuse existing utils in `packages/utils` or installed npm packages
+- Do not hand-roll reusable record/object-map guards such as `typeof value === 'object' && value !== null`; import helpers like `isRecord`, `isPlainRecord`, `isObjectLike`, `toRecord`, `pickString`, `UnknownRecord`, etc. from `@lobechat/utils/object`.
 - Assign `Date.now()` to a constant once and reuse for consistency
 
 ## Logging
