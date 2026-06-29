@@ -2,34 +2,34 @@ import { exec } from 'node:child_process';
 import { platform } from 'node:os';
 import { promisify } from 'node:util';
 
-import type { IToolDetector, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
-import { createCommandDetector } from '@/core/infrastructure/ToolDetectorManager';
+import type { BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManager';
+import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 
 const execPromise = promisify(exec);
 
 /**
- * Node.js runtime detector
+ * Node.js runtime
  */
-export const nodeDetector: IToolDetector = createCommandDetector('node', {
+export const nodeBinary: BinarySpec = defineCommandBinary('node', {
   description: 'Node.js - JavaScript runtime',
   priority: 1,
 });
 
 /**
- * NPM package manager detector
+ * NPM package manager
  */
-export const npmDetector: IToolDetector = createCommandDetector('npm', {
+export const npmBinary: BinarySpec = defineCommandBinary('npm', {
   description: 'npm - Node.js package manager',
   priority: 2,
 });
 
 /**
- * Python runtime detector
+ * Python runtime
  * Tries python3 (Unix) first, then python (cross-platform)
  */
-export const pythonDetector: IToolDetector = {
+export const pythonBinary: BinarySpec = {
   description: 'Python - programming language runtime',
-  async detect(): Promise<ToolStatus> {
+  async detect(): Promise<BinaryStatus> {
     const commands = platform() === 'win32' ? ['python', 'py'] : ['python3', 'python'];
 
     for (const cmd of commands) {
@@ -64,44 +64,44 @@ export const pythonDetector: IToolDetector = {
 };
 
 /**
- * Bun runtime detector
+ * Bun runtime
  */
-export const bunDetector: IToolDetector = createCommandDetector('bun', {
+export const bunBinary: BinarySpec = defineCommandBinary('bun', {
   description: 'Bun - fast JavaScript runtime and package manager',
   priority: 4,
 });
 
 /**
- * Bunx package runner detector
+ * Bunx package runner
  */
-export const bunxDetector: IToolDetector = createCommandDetector('bunx', {
+export const bunxBinary: BinarySpec = defineCommandBinary('bunx', {
   description: 'bunx - Bun package runner for executing npm packages',
   priority: 5,
 });
 
 /**
- * pnpm package manager detector
+ * pnpm package manager
  */
-export const pnpmDetector: IToolDetector = createCommandDetector('pnpm', {
+export const pnpmBinary: BinarySpec = defineCommandBinary('pnpm', {
   description: 'pnpm - fast, disk space efficient package manager',
   priority: 6,
 });
 
 /**
- * uv Python package manager detector
+ * uv Python package manager
  */
-export const uvDetector: IToolDetector = createCommandDetector('uv', {
+export const uvBinary: BinarySpec = defineCommandBinary('uv', {
   description: 'uv - extremely fast Python package manager',
   priority: 7,
 });
 
 /**
- * LobeHub CLI detector
+ * LobeHub CLI
  * Tries lobehub, lobe, lh in order; validates via --help output containing "LobeHub"
  */
-export const lobehubDetector: IToolDetector = {
+export const lobehubBinary: BinarySpec = {
   description: 'LobeHub CLI - manage and connect to LobeHub services',
-  async detect(): Promise<ToolStatus> {
+  async detect(): Promise<BinaryStatus> {
     const commands = ['lobehub', 'lobe', 'lh'];
     const whichCmd = platform() === 'win32' ? 'where' : 'which';
 
@@ -130,15 +130,15 @@ export const lobehubDetector: IToolDetector = {
 };
 
 /**
- * All runtime environment detectors
+ * All runtime environment binaries
  */
-export const runtimeEnvironmentDetectors: IToolDetector[] = [
-  lobehubDetector,
-  nodeDetector,
-  npmDetector,
-  pythonDetector,
-  bunDetector,
-  bunxDetector,
-  pnpmDetector,
-  uvDetector,
+export const runtimeEnvironmentBinaries: BinarySpec[] = [
+  lobehubBinary,
+  nodeBinary,
+  npmBinary,
+  pythonBinary,
+  bunBinary,
+  bunxBinary,
+  pnpmBinary,
+  uvBinary,
 ];

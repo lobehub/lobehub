@@ -407,7 +407,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
@@ -427,7 +427,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
@@ -465,7 +465,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
@@ -492,7 +492,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
@@ -518,7 +518,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
@@ -549,7 +549,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',

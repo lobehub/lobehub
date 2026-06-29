@@ -3,8 +3,8 @@ import { homedir, platform } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import type { IToolDetector, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
-import { createCommandDetector } from '@/core/infrastructure/ToolDetectorManager';
+import type { BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManager';
+import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
@@ -152,7 +152,7 @@ const resolveCommandPath = async (command: string): Promise<ResolvedCommand | un
 const detectValidatedCommand = async (
   command: string,
   options: Pick<ValidatedDetectorOptions, 'validateFlag' | 'validateKeywords'>,
-): Promise<ToolStatus> => {
+): Promise<BinaryStatus> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
@@ -238,7 +238,7 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
-): Promise<ToolStatus> => {
+): Promise<BinaryStatus> => {
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 
@@ -259,20 +259,20 @@ export const detectHeterogeneousCliCommand = async (
 };
 
 /**
- * Detector that resolves a command path via which/where, then validates
+ * Binary spec that resolves a command path via which/where, then validates
  * the binary by matching `--version` (or `--help`) output against a keyword
  * to avoid collisions with unrelated executables of the same name.
  */
-const createValidatedDetector = (
+const defineValidatedBinary = (
   options: ValidatedDetectorOptions & {
     candidates: string[];
   },
-): IToolDetector => {
+): BinarySpec => {
   const { candidates, description, name, priority, ...validation } = options;
 
   return {
     description,
-    async detect(): Promise<ToolStatus> {
+    async detect(): Promise<BinaryStatus> {
       for (const cmd of candidates) {
         const status = await detectValidatedCommand(cmd, validation);
         if (status.available) return status;
@@ -289,7 +289,7 @@ const createValidatedDetector = (
  * Claude Code CLI
  * @see https://docs.claude.com/en/docs/claude-code
  */
-export const claudeCodeDetector: IToolDetector = createValidatedDetector({
+export const claudeCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['claude'],
   description: 'Claude Code - Anthropic official agentic coding CLI',
   name: 'claude',
@@ -305,7 +305,7 @@ export const claudeCodeDetector: IToolDetector = createValidatedDetector({
  * fallback applies here too, keeping the manager path and the custom-command
  * path in sync.
  */
-export const codexDetector: IToolDetector = {
+export const codexBinary: BinarySpec = {
   description: 'Codex - OpenAI agentic coding CLI',
   detect: () => detectHeterogeneousCliCommand('codex', 'codex'),
   name: 'codex',
@@ -316,7 +316,7 @@ export const codexDetector: IToolDetector = {
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
  */
-export const geminiCliDetector: IToolDetector = createValidatedDetector({
+export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
@@ -328,7 +328,7 @@ export const geminiCliDetector: IToolDetector = createValidatedDetector({
  * Qwen Code CLI
  * @see https://github.com/QwenLM/qwen-code
  */
-export const qwenCodeDetector: IToolDetector = createValidatedDetector({
+export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
@@ -340,7 +340,7 @@ export const qwenCodeDetector: IToolDetector = createValidatedDetector({
  * Kimi CLI (Moonshot)
  * @see https://github.com/MoonshotAI/kimi-cli
  */
-export const kimiCliDetector: IToolDetector = createValidatedDetector({
+export const kimiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['kimi'],
   description: 'Kimi CLI - Moonshot AI agentic coding CLI',
   name: 'kimi',
@@ -350,22 +350,22 @@ export const kimiCliDetector: IToolDetector = createValidatedDetector({
 
 /**
  * Aider - AI pair programming CLI
- * Generic command detector; name collision is unlikely.
+ * Generic command spec; name collision is unlikely.
  * @see https://github.com/Aider-AI/aider
  */
-export const aiderDetector: IToolDetector = createCommandDetector('aider', {
+export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
   priority: 6,
 });
 
 /**
- * All CLI agent detectors
+ * All CLI agent binaries
  */
-export const cliAgentDetectors: IToolDetector[] = [
-  claudeCodeDetector,
-  codexDetector,
-  geminiCliDetector,
-  qwenCodeDetector,
-  kimiCliDetector,
-  aiderDetector,
+export const cliAgentBinaries: BinarySpec[] = [
+  claudeCodeBinary,
+  codexBinary,
+  geminiCliBinary,
+  qwenCodeBinary,
+  kimiCliBinary,
+  aiderBinary,
 ];

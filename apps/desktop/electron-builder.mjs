@@ -112,8 +112,9 @@ const config = {
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
 
-    console.info('📦 Downloading agent-browser binary...');
-    execSync('node scripts/download-agent-browser.mjs', { stdio: 'inherit', cwd: __dirname });
+    // agent-browser is no longer bundled in the installer — BinaryManager
+    // lazily downloads it on first use into the per-user cache dir. See
+    // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
 
     // Build and copy CLI bundle for embedding
     console.info('📦 Building CLI for embedding...');

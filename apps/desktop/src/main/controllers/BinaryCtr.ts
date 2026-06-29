@@ -6,80 +6,83 @@ import type {
   DetectHeterogeneousAgentCommandParams,
 } from '@lobechat/electron-client-ipc';
 
-import type { ToolCategory, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
-import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
+import type { BinaryCategory, BinaryStatus } from '@/core/infrastructure/BinaryManager';
+import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
 
 const execFilePromise = promisify(execFile);
 
-const logger = createLogger('controllers:ToolDetectorCtr');
+const logger = createLogger('controllers:BinaryCtr');
 
 /**
- * Tool Detector Controller
+ * Binary Controller
  *
- * Provides IPC interface for querying tool detection status.
- * Frontend can use these methods to display tool availability to users.
+ * Provides IPC interface for querying binary detection status.
+ * Frontend can use these methods to display binary availability to users.
  */
-export default class ToolDetectorCtr extends ControllerModule {
-  static override readonly groupName = 'toolDetector';
+export default class BinaryCtr extends ControllerModule {
+  static override readonly groupName = 'binary';
 
   private get manager() {
-    return this.app.toolDetectorManager;
+    return this.app.binaryManager;
   }
 
   /**
-   * Detect a single tool
+   * Detect a single binary
    */
   @IpcMethod()
-  async detectTool(name: string, force = false): Promise<ToolStatus> {
-    logger.debug(`Detecting tool: ${name}, force: ${force}`);
+  async detect(name: string, force = false): Promise<BinaryStatus> {
+    logger.debug(`Detecting binary: ${name}, force: ${force}`);
     return this.manager.detect(name, force);
   }
 
   @IpcMethod()
   async detectHeterogeneousAgentCommand(
     params: DetectHeterogeneousAgentCommandParams,
-  ): Promise<ToolStatus> {
+  ): Promise<BinaryStatus> {
     logger.debug('Detecting heterogeneous agent command:', params);
     return detectHeterogeneousCliCommand(params.agentType, params.command);
   }
 
   /**
-   * Detect all registered tools
+   * Detect all registered binaries
    */
   @IpcMethod()
-  async detectAllTools(force = false): Promise<Record<string, ToolStatus>> {
-    logger.debug(`Detecting all tools, force: ${force}`);
+  async detectAll(force = false): Promise<Record<string, BinaryStatus>> {
+    logger.debug(`Detecting all binaries, force: ${force}`);
     const results = await this.manager.detectAll(force);
     return Object.fromEntries(results);
   }
 
   /**
-   * Detect all tools in a category
+   * Detect all binaries in a category
    */
   @IpcMethod()
-  async detectCategory(category: ToolCategory, force = false): Promise<Record<string, ToolStatus>> {
+  async detectCategory(
+    category: BinaryCategory,
+    force = false,
+  ): Promise<Record<string, BinaryStatus>> {
     logger.debug(`Detecting category: ${category}, force: ${force}`);
     const results = await this.manager.detectCategory(category, force);
     return Object.fromEntries(results);
   }
 
   /**
-   * Get the best available tool in a category
+   * Get the best available binary in a category
    */
   @IpcMethod()
-  async getBestTool(category: ToolCategory): Promise<string | null> {
-    logger.debug(`Getting best tool for category: ${category}`);
+  async getBestTool(category: BinaryCategory): Promise<string | null> {
+    logger.debug(`Getting best binary for category: ${category}`);
     return this.manager.getBestTool(category);
   }
 
   /**
-   * Get cached status for a tool (no detection)
+   * Get cached status for a binary (no detection)
    */
   @IpcMethod()
-  getToolStatus(name: string): ToolStatus | null {
+  getStatus(name: string): BinaryStatus | null {
     return this.manager.getStatus(name) || null;
   }
 
@@ -87,48 +90,48 @@ export default class ToolDetectorCtr extends ControllerModule {
    * Get all cached statuses (no detection)
    */
   @IpcMethod()
-  getAllToolStatus(): Record<string, ToolStatus> {
+  getAllStatus(): Record<string, BinaryStatus> {
     return Object.fromEntries(this.manager.getAllStatus());
   }
 
   /**
-   * Clear tool status cache
+   * Clear binary status cache
    */
   @IpcMethod()
-  clearToolCache(name?: string): void {
+  clearCache(name?: string): void {
     this.manager.clearCache(name);
-    logger.debug(`Cleared tool cache${name ? ` for: ${name}` : ''}`);
+    logger.debug(`Cleared binary cache${name ? ` for: ${name}` : ''}`);
   }
 
   /**
-   * Get list of registered tools
+   * Get list of registered binary names
    */
   @IpcMethod()
-  getRegisteredTools(): string[] {
-    return this.manager.getRegisteredTools();
+  getRegistered(): string[] {
+    return this.manager.getRegistered();
   }
 
   /**
    * Get all categories
    */
   @IpcMethod()
-  getCategories(): ToolCategory[] {
+  getCategories(): BinaryCategory[] {
     return this.manager.getCategories();
   }
 
   /**
-   * Get tools in a category with their info
+   * Get binaries in a category with their info
    */
   @IpcMethod()
-  getToolsInCategory(category: ToolCategory): Array<{
+  getInCategory(category: BinaryCategory): Array<{
     description?: string;
     name: string;
     priority?: number;
   }> {
-    return this.manager.getToolsInCategory(category).map((detector) => ({
-      description: detector.description,
-      name: detector.name,
-      priority: detector.priority,
+    return this.manager.getInCategory(category).map((spec) => ({
+      description: spec.description,
+      name: spec.name,
+      priority: spec.priority,
     }));
   }
 

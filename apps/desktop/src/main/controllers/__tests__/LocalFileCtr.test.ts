@@ -108,7 +108,7 @@ const mockApp = {
     return mockSearchService;
   }),
   localFileProtocolManager: mockLocalFileProtocolManager,
-  toolDetectorManager: {
+  binaryManager: {
     getBestTool: vi.fn(() => null), // No external tools available, use Node.js fallback
   },
 } as unknown as App;

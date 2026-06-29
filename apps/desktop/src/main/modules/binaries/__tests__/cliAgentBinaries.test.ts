@@ -44,7 +44,7 @@ const callExec = (stdout: string, stderr = '') => {
   }) as any);
 };
 
-describe('cliAgentDetectors', () => {
+describe('cliAgentBinaries', () => {
   beforeEach(() => {
     execFileMock.mockReset();
     execMock.mockReset();
@@ -65,8 +65,8 @@ describe('cliAgentDetectors', () => {
       // 2) `cmd /c "...\\claude.cmd" --version` → keyword match
       callExec('1.2.3 (Claude Code)');
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.cmd');
@@ -82,8 +82,8 @@ describe('cliAgentDetectors', () => {
     it('returns unavailable when `where` finds nothing', async () => {
       callExecFileError(new Error('not found'));
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
       // We should NOT proceed to invoke anything after a failed resolve.
@@ -91,7 +91,7 @@ describe('cliAgentDetectors', () => {
     });
 
     it('rejects custom commands containing shell metacharacters', async () => {
-      const { detectHeterogeneousCliCommand } = await import('../cliAgentDetectors');
+      const { detectHeterogeneousCliCommand } = await import('../cliAgentBinaries');
       const status = await detectHeterogeneousCliCommand('claude-code', 'claude & calc.exe');
 
       expect(status.available).toBe(false);
@@ -103,8 +103,8 @@ describe('cliAgentDetectors', () => {
       callExecFile('C:\\some\\other\\claude.cmd\r\n');
       callExec('this is some other binary v1.0');
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
     });
@@ -122,8 +122,8 @@ describe('cliAgentDetectors', () => {
       );
       callExec('codex 0.130.0');
 
-      const { codexDetector } = await import('../cliAgentDetectors');
-      const status = await codexDetector.detect();
+      const { codexBinary } = await import('../cliAgentBinaries');
+      const status = await codexBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd');
@@ -136,8 +136,8 @@ describe('cliAgentDetectors', () => {
       callExecFile(['C:\\tools\\foo.exe', 'C:\\tools\\foo.cmd'].join('\r\n'));
       callExecFile('claude code 1.0.0');
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('C:\\tools\\foo.exe');
@@ -155,8 +155,8 @@ describe('cliAgentDetectors', () => {
         ].join('\r\n'),
       );
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
       // Must not attempt to invoke the unrunnable matches.
@@ -174,8 +174,8 @@ describe('cliAgentDetectors', () => {
       callExecFile('/usr/local/bin/claude\n');
       callExecFile('1.2.3 (Claude Code)');
 
-      const { claudeCodeDetector } = await import('../cliAgentDetectors');
-      const status = await claudeCodeDetector.detect();
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(true);
       expect(status.path).toBe('/usr/local/bin/claude');
@@ -197,8 +197,8 @@ describe('cliAgentDetectors', () => {
         callExecFileError(new Error('not found')); // which codex
         callExecFile('codex-cli 0.138.0'); // bundled CLI --version
 
-        const { codexDetector } = await import('../cliAgentDetectors');
-        const status = await codexDetector.detect();
+        const { codexBinary } = await import('../cliAgentBinaries');
+        const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
@@ -227,8 +227,8 @@ describe('cliAgentDetectors', () => {
         callExecFileError(new Error('ENOENT')); // /Applications candidate
         callExecFileError(new Error('ENOENT')); // ~/Applications candidate
 
-        const { codexDetector } = await import('../cliAgentDetectors');
-        const status = await codexDetector.detect();
+        const { codexBinary } = await import('../cliAgentBinaries');
+        const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
         expect(execFileMock).toHaveBeenCalledTimes(3);
@@ -245,7 +245,7 @@ describe('cliAgentDetectors', () => {
     it('does not probe well-known locations for an explicit path-like command', async () => {
       callExecFileError(new Error('ENOENT')); // /custom/bin/codex --version
 
-      const { detectHeterogeneousCliCommand } = await import('../cliAgentDetectors');
+      const { detectHeterogeneousCliCommand } = await import('../cliAgentBinaries');
       const status = await detectHeterogeneousCliCommand('codex', '/custom/bin/codex');
 
       expect(status.available).toBe(false);
@@ -265,8 +265,8 @@ describe('cliAgentDetectors', () => {
         callExecFile('/Users/Hanam/.local/share/mise/shims/gemini\n');
         callExecFile('gemini 0.2.0');
 
-        const { geminiCliDetector } = await import('../cliAgentDetectors');
-        const status = await geminiCliDetector.detect();
+        const { geminiCliBinary } = await import('../cliAgentBinaries');
+        const status = await geminiCliBinary.detect();
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');

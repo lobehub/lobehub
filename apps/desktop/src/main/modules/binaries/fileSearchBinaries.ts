@@ -1,17 +1,13 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type {
-  IToolDetector,
-  ToolStatus} from '@/core/infrastructure/ToolDetectorManager';
-import {
-  createCommandDetector
-} from '@/core/infrastructure/ToolDetectorManager';
+import type { BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManager';
+import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 
 const execPromise = promisify(exec);
 
 /**
- * File search tool detectors
+ * File search binaries
  *
  * Priority order: mdfind (1, macOS) > fd (2) > find (3)
  */
@@ -20,10 +16,9 @@ const execPromise = promisify(exec);
  * mdfind - macOS Spotlight search
  * Only available on macOS, uses Spotlight index for fast searching
  */
-export const mdfindDetector: IToolDetector = {
+export const mdfindBinary: BinarySpec = {
   description: 'macOS Spotlight search',
-  async detect(): Promise<ToolStatus> {
-    // Only available on macOS
+  async detect(): Promise<BinaryStatus> {
     if (process.platform !== 'darwin') {
       return {
         available: false,
@@ -32,12 +27,10 @@ export const mdfindDetector: IToolDetector = {
     }
 
     try {
-      // Check if mdfind command exists and Spotlight is working
       const { stdout } = await execPromise('mdfind -name test -onlyin ~ -count', {
         timeout: 5000,
       });
 
-      // If mdfind returns a number (even 0), Spotlight is available
       const count = parseInt(stdout.trim(), 10);
       if (Number.isNaN(count)) {
         return {
@@ -65,7 +58,7 @@ export const mdfindDetector: IToolDetector = {
  * fd - Fast alternative to find
  * https://github.com/sharkdp/fd
  */
-export const fdDetector: IToolDetector = createCommandDetector('fd', {
+export const fdBinary: BinarySpec = defineCommandBinary('fd', {
   description: 'fd - fast find alternative',
   priority: 2,
 });
@@ -73,13 +66,13 @@ export const fdDetector: IToolDetector = createCommandDetector('fd', {
 /**
  * find - Standard Unix file search
  */
-export const findDetector: IToolDetector = createCommandDetector('find', {
+export const findBinary: BinarySpec = defineCommandBinary('find', {
   description: 'Unix find command',
   priority: 3,
-  versionFlag: '--version', // GNU find supports this
+  versionFlag: '--version',
 });
 
 /**
- * All file search detectors
+ * All file search binaries
  */
-export const fileSearchDetectors: IToolDetector[] = [mdfindDetector, fdDetector, findDetector];
+export const fileSearchBinaries: BinarySpec[] = [mdfindBinary, fdBinary, findBinary];

@@ -1,6 +1,6 @@
 'use client';
 
-import { type ToolStatus } from '@lobechat/electron-client-ipc';
+import { type BinaryStatus } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Button, CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
-import { toolDetectorService } from '@/services/electron/toolDetector';
+import { binaryService } from '@/services/electron/binary';
 
 /**
  * Predefined tool configurations by category
@@ -70,7 +70,7 @@ const TOOL_CATEGORIES = {
 
 interface ToolStatusDisplayProps {
   isDetecting?: boolean;
-  status?: ToolStatus;
+  status?: BinaryStatus;
 }
 
 const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting }) => {
@@ -125,13 +125,13 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 
 const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
-  const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({});
+  const [toolStatuses, setToolStatuses] = useState<Record<string, BinaryStatus>>({});
   const [detecting, setDetecting] = useState(true);
 
   const detectTools = useCallback(async (force = false) => {
     try {
       setDetecting(true);
-      const statuses = await toolDetectorService.detectAllTools(force);
+      const statuses = await binaryService.detectAll(force);
       setToolStatuses(statuses);
     } catch (error) {
       console.error('Failed to detect tools:', error);

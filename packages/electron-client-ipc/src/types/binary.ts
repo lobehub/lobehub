@@ -1,7 +1,7 @@
 /**
- * Tool detection status
+ * Status of a registered binary
  */
-export interface ToolStatus {
+export interface BinaryStatus {
   available: boolean;
   error?: string;
   lastChecked?: Date;
@@ -10,14 +10,14 @@ export interface ToolStatus {
 }
 
 /**
- * Tool categories
+ * Binary categories
  */
-export type ToolCategory = 'content-search' | 'custom' | 'file-search' | 'system';
+export type BinaryCategory = 'content-search' | 'custom' | 'file-search' | 'system';
 
 /**
- * Tool info for display
+ * Binary info for display
  */
-export interface ToolInfo {
+export interface BinaryInfo {
   description?: string;
   name: string;
   priority?: number;
