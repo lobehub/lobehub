@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "當前付款方式",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "付款方式",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "將立即對您當前的付款方式收取按比例計算的費用。",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "購買座位",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "購買更多席位",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "查看計費",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "您的工作區座位更新已保存。",

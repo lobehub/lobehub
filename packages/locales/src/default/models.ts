@@ -20,7 +20,7 @@ const lobeHubOnlineModelLocales = {
   'kimi-k2-thinking-turbo.description':
     'High-speed version of kimi-k2-thinking, suitable for scenarios requiring both deep reasoning and extremely fast responses.',
   'lobehub-glm-5.2-fast.description':
-    'Fast mode for GLM-5.2 with substantially lower latency. Same capabilities as GLM-5.2 — costs more, but responds much faster.',
+    "The industry's fastest GLM-5.2. Same capabilities as GLM-5.2 with significantly faster response and reasoning speed. Limited-time launch pricing — 25% off.",
   'seedream-5-0-260128.description':
     'ByteDance-Seedream-5.0-lite by BytePlus features web-retrieval-augmented generation for real-time information, enhanced complex prompt interpretation, and improved reference consistency for professional visual creation.',
   'fal-ai/bytedance/seedream/v4.5.description':

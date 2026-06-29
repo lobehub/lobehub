@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "현재 결제 방법",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "결제 방법",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "현재 결제 방법에 즉시 비례 청구가 적용됩니다.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "좌석 구매",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "추가 좌석 구매",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "청구 보기",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "워크스페이스 좌석 업데이트가 저장되었습니다.",

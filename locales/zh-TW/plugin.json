@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "結果",
   "builtins.codex.mcpTool.unknownTool": "MCP工具",
   "builtins.codex.webSearch.query": "查詢",
+  "builtins.linear.render.updatedAt": "更新於 {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "啟用工具",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} 未找到",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "取得可用模型",

@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "現在の支払い方法",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "支払い方法",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "現在の支払い方法に即座に比例配分された料金が適用されます。",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "席を購入する",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "追加席を購入",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "請求を表示",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "ワークスペースの座席更新が保存されました。",

@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "결과",
   "builtins.codex.mcpTool.unknownTool": "MCP 도구",
   "builtins.codex.webSearch.query": "검색어",
+  "builtins.linear.render.updatedAt": "{{time}}에 업데이트됨",
   "builtins.lobe-activator.apiName.activateTools": "도구 활성화",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}}개를 찾을 수 없음",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "사용 가능한 모델 가져오기",

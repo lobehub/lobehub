@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "Resultaat",
   "builtins.codex.mcpTool.unknownTool": "MCP-tool",
   "builtins.codex.webSearch.query": "Zoekopdracht",
+  "builtins.linear.render.updatedAt": "Bijgewerkt {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Hulpmiddelen Activeren",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} niet gevonden",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Beschikbare modellen ophalen",

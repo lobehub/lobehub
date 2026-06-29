@@ -793,7 +793,7 @@
   "llava.description": "LLaVA 是一款多模態模型，結合視覺編碼器與 Vicuna，具備強大的視覺-語言理解能力。",
   "llava:13b.description": "LLaVA 是一款多模態模型，結合視覺編碼器與 Vicuna，具備強大的視覺-語言理解能力。",
   "llava:34b.description": "LLaVA 是一款多模態模型，結合視覺編碼器與 Vicuna，具備強大的視覺-語言理解能力。",
-  "lobehub-glm-5.2-fast.description": "GLM-5.2 的快速模式，具有顯著降低的延遲。與 GLM-5.2 擁有相同的功能——成本較高，但回應速度更快。",
+  "lobehub-glm-5.2-fast.description": "業界最快的 GLM-5.2。具備與 GLM-5.2 相同的功能，但回應和推理速度顯著提升。限時推出優惠——享 25% 折扣。",
   "magistral-medium-2509.description": "Magistral Medium 1.2是Mistral AI的前沿推理模型（2025年9月），支持視覺功能。",
   "magistral-small-2509.description": "Magistral Small 1.2 是 Mistral AI 推出的開源小型推理模型（2025 年 9 月），支援視覺任務。",
   "mathstral.description": "MathΣtral 專為科學研究與數學推理設計，具備強大的計算與解釋能力。",

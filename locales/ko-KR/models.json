@@ -793,7 +793,7 @@
   "llava.description": "LLaVA는 비쿠나와 비전 인코더를 결합한 멀티모달 모델로, 강력한 시각-언어 이해 능력을 갖추고 있습니다.",
   "llava:13b.description": "LLaVA는 비쿠나와 비전 인코더를 결합한 멀티모달 모델로, 강력한 시각-언어 이해 능력을 갖추고 있습니다.",
   "llava:34b.description": "LLaVA는 비쿠나와 비전 인코더를 결합한 멀티모달 모델로, 강력한 시각-언어 이해 능력을 갖추고 있습니다.",
-  "lobehub-glm-5.2-fast.description": "GLM-5.2의 빠른 모드로 지연 시간이 크게 줄어듭니다. GLM-5.2와 동일한 기능을 제공하며 비용은 더 들지만 응답 속도가 훨씬 빠릅니다.",
+  "lobehub-glm-5.2-fast.description": "업계에서 가장 빠른 GLM-5.2. GLM-5.2와 동일한 기능을 제공하며, 응답 및 추론 속도가 대폭 향상되었습니다. 한정 기간 출시 가격 — 25% 할인.",
   "magistral-medium-2509.description": "Magistral Medium 1.2는 Mistral AI의 최첨단 추론 모델로, 비전 지원을 제공합니다.",
   "magistral-small-2509.description": "Magistral Small 1.2는 Mistral AI가 개발한 오픈소스 소형 추론 모델로, 시각 기능을 지원합니다. (2025년 9월)",
   "mathstral.description": "MathΣtral은 과학 연구 및 수학적 추론을 위해 설계되었으며, 강력한 계산 및 설명 능력을 갖추고 있습니다.",

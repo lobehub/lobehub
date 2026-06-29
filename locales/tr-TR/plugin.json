@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "Sonuç",
   "builtins.codex.mcpTool.unknownTool": "MCP aracı",
   "builtins.codex.webSearch.query": "Sorgu",
+  "builtins.linear.render.updatedAt": "{{time}} tarihinde güncellendi",
   "builtins.lobe-activator.apiName.activateTools": "Araçları Etkinleştir",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} bulunamadı",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Mevcut modelleri al",

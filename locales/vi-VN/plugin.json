@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "Kết quả",
   "builtins.codex.mcpTool.unknownTool": "Công cụ MCP",
   "builtins.codex.webSearch.query": "Truy vấn",
+  "builtins.linear.render.updatedAt": "Cập nhật {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Kích hoạt Công cụ",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} không tìm thấy",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Lấy mô hình khả dụng",

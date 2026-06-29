@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "روش پرداخت فعلی",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "روش پرداخت",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "هزینه متناسب بلافاصله به روش پرداخت فعلی شما اعمال خواهد شد.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "خرید صندلی‌ها",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "خرید صندلی‌های بیشتر",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "مشاهده صورتحساب",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "به‌روزرسانی صندلی‌های فضای کاری شما ذخیره شده است.",

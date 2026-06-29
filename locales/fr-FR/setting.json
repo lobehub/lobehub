@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Mode de paiement actuel",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Mode de paiement",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "Un frais au prorata sera appliqué immédiatement à votre méthode de paiement actuelle.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Acheter des sièges",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Acheter plus de places",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "Voir la facturation",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "La mise à jour des sièges de votre espace de travail a été enregistrée.",

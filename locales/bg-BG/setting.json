@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Текущ метод на плащане",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Метод на плащане",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "Пропорционална такса ще бъде приложена незабавно към текущия ви метод на плащане.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Закупуване на места",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Купете повече места",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "Преглед на фактурирането",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "Актуализацията на местата във вашето работно пространство е запазена.",

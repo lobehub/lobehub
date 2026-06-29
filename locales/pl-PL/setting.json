@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Obecna metoda płatności",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Metoda płatności",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "Proporcjonalna opłata zostanie natychmiast naliczona na Twojej bieżącej metodzie płatności.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Zakup miejsc",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Kup więcej miejsc",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "Zobacz rozliczenia",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "Aktualizacja miejsc w Twoim miejscu pracy została zapisana.",

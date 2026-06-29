@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Método de pagamento atual",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Método de pagamento",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "Uma cobrança proporcional será aplicada imediatamente ao seu método de pagamento atual.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Comprar assentos",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Comprar mais assentos",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "Ver cobrança",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "A atualização de assentos do seu workspace foi salva.",

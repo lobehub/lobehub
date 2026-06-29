@@ -1424,6 +1424,7 @@
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodFallback": "Mevcut ödeme yöntemi",
   "workspace.billingPage.billing.upgradePlanModal.paymentMethodLabel": "Ödeme yöntemi",
   "workspace.billingPage.billing.upgradePlanModal.proratedCharge": "Mevcut ödeme yönteminizden hemen tahsil edilecek orantılı bir ücret uygulanacaktır.",
+  "workspace.billingPage.billing.upgradePlanModal.purchaseSeats": "Koltuk satın al",
   "workspace.billingPage.billing.upgradePlanModal.purchasedSeatsLine": "Daha fazla koltuk satın al",
   "workspace.billingPage.billing.upgradePlanModal.resultBillingCta": "Faturayı görüntüle",
   "workspace.billingPage.billing.upgradePlanModal.resultDesc": "Çalışma alanı koltuk güncellemeniz kaydedildi.",

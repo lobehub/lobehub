@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "نتیجه",
   "builtins.codex.mcpTool.unknownTool": "ابزار MCP",
   "builtins.codex.webSearch.query": "پرس‌وجو",
+  "builtins.linear.render.updatedAt": "به‌روزرسانی شده {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "فعال کردن ابزارها",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} یافت نشد",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "دریافت مدل‌های موجود",

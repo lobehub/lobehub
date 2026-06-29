@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "Risultato",
   "builtins.codex.mcpTool.unknownTool": "Strumento MCP",
   "builtins.codex.webSearch.query": "Richiesta",
+  "builtins.linear.render.updatedAt": "Aggiornato {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Attiva Strumenti",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} non trovati",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Ottieni modelli disponibili",

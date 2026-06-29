@@ -29,6 +29,7 @@
   "builtins.codex.mcpTool.result": "النتيجة",
   "builtins.codex.mcpTool.unknownTool": "أداة MCP",
   "builtins.codex.webSearch.query": "استعلام",
+  "builtins.linear.render.updatedAt": "تم التحديث {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "تفعيل الأدوات",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} غير موجود",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "الحصول على النماذج المتاحة",
