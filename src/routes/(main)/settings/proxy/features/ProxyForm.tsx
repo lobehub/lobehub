@@ -265,7 +265,12 @@ const ProxyForm = () => {
               rules: [{ validator: validateProxyUsername }],
             },
             {
-              children: <Input.Password placeholder={t('proxy.password_placeholder')} />,
+              children: (
+                <Input.Password
+                  autoComplete="new-password"
+                  placeholder={t('proxy.password_placeholder')}
+                />
+              ),
               label: t('proxy.password'),
               name: 'proxyPassword',
               rules: [{ validator: validateProxyPassword }],

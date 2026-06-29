@@ -281,7 +281,10 @@ const MCPManifestForm = ({
                   name={AUTH_TOKEN}
                   rules={[{ message: t('dev.mcp.auth.token.required'), required: true }]}
                 >
-                  <InputPassword placeholder={t('dev.mcp.auth.token.placeholder')} />
+                  <InputPassword
+                    autoComplete="new-password"
+                    placeholder={t('dev.mcp.auth.token.placeholder')}
+                  />
                 </FormItem>
               )}
               {enableOAuth && authType === 'oauth2' && (
@@ -298,7 +301,10 @@ const MCPManifestForm = ({
                     label={t('dev.mcp.auth.oauth.clientSecret.label')}
                     name={AUTH_CLIENT_SECRET}
                   >
-                    <InputPassword placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')} />
+                    <InputPassword
+                      autoComplete="new-password"
+                      placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')}
+                    />
                   </FormItem>
                   <div
                     style={{
