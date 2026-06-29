@@ -1,6 +1,7 @@
-import { type ActionIconProps } from '@lobehub/ui';
+import type { ActionIconProps } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
+import type { MouseEventHandler } from 'react';
 import { memo } from 'react';
 import { Link } from 'react-router';
 
@@ -10,12 +11,16 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 
 export const BACK_BUTTON_ID = 'lobe-back-button';
 
-const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick, ...rest }) => {
+interface BackButtonProps extends Omit<ActionIconProps, 'onClick'> {
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
+  to?: string;
+}
+
+const BackButton = memo<BackButtonProps>(({ to = '/', onClick, ...rest }) => {
   const activeSlug = useActiveWorkspaceSlug();
   const resolvedTo = buildWorkspaceAwarePath(to, activeSlug);
 
   return (
-    // @ts-expect-error
     <Link to={resolvedTo} onClick={onClick}>
       <ActionIcon
         icon={ChevronLeftIcon}
