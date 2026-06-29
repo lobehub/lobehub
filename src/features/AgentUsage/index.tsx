@@ -57,7 +57,7 @@ const AgentUsage = memo(() => {
       <Flexbox flex={1} style={styles.body} width={'100%'}>
         <WideScreenContainer>
           <Flexbox gap={16} paddingBlock={16}>
-            <Block gap={16} variant={'outlined'}>
+            <Block gap={16} padding={20} variant={'outlined'}>
               <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Text fontSize={13} type={'secondary'}>
@@ -95,10 +95,10 @@ const AgentUsage = memo(() => {
                 summary={data?.summary ?? EMPTY_SUMMARY}
               />
             </Block>
-            <Block variant={'outlined'}>
+            <Block padding={20} variant={'outlined'}>
               <UsageTrendChart buckets={data?.buckets} isLoading={isLoading} />
             </Block>
-            <Block variant={'outlined'}>
+            <Block padding={20} variant={'outlined'}>
               <ModelBreakdown isLoading={isLoading} rows={data?.byModel ?? []} />
             </Block>
           </Flexbox>
