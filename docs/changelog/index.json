@@ -3,6 +3,14 @@
   "cloud": [],
   "community": [
     {
+      "id": "2026-06-29-cleaner-conversations",
+      "date": "2026-06-29",
+      "versionRange": [
+        "2.2.7",
+        "2.2.8"
+      ]
+    },
+    {
       "image": "/blog/assets0a5cad3a54ab5bd637a85db37d04a840.webp",
       "id": "2026-06-22-delivery-checks",
       "date": "2026-06-22",
