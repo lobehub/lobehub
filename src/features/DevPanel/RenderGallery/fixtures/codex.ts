@@ -36,6 +36,31 @@ const linearIssueResult = {
   url: 'https://linear.app/lobehub/issue/TEST-0000',
 };
 
+const githubPullRequestResult = {
+  base: 'canary',
+  body: [
+    '#### Description of Change',
+    '',
+    '- Add a GitHub MCP render for Codex Apps tool calls.',
+    '- Replace the raw JSON block with a PR summary card.',
+    '',
+    '#### How to Test',
+    '',
+    '- Open the Codex render gallery.',
+    '- Check the GitHub create pull request fixture.',
+  ].join('\n'),
+  draft: false,
+  head: 'fix/codex-github-render',
+  mergeable: true,
+  merged: false,
+  number: 16430,
+  repository_full_name: 'lobehub/lobehub',
+  state: 'open',
+  title: 'Render Codex GitHub MCP tool calls',
+  updated_at: '2026-06-29T08:20:00Z',
+  url: 'https://github.com/lobehub/lobehub/pull/16430',
+};
+
 export default defineFixtures({
   identifier: 'codex',
   meta: {
@@ -177,6 +202,35 @@ export default defineFixtures({
           server: 'mcp__codex_apps__linear',
           status: 'completed',
           tool: 'linear_save_issue',
+        },
+      },
+      {
+        args: {
+          arguments: {
+            base: 'canary',
+            head: 'fix/codex-github-render',
+            repository_full_name: 'lobehub/lobehub',
+            title: 'Render Codex GitHub MCP tool calls',
+          },
+          server: 'mcp__codex_apps__github',
+          tool: 'github_create_pull_request',
+        },
+        content: JSON.stringify(githubPullRequestResult),
+        label: 'GitHub create pull request',
+        pluginState: {
+          arguments: {
+            base: 'canary',
+            head: 'fix/codex-github-render',
+            repository_full_name: 'lobehub/lobehub',
+            title: 'Render Codex GitHub MCP tool calls',
+          },
+          result: {
+            content: [{ text: JSON.stringify(githubPullRequestResult), type: 'text' }],
+            isError: false,
+          },
+          server: 'mcp__codex_apps__github',
+          status: 'completed',
+          tool: 'github_create_pull_request',
         },
       },
     ]),
