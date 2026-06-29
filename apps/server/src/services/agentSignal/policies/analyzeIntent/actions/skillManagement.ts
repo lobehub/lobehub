@@ -156,9 +156,10 @@ export const executeSkillManagementAction = async (
     const { assistantMessageId, messageId, topicId } = action.payload;
 
     // Anchor the skill seed under the completed assistant turn when the synthesis
-    // ran deferred at `agent.execution.completed` (LOBE-10802); fall back to the
-    // user message for the legacy inbound dispatch. Anchoring to the assistant
-    // message keeps the seed inside the assistant group instead of surfacing as a
+    // ran deferred at `agent.execution.completed` (skill delayed to turn
+    // completion so evidence carries the full trajectory); fall back to the user
+    // message for the legacy inbound dispatch. Anchoring to the assistant message
+    // keeps the seed inside the assistant group instead of surfacing as a
     // floating `parent_id=null` mainline root.
     const anchorMessageId = assistantMessageId ?? messageId;
 

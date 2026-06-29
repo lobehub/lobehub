@@ -126,10 +126,12 @@ const detectClientComplete = (signal: FeedbackDomainSignal) => {
 
 /**
  * Detects a server execAgent inbound skill candidate that should be parked and
- * synthesized after the run finishes (LOBE-10802), rather than dispatched on the
- * user message alone. The client-runtime lane parks/synthesizes through its own
- * `client.runtime.start` / `client.runtime.complete` pair and is never re-routed
- * here; agent-signal self-iteration runs are suppressed upstream but guarded too.
+ * synthesized after the run finishes (deferred skill synthesis so the evidence
+ * carries the full trajectory, not just the user prompt), rather than dispatched
+ * on the user message alone. The client-runtime lane parks/synthesizes through
+ * its own `client.runtime.start` / `client.runtime.complete` pair and is never
+ * re-routed here; agent-signal self-iteration runs are suppressed upstream but
+ * guarded too.
  */
 const detectServerInboundDeferredSkill = (signal: FeedbackDomainSignal): boolean => {
   const { trigger } = signal.payload;
@@ -486,12 +488,12 @@ export const createFeedbackActionPlannerSignalHandler = (
           };
         }
 
-        // Defer server execAgent inbound synthesis to agent.execution.completed
-        // (LOBE-10802): park the candidate with its synthesis payload so the
-        // completion-stage handler synthesizes from the full trajectory (tool
-        // sequence + final product) instead of the user prompt alone. Only when
-        // the intent-record store is wired — otherwise fall through to the legacy
-        // inbound dispatch so synthesis is never silently dropped.
+        // Defer server execAgent inbound synthesis to agent.execution.completed:
+        // park the candidate with its synthesis payload so the completion-stage
+        // handler synthesizes from the full trajectory (tool sequence + final
+        // product) instead of the user prompt alone. Only when the intent-record
+        // store is wired — otherwise fall through to the legacy inbound dispatch
+        // so synthesis is never silently dropped.
         const skillIntentWriter = options.procedure?.procedureState?.skillIntentRecords?.write;
         if (skillIntentWriter && detectServerInboundDeferredSkill(signal)) {
           await skillIntentWriter(

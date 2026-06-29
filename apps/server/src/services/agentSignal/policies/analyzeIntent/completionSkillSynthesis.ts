@@ -127,7 +127,7 @@ const renderTrajectoryMessage = (message: CompletedTurnMessage): string => {
  * Assembles the completed-turn trajectory (user request, the tool-call sequence,
  * tool results, and the final assistant product) into one XML envelope used as
  * the deferred skill synthesis context. This is the evidence the inbound prompt
- * alone could not provide (LOBE-10802 acceptance: evidence carries the tool
+ * alone could not provide (deferred synthesis: evidence carries the tool
  * sequence + final product, not just the user prompt).
  */
 const assembleTrajectoryContext = async (input: {
@@ -182,7 +182,8 @@ export type CompletionSkillSynthesisOptions = SkillManagementActionHandlerOption
 
 /**
  * Builds the `agent.execution.completed` source handler that performs deferred
- * skill synthesis (LOBE-10802).
+ * skill synthesis (skill synthesis delayed to turn completion so evidence
+ * carries the full trajectory instead of just the user prompt).
  *
  * For a normal, non-error, non-self-iteration server execAgent turn it:
  * 1. Hydrates the completed turn (assistant -> user parent).

@@ -31,7 +31,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * supervisor op), every Gateway push for that operation is additionally
    * delivered to the mirror op's channel — so member streaming events ride down
    * the supervisor's single WebSocket instead of stranding on a per-member
-   * channel nobody subscribes to (single-connection multiplexing, LOBE-10868).
+   * channel nobody subscribes to (single-connection multiplexing).
    *
    * Two population paths, so this works both in-process AND across queue workers:
    *  - fast path: set at `publishAgentRuntimeInit` from the initial state (the

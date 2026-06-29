@@ -25,9 +25,9 @@ export interface AgentOperationMetadata {
   /**
    * When set, the Gateway stream notifier mirrors this operation's stream events
    * onto the named operation's Gateway channel as well (single-connection
-   * multiplexing, LOBE-10868). Used so a broadcast member's streaming events
-   * also flow down the supervisor's existing WebSocket — the supervisor's own
-   * operationId — instead of stranding on a member channel nobody subscribes to.
+   * multiplexing). Used so a broadcast member's streaming events also flow down
+   * the supervisor's existing WebSocket — the supervisor's own operationId —
+   * instead of stranding on a member channel nobody subscribes to.
    */
   mirrorToOperationId?: string;
   modelRuntimeConfig?: any;

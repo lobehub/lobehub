@@ -307,9 +307,10 @@ describe('AgentStreamClient', () => {
     });
 
     it('should NOT disconnect on a forwarded terminal for a different operationId', async () => {
-      // Multiplexed WS (LOBE-10868): a broadcast member's agent_runtime_end is
-      // mirrored onto the supervisor's channel. It must be emitted (so the member
-      // handler can finalize that member) but must NOT close the supervisor WS.
+      // Single-connection WS multiplexing: a broadcast member's
+      // agent_runtime_end is mirrored onto the supervisor's channel. It must
+      // be emitted (so the member handler can finalize that member) but must
+      // NOT close the supervisor WS.
       const client = createClient(); // operationId: 'op-123'
       const events: any[] = [];
       client.on('agent_event', (e) => events.push(e));

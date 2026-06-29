@@ -9,7 +9,10 @@ import { createCompletionSkillSynthesisSourceHandler } from '../completionSkillS
 import type { PendingSkillSynthesis, RecordedSkillIntent } from '../skillIntentRecord';
 
 /**
- * LOBE-10802 — deferred skill synthesis on `agent.execution.completed`.
+ * Deferred skill synthesis on `agent.execution.completed` — skill synthesis
+ * moved from user-message-inbound to turn-completion so the evidence carries the
+ * full trajectory (tool sequence + final product) instead of just the user
+ * prompt.
  *
  * These tests pin the completion-stage handler in isolation: the parked
  * candidate is read, the turn trajectory (tool sequence + final product) is
@@ -261,10 +264,11 @@ describe('createCompletionSkillSynthesisSourceHandler', () => {
 });
 
 /**
- * End-to-end across the seam the LOBE-10802 bug lived in: emit the completion
- * event from a *server execAgent* state whose operation metadata carries NO
- * per-turn `assistantMessageId` (DB shape: `{}` + agentId/topicId/userId), then
- * feed the emitted payload straight into the completion-skill-synthesis handler.
+ * End-to-end across the seam the deferred skill synthesis bug lived in: emit the
+ * completion event from a *server execAgent* state whose operation metadata
+ * carries NO per-turn `assistantMessageId` (DB shape: `{}` + agentId/topicId/
+ * userId), then feed the emitted payload straight into the completion-skill-
+ * synthesis handler.
  *
  * The whole logic chain runs in-process — no QStash, no HTTP. The earlier
  * handler tests hardcoded `assistantMessageId` in `createSource()`, which masked

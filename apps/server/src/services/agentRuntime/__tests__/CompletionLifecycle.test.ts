@@ -227,11 +227,13 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
   });
 
   it('resolves assistantMessageId from the final assistant message row when metadata omits it', () => {
-    // Regression (LOBE-10802): a server execAgent turn carries operation-level
-    // metadata ({} in DB) with no assistantMessageId, so the completion event
-    // previously shipped assistantMessageId=undefined and the deferred
-    // skill-synthesis handler no-oped. The id must fall back to the persisted
-    // id on the final assistant message row in state.
+    // Regression: a server execAgent turn carries operation-level metadata
+    // ({} in DB) with no assistantMessageId, so the completion event previously
+    // shipped assistantMessageId=undefined and the deferred skill-synthesis
+    // handler no-oped. The id must fall back to the persisted id on the final
+    // assistant message row in state (deferred skill synthesis needs the
+    // anchor to seed the skill under the assistant group, not under the user
+    // message).
     const state = {
       messages: [
         { content: 'user prompt', id: 'msg-user', role: 'user' },
@@ -416,10 +418,12 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
   });
 
   it('ships the resolved assistantMessageId on the completed payload for a server turn', async () => {
-    // Regression (LOBE-10802): on a server execAgent turn the operation metadata
-    // has no assistantMessageId, so the agent.execution.completed event used to
-    // carry assistantMessageId=undefined and the deferred skill-synthesis handler
-    // no-oped. The payload must now anchor to the final assistant message row.
+    // Regression: on a server execAgent turn the operation metadata has no
+    // assistantMessageId, so the agent.execution.completed event used to carry
+    // assistantMessageId=undefined and the deferred skill-synthesis handler
+    // no-oped. The payload must now anchor to the final assistant message row
+    // (so deferred skill synthesis seeds the skill under the completed turn's
+    // assistant group, not as a floating mainline root).
     const emitSpy = vi
       .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
       .mockResolvedValue(undefined as any);

@@ -269,9 +269,10 @@ export class CompletionLifecycle {
                 payload: {
                   agentId: metadata?.agentId,
                   // Anchor the deferred skill synthesis to the completed assistant
-                  // turn (LOBE-10802): the completion-stage skill handler walks
-                  // this id back to the user message to read the parked candidate
-                  // and seeds the skill under the assistant group. Resolved from
+                  // turn: the completion-stage skill handler walks this id back
+                  // to the user message to read the parked candidate and seeds
+                  // the skill under the assistant group — instead of synthesizing
+                  // from the user prompt alone at inbound time. Resolved from
                   // the final assistant message row when operation metadata omits
                   // it (the server execAgent path).
                   anchorMessageId: assistantMessageId,
@@ -482,8 +483,10 @@ export class CompletionLifecycle {
     // Operation-level metadata only carries `assistantMessageId` on the client
     // runtime path; a server `execAgent` turn leaves it unset (`{}` in DB). Fall
     // back to the persisted id on the final assistant message row in state so the
-    // completion event can anchor deferred skill synthesis to this turn
-    // (LOBE-10802). A metadata value, when present, still wins.
+    // completion event can anchor deferred skill synthesis to this turn (skill
+    // synthesis deferred from inbound to turn completion so it uses the full
+    // trajectory — tool sequence + final product — not just the user prompt).
+    // A metadata value, when present, still wins.
     const assistantMessageId =
       metadata?.assistantMessageId ?? (lastAssistantMessage as { id?: string } | undefined)?.id;
 

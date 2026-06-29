@@ -86,8 +86,9 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
             procedureState:
               options.skillManagement.procedureState ?? options.procedure?.procedureState,
           }),
-          // Deferred skill synthesis (LOBE-10802): synthesize the parked skill
-          // candidate after `agent.execution.completed`, off the full trajectory.
+          // Deferred skill synthesis: synthesize the parked skill candidate after
+          // `agent.execution.completed`, off the full trajectory (tool sequence
+          // + final product) rather than the user prompt alone.
           createCompletionSkillSynthesisSourceHandler({
             ...options.skillManagement,
             procedureState:
