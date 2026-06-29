@@ -6,7 +6,7 @@
   "homepage": "https://lobehub.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobe-chat.git"
+    "url": "https://github.com/lobehub/lobehub.git"
   },
   "author": "LobeHub",
   "main": "./dist/main/index.js",
