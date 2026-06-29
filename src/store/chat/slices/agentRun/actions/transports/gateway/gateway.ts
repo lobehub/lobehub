@@ -212,8 +212,8 @@ export class GatewayActionImpl {
 
     // Forward agent events to caller, and track terminal events.
     //
-    // Only THIS op's terminal counts. On a multiplexed connection (LOBE-10868)
-    // the supervisor's WS also carries forwarded member terminals; a member
+    // Only THIS op's terminal counts. On a multiplexed connection the
+    // supervisor's WS also carries forwarded member terminals; a member
     // finishing must not mark the supervisor run complete or stomp its unread
     // status. Match on the event's operationId (absent ⇒ legacy single-op WS,
     // treat as this op's to preserve prior behavior).
@@ -613,9 +613,9 @@ export class GatewayActionImpl {
     });
 
     // Demux the supervisor's WebSocket: with single-connection multiplexing
-    // (LOBE-10868) this WS also carries each broadcast member's streaming events
-    // (forwarded server-side onto the supervisor op channel). Route owner events
-    // to the full handler and member events to render-only member handlers so a
+    // this WS also carries each broadcast member's streaming events (forwarded
+    // server-side onto the supervisor op channel). Route owner events to the
+    // full handler and member events to render-only member handlers so a
     // member's chunks stream into its own council column instead of corrupting
     // the supervisor bubble.
     const eventRouter = createGatewayEventRouter({

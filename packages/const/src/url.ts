@@ -6,6 +6,12 @@ export const OFFICIAL_DOMAIN = 'lobehub.com';
 
 export const OG_URL = '/og/og.webp?v=1';
 
+export const LobeHubPath = {
+  webapi: {
+    modelConfig: '/webapi/lobehub-model-config',
+  },
+} as const;
+
 export const GITHUB = 'https://github.com/lobehub/lobe-chat';
 export const GITHUB_ISSUES = urlJoin(GITHUB, 'issues/new/choose');
 export const CHANGELOG = 'https://lobehub.com/changelog';

@@ -431,11 +431,11 @@ describe('feedbackActionPlanner', () => {
   });
 
   /**
-   * @example
-   * LOBE-10802: a server execAgent inbound skill candidate (trigger is neither
+   * A server execAgent inbound skill candidate (trigger is neither
    * `client.runtime.*` nor an agent-signal self-iteration run) is parked WITH a
    * synthesis payload and NOT dispatched on the user prompt alone — the deferred
-   * completion-stage handler synthesizes it off the full trajectory instead.
+   * completion-stage handler synthesizes it off the full trajectory instead of
+   * just the user prompt.
    */
   it('parks a server-inbound skill candidate until agent.execution.completed', async () => {
     const store = createStore();

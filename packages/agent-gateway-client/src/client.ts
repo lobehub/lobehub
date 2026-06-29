@@ -283,13 +283,13 @@ export class AgentStreamClient extends TypedEmitter {
           const agentEvent: AgentStreamEvent = message.event;
           if (message.id) this.lastEventId = message.id;
 
-          // A single WS can be multiplexed: alongside this op's events it may
+          // A single WebSocket is multiplexed: alongside this op's events it may
           // carry forwarded events from other operations (e.g. broadcast council
-          // members mirrored onto the supervisor's channel, LOBE-10868). A
-          // terminal event ends the SESSION only when it belongs to THIS op —
-          // a member finishing must not disconnect the supervisor's socket and
-          // stop sibling/supervisor streaming. Events with no operationId
-          // (legacy gateway) are treated as this op's, preserving old behavior.
+          // members mirrored onto the supervisor's channel). A terminal event
+          // ends the SESSION only when it belongs to THIS op — a member
+          // finishing must not disconnect the supervisor's socket and stop
+          // sibling/supervisor streaming. Events with no operationId (legacy
+          // gateway) are treated as this op's, preserving old behavior.
           const isOwnTerminal =
             (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
             (!agentEvent.operationId || agentEvent.operationId === this.operationId);

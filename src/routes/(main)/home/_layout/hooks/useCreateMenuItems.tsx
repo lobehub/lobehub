@@ -4,7 +4,14 @@ import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus, MonitorSmartphone } from 'lucide-react';
+import {
+  BotIcon,
+  FileTextIcon,
+  FolderCogIcon,
+  FolderPlus,
+  MonitorSmartphone,
+  Store,
+} from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWRMutation from 'swr/mutation';
@@ -236,6 +243,25 @@ export const useCreateMenuItems = () => {
   );
 
   /**
+   * Add market agent menu item
+   */
+  const createMarketAgentMenuItem = useCallback(
+    (): ItemType => ({
+      icon: <Icon icon={Store} />,
+      disabled: !canCreate,
+      key: 'addAgentFromMarket',
+      label: t('addAgentFromMarket'),
+      onClick: (info) => {
+        info.domEvent?.stopPropagation();
+        if (!canCreate) return;
+
+        navigate('/community/agent');
+      },
+    }),
+    [canCreate, navigate, t],
+  );
+
+  /**
    * Create heterogeneous agent menu items (Desktop only)
    */
   const createHeterogeneousAgentMenuItems = useCallback(
@@ -380,6 +406,36 @@ export const useCreateMenuItems = () => {
     [canCreate, t, createPage],
   );
 
+  /**
+   * Top-level create menu shown by the Agent section and header add buttons.
+   *
+   * Regression example: the Agent section + menu used to expose only local creation actions,
+   * so users had no visible entry to `/community/agent`.
+   */
+  const createTopLevelMenuItems = useCallback((): ItemType[] => {
+    const heterogeneousItems = createHeterogeneousAgentMenuItems();
+    const platformItem = createPlatformAgentMenuItem();
+
+    return [
+      createAgentMenuItem(),
+      createGroupChatMenuItem(),
+      createPageMenuItem(),
+      ...(heterogeneousItems.length > 0
+        ? [{ type: 'divider' as const }, ...heterogeneousItems]
+        : []),
+      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      { type: 'divider' as const },
+      createMarketAgentMenuItem(),
+    ];
+  }, [
+    createAgentMenuItem,
+    createGroupChatMenuItem,
+    createHeterogeneousAgentMenuItems,
+    createMarketAgentMenuItem,
+    createPageMenuItem,
+    createPlatformAgentMenuItem,
+  ]);
+
   return {
     configMenuItem,
     createAgent,
@@ -390,10 +446,12 @@ export const useCreateMenuItems = () => {
     createHeterogeneousAgent,
     createHeterogeneousAgentMenuItems,
     createGroupWithMembers,
+    createMarketAgentMenuItem,
     createPage,
     createPageMenuItem,
     createPlatformAgentMenuItem,
     createSessionGroupMenuItem,
+    createTopLevelMenuItems,
     openCreateModal,
 
     // Loading states

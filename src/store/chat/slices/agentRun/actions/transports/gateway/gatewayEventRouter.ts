@@ -30,11 +30,11 @@ export interface GatewayEventRouterParams {
  * one `operationId`.
  *
  * The Gateway connection model is moving from per-operation (one WS per op) to
- * single-connection multiplexing (LOBE-10868): a broadcast supervisor's WS now
- * also receives the streaming events of each of its members, forwarded
- * server-side onto the supervisor's op channel. Every `AgentStreamEvent` already
- * carries its own `operationId`, so the routing key is intrinsic to the event —
- * we just need to fan it out to the right handler.
+ * single-connection multiplexing: a broadcast supervisor's WS now also receives
+ * the streaming events of each of its members, forwarded server-side onto the
+ * supervisor's op channel. Every `AgentStreamEvent` already carries its own
+ * `operationId`, so the routing key is intrinsic to the event — we just need to
+ * fan it out to the right handler.
  *
  * - Events for `ownerOperationId` → `ownerHandler` (existing behavior, unchanged).
  * - Events for any other operationId → a render-only member handler, created

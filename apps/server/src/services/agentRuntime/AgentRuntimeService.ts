@@ -528,7 +528,7 @@ export class AgentRuntimeService {
       // For an in-group broadcast/speak member, mirror its Gateway stream events
       // onto the supervisor op's channel (parentOperationId) so they flow down the
       // supervisor's existing WebSocket — the client subscribes to one connection,
-      // not one per member (single-connection multiplexing, LOBE-10868).
+      // not one per member (single-connection multiplexing).
       const mirrorToOperationId =
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {

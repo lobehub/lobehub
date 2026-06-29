@@ -40,8 +40,9 @@ export interface GatewayMemberStreamHandlerParams {
 
 /**
  * A render-only handler for a broadcast council member whose streaming events
- * are multiplexed onto the supervisor's Gateway WebSocket (LOBE-10868, option
- * B: server forwards member events onto the supervisor op channel).
+ * are multiplexed onto the supervisor's Gateway WebSocket (server forwards
+ * member events onto the supervisor op channel, single-connection
+ * multiplexing).
  *
  * Scope is deliberately narrow — it owns ONLY the member's live text/reasoning/
  * tool-call streaming into its council column. It does NOT drive any run

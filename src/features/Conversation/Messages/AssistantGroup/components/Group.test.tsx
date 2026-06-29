@@ -5,6 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { LOADING_FLAT } from '@/const/message';
 import type { AssistantContentBlock } from '@/types/index';
 
 import Group from './Group';
@@ -20,6 +21,16 @@ vi.mock('antd-style', () => ({
   createStaticStyles: () => ({
     container: 'group-container',
   }),
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/chat/slices/operation/selectors', () => ({
+  operationSelectors: {
+    getOperationsByMessage: () => () => [],
+  },
 }));
 
 // Mock the council list so importing Group doesn't pull in the AgentCouncil
@@ -83,6 +94,21 @@ vi.mock('./WorkflowCollapse', () => ({
         ),
       )}
     />
+  ),
+}));
+
+vi.mock('./ProcessFold', () => ({
+  default: ({
+    children,
+    stepCount,
+  }: {
+    children?: ReactNode;
+    durationText?: string;
+    stepCount: number;
+  }) => (
+    <div data-step-count={stepCount} data-testid="process-fold">
+      {children}
+    </div>
   ),
 }));
 
@@ -321,6 +347,32 @@ describe('Group', () => {
         toolCount: 1,
       },
     ]);
+  });
+
+  it('does not fold the latest process behind a non-renderable final answer placeholder', () => {
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'I will run the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: LOADING_FLAT, id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
+    expect(screen.getByTestId('workflow-segment')).toBeInTheDocument();
+    expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
   });
 
   it('keeps assistant runtime errors outside the workflow collapse', () => {

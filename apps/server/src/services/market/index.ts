@@ -11,6 +11,7 @@ import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback
 const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
+export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
 
 // ============================== Helper Functions ==============================
 
@@ -561,7 +562,9 @@ export class MarketService {
   async getLobehubSkillManifests(): Promise<LobeToolManifest[]> {
     try {
       // 1. Get user's connected skills
-      const { connections } = await this.market.connect.listConnections();
+      const { connections } = await this.market.connect.listConnections({
+        signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+      });
       if (!connections || connections.length === 0) {
         log('getLobehubSkillManifests: no connected skills found');
         return [];
