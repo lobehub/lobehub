@@ -102,7 +102,6 @@ const UpdateDetailContent = memo<UpdateDetailContentProps>(({ updateInfo }) => {
         ))}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <BaseButton
-          size={'small'}
           onClick={() => {
             autoUpdateService.installLater();
             close();
@@ -112,7 +111,6 @@ const UpdateDetailContent = memo<UpdateDetailContentProps>(({ updateInfo }) => {
         </BaseButton>
         <BaseButton
           loading={isInstalling}
-          size={'small'}
           type={'primary'}
           onClick={() => {
             setIsInstalling(true);
