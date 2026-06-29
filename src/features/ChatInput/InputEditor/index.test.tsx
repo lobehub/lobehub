@@ -100,7 +100,6 @@ vi.mock('@lobehub/editor/react', () => {
 
   return {
     Editor,
-    FloatMenu: vi.fn(() => null),
     useEditorState: vi.fn(() => ({ isEmpty: true })),
   };
 });
