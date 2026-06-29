@@ -45,6 +45,8 @@ describe('applyInjectedCredentials', () => {
 
       expect(command).toContain('python3 -');
       expect(command).toContain('curl');
+      expect(command).toContain('export');
+      expect(command).toContain('shlex.quote');
       expect(command).toMatch(/main\('([A-Za-z0-9+/=]+)'\)/);
 
       const encoded = command!.match(/main\('([A-Za-z0-9+/=]+)'\)/)![1];

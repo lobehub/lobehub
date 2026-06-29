@@ -30,6 +30,7 @@ interface CredsFileOp {
 const APPLY_CREDS_SCRIPT = `
 import base64
 import json
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -38,6 +39,17 @@ def load_args(encoded):
 
 def safe_key_segment(value):
     return ''.join(c if c.isalnum() or c in '.-' else '-' for c in value)
+
+def parse_env_line(line):
+    line = line.strip()
+    if not line or line.startswith('#'):
+        return None
+    if line.startswith('export '):
+        line = line[len('export '):].strip()
+    if '=' not in line:
+        return None
+    key, _, value = line.partition('=')
+    return key.strip(), value.strip().strip("'").strip('"')
 
 def main(encoded):
     data = load_args(encoded)
@@ -51,9 +63,9 @@ def main(encoded):
     existing = {}
     if env_path.exists():
         for line in env_path.read_text(errors='replace').splitlines():
-            if '=' in line and not line.startswith('#'):
-                key, _, value = line.partition('=')
-                existing[key] = value
+            parsed = parse_env_line(line)
+            if parsed:
+                existing[parsed[0]] = parsed[1]
 
     for key, value in (data.get('env') or {}).items():
         if value is not None and value != '':
@@ -70,7 +82,12 @@ def main(encoded):
             existing[env_name] = str(dest)
 
     if existing:
-        env_path.write_text(''.join(f'{key}={value}\\n' for key, value in existing.items()))
+        env_path.write_text(
+            ''.join(
+                f'export {key}={shlex.quote(str(value))}\\n'
+                for key, value in existing.items()
+            )
+        )
 `;
 
 const collectEnvUpdates = (credentials: SandboxInjectedCredentials): Record<string, string> => {

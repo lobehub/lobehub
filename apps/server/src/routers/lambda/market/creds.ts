@@ -257,11 +257,17 @@ export const credsRouter = router({
       log('inject input: %O', input);
 
       try {
-        const userId = input.userId || ctx.userId;
-        if (!userId) {
+        if (!ctx.userId) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'userId is required for credential injection',
+          });
+        }
+
+        if (input.userId && input.userId !== ctx.userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot inject credentials for another user',
           });
         }
 
@@ -269,7 +275,7 @@ export const credsRouter = router({
           keys: input.keys,
           sandbox: input.sandbox,
           topicId: input.topicId,
-          userId,
+          userId: ctx.userId,
         });
 
         const applyResult = await applyInjectedCredentialsToSandboxIfNeeded({
@@ -277,7 +283,7 @@ export const credsRouter = router({
           marketService: ctx.marketService,
           sandbox: input.sandbox,
           topicId: input.topicId,
-          userId,
+          userId: ctx.userId,
         });
 
         if (applyResult.error) {
