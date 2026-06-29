@@ -62,7 +62,7 @@ Given('I am logged in with a session', async function (this: CustomWorld) {
  */
 When('I navigate to the signin page', async function (this: CustomWorld) {
   await this.page.goto('/signin');
-  await this.page.waitForLoadState('networkidle');
+  await this.page.waitForLoadState('domcontentloaded');
 });
 
 /**

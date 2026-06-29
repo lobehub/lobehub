@@ -4,7 +4,7 @@ import { type Cookie, request } from 'playwright';
 import { mockManager } from '../mocks';
 import { seedTestUser, TEST_USER } from '../support/seedTestUser';
 import { startWebServer, stopWebServer } from '../support/webServer';
-import type { CustomWorld } from '../support/world';
+import { closeSharedBrowser, type CustomWorld } from '../support/world';
 
 process.env['E2E'] = '1';
 // Set default timeout for all steps to 30 seconds
@@ -131,6 +131,8 @@ After(async function (this: CustomWorld, { pickle, result }) {
 
 AfterAll(async function () {
   console.log('\n🏁 Test suite completed');
+
+  await closeSharedBrowser();
 
   // Stop web server if we started it
   if (!process.env.BASE_URL && process.env.CI) {

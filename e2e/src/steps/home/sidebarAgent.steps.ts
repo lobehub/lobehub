@@ -6,6 +6,8 @@
  * - Pin/Unpin
  * - Delete
  */
+import { randomBytes } from 'node:crypto';
+
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
@@ -67,8 +69,9 @@ async function createTestAgent(title: string = 'Test Agent'): Promise<string> {
     await client.connect();
 
     const now = new Date().toISOString();
-    const agentId = `agent_e2e_test_${Date.now()}`;
-    const slug = `test-agent-${Date.now()}`;
+    const suffix = randomBytes(6).toString('hex');
+    const agentId = `agent_e2e_test_${suffix}`;
+    const slug = `test-agent-${suffix}`;
 
     await client.query(
       `INSERT INTO agents (id, slug, title, user_id, created_at, updated_at)
@@ -95,7 +98,7 @@ Given('用户在 Home 页面有一个 Agent', { timeout: 30_000 }, async functio
 
   console.log('   📍 Step: 导航到 Home 页面...');
   await this.page.goto('/');
-  await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
   await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 查找新创建的 Agent...');
