@@ -121,6 +121,7 @@ const config = {
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
     const cliSrc = path.resolve(__dirname, '../cli/dist/index.js');
     const cliDest = path.resolve(__dirname, 'resources/bin/lobe-cli.js');
+    await fs.mkdir(path.dirname(cliDest), { recursive: true });
     await fs.copyFile(cliSrc, cliDest);
 
     // Write a minimal package.json next to the CLI bundle so that
