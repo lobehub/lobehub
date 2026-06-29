@@ -2493,6 +2493,54 @@ describe('ClaudeCodeAdapter', () => {
       expect(secondChunk!.data.subagent.spawnMetadata).toBeUndefined();
     });
 
+    it('stamps spawnMetadata on a reasoning-FIRST subagent event (titles the Thread correctly)', () => {
+      // A thinking Explore agent reasons before its first tool call. The
+      // executor lazy-creates + titles the Thread off the FIRST subagent event
+      // it sees, so the metadata must ride the reasoning chunk too — otherwise
+      // the Thread is born with the generic "Subagent" title.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_agent',
+          input: {
+            description: 'Find git remote url lobe-chat',
+            prompt: 'locate the remote',
+            subagent_type: 'Explore',
+          },
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      // First subagent event is a reasoning block — no tool call yet.
+      const first = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_agent', { thinking: 'Let me look…', type: 'thinking' }),
+      );
+      const reasoningChunk = first.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunk!.data.subagent.spawnMetadata).toEqual({
+        description: 'Find git remote url lobe-chat',
+        prompt: 'locate the remote',
+        subagentType: 'Explore',
+      });
+
+      // The later tool event for the same parent must NOT re-announce.
+      const second = adapter.adapt(
+        subAgent('msg_sub_2', 'toolu_agent', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+      const toolChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolChunk!.data.subagent.spawnMetadata).toBeUndefined();
+    });
+
     it('extracts spawnMetadata from the `Agent` spawn-tool variant too (not just Task)', () => {
       // Real CC traces emit `Agent` for general-purpose subagents, not just
       // `Task` — the adapter should cache input for ANY main-agent tool and
