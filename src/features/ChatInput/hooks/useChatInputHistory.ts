@@ -102,11 +102,12 @@ interface UseChatInputHistoryOptions {
   isComposingRef: RefObject<boolean>;
 }
 
-const focusEditorAfterHistoryNavigation = (editor: IEditor) => {
+const focusEditorAfterHistoryNavigation = (editor: IEditor, onFocusRestored: () => void) => {
   requestAnimationFrame(() => {
     // setDocument/cleanDocument can make the Lexical root lose focus; keep
     // keyboard navigation active so ArrowUp can continue walking prompt history.
     editor.focus();
+    onFocusRestored();
   });
 };
 
@@ -117,33 +118,43 @@ export const useChatInputHistory = ({
   isComposingRef,
 }: UseChatInputHistoryOptions) => {
   const navigatorRef = useRef<InputHistoryNavigator | null>(null);
+  const skipNextBlurResetRef = useRef(false);
   const skipNextChangeResetRef = useRef(false);
 
-  const restoreEntry = useCallback(
-    (entry: ChatInputHistoryEntry) => {
+  const runHistoryDocumentMutation = useCallback(
+    (mutation: (editor: IEditor) => void) => {
       if (!editor) return;
 
+      skipNextBlurResetRef.current = true;
       skipNextChangeResetRef.current = true;
 
-      if (entry.json) {
-        editor.setDocument('json', entry.json, { keepHistory: true });
-        focusEditorAfterHistoryNavigation(editor);
-        return;
-      }
-
-      editor.setDocument('markdown', entry.markdown, { keepHistory: true });
-      focusEditorAfterHistoryNavigation(editor);
+      mutation(editor);
+      focusEditorAfterHistoryNavigation(editor, () => {
+        skipNextBlurResetRef.current = false;
+      });
     },
     [editor],
   );
 
-  const clearInput = useCallback(() => {
-    if (!editor) return;
+  const restoreEntry = useCallback(
+    (entry: ChatInputHistoryEntry) => {
+      runHistoryDocumentMutation((editor) => {
+        if (entry.json) {
+          editor.setDocument('json', entry.json, { keepHistory: true });
+          return;
+        }
 
-    skipNextChangeResetRef.current = true;
-    editor.cleanDocument();
-    focusEditorAfterHistoryNavigation(editor);
-  }, [editor]);
+        editor.setDocument('markdown', entry.markdown, { keepHistory: true });
+      });
+    },
+    [runHistoryDocumentMutation],
+  );
+
+  const clearInput = useCallback(() => {
+    runHistoryDocumentMutation((editor) => {
+      editor.cleanDocument();
+    });
+  }, [runHistoryDocumentMutation]);
 
   const getNavigator = useCallback(() => {
     if (!navigatorRef.current) {
@@ -166,6 +177,17 @@ export const useChatInputHistory = ({
     navigatorRef.current?.reset();
   }, []);
 
+  const handleEditorBlur = useCallback(() => {
+    if (skipNextBlurResetRef.current) {
+      // Example: restoring "latest" may briefly blur Lexical before rAF focus;
+      // keep the cursor so the next ArrowUp can continue to "older".
+      skipNextBlurResetRef.current = false;
+      return;
+    }
+
+    reset();
+  }, [reset]);
+
   const handleEditorChange = useCallback(() => {
     if (skipNextChangeResetRef.current) {
       skipNextChangeResetRef.current = false;
@@ -187,6 +209,7 @@ export const useChatInputHistory = ({
   );
 
   return {
+    handleEditorBlur,
     handleEditorChange,
     handleKeyDown,
     reset,

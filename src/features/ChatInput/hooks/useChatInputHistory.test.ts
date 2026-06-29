@@ -109,6 +109,55 @@ describe('shouldIgnoreInputHistoryKeyDown', () => {
 });
 
 describe('useChatInputHistory', () => {
+  it('preserves the history cursor when restoring an entry briefly blurs the editor', () => {
+    addInputHistory({ markdown: 'older prompt' });
+    addInputHistory({ markdown: 'latest prompt' });
+
+    const frameCallbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback);
+      return frameCallbacks.length;
+    });
+
+    let markdown = '';
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      setDocument: vi.fn((type: string, value: string) => {
+        if (type === 'markdown') markdown = value;
+      }),
+    } as unknown as IEditor;
+    const isComposingRef = { current: false };
+
+    const { result } = renderHook(() =>
+      useChatInputHistory({
+        editor,
+        enabled: true,
+        getMarkdownContent: () => markdown,
+        isComposingRef,
+      }),
+    );
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+      result.current.handleEditorBlur();
+    });
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(editor.setDocument).toHaveBeenLastCalledWith('markdown', 'older prompt', {
+      keepHistory: true,
+    });
+
+    act(() => {
+      frameCallbacks.forEach((callback) => callback(0));
+    });
+
+    expect(editor.focus).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps editor focus after restoring and clearing history entries', () => {
     const editorData = { root: { children: [{ text: 'previous prompt' }] } };
     addInputHistory({ json: editorData, markdown: 'previous prompt' });

@@ -488,7 +488,7 @@ const InputEditor = memo<{
       onInit={handleEditorInit}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
-        inputHistory.reset();
+        inputHistory.handleEditorBlur();
         saveDraftDebounced.flush();
       }}
       onChange={() => {
