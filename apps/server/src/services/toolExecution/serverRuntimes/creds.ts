@@ -6,6 +6,10 @@ import {
 import debug from 'debug';
 
 import { MarketService } from '@/server/services/market';
+import {
+  applyInjectedCredentialsToSandboxIfNeeded,
+  type SandboxInjectedCredentials,
+} from '@/server/services/sandbox';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -105,7 +109,23 @@ class ServerCredsService implements ICredsService {
       userId: params.userId,
     });
 
-    log('injectCreds success: notFound=%d', result.notFound?.length || 0);
+    const applyResult = await applyInjectedCredentialsToSandboxIfNeeded({
+      credentials: (result as { credentials?: SandboxInjectedCredentials }).credentials,
+      marketService: this.marketService,
+      sandbox: params.sandbox,
+      topicId: params.topicId,
+      userId: params.userId,
+    });
+
+    if (applyResult.error) {
+      throw new Error(applyResult.error);
+    }
+
+    log(
+      'injectCreds success: notFound=%d, appliedToSandbox=%s',
+      result.notFound?.length || 0,
+      applyResult.applied,
+    );
 
     return result as any;
   }

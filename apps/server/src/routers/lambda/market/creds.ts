@@ -6,6 +6,10 @@ import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermi
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
+import {
+  applyInjectedCredentialsToSandboxIfNeeded,
+  type SandboxInjectedCredentials,
+} from '@/server/services/sandbox';
 
 const log = debug('lambda-router:market:creds');
 
@@ -267,7 +271,24 @@ export const credsRouter = router({
           topicId: input.topicId,
           userId,
         });
+
+        const applyResult = await applyInjectedCredentialsToSandboxIfNeeded({
+          credentials: (result as { credentials?: SandboxInjectedCredentials }).credentials,
+          marketService: ctx.marketService,
+          sandbox: input.sandbox,
+          topicId: input.topicId,
+          userId,
+        });
+
+        if (applyResult.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: applyResult.error,
+          });
+        }
+
         log('inject success: %O', {
+          appliedToSandbox: applyResult.applied,
           notFound: result.notFound?.length,
           success: result.success,
         });
