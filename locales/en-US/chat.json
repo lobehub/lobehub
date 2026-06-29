@@ -1,6 +1,7 @@
 {
   "ModelSwitch.title": "Model",
   "active": "Active",
+  "addAgentFromMarket": "Add from Market",
   "agentBuilder.installPlugin.authRequired": "Cloud MCP requires sign-in to continue",
   "agentBuilder.installPlugin.cancel": "Cancel",
   "agentBuilder.installPlugin.clickApproveToConnect": "Click \"Approve\" to connect and authorize this Integration",

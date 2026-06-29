@@ -1,6 +1,7 @@
 {
   "ModelSwitch.title": "模型",
   "active": "活跃",
+  "addAgentFromMarket": "从市场添加助理",
   "agentBuilder.installPlugin.authRequired": "云端 MCP 需要登录后才能继续",
   "agentBuilder.installPlugin.cancel": "取消",
   "agentBuilder.installPlugin.clickApproveToConnect": "点击「批准」连接并授权此连接器",
