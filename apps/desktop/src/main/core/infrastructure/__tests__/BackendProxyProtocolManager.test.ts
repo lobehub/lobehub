@@ -27,6 +27,9 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 vi.mock('electron', () => ({
+  app: {
+    getVersion: vi.fn(() => '1.2.3'),
+  },
   BrowserWindow: {
     getAllWindows: vi.fn(),
   },
@@ -87,6 +90,7 @@ describe('BackendProxyProtocolManager', () => {
     expect(init.method).toBe('GET');
     const headers = init.headers as Headers;
     expect(headers.get('Oidc-Auth')).toBe('token-123');
+    expect(headers.get('User-Agent')).toBe('LobeHub Desktop/1.2.3');
     expect(headers.get('X-Test')).toBe('1');
 
     expect(response!.status).toBe(200);

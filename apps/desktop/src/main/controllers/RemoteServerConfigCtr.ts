@@ -9,6 +9,7 @@ import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -441,6 +442,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(headers);
+      setDesktopUserAgentHeader(headers);
       const response = await netFetch(tokenUrl.toString(), { body, headers, method: 'POST' });
 
       if (!response.ok) {
@@ -547,6 +549,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
           requestHeaders['Oidc-Auth'] = token;
           logger.debug(`Injected Oidc-Auth token for: ${details.url}`);
         }
+        setDesktopUserAgentHeader(requestHeaders);
 
         callback({ requestHeaders });
       },

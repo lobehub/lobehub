@@ -7,6 +7,7 @@ import { getDesktopEnv } from '@/env';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import type { RendererRequestInterceptor } from './RendererProtocolManager';
 
@@ -180,6 +181,7 @@ export class BackendProxyProtocolManager {
       headers.set('Oidc-Auth', token);
     }
     appendVercelCookie(headers);
+    setDesktopUserAgentHeader(headers);
 
     const requestInit: RequestInit & { duplex?: 'half' } = {
       headers,
