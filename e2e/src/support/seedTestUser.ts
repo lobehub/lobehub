@@ -4,10 +4,10 @@ import bcrypt from 'bcryptjs';
 
 // Test user credentials - these are used for e2e testing only
 export const TEST_USER = {
-  email: 'e2e-test@lobehub.com',
+  email: process.env.E2E_TEST_USER_EMAIL || 'e2e-test@lobehub.com',
   fullName: 'E2E Test User',
   id: 'user_e2e_test_user_001',
-  password: 'TestPassword123!',
+  password: process.env.E2E_TEST_USER_PASSWORD || 'TestPassword123!',
   username: 'e2e_test_user',
 };
 
@@ -47,7 +47,7 @@ export async function seedTestUser(): Promise<void> {
     // Insert user or do nothing if already exists (handles all unique constraints)
     const passwordHash = await hashPassword(TEST_USER.password);
 
-    // Use ON CONFLICT DO NOTHING to handle all unique constraint conflicts
+    // Use ON CONFLICT (id) DO UPDATE SET account_id = $3, password = $5, updated_at = $6 to handle all unique constraint conflicts
     // This is safe because we're using fixed test user credentials
     // Set onboarding as completed to skip onboarding flow in tests
     const onboarding = JSON.stringify({ finishedAt: now, version: 1 });
@@ -55,7 +55,7 @@ export async function seedTestUser(): Promise<void> {
     await client.query(
       `INSERT INTO users (id, email, normalized_email, username, full_name, email_verified, onboarding, created_at, updated_at, last_active_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $8)
-       ON CONFLICT (id) DO UPDATE SET onboarding = $7, updated_at = $8`,
+       ON CONFLICT (id) DO UPDATE SET email = $2, normalized_email = $3, username = $4, onboarding = $7, updated_at = $8`,
       [
         TEST_USER.id,
         TEST_USER.email,
@@ -85,7 +85,7 @@ export async function seedTestUser(): Promise<void> {
 
     console.log('✅ Test user seeded successfully');
     console.log(`   Email: ${TEST_USER.email}`);
-    console.log(`   Password: ${TEST_USER.password}`);
+    console.log(`   Password: ${process.env.E2E_TEST_USER_PASSWORD ? '[REDACTED]' : TEST_USER.password}`);
   } catch (error) {
     console.error('❌ Failed to seed test user:', error);
     throw error;
