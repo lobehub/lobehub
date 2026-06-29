@@ -1,17 +1,16 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { DatePicker } from 'antd';
-import dayjs from 'dayjs';
-import { memo, useMemo, useState } from 'react';
+import { Block, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
+import { type AgentUsageGranularity } from '@/types/usage/usageRecord';
 import { StyleSheet } from '@/utils/styles';
 
-import { groupByModel, summarizeUsage, useAgentUsage } from './hooks';
+import { RANGE_DAYS, type TimeRange, useAgentUsageStats } from './hooks';
 import ModelBreakdown from './ModelBreakdown';
 import StatCards from './StatCards';
 import UsageTrendChart from './UsageTrendChart';
@@ -24,17 +23,27 @@ const styles = StyleSheet.create({
   },
 });
 
+const EMPTY_SUMMARY = {
+  cacheHitRate: 0,
+  cacheReadTokens: 0,
+  cacheSavings: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  totalCost: 0,
+  totalRequests: 0,
+  totalTokens: 0,
+};
+
 const AgentUsage = memo(() => {
   const { t } = useTranslation('setting');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
-  const [month, setMonth] = useState<dayjs.Dayjs>(dayjs());
-  const mo = month.format('YYYY-MM');
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<AgentUsageGranularity>('day');
 
-  const { data, isLoading } = useAgentUsage(activeAgentId ?? '', mo);
+  const { data, isLoading } = useAgentUsageStats(activeAgentId ?? '', range, granularity);
 
-  const summary = useMemo(() => summarizeUsage(data), [data]);
-  const modelRows = useMemo(() => groupByModel(data), [data]);
+  const rangeLabel = t('usageStats.rangeSuffix', { count: RANGE_DAYS[range] });
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
@@ -44,21 +53,54 @@ const AgentUsage = memo(() => {
             {t('usageStats.title')}
           </Text>
         }
-        right={
-          <DatePicker
-            allowClear={false}
-            picker={'month'}
-            value={month}
-            onChange={(value) => value && setMonth(value)}
-          />
-        }
       />
       <Flexbox flex={1} style={styles.body} width={'100%'}>
         <WideScreenContainer>
-          <Flexbox gap={24} paddingBlock={16}>
-            <StatCards isLoading={isLoading} summary={summary} />
-            <UsageTrendChart data={data} isLoading={isLoading} />
-            <ModelBreakdown isLoading={isLoading} rows={modelRows} />
+          <Flexbox gap={16} paddingBlock={16}>
+            <Block gap={16} variant={'outlined'}>
+              <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Text fontSize={13} type={'secondary'}>
+                    {t('usageStats.dimension')}
+                  </Text>
+                  <Segmented
+                    size={'small'}
+                    value={granularity}
+                    options={[
+                      { label: t('usageStats.byDay'), value: 'day' },
+                      { label: t('usageStats.byWeek'), value: 'week' },
+                    ]}
+                    onChange={(v) => setGranularity(v as AgentUsageGranularity)}
+                  />
+                </Flexbox>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Text fontSize={13} type={'secondary'}>
+                    {t('usageStats.range')}
+                  </Text>
+                  <Segmented
+                    size={'small'}
+                    value={range}
+                    options={[
+                      { label: '7d', value: '7d' },
+                      { label: '30d', value: '30d' },
+                      { label: '90d', value: '90d' },
+                    ]}
+                    onChange={(v) => setRange(v as TimeRange)}
+                  />
+                </Flexbox>
+              </Flexbox>
+              <StatCards
+                isLoading={isLoading}
+                rangeLabel={rangeLabel}
+                summary={data?.summary ?? EMPTY_SUMMARY}
+              />
+            </Block>
+            <Block variant={'outlined'}>
+              <UsageTrendChart buckets={data?.buckets} isLoading={isLoading} />
+            </Block>
+            <Block variant={'outlined'}>
+              <ModelBreakdown isLoading={isLoading} rows={data?.byModel ?? []} />
+            </Block>
           </Flexbox>
         </WideScreenContainer>
       </Flexbox>

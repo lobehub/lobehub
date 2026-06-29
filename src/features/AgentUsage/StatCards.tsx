@@ -1,54 +1,68 @@
 'use client';
 
-import { Grid } from '@lobehub/ui';
+import { Grid, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
-import { formatNumber } from '@/utils/format';
-
-import { type AgentUsageSummary } from './hooks';
+import { type AgentUsageStats } from '@/types/usage/usageRecord';
+import { formatNumber, formatUsageValue } from '@/utils/format';
 
 interface StatCardsProps {
   isLoading?: boolean;
-  summary: AgentUsageSummary;
+  rangeLabel: string;
+  summary: AgentUsageStats['summary'];
 }
 
-const StatCards = memo<StatCardsProps>(({ summary, isLoading }) => {
+const desc = (text: string) => (
+  <Text fontSize={12} type={'secondary'}>
+    {text}
+  </Text>
+);
+
+const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
   const { t } = useTranslation('setting');
+  const suffix = ` · ${rangeLabel}`;
 
   return (
-    <Grid gap={8} maxItemWidth={200} rows={3}>
+    <Grid gap={8} maxItemWidth={240} rows={3}>
       <StatisticCard
         loading={isLoading}
-        title={t('usageStats.cards.totalCost')}
+        title={t('usageStats.cards.cost') + suffix}
         statistic={{
           precision: 2,
           prefix: '$',
-          value: formatNumber(summary.totalSpend, 2),
+          value: formatNumber(summary.totalCost, 2),
         }}
       />
       <StatisticCard
         loading={isLoading}
-        title={t('usageStats.cards.totalTokens')}
+        title={t('usageStats.cards.cacheSavings') + suffix}
         statistic={{
-          description: (
-            <Statistic
-              title={t('usageStats.cards.inputOutput')}
-              value={`${formatNumber(summary.totalInputTokens)} / ${formatNumber(
-                summary.totalOutputTokens,
-              )}`}
-            />
+          description: desc(
+            t('usageStats.cards.cacheDesc', {
+              rate: Math.round(summary.cacheHitRate * 100),
+              read: formatUsageValue(summary.cacheReadTokens),
+            }),
           ),
-          value: formatNumber(summary.totalTokens),
+          precision: 2,
+          prefix: '$',
+          value: formatNumber(summary.cacheSavings, 2),
+          valueStyle: { color: cssVar.colorSuccess },
         }}
       />
       <StatisticCard
         loading={isLoading}
-        title={t('usageStats.cards.totalRequests')}
+        title={t('usageStats.cards.token') + suffix}
         statistic={{
-          value: formatNumber(summary.totalRequests),
+          description: desc(
+            t('usageStats.cards.tokenDesc', {
+              input: formatUsageValue(summary.inputTokens),
+              output: formatUsageValue(summary.outputTokens),
+            }),
+          ),
+          value: formatUsageValue(summary.totalTokens),
         }}
       />
     </Grid>

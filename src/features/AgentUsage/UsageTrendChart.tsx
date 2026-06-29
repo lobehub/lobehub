@@ -2,11 +2,10 @@
 
 import { BarChart } from '@lobehub/charts';
 import { Block, Flexbox, Segmented, Skeleton, Text } from '@lobehub/ui';
-import dayjs from 'dayjs';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type UsageLog } from '@/types/usage/usageRecord';
+import { type AgentUsageBucket } from '@/types/usage/usageRecord';
 import { formatNumber, formatTokenNumber } from '@/utils/format';
 
 enum ShowType {
@@ -14,30 +13,37 @@ enum ShowType {
   Token = 'token',
 }
 
+// 输入 (dark) / 输出 (medium) / 缓存写入 (light) — blue shades matching the design.
+const COLORS = ['#1668dc', '#4096ff', '#91caff'];
+
 interface UsageTrendChartProps {
-  data?: UsageLog[];
+  buckets?: AgentUsageBucket[];
   isLoading?: boolean;
 }
 
-const UsageTrendChart = memo<UsageTrendChartProps>(({ data, isLoading }) => {
+const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
   const { t } = useTranslation('setting');
   const [type, setType] = useState<ShowType>(ShowType.Spend);
 
-  const seriesKey =
-    type === ShowType.Spend ? t('usageStats.chart.spend') : t('usageStats.chart.tokens');
+  const inputKey = t('usageStats.chart.input');
+  const outputKey = t('usageStats.chart.output');
+  const cacheWriteKey = t('usageStats.chart.cacheWrite');
+  const categories = [inputKey, outputKey, cacheWriteKey];
 
   const chartData = useMemo(
     () =>
-      (data ?? []).map((log) => ({
-        [seriesKey]: type === ShowType.Spend ? log.totalSpend || 0 : log.totalTokens || 0,
-        day: dayjs(log.day).format('MM-DD'),
+      (buckets ?? []).map((b) => ({
+        [cacheWriteKey]: type === ShowType.Spend ? b.cacheWriteCost : b.cacheWriteTokens,
+        [inputKey]: type === ShowType.Spend ? b.inputCost : b.inputTokens,
+        [outputKey]: type === ShowType.Spend ? b.outputCost : b.outputTokens,
+        label: b.label,
       })),
-    [data, type, seriesKey],
+    [buckets, type, inputKey, outputKey, cacheWriteKey],
   );
 
   return (
     <Block gap={16} variant={'borderless'}>
-      <Flexbox horizontal align={'center'} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Text fontSize={16} weight={500}>
           {t('usageStats.chart.title')}
         </Text>
@@ -51,15 +57,18 @@ const UsageTrendChart = memo<UsageTrendChartProps>(({ data, isLoading }) => {
         />
       </Flexbox>
       {isLoading ? (
-        <Skeleton.Block height={280} />
+        <Skeleton.Block height={320} />
       ) : (
         <BarChart
-          categories={[seriesKey]}
+          showLegend
+          stack
+          categories={categories}
+          colors={COLORS}
           data={chartData}
-          height={280}
-          index={'day'}
+          height={320}
+          index={'label'}
           valueFormatter={(num: number) =>
-            type === ShowType.Spend ? formatNumber(num, 2) : formatTokenNumber(num)
+            type === ShowType.Spend ? `$${formatNumber(num, 2)}` : formatTokenNumber(num)
           }
         />
       )}

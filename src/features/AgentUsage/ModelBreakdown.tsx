@@ -6,13 +6,12 @@ import { Table } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatNumber } from '@/utils/format';
-
-import { type ModelUsageRow } from './hooks';
+import { type AgentUsageModelRow } from '@/types/usage/usageRecord';
+import { formatNumber, formatUsageValue } from '@/utils/format';
 
 interface ModelBreakdownProps {
   isLoading?: boolean;
-  rows: ModelUsageRow[];
+  rows: AgentUsageModelRow[];
 }
 
 const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
@@ -22,7 +21,7 @@ const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
     {
       dataIndex: 'model',
       key: 'model',
-      render: (model: string, record: ModelUsageRow) => (
+      render: (model: string, record: AgentUsageModelRow) => (
         <Flexbox horizontal align={'center'} gap={8}>
           <ModelIcon model={model} size={20} />
           <Flexbox>
@@ -44,29 +43,15 @@ const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
     },
     {
       align: 'right' as const,
-      dataIndex: 'inputTokens',
-      key: 'inputTokens',
-      render: (value: number) => formatNumber(value),
-      title: t('usageStats.breakdown.inputTokens'),
-    },
-    {
-      align: 'right' as const,
-      dataIndex: 'outputTokens',
-      key: 'outputTokens',
-      render: (value: number) => formatNumber(value),
-      title: t('usageStats.breakdown.outputTokens'),
-    },
-    {
-      align: 'right' as const,
       dataIndex: 'totalTokens',
       key: 'totalTokens',
-      render: (value: number) => formatNumber(value),
+      render: (value: number) => formatUsageValue(value),
       title: t('usageStats.breakdown.totalTokens'),
     },
     {
       align: 'right' as const,
-      dataIndex: 'spend',
-      key: 'spend',
+      dataIndex: 'cost',
+      key: 'cost',
       render: (value: number) => `$${formatNumber(value, 2)}`,
       title: t('usageStats.breakdown.cost'),
     },
@@ -77,12 +62,12 @@ const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
       <Text fontSize={16} weight={500}>
         {t('usageStats.breakdown.title')}
       </Text>
-      <Table<ModelUsageRow>
+      <Table<AgentUsageModelRow>
         columns={columns}
         dataSource={rows}
         loading={isLoading}
         pagination={false}
-        rowKey={'key'}
+        rowKey={'id'}
         size={'middle'}
       />
     </Block>

@@ -1,4 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
+import { type AgentUsageGranularity } from '@/types/usage/usageRecord';
 
 class UsageService {
   findByMonth = async (mo?: string) => {
@@ -10,10 +11,15 @@ class UsageService {
   };
 
   /**
-   * Usage grouped by day for a single agent, scoped to the given month.
+   * Rich usage + cost stats for a single agent over a date range.
    */
-  findAndGroupByDayForAgent = async (agentId: string, mo?: string) => {
-    return lambdaClient.usage.findAndGroupByDay.query({ agentId, mo });
+  getAgentUsageStats = async (params: {
+    agentId: string;
+    endAt: string;
+    granularity: AgentUsageGranularity;
+    startAt: string;
+  }) => {
+    return lambdaClient.usage.getAgentUsageStats.query(params);
   };
 }
 
