@@ -40,7 +40,7 @@ interface GroupChildrenProps {
   contentId?: string;
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
-  /** Lab flag: fold finished non-latest turns' process under a "已处理" header. */
+  /** Lab flag: fold finished non-latest turns' process under a "Processed" header. */
   enableProcessFold?: boolean;
   id: string;
   /** Whether this turn is the latest item in the conversation. */
@@ -501,7 +501,7 @@ const Group = memo<GroupChildrenProps>(
 
     // Codex-style turn folding: once a turn is finished and no longer the latest
     // one, fold its whole process (reasoning + tools + intermediate prose) under
-    // a single "已处理 {duration}" header, leaving the final answer always
+    // a single "Processed {duration}" header, leaving the final answer always
     // visible. The latest / still-generating turn renders in full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
     const foldProcess = shouldFoldProcess({

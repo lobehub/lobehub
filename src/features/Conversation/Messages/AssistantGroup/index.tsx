@@ -83,7 +83,7 @@ const GroupMessage = memo<GroupMessageProps>(
     } = item;
     const avatar = useAgentMeta(agentId);
 
-    // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
+    // Supervisor messages render the GROUP's identity (avatar + name + Supervisor badge)
     // rather than the supervisor agent's own bare meta (whose title is literally
     // "Supervisor" with no avatar). The flag is a persisted snapshot on the
     // message metadata; see metadata.orchestrationRole.
