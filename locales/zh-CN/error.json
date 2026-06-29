@@ -99,7 +99,7 @@
   "response.SubscriptionPlanLimitUltimate": "您的订阅积分已用尽，无法使用此功能。请充值积分或配置自定义模型 API 以继续使用。",
   "response.SystemTimeNotMatchError": "系统时间与服务器不一致。请校准系统时间后重试",
   "response.UnknownChatFetchError": "请求失败（未知错误）。请根据以下信息排查或重试",
-  "response.WorkspaceAgentRequiresWorkspaceDevice": "这是一个 Workspace 助手，只能绑定全员都能访问的 Workspace 设备。个人设备仅注册者本人可达 —— 请改选 Workspace 设备，或先把这台设备加入 Workspace。",
+  "response.WorkspaceAgentRequiresWorkspaceDevice": "这是一个工作区助手，只能绑定全员都能访问的工作区设备。个人设备仅注册者本人可达 —— 请改选工作区设备，或先把这台设备加入工作区。",
   "response.WorkspaceFrozenByAdmin": "工作区已被管理员冻结，暂时无法处理请求。请联系工作区所有者处理",
   "response.WorkspaceFrozenByRiskControl": "工作区已被风控系统自动冻结，暂时无法处理请求。请联系客服处理",
   "stt.responseError": "请求失败。请检查配置后重试",
