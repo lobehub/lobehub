@@ -1342,6 +1342,13 @@ export class AiAgentService {
     // exclude this freshly-created turn — history must be the PRIOR turns only,
     // otherwise the new prompt is double-counted in the LLM context.
     const selfMessageIds = new Set<string>();
+    const userMessageParentId =
+      runFromHistory || parentMessageId
+        ? undefined
+        : await this.messageModel.getLatestSpineMessageId?.({
+            threadId: appContext?.threadId ?? null,
+            topicId,
+          });
     const userMessageRecord = runFromHistory
       ? undefined
       : await this.messageModel.create({
@@ -1353,6 +1360,7 @@ export class AiAgentService {
           // shows when the topic is reopened (group topic sidebar + ownership fix).
           groupId: appContext?.groupId ?? undefined,
           metadata: requestTriggerMetadata,
+          parentId: userMessageParentId,
           role: 'user',
           threadId: appContext?.threadId ?? undefined,
           topicId,
