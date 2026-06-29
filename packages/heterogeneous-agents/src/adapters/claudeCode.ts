@@ -566,20 +566,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
   /**
    * Build the spawn metadata (`description` / `prompt` / `subagent_type`) for a
-   * subagent's parent tool_use exactly once, from the cached Task/Agent input.
-   *
-   * MUST be invoked for the FIRST subagent event of any kind — reasoning, text,
-   * OR tool — because the executor lazy-creates the Thread (and titles it from
-   * `description`) on whichever event it sees first. A reasoning- or text-first
-   * subagent (the normal case for a thinking Explore agent that reasons before
-   * its first tool call) would otherwise create the Thread with no metadata,
-   * yielding the generic "Subagent" title and an empty seed prompt. Returns
-   * undefined on every later event for the same parent (and when the parent's
-   * args were never cached), so the metadata still rides exactly one event.
+   * subagent's parent tool_use from the cached Task/Agent input. Pure: it neither
+   * reads nor mutates {@link announcedSpawns} — the caller gates "exactly once"
+   * and only marks the parent announced when the metadata is actually attached to
+   * an EMITTED chunk (see `handleSubagentAssistant`). Returns undefined when the
+   * parent's args were never cached.
    */
-  private buildSpawnMetadataOnce(parentToolCallId: string): SubagentSpawnMetadata | undefined {
-    if (this.announcedSpawns.has(parentToolCallId)) return undefined;
-    this.announcedSpawns.add(parentToolCallId);
+  private buildSpawnMetadata(parentToolCallId: string): SubagentSpawnMetadata | undefined {
     const args = this.mainToolInputsById.get(parentToolCallId);
     if (!args) return undefined;
     // CC's subagent-spawn tools (Task, Agent, ...) share the same input shape
@@ -982,11 +975,21 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // titles the Thread off whichever subagent event it sees first, so a
     // reasoning/text-first subagent must carry the metadata too — not just the
     // tool path — or the Thread is born with the generic "Subagent" title.
-    let pendingSpawnMetadata = this.buildSpawnMetadataOnce(parentToolUseId);
+    //
+    // `announcedSpawns` is marked only when the metadata is ACTUALLY attached to
+    // an emitted chunk (inside `nextSubagentCtx`), not merely built here. A first
+    // event that emits nothing the reducer consumes (empty text/thinking block,
+    // an unsupported block, or a usage-only `content: []`) must NOT burn the
+    // one-shot — otherwise the next real chunk would create the Thread with the
+    // fallback title, the exact bug this guards against.
+    let pendingSpawnMetadata = this.announcedSpawns.has(parentToolUseId)
+      ? undefined
+      : this.buildSpawnMetadata(parentToolUseId);
     const nextSubagentCtx = (): SubagentEventContext => {
       if (!pendingSpawnMetadata) return baseCtx;
       const ctx: SubagentEventContext = { ...baseCtx, spawnMetadata: pendingSpawnMetadata };
       pendingSpawnMetadata = undefined;
+      this.announcedSpawns.add(parentToolUseId);
       return ctx;
     };
 

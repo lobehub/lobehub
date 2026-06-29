@@ -2541,6 +2541,49 @@ describe('ClaudeCodeAdapter', () => {
       expect(toolChunk!.data.subagent.spawnMetadata).toBeUndefined();
     });
 
+    it('does NOT burn the one-shot on a first event that emits no chunk', () => {
+      // The very first subagent event can carry nothing the reducer consumes —
+      // an empty text/thinking block or a usage-only `content: []`. That event
+      // never reaches `ensureRun` (no chunk), so it must NOT mark the parent
+      // announced; the metadata has to survive for the next REAL chunk, which is
+      // the one that actually lazy-creates + titles the Thread.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_agent',
+          input: {
+            description: 'Find git remote url lobe-chat',
+            prompt: 'locate the remote',
+            subagent_type: 'Explore',
+          },
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      // First subagent event: empty content + an empty text block — emits nothing.
+      const first = adapter.adapt({
+        message: { content: [{ text: '', type: 'text' }], id: 'msg_sub_0', usage: {} },
+        parent_tool_use_id: 'toolu_agent',
+        type: 'assistant',
+      });
+      expect(first.some((e) => e.type === 'stream_chunk')).toBe(false);
+
+      // Second event is the first REAL chunk — it must still carry spawnMetadata.
+      const second = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_agent', { thinking: 'Let me look…', type: 'thinking' }),
+      );
+      const reasoningChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunk!.data.subagent.spawnMetadata).toEqual({
+        description: 'Find git remote url lobe-chat',
+        prompt: 'locate the remote',
+        subagentType: 'Explore',
+      });
+    });
+
     it('extracts spawnMetadata from the `Agent` spawn-tool variant too (not just Task)', () => {
       // Real CC traces emit `Agent` for general-purpose subagents, not just
       // `Task` — the adapter should cache input for ANY main-agent tool and
