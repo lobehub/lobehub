@@ -5,6 +5,7 @@ import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolsClient } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
 
 import { useToolStore } from '../../store';
 import { LobehubSkillStatus } from './types';
@@ -13,6 +14,7 @@ vi.mock('zustand/traditional');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useUserStore.setState({ isSignedIn: false });
 });
 
 vi.mock('@lobechat/const', async (importOriginal) => {
@@ -943,6 +945,23 @@ describe('lobehubSkillStore actions', () => {
       expect(toolsClient.market.connectListConnections.query).not.toHaveBeenCalled();
     });
 
+    it('should not fetch when user is not signed in', () => {
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillServers: [],
+          lobehubSkillLoadingIds: new Set(),
+          lobehubSkillExecutingToolIds: new Set(),
+        });
+        useUserStore.setState({ isSignedIn: false });
+      });
+
+      vi.mocked(toolsClient.market.connectListConnections.query).mockClear();
+
+      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(true));
+
+      expect(toolsClient.market.connectListConnections.query).not.toHaveBeenCalled();
+    });
+
     it('should fetch connections when enabled', async () => {
       act(() => {
         useToolStore.setState({
@@ -950,6 +969,7 @@ describe('lobehubSkillStore actions', () => {
           lobehubSkillLoadingIds: new Set(),
           lobehubSkillExecutingToolIds: new Set(),
         });
+        useUserStore.setState({ isSignedIn: true });
       });
 
       const mockConnections = {
