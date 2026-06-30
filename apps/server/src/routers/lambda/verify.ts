@@ -445,6 +445,17 @@ export const verifyRouter = router({
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
 
+  // Delete a whole verification session: the run row cascades to its check
+  // results (→ their evidence) and its report via the schema FKs, so one delete
+  // tears down the published bundle. Ownership-scoped: resolveVerifyRun 404s a
+  // run that isn't the caller's before we touch it.
+  deleteRun: verifyProcedure.input(verifyRunIdInputSchema).mutation(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+    await ctx.runModel.delete(run.id);
+    return { id: run.id, success: true };
+  }),
+
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
   listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {

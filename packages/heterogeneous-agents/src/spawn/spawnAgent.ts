@@ -110,9 +110,11 @@ export interface SpawnAgentHandle {
  * `AskUserQuestion` is disabled because CC's CLI self-injects an
  * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
  * can surface the questions, so the model falls back to plain-text prompting
- * anyway. Remove this once a local MCP-backed replacement is wired to
- * LobeHub's intervention UI.
+ * anyway. `Monitor` and `ScheduleWakeup` are also disabled here because they
+ * can hit the same stuck wakeup path in both desktop and sandbox runs.
  */
+const CLAUDE_CODE_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
+
 export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',
@@ -121,7 +123,7 @@ export const CLAUDE_CODE_BASE_ARGS = [
   'stream-json',
   '--verbose',
   '--disallowedTools',
-  'AskUserQuestion',
+  CLAUDE_CODE_DISALLOWED_TOOLS.join(','),
 ] as const;
 
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).

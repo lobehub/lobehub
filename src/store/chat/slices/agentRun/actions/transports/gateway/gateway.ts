@@ -18,11 +18,13 @@ import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
+import { createGatewayEventRouter } from './gatewayEventRouter';
+import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
@@ -103,8 +105,19 @@ export interface ConnectGatewayParams {
    * cleanup. When false (terminal-missing: `session_complete` / `auth_failed` /
    * token-refresh failure arrived with no terminal agent event), the callback must
    * itself complete the op as the explicit fallback so it never sticks `running`.
+   *
+   * `authFailed` is true when the close was driven by the gateway rejecting auth
+   * (`auth_failed`, or a failed `auth_expired` token refresh) — an authoritative
+   * "this op no longer exists on the server" signal. Reconnect callers use it to
+   * distinguish a genuinely-dead op (clear the persisted marker) from a bare
+   * `resume_complete` terminal status, which can fire for a still-running op the
+   * gateway DO has no live session for (e.g. heterogeneous CC) and must NOT clear.
    */
-  onSessionComplete?: (info: { succeeded: boolean; terminalReceived: boolean }) => void;
+  onSessionComplete?: (info: {
+    authFailed: boolean;
+    succeeded: boolean;
+    terminalReceived: boolean;
+  }) => void;
   /**
    * The operation ID returned by execAgent
    */
@@ -187,18 +200,26 @@ export class GatewayActionImpl {
     let receivedTerminalEvent = false;
     let terminalSucceeded = false;
     let sessionCompleted = false;
-    const fireSessionComplete = () => {
+    const fireSessionComplete = (opts?: { authFailed?: boolean }) => {
       if (sessionCompleted) return;
       sessionCompleted = true;
       onSessionComplete?.({
+        authFailed: opts?.authFailed ?? false,
         succeeded: terminalSucceeded,
         terminalReceived: receivedTerminalEvent,
       });
     };
 
-    // Forward agent events to caller, and track terminal events
+    // Forward agent events to caller, and track terminal events.
+    //
+    // Only THIS op's terminal counts. On a multiplexed connection the
+    // supervisor's WS also carries forwarded member terminals; a member
+    // finishing must not mark the supervisor run complete or stomp its unread
+    // status. Match on the event's operationId (absent ⇒ legacy single-op WS,
+    // treat as this op's to preserve prior behavior).
     client.on('agent_event', (event) => {
-      if (event.type === 'agent_runtime_end' || event.type === 'error') {
+      const isOwnOp = !event.operationId || event.operationId === operationId;
+      if (isOwnOp && (event.type === 'agent_runtime_end' || event.type === 'error')) {
         receivedTerminalEvent = true;
       }
       // Only a clean completion counts as success — a cancel ('interrupted') or
@@ -206,6 +227,7 @@ export class GatewayActionImpl {
       // branch so onSessionComplete clears the run back to 'active' instead of
       // leaving the topic persisted as an unread completion.
       if (
+        isOwnOp &&
         event.type === 'agent_runtime_end' &&
         isCompletedRuntimeEnd((event.data as { reason?: string } | undefined)?.reason)
       ) {
@@ -240,7 +262,7 @@ export class GatewayActionImpl {
     client.on('auth_failed', (reason) => {
       console.error(`[Gateway] Auth failed for operation ${operationId}: ${reason}`);
       this.internal_cleanupGatewayConnection(operationId);
-      fireSessionComplete();
+      fireSessionComplete({ authFailed: true });
     });
 
     // Handle expired-but-recoverable auth: the JWT is past `exp` but the op
@@ -260,7 +282,9 @@ export class GatewayActionImpl {
         console.error(`[Gateway] Token refresh failed for operation ${operationId}:`, error);
         client.disconnect();
         this.internal_cleanupGatewayConnection(operationId);
-        fireSessionComplete();
+        // A rejected refresh means the gateway no longer accepts this op's token
+        // — treat it like auth_failed so reconnect callers clear the stale marker.
+        fireSessionComplete({ authFailed: true });
       }
     });
 
@@ -408,6 +432,10 @@ export class GatewayActionImpl {
       : undefined;
 
     const localDeviceId = await resolveLocalDeviceId(context.agentId);
+    const userInterventionConfig = {
+      approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
+      allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
+    };
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -441,6 +469,7 @@ export class GatewayActionImpl {
         prompt: message,
         resumeApproval,
         trigger: metadata?.trigger,
+        userInterventionConfig,
       },
       { signal: abortSignal },
     );
@@ -583,9 +612,21 @@ export class GatewayActionImpl {
       }),
     });
 
+    // Demux the supervisor's WebSocket: with single-connection multiplexing
+    // this WS also carries each broadcast member's streaming events (forwarded
+    // server-side onto the supervisor op channel). Route owner events to the
+    // full handler and member events to render-only member handlers so a
+    // member's chunks stream into its own council column instead of corrupting
+    // the supervisor bubble.
+    const eventRouter = createGatewayEventRouter({
+      createMemberHandler: this.buildMemberHandlerFactory(execContext, gatewayOpId),
+      ownerHandler: eventHandler,
+      ownerOperationId: result.operationId,
+    });
+
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
-      onEvent: eventHandler,
+      onEvent: eventRouter,
       onSessionComplete: ({ succeeded, terminalReceived }) => {
         // The gateway event handler already completed the op via the shared run
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
@@ -731,15 +772,42 @@ export class GatewayActionImpl {
       }),
     });
 
+    // Same demux as the initial-run path: a reconnected supervisor WS can also
+    // receive forwarded member events, so route them away from the supervisor
+    // handler (and stream them when the reconnect context carries the group).
+    const eventRouter = createGatewayEventRouter({
+      createMemberHandler: this.buildMemberHandlerFactory(context, gatewayOpId),
+      ownerHandler: eventHandler,
+      ownerOperationId: operationId,
+    });
+
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
-      onEvent: eventHandler,
-      onSessionComplete: ({ succeeded, terminalReceived }) => {
-        // See executeGatewayAgent's onSessionComplete: the handler owns op
-        // completion via the run lifecycle; complete here only as the
-        // terminal-missing fallback.
-        if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
+      onEvent: eventRouter,
+      onSessionComplete: ({ succeeded, terminalReceived, authFailed }) => {
         this.#get().internal_updateTopicLoading(topicId, false);
+
+        // A reconnect is a passive re-subscribe — it must not END a run it merely
+        // re-subscribed to. Only finalize when the close PROVES the op is over:
+        //   - terminalReceived: a real agent_runtime_end / error streamed in, or
+        //   - authFailed: the gateway rejected the op's token (GC'd / gone).
+        // A bare `resume_complete` terminal *status* with neither is ambiguous —
+        // it also fires for a still-running op the gateway DO has no live session
+        // for (typically a heterogeneous CC run streaming via heteroIngest).
+        // Clearing runningOperation there would black-hole every subsequent
+        // heteroIngest batch (StaleHeteroOperationError) and silently kill the
+        // live agent, so leave the marker to the real terminal sites (heteroFinish
+        // / the inactivity watchdog) and just drop our local connection op.
+        if (!terminalReceived && !authFailed) {
+          this.#get().completeOperation(gatewayOpId);
+          return;
+        }
+
+        // The run lifecycle already completed the op when a terminal event
+        // arrived; an auth failure carries no such event, so finalize it here so
+        // the local op never sticks `running`.
+        if (authFailed) this.#get().completeOperation(gatewayOpId);
+
         // See executeGatewayAgent's onSessionComplete: a clean background
         // completion is left to markTopicUnread (status: 'unread').
         const viewing = this.#get().activeTopicId === topicId;
@@ -750,6 +818,8 @@ export class GatewayActionImpl {
             topicId,
           });
         }
+        // Clear the persisted marker useGatewayReconnect keys off so a dead op
+        // doesn't get reconnected on every reload / task-drawer open.
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,
@@ -757,6 +827,41 @@ export class GatewayActionImpl {
       token,
       topicId,
     });
+  };
+
+  /**
+   * Build the `createMemberHandler` factory for a run's event router, with a
+   * single memoized group-tree hydration shared across all of that run's member
+   * handlers. The first member to stream triggers one `getMessages` +
+   * `replaceMessages` so the canonical council structure (the `agentCouncil` tool
+   * message + every member row) lands — which is what makes the members render as
+   * parallel columns rather than a stack — and concurrent members reuse the same
+   * promise instead of each re-replacing the bucket and clobbering live content.
+   */
+  private buildMemberHandlerFactory = (
+    context: ConversationContext,
+    parentOperationId: string,
+  ): ((memberOperationId: string) => (event: AgentStreamEvent) => void) => {
+    let hydration: Promise<void> | undefined;
+    const ensureGroupHydrated = () => {
+      if (!hydration) {
+        hydration = messageService
+          .getMessages(context)
+          .then((messages) => {
+            this.#get().replaceMessages(messages, { context });
+          })
+          .catch(() => {});
+      }
+      return hydration;
+    };
+
+    return (memberOperationId: string) =>
+      createGatewayMemberStreamHandler(this.#get, {
+        context,
+        ensureGroupHydrated,
+        memberOperationId,
+        parentOperationId,
+      });
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {

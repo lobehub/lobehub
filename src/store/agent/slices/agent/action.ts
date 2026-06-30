@@ -517,9 +517,12 @@ export class AgentSliceActionImpl {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentConfig(id, mergedData, signal);
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        // Refresh agent:config so cached model A cannot replay after a
+        // successful model A -> B update.
+        await this.#get().internal_refreshAgentConfig(id);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');

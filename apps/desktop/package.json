@@ -6,7 +6,7 @@
   "homepage": "https://lobehub.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobe-chat.git"
+    "url": "https://github.com/lobehub/lobehub.git"
   },
   "author": "LobeHub",
   "main": "./dist/main/index.js",
@@ -16,7 +16,6 @@
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
-    "download:agent-browser": "node scripts/download-agent-browser.mjs",
     "format": "prettier --write ",
     "i18n": "tsx scripts/i18nWorkflow/index.ts && lobe-i18n",
     "postinstall": "electron-builder install-app-deps",

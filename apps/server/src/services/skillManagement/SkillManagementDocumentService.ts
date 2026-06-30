@@ -57,7 +57,7 @@ interface SkillManagementDocumentServiceDeps {
   /** Markdown-to-editor snapshot projector. */
   createMarkdownEditorSnapshot?: (content: string) => Promise<AgentDocumentEditorSnapshot>;
   /** Document history service dependency. */
-  documentService: Pick<DocumentService, 'trySaveCurrentDocumentHistory'>;
+  documentService: Pick<DocumentService, 'getDocumentById' | 'trySaveCurrentDocumentHistory'>;
 }
 
 const createEmptyEditorData = (): Record<string, unknown> => ({
@@ -94,7 +94,10 @@ const buildSkillMetadata = (
 export class SkillManagementDocumentService {
   private agentDocumentModel: SkillManagementAgentDocumentModel;
   private createMarkdownEditorSnapshot: (content: string) => Promise<AgentDocumentEditorSnapshot>;
-  private documentService: Pick<DocumentService, 'trySaveCurrentDocumentHistory'>;
+  private documentService: Pick<
+    DocumentService,
+    'getDocumentById' | 'trySaveCurrentDocumentHistory'
+  >;
 
   constructor(
     private db: LobeChatDatabase,
@@ -359,7 +362,10 @@ export class SkillManagementDocumentService {
     // Removal condition: only if document history can snapshot Markdown content directly.
     const editorSnapshot = await this.createMarkdownEditorSnapshot(normalizedContent);
 
-    await this.documentService.trySaveCurrentDocumentHistory(index.documentId, 'llm_call');
+    const preMutationHistory = await this.documentService.trySaveCurrentDocumentHistory(
+      index.documentId,
+      'llm_call',
+    );
     const updatedBundle =
       (await this.agentDocumentModel.updateDocumentIdentity(resolved.id, {
         metadata,
@@ -373,8 +379,17 @@ export class SkillManagementDocumentService {
 
     const updated = await this.agentDocumentModel.findById(index.id);
     if (!updated) throw new Error(`Skill index disappeared during replace: ${index.id}`);
+    const updatedDocument = await this.documentService.getDocumentById(index.documentId);
 
-    return this.toSkillDetail(updatedBundle, updated, { includeContent: true });
+    return {
+      ...this.toSkillDetail(updatedBundle, updated, { includeContent: true }),
+      ...(updatedDocument?.updatedAt
+        ? { expectedCurrentDocumentUpdatedAt: updatedDocument.updatedAt.toISOString() }
+        : {}),
+      ...(preMutationHistory?.historyId
+        ? { preMutationHistoryId: preMutationHistory.historyId }
+        : {}),
+    };
   }
 
   /**

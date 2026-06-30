@@ -592,6 +592,7 @@ export interface EnabledAiModel {
   id: string;
   knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
+  pricing?: Pricing;
   providerId: string;
   releasedAt?: string;
   settings?: AiModelSettings;

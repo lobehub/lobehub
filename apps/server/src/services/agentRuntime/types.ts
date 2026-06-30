@@ -1,5 +1,6 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
 import type {
+  AgentGroupConfig,
   BotPlatformContext,
   LobeToolManifest,
   OperationSkillSet,
@@ -289,6 +290,14 @@ export interface ExecGroupMemberParams {
   onComplete: GroupActionOnComplete;
   /** Parent (supervisor) operation id. */
   parentOperationId: string;
+  /**
+   * Supervisor ASSISTANT message id that owns the group-management tool call.
+   * In-group council members parent their response to THIS message — so the
+   * member assistants are siblings of the council tool under the supervisor
+   * turn and the renderer groups them into one council — while the per-member
+   * anchors stay under `groupToolMessageId` for the K=N barrier.
+   */
+  supervisorMessageId?: string;
   /** Per-member timeout (ms), isolated mode. */
   timeout?: number;
   /** Group topic id. */
@@ -308,6 +317,13 @@ export interface ExecGroupMemberResult {
 export interface OperationCreationParams {
   activeDeviceId?: string;
   agentConfig?: any;
+  /**
+   * Multi-agent group (or bot-conversation fallback) context, resolved once at
+   * op creation and forwarded into `state.metadata.agentGroup`. The per-step
+   * context engine reads it back to inject the participant roster (with real
+   * `agt_*` IDs) — no per-step DB lookup, mirroring `botContext`.
+   */
+  agentGroup?: AgentGroupConfig;
   appContext: {
     agentId?: string;
     /**
@@ -320,6 +336,13 @@ export interface OperationCreationParams {
     documentId?: string | null;
     groupId?: string | null;
     isSubAgent?: boolean;
+    /**
+     * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
+     * Lets the inactivity-watchdog abandon path tell an isolated group member
+     * (`'member'`, resumed via the group K=N bridge) apart from a genuine
+     * callSubAgent child (which shares `isSubAgent: true`).
+     */
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;

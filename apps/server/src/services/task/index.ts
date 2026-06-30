@@ -30,6 +30,20 @@ import { TaskRunnerService } from '../taskRunner';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
+const TASK_DETAIL_DIRECT_TOPIC_LIMIT = 100;
+const TASK_DETAIL_DESCENDANT_TOPIC_LIMIT = 300;
+
+type DirectTaskTopicActivityRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
+type DescendantTaskTopicActivityRow = Awaited<
+  ReturnType<TaskTopicModel['findWithHandoffByTaskIds']>
+>[number];
+type TaskTopicActivityRow = DirectTaskTopicActivityRow &
+  Partial<
+    Pick<
+      DescendantTaskTopicActivityRow,
+      'sourceTaskAssigneeAgentId' | 'sourceTaskId' | 'sourceTaskIdentifier' | 'sourceTaskName'
+    >
+  >;
 
 export interface CreateTaskInput {
   assigneeAgentId?: string;
@@ -419,14 +433,41 @@ export class TaskService {
       task = { ...task, error: null };
     }
 
-    const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id, 100).catch(() => []),
-      this.briefModel.findByTaskId(task.id).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
-      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-    ]);
+    const [allDescendants, dependencies, directTopics, briefs, comments, workspace] =
+      await Promise.all([
+        this.taskModel.findAllDescendants(task.id),
+        this.taskModel.getDependencies(task.id),
+        this.taskTopicModel
+          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
+          .catch(() => []),
+        this.briefModel.findByTaskId(task.id).catch(() => []),
+        this.taskModel.getComments(task.id).catch(() => []),
+        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+      ]);
+
+    const allDescendantIds = allDescendants.map((s) => s.id);
+    const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
+    const descendantTopics =
+      allDescendantIds.length > 0
+        ? await this.taskTopicModel
+            .findWithHandoffByTaskIds(allDescendantIds, TASK_DETAIL_DESCENDANT_TOPIC_LIMIT)
+            .catch(() => [])
+        : [];
+
+    const topics: TaskTopicActivityRow[] = [
+      ...directTopics,
+      ...descendantTopics.map((topic) => {
+        const sourceTask = descendantTaskMap.get(topic.sourceTaskId);
+        return {
+          ...topic,
+          sourceTaskAssigneeAgentId:
+            topic.sourceTaskAssigneeAgentId ?? sourceTask?.assigneeAgentId ?? null,
+          sourceTaskId: topic.sourceTaskId ?? sourceTask?.id ?? null,
+          sourceTaskIdentifier: topic.sourceTaskIdentifier ?? sourceTask?.identifier ?? null,
+          sourceTaskName: topic.sourceTaskName ?? sourceTask?.name ?? null,
+        };
+      }),
+    ];
 
     // Derive fileIds from persisted editor_data (single source of truth).
     const extractCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
@@ -450,17 +491,25 @@ export class TaskService {
     const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
     const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
 
-    // Build dependency map for all descendants
-    const allDescendantIds = allDescendants.map((s) => s.id);
-    const allDescendantDeps =
+    const [allDescendantDeps, allDescendantTopics] =
       allDescendantIds.length > 0
-        ? await this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => [])
-        : [];
+        ? await Promise.all([
+            this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => []),
+            this.taskTopicModel.findRunningByTaskIds(allDescendantIds).catch(() => []),
+          ])
+        : [[], []];
+
+    // Build dependency map for all descendants
     const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
     const depMap = new Map<string, string>();
     for (const dep of allDescendantDeps) {
       const depId = idToIdentifier.get(dep.dependsOnId);
       if (depId) depMap.set(dep.taskId, depId);
+    }
+
+    const runningTopicByTaskId = new Map<string, (typeof allDescendantTopics)[number]>();
+    for (const topic of allDescendantTopics) {
+      if (!runningTopicByTaskId.has(topic.taskId)) runningTopicByTaskId.set(topic.taskId, topic);
     }
 
     // Build nested subtask tree
@@ -489,6 +538,7 @@ export class TaskService {
       if (!children || children.length === 0) return undefined;
       return children.map((s) => {
         const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
+        const runningTopic = runningTopicByTaskId.get(s.id);
         return {
           ...(agent
             ? {
@@ -507,6 +557,14 @@ export class TaskService {
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
+          ...(runningTopic?.topicId
+            ? {
+                runningTopic: {
+                  id: runningTopic.topicId,
+                  operationId: runningTopic.operationId ?? null,
+                },
+              }
+            : {}),
           ...(s.schedulePattern || s.scheduleTimezone
             ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
             : {}),
@@ -564,8 +622,14 @@ export class TaskService {
     const agentIds = new Set<string>();
     const userIds = new Set<string>();
 
-    // Topics are created by the task's assignee agent
-    if (task.assigneeAgentId && topics.length > 0) agentIds.add(task.assigneeAgentId);
+    // Each topic keeps the agent that actually ran it (topics.agentId), so an
+    // earlier run's avatar stays correct after the task is reassigned. Fall back
+    // to the source task assignee, then the current task assignee, only when a
+    // topic has no recorded agent.
+    for (const t of topics) {
+      const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
+      if (topicAgentId) agentIds.add(topicAgentId);
+    }
     // Briefs may have an agentId
     for (const b of briefs) {
       if (b.agentId) agentIds.add(b.agentId);
@@ -600,8 +664,9 @@ export class TaskService {
       ...(createdActivity ? [createdActivity] : []),
       ...topics.map((t) => {
         const handoff = t.handoff as TaskTopicHandoff | null;
+        const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
         return {
-          author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
           id: t.topicId ?? undefined,
           operationId: t.operationId ?? null,
@@ -609,6 +674,9 @@ export class TaskService {
           seq: t.seq,
           status: t.status,
           summary: handoff?.summary,
+          sourceTaskId: t.sourceTaskId,
+          sourceTaskIdentifier: t.sourceTaskIdentifier,
+          sourceTaskName: t.sourceTaskName,
           time: toISO(t.createdAt),
           title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
           type: 'topic' as const,

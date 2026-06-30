@@ -157,8 +157,13 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Helper to apply plugin filters:
   // 1. If disableTools is true, return empty array (for broadcast scenarios)
-  // 2. If isSubAgent is true, filter out lobe-agent (which owns the sub-agent
-  //    dispatch APIs) to prevent nested sub-agent creation.
+  // 2. Drop page-agent outside page scope.
+  //
+  // lobe-agent's context trimming (hide `callSubAgent` in group / sub-agent runs)
+  // now lives in its manifest resolver (resolveLobeAgentManifest), applied at
+  // tools-engine build time. That keeps lobe-agent's plan / todo / visual-media
+  // available to sub-agents — only the nested dispatch API is removed — instead of
+  // dropping the whole tool here.
   const applyPluginFilters = (pluginIds: string[]) => {
     if (disableTools) {
       log('disableTools is true, returning empty plugins');
@@ -171,7 +176,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
-    return isSubAgent ? nextPluginIds.filter((id) => id !== 'lobe-agent') : nextPluginIds;
+    return nextPluginIds;
   };
 
   const agentStoreState = getAgentStoreState();

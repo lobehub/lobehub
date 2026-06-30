@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
+import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentApiName, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -285,6 +287,57 @@ describe('createServerAgentToolsEngine', () => {
 
     // lobe-agent is in alwaysOnToolIds, so its core capabilities are on for every agent-mode turn.
     expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+
+    // Without a manifest context, the full static manifest is used — callSubAgent stays.
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    expect(lobeAgent?.api.map((a) => a.name)).toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('hides lobe-agent callSubAgent when manifestContext.isSubAgent is true', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: { isSubAgent: true },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    // lobe-agent's other capabilities (plan / todo / visual-media) stay on...
+    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    // ...but callSubAgent is stripped so a nested sub-agent cannot recurse.
+    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('hides lobe-agent callSubAgent inside a group run (scope=group)', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: { scope: 'group' },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {
@@ -321,6 +374,48 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result.enabledToolIds).not.toContain(KnowledgeBaseManifest.identifier);
+  });
+
+  it('should auto-enable group orchestration tools when isGroupSupervisor is true', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      // Supervisor agent does not declare the group tools itself — they ship
+      // only with the builtin group-supervisor, so the engine must inject them.
+      agentConfig: { plugins: [] },
+      isGroupSupervisor: true,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result.enabledToolIds).toContain(GroupManagementManifest.identifier);
+    // group-agent-builder has no server runtime, so it is deliberately NOT
+    // advertised on a server-side supervisor run (it would throw if called).
+    expect(result.enabledToolIds).not.toContain(GroupAgentBuilderManifest.identifier);
+  });
+
+  it('should not enable group orchestration tools for a non-supervisor run', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      isGroupSupervisor: false,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result.enabledToolIds).not.toContain(GroupManagementManifest.identifier);
+    expect(result.enabledToolIds).not.toContain(GroupAgentBuilderManifest.identifier);
   });
 
   it('should include default tools (WebBrowsing, KnowledgeBase)', () => {

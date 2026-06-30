@@ -62,6 +62,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('workspaceSetting.tab.members'),
             },
             {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
@@ -127,16 +132,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // The Admin group (workspace devices / storage / API keys) is owner-only —
-        // managing shared infra is an owner action. Members reach workspace devices
-        // via the run-device picker, not this page.
+        // The Admin group (workspace storage / API keys) is owner-only — managing
+        // shared infra is an owner action.
         isOwner && {
           items: [
-            {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
-            },
             {
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,

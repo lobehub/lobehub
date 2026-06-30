@@ -2,6 +2,8 @@ import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setScopedMutate } from '@/libs/swr';
+import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
@@ -56,6 +58,7 @@ vi.mock('swr', async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setScopedMutate(vi.fn() as any);
   useAgentStore.setState({
     activeAgentId: undefined,
     agentMap: {},
@@ -556,6 +559,63 @@ describe('AgentSlice Actions', () => {
 
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
+
+    it('should refresh agent config SWR cache after a confirmed config update', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: { id: 'agent-1', model: 'model-b', provider: 'lobehub' } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { id: 'agent-1', model: 'model-a', provider: 'lobehub' } },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          model: 'model-b',
+          provider: 'lobehub',
+        });
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
+    });
+
+    it('should not refresh agent config SWR cache when save fails', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { id: 'agent-1', model: 'model-a', provider: 'lobehub' } },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          model: 'model-b',
+          provider: 'lobehub',
+        });
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      expect(configCacheCalls).toHaveLength(0);
+      expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
+    });
   });
 
   describe('optimisticUpdateAgentMeta', () => {

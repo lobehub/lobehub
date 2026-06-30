@@ -29,6 +29,7 @@ import { authSelectors } from '@/store/user/selectors';
 import { DEVICE_LIST_SWR_KEY, refreshDeviceList } from './const';
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
+import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -277,6 +278,9 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation();
   const removeMutation = isWorkspace ? removeWorkspace : removePersonal;
 
+  // Hook must run before any early return so render order stays stable.
+  const canEditDevice = useCanEditDevice();
+
   if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
 
   // ─── Empty state: onboarding hero + connect options + capabilities ───
@@ -323,10 +327,17 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
 
-  // Only count ids that still exist in the current scope's list, so a stale tick
-  // (e.g. a device removed elsewhere) never inflates the toolbar count.
-  const checkedCount = devices.filter((d) => checkedIds.has(d.deviceId)).length;
-  const allChecked = devices.length > 0 && checkedCount === devices.length;
+  // Bulk-selection set excludes rows the user can't edit so the toolbar only
+  // ever offers actions the server would actually accept, mirroring the
+  // self-or-owner gate. `canEditDevice` is a stable callback so deriving from
+  // it on render is fine.
+  const editableDevices = devices.filter((d) => canEditDevice(d));
+
+  // Only count ids that still exist in the current scope's editable list, so a
+  // stale tick (e.g. a device removed elsewhere) never inflates the toolbar
+  // count.
+  const checkedCount = editableDevices.filter((d) => checkedIds.has(d.deviceId)).length;
+  const allChecked = editableDevices.length > 0 && checkedCount === editableDevices.length;
   const someChecked = checkedCount > 0 && !allChecked;
 
   const toggleChecked = (deviceId: string, next: boolean) =>
@@ -338,10 +349,10 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
     });
 
   const toggleAll = () =>
-    setCheckedIds(allChecked ? new Set() : new Set(devices.map((d) => d.deviceId)));
+    setCheckedIds(allChecked ? new Set() : new Set(editableDevices.map((d) => d.deviceId)));
 
   const handleBulkRemove = () => {
-    const ids = devices.filter((d) => checkedIds.has(d.deviceId)).map((d) => d.deviceId);
+    const ids = editableDevices.filter((d) => checkedIds.has(d.deviceId)).map((d) => d.deviceId);
     if (ids.length === 0) return;
     confirmModal({
       content: t('devices.remove.confirmManyDesc', { count: ids.length }),
@@ -369,11 +380,13 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.selectAll}
+            className={editableDevices.length > 0 ? styles.selectAll : undefined}
             gap={8}
-            onClick={toggleAll}
+            onClick={editableDevices.length > 0 ? toggleAll : undefined}
           >
-            <Checkbox checked={allChecked} indeterminate={someChecked} />
+            {editableDevices.length > 0 && (
+              <Checkbox checked={allChecked} indeterminate={someChecked} />
+            )}
             <Text style={{ fontSize: 13 }} type={'secondary'}>
               {checkedCount > 0
                 ? t('devices.selection.selected', { count: checkedCount })
@@ -393,19 +406,27 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
           )}
         </Flexbox>
         <Flexbox className={styles.listScroll} padding={4}>
-          {devices.map((device) => (
-            <DeviceItem
-              checked={checkedIds.has(device.deviceId)}
-              device={device}
-              isCurrent={isCurrent(device.deviceId)}
-              key={device.deviceId}
-              selected={device.deviceId === selectedId}
-              onCheckChange={(next) => toggleChecked(device.deviceId, next)}
-              onSelect={() =>
-                setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
-              }
-            />
-          ))}
+          {devices.map((device) => {
+            const editable = canEditDevice(device);
+            return (
+              <DeviceItem
+                checked={checkedIds.has(device.deviceId)}
+                device={device}
+                isCurrent={isCurrent(device.deviceId)}
+                key={device.deviceId}
+                selected={device.deviceId === selectedId}
+                // Withholding the handler also withholds the checkbox; non-
+                // editable rows render without a tick so bulk selection only
+                // ever includes devices the server would accept.
+                onCheckChange={
+                  editable ? (next) => toggleChecked(device.deviceId, next) : undefined
+                }
+                onSelect={() =>
+                  setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
+                }
+              />
+            );
+          })}
         </Flexbox>
       </Flexbox>
       {selected && (

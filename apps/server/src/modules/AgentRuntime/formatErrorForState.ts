@@ -150,7 +150,10 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
  *    `runtime.step()` non-throwing error path and the outer `executeStep`
  *    catch can both run through here without double-wrapping).
  * 3. Standard `Error` instance — wrapped as `InternalServerError`.
- * 4. Anything else — stringified as `AgentRuntimeError`.
+ * 4. Anything else — a loosely-typed `{ message }` body (e.g. a heterogeneous CLI
+ *    agent's wire `error` event data `{ code, message, stderr }`) or a raw string —
+ *    mapped to `AgentRuntimeError` with a real extracted message. This branch is
+ *    the single canonical replacement for the hetero-specific `toChatMessageError`.
  */
 export const formatErrorForState = (error: unknown): ChatMessageError => {
   if (error && typeof error === 'object' && 'errorType' in error) {
@@ -191,9 +194,25 @@ export const formatErrorForState = (error: unknown): ChatMessageError => {
     });
   }
 
+  // Path 4: arbitrary thrown value. A loosely-typed object (no `errorType`, no
+  // string/number `type`) keeps its body and contributes its `.message` rather
+  // than being stringified to '[object Object]' — this is what the heterogeneous
+  // CLI agents emit on the wire (`{ code, message, stderr }`). A raw string or any
+  // other primitive becomes a `{ message }` body. Mirrors the former
+  // `toChatMessageError`, then runs through `enrichWithSpec` so even these get
+  // classification (the bare hetero formatter never did).
+  if (isRecord(error)) {
+    return enrichWithSpec({
+      body: error,
+      message: extractMessage(error) ?? 'Agent runtime error',
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    });
+  }
+
+  const message = typeof error === 'string' ? error : 'Agent runtime error';
   return enrichWithSpec({
-    body: error,
-    message: String(error),
+    body: { message },
+    message,
     type: AgentRuntimeErrorType.AgentRuntimeError,
   });
 };

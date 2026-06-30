@@ -1,4 +1,4 @@
-import type { ExecAgentAppContext, ExecAgentResult } from '@lobechat/types';
+import type { ExecAgentAppContext, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -44,6 +44,7 @@ export interface ExecAgentTaskParams {
    * `agent_operations.trigger` column reflects the real source.
    */
   trigger?: string;
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

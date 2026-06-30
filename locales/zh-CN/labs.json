@@ -7,7 +7,7 @@
   "features.assistantMessageGroup.title": "代理消息分组",
   "features.fleet.desc": "在标题栏显示 Fleet 入口——把当前账号下所有运行中的任务并排展示的看板。",
   "features.fleet.title": "Fleet 并排视图",
-  "features.foldFinishedTurn.desc": "将已完成、非最新回合的过程（推理与工具调用）折叠进「已处理」标题，最终回答始终显示；点击可展开过程。",
+  "features.foldFinishedTurn.desc": "当最终回答可见后，将已完成回合的过程（推理与工具调用）折叠进「已处理」标题；点击可展开过程。",
   "features.foldFinishedTurn.title": "折叠已完成回合",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",

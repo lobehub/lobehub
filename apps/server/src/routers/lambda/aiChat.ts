@@ -280,6 +280,35 @@ export const aiChatRouter = router({
 
       let parentId = input.newUserMessage.parentId;
 
+      // Server-authoritative parent resolution (concurrent-append race fix).
+      //
+      // The client derives parentId from a local snapshot of the conversation
+      // tail, but that tail can advance server-side without the client knowing
+      // — e.g. another assistant turn is persisted while the user is composing
+      // or right as they hit send. Trusting the client's stale parentId forks
+      // the new user turn off an earlier node instead of the real head, which
+      // splits the conversation.
+      //
+      // For a plain append to an existing topic we re-read the spine head from
+      // the DB so the message attaches after the latest assistant turn. Note we
+      // anchor on the spine head (latest non-tool, non-signal message), NOT the
+      // raw latest row: tool results are inline children of their assistant
+      // turn, so a new user turn parents off the assistant, never a tool result.
+      // A brand-new topic (no prior messages) or a brand-new thread (must anchor
+      // on its explicit branch point / sourceMessageId) keep the client parentId.
+      //
+      // Fall back to the client parentId when the spine head is absent (no spine
+      // message yet), so we never orphan the turn by overwriting it to undefined.
+      if (topicId && !input.newTopic && !input.newThread) {
+        const resolvedParentId = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.resolveParentId',
+          () => ctx.messageModel.getLatestSpineMessageId({ threadId, topicId }),
+          { hasThreadId: !!threadId },
+        );
+        parentId = resolvedParentId ?? parentId;
+      }
+
       if (input.preloadMessages?.length) {
         log('creating %d preload messages before user message', input.preloadMessages.length);
 

@@ -267,12 +267,13 @@ export class WorkspaceModel {
   };
 
   /**
-   * Demote the workspace to single-owner: remove every non-owner member and
-   * clear the grace-period marker. Called when a subscription is cancelled.
-   * Workspace-scoped resources (agents/sessions/etc.) stay attached to the
-   * workspace and remain accessible to the primary owner.
+   * Downgrade the workspace to Free: clear the grace-period marker so the
+   * workspace is no longer in the cancel-grace window. Members are preserved
+   * — Free supports multiple members, and the billing-inactive lockout (see
+   * `assertSubscriptionActive`) gives view-only access until the owner
+   * renews. Workspace-scoped resources (agents/sessions/etc.) stay attached.
    */
-  downgradeToSolo = async (id: string) => {
+  downgradeToFree = async (id: string) => {
     return this.db.transaction(async (tx) => {
       const current = await tx.query.workspaces.findFirst({
         where: eq(workspaces.id, id),
@@ -281,18 +282,6 @@ export class WorkspaceModel {
       if (!current) throw new Error('Workspace not found');
       if (current.primaryOwnerId !== this.userId)
         throw new Error('Only the primary owner can downgrade this workspace');
-
-      const removedMembers = await tx
-        .update(workspaceMembers)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, id),
-            ne(workspaceMembers.userId, current.primaryOwnerId),
-            isNull(workspaceMembers.deletedAt),
-          ),
-        )
-        .returning();
 
       const currentSettings = (current.settings as Record<string, any> | null) ?? {};
       const { gracePeriodUntil: _drop, ...restSettings } = currentSettings;
@@ -306,10 +295,7 @@ export class WorkspaceModel {
         .where(eq(workspaces.id, id))
         .returning();
 
-      return {
-        removedUserIds: removedMembers.map((m) => m.userId),
-        workspace: updated,
-      };
+      return { workspace: updated };
     });
   };
 

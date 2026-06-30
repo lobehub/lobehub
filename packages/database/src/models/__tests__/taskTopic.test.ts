@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { tasks, taskTopics, topics, users } from '../../schemas';
+import { agents, tasks, taskTopics, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { TaskTopicModel } from '../taskTopic';
@@ -61,6 +61,29 @@ describe('TaskTopicModel', () => {
 
       const topics = await topicModel.findByTaskId(task.id);
       expect(topics).toHaveLength(1);
+    });
+
+    it('should find running topics for multiple tasks within the current owner scope', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const otherTaskModel = new TaskModel(serverDB, userId2);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const otherTopicModel = new TaskTopicModel(serverDB, userId2);
+      const task1 = await taskModel.create({ instruction: 'A' });
+      const task2 = await taskModel.create({ instruction: 'B' });
+      const otherTask = await otherTaskModel.create({ instruction: 'Other' });
+      await createTopic('tpc_a1');
+      await createTopic('tpc_a3');
+      await createTopic('tpc_b2');
+      await createTopic('tpc_theirs', userId2);
+
+      await topicModel.add(task1.id, 'tpc_a1', { seq: 1 });
+      await topicModel.add(task1.id, 'tpc_a3', { seq: 3 });
+      await topicModel.add(task2.id, 'tpc_b2', { seq: 2 });
+      await otherTopicModel.add(otherTask.id, 'tpc_theirs', { seq: 99 });
+      await topicModel.updateStatus(task1.id, 'tpc_a1', 'completed');
+
+      const rows = await topicModel.findRunningByTaskIds([task1.id, task2.id, otherTask.id]);
+      expect(rows.map((row) => row.topicId)).toEqual(['tpc_a3', 'tpc_b2']);
     });
   });
 
@@ -290,6 +313,40 @@ describe('TaskTopicModel', () => {
       const h2 = rows.find((r) => r.topicId === 'tpc_h2');
       expect(h1?.completedAt).toBeInstanceOf(Date);
       expect(h2?.completedAt).toBeNull();
+    });
+
+    it('should return source task metadata when querying multiple task ids', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'agt_child', slug: 'agt_child', userId })
+        .onConflictDoNothing();
+      const parent = await taskModel.create({ instruction: 'Parent' });
+      const child = await taskModel.create({
+        assigneeAgentId: 'agt_child',
+        instruction: 'Child',
+        name: 'Child Task',
+        parentTaskId: parent.id,
+      });
+      const sibling = await taskModel.create({ instruction: 'Sibling', parentTaskId: parent.id });
+      await createTopic('tpc_child');
+      await createTopic('tpc_sibling');
+
+      await topicModel.add(child.id, 'tpc_child', { operationId: 'op_child', seq: 1 });
+      await topicModel.add(sibling.id, 'tpc_sibling', { operationId: 'op_sibling', seq: 1 });
+
+      const rows = await topicModel.findWithHandoffByTaskIds([child.id], 10);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        operationId: 'op_child',
+        sourceTaskAssigneeAgentId: 'agt_child',
+        sourceTaskId: child.id,
+        sourceTaskIdentifier: child.identifier,
+        sourceTaskName: 'Child Task',
+        topicId: 'tpc_child',
+      });
     });
   });
 

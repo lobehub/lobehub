@@ -40,6 +40,20 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   });
 });
 
+/**
+ * Shared input for the ownership-scoped message analytics queries
+ * (count / countByTopic / topicStats). Every field is an optional filter
+ * applied on top of the `userId × workspace` ownership predicate.
+ */
+const messageAnalyticsSchema = z.object({
+  agentId: z.string().optional(),
+  endDate: z.string().optional(),
+  range: z.tuple([z.string(), z.string()]).optional(),
+  role: z.string().optional(),
+  startDate: z.string().optional(),
+  topicId: z.string().optional(),
+});
+
 export const messageRouter = router({
   addFilesToMessage: messageProcedure
     .use(withScopedPermission('message:update'))
@@ -102,17 +116,19 @@ export const messageRouter = router({
     }),
 
   count: messageProcedure
-    .input(
-      z
-        .object({
-          endDate: z.string().optional(),
-          range: z.tuple([z.string(), z.string()]).optional(),
-          startDate: z.string().optional(),
-        })
-        .optional(),
-    )
+    .input(messageAnalyticsSchema.optional())
     .query(async ({ ctx, input }) => {
       return ctx.messageModel.count(input);
+    }),
+
+  /**
+   * Count messages grouped by topic (server-side GROUP BY), sorted by count
+   * desc. Optionally scoped by agent / role / date range.
+   */
+  countByTopic: messageProcedure
+    .input(messageAnalyticsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.countGroupByTopic(input);
     }),
 
   countWords: messageProcedure
@@ -259,6 +275,17 @@ export const messageRouter = router({
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
   }),
+
+  /**
+   * Distribution of message counts per topic (topics / mean / median / p90 /
+   * p99 / one-shot ratio + histogram). Aggregated server-side; optionally
+   * scoped by agent / role / date range.
+   */
+  topicStats: messageProcedure
+    .input(messageAnalyticsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.topicMessageStats(input);
+    }),
 
   removeAllMessages: messageProcedure
     .use(withScopedPermission('message:delete'))

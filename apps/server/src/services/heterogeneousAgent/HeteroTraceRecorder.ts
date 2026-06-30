@@ -1,5 +1,10 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
+import {
+  type ExecutionSnapshot,
+  type ISnapshotStore,
+  parseOperationId,
+  type StepSnapshot,
+} from '@lobechat/agent-tracing';
 import debug from 'debug';
 
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
@@ -112,8 +117,13 @@ export class HeteroTraceRecorder {
         session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
       const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
 
-      const agentId = params.agentId ?? undefined;
-      const topicId = params.topicId ?? undefined;
+      // Fall back to the agentId/topicId encoded in the operationId when the
+      // caller didn't supply them, so the snapshot body and its S3 key never
+      // degrade to the literal "unknown" (which also breaks the reader, since
+      // it rebuilds the key from the operationId's agt_/tpc_ segments).
+      const parsedOp = parseOperationId(operationId);
+      const agentId = params.agentId ?? parsedOp?.agentId ?? undefined;
+      const topicId = params.topicId ?? parsedOp?.topicId ?? undefined;
 
       const snapshot: ExecutionSnapshot = {
         agentId,

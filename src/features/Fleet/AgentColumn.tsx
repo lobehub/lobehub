@@ -34,7 +34,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useFetchGitInfo } from '@/store/device/gitHooks';
+import { useFetchGitBranch } from '@/store/device/gitHooks';
 import { useElectronStore } from '@/store/electron';
 import { type ChatTopicStatus } from '@/types/topic';
 
@@ -179,7 +179,7 @@ const buildChatPath = (column: FleetColumn) =>
 
 /** Working directory + git branch subtitle (branch resolved live for local cwd). */
 const WorkingDirRow = memo<{ workingDirectory: string }>(({ workingDirectory }) => {
-  const { data } = useFetchGitInfo(undefined, workingDirectory);
+  const { data } = useFetchGitBranch(undefined, workingDirectory);
   const dirName = workingDirectory.split('/').findLast(Boolean) ?? workingDirectory;
 
   return (

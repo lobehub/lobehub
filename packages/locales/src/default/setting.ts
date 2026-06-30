@@ -1239,7 +1239,7 @@ When I am ___, I need ___
     'Cancellation scheduled. Your subscription stops renewing at the end of the current billing cycle — the workspace then falls back to Free.',
   'workspace.billingPage.billing.banner.cancelledTitle': 'Subscription pending cancellation',
   'workspace.billingPage.billing.banner.expiredDesc':
-    'Your subscription has ended. Re-subscribe to restore Pro features, or downgrade to Solo.',
+    'Your subscription has ended. Re-subscribe to restore Pro features, or downgrade to Free.',
   'workspace.billingPage.billing.banner.expiredTitle': 'Subscription cancelled',
   'workspace.billingPage.billing.banner.inactiveDesc':
     'Subscription is inactive — credits will not refresh until you re-subscribe.',
@@ -1284,6 +1284,8 @@ When I am ___, I need ___
     'Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period.',
   'workspace.billingPage.billing.downgradePlanModal.bodyWithDate':
     'Your current plan will be downgraded to {{targetPlan}} at the end of the current billing period on {{date}}.',
+  'workspace.billingPage.billing.downgradePlanModal.intervalSuffix':
+    ' and switched to {{interval}}',
   'workspace.billingPage.billing.downgradePlanModal.continueCta': 'Continue',
   'workspace.billingPage.billing.downgradePlanModal.keepCta': 'Keep plan',
   'workspace.billingPage.billing.downgradePlanModal.limitDesc':
@@ -1375,6 +1377,7 @@ When I am ___, I need ___
     'This change will take effect after the current billing cycle ends. You will not be charged now.',
   'workspace.billingPage.billing.upgradePlanModal.scheduledTarget':
     'Your workspace will change to the {{plan}} {{interval}} plan after the current billing cycle ends.',
+  'workspace.billingPage.billing.upgradePlanModal.purchaseSeats': 'Purchase seats',
   'workspace.billingPage.billing.upgradePlanModal.seatAdjustment': 'Seat adjustment',
   'workspace.billingPage.billing.upgradePlanModal.target':
     'Your workspace will upgrade immediately to the {{plan}} {{interval}} plan.',
@@ -1384,14 +1387,14 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.title': 'Upgrade?',
   'workspace.billingPage.billing.upgradePlanModal.totalSummary': '{{seats}} seats after upgrade',
   'workspace.billingPage.billing.downgrade.confirmBody':
-    'This immediately downgrades the workspace to Solo. The current billing period is non-refundable, and every member except the primary owner will be removed from this workspace.',
+    'The workspace becomes Free right away. Members and shared resources are preserved; the workspace exits the read-only state. Re-subscribe at any time to restore Pro features.',
   'workspace.billingPage.billing.downgrade.confirmCta': 'Downgrade now',
   'workspace.billingPage.billing.downgrade.confirmInputLabel':
     'Type the workspace name "{{name}}" to confirm:',
   'workspace.billingPage.billing.downgrade.confirmInputPlaceholder': 'Workspace name',
-  'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Solo?',
+  'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Free?',
   'workspace.billingPage.billing.downgrade.failedToast': 'Failed to downgrade.',
-  'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Solo.',
+  'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Free.',
   'workspace.billingPage.billing.basic.subtitle':
     'Basic workspace · shared monthly pool · no paid seats',
   'workspace.billingPage.billing.basic.title': 'Basic workspace',
@@ -1421,6 +1424,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.planBadge.active': 'Active',
   'workspace.billingPage.billing.planBadge.cancelled': 'Cancelled',
   'workspace.billingPage.billing.planBadge.cancelling': 'Cancelling',
+  'workspace.billingPage.billing.planBadge.free': 'Free',
   'workspace.billingPage.billing.planBadge.inactive': 'Inactive',
   'workspace.billingPage.billing.pending.cancelCta': 'Cancel',
   'workspace.billingPage.billing.pending.cancelSuccess': 'Subscription change canceled.',
@@ -1998,7 +2002,7 @@ When I am ___, I need ___
   'workspace.invitePage.invitedEmail': 'Invited email',
   'workspace.invitePage.invitedTo': '{{inviter}} invited you to join the workspace',
   'workspace.invitePage.memberLimitSubtitle':
-    'This workspace already has {{limit}} members. Ask an owner to adjust seats in Billing or remove a member before joining.',
+    'This workspace is full. Ask an owner to adjust seats in Billing or remove a member before joining.',
   'workspace.invitePage.memberLimitTitle': 'Workspace Is Full',
   'workspace.invitePage.notFoundSubtitle':
     'This invitation link is invalid. Double-check the URL or ask the team owner to send a new one.',
@@ -2187,12 +2191,12 @@ When I am ___, I need ___
   'workspace.wizard.step2.totalLimitReached':
     "You've reached the maximum of {{limit}} workspaces. Leave one before creating another.",
   'workspace.wizard.step2.features.basic.share': 'First 3 members are free, including you',
-  'workspace.wizard.step2.features.basic.solo': 'Up to 3 members, no paid seats',
+  'workspace.wizard.step2.features.basic.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.basic.onDemand':
     'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.basic.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.free.share': 'First 3 members are free, including you',
-  'workspace.wizard.step2.features.free.solo': 'Up to 3 members, no paid seats',
+  'workspace.wizard.step2.features.free.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.free.onDemand':
     'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.free.upgradable': 'Upgrade anytime for more seats',
@@ -2344,13 +2348,18 @@ When I am ___, I need ___
     'Shared machines enrolled into this workspace. Members can run agents on them.',
   'workspaceSetting.devices.empty': 'No workspace devices yet.',
   'workspaceSetting.devices.enrollDesc':
-    'Run this on the machine you want to share (workspace owner only):',
+    'Run this on the machine you want to share with the workspace:',
+  'workspaceSetting.devices.enrolledBy': 'Enrolled by {{name}}',
+  'workspaceSetting.devices.enrolledByLabel': 'Enrolled by',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
   'workspaceSetting.devices.heroDesc':
     'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
   'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',
+  'workspaceSetting.devices.readonlyHint':
+    'Only the member who enrolled this device or a workspace owner can rename or remove it.',
+  'workspaceSetting.devices.unknownEnroller': 'an unknown member',
   'workspaceSetting.group.admin': 'Admin',
   'workspaceSetting.group.agent': 'Agent',
   'workspaceSetting.group.general': 'General',

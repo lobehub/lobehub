@@ -176,7 +176,7 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   ) => Promise<HandleCreateVideoWebhookResult>;
   id: string;
   models?:
-    | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
+    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
@@ -686,7 +686,10 @@ export const createRouterRuntime = ({
         typeof modelsOption === 'function' && // Use the same baseURL-matched runtime as chat routing for provider model discovery.
         'client' in runtime
       ) {
-        const modelList = await modelsOption({ client: (runtime as any).client });
+        const modelList = await modelsOption({
+          client: (runtime as any).client,
+          options: this._options,
+        });
         return await postProcessModelList(modelList);
       }
 

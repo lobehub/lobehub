@@ -39,6 +39,9 @@ import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
+const GlobalApprovalNotification = dynamic(
+  () => import('@/features/GlobalApprovalNotification'),
+);
 
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
@@ -90,6 +93,7 @@ const Layout: FC = () => {
           <HotkeyHelperPanel />
           <RegisterHotkeys />
           <CmdkLazy />
+          <GlobalApprovalNotification />
         </Suspense>
       </WorkspaceContextSlot>
     </HotkeysProvider>

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
-import { extractAccessToken, MarketService } from './index';
+import { extractAccessToken, LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS, MarketService } from './index';
 
 // Mock dependencies before importing the module under test
 vi.mock('@lobehub/market-sdk', () => {
@@ -629,6 +629,25 @@ describe('MarketService', () => {
 
       const manifests = await service.getLobehubSkillManifests();
       expect(manifests).toEqual([]);
+    });
+
+    it('should time out listConnections and degrade to empty manifests', async () => {
+      const service = new MarketService();
+      const signal = new AbortController().signal;
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+      const timeoutError = new Error('The operation was aborted due to timeout');
+      timeoutError.name = 'TimeoutError';
+      (service as any).market.connect.listConnections = vi.fn().mockRejectedValue(timeoutError);
+
+      try {
+        const manifests = await service.getLobehubSkillManifests();
+
+        expect(manifests).toEqual([]);
+        expect(timeoutSpy).toHaveBeenCalledWith(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS);
+        expect((service as any).market.connect.listConnections).toHaveBeenCalledWith({ signal });
+      } finally {
+        timeoutSpy.mockRestore();
+      }
     });
 
     it('should continue building other manifests when one connection fails', async () => {

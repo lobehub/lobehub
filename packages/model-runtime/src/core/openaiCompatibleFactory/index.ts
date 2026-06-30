@@ -291,7 +291,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     options: CreateVideoOptions,
   ) => Promise<PollVideoStatusResult>;
   models?:
-    | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
+    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
@@ -863,7 +863,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       let resultModels: ChatModelCard[];
       if (typeof models === 'function') {
         log('using custom models function');
-        resultModels = await models({ client: this.client });
+        resultModels = await models({ client: this.client, options: this._options });
       } else {
         log('fetching models from client API');
         const list = await this.client.models.list();

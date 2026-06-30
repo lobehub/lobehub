@@ -5,6 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useMemo, useRef } from 'react';
 
+import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntry';
 import { isDesktop } from '@/const/version';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
 import Footer from '@/routes/(main)/home/_layout/Footer';
@@ -159,6 +160,9 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
           {activeContent.node}
         </div>
       </div>
+      <Suspense fallback={null}>
+        <NavPanelUpgradeEntry />
+      </Suspense>
       <Suspense>
         <Footer />
       </Suspense>

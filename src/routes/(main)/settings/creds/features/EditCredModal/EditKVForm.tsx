@@ -160,6 +160,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
                     style={{ flex: 2, marginBottom: 0 }}
                   >
                     <Input.Password
+                      autoComplete="new-password"
                       disabled={!canManageCredentials}
                       placeholder={t('creds.form.valuePlaceholder')}
                     />

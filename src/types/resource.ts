@@ -29,6 +29,7 @@ export interface ResourceItem {
 
   embeddingStatus?: string | null;
   embeddingTaskId?: string | null;
+  fileId?: string | null;
   fileType: string;
   finishEmbedding?: boolean;
   // Identity

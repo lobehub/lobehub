@@ -240,6 +240,16 @@ do not open a login page; verify agent-browser first, then request the Network
 Escalate, don't duplicate: verify a backend change with the CLI first; only add
 a UI pass when the change actually affects the UI.
 
+**Verify the change runs where you think it does — confirm runtime, don't assume.**
+Some features have two execution paths and the UI silently picks one (e.g. group
+orchestration: the chat UI defaults to the **client** runtime, while the fix may
+live in the **server** runtime / `AGENT_RUNTIME_MODE=queue` durable-op path). A
+test that exercises the wrong path can pass green without ever touching the code
+under test. Before trusting a result, **prove which runtime ran** — e.g. check for
+a server `agent_operations` row, the QStash `/api/agent/run` steps, or server-only
+log lines. If the UI won't take the server path, drive it directly (call the
+server TRPC mutation / endpoint) so the server runtime actually executes.
+
 ### Environment support (local macOS vs cloud Linux)
 
 The decisive constraint per surface is **how evidence (screenshots) is
@@ -291,7 +301,7 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 | Start / restart the local dev server | [references/dev-server.md](./references/dev-server.md)               |
 | `agent-browser` command reference    | [references/agent-browser.md](./references/agent-browser.md)         |
 | osascript patterns (general macOS)   | [references/osascript.md](./references/osascript.md)                 |
-| Agent gateway probing                | [references/agent-gateway.md](./references/agent-gateway.md)         |
+| Local gateway closed loop + probing  | [references/agent-gateway.md](./references/agent-gateway.md)         |
 | Screen recording                     | [references/record-app-screen.md](./references/record-app-screen.md) |
 
 ### Scripts
@@ -348,10 +358,12 @@ Two hard rules worth front-loading:
   from `summary.conclusion`. So do NOT hand-build a 用例 table or a 范围 block in
   `report.md` — they double up on the page. `report.md` is the narrative tail
   only (跟进 / 本轮验证 / 评分).
-- **Visual evidence must render inline.** Screenshots and GIFs in `report.md`
-  must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
-  use bare file paths, Markdown links, or local file links as the primary
-  visual evidence; those make the report unreadable without opening each asset.
+- **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
+  screenshot/GIF to the relevant case via `cases[].evidence` (path or array of
+  paths under `$DIR`); the verify page renders it next to that check. Do NOT
+  embed images/GIFs in `report.md` (no `![...](assets/...)`) — they would just
+  double up with the per-case evidence the page already shows. `report.md` stays
+  prose-only (跟进 / 备注 / 复现).
 - **Final replies must include visual evidence links.** When a run includes UI
   screenshots or GIFs, include the report directory and the most important
   visual artifacts in the final chat response. Each item must include a stable
@@ -361,8 +373,8 @@ Two hard rules worth front-loading:
   Use repo-relative paths, not absolute paths.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
-  animations), record it with `scripts/record-gif.sh` and embed the GIF —
-  a static screenshot cannot prove the behavior.
+  animations), record it with `scripts/record-gif.sh` and attach the GIF as that
+  case's `evidence` — a static screenshot cannot prove the behavior.
 
 ## Step 4 — Publish to LobeHub (mandatory)
 

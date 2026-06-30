@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
@@ -12,6 +12,9 @@ import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOver
 type SegmentedValue = 'true' | 'false' | 'inherit';
 
 const styles = createStaticStyles(({ css }) => ({
+  control: css`
+    flex: none;
+  `,
   meta: css`
     font-family: ${cssVar.fontFamilyCode};
     font-size: 10px;
@@ -53,9 +56,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const segmentOptions = [
-  { key: 'true' as const, label: 'true' },
-  { key: 'false' as const, label: 'false' },
-  { key: 'inherit' as const, label: 'inherit' },
+  { label: 'true', value: 'true' as const },
+  { label: 'false', value: 'false' as const },
+  { label: 'inherit', value: 'inherit' as const },
 ];
 
 interface FlagRowProps {
@@ -93,11 +96,12 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
         </Text>
         <span className={styles.meta}>server: {String(original)}</span>
       </Flexbox>
-      <Tabs
-        activeKey={value}
-        items={segmentOptions}
+      <Segmented
+        className={styles.control}
+        options={segmentOptions}
         size={'small'}
-        onChange={(key) => handleChange(key as SegmentedValue)}
+        value={value}
+        onChange={handleChange}
       />
     </div>
   );

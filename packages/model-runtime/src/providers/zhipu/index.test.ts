@@ -439,10 +439,48 @@ describe('LobeZhipuAI - custom features', () => {
 
         expect(payload.tool_stream).toBe(expected);
       });
+
+      it('should allow compatible channels to disable tool_stream without disabling Zhipu payload handling', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [
+              { content: 'Hello', reasoning: { content: 'cached thought' }, role: 'user' },
+            ],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            stream: true,
+            temperature: 0.5,
+            thinking: { type: 'enabled' },
+          },
+          { disableToolStream: true },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+        expect(payload.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(payload.messages).toEqual([
+          { content: 'Hello', reasoning_content: 'cached thought', role: 'user' },
+        ]);
+      });
+
+      it('should suppress tool_stream for Fireworks-hosted GLM streams', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            stream: true,
+            temperature: 0.5,
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+      });
     });
 
     describe('GLM-5.2 optional params', () => {
-      it('should forward reasoning_effort with thinking enabled', () => {
+      it('should forward reasoning_effort with thinking enabled for Z.ai', () => {
         const payload = params.chatCompletion.handlePayload({
           max_tokens: 4096,
           messages: [{ content: 'Hello', role: 'user' }],
@@ -454,6 +492,56 @@ describe('LobeZhipuAI - custom features', () => {
 
         expect(payload.reasoning_effort).toBe('max');
         expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should omit thinking when Fireworks handles GLM-5.2 reasoning_effort', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'enabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.reasoning_history).toBe('preserved');
+      });
+
+      it('should omit reasoning_effort when Fireworks handles disabled thinking', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBeUndefined();
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should keep disabled thinking with reasoning_effort for Z.ai', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'disabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'disabled' });
       });
     });
 

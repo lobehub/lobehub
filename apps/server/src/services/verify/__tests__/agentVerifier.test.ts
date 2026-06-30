@@ -8,10 +8,17 @@ import { createVerifierAgentRunner } from '../agentVerifier';
 // AgentModel/ThreadModel expose their methods as arrow-function class fields
 // (instance props, not on the prototype), so they can't be spied via the
 // prototype — mock the modules instead. Hoisted so the factories can close over them.
-const { existsByIdMock, getBuiltinAgentMock, threadCreateMock, execAgentMock } = vi.hoisted(() => ({
+const {
+  existsByIdMock,
+  getBuiltinAgentMock,
+  threadCreateMock,
+  execAgentMock,
+  settleVerifierCheckFromTerminalMock,
+} = vi.hoisted(() => ({
   execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
   existsByIdMock: vi.fn(),
   getBuiltinAgentMock: vi.fn(),
+  settleVerifierCheckFromTerminalMock: vi.fn(),
   threadCreateMock: vi.fn(async () => ({ id: 'thread-1' })),
 }));
 
@@ -34,6 +41,9 @@ vi.mock('@/database/models/thread', () => ({
 // The runner dynamically imports AiAgentService to break a static cycle.
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({ execAgent: execAgentMock })),
+}));
+vi.mock('../verifierTerminal', () => ({
+  settleVerifierCheckFromTerminal: settleVerifierCheckFromTerminalMock,
 }));
 
 const checkItem: VerifyCheckItem = {
@@ -90,7 +100,7 @@ describe('createVerifierAgentRunner', () => {
     expect(params.additionalPluginIds).toEqual([VerifyToolIdentifier]);
   });
 
-  it('falls back to the builtin verify agent (by slug) inheriting parent model/provider', async () => {
+  it('falls back to the builtin verify agent (by slug) with the provided verify model config', async () => {
     existsByIdMock.mockResolvedValue(false); // pinned id no longer exists
     getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
 
@@ -105,6 +115,52 @@ describe('createVerifierAgentRunner', () => {
     expect(params.provider).toBe('openai');
     // The builtin verify agent already declares the tool — not re-injected.
     expect(params.additionalPluginIds).toBeUndefined();
+  });
+
+  it('registers a verifier-terminal hook for local and queued completion handling', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner({ ...baseParams, workspaceId: 'ws-1' })!;
+    await runner(runnerArgs);
+
+    const hooks = execParams().hooks;
+    expect(hooks).toEqual([
+      expect.objectContaining({
+        id: 'verify-agent-terminal',
+        type: 'onComplete',
+        webhook: expect.objectContaining({
+          body: {
+            checkItemId: 'check-1',
+            parentOperationId: 'parent-op-1',
+            userId: 'u',
+            workspaceId: 'ws-1',
+          },
+          delivery: 'qstash',
+          url: '/api/workflows/verify/on-verifier-complete',
+        }),
+      }),
+    ]);
+
+    await hooks[0].handler({
+      agentId: 'agent',
+      errorMessage: 'bad key',
+      operationId: 'verifier-op-1',
+      reason: 'error',
+      userId: 'u',
+    });
+
+    expect(settleVerifierCheckFromTerminalMock).toHaveBeenCalledWith(
+      db,
+      'u',
+      {
+        checkItemId: 'check-1',
+        errorMessage: 'bad key',
+        parentOperationId: 'parent-op-1',
+        reason: 'error',
+        verifierOperationId: 'verifier-op-1',
+      },
+      'ws-1',
+    );
   });
 
   it('uses the builtin agent when no verifierAgentId is pinned', async () => {

@@ -19,6 +19,7 @@ import { app, powerSaveBlocker } from 'electron';
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
+import { getDesktopUserAgent } from '@/utils/user-agent';
 
 import { ServiceModule } from './index';
 
@@ -331,6 +332,7 @@ export default class GatewayConnectionService extends ServiceModule {
       gatewayUrl,
       logger,
       token,
+      userAgent: getDesktopUserAgent(),
       userId: userId || undefined,
     });
 

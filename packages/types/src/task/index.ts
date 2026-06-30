@@ -256,6 +256,11 @@ export interface TaskDetailSubtaskAssignee {
   title: string | null;
 }
 
+export interface TaskDetailSubtaskRunningTopic {
+  id: string;
+  operationId?: string | null;
+}
+
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
   automationMode?: TaskAutomationMode | null;
@@ -265,6 +270,7 @@ export interface TaskDetailSubtask {
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
@@ -340,6 +346,12 @@ export interface TaskDetailActivity {
     threadId?: string | null;
   } | null;
   seq?: number | null;
+  /** Topic-only: task that owns this run when a parent detail includes descendant topics. */
+  sourceTaskId?: string | null;
+  /** Topic-only: display identifier of the task that owns this run, e.g. T-12. */
+  sourceTaskIdentifier?: string | null;
+  /** Topic-only: display name of the task that owns this run. */
+  sourceTaskName?: string | null;
   status?: string | null;
   summary?: string;
   taskId?: string | null;

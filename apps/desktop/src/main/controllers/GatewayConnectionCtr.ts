@@ -29,6 +29,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
@@ -292,6 +293,20 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { reason: 'Remote server URL not configured', status: 'rejected' };
       }
 
+      // Reuse this device's own logged-in session as the run identity. The
+      // access token is a full user OIDC token (7-day TTL, longer than any run),
+      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
+      // gives the spawned Claude Code's nested `lh` calls a real login state —
+      // unlike the narrow `hetero-operation` token, which only works for the
+      // ingest endpoints. We deliberately do NOT pass the refresh token to the
+      // CLI: the device stays the single refresher (refresh tokens rotate), and
+      // the 7-day access token outlives the run so no mid-run refresh is needed.
+      //
+      // Fall back to the dispatched `request.jwt` when the device has no access
+      // token (e.g. not logged in), preserving the prior behavior gracefully.
+      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
+      const jwt = accessToken || request.jwt;
+
       // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
       // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
       // Same command as spawnHeteroSandbox() on the server side.
@@ -300,7 +315,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         args: request.args,
         cwd: request.cwd,
         imageList: request.imageList,
-        jwt: request.jwt,
+        jwt,
         operationId: request.operationId,
         prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
@@ -1052,6 +1067,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         'Oidc-Auth': token,
       };
       if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+      setDesktopUserAgentHeader(headers);
 
       await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: body }),
@@ -1081,12 +1097,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
     ]);
     if (!serverUrl || !token) return;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
     await fetch(`${serverUrl}/trpc/lambda/device.register`, {
       body: JSON.stringify({ json: info }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      },
+      headers,
       method: 'POST',
     });
   }

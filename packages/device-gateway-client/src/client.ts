@@ -68,6 +68,7 @@ export interface GatewayClientOptions {
   serverUrl?: string;
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  userAgent?: string;
   userId?: string;
   /**
    * When set, the connection enrolls as a WORKSPACE-owned device: the gateway
@@ -92,6 +93,7 @@ export class GatewayClient extends EventEmitter {
   private gatewayUrl: string;
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  private userAgent?: string;
   private userId?: string;
   private workspaceId?: string;
   private serverUrl?: string;
@@ -102,6 +104,7 @@ export class GatewayClient extends EventEmitter {
     super();
     this.token = options.token;
     this.tokenType = options.tokenType;
+    this.userAgent = options.userAgent;
     this.gatewayUrl = options.gatewayUrl || DEFAULT_GATEWAY_URL;
     this.deviceId = options.deviceId || randomUUID();
     this.connectionId = options.connectionId || randomUUID();
@@ -220,7 +223,8 @@ export class GatewayClient extends EventEmitter {
       const wsUrl = this.buildWsUrl();
       this.logger.debug(`Connecting to: ${wsUrl}`);
 
-      const ws = new WebSocket(wsUrl);
+      const wsOptions = this.userAgent ? { headers: { 'User-Agent': this.userAgent } } : undefined;
+      const ws = new WebSocket(wsUrl, wsOptions);
 
       ws.on('open', this.handleOpen);
       ws.on('message', this.handleMessage);

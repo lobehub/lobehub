@@ -43,6 +43,7 @@ import type {
   HeterogeneousTerminalErrorData,
   StreamChunkData,
   SubagentEventContext,
+  SubagentSpawnMetadata,
   ToolCallPayload,
   ToolResultData,
   UsageData,
@@ -557,11 +558,32 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   /**
    * Set of parent tool_use ids whose spawn metadata has already been
    * announced on a subagent event. Guarantees `spawnMetadata` appears
-   * exactly once per subagent run — on the first subagent chunk for that
+   * exactly once per subagent run — on the first subagent event for that
    * parent — so the executor's lazy-create logic isn't tempted to
    * recreate the Thread on every chunk.
    */
   private announcedSpawns = new Set<string>();
+
+  /**
+   * Build the spawn metadata (`description` / `prompt` / `subagent_type`) for a
+   * subagent's parent tool_use from the cached Task/Agent input. Pure: it neither
+   * reads nor mutates {@link announcedSpawns} — the caller gates "exactly once"
+   * and only marks the parent announced when the metadata is actually attached to
+   * an EMITTED chunk (see `handleSubagentAssistant`). Returns undefined when the
+   * parent's args were never cached.
+   */
+  private buildSpawnMetadata(parentToolCallId: string): SubagentSpawnMetadata | undefined {
+    const args = this.mainToolInputsById.get(parentToolCallId);
+    if (!args) return undefined;
+    // CC's subagent-spawn tools (Task, Agent, ...) share the same input shape
+    // (`description`, `prompt`, `subagent_type`). Pull the fields defensively —
+    // any unknown spawn-tool variant matching this shape benefits automatically.
+    return {
+      description: typeof args.description === 'string' ? args.description : undefined,
+      prompt: typeof args.prompt === 'string' ? args.prompt : undefined,
+      subagentType: typeof args.subagent_type === 'string' ? args.subagent_type : undefined,
+    };
+  }
   /**
    * Tool name keyed by main-agent `tool_use.id`. Used to label the
    * resulting {@link ExternalSignalContext} when a Monitor-style task
@@ -943,9 +965,32 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (!Array.isArray(content)) return [];
 
     const messageId: string | undefined = raw.message?.id;
-    const subagentCtx = {
+    const baseCtx: SubagentEventContext = {
       parentToolCallId: parentToolUseId,
       subagentMessageId: messageId ?? '',
+    };
+
+    // Build spawn metadata once per parent and hand it to the FIRST chunk this
+    // event emits (reasoning, text, OR tool). The executor lazy-creates +
+    // titles the Thread off whichever subagent event it sees first, so a
+    // reasoning/text-first subagent must carry the metadata too — not just the
+    // tool path — or the Thread is born with the generic "Subagent" title.
+    //
+    // `announcedSpawns` is marked only when the metadata is ACTUALLY attached to
+    // an emitted chunk (inside `nextSubagentCtx`), not merely built here. A first
+    // event that emits nothing the reducer consumes (empty text/thinking block,
+    // an unsupported block, or a usage-only `content: []`) must NOT burn the
+    // one-shot — otherwise the next real chunk would create the Thread with the
+    // fallback title, the exact bug this guards against.
+    let pendingSpawnMetadata = this.announcedSpawns.has(parentToolUseId)
+      ? undefined
+      : this.buildSpawnMetadata(parentToolUseId);
+    const nextSubagentCtx = (): SubagentEventContext => {
+      if (!pendingSpawnMetadata) return baseCtx;
+      const ctx: SubagentEventContext = { ...baseCtx, spawnMetadata: pendingSpawnMetadata };
+      pendingSpawnMetadata = undefined;
+      this.announcedSpawns.add(parentToolUseId);
+      return ctx;
     };
 
     const textParts: string[] = [];
@@ -995,7 +1040,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeChunkEvent({
           chunkType: 'reasoning',
           reasoning: reasoningParts.join(''),
-          subagent: subagentCtx,
+          subagent: nextSubagentCtx(),
         }),
       );
     }
@@ -1004,11 +1049,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeChunkEvent({
           chunkType: 'text',
           content: textParts.join(''),
-          subagent: subagentCtx,
+          subagent: nextSubagentCtx(),
         }),
       );
     }
-    events.push(...this.emitToolChunk(newToolCalls, messageId, subagentCtx));
+    // Only consume the pending spawn metadata for the tool chunk when this
+    // event actually carries tools (else it would be lost on the no-op chunk).
+    events.push(
+      ...this.emitToolChunk(
+        newToolCalls,
+        messageId,
+        newToolCalls.length > 0 ? nextSubagentCtx() : baseCtx,
+      ),
+    );
 
     const usage = toUsageData(raw.message?.usage);
     if (usage) {
@@ -1017,7 +1070,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           model: raw.message?.model,
           phase: 'turn_metadata',
           provider: 'claude-code',
-          subagent: subagentCtx,
+          subagent: baseCtx,
           usage,
         }),
       );
@@ -1038,15 +1091,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * so an echoed tool_use does not re-open a closed lifecycle.
    *
    * When `subagentCtx` is provided, the chunk + each tool_start event
-   * gets the context stamped as a peer field. The FIRST chunk for a new
-   * parent (tracked via `announcedSpawns`) also carries `spawnMetadata`
-   * built from the cached Task args, so the executor can lazy-create
-   * the Thread without knowing about CC-specific argument shapes.
+   * gets the context stamped as a peer field — including any `spawnMetadata`
+   * the caller already attached (`handleSubagentAssistant` builds it once per
+   * parent and hands it to the first emitted chunk, tool or otherwise).
    */
   private emitToolChunk(
     newToolCalls: ToolCallPayload[],
     messageId: string | undefined,
-    subagentCtx?: { parentToolCallId: string; subagentMessageId: string },
+    subagentCtx?: SubagentEventContext,
   ): HeterogeneousAgentEvent[] {
     if (newToolCalls.length === 0) return [];
 
@@ -1057,30 +1109,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const cumulative = [...existing, ...freshTools];
     this.toolCallsByMessageId.set(msgKey, cumulative);
 
-    // Build the `subagent` peer field — stamped on the chunk + each
-    // tool_start. Only the first emission for a new parent carries
-    // spawnMetadata; subsequent ones carry just the lineage ids.
-    const subagent: SubagentEventContext | undefined = subagentCtx
-      ? {
-          parentToolCallId: subagentCtx.parentToolCallId,
-          subagentMessageId: subagentCtx.subagentMessageId,
-        }
-      : undefined;
-    if (subagent && !this.announcedSpawns.has(subagent.parentToolCallId)) {
-      const args = this.mainToolInputsById.get(subagent.parentToolCallId);
-      if (args) {
-        // CC's subagent-spawn tools (Task, Agent, ...) share the same
-        // input shape (`description`, `prompt`, `subagent_type`). We pull
-        // the fields defensively — any unknown spawn-tool variant that
-        // happens to match this shape benefits automatically.
-        subagent.spawnMetadata = {
-          description: typeof args.description === 'string' ? args.description : undefined,
-          prompt: typeof args.prompt === 'string' ? args.prompt : undefined,
-          subagentType: typeof args.subagent_type === 'string' ? args.subagent_type : undefined,
-        };
-      }
-      this.announcedSpawns.add(subagent.parentToolCallId);
-    }
+    // The `subagent` peer field — stamped on the chunk + each tool_start —
+    // is passed through verbatim (carrying `spawnMetadata` when the caller
+    // designated this the first emission for the parent).
+    const subagent: SubagentEventContext | undefined = subagentCtx;
 
     const chunkData: StreamChunkData = {
       chunkType: 'tools_calling',

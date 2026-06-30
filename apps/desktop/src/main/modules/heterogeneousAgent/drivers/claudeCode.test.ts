@@ -36,16 +36,16 @@ describe('claudeCodeDriver', () => {
     expect(args[idx + 1]).toBe('/tmp/lobe-cc-mcp-op-1.json');
   });
 
-  it('still pins --disallowedTools AskUserQuestion alongside --mcp-config', async () => {
+  it('still pins shared --disallowedTools alongside --mcp-config', async () => {
     // Even with our local MCP replacement available, CC's built-in stays
-    // disabled — leaving both visible would let the model double-register
-    // the same name and pick the broken one.
+    // disabled. Monitor/ScheduleWakeup stay disabled through the same shared
+    // base args because they can hit the stuck wakeup path in desktop mode.
     const { args } = await claudeCodeDriver.buildSpawnPlan(
       buildParams({ mcpConfigPath: '/tmp/x.json' }),
     );
     const disallowedIdx = args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion');
+    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
   });
 
   it('--mcp-config goes before --resume so user --args can still override the resume id', async () => {

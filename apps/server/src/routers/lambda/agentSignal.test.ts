@@ -5,12 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { type AuthContext } from '@/libs/trpc/lambda/context';
 import { createContextInner } from '@/libs/trpc/lambda/context';
+import { rollbackAgentSignalReceipt } from '@/server/services/agentSignal/services/receiptRollbackService';
 import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 
 import { agentSignalRouter } from './agentSignal';
 
+const mockServerDB = vi.hoisted(() => ({}));
+
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn().mockResolvedValue({}),
+  getServerDB: vi.fn().mockResolvedValue(mockServerDB),
 }));
 
 vi.mock('@/server/services/agentSignal', () => ({
@@ -41,6 +44,16 @@ vi.mock('@/server/services/agentSignal/services/receiptService', () => ({
   }),
 }));
 
+vi.mock('@/server/services/agentSignal/services/receiptRollbackService', () => ({
+  rollbackAgentSignalReceipt: vi.fn().mockResolvedValue({
+    agentDocumentId: 'adoc-1',
+    documentId: 'doc-1',
+    historyId: 'history-1',
+    receiptId: 'receipt-1',
+    status: 'rolled_back',
+  }),
+}));
+
 const createCaller = createCallerFactory(agentSignalRouter);
 
 describe('agentSignalRouter', () => {
@@ -49,7 +62,7 @@ describe('agentSignalRouter', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    ctx = await createContextInner({ userId: 'user-1' });
+    ctx = await createContextInner({ userId: 'user-1', workspaceId: 'workspace-1' });
     router = createCaller(ctx);
   });
 
@@ -112,5 +125,36 @@ describe('agentSignalRouter', () => {
       topicId: 'topic-1',
       userId: 'user-1',
     });
+  });
+
+  it('rolls back a receipt for the current user workspace', async () => {
+    await expect(
+      router.rollbackReceipt({
+        agentDocumentId: 'adoc-1',
+        documentId: 'doc-1',
+        historyId: 'history-1',
+        receiptId: 'receipt-1',
+      }),
+    ).resolves.toEqual({
+      agentDocumentId: 'adoc-1',
+      documentId: 'doc-1',
+      historyId: 'history-1',
+      receiptId: 'receipt-1',
+      status: 'rolled_back',
+    });
+
+    expect(rollbackAgentSignalReceipt).toHaveBeenCalledWith(
+      {
+        agentDocumentId: 'adoc-1',
+        documentId: 'doc-1',
+        historyId: 'history-1',
+        receiptId: 'receipt-1',
+      },
+      {
+        db: mockServerDB,
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      },
+    );
   });
 });

@@ -153,7 +153,15 @@ export const executeSkillManagementAction = async (
     }
 
     const sourceId = idempotencyKey ?? action.actionId;
-    const { messageId, topicId } = action.payload;
+    const { assistantMessageId, messageId, topicId } = action.payload;
+
+    // Anchor the skill seed under the completed assistant turn when the synthesis
+    // ran deferred at `agent.execution.completed` (skill delayed to turn
+    // completion so evidence carries the full trajectory); fall back to the user
+    // message for the legacy inbound dispatch. Anchoring to the assistant message
+    // keeps the seed inside the assistant group instead of surfacing as a
+    // floating `parent_id=null` mainline root.
+    const anchorMessageId = assistantMessageId ?? messageId;
 
     const prompt = buildSkillFeedbackPrompt({
       agentId,
@@ -172,7 +180,8 @@ export const executeSkillManagementAction = async (
       agentId,
       kind: 'skill',
       sourceId,
-      ...(messageId ? { anchorMessageId: messageId, triggerMessageId: messageId } : {}),
+      ...(anchorMessageId ? { anchorMessageId } : {}),
+      ...(messageId ? { triggerMessageId: messageId } : {}),
       ...(topicId ? { topicId } : {}),
     };
 
@@ -183,7 +192,7 @@ export const executeSkillManagementAction = async (
       marker,
       prompt,
       slug: BUILTIN_AGENT_SLUGS.skillManagement,
-      ...(messageId ? { sourceMessageId: messageId } : {}),
+      ...(anchorMessageId ? { sourceMessageId: anchorMessageId } : {}),
       threadTitle: 'Agent Signal Skill',
       ...(topicId ? { topicId } : {}),
       userId: options.userId,

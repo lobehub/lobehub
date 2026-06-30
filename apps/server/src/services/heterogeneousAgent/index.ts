@@ -1,5 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
@@ -9,9 +9,10 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
-import { dispatchTerminalHooks } from '@/server/services/agentRuntime/hooks';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
 import {
   HeterogeneousPersistenceHandler,
@@ -80,12 +81,12 @@ export interface HeterogeneousAgentServiceOptions {
 export class HeterogeneousAgentService {
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
-  private readonly operationModel: AgentOperationModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
@@ -95,8 +96,8 @@ export class HeterogeneousAgentService {
     this.db = db;
     this.userId = userId;
     const workspaceId = options.workspaceId;
+    this.workspaceId = workspaceId;
     this.messageModel = new MessageModel(db, userId, workspaceId);
-    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
     this.traceRecorder = new HeteroTraceRecorder(
@@ -237,70 +238,135 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }
 
-    // Read the final assistant content + owning agent so the bot-callback
-    // handler has lastAssistantContent to render and the event carries agentId.
+    // The owning agentId is authoritatively encoded in the operationId
+    // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
+    // agent), so derive it from there. Reading it back off the final assistant
+    // message is unreliable: the message pointer (heteroCurrentMsgId /
+    // runningOperation.assistantMessageId) is absent on single-step desktop
+    // runs, which dropped agentId and landed the trace snapshot under
+    // agent-traces/unknown/... and left terminal hooks without an agentId.
+    const agentId = parseOperationId(operationId)?.agentId;
+
+    // Still read the assistant message for its content so the bot-callback
+    // handler has lastAssistantContent to render.
     let lastAssistantContent: string | undefined;
-    let agentId: string | undefined;
     if (assistantMessageId) {
       try {
         const msg = await this.messageModel.findById(assistantMessageId);
         lastAssistantContent = msg?.content as string | undefined;
-        agentId = msg?.agentId ?? undefined;
       } catch (err) {
         log('heteroFinish: failed to read final assistant message (non-fatal): %O', err);
       }
     }
 
-    // Finalize the trace snapshot + write the operation's terminal state. Runs
-    // on the real terminal only (cancelled returned above), so a run gets one
-    // snapshot + one completion. Aggregates come from the accumulated steps;
-    // missing fields stay null (schema treats null as "not measured"). This
-    // makes the hetero run a verify/tracing peer of the built-in agent.
+    // Finalize the trace snapshot (uploads it; the terminal op row is written by
+    // CompletionLifecycle.persistCompletion below). Runs on the real terminal only
+    // (cancelled returned above). Aggregates come from the accumulated steps;
+    // missing fields stay null (schema treats null as "not measured"). Kept inside
+    // its own try so an upload hiccup never blocks the lifecycle dispatch — verify
+    // and hooks still fire, persistCompletion just records null aggregates.
     // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
     const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
+    let totals: Awaited<ReturnType<HeteroTraceRecorder['finalize']>> | undefined;
     try {
-      const totals = await this.traceRecorder.finalize(operationId, {
+      totals = await this.traceRecorder.finalize(operationId, {
         agentId,
         completionReason,
         error,
         topicId,
         userId: this.userId,
       });
-      await this.operationModel.recordCompletion(operationId, {
-        completedAt: new Date(),
-        completionReason,
-        error: error ?? null,
-        llmCalls: totals?.llmCalls ?? null,
-        // Backfill the real executed model/provider resolved from the CLI stream
-        // (recordStart could only seed provider=heteroType + model=null at
-        // dispatch). Spread conditionally so a run without a model event keeps the
-        // seeded values instead of getting clobbered back to null.
-        ...(totals?.model ? { model: totals.model } : {}),
-        ...(totals?.provider ? { provider: totals.provider } : {}),
-        status: completionReason,
-        stepCount: totals?.stepCount ?? null,
-        toolCalls: totals?.toolCalls ?? null,
-        totalCost: totals?.totalCost ?? null,
-        totalInputTokens: totals?.totalInputTokens ?? null,
-        totalOutputTokens: totals?.totalOutputTokens ?? null,
-        totalTokens: totals?.totalTokens ?? null,
-        traceS3Key: totals?.traceS3Key ?? null,
-      });
     } catch (err) {
-      log('heteroFinish: recordCompletion/finalize failed (non-fatal): %O', err);
+      log('heteroFinish: trace finalize failed (non-fatal): %O', err);
     }
 
-    await dispatchTerminalHooks({
-      agentId,
-      ...(error ? { errorMessage: error.message, errorType: error.type } : {}),
-      lastAssistantContent,
+    let goalContent: unknown = '';
+    if (completionReason === 'done') {
+      // Guarantee the task's verify plan is DURABLY persisted before the gate
+      // (dispatchHooks → runVerifyOnCompletion) reads it. The start-side
+      // instantiation in execAgent is fire-and-forget on a SEPARATE
+      // CompletionLifecycle instance, so its in-memory await (the homogeneous
+      // race guard) can't bridge to this finish — a different request/process.
+      // A fast hetero run could otherwise reach the gate before the plan lands
+      // and silently skip verify. instantiateVerifyPlanOnStart is idempotent
+      // (skips when a plan exists; verify_runs is unique on operationId), so
+      // awaiting it here creates the plan only when the start side hasn't yet,
+      // and is a no-op once it has. This is the durable handle the gate waits on.
+      try {
+        const op = await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          operationId,
+        );
+        if (op?.taskId && !op.parentOperationId) {
+          await instantiateVerifyPlanOnStart(
+            this.db,
+            this.userId,
+            { operationId, taskId: op.taskId },
+            this.workspaceId,
+          );
+        }
+      } catch (err) {
+        log('heteroFinish: ensure verify plan failed (non-fatal): %O', err);
+      }
+
+      // Resolve the run goal (the task the run had to satisfy) for the delivery
+      // checker. `messages.find(role==='user')` mirrors the in-process runtime's
+      // goal extraction; pass the raw content through and let dispatchHooks
+      // extract text.
+      try {
+        const history = await this.messageModel.query({ pageSize: 50, topicId });
+        goalContent = history.find((m) => m.role === 'user')?.content ?? '';
+      } catch (err) {
+        log('heteroFinish: failed to resolve verify goal (non-fatal): %O', err);
+      }
+    }
+
+    // Route the terminal transition through CompletionLifecycle — the SAME owner
+    // the in-process runtime uses — instead of the stripped-down dispatchTerminalHooks.
+    // This is what makes the hetero run a true lifecycle peer: persistCompletion
+    // writes the terminal op row (model/provider backfilled from the CLI stream via
+    // `state.model/provider`), onComplete/onError hooks fire through hookDispatcher,
+    // and on success the delivery-checker card + verify gate run against the task's
+    // plan. We synthesize the runtime `state` shape CompletionLifecycle reads:
+    // metadata (agentId/topicId/userId/assistantMessageId/_hooks), the goal+reply
+    // messages, and the trace aggregates mapped into usage/cost.
+    const syntheticState = {
+      cost: { total: totals?.totalCost ?? null },
+      error: error ?? undefined,
+      messages: [
+        { content: goalContent, role: 'user' },
+        { content: lastAssistantContent ?? '', role: 'assistant' },
+      ],
+      metadata: {
+        _hooks: serializedHooks,
+        agentId,
+        assistantMessageId,
+        topicId,
+        userId: this.userId,
+      },
+      // Backfilled executed model/provider — persistCompletion writes these and the
+      // verify gate (lifecycle.ts) bails when op.model/provider are absent.
+      model: totals?.model,
+      provider: totals?.provider,
+      stepCount: totals?.stepCount ?? null,
+      usage: {
+        llm: {
+          apiCalls: totals?.llmCalls ?? null,
+          tokens: {
+            input: totals?.totalInputTokens ?? null,
+            output: totals?.totalOutputTokens ?? null,
+            total: totals?.totalTokens ?? null,
+          },
+        },
+        tools: { totalCalls: totals?.toolCalls ?? null },
+      },
+    };
+
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).dispatchHooks(
       operationId,
-      reason: result === 'success' ? 'done' : 'error',
-      serializedHooks,
-      topicId,
-      userId: this.userId,
-    });
-    log('heteroFinish: dispatched terminal hooks for op=%s result=%s', operationId, result);
+      syntheticState,
+      completionReason,
+    );
+    log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
   }
 
   /**

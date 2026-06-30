@@ -62,6 +62,7 @@ export interface ExecuteVerifyParams {
 
 const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
   verdict === 'passed' ? 'passed' : 'failed';
+const terminalResultStatuses = new Set<VerifyCheckResultStatus>(['passed', 'failed', 'skipped']);
 
 /** Group a run's evidence rows by the plan item they back, for judge injection. */
 type EvidenceByItem = Map<string, JudgeEvidence[]>;
@@ -263,10 +264,26 @@ export class VerifyExecutorService {
         goal: params.goal,
         operationId: params.operationId,
       });
+
+      if (!spawned?.verifierOperationId) {
+        await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+          completedAt: new Date(),
+          status: 'failed',
+          toulmin: { limitation: 'Agent verifier failed to start.' },
+          verdict: 'uncertain',
+        });
+        return;
+      }
+
+      const current = (await this.resultModel.listByRun(verifyRunId)).find(
+        (result) => result.checkItemId === item.id,
+      );
+      if (current && terminalResultStatuses.has(current.status)) return;
+
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         startedAt: new Date(),
         status: 'running',
-        verifierOperationId: spawned?.verifierOperationId ?? null,
+        verifierOperationId: spawned.verifierOperationId,
       });
     } catch (error) {
       log('agent verifier spawn failed for item %s: %O', item.id, error);

@@ -13,6 +13,59 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      "GLM-5.2 is Z.ai's latest flagship model designed for long-horizon task scenarios, offering significant improvements in long-horizon task capabilities compared to GLM-5.1. This 753B MoE model supports a stable 1M-token context window, features stronger programming capabilities, and supports multiple thinking effort levels for a flexible balance between performance and latency.",
+    displayName: 'GLM-5.2',
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'zai-org/GLM-5.2',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-17',
+    settings: {
+      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.7 Code is an agentic model designed for code tasks from Moonshot AI. Built on Kimi K2.6, it shows significant improvements in real-world long-horizon coding tasks, enhancing end-to-end task completion capabilities in complex software engineering workflows while reducing thinking token usage by about 30% compared to Kimi K2.6.',
+    displayName: 'Kimi-K2.7-Code',
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'moonshotai/Kimi-K2.7-Code',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-12',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       'DeepSeek-V4-Pro is the flagship MoE language model in the DeepSeek-V4 series, with 1.6T total parameters and 49B active parameters, natively supporting an ultra-long context of 1 million tokens. The model adopts an innovative hybrid attention architecture combining Compressed Sparse Attention (CSA) and Highly Compressed Attention (HCA), requiring only 27% of DeepSeek-V3.2 per-token inference FLOPs and 10% KV cache at 1M context. It also introduces Manifold-Constrained Hyper Connections (mHC) to enhance inter-layer signal propagation stability, and employs the Muon optimizer to accelerate convergence. DeepSeek-V4-Pro is pretrained on over 32T high-quality diverse tokens, with post-training using a two-stage paradigm of independent domain expert cultivation plus online policy distillation for unified integration. Its maximum reasoning intensity mode DeepSeek-V4-Pro-Max achieves top performance on coding benchmarks and significantly narrows the gap with leading closed-source models on reasoning and agentic tasks, making it one of the strongest open-source models today, supporting Non-think, Think High, and Think Max reasoning intensity modes.',
     displayName: 'DeepSeek V4 Pro',
     enabled: true,
@@ -30,7 +83,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -58,7 +111,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },

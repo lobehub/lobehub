@@ -45,6 +45,13 @@ const useMatchedRouteMeta = (): MatchedRouteMeta | null => {
 
 type Translate = (key: string) => string;
 
+const translateTitleKey = (titleKey: string | undefined, translate: Translate) => {
+  if (!titleKey) return '';
+
+  const title = translate(titleKey);
+  return title === titleKey ? '' : title;
+};
+
 const RouteMetaBridge = memo(() => {
   const { t } = useTranslation('electron');
   const location = useLocation();
@@ -77,7 +84,7 @@ const RouteMetaBridge = memo(() => {
   // Keep the previously resolved meta while navigating within the same route family
   // (e.g. switching topics) so the title doesn't briefly fall back to the static label.
   const currentDynamic = matched && dynamic.routeId === matched.routeId ? dynamic.meta : {};
-  const title = matched ? currentDynamic.title || (titleKey ? translate(titleKey) : '') : '';
+  const title = matched ? currentDynamic.title || translateTitleKey(titleKey, translate) : '';
 
   useEffect(() => {
     if (DynamicMeta) return;

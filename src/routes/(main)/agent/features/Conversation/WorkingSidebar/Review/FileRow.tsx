@@ -15,6 +15,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        implementation. */
     content-visibility: auto;
     contain-intrinsic-size: auto 32px;
+    flex: none;
 
     /* Every row carries its own top border — separates file-from-file AND
        file-from-header without doubling up when a group is collapsed. */

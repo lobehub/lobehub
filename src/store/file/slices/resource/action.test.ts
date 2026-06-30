@@ -99,4 +99,43 @@ describe('resource actions', () => {
     expect(resourceList).toEqual([]);
     expect(resourceMap.has(rootResource.id)).toBe(false);
   });
+
+  it('should patch a file-backed document resource with statuses returned by file id', () => {
+    const resource = createResource({
+      chunkCount: null,
+      fileId: 'file-1',
+      id: 'docs-1',
+    });
+
+    useFileStore.setState({
+      resourceList: [resource],
+      resourceMap: new Map([[resource.id, resource]]),
+    });
+
+    useFileStore.getState().patchLocalResourceStatuses([
+      {
+        chunkCount: 10,
+        chunkingError: null,
+        chunkingStatus: 'success',
+        embeddingError: null,
+        embeddingStatus: 'success',
+        finishEmbedding: true,
+        id: 'file-1',
+      },
+    ]);
+
+    const { resourceList, resourceMap } = useFileStore.getState();
+
+    expect(resourceList[0]).toMatchObject({
+      chunkCount: 10,
+      chunkingStatus: 'success',
+      embeddingStatus: 'success',
+      finishEmbedding: true,
+      id: 'docs-1',
+    });
+    expect(resourceMap.get('docs-1')).toMatchObject({
+      chunkCount: 10,
+      embeddingStatus: 'success',
+    });
+  });
 });

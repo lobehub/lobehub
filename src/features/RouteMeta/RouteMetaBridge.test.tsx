@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
+    echoTranslationKeys: false,
     getSnapshot: () => store.matches,
     setCurrentRouteMeta: vi.fn(),
     setMatches: store.setMatches,
@@ -65,7 +66,9 @@ vi.mock('@/store/electron', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
+  useTranslation: () => ({
+    t: (key: string) => (mocks.echoTranslationKeys ? key : `translated:${key}`),
+  }),
 }));
 
 vi.mock('react-router', async () => {
@@ -90,6 +93,7 @@ describe('RouteMetaBridge', () => {
   afterEach(() => {
     cleanup();
     document.title = '';
+    mocks.echoTranslationKeys = false;
     mocks.setMatches([]);
     mocks.setCurrentRouteMeta.mockReset();
   });
@@ -243,6 +247,30 @@ describe('RouteMetaBridge', () => {
     await waitFor(() => {
       expect(document.title).toBe(`translated:navigation.settings · ${BRANDING_NAME}`);
       expect(mocks.setCurrentRouteMeta).toHaveBeenLastCalledWith({}, '/settings');
+    });
+  });
+
+  it('does not write raw translation keys into document title while route labels are unresolved', async () => {
+    mocks.echoTranslationKeys = true;
+    mocks.setMatches([
+      {
+        data: undefined,
+        handle: {
+          meta: {
+            DynamicMeta: createDynamicMeta(() => ({})),
+            titleKey: 'navigation.home',
+          },
+        },
+        id: 'routes/workspace-home',
+        params: { workspaceSlug: 'acme' },
+        pathname: '/acme',
+      },
+    ]);
+
+    render(<RouteMetaBridge />);
+
+    await waitFor(() => {
+      expect(document.title).toBe(BRANDING_NAME);
     });
   });
 });

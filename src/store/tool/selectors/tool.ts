@@ -134,9 +134,9 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
     .filter((tool) => !builtinSkillIds.has(tool.identifier))
     .filter((tool) => isToolAvailableInCurrentEnv(tool.identifier))
     .map((tool) => ({
-      description: tool.manifest.meta?.description || '',
+      description: tool.description || '',
       identifier: tool.identifier,
-      name: tool.manifest.meta?.title || tool.identifier,
+      name: tool.title || tool.identifier,
     }));
 
   // 2. User-installed plugins — directly from s.installedPlugins

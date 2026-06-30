@@ -1,15 +1,6 @@
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Accordion, AccordionItem, Text } from '@lobehub/ui';
 import { type Key, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const styles = createStaticStyles(({ css }) => ({
-  duration: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
 
 const PROCESS_KEY = 'process';
 
@@ -20,6 +11,8 @@ interface ProcessFoldProps {
   defaultExpanded?: boolean;
   /** Formatted turn duration, e.g. "3m 37s". Hidden when absent. */
   durationText?: string;
+  /** Number of steps in the turn = count of assistant (call_llm) messages. */
+  stepCount: number;
 }
 
 /**
@@ -31,16 +24,17 @@ interface ProcessFoldProps {
  * affordance — never persisted.
  */
 const ProcessFold = memo<ProcessFoldProps>(
-  ({ children, durationText, defaultExpanded = false }) => {
+  ({ children, durationText, stepCount, defaultExpanded = false }) => {
     const { t } = useTranslation('chat');
     const [expanded, setExpanded] = useState(defaultExpanded);
     const expandedKeys = useMemo(() => (expanded ? [PROCESS_KEY] : []), [expanded]);
 
     const title = (
-      <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-        <Text type={'secondary'}>{t('turnProcess.done')}</Text>
-        {durationText && <span className={styles.duration}>{durationText}</span>}
-      </Flexbox>
+      <Text style={{ minWidth: 0 }} type={'secondary'}>
+        {durationText
+          ? t('turnProcess.ranFor', { count: stepCount, duration: durationText })
+          : t('turnProcess.done', { count: stepCount })}
+      </Text>
     );
 
     return (

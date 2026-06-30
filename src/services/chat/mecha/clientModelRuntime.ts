@@ -41,5 +41,6 @@ export const initializeWithClientStore = ({
     ...commonOptions,
     ...providerAuthPayload,
     ...payload,
+    providerId: provider,
   });
 };

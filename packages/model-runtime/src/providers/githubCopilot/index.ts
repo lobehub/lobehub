@@ -276,12 +276,13 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           max_tokens,
           verbosity,
           preserveThinking: _pt,
+          frequency_penalty,
+          presence_penalty,
+          top_p,
+          temperature,
+          apiMode,
           ...responseRest
         } = rest as any;
-
-        delete responseRest.apiMode;
-        delete responseRest.frequency_penalty;
-        delete responseRest.presence_penalty;
 
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: true,

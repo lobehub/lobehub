@@ -6,6 +6,8 @@ import useSWR from 'swr';
 import { toolKeys } from '@/libs/swr/keys';
 import { toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -289,8 +291,10 @@ export class LobehubSkillStoreActionImpl {
   };
 
   useFetchLobehubSkillConnections = (enabled: boolean): SWRResponse<LobehubSkillServer[]> => {
+    const isSignedIn = useUserStore(authSelectors.isLogin);
+
     return useSWR<LobehubSkillServer[]>(
-      enabled ? toolKeys.lobehubSkillConnections() : null,
+      enabled && isSignedIn ? toolKeys.lobehubSkillConnections() : null,
       async () => {
         const response = await toolsClient.market.connectListConnections.query();
 

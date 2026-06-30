@@ -1,5 +1,15 @@
 [
   {
+    "children": {
+      "fixes": [
+        "drop legacy task template recommendations.",
+        "drop legacy task template recommendations."
+      ]
+    },
+    "date": "2026-06-22",
+    "version": "2.2.8"
+  },
+  {
     "children": {},
     "date": "2026-06-20",
     "version": "2.2.7"

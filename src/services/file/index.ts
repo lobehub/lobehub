@@ -92,6 +92,7 @@ export class FileService {
         editorData: doc.editorData,
         embeddingError: null,
         embeddingStatus: null,
+        fileId: doc.fileId,
         fileType: doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
         finishEmbedding: false,
         id: doc.id,

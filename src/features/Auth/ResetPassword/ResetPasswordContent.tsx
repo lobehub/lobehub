@@ -44,6 +44,7 @@ export const ResetPasswordContent = ({
         ]}
       >
         <InputPassword
+          autoComplete="new-password"
           placeholder={t('betterAuth.resetPassword.newPasswordPlaceholder')}
           size="large"
           prefix={
@@ -70,6 +71,7 @@ export const ResetPasswordContent = ({
         ]}
       >
         <InputPassword
+          autoComplete="new-password"
           placeholder={t('betterAuth.resetPassword.confirmPasswordPlaceholder')}
           size="large"
           prefix={

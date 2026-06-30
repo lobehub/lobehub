@@ -571,6 +571,27 @@ export function registerVerifyCommand(program: Command) {
       console.log(JSON.stringify(item, null, 2));
     });
 
+  run
+    .command('delete <runId>')
+    .description('Delete a verification session (cascades its results, evidence and report)')
+    .option('-y, --yes', 'Skip the confirmation prompt')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (runId: string, options: { json?: boolean | string; yes?: boolean }) => {
+      const client = await getTrpcClient();
+      if (!options.yes) {
+        const ok = await confirm(
+          `Delete run ${pc.bold(runId)} and all its results, evidence and report? This cannot be undone.`,
+        );
+        if (!ok) return void console.log('Aborted.');
+      }
+      const result = await client.verify.deleteRun.mutate({ verifyRunId: runId });
+      if (options.json !== undefined) {
+        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      console.log(`${pc.green('✓')} Deleted run ${pc.bold(result.id)}`);
+    });
+
   // ════════════ result (check result entity) ════════════
   const result = verify.command('result').description('Check results (verify_check_results)');
 

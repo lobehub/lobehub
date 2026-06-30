@@ -15,16 +15,8 @@ const AddButton = memo(() => {
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   // Create menu items
-  const {
-    createAgentMenuItem,
-    createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPageMenuItem,
-    createPlatformAgentMenuItem,
-    openCreateModal,
-    isMutatingAgent,
-    isCreatingGroup,
-  } = useCreateMenuItems();
+  const { createTopLevelMenuItems, openCreateModal, isMutatingAgent, isCreatingGroup } =
+    useCreateMenuItems();
 
   const handleMainIconClick = useCallback(
     (e: React.MouseEvent) => {
@@ -36,26 +28,7 @@ const AddButton = memo(() => {
     [canCreate, openCreateModal],
   );
 
-  const dropdownItems = useMemo(() => {
-    const heterogeneousItems = createHeterogeneousAgentMenuItems();
-    const platformItem = createPlatformAgentMenuItem();
-
-    return [
-      createAgentMenuItem(),
-      createGroupChatMenuItem(),
-      createPageMenuItem(),
-      ...(heterogeneousItems.length > 0
-        ? [{ type: 'divider' as const }, ...heterogeneousItems]
-        : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
-    ];
-  }, [
-    createAgentMenuItem,
-    createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPageMenuItem,
-    createPlatformAgentMenuItem,
-  ]);
+  const dropdownItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
   // When viewer (no create_content): keep the icons visible per UX rule
   // (disabled-not-hidden), but the click handler short-circuits and the

@@ -313,9 +313,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     ? t('connector.add.editTitle', 'Edit Connector')
     : t('connector.add.title', 'Add custom connector');
 
-  const okText = isEditMode
-    ? t('connector.add.update', 'Save')
-    : t('connector.add.confirm', 'Add');
+  const okText = isEditMode ? t('connector.add.update', 'Save') : t('connector.add.confirm', 'Add');
 
   return (
     <Modal
@@ -374,6 +372,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
                 onChange={(e) => setClientId(e.target.value)}
               />
               <Input.Password
+                autoComplete="new-password"
                 placeholder={t('connector.add.clientSecret', 'OAuth Client Secret (optional)')}
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}

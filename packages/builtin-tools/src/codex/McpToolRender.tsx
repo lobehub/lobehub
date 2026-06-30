@@ -1,7 +1,7 @@
 'use client';
 
 import { LINEAR_TOOL_NAMES } from '@lobechat/shared-tool-ui/inspectors';
-import { LinearRender } from '@lobechat/shared-tool-ui/renders';
+import { GitHubRender, LinearRender } from '@lobechat/shared-tool-ui/renders';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -13,6 +13,7 @@ import type { CodexMcpToolArgs, CodexMcpToolState } from './mcpToolUtils';
 import {
   formatMcpInput,
   formatMcpOutput,
+  getCodexGithubMcpApiName,
   getCodexLinearMcpApiName,
   getMcpErrorText,
   getMcpInput,
@@ -34,6 +35,9 @@ const LINEAR_TOOL_NAME_SET = new Set<string>([...LINEAR_TOOL_NAMES, 'fetch', 'se
 const SharedLinearRender = LinearRender as ComponentType<
   BuiltinRenderProps<Record<string, unknown>, unknown, string>
 >;
+const SharedGitHubRender = GitHubRender as ComponentType<
+  BuiltinRenderProps<Record<string, unknown>, unknown, string>
+>;
 
 const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolState, string>>(
   ({ args, content, messageId, pluginState, toolCallId }) => {
@@ -48,11 +52,30 @@ const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolStat
       server,
       toolName,
     });
+    const githubApiName = getCodexGithubMcpApiName({
+      server,
+      toolName,
+    });
 
     if (LINEAR_TOOL_NAME_SET.has(linearApiName)) {
       return (
         <SharedLinearRender
           apiName={linearApiName}
+          args={inputRecord || {}}
+          content={resultText}
+          identifier={'codex'}
+          messageId={messageId}
+          pluginError={error}
+          pluginState={pluginState}
+          toolCallId={toolCallId}
+        />
+      );
+    }
+
+    if (githubApiName) {
+      return (
+        <SharedGitHubRender
+          apiName={githubApiName}
           args={inputRecord || {}}
           content={resultText}
           identifier={'codex'}

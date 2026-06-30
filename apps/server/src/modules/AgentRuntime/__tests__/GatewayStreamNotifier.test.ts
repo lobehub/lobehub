@@ -493,4 +493,124 @@ describe('GatewayStreamNotifier', () => {
       );
     });
   });
+
+  // ─── Single-connection multiplexing: mirror member events to supervisor op ───
+
+  describe('mirrorToOperationId (single-connection multiplexing)', () => {
+    const pushEventCalls = () =>
+      mockFetch.mock.calls
+        .filter(([url]) => String(url).endsWith('/api/operations/push-event'))
+        .map(([, init]) => JSON.parse((init as { body: string }).body));
+
+    it('mirrors a member op stream event to the supervisor channel, keeping the event operationId', async () => {
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishStreamChunk('op-member', 0, {
+        chunkType: 'text',
+        content: 'hi',
+      } as StreamChunkData);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushes = pushEventCalls().filter((b) => b.event?.type === 'stream_chunk');
+      // Delivered to BOTH the member channel and the supervisor channel.
+      expect(pushes.map((p) => p.operationId).sort()).toEqual(['op-member', 'op-supervisor']);
+      // Event payload keeps the member operationId so the client demuxes correctly.
+      for (const p of pushes) expect(p.event.operationId).toBe('op-member');
+    });
+
+    it('does not mirror when no mirrorToOperationId was registered', async () => {
+      await notifier.publishAgentRuntimeInit('op-solo', { userId: 'u1' });
+
+      await notifier.publishStreamChunk('op-solo', 0, {
+        chunkType: 'text',
+        content: 'hi',
+      } as StreamChunkData);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushes = pushEventCalls().filter((b) => b.event?.type === 'stream_chunk');
+      expect(pushes.map((p) => p.operationId)).toEqual(['op-solo']);
+    });
+
+    it('ignores a self-referential mirror target', async () => {
+      await notifier.publishAgentRuntimeInit('op-x', { mirrorToOperationId: 'op-x' });
+
+      await notifier.publishStreamChunk('op-x', 0, {
+        chunkType: 'text',
+        content: 'hi',
+      } as StreamChunkData);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushes = pushEventCalls().filter((b) => b.event?.type === 'stream_chunk');
+      expect(pushes.map((p) => p.operationId)).toEqual(['op-x']);
+    });
+
+    it('queue worker path: lazily resolves the mirror target from persisted metadata', async () => {
+      // Worker notifier never ran init for this op, so its in-process map is empty.
+      const resolve = vi.fn(async (op: string) =>
+        op === 'op-member-q' ? 'op-supervisor-q' : undefined,
+      );
+      const workerNotifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken, resolve);
+
+      await workerNotifier.publishStreamChunk('op-member-q', 0, {
+        chunkType: 'text',
+        content: 'streamed-by-worker',
+      } as StreamChunkData);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushes = pushEventCalls().filter(
+        (b) => b.event?.data?.content === 'streamed-by-worker',
+      );
+      expect(pushes.map((p) => p.operationId).sort()).toEqual(['op-member-q', 'op-supervisor-q']);
+
+      // Resolution is cached: a second event does not re-read metadata.
+      await workerNotifier.publishStreamChunk('op-member-q', 1, {
+        chunkType: 'text',
+        content: 'second',
+      } as StreamChunkData);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('queue worker path: an op with no persisted mirror target is not mirrored', async () => {
+      const resolve = vi.fn(async () => undefined);
+      const workerNotifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken, resolve);
+
+      await workerNotifier.publishStreamChunk('op-plain', 0, {
+        chunkType: 'text',
+        content: 'plain',
+      } as StreamChunkData);
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushes = pushEventCalls().filter((b) => b.event?.data?.content === 'plain');
+      expect(pushes.map((p) => p.operationId)).toEqual(['op-plain']);
+    });
+
+    it('stops mirroring after the member op reaches a terminal state', async () => {
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'completed',
+        stepIndex: 1,
+      });
+
+      // A late event after terminal must not mirror anymore.
+      await notifier.publishStreamChunk('op-member', 2, {
+        chunkType: 'text',
+        content: 'late',
+      } as StreamChunkData);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const lateChunk = pushEventCalls().filter(
+        (b) => b.event?.type === 'stream_chunk' && b.event?.data?.content === 'late',
+      );
+      expect(lateChunk.map((p) => p.operationId)).toEqual(['op-member']);
+    });
+  });
 });

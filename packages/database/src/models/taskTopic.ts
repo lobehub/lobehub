@@ -1,5 +1,5 @@
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
-import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
@@ -195,6 +195,22 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
+  async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(taskTopics.seq));
+  }
+
   async findWithDetails(taskId: string) {
     return this.db
       .select({
@@ -222,6 +238,10 @@ export class TaskTopicModel {
   async findWithHandoff(taskId: string, limit: number) {
     return this.db
       .select({
+        // The agent that actually ran this topic — used so each activity row
+        // keeps its own avatar instead of inheriting the task's *current*
+        // assignee (which changes when the task is reassigned).
+        agentId: topics.agentId,
         completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
@@ -236,6 +256,37 @@ export class TaskTopicModel {
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
       .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq))
+      .limit(limit);
+  }
+
+  async findWithHandoffByTaskIds(taskIds: string[], limit: number) {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select({
+        // The agent that actually ran this topic — used so each activity row
+        // keeps its own avatar instead of inheriting the task's *current*
+        // assignee (which changes when the task is reassigned).
+        agentId: topics.agentId,
+        completedAt: topics.completedAt,
+        createdAt: taskTopics.createdAt,
+        handoff: taskTopics.handoff,
+        metadata: topics.metadata,
+        operationId: taskTopics.operationId,
+        seq: taskTopics.seq,
+        sourceTaskAssigneeAgentId: tasks.assigneeAgentId,
+        sourceTaskId: tasks.id,
+        sourceTaskIdentifier: tasks.identifier,
+        sourceTaskName: tasks.name,
+        status: taskTopics.status,
+        title: topics.title,
+        topicId: taskTopics.topicId,
+      })
+      .from(taskTopics)
+      .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()))
+      .orderBy(desc(taskTopics.createdAt), desc(taskTopics.seq))
       .limit(limit);
   }
 

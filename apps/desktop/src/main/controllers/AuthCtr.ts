@@ -13,6 +13,7 @@ import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -370,6 +371,7 @@ export default class AuthCtr extends ControllerModule {
       // Use Electron net.fetch to respect system CA store (self-signed/private CA certs)
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       appendVercelCookie(headers);
+      setDesktopUserAgentHeader(headers);
       const response = await netFetch(url.toString(), { headers, method: 'GET' });
 
       // Check response status
@@ -488,6 +490,7 @@ export default class AuthCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(tokenHeaders);
+      setDesktopUserAgentHeader(tokenHeaders);
       const response = await netFetch(tokenUrl.toString(), {
         body,
         headers: tokenHeaders,
