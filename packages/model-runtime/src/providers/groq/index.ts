@@ -2,7 +2,10 @@ import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import {
+  createOpenAICompatibleRuntime,
+  transformResponseToStream,
+} from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
 import { AgentRuntimeErrorType } from '../../types/error';
 
@@ -133,6 +136,15 @@ export const params = {
         stream: payload.stream ?? true,
         temperature: resolvedTemp,
       } as any;
+    },
+    handleTransformResponseToStream: (data) => {
+      const choices = data.choices || [];
+      for (const choice of choices) {
+        if (choice.message && 'reasoning' in choice.message) {
+          (choice.message as any).reasoning_content = (choice.message as any).reasoning;
+        }
+      }
+      return transformResponseToStream(data);
     },
   },
   debug: {

@@ -34,7 +34,6 @@ const cerebrasModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'GPT OSS 120B',
-    enabled: true,
     family: 'gpt-oss',
     generation: 'gpt-oss',
     id: 'gpt-oss-120b',

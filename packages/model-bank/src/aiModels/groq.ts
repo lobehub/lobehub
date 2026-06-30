@@ -32,6 +32,7 @@ const groqChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.6 27B is an open-source dense model with strong performance in reasoning, coding, and general capabilities. It supports thinking mode by default, offering balanced performance and efficiency.',
     displayName: 'Qwen3.6 27B',
+    enabled: true,
     family: 'qwen',
     generation: 'qwen3.6',
     id: 'qwen/qwen3.6-27b',
@@ -103,7 +104,6 @@ const groqChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     displayName: 'Llama 4 Scout (17Bx16E)',
-    enabled: true,
     family: 'llama',
     generation: 'llama-4',
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',

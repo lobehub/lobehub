@@ -4,6 +4,7 @@ const longcatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 1_048_576,
     description:

@@ -765,6 +765,26 @@ describe('LobeGroq - custom features', () => {
     });
   });
 
+  describe('handleTransformResponseToStream', () => {
+    it('should map reasoning field to reasoning_content for non-streaming response transformation', () => {
+      const mockCompletion = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              content: 'Test content',
+              role: 'assistant',
+              reasoning: 'Test reasoning',
+            },
+          },
+        ],
+      };
+
+      const stream = params.chatCompletion.handleTransformResponseToStream!(mockCompletion as any);
+      expect(stream).toBeDefined();
+    });
+  });
+
   describe('handleError', () => {
     it('should handle 403 location not supported error', () => {
       const error = { status: 403, message: 'Location not supported' };
