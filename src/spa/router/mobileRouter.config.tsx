@@ -438,6 +438,13 @@ export const mobileRoutes: RouteObject[] = [
                 ),
                 path: 'usage',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/audit-log'),
+                  'Mobile > Workspace > Settings > Audit Log',
+                ),
+                path: 'audit-log',
+              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(mobile)/settings/_layout'),

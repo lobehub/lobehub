@@ -57,7 +57,16 @@ export const agentRouter = router({
    * conditions of queryAgents. Lets paginated callers report real totals.
    */
   countAgents: agentProcedure
-    .input(z.object({ keyword: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          endDate: z.string().optional(),
+          keyword: z.string().optional(),
+          range: z.tuple([z.string(), z.string()]).optional(),
+          startDate: z.string().optional(),
+        })
+        .optional(),
+    )
     .query(async ({ input, ctx }) => {
       return ctx.agentModel.countAgents(input);
     }),

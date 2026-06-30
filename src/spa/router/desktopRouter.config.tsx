@@ -874,6 +874,13 @@ export const desktopRoutes: RouteObject[] = [
                   },
                   {
                     element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/audit-log'),
+                      'Desktop > Workspace > Settings > Audit Log',
+                    ),
+                    path: 'audit-log',
+                  },
+                  {
+                    element: dynamicElement(
                       () => import('@/routes/(main)/[workspaceSlug]/settings/storage'),
                       'Desktop > Workspace > Settings > Storage',
                     ),

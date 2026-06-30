@@ -793,7 +793,6 @@
   "llava.description": "LLaVA est un modèle multimodal combinant un encodeur visuel et Vicuna pour une compréhension solide vision-langage.",
   "llava:13b.description": "LLaVA est un modèle multimodal combinant un encodeur visuel et Vicuna pour une compréhension solide vision-langage.",
   "llava:34b.description": "LLaVA est un modèle multimodal combinant un encodeur visuel et Vicuna pour une compréhension solide vision-langage.",
-  "lobehub-glm-5.2-fast.description": "Le GLM-5.2 le plus rapide de l'industrie. Les mêmes capacités que le GLM-5.2 avec une vitesse de réponse et de raisonnement nettement améliorée. Offre de lancement limitée — 25 % de réduction.",
   "magistral-medium-2509.description": "Magistral Medium 1.2 est un modèle de raisonnement de pointe de Mistral AI (septembre 2025) avec prise en charge de la vision.",
   "magistral-small-2509.description": "Magistral Small 1.2 est un petit modèle de raisonnement open source de Mistral AI (septembre 2025) avec prise en charge de la vision.",
   "mathstral.description": "MathΣtral est conçu pour la recherche scientifique et le raisonnement mathématique, avec de solides capacités de calcul et d'explication.",

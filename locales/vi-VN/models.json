@@ -793,7 +793,6 @@
   "llava.description": "LLaVA là mô hình đa phương thức kết hợp bộ mã hóa thị giác và Vicuna để hiểu ngôn ngữ-thị giác mạnh mẽ.",
   "llava:13b.description": "LLaVA là mô hình đa phương thức kết hợp bộ mã hóa thị giác và Vicuna để hiểu ngôn ngữ-thị giác mạnh mẽ.",
   "llava:34b.description": "LLaVA là mô hình đa phương thức kết hợp bộ mã hóa thị giác và Vicuna để hiểu ngôn ngữ-thị giác mạnh mẽ.",
-  "lobehub-glm-5.2-fast.description": "GLM-5.2 nhanh nhất trong ngành. Cùng khả năng như GLM-5.2 nhưng tốc độ phản hồi và suy luận nhanh hơn đáng kể. Giá ra mắt giới hạn thời gian — giảm 25%.",
   "magistral-medium-2509.description": "Magistral Medium 1.2 là mô hình lý luận tiên phong từ Mistral AI (tháng 9 năm 2025) với hỗ trợ thị giác.",
   "magistral-small-2509.description": "Magistral Small 1.2 là mô hình suy luận nhỏ mã nguồn mở từ Mistral AI (tháng 9/2025) với hỗ trợ thị giác.",
   "mathstral.description": "MathΣtral được xây dựng cho nghiên cứu khoa học và suy luận toán học, với khả năng tính toán và giải thích mạnh mẽ.",

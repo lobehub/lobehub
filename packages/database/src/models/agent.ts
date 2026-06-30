@@ -27,6 +27,7 @@ import {
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -251,12 +252,33 @@ export class AgentModel {
   /**
    * Count non-virtual agents matching the same conditions as queryAgents.
    * Used to report real totals (and pagination) when queryAgents is limited.
+   * Accepts the same date filters as SessionModel.count so callers can compare
+   * current vs. prior-period totals without falling back to the legacy
+   * sessions table.
    */
-  countAgents = async (params?: { keyword?: string }): Promise<number> => {
+  countAgents = async (params?: {
+    endDate?: string;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }): Promise<number> => {
     const result = await this.db
       .select({ count: count() })
       .from(agents)
-      .where(this.buildQueryAgentsWhere(params?.keyword));
+      .where(
+        genWhere([
+          this.buildQueryAgentsWhere(params?.keyword),
+          params?.range
+            ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.endDate
+            ? genEndDateWhere(params.endDate, agents.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.startDate
+            ? genStartDateWhere(params.startDate, agents.createdAt, (date) => date.toDate())
+            : undefined,
+        ]),
+      );
 
     return result[0]?.count ?? 0;
   };

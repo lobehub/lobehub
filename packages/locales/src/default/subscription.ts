@@ -104,6 +104,46 @@ export default {
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
   'credits.autoTopUp.validation.targetMustExceedThreshold':
     'Target balance must be greater than threshold',
+  'credits.memberBudget.actions.addRule': 'Add rule',
+  'credits.memberBudget.actions.removeRule': 'Remove rule',
+  'credits.memberBudget.actions.restoreDefault': 'Restore default',
+  'credits.memberBudget.actions.saveDefault': 'Save',
+  'credits.memberBudget.actions.setCustom': 'Set custom',
+  'credits.memberBudget.actions.setUnlimited': 'Set unlimited',
+  'credits.memberBudget.currentSpend': 'Current spend',
+  'credits.memberBudget.defaultLimit': 'Default member budget',
+  'credits.memberBudget.defaultLimitHint':
+    'Members without a custom rule use this limit each billing cycle.',
+  'credits.memberBudget.desc':
+    'Limit how many workspace credits each member can use in the current billing cycle',
+  'credits.memberBudget.effectiveBudget': 'Effective budget',
+  'credits.memberBudget.empty': 'No workspace members yet',
+  'credits.memberBudget.globalBadge': 'Global',
+  'credits.memberBudget.noRules':
+    'No budget rules. Members can use workspace credits without per-member limits.',
+  'credits.memberBudget.removeConfirm.desc':
+    'This rule will stop applying immediately after confirmation.',
+  'credits.memberBudget.removeConfirm.title': 'Remove this budget rule?',
+  'credits.memberBudget.ruleLimit': 'Budget limit',
+  'credits.memberBudget.ruleTarget': 'Rule target',
+  'credits.memberBudget.saveError': 'Failed to save member budget settings',
+  'credits.memberBudget.saveSuccess': 'Member budget settings saved',
+  'credits.memberBudget.status.custom': 'Custom',
+  'credits.memberBudget.status.inherit': 'Inherits default',
+  'credits.memberBudget.status.unlimited': 'Unlimited',
+  'credits.memberBudget.target.allMembers': 'All members',
+  'credits.memberBudget.title': 'Member Budget Control',
+  'credits.memberBudget.unlimited': 'Unlimited',
+  'credits.memberBudget.upgradeCta': 'View plans',
+  'credits.memberBudget.userPanel.exhaustedDesc':
+    'Contact your workspace admin to adjust the quota.',
+  'credits.memberBudget.userPanel.exhaustedOwnerDesc':
+    'Go to credit settings to adjust member budgets.',
+  'credits.memberBudget.userPanel.label': 'My budget',
+  'credits.memberBudget.upgradeHint':
+    'Subscribe to a paid plan to set per-member spend limits and prevent unexpected overages.',
+  'credits.memberBudget.unlimitedMemberHint':
+    'Set an all-members rule first before adding an unlimited override for a single member.',
   'credits.costEstimateHint.desc':
     'Show a lightweight warning before sending when the estimated model cost reaches your threshold',
   'credits.costEstimateHint.saveError': 'Failed to save cost estimate alert settings',
@@ -202,6 +242,10 @@ export default {
   'limitation.workspace.insufficientBudget.title': 'Workspace Credits Insufficient',
   'limitation.workspace.insufficientBudget.topup': 'Top Up Credits',
   'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
+  'limitation.workspace.memberBudget.desc':
+    'You have reached the personal budget set by this workspace. Contact a workspace admin to adjust your quota — top-up and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.retry': 'Retry',
+  'limitation.workspace.memberBudget.title': 'Member Budget Reached',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
@@ -308,7 +352,7 @@ export default {
   'plans.credit.tip': '{{credit}} free credits per month',
   'plans.credit.title': 'Credits',
   'plans.credit.tooltip': 'Monthly model message credits',
-  'plans.creditPackage.available': 'Additional credit packages available (${{price}}/M)',
+  'plans.creditPackage.available': 'Additional credit packages available (${{price}} / 1M credits)',
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
@@ -393,7 +437,10 @@ export default {
   'plans.support.starter': 'Email and Community Forum',
   'plans.support.title': 'Support',
   'plans.support.ultimate': 'Priority Chat and Email Support',
+  'plans.workspace.features.adminControls': 'Centralized billing and role management',
+  'plans.workspace.features.auditLog': 'Audit Logs',
   'plans.workspace.features.inviteMembers': 'Invite Members',
+  'plans.workspace.features.memberBudget': 'Per-member Budget Control',
   'plans.workspace.features.roles': 'Roles & Permissions',
   'plans.workspace.includesFrom.free': 'Everything in Free, plus:',
   'plans.workspace.maxMembers': 'Up to {{count}} members',

@@ -793,7 +793,6 @@
   "llava.description": "LLaVA to model multimodalny łączący enkoder obrazu i Vicunę, zapewniający silne zrozumienie języka i obrazu.",
   "llava:13b.description": "LLaVA to model multimodalny łączący enkoder obrazu i Vicunę, zapewniający silne zrozumienie języka i obrazu.",
   "llava:34b.description": "LLaVA to model multimodalny łączący enkoder obrazu i Vicunę, zapewniający silne zrozumienie języka i obrazu.",
-  "lobehub-glm-5.2-fast.description": "Najszybszy GLM-5.2 w branży. Te same możliwości co GLM-5.2, ale z znacznie szybszą reakcją i szybkością rozumowania. Promocyjna cena na czas premiery — 25% zniżki.",
   "magistral-medium-2509.description": "Magistral Medium 1.2 to model rozumowania nowej generacji od Mistral AI (wrzesień 2025) z obsługą wizji.",
   "magistral-small-2509.description": "Magistral Small 1.2 to otwartoźródłowy, mały model wnioskowania od Mistral AI (wrzesień 2025) z obsługą wizji.",
   "mathstral.description": "MathΣtral został stworzony do badań naukowych i matematycznego wnioskowania, oferując silne możliwości obliczeniowe i wyjaśniające.",

@@ -793,7 +793,6 @@
   "llava.description": "LLaVA, güçlü görsel-dil anlayışı için bir görsel kodlayıcı ile Vicuna'yı birleştiren çok modlu bir modeldir.",
   "llava:13b.description": "LLaVA, güçlü görsel-dil anlayışı için bir görsel kodlayıcı ile Vicuna'yı birleştiren çok modlu bir modeldir.",
   "llava:34b.description": "LLaVA, güçlü görsel-dil anlayışı için bir görsel kodlayıcı ile Vicuna'yı birleştiren çok modlu bir modeldir.",
-  "lobehub-glm-5.2-fast.description": "Sektörün en hızlı GLM-5.2'si. GLM-5.2 ile aynı yeteneklere sahip, ancak çok daha hızlı yanıt ve akıl yürütme hızı sunar. Sınırlı süreli lansman fiyatı — %25 indirim.",
   "magistral-medium-2509.description": "Magistral Medium 1.2, Mistral AI'den (Eylül 2025) vizyon desteği ile sınır akıl yürütme modelidir.",
   "magistral-small-2509.description": "Magistral Small 1.2, Mistral AI tarafından geliştirilen açık kaynaklı küçük bir akıl yürütme modelidir (Eylül 2025) ve görsel desteğe sahiptir.",
   "mathstral.description": "MathΣtral, bilimsel araştırma ve matematiksel akıl yürütme için geliştirilmiş, güçlü hesaplama ve açıklama yeteneklerine sahip bir modeldir.",
