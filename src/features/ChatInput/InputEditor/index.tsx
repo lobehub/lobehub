@@ -64,12 +64,12 @@ const className = cx(
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
 // editor's placeholder slot while the input is empty (history popup open).
-const ghostClassName = css`
+const ghostClassName = cx(css`
   overflow: hidden;
   display: block;
   text-overflow: ellipsis;
   white-space: nowrap;
-`;
+`);
 
 type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
