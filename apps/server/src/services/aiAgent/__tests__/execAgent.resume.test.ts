@@ -252,4 +252,97 @@ describe('AiAgentService.execAgent - resume mode', () => {
       }),
     ).rejects.toThrow('parentMessageId is required when resume is true');
   });
+
+  // Regression: gateway/server-runtime regenerate must replace, not continue.
+  // The flat topic query returns the anchor user message's existing answer
+  // branch; feeding it back makes the model continue the old answer
+  // ([U1, A1] -> continue) instead of producing a fresh one ([U1] -> A2).
+  it('regenerate: drops the anchor user message existing answer branch from history', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'prior question', id: 'prior-u', role: 'user' },
+      { content: 'prior answer', id: 'prior-a', parentId: 'prior-u', role: 'assistant' },
+      { content: 'the question', id: 'u1', parentId: 'prior-a', role: 'user' },
+      // Old answer being regenerated — must NOT be fed back as context.
+      { content: 'OLD answer', id: 'a1', parentId: 'u1', role: 'assistant' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['prior-u', 'prior-a', 'u1']);
+  });
+
+  // Regression: regenerating a MIDDLE turn must also drop the turns that
+  // continued from it (they live on the old branch), so history ends at U1.
+  it('regenerate: drops later turns that continued from the anchor (middle-turn regenerate)', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'the question', id: 'u1', role: 'user' },
+      { content: 'OLD answer', id: 'a1', parentId: 'u1', role: 'assistant' },
+      { content: 'follow-up question', id: 'u2', parentId: 'a1', role: 'user' },
+      { content: 'follow-up answer', id: 'a2', parentId: 'u2', role: 'assistant' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['u1']);
+  });
+
+  // Guard: the human-approval resume path anchors on a tool message and must
+  // keep the in-flight turn — including parallel-tool sibling messages — intact.
+  it('resume on a non-user anchor (tool message) keeps full history untouched', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'tool-1',
+      role: 'tool',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'q', id: 'u1', role: 'user' },
+      { content: 'a with tool calls', id: 'a1', parentId: 'u1', role: 'assistant' },
+      { content: 'tool result A', id: 'tool-1', parentId: 'a1', role: 'tool' },
+      { content: 'tool result B', id: 'tool-2', parentId: 'a1', role: 'tool' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'tool-1',
+      prompt: '',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['u1', 'a1', 'tool-1', 'tool-2']);
+  });
 });

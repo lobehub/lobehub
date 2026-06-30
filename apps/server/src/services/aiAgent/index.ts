@@ -1103,7 +1103,7 @@ export class AiAgentService {
       log('execAgent: appended additional instructions to systemRole');
     }
 
-    let resumeParentMessage;
+    let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
     // `resumeApproval` implies the same "load parent message + skip user
     // message creation" semantics as `resume`. Callers that go through the
@@ -2048,6 +2048,42 @@ export class AiAgentService {
         historyMessagesCache = messages.filter((msg) => !selfMessageIds.has(msg.id));
       } else {
         historyMessagesCache = [];
+      }
+
+      // ── Regenerate: drop the anchor user message's existing answer branches ──
+      // In gateway/server runtime mode the client only sends `parentMessageId`
+      // (the user message being regenerated) and lets the server rebuild the
+      // context from the flat topic query above. That query still returns the
+      // anchor's *previous* assistant branch (the answer being replaced) and —
+      // when a middle turn is regenerated — the later turns that continued from
+      // it. Leaving them in makes the model see an already-answered turn and
+      // "continue" it instead of producing a fresh answer (`[U1, A1]` → continue
+      // rather than `[U1]` → A2). Drop everything descending from the anchor so
+      // history ends at the user message.
+      //
+      // Scoped to a `user`-role anchor: the human-approval resume path anchors on
+      // a tool message and must keep the in-flight turn (including parallel-tool
+      // sibling messages) intact, so it is intentionally left untouched.
+      if (
+        historyMessagesCache &&
+        effectiveResume &&
+        parentMessageId &&
+        resumeParentMessage?.role === 'user'
+      ) {
+        const byId = new Map(historyMessagesCache.map((msg) => [msg.id, msg]));
+        const isDescendantOfAnchor = (id: string) => {
+          let cursor: string | null | undefined = id;
+          const seen = new Set<string>();
+          while (cursor && !seen.has(cursor)) {
+            if (cursor === parentMessageId) return true;
+            seen.add(cursor);
+            cursor = byId.get(cursor)?.parentId;
+          }
+          return false;
+        };
+        historyMessagesCache = historyMessagesCache.filter(
+          (msg) => msg.id === parentMessageId || !isDescendantOfAnchor(msg.id),
+        );
       }
 
       return historyMessagesCache;
