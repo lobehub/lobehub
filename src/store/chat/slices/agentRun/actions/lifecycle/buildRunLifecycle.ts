@@ -179,9 +179,8 @@ export const buildRunLifecycle = (
       // had no LLM-summarized title at all before the unified lifecycle.
       // Top-level only — a nested sub-agent / `/compact` run must not retitle the
       // user's topic. See RunScope.
-      const { isCreateNewTopic, topicId, assistantMessageId } = event;
-
       if (adapter.runScope !== 'top_level') return;
+      const { isCreateNewTopic, topicId, assistantMessageId } = event;
       if (!topicId) return;
 
       // Dev-only fast path: slice the first user message instead of calling the

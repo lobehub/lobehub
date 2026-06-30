@@ -397,7 +397,7 @@ export class ConversationLifecycleActionImpl {
     // if message is empty or no files, then stop
     if (!message && !hasFile) return;
 
-    const newTopicTitle = message.slice(0, 80) || t('defaultTitle', { ns: 'topic' });
+    const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
     // ━━━ Message Queue: enqueue if agent is currently running ━━━
     // Check if there's a running agent-runtime operation in the current context.
@@ -614,10 +614,6 @@ export class ConversationLifecycleActionImpl {
       optimisticTopicActive = false;
     };
 
-    const replaceOptimisticTopic = (topicId: string, title = optimisticTopic?.title) => {
-      resolveOptimisticTopic(topicId, title);
-    };
-
     if (optimisticTopic) {
       // Input "666" used to leave the sidebar unchanged until the server returned
       // a topicId; insert a temporary topic so the new conversation is visible immediately.
@@ -674,7 +670,7 @@ export class ConversationLifecycleActionImpl {
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,
-                  title: markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
+                  title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
               : undefined,
@@ -736,10 +732,7 @@ export class ConversationLifecycleActionImpl {
       if (heteroData.isCreateNewTopic && heteroData.topicId) {
         if (heteroData.topics) {
           if (optimisticTopic && optimisticTopicActive) {
-            resolveOptimisticTopic(
-              heteroData.topicId,
-              markdownToTxt(message).slice(0, 80) || optimisticTopic.title,
-            );
+            resolveOptimisticTopic(heteroData.topicId, newTopicTitle);
           }
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
           this.#get().internal_updateTopics(operationContext.agentId, {
@@ -749,10 +742,7 @@ export class ConversationLifecycleActionImpl {
             total: heteroData.topics.total,
           });
         } else if (!context.isolatedTopic) {
-          replaceOptimisticTopic(
-            heteroData.topicId,
-            markdownToTxt(message).slice(0, 80) || optimisticTopic?.title,
-          );
+          resolveOptimisticTopic(heteroData.topicId, newTopicTitle);
           void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
         }
         await this.#get().switchTopic(heteroData.topicId, {
@@ -1037,7 +1027,7 @@ export class ConversationLifecycleActionImpl {
           this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         }
       } else if (isCreateNewTopic && data.topicId && !context.isolatedTopic) {
-        replaceOptimisticTopic(data.topicId, newTopicTitle);
+        resolveOptimisticTopic(data.topicId, newTopicTitle);
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
@@ -1148,6 +1138,8 @@ export class ConversationLifecycleActionImpl {
       rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
       return;
     }
+
+    rollbackOptimisticTopic('sendMessage/rollbackUnresolvedOptimisticTopic');
 
     if (data.topicId && !optimisticTopicResolved) {
       this.#get().internal_updateTopicLoading(data.topicId, true);

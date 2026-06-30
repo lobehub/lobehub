@@ -510,7 +510,7 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           sendPromise = result.current.sendMessage({
             context: { agentId, threadId: null, topicId: null },
-            message: '666',
+            message: '**666**',
           });
         });
 
@@ -563,6 +563,53 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+      });
+
+      it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: null,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: undefined,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
+        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
       });
 
       it('should persist selected tool tags into user message content before runtime execution', async () => {

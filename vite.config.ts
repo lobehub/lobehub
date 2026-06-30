@@ -14,7 +14,6 @@ import {
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRendererResolve,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
@@ -122,7 +121,6 @@ export default defineConfig({
     bundledDev: false,
   },
   resolve: {
-    ...sharedRendererResolve,
     tsconfigPaths: true,
   },
   optimizeDeps: sharedOptimizeDeps,
