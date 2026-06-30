@@ -11,7 +11,7 @@ const EmpirioLabs: ModelProviderCard = {
   id: 'empiriolabs',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://empiriolabs.ai/models',
-  name: 'EmpirioLabs',
+  name: 'EmpirioLabs AI',
   settings: {
     proxyUrl: {
       placeholder: 'https://api.empiriolabs.ai/v1',
