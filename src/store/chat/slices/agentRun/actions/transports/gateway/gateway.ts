@@ -12,7 +12,8 @@ import { gatewayConnectionService } from '@/services/electron/gatewayConnection'
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -335,11 +336,24 @@ export class GatewayActionImpl {
     const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
       .chatConfig?.disableGatewayMode;
     const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
+    const model = resolvedAgentId
+      ? agentByIdSelectors.getAgentModelById(resolvedAgentId)(agentState)
+      : undefined;
+    const provider = resolvedAgentId
+      ? agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(agentState)
+      : undefined;
+    // Example: Nano Banana supports image output but not function calling; Gateway would
+    // inject agent/tools context and run the wrong runtime instead of normal image output.
+    const supportToolUse =
+      !!model &&
+      !!provider &&
+      aiModelSelectors.isModelSupportToolUse(model, provider)(getAiInfraStoreState());
 
     return (
       !!serverConfig?.agentGatewayUrl &&
       !!serverConfig.enableGatewayMode &&
-      disableGatewayMode !== true
+      disableGatewayMode !== true &&
+      supportToolUse
     );
   };
 

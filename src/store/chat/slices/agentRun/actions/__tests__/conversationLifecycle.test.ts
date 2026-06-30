@@ -325,6 +325,39 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
+      it('falls back to client runtime when Gateway mode is unavailable for the model', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const executeGatewayAgentSpy = vi.fn();
+        const executeClientAgentSpy = vi.fn();
+
+        act(() => {
+          useChatStore.setState({
+            executeClientAgent: executeClientAgentSpy,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => false,
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: [],
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+        expect(executeClientAgentSpy).toHaveBeenCalled();
+      });
+
       it('should persist selected slash skills into user message content before sending', async () => {
         const { result } = renderHook(() => useChatStore());
 
