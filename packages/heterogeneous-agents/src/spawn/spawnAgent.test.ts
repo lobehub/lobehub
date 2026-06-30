@@ -567,6 +567,31 @@ describe('spawnAgent', () => {
     }).rejects.toThrow(/boom/);
   });
 
+  it('events iterator surfaces child spawn errors instead of hanging', async () => {
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    const exitError = handle.exit.catch((err) => err);
+
+    const drainEvents = async () => {
+      for await (const _e of handle.events) {
+        // drain
+      }
+    };
+
+    const spawnError = new Error('spawn claude ENOENT');
+    fake.proc.emit('error', spawnError);
+
+    await expect(drainEvents()).rejects.toThrow(/spawn claude ENOENT/);
+    await expect(exitError).resolves.toBe(spawnError);
+  });
+
   it('tees the child raw stdout to onRawStdout verbatim, before adapting', async () => {
     const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
     nextFakeProc = fake.proc;

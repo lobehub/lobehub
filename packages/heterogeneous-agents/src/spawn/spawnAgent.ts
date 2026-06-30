@@ -278,19 +278,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve, reject) => {
-      proc.on('exit', (code, signal) => resolve({ code, signal }));
-      proc.on('error', (err) => reject(err));
-    },
-  );
-
-  if (proc.stdin) {
-    proc.stdin.write(inputPlan.stdin, () => {
-      proc.stdin?.end();
-    });
-  }
-
   const pipeline = new AgentStreamPipeline({
     agentType: options.agentType,
     cwd,
@@ -317,6 +304,28 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       w();
     }
   };
+
+  const failStream = (err: Error) => {
+    streamError = err;
+    streamEnded = true;
+    wake();
+  };
+
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      proc.on('exit', (code, signal) => resolve({ code, signal }));
+      proc.on('error', (err) => {
+        failStream(err);
+        reject(err);
+      });
+    },
+  );
+
+  if (proc.stdin) {
+    proc.stdin.write(inputPlan.stdin, () => {
+      proc.stdin?.end();
+    });
+  }
 
   // ALL pipeline work — push / flush — runs through this single chain so:
   //   1. multiple `'data'` chunks process in arrival order, even when an

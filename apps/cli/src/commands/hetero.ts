@@ -524,7 +524,19 @@ const exec = async (options: ExecOptions): Promise<void> => {
       handle = await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
     } catch (err) {
       await dumpAttempt?.close();
-      log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      log.error('Failed to start agent:', message);
+      if (serverIngester && sink) {
+        try {
+          await serverIngester.drain();
+          await sink.finish({
+            error: { message, type: 'AgentRuntimeError' },
+            result: 'error',
+          });
+        } catch {
+          // best-effort; process is exiting anyway
+        }
+      }
       process.exit(1);
     }
 
@@ -543,6 +555,13 @@ const exec = async (options: ExecOptions): Promise<void> => {
       dumpAttempt?.writeStderr(chunk);
     });
     handle.stderr.pipe(process.stderr);
+    const exit = handle.exit.catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (stderrContent.length < STDERR_CAP) {
+        stderrContent += `${stderrContent ? '\n' : ''}${message}`;
+      }
+      return { code: 1, signal: null as NodeJS.Signals | null };
+    });
 
     // Ctrl-C → SIGINT to the child's process group.
     // Repeated Ctrl-C escalates to SIGKILL.
@@ -633,7 +652,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       process.off('SIGTERM', onSigterm);
     }
 
-    const { code, signal } = await handle.exit;
+    const { code, signal } = await exit;
     await stderrEnded;
     await dumpAttempt?.close();
 
