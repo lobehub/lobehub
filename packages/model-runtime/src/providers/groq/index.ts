@@ -54,6 +54,18 @@ const filterAdvancedFields = (schema: any): any => {
   return filtered;
 };
 
+/** Models that accept the `reasoning_format` parameter */
+const supportsReasoningFormat = (model: string): boolean => {
+  const lower = model.toLowerCase();
+  return ['deepseek-r1', 'qwen3'].some((kw) => lower.includes(kw));
+};
+
+/** Qwen-family reasoning models: effort values are "none" | "default" */
+const isQwenEffortModel = (model: string): boolean => model.toLowerCase().includes('qwen3.6-27b');
+
+/** GPT-OSS reasoning models: effort values are "low" | "medium" | "high" */
+const isGptOssModel = (model: string): boolean => model.toLowerCase().includes('gpt-oss-');
+
 export const params = {
   baseURL: 'https://api.groq.com/openai/v1',
   chatCompletion: {
@@ -63,18 +75,63 @@ export const params = {
         return { error, errorType: AgentRuntimeErrorType.LocationNotSupportError };
     },
     handlePayload: (payload) => {
-      const { temperature, ...restPayload } = payload;
+      const {
+        temperature,
+        // Lobe-internal fields to strip
+        thinking,
+        reasoning,
+        reasoning_effort,
+        effort,
+        ...restPayload
+      } = payload;
 
       // Groq doesn't support temperature <= 0, set to undefined in that case
       const resolvedParams = resolveParameters({ temperature }, { normalizeTemperature: false });
+      const resolvedTemp =
+        resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
+          ? undefined
+          : resolvedParams.temperature;
+
+      // --- Reasoning parameters ---
+      const isThinkingDisabled = thinking?.type === 'disabled';
+      const model = payload.model;
+      const groqReasoningParams: Record<string, unknown> = {};
+
+      // 1. reasoning_format (only for DeepSeek R1 and Qwen3 series)
+      if (supportsReasoningFormat(model)) {
+        if (isThinkingDisabled) {
+          groqReasoningParams.reasoning_format = 'hidden';
+        } else {
+          // Default to parsed, also required when tools or JSON mode are used
+          groqReasoningParams.reasoning_format = 'parsed';
+        }
+      }
+
+      // 2. reasoning_effort
+      const effortVal = reasoning_effort || reasoning?.effort || effort;
+      if (isQwenEffortModel(model)) {
+        groqReasoningParams.reasoning_effort =
+          isThinkingDisabled || effortVal === 'none' ? 'none' : 'default';
+      } else if (isGptOssModel(model)) {
+        // Map Lobe effort values to Groq's low/medium/high
+        const effortMap: Record<string, string> = {
+          low: 'low',
+          minimal: 'low',
+          medium: 'medium',
+          high: 'high',
+          xhigh: 'high',
+          max: 'high',
+        };
+        if (effortVal && effortMap[effortVal]) {
+          groqReasoningParams.reasoning_effort = effortMap[effortVal];
+        }
+      }
 
       return {
         ...restPayload,
+        ...groqReasoningParams,
         stream: payload.stream ?? true,
-        temperature:
-          resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
-            ? undefined
-            : resolvedParams.temperature,
+        temperature: resolvedTemp,
       } as any;
     },
   },
@@ -94,9 +151,10 @@ export const params = {
       'llama3-',
       'mixtral-8x7b-32768',
       'gemma2-9b-it',
+      'qwen3.6-27b',
     ];
 
-    const reasoningKeywords = ['deepseek-r1'];
+    const reasoningKeywords = ['deepseek-r1', 'qwen3.6-27b', 'qwen3', 'gpt-oss-'];
 
     const modelsPage = (await client.models.list()) as any;
     const modelList: GroqModelCard[] = modelsPage.data;
