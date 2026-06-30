@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/agent-runtime';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 

@@ -1,4 +1,4 @@
-import { ModelEmptyError } from '@lobechat/agent-runtime';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { describe, expect, it } from 'vitest';
 
 import { classifyLLMError } from '../llmErrorClassification';

@@ -1,7 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { ModelEmptyError } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
@@ -64,26 +63,36 @@ vi.mock('@/server/services/message', () => ({
 
 // @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
 // cloud-specific dependencies that are unavailable in the test environment
-vi.mock('@lobechat/model-runtime', () => ({
-  // The executor resolves extend params via this helper; an empty result keeps
-  // the runtime payload unchanged, matching this suite's pre-existing behavior.
-  applyModelExtendParams: vi.fn(() => ({})),
-  consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
-  // `llmErrorClassification.ts` reads these at module-load time; an empty
-  // spec map is fine here because this suite never exercises the runtime
-  // retry classifier path.
-  ERROR_CODE_SPECS: {},
-  getErrorCodeSpec: () => undefined,
-  isDeepSeekThinkingEligibleModel: (model: string) =>
-    typeof model === 'string' &&
-    (model.toLowerCase().includes('deepseek-reasoner') ||
-      model.toLowerCase().includes('deepseek-v4')),
-  isDeepSeekV4FamilyModel: (model: string) =>
-    typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
-  isKimiAlwaysPreserveThinkingModel: (model: string) =>
-    /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
-  refineErrorCode: () => undefined,
-}));
+vi.mock('@lobechat/model-runtime', async () => {
+  // ModelEmptyError + isEmptyModelCompletion are pure (they only depend on
+  // @lobechat/types), so import the real implementations directly from source —
+  // bypassing this cloud-package mock — so the executor's empty-completion
+  // retry path and these tests share a single class identity for instanceof.
+  const { isEmptyModelCompletion, ModelEmptyError } =
+    await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  return {
+    // The executor resolves extend params via this helper; an empty result keeps
+    // the runtime payload unchanged, matching this suite's pre-existing behavior.
+    applyModelExtendParams: vi.fn(() => ({})),
+    consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
+    // `llmErrorClassification.ts` reads these at module-load time; an empty
+    // spec map is fine here because this suite never exercises the runtime
+    // retry classifier path.
+    ERROR_CODE_SPECS: {},
+    getErrorCodeSpec: () => undefined,
+    isDeepSeekThinkingEligibleModel: (model: string) =>
+      typeof model === 'string' &&
+      (model.toLowerCase().includes('deepseek-reasoner') ||
+        model.toLowerCase().includes('deepseek-v4')),
+    isDeepSeekV4FamilyModel: (model: string) =>
+      typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
+    isEmptyModelCompletion,
+    isKimiAlwaysPreserveThinkingModel: (model: string) =>
+      /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
+    ModelEmptyError,
+    refineErrorCode: () => undefined,
+  };
+});
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),

@@ -1,7 +1,8 @@
-import { type AgentState, ModelEmptyError } from '@lobechat/agent-runtime';
+import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type OperationToolSet } from '@lobechat/context-engine';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';

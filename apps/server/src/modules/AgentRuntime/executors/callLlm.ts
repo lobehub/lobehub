@@ -4,8 +4,6 @@ import {
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
   type InstructionExecutor,
-  isEmptyModelCompletion,
-  ModelEmptyError,
   stripAssistantReasoningForReplay,
   UsageCounter,
 } from '@lobechat/agent-runtime';
@@ -41,7 +39,9 @@ import {
   consumeStreamUntilDone,
   isDeepSeekThinkingEligibleModel,
   isDeepSeekV4FamilyModel,
+  isEmptyModelCompletion,
   isKimiAlwaysPreserveThinkingModel,
+  ModelEmptyError,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
 import {

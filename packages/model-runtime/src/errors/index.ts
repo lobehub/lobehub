@@ -1,5 +1,6 @@
 export { ErrorClassifier, type ErrorClassifierType } from './classifier';
 export { isUserSideError, matchErrorPattern, type MatchInput, type MatchResult } from './match';
+export { isEmptyModelCompletion, ModelEmptyError } from './modelEmptyCompletion';
 export { ERROR_PATTERNS, type ErrorPattern } from './patterns';
 export { refineErrorCode, type RefineErrorInput } from './refine';
 export {
