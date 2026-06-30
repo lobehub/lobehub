@@ -45,6 +45,7 @@ import {
   useSlashActionItems,
 } from './ActionTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
+import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
@@ -60,6 +61,15 @@ const className = cx(
   `,
   mentionFilledClassName,
 );
+
+// Single-line dimmed preview of the highlighted history entry, shown through the
+// editor's placeholder slot while the input is empty (history popup open).
+const ghostClassName = css`
+  overflow: hidden;
+  display: block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
 
 type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
@@ -507,92 +517,115 @@ const InputEditor = memo<{
     [restoreDraft, storeApi],
   );
 
+  const ghostMarkdown = inputHistory.ghostMarkdown;
+
   return (
-    <Editor
-      autoFocus
-      pasteAsPlainText
-      className={className}
-      content={''}
-      editable={canCreateContent}
-      editor={editor}
-      getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
-      {...{ slashPlacement }}
-      {...richRenderProps}
-      mentionOption={mentionOption}
-      slashOption={slashOption}
-      type={'text'}
-      variant={'chat'}
-      placeholder={
-        placeholder ?? (
-          <Placeholder
-            heterogeneousName={heterogeneousName}
-            showAgentAssignmentHint={showAgentAssignmentHint}
-            variant={placeholderVariant}
-          />
-        )
-      }
-      style={{
-        minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
-      }}
-      onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-      onInit={handleEditorInit}
-      onBlur={() => {
-        disableScope(HotkeyEnum.AddUserMessage);
-        inputHistory.handleEditorBlur();
-        saveDraftDebounced.flush();
-      }}
-      onChange={() => {
-        updateMarkdownContent();
-        inputHistory.handleEditorChange();
-        saveDraftDebounced();
-      }}
-      onCompositionStart={({ event }) => {
-        compositionProps.onCompositionStart(event);
-        // Clear autocomplete placeholder nodes before IME composition starts —
-        // composing next to placeholder inline nodes freezes the editor.
-        if (isAutoCompleteEnabled) {
-          editor?.dispatchCommand(
-            KEY_ESCAPE_COMMAND,
-            new KeyboardEvent('keydown', { key: 'Escape' }),
-          );
+    <>
+      <InputHistoryPopup
+        activeIndex={inputHistory.popup.activeIndex}
+        container={(slashMenuRef as any)?.current ?? null}
+        entries={inputHistory.popup.entries}
+        open={inputHistory.popup.open}
+        onClose={inputHistory.close}
+        onHover={inputHistory.setActiveIndex}
+        onSelect={inputHistory.confirm}
+      />
+      <Editor
+        autoFocus
+        pasteAsPlainText
+        className={className}
+        content={''}
+        editable={canCreateContent}
+        editor={editor}
+        getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
+        {...{ slashPlacement }}
+        {...richRenderProps}
+        mentionOption={mentionOption}
+        slashOption={slashOption}
+        type={'text'}
+        variant={'chat'}
+        placeholder={
+          ghostMarkdown === undefined ? (
+            (placeholder ?? (
+              <Placeholder
+                heterogeneousName={heterogeneousName}
+                showAgentAssignmentHint={showAgentAssignmentHint}
+                variant={placeholderVariant}
+              />
+            ))
+          ) : (
+            <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
+          )
         }
-      }}
-      onContextMenu={async ({ event: e, editor }) => {
-        if (isDesktop) {
-          e.preventDefault();
-          const { electronSystemService } = await import('@/services/electron/system');
+        style={{
+          minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
+        }}
+        onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
+        onInit={handleEditorInit}
+        onBlur={() => {
+          disableScope(HotkeyEnum.AddUserMessage);
+          saveDraftDebounced.flush();
+        }}
+        onChange={() => {
+          updateMarkdownContent();
+          inputHistory.handleEditorChange();
+          saveDraftDebounced();
+        }}
+        onCompositionStart={({ event }) => {
+          compositionProps.onCompositionStart(event);
+          // Clear autocomplete placeholder nodes before IME composition starts —
+          // composing next to placeholder inline nodes freezes the editor.
+          if (isAutoCompleteEnabled) {
+            editor?.dispatchCommand(
+              KEY_ESCAPE_COMMAND,
+              new KeyboardEvent('keydown', { key: 'Escape' }),
+            );
+          }
+        }}
+        onContextMenu={async ({ event: e, editor }) => {
+          if (isDesktop) {
+            e.preventDefault();
+            const { electronSystemService } = await import('@/services/electron/system');
 
-          const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
+            const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
 
-          await electronSystemService.showContextMenu('editor', {
-            selectionText: selectionText || undefined,
-          });
-        }
-      }}
-      onFocus={() => {
-        enableScope(HotkeyEnum.AddUserMessage);
-      }}
-      onKeyDown={({ event }) => {
-        if (inputHistory.handleKeyDown(event)) return true;
-      }}
-      onPressEnter={({ event: e }) => {
-        if (e.shiftKey || isComposingRef.current) return;
-        // when user like alt + enter to add ai message
-        if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
-        // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
-        if (expand) {
-          if (isCommandPressed(e)) {
+            await electronSystemService.showContextMenu('editor', {
+              selectionText: selectionText || undefined,
+            });
+          }
+        }}
+        onFocus={() => {
+          enableScope(HotkeyEnum.AddUserMessage);
+        }}
+        onKeyDown={({ event }) => {
+          if (inputHistory.handleKeyDown(event)) return true;
+        }}
+        onPressEnter={({ event: e }) => {
+          // While the history popup is open, Enter confirms the highlighted entry
+          // instead of sending. onPressEnter runs before onKeyDown for Enter, so
+          // returning true here also prevents a newline / send.
+          if (inputHistory.popup.open) {
+            inputHistory.confirm();
+            return true;
+          }
+          if (e.shiftKey || isComposingRef.current) return;
+          // when user like alt + enter to add ai message
+          if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
+          // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
+          if (expand) {
+            if (isCommandPressed(e)) {
+              send();
+              return true;
+            }
+            return;
+          }
+          if (shouldSendOnEnter(e)) {
             send();
             return true;
           }
-          return;
-        }
-        if (shouldSendOnEnter(e)) {
-          send();
-          return true;
-        }
-      }}
-    />
+        }}
+      />
+    </>
   );
 });
 
