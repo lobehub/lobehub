@@ -192,4 +192,39 @@ describe('useChatInputHistory', () => {
     expect(editor.cleanDocument).toHaveBeenCalledTimes(1);
     expect(editor.focus).toHaveBeenCalledTimes(2);
   });
+
+  it('falls back to markdown when saved JSON cannot be restored', () => {
+    const incompatibleEditorData = { root: { children: [{ text: 'item', type: 'list' }] } };
+    addInputHistory({ json: incompatibleEditorData, markdown: '- fallback prompt' });
+
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      setDocument: vi.fn((type: string) => {
+        if (type === 'json') throw new Error('unknown node type');
+      }),
+    } as unknown as IEditor;
+    const isComposingRef = { current: false };
+
+    const { result } = renderHook(() =>
+      useChatInputHistory({
+        editor,
+        enabled: true,
+        getMarkdownContent: () => '',
+        isComposingRef,
+      }),
+    );
+
+    act(() => {
+      expect(result.current.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
+    });
+
+    expect(editor.setDocument).toHaveBeenNthCalledWith(1, 'json', incompatibleEditorData, {
+      keepHistory: true,
+    });
+    expect(editor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '- fallback prompt', {
+      keepHistory: true,
+    });
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+  });
 });

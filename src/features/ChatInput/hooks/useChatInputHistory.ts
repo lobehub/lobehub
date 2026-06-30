@@ -102,6 +102,8 @@ interface UseChatInputHistoryOptions {
   isComposingRef: RefObject<boolean>;
 }
 
+const HISTORY_SET_DOCUMENT_OPTIONS = { keepHistory: true };
+
 const focusEditorAfterHistoryNavigation = (editor: IEditor, onFocusRestored: () => void) => {
   requestAnimationFrame(() => {
     // setDocument/cleanDocument can make the Lexical root lose focus; keep
@@ -109,6 +111,21 @@ const focusEditorAfterHistoryNavigation = (editor: IEditor, onFocusRestored: () 
     editor.focus();
     onFocusRestored();
   });
+};
+
+const restoreHistoryEntryDocument = (editor: IEditor, entry: ChatInputHistoryEntry) => {
+  if (!entry.json) {
+    editor.setDocument('markdown', entry.markdown, HISTORY_SET_DOCUMENT_OPTIONS);
+    return;
+  }
+
+  try {
+    editor.setDocument('json', entry.json, HISTORY_SET_DOCUMENT_OPTIONS);
+  } catch {
+    // Example: a rich-input list/code node can fail after rich input is disabled;
+    // markdown stays portable across different chat input plugin sets.
+    editor.setDocument('markdown', entry.markdown, HISTORY_SET_DOCUMENT_OPTIONS);
+  }
 };
 
 export const useChatInputHistory = ({
@@ -139,12 +156,7 @@ export const useChatInputHistory = ({
   const restoreEntry = useCallback(
     (entry: ChatInputHistoryEntry) => {
       runHistoryDocumentMutation((editor) => {
-        if (entry.json) {
-          editor.setDocument('json', entry.json, { keepHistory: true });
-          return;
-        }
-
-        editor.setDocument('markdown', entry.markdown, { keepHistory: true });
+        restoreHistoryEntryDocument(editor, entry);
       });
     },
     [runHistoryDocumentMutation],
