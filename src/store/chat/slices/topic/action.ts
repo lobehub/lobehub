@@ -1170,7 +1170,7 @@ export class ChatTopicActionImpl {
   };
 
   internal_updateTopics = (
-    agentId: string,
+    agentId: string | undefined,
     params: {
       append?: boolean;
       currentPage?: number;

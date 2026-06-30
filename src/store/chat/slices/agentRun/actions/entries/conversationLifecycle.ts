@@ -560,8 +560,15 @@ export class ConversationLifecycleActionImpl {
     let optimisticTopicActive = false;
     let optimisticTopicResolved = false;
 
+    // Group main topic lists are keyed by `group_${groupId}`. Keeping the
+    // supervisor agent id here would write "group first message" placeholders
+    // into `group_agent_${groupId}_${agentId}`, invisible to the group sidebar.
+    const topicListAgentId =
+      operationContext.groupId && operationContext.scope === 'group'
+        ? undefined
+        : operationContext.agentId;
     const optimisticTopicScope = {
-      agentId: operationContext.agentId,
+      agentId: topicListAgentId,
       groupId: operationContext.groupId ?? undefined,
     };
 
@@ -607,6 +614,9 @@ export class ConversationLifecycleActionImpl {
       if (!optimisticTopic || !optimisticTopicActive) return;
 
       this.#get().internal_updateTopicLoading(optimisticTopic.id, false);
+      if (this.#get().activeTopicId === optimisticTopic.id) {
+        void this.#get().switchTopic(null, { skipRefreshMessage: true });
+      }
       this.#get().internal_dispatchTopic(
         { ...optimisticTopicScope, type: 'deleteTopic', id: optimisticTopic.id },
         action,
@@ -684,7 +694,7 @@ export class ConversationLifecycleActionImpl {
             },
             threadId: operationContext.threadId ?? undefined,
             topicFilter: this.#getTopicFilter(
-              operationContext.agentId,
+              topicListAgentId,
               operationContext.groupId ?? undefined,
             ),
             topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
@@ -735,7 +745,7 @@ export class ConversationLifecycleActionImpl {
             resolveOptimisticTopic(heteroData.topicId, newTopicTitle);
           }
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
-          this.#get().internal_updateTopics(operationContext.agentId, {
+          this.#get().internal_updateTopics(topicListAgentId, {
             groupId: operationContext.groupId,
             items: heteroData.topics.items,
             pageSize,
@@ -965,7 +975,7 @@ export class ConversationLifecycleActionImpl {
           // if there is topicId, then add topicId to message
           topicId: topicId ?? undefined,
           topicFilter: this.#getTopicFilter(
-            operationContext.agentId,
+            topicListAgentId,
             operationContext.groupId ?? undefined,
           ),
           topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
@@ -1016,7 +1026,7 @@ export class ConversationLifecycleActionImpl {
             resolveOptimisticTopic(data.topicId, newTopicTitle);
           }
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
-          this.#get().internal_updateTopics(operationContext.agentId, {
+          this.#get().internal_updateTopics(topicListAgentId, {
             groupId: operationContext.groupId,
             items: data.topics.items,
             pageSize,

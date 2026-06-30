@@ -612,6 +612,173 @@ describe('ConversationLifecycle actions', () => {
         expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
       });
 
+      it('should show a group optimistic topic in the group topic bucket', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const groupId = 'group-1';
+        const supervisorAgentId = 'supervisor-agent';
+        const groupKey = topicMapKey({ groupId });
+        const groupAgentKey = topicMapKey({ agentId: supervisorAgentId, groupId });
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+
+        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
+          groupMap: {
+            [groupId]: {
+              id: groupId,
+              supervisorAgentId,
+            },
+          },
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: undefined,
+            activeGroupId: groupId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [groupKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockReturnValue(serverSendPromise);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: {
+              agentId: supervisorAgentId,
+              groupId,
+              scope: 'group',
+              threadId: null,
+              topicId: null,
+            },
+            message: 'Group first message',
+          });
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(
+            /^tmp_topic_/,
+          ),
+        );
+
+        const optimisticTopic = useChatStore.getState().topicDataMap[groupKey]?.items[0];
+        expect(optimisticTopic).toEqual(
+          expect.objectContaining({
+            title: 'Group first message',
+          }),
+        );
+        expect(useChatStore.getState().topicDataMap[groupAgentKey]?.items ?? []).toEqual([]);
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: TEST_IDS.NEW_TOPIC_ID,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: TEST_IDS.NEW_TOPIC_ID,
+              }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: { items: [{ id: TEST_IDS.NEW_TOPIC_ID, title: 'Group Topic' }], total: 1 },
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+          await sendPromise;
+        });
+
+        expect(useChatStore.getState().topicDataMap[groupKey]?.items).toEqual([
+          expect.objectContaining({ id: TEST_IDS.NEW_TOPIC_ID, title: 'Group Topic' }),
+        ]);
+        expect(useChatStore.getState().topicDataMap[groupAgentKey]?.items ?? []).toEqual([]);
+      });
+
+      it('should clear the active temp topic when rolling back an optimistic topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockReturnValue(serverSendPromise);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(
+            /^tmp_topic_/,
+          ),
+        );
+        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
+
+        act(() => {
+          useChatStore.setState({ activeTopicId: optimisticTopicId });
+        });
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: undefined,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+          await sendPromise;
+        });
+
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(useChatStore.getState().activeTopicId).not.toBe(optimisticTopicId);
+      });
+
       it('should persist selected tool tags into user message content before runtime execution', async () => {
         const { result } = renderHook(() => useChatStore());
 
