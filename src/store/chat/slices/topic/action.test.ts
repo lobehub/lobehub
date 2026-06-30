@@ -76,6 +76,7 @@ beforeEach(() => {
       activeTopicId: undefined,
       searchTopics: [],
       topicDataMap: {},
+      topicLoadingIdCounts: {},
       topicLoadingIds: [],
       // ... initial state
     },
@@ -1295,12 +1296,84 @@ describe('topic action', () => {
 
       expect(result.current.topicLoadingIds).toEqual(['loading-id']);
     });
+
+    it('should keep a topic loading until all loading owners finish', () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({ topicLoadingIdCounts: {}, topicLoadingIds: [] });
+      });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', true);
+        result.current.internal_updateTopicLoading('topic-1', true);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', false);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 1 });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', false);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual([]);
+      expect(result.current.topicLoadingIdCounts).toEqual({});
+    });
+  });
+  describe('replaceTopicId', () => {
+    it('should migrate a loading optimistic topic to the server topic id', () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [{ id: 'tmp_topic_1', sessionId: agentId, title: '666' }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          topicLoadingIdCounts: { tmp_topic_1: 2 },
+          topicLoadingIds: ['tmp_topic_1'],
+        });
+      });
+
+      act(() => {
+        result.current.internal_replaceTopicId({
+          agentId,
+          nextId: 'topic-1',
+          previousId: 'tmp_topic_1',
+          value: { sessionId: agentId },
+        });
+      });
+
+      expect(result.current.topicDataMap[key].items).toEqual([
+        expect.objectContaining({
+          id: 'topic-1',
+          sessionId: agentId,
+          title: '666',
+        }),
+      ]);
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
+    });
   });
   describe('summaryTopicTitle', () => {
-    it('should auto-summarize the topic title and update it', async () => {
+    it('should show a loading placeholder when auto-summarizing a topic without a title', async () => {
       const topicId = 'topic-1';
       const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
-      const topics = [{ id: 'topic-1', title: 'Test Topic' }] as ChatTopic[];
+      const topics = [{ id: 'topic-1', title: '' }] as ChatTopic[];
       const { result } = renderHook(() => useChatStore());
       await act(async () => {
         useChatStore.setState({
@@ -1341,6 +1414,47 @@ describe('topic action', () => {
       expect(refreshTopicSpy).toHaveBeenCalled();
 
       // TODO: need to test with fetchPresetTaskResult
+    });
+
+    it('should keep an optimistic title visible until the summarized title is ready', async () => {
+      const topicId = 'topic-1';
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
+      const optimisticTitle = '阅读下面的材料，根据要求写作。';
+      const topics = [{ id: topicId, title: optimisticTitle }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+      await act(async () => {
+        useChatStore.setState({
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              items: topics,
+              total: topics.length,
+              currentPage: 0,
+              hasMore: false,
+              pageSize: 20,
+            },
+          },
+          activeAgentId: 'test',
+        });
+      });
+
+      const updateTopicTitleInSummarySpy = vi.spyOn(
+        result.current,
+        'internal_updateTopicTitleInSummary',
+      );
+      const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+
+      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(async (params) => {
+        params?.onMessageHandle?.({ type: 'text', text: 'Partial Title' } as any);
+        await params?.onFinish?.('Summarized Title', { type: 'done' });
+      });
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, LOADING_FLAT);
+      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, 'Partial Title');
+      expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
     });
   });
   describe('createTopic', () => {

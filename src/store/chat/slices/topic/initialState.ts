@@ -51,6 +51,11 @@ export interface ChatTopicState {
    * Contains items, total count, pagination state, and loading states
    */
   topicDataMap: Record<string, TopicData>;
+  /**
+   * Internal ref-count for topic loading owners. A topic can be loading because
+   * the agent is running and because title-summary is streaming at the same time.
+   */
+  topicLoadingIdCounts: Record<string, number>;
   topicLoadingIds: string[];
   topicRenamingId?: string;
   topicSearchKeywords: string;
@@ -64,6 +69,7 @@ export const initialTopicState: ChatTopicState = {
   isSearchingTopic: false,
   searchTopics: [],
   topicDataMap: {},
+  topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicSearchKeywords: '',
 };

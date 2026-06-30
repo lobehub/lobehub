@@ -1,6 +1,9 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { ModulePreloadOptions } from 'vite';
+import type { ModulePreloadOptions, UserConfig } from 'vite';
 
 import { viteEmotionSpeedy } from './emotionSpeedy';
 import { viteMarkdownImport } from './markdownImport';
@@ -21,6 +24,44 @@ const HEAVY_NS = new Set(['models', 'modelProvider']);
  * main app, and both SPAs share the same chunk URLs for these namespaces.
  */
 const AUTH_NS = new Set(['auth', 'authError', 'common', 'error', 'marketAuth', 'oauth']);
+
+const resolveModuleDirname = () => {
+  if (typeof __dirname === 'string') return __dirname;
+  if (import.meta.url.startsWith('file:')) return path.dirname(fileURLToPath(import.meta.url));
+
+  return path.dirname(import.meta.url);
+};
+
+const LOBEHUB_ROOT = path.resolve(resolveModuleDirname(), '../..');
+const LOBEHUB_EDITOR_PACKAGE = path.join(LOBEHUB_ROOT, 'node_modules/@lobehub/editor');
+const resolveLobehubEditorEntry = (entry: string) => path.join(LOBEHUB_EDITOR_PACKAGE, 'es', entry);
+
+export const sharedRendererResolve = {
+  alias: [
+    { find: /^@lobehub\/editor$/, replacement: resolveLobehubEditorEntry('index.js') },
+    {
+      find: /^@lobehub\/editor\/codemirror$/,
+      replacement: resolveLobehubEditorEntry('codemirror.js'),
+    },
+    {
+      find: /^@lobehub\/editor\/headless$/,
+      replacement: resolveLobehubEditorEntry('headless.js'),
+    },
+    {
+      find: /^@lobehub\/editor\/litexml-commands$/,
+      replacement: path.join(LOBEHUB_EDITOR_PACKAGE, 'es/plugins/litexml/command/symbols.js'),
+    },
+    { find: /^@lobehub\/editor\/react$/, replacement: resolveLobehubEditorEntry('react.js') },
+    {
+      find: /^@lobehub\/editor\/renderer$/,
+      replacement: resolveLobehubEditorEntry('renderer.js'),
+    },
+  ],
+  // Workspace builtin tools may have a peer symlink to another @lobehub/editor
+  // patch version. Example: ReactListPlugin from 4.18.0 cannot read the 4.18.1
+  // Editor context and crashes with "cannot find a LexicalComposerContext".
+  dedupe: ['@lobehub/editor', 'react', 'react-dom'],
+} satisfies NonNullable<UserConfig['resolve']>;
 
 /** antd locale filename → app locale */
 const ANTD_LOCALE: Record<string, string> = {

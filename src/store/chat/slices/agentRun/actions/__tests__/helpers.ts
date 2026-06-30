@@ -114,6 +114,8 @@ export const resetTestEnvironment = () => {
       activeTopicId: TEST_IDS.TOPIC_ID,
       messagesMap: {},
       toolCallingStreamIds: {},
+      topicLoadingIdCounts: {},
+      topicLoadingIds: [],
     },
     false,
   );

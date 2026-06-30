@@ -204,7 +204,11 @@ export class ChatTopicActionImpl {
     const topic = topicSelectors.getTopicById(topicId)(this.#get());
     if (!topic) return;
 
-    internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
+    // Keep an optimistic title like "阅读下面..." stable while AI rename runs;
+    // otherwise the sidebar flickers `title -> ... -> final title`.
+    const shouldStreamSummaryTitle = !topic.title || topic.title === LOADING_FLAT;
+
+    if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
 
     let output = '';
 
@@ -214,7 +218,7 @@ export class ChatTopicActionImpl {
     // Automatically summarize the topic title
     await chatService.fetchPresetTaskResult({
       onError: () => {
-        internal_updateTopicTitleInSummary(topicId, topic.title);
+        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, topic.title);
       },
       onFinish: async (text) => {
         await this.#get().internal_updateTopic(topicId, { title: text });
@@ -229,7 +233,7 @@ export class ChatTopicActionImpl {
           }
         }
 
-        internal_updateTopicTitleInSummary(topicId, output);
+        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, output);
       },
       params: merge(
         topicConfig,
@@ -969,12 +973,86 @@ export class ChatTopicActionImpl {
   internal_updateTopicLoading = (id: string, loading: boolean): void => {
     this.#set(
       (state) => {
-        if (loading) return { topicLoadingIds: [...state.topicLoadingIds, id] };
+        const currentCount =
+          state.topicLoadingIdCounts[id] ?? (state.topicLoadingIds.includes(id) ? 1 : 0);
+        const nextCounts = { ...state.topicLoadingIdCounts };
 
-        return { topicLoadingIds: state.topicLoadingIds.filter((i) => i !== id) };
+        if (loading) {
+          nextCounts[id] = currentCount + 1;
+          const nextIds = state.topicLoadingIds.includes(id)
+            ? state.topicLoadingIds
+            : [...state.topicLoadingIds, id];
+
+          return {
+            topicLoadingIdCounts: nextCounts,
+            topicLoadingIds: nextIds,
+          };
+        }
+
+        if (currentCount > 1) {
+          nextCounts[id] = currentCount - 1;
+
+          return { topicLoadingIdCounts: nextCounts, topicLoadingIds: state.topicLoadingIds };
+        }
+
+        delete nextCounts[id];
+        const nextIds = state.topicLoadingIds.filter((i) => i !== id);
+
+        return {
+          topicLoadingIdCounts: nextCounts,
+          topicLoadingIds: nextIds,
+        };
       },
       false,
       n('updateTopicLoading'),
+    );
+  };
+
+  internal_replaceTopicId = (params: {
+    agentId?: string;
+    groupId?: string;
+    nextId: string;
+    previousId: string;
+    value?: Partial<ChatTopic>;
+  }): void => {
+    const { agentId, groupId, nextId, previousId, value } = params;
+
+    // The first-message optimistic topic starts as `tmp_topic_*`. Once the
+    // server returns the real id, keep the same row alive so loading state and
+    // title-summary updates continue targeting the visible topic.
+    this.#get().internal_dispatchTopic(
+      {
+        agentId,
+        groupId,
+        id: previousId,
+        nextId,
+        type: 'replaceTopicId',
+        value,
+      },
+      n('replaceTopicId'),
+    );
+
+    this.#set(
+      (state) => {
+        const previousCount = state.topicLoadingIdCounts[previousId] ?? 0;
+        const nextCount = state.topicLoadingIdCounts[nextId] ?? 0;
+        const topicLoadingIdCounts = { ...state.topicLoadingIdCounts };
+        delete topicLoadingIdCounts[previousId];
+        if (previousCount > 0 || nextCount > 0) {
+          topicLoadingIdCounts[nextId] = previousCount + nextCount;
+        }
+        const topicLoadingIds = Array.from(
+          new Set(state.topicLoadingIds.map((id) => (id === previousId ? nextId : id))),
+        );
+
+        return {
+          activeTopicId: state.activeTopicId === previousId ? nextId : state.activeTopicId,
+          topicLoadingIdCounts,
+          topicLoadingIds,
+        };
+      },
+      false,
+      n('replaceTopicId/loading'),
     );
   };
 

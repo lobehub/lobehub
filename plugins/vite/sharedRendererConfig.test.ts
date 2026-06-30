@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { __testing, sharedModulePreload } from './sharedRendererConfig';
+import { __testing, sharedModulePreload, sharedRendererResolve } from './sharedRendererConfig';
 
 describe('sharedModulePreload', () => {
   it('keeps vendor modulepreload dependencies while excluding i18n chunks', () => {
@@ -19,6 +19,23 @@ describe('sharedModulePreload', () => {
         { hostId: 'index.html', hostType: 'html' },
       ),
     ).toEqual(['assets/vendor-icons.js', 'vendor/vendor-react.js', 'assets/page.js']);
+  });
+});
+
+describe('sharedRendererResolve', () => {
+  it('keeps @lobehub/editor as a singleton across workspace package importers', () => {
+    const alias = sharedRendererResolve.alias as Array<{
+      find: RegExp;
+      replacement: string;
+    }>;
+
+    expect(sharedRendererResolve.dedupe).toContain('@lobehub/editor');
+    expect(alias.find(({ find }) => find.test('@lobehub/editor'))?.replacement).toMatch(
+      /node_modules\/@lobehub\/editor\/es\/index\.js$/,
+    );
+    expect(alias.find(({ find }) => find.test('@lobehub/editor/react'))?.replacement).toMatch(
+      /node_modules\/@lobehub\/editor\/es\/react\.js$/,
+    );
   });
 });
 

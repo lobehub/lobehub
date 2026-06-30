@@ -1,5 +1,5 @@
 import type * as LobechatConstModule from '@lobechat/const';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -466,6 +466,103 @@ describe('ConversationLifecycle actions', () => {
           expect.any(AbortController),
         );
         expect(result.current.executeClientAgent).toHaveBeenCalled();
+      });
+
+      it('should show an optimistic topic while the first message is still creating the server topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+        let resolveExecute!: () => void;
+        const executePromise = new Promise<void>((resolve) => {
+          resolveExecute = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: null,
+            executeClientAgent: vi.fn().mockReturnValue(executePromise),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(serverSendPromise);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: '666',
+          });
+        });
+
+        await waitFor(() => expect(sendMessageInServerSpy).toHaveBeenCalled());
+
+        const optimisticTopic = useChatStore.getState().topicDataMap[topicKey]?.items[0];
+        expect(optimisticTopic).toEqual(
+          expect.objectContaining({
+            sessionId: agentId,
+            title: '666',
+          }),
+        );
+        expect(optimisticTopic?.id).toMatch(/^tmp_topic_/);
+        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopic!.id);
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: newTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: newTopicId,
+              }),
+            ],
+            topicId: newTopicId,
+            topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toBe(newTopicId),
+        );
+        const finalTopics = useChatStore.getState().topicDataMap[topicKey]?.items ?? [];
+        expect(finalTopics).toEqual([expect.objectContaining({ id: newTopicId })]);
+        expect(finalTopics.some((topic) => topic.id === optimisticTopic?.id)).toBe(false);
+        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopic!.id);
+        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
+
+        await act(async () => {
+          resolveExecute();
+          await sendPromise;
+        });
+
+        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
       });
 
       it('should persist selected tool tags into user message content before runtime execution', async () => {
@@ -1854,6 +1951,44 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({ id: TEST_IDS.ASSISTANT_MESSAGE_ID }),
         ]),
       );
+    });
+
+    it('CLIENT new-topic path: summaryTopicTitle still runs when the response omits isCreateNewTopic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = TEST_IDS.SESSION_ID;
+      const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+
+      const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
+      act(() => {
+        useChatStore.setState({ summaryTopicTitle: summaryTopicTitleSpy });
+      });
+
+      const persistedMessages = [
+        createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId: newTopicId }),
+        createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          parentId: TEST_IDS.USER_MESSAGE_ID,
+          role: 'assistant',
+          topicId: newTopicId,
+        }),
+      ];
+
+      vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+        assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        messages: persistedMessages,
+        topicId: newTopicId,
+        topics: undefined,
+        userMessageId: TEST_IDS.USER_MESSAGE_ID,
+      } as any);
+
+      await act(async () => {
+        await result.current.sendMessage({
+          context: { agentId, threadId: null, topicId: null },
+          message: TEST_CONTENT.USER_MESSAGE,
+        });
+      });
+
+      expect(summaryTopicTitleSpy).toHaveBeenCalledWith(newTopicId, expect.any(Array));
     });
 
     it('CLIENT existing-topic with EMPTY title: summaryTopicTitle IS invoked', async () => {

@@ -365,6 +365,8 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'trigger'>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
+    /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
+    optimisticTopic?: { id: string; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
@@ -397,6 +399,7 @@ export class GatewayActionImpl {
       message,
       metadata,
       onComplete,
+      optimisticTopic,
       parentMessageId,
       parentOperationId,
       resumeApproval,
@@ -487,6 +490,18 @@ export class GatewayActionImpl {
     if (isCreateNewTopic && result.topicId) {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (context.agentId) consumePendingTopicRepos(context.agentId);
+      if (optimisticTopic) {
+        this.#get().internal_replaceTopicId({
+          agentId: context.agentId,
+          groupId: context.groupId,
+          nextId: result.topicId,
+          previousId: optimisticTopic.id,
+          value: {
+            ...(context.groupId ? {} : { sessionId: context.agentId }),
+            title: optimisticTopic.title,
+          },
+        });
+      }
       try {
         const newContext = { ...context, topicId: result.topicId };
         const messages = await messageService.getMessages(newContext);
@@ -520,7 +535,7 @@ export class GatewayActionImpl {
     const execContext = { ...context, topicId: result.topicId };
 
     if (result.topicId) {
-      this.#get().internal_updateTopicLoading(result.topicId, true);
+      if (!optimisticTopic) this.#get().internal_updateTopicLoading(result.topicId, true);
       void this.#get().updateTopicStatus?.({
         agentId: context.agentId,
         groupId: context.groupId,

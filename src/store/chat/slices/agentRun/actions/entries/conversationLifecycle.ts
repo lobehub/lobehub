@@ -121,6 +121,11 @@ type SendMessageServerResponseMeta = SendMessageServerResponse & {
   __isPartialMessages?: boolean;
 };
 
+interface OptimisticTopicPlaceholder {
+  id: string;
+  title: string;
+}
+
 /**
  * Actions managing the complete lifecycle of conversations including sending,
  * regenerating, and resending messages
@@ -392,6 +397,8 @@ export class ConversationLifecycleActionImpl {
     // if message is empty or no files, then stop
     if (!message && !hasFile) return;
 
+    const newTopicTitle = message.slice(0, 80) || t('defaultTitle', { ns: 'topic' });
+
     // ━━━ Message Queue: enqueue if agent is currently running ━━━
     // Check if there's a running agent-runtime operation in the current context.
     // If so, enqueue the message instead of starting a new operation. Covers all
@@ -546,6 +553,83 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempId, operationId);
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
+    const optimisticTopic: OptimisticTopicPlaceholder | undefined =
+      !operationContext.topicId && !context.isolatedTopic
+        ? { id: `tmp_topic_${nanoid()}`, title: newTopicTitle }
+        : undefined;
+    let optimisticTopicActive = false;
+    let optimisticTopicResolved = false;
+
+    const optimisticTopicScope = {
+      agentId: operationContext.agentId,
+      groupId: operationContext.groupId ?? undefined,
+    };
+
+    const addResolvedTopicPlaceholder = (topicId: string, title: string, action: string) => {
+      this.#get().internal_dispatchTopic(
+        {
+          ...optimisticTopicScope,
+          type: 'addTopic',
+          value: {
+            id: topicId,
+            ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
+            title,
+          },
+        },
+        action,
+      );
+    };
+
+    const resolveOptimisticTopic = (topicId: string, title = optimisticTopic?.title) => {
+      if (!optimisticTopic || !optimisticTopicActive) {
+        addResolvedTopicPlaceholder(
+          topicId,
+          title || t('defaultTitle', { ns: 'topic' }),
+          'sendMessage/reconcileOptimisticTopic/add',
+        );
+        return;
+      }
+
+      this.#get().internal_replaceTopicId({
+        ...optimisticTopicScope,
+        nextId: topicId,
+        previousId: optimisticTopic.id,
+        value: {
+          ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
+          title: title || t('defaultTitle', { ns: 'topic' }),
+        },
+      });
+      optimisticTopicActive = false;
+      optimisticTopicResolved = true;
+    };
+
+    const rollbackOptimisticTopic = (action: string) => {
+      if (!optimisticTopic || !optimisticTopicActive) return;
+
+      this.#get().internal_updateTopicLoading(optimisticTopic.id, false);
+      this.#get().internal_dispatchTopic(
+        { ...optimisticTopicScope, type: 'deleteTopic', id: optimisticTopic.id },
+        action,
+      );
+      optimisticTopicActive = false;
+    };
+
+    const replaceOptimisticTopic = (topicId: string, title = optimisticTopic?.title) => {
+      resolveOptimisticTopic(topicId, title);
+    };
+
+    if (optimisticTopic) {
+      // Input "666" used to leave the sidebar unchanged until the server returned
+      // a topicId; insert a temporary topic so the new conversation is visible immediately.
+      addResolvedTopicPlaceholder(
+        optimisticTopic.id,
+        optimisticTopic.title,
+        'sendMessage/optimisticCreateTopic',
+      );
+      this.#get().internal_updateTopicLoading(optimisticTopic.id, true);
+      optimisticTopicActive = true;
+    }
+
     // Store editor state in operation metadata for cancel restoration
     const jsonState = inputEditorData ?? mainInputEditor?.getJSONState();
     this.#get().updateOperationMetadata(operationId, {
@@ -618,10 +702,14 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'HeterogeneousAgentError',
         });
+        rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         return;
       }
 
-      if (!heteroData) return;
+      if (!heteroData) {
+        rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+        return;
+      }
 
       // Update context with server-created topicId
       const heteroContext = {
@@ -647,6 +735,12 @@ export class ConversationLifecycleActionImpl {
       // Handle new topic creation
       if (heteroData.isCreateNewTopic && heteroData.topicId) {
         if (heteroData.topics) {
+          if (optimisticTopic && optimisticTopicActive) {
+            resolveOptimisticTopic(
+              heteroData.topicId,
+              markdownToTxt(message).slice(0, 80) || optimisticTopic.title,
+            );
+          }
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
           this.#get().internal_updateTopics(operationContext.agentId, {
             groupId: operationContext.groupId,
@@ -654,6 +748,12 @@ export class ConversationLifecycleActionImpl {
             pageSize,
             total: heteroData.topics.total,
           });
+        } else if (!context.isolatedTopic) {
+          replaceOptimisticTopic(
+            heteroData.topicId,
+            markdownToTxt(message).slice(0, 80) || optimisticTopic?.title,
+          );
+          void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
         }
         await this.#get().switchTopic(heteroData.topicId, {
           clearNewKey: true,
@@ -693,7 +793,9 @@ export class ConversationLifecycleActionImpl {
       // branch returns early (line 498) and never reaches that clear.
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
-      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, true);
+      if (heteroData.topicId && !optimisticTopicResolved) {
+        this.#get().internal_updateTopicLoading(heteroData.topicId, true);
+      }
 
       // Start heterogeneous agent execution
       const { operationId: heteroOpId } = this.#get().startOperation({
@@ -769,6 +871,7 @@ export class ConversationLifecycleActionImpl {
           message,
           metadata: requestMetadata,
           parentOperationId: operationId,
+          optimisticTopic,
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.
@@ -792,6 +895,8 @@ export class ConversationLifecycleActionImpl {
               topicId: result.topicId,
             })
             .catch(console.error);
+        } else {
+          rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         }
 
         return {
@@ -803,19 +908,29 @@ export class ConversationLifecycleActionImpl {
         // the op to 'cancelled' and `executeGatewayAgent` cleaned up the
         // server task. Don't clobber that with 'failed'.
         const op = this.#get().operations[operationId];
-        if (op?.status === 'cancelled') return;
+        if (op?.status === 'cancelled') {
+          rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+          return;
+        }
 
         console.error('[Gateway] Failed to start server-side agent:', e);
         this.#get().failOperation(operationId, {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
         });
+        rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         return;
       }
     }
 
     // ── Client mode: send via server API then run agent locally ──
     let data: SendMessageServerResponse | undefined;
+    const isCreatedTopicResponse = (response?: SendMessageServerResponse) =>
+      Boolean(
+        response &&
+        (response.isCreateNewTopic || (!operationContext.topicId && !!response.topicId)),
+      );
+
     try {
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
@@ -846,8 +961,6 @@ export class ConversationLifecycleActionImpl {
       const toolContext = formatSelectedToolsContext(dedupedTools);
       const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
       const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
-      const newTopicTitle = message.slice(0, 80) || t('defaultTitle', { ns: 'topic' });
-
       data = await aiChatService.sendMessageInServer(
         {
           newUserMessage: {
@@ -898,6 +1011,7 @@ export class ConversationLifecycleActionImpl {
       // Use created topicId/threadId if available, otherwise use original from context
       let finalTopicId = data.topicId ?? operationContext.topicId;
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
+      const isCreateNewTopic = isCreatedTopicResponse(data);
 
       // refresh the total data
       if (data?.topics) {
@@ -908,6 +1022,9 @@ export class ConversationLifecycleActionImpl {
         // Otherwise the newly created isolated-trigger topic would flash in the
         // main sidebar until the next SWR revalidation filters it out.
         if (!context.isolatedTopic) {
+          if (optimisticTopic && optimisticTopicActive && data.topicId) {
+            resolveOptimisticTopic(data.topicId, newTopicTitle);
+          }
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
           this.#get().internal_updateTopics(operationContext.agentId, {
             groupId: operationContext.groupId,
@@ -919,17 +1036,8 @@ export class ConversationLifecycleActionImpl {
           // Record the created topicId in metadata (not context)
           this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         }
-      } else if (data.isCreateNewTopic && data.topicId && !context.isolatedTopic) {
-        this.#get().internal_dispatchTopic(
-          {
-            type: 'addTopic',
-            value: {
-              id: data.topicId,
-              title: newTopicTitle,
-            },
-          },
-          'sendMessage/createTopicPlaceholder',
-        );
+      } else if (isCreateNewTopic && data.topicId && !context.isolatedTopic) {
+        replaceOptimisticTopic(data.topicId, newTopicTitle);
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
@@ -986,7 +1094,7 @@ export class ConversationLifecycleActionImpl {
         action: 'sendMessage/serverResponse',
       });
 
-      if (data.isCreateNewTopic && data.topicId) {
+      if (isCreateNewTopic && data.topicId) {
         if (context.isolatedTopic) {
           // Notify the isolated caller immediately so its UI re-subscribes to
           // the new topic key and picks up the streaming AI response.
@@ -1001,6 +1109,7 @@ export class ConversationLifecycleActionImpl {
       }
     } catch (e) {
       console.error(e);
+      rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
       // Fail operation on error
       this.#get().failOperation(operationId, {
         type: e instanceof Error ? e.name : 'unknown_error',
@@ -1022,7 +1131,7 @@ export class ConversationLifecycleActionImpl {
       }
     } finally {
       // A new topic was created, or the user cancelled the message (or it failed), so data is absent here
-      if (data?.isCreateNewTopic || !data) {
+      if (isCreatedTopicResponse(data) || !data) {
         this.#get().internal_dispatchMessage(
           { type: 'deleteMessages', ids: [tempId, tempAssistantId] },
           { operationId },
@@ -1035,9 +1144,14 @@ export class ConversationLifecycleActionImpl {
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
     }
 
-    if (!data) return;
+    if (!data) {
+      rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+      return;
+    }
 
-    if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, true);
+    if (data.topicId && !optimisticTopicResolved) {
+      this.#get().internal_updateTopicLoading(data.topicId, true);
+    }
 
     // Topic title auto-generation, now via the shared `afterUserMessagePersisted`
     // hook. The client passes its freshly-created `data.messages`
@@ -1047,7 +1161,7 @@ export class ConversationLifecycleActionImpl {
       .afterUserMessagePersisted({
         assistantMessageId: data.assistantMessageId,
         context: operationContext,
-        isCreateNewTopic: data.isCreateNewTopic,
+        isCreateNewTopic: isCreatedTopicResponse(data),
         messages: data.messages,
         operationId,
         runId: operationId,
@@ -1179,7 +1293,9 @@ export class ConversationLifecycleActionImpl {
       } catch (e) {
         console.error(e);
       } finally {
-        if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
+        if (data.topicId) {
+          this.#get().internal_updateTopicLoading(data.topicId, false);
+        }
       }
     }
 
@@ -1187,7 +1303,7 @@ export class ConversationLifecycleActionImpl {
     return {
       assistantMessageId: data.assistantMessageId,
       createdThreadId: data.createdThreadId,
-      createdTopicId: data.isCreateNewTopic ? data.topicId : undefined,
+      createdTopicId: isCreatedTopicResponse(data) ? data.topicId : undefined,
       userMessageId: data.userMessageId,
     };
   };

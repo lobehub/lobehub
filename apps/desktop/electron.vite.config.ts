@@ -12,6 +12,7 @@ import {
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
+  sharedRendererResolve,
   sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
@@ -335,7 +336,7 @@ export default defineConfig({
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
-      dedupe: ['react', 'react-dom'],
+      ...sharedRendererResolve,
       tsconfigPaths: !isCloudDesktopBuild,
     },
     // In dev the BrowserWindow loads `app://renderer/` and the Electron main process

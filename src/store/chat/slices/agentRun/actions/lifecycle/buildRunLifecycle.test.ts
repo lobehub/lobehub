@@ -211,6 +211,38 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
   });
 
+  it('dev-slice title update does not clear the client runtime loading owner', async () => {
+    const previous = process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+    process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = '1';
+
+    try {
+      const { get, store } = makeStore();
+      const messages = [
+        { content: '阅读下面的材料，根据要求写作。', id: 'm1', role: 'user' } as any,
+      ];
+
+      await lifecycle('client', get, 'top_level').afterUserMessagePersisted(
+        persistedEvent('client', 'top_level', {
+          isCreateNewTopic: true,
+          messages,
+          topicId: 't1',
+        }),
+      );
+
+      expect(store.internal_updateTopic).toHaveBeenCalledWith('t1', {
+        title: '阅读下面的材料，根据要求写作。',
+      });
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('t1', false);
+      expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+      } else {
+        process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = previous;
+      }
+    }
+  });
+
   it('loads the topic first when it is absent from the store (gateway fire-and-forget refreshTopic race)', async () => {
     const { get, store } = makeStore(); // topicMaps empty → getTopicById returns undefined
     const messages = [{ content: 'hi', id: 'm1', role: 'user' } as any];
