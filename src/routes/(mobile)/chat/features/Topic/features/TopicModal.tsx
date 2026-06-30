@@ -1,6 +1,6 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
+import { Modal } from '@lobehub/ui/base-ui';
 import type { PropsWithChildren } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
