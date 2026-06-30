@@ -47,7 +47,8 @@ import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
-import { AI_RUNTIME_OPERATION_TYPES, type QueuedFile } from '@/store/chat/slices/operation/types';
+import type { OperationType, QueuedFile } from '@/store/chat/slices/operation/types';
+import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -144,6 +145,11 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
+
+const QUEUE_BLOCKING_OPERATION_TYPES = new Set<OperationType>([
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+]);
 
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
@@ -399,19 +405,18 @@ export class ConversationLifecycleActionImpl {
 
     const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
-    // ━━━ Message Queue: enqueue if agent is currently running ━━━
-    // Check if there's a running agent-runtime operation in the current context.
-    // If so, enqueue the message instead of starting a new operation. Covers all
-    // three runtime paths (`AI_RUNTIME_OPERATION_TYPES`) — Client, heterogeneous
-    // agent / CC, and Gateway — so a follow-up send never spawns a parallel
-    // `claude` process or a second server-side run.
+    // ━━━ Message Queue: enqueue if this context is already busy ━━━
+    // Include the initial `sendMessage` persist/create-topic phase. Example:
+    // first send from a blank chat is still creating topic A (`topicId=null`);
+    // a fast second Enter must queue on `main_<agent>_new` instead of starting
+    // topic B.
     const currentContextKey = messageMapKey(operationContext);
     const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
-    const runningAgentOp = contextOpIds
+    const runningQueueBlockingOp = contextOpIds
       .map((id) => this.#get().operations[id])
-      .find((op) => op && AI_RUNTIME_OPERATION_TYPES.includes(op.type) && op.status === 'running');
+      .find((op) => op && QUEUE_BLOCKING_OPERATION_TYPES.has(op.type) && op.status === 'running');
 
-    if (runningAgentOp) {
+    if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
       // resumed sendMessage can rebuild imageList/videoList — by the time
       // we drain, chatUploadFileList has long been cleared.
@@ -435,7 +440,7 @@ export class ConversationLifecycleActionImpl {
           metadata: userMessageMetadata,
           createdAt: Date.now(),
         },
-        runningAgentOp.id,
+        runningQueueBlockingOp.id,
       );
       return;
     }
@@ -724,6 +729,7 @@ export class ConversationLifecycleActionImpl {
       };
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);
+      this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
       const heteroMessages = heteroResponseMeta.__isPartialMessages
         ? mergePartialPersistedMessages(
             this.#get().messagesMap[heteroMessageKey] || [],
@@ -1071,13 +1077,18 @@ export class ConversationLifecycleActionImpl {
       }
 
       // Create final context with updated topicId/threadId from server response
-      const finalContext = { ...operationContext, topicId: finalTopicId, threadId: finalThreadId };
+      const finalContext = {
+        ...operationContext,
+        threadId: finalThreadId,
+        topicId: finalTopicId,
+      };
+      const finalMessageKey = messageMapKey(finalContext);
+      this.#get().moveQueuedMessages(currentContextKey, finalMessageKey);
       const persistedMessages = attachSendTimeMetadataToUserMessage(
         data.messages,
         data.userMessageId,
         userMessageMetadata,
       );
-      const finalMessageKey = messageMapKey(finalContext);
       data = {
         ...data,
         messages: responseMeta.__isPartialMessages

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 import { topicService } from '@/services/topic';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
@@ -508,6 +509,7 @@ describe('GatewayActionImpl', () => {
   describe('executeGatewayAgent', () => {
     function createExecuteTestAction() {
       const mockClient = createMockClient();
+      const moveQueuedMessages = vi.fn();
       const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
       const associateMessageWithOperation = vi.fn();
       const connectToGateway = vi.fn();
@@ -535,6 +537,7 @@ describe('GatewayActionImpl', () => {
         internal_dispatchTopic: internalDispatchTopic,
         internal_replaceTopicId: internalReplaceTopicId,
         internal_updateTopicLoading: internalUpdateTopicLoading,
+        moveQueuedMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -564,6 +567,7 @@ describe('GatewayActionImpl', () => {
         internalReplaceTopicId,
         internalUpdateTopicLoading,
         mockClient,
+        moveQueuedMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -641,6 +645,36 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
         }),
         expect.anything(),
+      );
+    });
+
+    it('should move queued follow-ups from the new-topic key to the server-created topic key', async () => {
+      const { action, moveQueuedMessages } = createExecuteTestAction();
+      const context = { agentId: 'agent-1', topicId: null, threadId: null };
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-created',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context,
+        message: 'Hello',
+      });
+
+      expect(moveQueuedMessages).toHaveBeenCalledWith(
+        messageMapKey(context),
+        messageMapKey({ ...context, topicId: 'topic-created' }),
       );
     });
 
@@ -927,6 +961,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway: vi.fn(),
         internal_dispatchTopic: vi.fn(),
         internal_updateTopicLoading: vi.fn(),
+        moveQueuedMessages: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),
         startOperation,

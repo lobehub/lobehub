@@ -999,6 +999,114 @@ describe('ConversationLifecycle actions', () => {
           'op-cc-running',
         );
       });
+
+      it('should enqueue while the first new-topic message is still being persisted', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-send-running': {
+                childOperationIds: [],
+                context: { ...context, messageId: 'tmp-first-user-message' },
+                id: 'op-send-running',
+                metadata: {},
+                status: 'running',
+                type: 'sendMessage',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-send-running'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'fast follow-up before topic is created',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'fast follow-up before topic is created',
+            interruptMode: 'soft',
+          }),
+          'op-send-running',
+        );
+        expect(sendMessageInServerSpy).not.toHaveBeenCalled();
+      });
+
+      it('should move queued follow-ups from the new-topic key to the created topic key', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const createdTopicId = 'created-topic-id';
+        const newTopicKey = messageMapKey({ agentId, topicId: null });
+        const createdTopicKey = messageMapKey({ agentId, topicId: createdTopicId });
+        const queuedMessage = {
+          content: 'queued while topic is being created',
+          createdAt: Date.now(),
+          id: 'queued-before-topic-created',
+          interruptMode: 'soft' as const,
+        };
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            queuedMessages: {
+              [newTopicKey]: [queuedMessage],
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              topicId: createdTopicId,
+            }),
+            createMockMessage({
+              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              role: 'assistant',
+              topicId: createdTopicId,
+            }),
+          ],
+          topicId: createdTopicId,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(useChatStore.getState().queuedMessages[newTopicKey] ?? []).toEqual([]);
+        expect(useChatStore.getState().queuedMessages[createdTopicKey]).toEqual([queuedMessage]);
+      });
     });
 
     describe('page scope documentId injection', () => {
