@@ -399,11 +399,6 @@
       "count": 1
     }
   },
-  "src/features/Conversation/Messages/Verify/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/Conversation/Messages/components/Extras/TTS/Player.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -485,11 +480,6 @@
     }
   },
   "src/features/DocumentModal/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/features/EditorCanvas/LinearFilePlugin.tsx": {
     "no-restricted-imports": {
       "count": 1
     }
@@ -690,11 +680,6 @@
     }
   },
   "src/features/PageEditor/History/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/features/PageEditor/PageEditor.tsx": {
     "no-restricted-imports": {
       "count": 1
     }
