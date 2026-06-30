@@ -3,21 +3,23 @@ import type {
   LoadI18nNamespaceModuleWithFallbackParams,
 } from './loadI18nNamespaceModule';
 
+type NamespaceModule = { default: Record<string, unknown> };
+type NamespaceModuleMap = Record<string, NamespaceModule>;
+
 // eager: true — all locale JSON inlined at build time, synchronous access at runtime
-const defaultModules = import.meta.glob<{ default: Record<string, unknown> }>(
-  '/packages/locales/src/default/*.ts',
-  { eager: true },
-);
-const localeModules = import.meta.glob<{ default: Record<string, unknown> }>('/locales/*/*.json', {
+const defaultModules = import.meta.glob('/packages/locales/src/default/*.ts', {
   eager: true,
-});
+}) as NamespaceModuleMap;
+const localeModules = import.meta.glob('/locales/*/*.json', {
+  eager: true,
+}) as NamespaceModuleMap;
 
 const getDefaultKey = (ns: string) => `/packages/locales/src/default/${ns}.ts`;
 const getLocaleKey = (lng: string, ns: string) => `/locales/${lng}/${ns}.json`;
 
 export const loadI18nNamespaceModule = async (
   params: LoadI18nNamespaceModuleParams,
-): Promise<{ default: Record<string, unknown> }> => {
+): Promise<NamespaceModule> => {
   const { defaultLang, normalizeLocale, lng, ns } = params;
 
   if (lng === defaultLang) {
@@ -42,7 +44,7 @@ export type {
 
 export const loadI18nNamespaceModuleWithFallback = async (
   params: LoadI18nNamespaceModuleWithFallbackParams,
-): Promise<{ default: Record<string, unknown> }> => {
+): Promise<NamespaceModule> => {
   const { onFallback, ...rest } = params;
   try {
     return await loadI18nNamespaceModule(rest);
