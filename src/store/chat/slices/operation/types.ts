@@ -149,12 +149,18 @@ export interface OperationMetadata {
     total: number;
     percentage?: number;
   };
-
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
   // Performance information
   startTime: number;
+
+  /**
+   * The model text stream has finished and there is no visible follow-up phase
+   * to wait for, but the runtime operation still needs its terminal lifecycle
+   * (`agent_runtime_end`) for cache, queue, unread, and notification effects.
+   */
+  visibleLoadingDone?: boolean;
 }
 
 /**

@@ -41,6 +41,7 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
+    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
     operations: {
@@ -432,7 +433,50 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('should clear tool streaming only', async () => {
+    it('clears visible loading immediately for a plain no-tool answer', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('keeps visible loading after stream_end when tool calls need another step', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'tc-1' }],
+        }),
+      );
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('should clear tool streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 

@@ -32,6 +32,9 @@ const getRunningOperations = (s: ChatStoreState): Operation[] => {
   return Object.values(s.operations).filter((op) => op.status === 'running');
 };
 
+const isVisiblyRunningOperation = (op: Operation): boolean =>
+  op.status === 'running' && !op.metadata.isAborting && !op.metadata.visibleLoadingDone;
+
 /**
  * Get operation by ID
  */
@@ -222,6 +225,23 @@ const isAgentRuntimeRunningByContext =
   };
 
 /**
+ * Check if agent runtime should still show visible loading in a specific context.
+ * The underlying operation may remain running for terminal bookkeeping after a
+ * no-tool stream has ended.
+ */
+const isAgentRuntimeVisiblyRunningByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    return operations.some(
+      (op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
+    );
+  };
+
+/**
  * Get the earliest start time for a running agent runtime operation in a
  * specific context. This anchors visible elapsed-time UI to the top-level
  * runtime op instead of short-lived sub-operations.
@@ -240,6 +260,31 @@ const getAgentRuntimeStartTimeByContext =
         op.metadata.isAborting ||
         !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
       ) {
+        continue;
+      }
+
+      startTime =
+        startTime === undefined
+          ? op.metadata.startTime
+          : Math.min(startTime, op.metadata.startTime);
+    }
+
+    return startTime;
+  };
+
+/**
+ * Get the earliest start time for a visibly running agent runtime operation.
+ */
+const getVisibleAgentRuntimeStartTimeByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number | undefined => {
+    if (!context.agentId) return undefined;
+
+    const operations = getOperationsByContext(context)(s);
+    let startTime: number | undefined;
+
+    for (const op of operations) {
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type) || !isVisiblyRunningOperation(op)) {
         continue;
       }
 
@@ -272,6 +317,21 @@ const isInputLoadingByContext =
     );
   };
 
+/**
+ * Check if input should show visible loading state in a specific context.
+ */
+const isInputVisiblyLoadingByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    return operations.some(
+      (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
+    );
+  };
+
 // === Backward Compatibility ===
 
 /**
@@ -285,9 +345,7 @@ const isAgentRunning =
       const operationIds = s.operationsByType[type] || [];
       const hasRunning = operationIds.some((id) => {
         const op = s.operations[id];
-        return (
-          op && op.status === 'running' && !op.metadata.isAborting && op.context.agentId === agentId
-        );
+        return op && isVisiblyRunningOperation(op) && op.context.agentId === agentId;
       });
       if (hasRunning) return true;
     }
@@ -306,7 +364,7 @@ const isAgentRuntimeRunning = (s: ChatStoreState): boolean => {
     const hasRunning = operationIds.some((id) => {
       const op = s.operations[id];
       // Exclude operations that are aborting (user already cancelled, just cleaning up)
-      return op && op.status === 'running' && !op.metadata.isAborting;
+      return op && isVisiblyRunningOperation(op);
     });
     if (hasRunning) return true;
   }
@@ -325,7 +383,7 @@ const isMainWindowAgentRuntimeRunning = (s: ChatStoreState): boolean => {
 
     const hasRunning = operationIds.some((id) => {
       const op = s.operations[id];
-      if (!op || op.status !== 'running' || op.metadata.isAborting || op.metadata.inThread) {
+      if (!op || !isVisiblyRunningOperation(op) || op.metadata.inThread) {
         return false;
       }
 
@@ -661,6 +719,7 @@ export const operationSelectors = {
   getCurrentOperationLabel,
   getCurrentOperationProgress,
   getDeepestRunningOperationByMessage,
+  getVisibleAgentRuntimeStartTimeByContext,
   getOperationById,
   getOperationContextFromMessage,
   getAgentRuntimeStartTimeByContext,
@@ -683,7 +742,9 @@ export const operationSelectors = {
   isAgentRuntimeRunning,
   isAgentUnreadCompleted,
   isAgentRuntimeRunningByContext,
+  isAgentRuntimeVisiblyRunningByContext,
   isInputLoadingByContext,
+  isInputVisiblyLoadingByContext,
   isAnyMessageLoading,
   isContinuing,
   isInSearchWorkflow,

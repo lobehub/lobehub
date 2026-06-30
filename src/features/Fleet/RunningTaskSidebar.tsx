@@ -72,7 +72,7 @@ interface RunningStatusProps {
 const RunningStatus = memo<RunningStatusProps>(({ agentId, status, topicId }) => {
   const { isDarkMode } = useTheme();
   const startedAt = useChatStore(
-    operationSelectors.getAgentRuntimeStartTimeByContext({ agentId, topicId }),
+    operationSelectors.getVisibleAgentRuntimeStartTimeByContext({ agentId, topicId }),
   );
   const elapsed = useElapsedClock(startedAt);
 
