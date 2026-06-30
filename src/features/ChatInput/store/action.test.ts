@@ -1,12 +1,15 @@
 import type { IEditor } from '@lobehub/editor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAgentStore } from '@/store/agent';
+
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
 
 describe('ChatInput store actions', () => {
   beforeEach(() => {
     localStorage.clear();
+    useAgentStore.setState({ activeAgentId: undefined });
     vi.restoreAllMocks();
   });
 
@@ -45,6 +48,29 @@ describe('ChatInput store actions', () => {
       json: editorData,
       markdown: 'Hello',
     });
+  });
+
+  it('records sent input in the active agent history when no agent id is provided', () => {
+    useAgentStore.setState({ activeAgentId: 'active-agent' });
+
+    const editorData = { root: { children: [{ text: 'Hello' }] } };
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend: vi.fn(),
+    });
+
+    store.getState().handleSendButton();
+
+    expect(getInputHistory({ agentId: 'active-agent' })[0]).toMatchObject({
+      json: editorData,
+      markdown: 'Hello',
+    });
+    expect(getInputHistory()).toEqual([]);
   });
 
   it('does not record history when the input history feature is disabled', () => {
