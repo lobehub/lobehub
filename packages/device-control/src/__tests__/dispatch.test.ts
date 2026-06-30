@@ -61,6 +61,30 @@ describe('executeDeviceRpc', () => {
     expect(result.source).toBe('.agents/skills');
   });
 
+  it('parses folded skill descriptions from frontmatter', async () => {
+    await mkdir(path.join(root, '.agents', 'skills', 'agent-testing'), { recursive: true });
+    await writeFile(
+      path.join(root, '.agents', 'skills', 'agent-testing', 'SKILL.md'),
+      [
+        '---',
+        'name: agent-testing',
+        'description: >',
+        '  Agentic end-to-end testing for LobeHub: backend verification via the CLI,',
+        '  frontend verification via agent-browser (Electron).',
+        '---',
+        'body',
+      ].join('\n'),
+    );
+
+    const result = (await executeDeviceRpc('listProjectSkills', { scope: root }, makeDeps())) as {
+      skills: { description?: string; name: string }[];
+    };
+
+    expect(result.skills.find((skill) => skill.name === 'agent-testing')?.description).toBe(
+      'Agentic end-to-end testing for LobeHub: backend verification via the CLI, frontend verification via agent-browser (Electron).',
+    );
+  });
+
   it('routes statPath and reports a directory + repo type', async () => {
     const result = (await executeDeviceRpc('statPath', { path: root }, makeDeps())) as {
       exists: boolean;

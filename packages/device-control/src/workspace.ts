@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { detectRepoType } from '@lobechat/local-file-shell';
+import matter from 'gray-matter';
 
 import type {
   InitWorkspaceParams,
@@ -13,8 +14,6 @@ import type {
   WorkspaceInstructionsItem,
   WorkspaceScanDeps,
 } from './types';
-
-const SKILL_FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 
 // Cap recursion to guard against pathological directory trees.
 const MAX_SKILL_FILE_COUNT = 1000;
@@ -49,31 +48,30 @@ const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
   return results.sort();
 };
 
-/**
- * Parse a minimal YAML frontmatter block for SKILL.md files. Only handles
- * `key: value` lines; multi-line block scalars fall back to the first line.
- */
-const parseSkillFrontmatter = (raw: string): Record<string, string> => {
-  const match = raw.match(SKILL_FRONTMATTER_RE);
-  if (!match) return {};
+interface SkillFrontmatterFields {
+  description?: string;
+  name?: string;
+}
 
-  const fields: Record<string, string> = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    if (!key || key.startsWith('#')) continue;
-    let value = line.slice(colonIdx + 1).trim();
-    if (value.startsWith('|') || value.startsWith('>')) continue;
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    fields[key] = value;
+const readStringField = (data: Record<string, unknown>, field: keyof SkillFrontmatterFields) => {
+  const value = data[field];
+  return typeof value === 'string' ? value.trim() : undefined;
+};
+
+/**
+ * Parse SKILL.md YAML frontmatter. `gray-matter` handles block scalars such as
+ * `description: >`, keeping this path aligned with the server-side skill parser.
+ */
+const parseSkillFrontmatter = (raw: string): SkillFrontmatterFields => {
+  try {
+    const { data } = matter(raw) as { data: Record<string, unknown> };
+    return {
+      description: readStringField(data, 'description'),
+      name: readStringField(data, 'name'),
+    };
+  } catch {
+    return {};
   }
-  return fields;
 };
 
 /**
