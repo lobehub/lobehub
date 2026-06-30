@@ -154,7 +154,7 @@ const MessageItem = memo<MessageItemProps>(
         case 'supervisor': {
           // Supervisor messages render through the rich AssistantGroup component
           // (workflow collapse / taskCompletions / signalCallbacks) — it swaps in
-          // the group's avatar + name + 主管 badge when the message is a supervisor
+          // the group's avatar + name + supervisor badge when the message is a supervisor
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
             <AssistantGroupMessage

@@ -23,7 +23,7 @@ export type GroupRenderSegment = AnswerSegment | WorkflowSegment;
  * reasoning/tools so the answer text stays visible, rather than disappearing
  * inside the fold whenever a turn happens to end on a tool call. Everything that
  * is not the final answer — leading tools/reasoning/intermediate prose and any
- * trailing bookkeeping tools — folds under the Codex-style "已处理 {duration}"
+ * trailing bookkeeping tools — folds under the Codex-style "Processed {duration}"
  * header. A turn with no answer segment at all has no final answer to surface.
  */
 export const splitFinalAnswer = (
@@ -87,7 +87,7 @@ export const hasRenderableFinalAnswer = (segments: GroupRenderSegment[]): boolea
   });
 
 /**
- * Whether a turn folds its process under the "已处理" header. Gated by the
+ * Whether a turn folds its process under the "Processed" header. Gated by the
  * `enabled` lab flag, then: only after the associated operation has ended and
  * the message is not generating. The latest turn is eligible only once its final
  * answer is visible, so a tool-only latest turn does not collapse into a lone

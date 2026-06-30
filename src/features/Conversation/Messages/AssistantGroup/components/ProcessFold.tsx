@@ -16,7 +16,7 @@ interface ProcessFoldProps {
 }
 
 /**
- * Codex-style "已处理 {duration}" header that folds a finished turn's *process*
+ * Codex-style "Processed {duration}" header that folds a finished turn's *process*
  * (reasoning + tool calls + intermediate narration) into one persistent,
  * toggleable row. The turn's final answer is rendered separately and stays
  * visible regardless of this state. Reuses the same Accordion chrome as

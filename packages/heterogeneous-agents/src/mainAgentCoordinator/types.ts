@@ -16,7 +16,7 @@ import type { ExternalSignalContext, ToolCallPayload } from '../types';
  * the source tool so `MessageCollector.collectAssistantChain` keeps walking;
  * the server lacked it and, on a cold serverless replica, fell back to chaining
  * `asst → asst`, which forks the wire into disconnected bubbles (the remote
- * "断链" bug).
+ * "broken chain" bug).
  *
  * This module owns the "when to open a turn / persist / resolve / finalize"
  * decisions in ONE pure reducer, mirroring `subagentCoordinator`. It performs

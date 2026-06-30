@@ -183,7 +183,7 @@ const ScopeRow = memo<{ label: string; value?: string | null }>(({ label, value 
 });
 
 /**
- * Scope header — the report's "范围" block. Rendered per `scenario`; today only
+ * Scope header — the report's "Scope" block. Rendered per `scenario`; today only
  * `coding` (branch / commit / surfaces / …). Returns null when there's nothing
  * to show so the page stays clean for runs without context.
  */
