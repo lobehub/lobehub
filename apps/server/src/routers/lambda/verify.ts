@@ -24,6 +24,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import {
+  finalizeVerifyRun,
   VerifyExecutorService,
   VerifyFeedbackService,
   VerifyPlanGeneratorService,
@@ -387,6 +388,24 @@ export const verifyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.executorService.execute(input);
+      // Settle the run through the SAME finalizer the completion-time gate uses
+      // (runVerifyOnCompletion → finalizeVerifyRun): repair-aware tail (spawn a
+      // repair round on auto_repair failures), then report + drive the bound task.
+      // Without this, a verify triggered via the CLI (`lh verify run`, e.g. a
+      // device/agent-testing run) would write verdicts and stop — never auto-repair.
+      await finalizeVerifyRun(
+        ctx.serverDB,
+        ctx.userId,
+        input.operationId,
+        {
+          report: {
+            deliverable: input.deliverable,
+            goal: input.goal,
+            modelConfig: input.modelConfig,
+          },
+        },
+        ctx.workspaceId ?? undefined,
+      );
       const run = await ctx.runModel.findByOperation(input.operationId);
       return run ? ctx.resultModel.listByRun(run.id) : [];
     }),

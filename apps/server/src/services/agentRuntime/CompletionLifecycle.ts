@@ -15,11 +15,66 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
-import { hookDispatcher } from './hooks';
+import { hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
 
 type SignalEvent = { [key: string]: unknown; type: string };
+
+/**
+ * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.
+ *
+ * This is the single typed shape every NON-in-process terminal path passes in —
+ * heterogeneous CLI exit (`heteroFinish`), remote-agent done signal
+ * (`agentNotify`), and synchronous dispatch failure
+ * (`finalizeHeteroDispatchError`). `completeOperation` expands it into the
+ * runtime `state` shape `dispatchHooks` consumes via one builder, so there is
+ * exactly ONE place that mirrors the runtime state — no per-caller hand-rolled
+ * synthetic state to drift.
+ *
+ * The in-process runtime keeps calling `dispatchHooks` with its real, rich
+ * `state` directly (full message array, interruption, …) — it needs no synthesis.
+ */
+export interface OperationCompletionInput {
+  /** Owning agent id — trace snapshot key + the lifecycle event's `agentId`. */
+  agentId?: string;
+  /** Final assistant message row id — anchors the verify card / error bubble. */
+  assistantMessageId?: string;
+  cost?: { total?: number | null } | null;
+  /** Final assistant deliverable text — the verify gate's input + bot rendering. */
+  deliverable?: string;
+  /** Terminal error payload (error path only). */
+  error?: unknown;
+  /**
+   * The user goal (first user turn) — the verify gate judges against it. Typed
+   * `unknown` because message content is polymorphic (string or multimodal part
+   * array); `dispatchHooks` normalizes it to text the same way it does the
+   * in-process path's user turn.
+   */
+  goal?: unknown;
+  /** Executed model — the verify gate keys off `op.model`, so hetero backfills it. */
+  model?: string | null;
+  operationId: string;
+  /** Executed provider — see {@link OperationCompletionInput.model}. */
+  provider?: string | null;
+  /** Serialized webhook hooks (queue mode); ignored in local in-memory mode. */
+  serializedHooks?: SerializedHook[];
+  stepCount?: number | null;
+  topicId?: string;
+  /** Trace / usage aggregates (llm calls, tokens, tool calls). */
+  usage?: unknown;
+  userId?: string;
+}
+
+/** Options shared by {@link CompletionLifecycle.completeOperation} / `dispatchHooks`. */
+export interface CompleteOperationOptions {
+  /**
+   * Skip writing the terminal error onto the assistant message row. Set by callers
+   * that already wrote a bespoke error bubble before delegating (e.g. the hetero
+   * dispatch-failure path, which surfaces a device-specific `detail`).
+   */
+  skipErrorMessageWrite?: boolean;
+}
 
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
@@ -353,12 +408,65 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Expand a normalized {@link OperationCompletionInput} into the runtime `state`
+   * shape `dispatchHooks` consumes. The SINGLE place that mirrors the runtime
+   * state for non-in-process paths — goal/deliverable become the user/assistant
+   * turns the gate reads, model/provider backfill the op row, hooks ride on
+   * `metadata._hooks`. Replaces the per-caller hand-rolled synthetic state that
+   * previously drifted (e.g. a verify field added here was missed by heteroFinish).
+   */
+  private buildStateFromInput(input: OperationCompletionInput) {
+    return {
+      cost: input.cost ?? { total: null },
+      error: input.error ?? undefined,
+      messages: [
+        { content: input.goal ?? '', role: 'user' },
+        { content: input.deliverable ?? '', role: 'assistant' },
+      ],
+      metadata: {
+        _hooks: input.serializedHooks,
+        agentId: input.agentId,
+        assistantMessageId: input.assistantMessageId,
+        topicId: input.topicId,
+        userId: input.userId ?? this.userId,
+      },
+      model: input.model ?? undefined,
+      provider: input.provider ?? undefined,
+      stepCount: input.stepCount ?? null,
+      usage: input.usage ?? undefined,
+    };
+  }
+
+  /**
+   * The single terminal-completion entry for every path that does NOT have the
+   * in-process runtime's rich `state` in hand: heterogeneous CLI exit
+   * (`heteroFinish`), remote-agent done signal (`agentNotify`), and synchronous
+   * dispatch failure (`finalizeHeteroDispatchError`). Builds the synthetic state
+   * once and runs the SAME pipeline the in-process runtime uses — persist the
+   * terminal op row, fire onComplete/onError hooks, and (on `done`) run the
+   * delivery-checker verify gate. This is what makes those paths true lifecycle
+   * peers instead of firing a stripped-down hooks-only funnel.
+   */
+  async completeOperation(
+    input: OperationCompletionInput,
+    reason: 'done' | 'error',
+    options?: CompleteOperationOptions,
+  ): Promise<void> {
+    await this.dispatchHooks(input.operationId, this.buildStateFromInput(input), reason, options);
+  }
+
+  /**
    * Dispatch `onComplete` (and `onError` for `reason='error'`) hooks via
    * the global `hookDispatcher`. On the error path, also writes the error
    * back onto the assistant message row so the frontend can render it.
    * Fire-and-forget; always unregisters the operation from the dispatcher.
    */
-  async dispatchHooks(operationId: string, state: any, reason: string): Promise<void> {
+  async dispatchHooks(
+    operationId: string,
+    state: any,
+    reason: string,
+    options?: CompleteOperationOptions,
+  ): Promise<void> {
     // `waiting_for_async_tool` parks the SAME operation: it persists the parked
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
@@ -419,7 +527,7 @@ export class CompletionLifecycle {
         await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
 
         const assistantMessageId = metadata?.assistantMessageId;
-        if (assistantMessageId && state?.error) {
+        if (assistantMessageId && state?.error && !options?.skipErrorMessageWrite) {
           // Preserve the semantic error type written by the runtime. Rebuilding
           // this as a generic AgentRuntimeError would lose UI routing data such
           // as quota context and force the client into the fallback card.

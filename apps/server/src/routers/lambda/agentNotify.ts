@@ -10,7 +10,7 @@ import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
-import { dispatchTerminalHooks } from '@/server/services/agentRuntime/hooks';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -132,8 +132,7 @@ export const agentNotifyRouter = router({
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
     const remoteOperationId = (topic.metadata as any)?.runningOperation?.operationId as
-      | string
-      | undefined;
+      string | undefined;
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -165,31 +164,56 @@ export const agentNotifyRouter = router({
           });
 
           // Remote hetero (openclaw / hermes) has no `heteroFinish` callback, so
-          // this is its terminal funnel. Fire the run's onComplete (+ onError on
-          // failure) hooks through the shared dispatcher — the same mechanism the
-          // CLI / normal LLM paths use — so the task lifecycle (onTopicComplete →
-          // task done/failed) and any IM bot completion callback run. Hooks were
-          // serialized onto runningOperation at dispatch time.
+          // this is its terminal funnel. Route it through CompletionLifecycle's
+          // single entry — the SAME owner the CLI / in-process paths use — so
+          // persistCompletion writes the terminal op row, onComplete/onError hooks
+          // fire (task lifecycle → task done/failed + IM bot callback), and on
+          // success the delivery-checker verify gate runs against the task's plan.
+          // (Previously this fired the stripped-down dispatchTerminalHooks, which
+          // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
+          // Hooks were serialized onto runningOperation at dispatch time.
           const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
-            | SerializedHook[]
-            | undefined;
+            SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
             lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
           }
-          await dispatchTerminalHooks({
-            agentId,
-            ...(terminalError
-              ? { errorMessage: terminalError.message, errorType: terminalError.type }
-              : {}),
-            lastAssistantContent,
-            operationId: remoteOperationId,
-            reason: terminalError ? 'error' : 'done',
-            serializedHooks,
-            topicId,
-            userId: ctx.userId,
-          });
+          // Resolve the run goal (first user turn) for the verify gate — mirrors
+          // heteroFinish. Skipped on the error path (verify is done-only). Wrapped
+          // in try/catch (not just a promise `.catch`) so a throwing/absent query
+          // degrades to an empty goal instead of aborting the terminal funnel.
+          let goal: unknown = '';
+          if (!terminalError) {
+            try {
+              const history = await ctx.messageModel.query({ pageSize: 50, topicId });
+              goal = history.find((m) => m.role === 'user')?.content ?? '';
+            } catch (err) {
+              log('notify: failed to resolve verify goal (non-fatal): %O', err);
+            }
+          }
+          await new CompletionLifecycle(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).completeOperation(
+            {
+              agentId,
+              assistantMessageId: writtenMessageId,
+              deliverable: lastAssistantContent,
+              error: terminalError ?? undefined,
+              goal,
+              operationId: remoteOperationId,
+              serializedHooks,
+              topicId,
+              userId: ctx.userId,
+            },
+            terminalError ? 'error' : 'done',
+            // openclaw/hermes surface their failure via the runtime-end stream event
+            // + their own message write, not the lifecycle's assistant-row error
+            // write — keep that prior behavior on the error path.
+            { skipErrorMessageWrite: true },
+          );
 
           // The operation is finished — drop the running marker so a duplicate
           // terminal signal / reconnect doesn't re-fire the hooks.

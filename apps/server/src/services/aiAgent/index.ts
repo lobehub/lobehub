@@ -91,7 +91,7 @@ import type {
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
-import { dispatchTerminalHooks, hookDispatcher } from '@/server/services/agentRuntime/hooks';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type {
   ExecGroupMemberParams,
@@ -473,12 +473,13 @@ export class AiAgentService {
    * each one would strand the run: the assistant bubble would show an error but
    * the UI stream would never close and a long-run task would hang in `running`.
    *
-   * Routes through the SAME terminal funnel a normal exit uses — it fires the
-   * run's onComplete/onError hooks via `dispatchTerminalHooks`, so the task
-   * lifecycle (onTopicComplete → task failed) and any IM bot completion callback
-   * fire exactly as they would for a real failure — then closes the UI stream and
-   * clears the (never-started) running operation. The hooks were registered and
-   * serialized onto `runningOperation` at dispatch time.
+   * Routes through the SAME terminal funnel a normal exit uses —
+   * `CompletionLifecycle.completeOperation` finalizes the op row and fires the
+   * run's onComplete/onError hooks, so the task lifecycle (onTopicComplete → task
+   * failed) and any IM bot completion callback fire exactly as they would for a
+   * real failure — then closes the UI stream and clears the (never-started)
+   * running operation. The hooks were registered and serialized onto
+   * `runningOperation` at dispatch time.
    *
    * Stream-close / hook dispatch / metadata clear are best-effort: a failure
    * there must not mask the original dispatch error the caller surfaces.
@@ -500,20 +501,27 @@ export class AiAgentService {
       error: { body: { detail }, message, type: 'ServerAgentRuntimeError' },
     });
 
-    // 1b. Mark the agent_operations row terminal. The row was inserted at
-    //     recordStart, but a dispatch failure goes through THIS path, not
-    //     heteroFinish — so without this the row stays status='running' forever
-    //     and pollutes operation-lifecycle / verify views for failed starts.
-    try {
-      await this.agentOperationModel.recordCompletion(operationId, {
-        completedAt: new Date(),
-        completionReason: 'error',
+    // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
+    //     owner the CLI exit (heteroFinish) / in-process paths use. It marks the
+    //     agent_operations row terminal (the row was inserted at recordStart, but a
+    //     dispatch failure goes through THIS path, not heteroFinish, so without
+    //     finalizing it the row stays status='running' forever) AND fires the run's
+    //     onComplete/onError hooks (task lifecycle → task failed + IM bot callback).
+    //     `skipErrorMessageWrite` keeps the bespoke device-specific bubble written
+    //     in step 1; verify is done-only, so it no-ops on this error path.
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+      {
+        agentId,
+        assistantMessageId,
         error: { message, type: 'ServerAgentRuntimeError' },
-        status: 'error',
-      });
-    } catch (err) {
-      log('finalizeHeteroDispatchError: recordCompletion failed (non-fatal): %O', err);
-    }
+        operationId,
+        serializedHooks: hookDispatcher.getSerializedHooks(operationId),
+        topicId,
+        userId: this.userId,
+      },
+      'error',
+      { skipErrorMessageWrite: true },
+    );
 
     // 2. Close the UI stream.
     try {
@@ -528,21 +536,7 @@ export class AiAgentService {
       log('finalizeHeteroDispatchError: publishAgentRuntimeEnd failed (non-fatal): %O', err);
     }
 
-    // 3. Fire onComplete/onError hooks (task lifecycle + bot callback). Hooks
-    //    were registered in-memory (local mode) and serialized onto
-    //    runningOperation (queue mode) at dispatch time.
-    await dispatchTerminalHooks({
-      agentId,
-      errorMessage: message,
-      errorType: 'ServerAgentRuntimeError',
-      operationId,
-      reason: 'error',
-      serializedHooks: hookDispatcher.getSerializedHooks(operationId),
-      topicId,
-      userId: this.userId,
-    });
-
-    // 4. The operation never started — drop the running marker so reconnect /
+    // 3. The operation never started — drop the running marker so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
     try {
       await this.topicModel.updateMetadata(topicId, { runningOperation: null });
@@ -1312,10 +1306,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
     const heteroType = (heteroProviderType ?? model) as
-      | 'claude-code'
-      | 'codex'
-      | 'hermes'
-      | 'openclaw';
+      'claude-code' | 'codex' | 'hermes' | 'openclaw';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -4219,8 +4210,7 @@ export class AiAgentService {
     if (topicId) {
       const topic = await this.topicModel.findById(topicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
-        | { deviceId?: string; heteroType?: string; operationId?: string }
-        | undefined;
+        { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
 
       if (
         runningOp?.deviceId &&
