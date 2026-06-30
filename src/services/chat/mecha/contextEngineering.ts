@@ -205,6 +205,10 @@ export const contextEngineering = async ({
 
   // Get agent store state (used for both group agent builder context and file/knowledge base)
   const agentStoreState = getAgentStoreState();
+  // Example: preset-task calls omit `enableAgentMode`; preserve explicit chat mode
+  // from stored config instead of letting MessagesEngine treat `undefined` as agent mode.
+  const effectiveEnableAgentMode =
+    enableAgentMode ?? agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode;
 
   // Build group agent builder context if Group Agent Builder is enabled
   // Note: Uses activeGroupId from chatStore to get the group being edited
@@ -714,7 +718,7 @@ export const contextEngineering = async ({
     // MessagesEngine force-disables skills / agent-document injectors when this
     // is `false` (chat mode). ChatService resolves it from stored user intent
     // plus the selected model's function-call ability.
-    enableAgentMode,
+    enableAgentMode: effectiveEnableAgentMode,
 
     // Skills configuration (resolved above)
     skillsConfig: {
