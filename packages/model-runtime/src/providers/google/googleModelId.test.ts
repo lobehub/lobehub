@@ -4,6 +4,7 @@ import {
   isGemini3OrAbove,
   isGeminiVersionAtLeast,
   isGoogleImageResponseModel,
+  isGoogleNanoBananaModel,
   isGoogleSafetyOffModel,
   normalizeGoogleModelId,
   parseGoogleModelId,
@@ -88,6 +89,25 @@ describe('googleModelId', () => {
       expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image-preview')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.5-pro-image-preview')).toBe(false);
     });
+  });
+
+  describe('Nano Banana helpers', () => {
+    it.each([
+      'nano-banana-pro-preview',
+      'google/nano-banana-pro-preview',
+      'gemini-2.5-flash-image',
+      'gemini-3-pro-image-preview',
+      'gemini-3.1-flash-lite-image',
+    ])('detects Nano Banana model %s', (model) => {
+      expect(isGoogleNanoBananaModel(model)).toBe(true);
+    });
+
+    it.each(['gemini-3.5-pro', 'gemini-3.1-flash-lite', undefined])(
+      'does not detect non-Nano Banana model %s',
+      (model) => {
+        expect(isGoogleNanoBananaModel(model)).toBe(false);
+      },
+    );
   });
 
   describe('payload guard helpers', () => {

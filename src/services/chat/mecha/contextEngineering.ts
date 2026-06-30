@@ -86,6 +86,11 @@ interface ContextEngineeringContext {
   agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
+  /**
+   * Runtime-resolved agent mode. Callers may force chat mode for models without
+   * function calling while keeping the stored chatConfig unchanged.
+   */
+  enableAgentMode?: boolean;
   enableHistoryCount?: boolean;
   enableUserMemories?: boolean;
   /** Group ID for multi-agent scenarios */
@@ -135,6 +140,7 @@ export const contextEngineering = async ({
   agentBuilderContext,
   agentDocuments,
   agentId,
+  enableAgentMode,
   groupId,
   initialContext,
   plugins,
@@ -387,14 +393,12 @@ export const contextEngineering = async ({
     try {
       const credsResult = await lambdaClient.market.creds.list.query();
       const userCreds = (credsResult as any)?.data ?? [];
-      credsList = userCreds.map(
-        (cred: any): CredSummary => ({
-          description: cred.description,
-          key: cred.key,
-          name: cred.name,
-          type: cred.type,
-        }),
-      );
+      credsList = userCreds.map((cred: any): CredSummary => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        type: cred.type,
+      }));
       log('Creds context resolved: count=%d', credsList?.length ?? 0);
     } catch (error) {
       // Silently fail - creds context is optional
@@ -707,9 +711,10 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
-    // Pass enableAgentMode through; MessagesEngine force-disables skills /
-    // agent-document injectors when this is `false` (chat mode).
-    enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
+    // MessagesEngine force-disables skills / agent-document injectors when this
+    // is `false` (chat mode). ChatService resolves it from stored user intent
+    // plus the selected model's function-call ability.
+    enableAgentMode,
 
     // Skills configuration (resolved above)
     skillsConfig: {

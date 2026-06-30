@@ -18,7 +18,6 @@ interface TestProviderWithModels {
 const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as { heterogeneousProvider?: { type: string } } | undefined,
-    enableAgentMode: true,
     model: 'gpt-4o',
     provider: 'openai',
   },
@@ -45,7 +44,6 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgentEnableModeById: () => (s: typeof testState.agent) => s.enableAgentMode,
     getAgentModelById: () => (s: typeof testState.agent) => s.model,
     getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
     isAgentHeterogeneousById: () => (s: typeof testState.agent) =>
@@ -64,7 +62,6 @@ vi.mock('@/store/aiInfra', () => ({
 describe('useCurrentModelNotice', () => {
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
-    testState.agent.enableAgentMode = true;
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
     testState.aiInfra.enabledChatModelList = [];
@@ -78,7 +75,6 @@ describe('useCurrentModelNotice', () => {
   });
 
   it('returns unavailable model copy when the ready model config no longer contains the selected model', () => {
-    testState.agent.enableAgentMode = false;
     testState.aiInfra.isInitAiProviderRuntimeState = true;
 
     const { result } = renderHook(() => useCurrentModelNotice());
@@ -86,7 +82,7 @@ describe('useCurrentModelNotice', () => {
     expect(result.current).toBe('input.modelUnavailable');
   });
 
-  it('returns unsupported tool-use copy only when agent mode is enabled and the selected model exists but lacks tool calls', () => {
+  it('does not return unsupported tool-use copy when the selected model exists but lacks tool calls', () => {
     testState.aiInfra.isInitAiProviderRuntimeState = true;
     testState.aiInfra.enabledChatModelList = [
       { children: [{ abilities: { functionCall: false }, id: 'gpt-4o' }], id: 'openai' },
@@ -94,7 +90,7 @@ describe('useCurrentModelNotice', () => {
 
     const { result } = renderHook(() => useCurrentModelNotice());
 
-    expect(result.current).toBe('input.agentModeUnsupportedModel');
+    expect(result.current).toBeUndefined();
   });
 
   it('returns unavailable model copy when the selected model is enabled globally but absent from the chat selector list', () => {
@@ -106,18 +102,6 @@ describe('useCurrentModelNotice', () => {
     const { result } = renderHook(() => useCurrentModelNotice());
 
     expect(result.current).toBe('input.modelUnavailable');
-  });
-
-  it('does not return unsupported tool-use copy when agent mode is disabled', () => {
-    testState.agent.enableAgentMode = false;
-    testState.aiInfra.isInitAiProviderRuntimeState = true;
-    testState.aiInfra.enabledChatModelList = [
-      { children: [{ abilities: { functionCall: false }, id: 'gpt-4o' }], id: 'openai' },
-    ];
-
-    const { result } = renderHook(() => useCurrentModelNotice());
-
-    expect(result.current).toBeUndefined();
   });
 
   it('does not return a notice when the ready model supports tool use', () => {

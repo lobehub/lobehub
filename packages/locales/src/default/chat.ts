@@ -594,6 +594,7 @@ export default {
   'chatMode.agentCap.tools': 'Tool calls',
   'chatMode.agentCap.web': 'Web search',
   'chatMode.agentDesc': 'Agent can use tools and environment to complete tasks automatically',
+  'chatMode.agentUnsupported': 'The current model does not support tool calling',
   'chatMode.chat': 'Chat',
   'chatMode.chatDesc': 'No runtime environment or autonomy; uses fewer tokens',
   'chatMode.select': 'Switch Mode',

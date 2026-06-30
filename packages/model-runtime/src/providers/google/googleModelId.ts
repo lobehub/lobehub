@@ -26,6 +26,17 @@ const SAFETY_OFF_MODELS = new Set(['gemini-2.0-flash-exp']);
 
 const IMAGE_RESPONSE_MODEL_ALIASES = new Set(['gemini-2.0-flash-exp', 'nano-banana-pro-preview']);
 
+const NANO_BANANA_MODEL_ALIASES = new Set([
+  'gemini-2.5-flash-image-preview',
+  'gemini-2.5-flash-image',
+  'gemini-3-pro-image',
+  'gemini-3-pro-image-preview',
+  'gemini-3.1-flash-image',
+  'gemini-3.1-flash-image-preview',
+  'gemini-3.1-flash-lite-image',
+  'nano-banana-pro-preview',
+]);
+
 // These models need the explicit image/web searchTypes payload when googleSearch is enabled.
 // Other search-capable models use the plain `{ googleSearch: {} }` shape.
 const IMAGE_SEARCH_TYPES_MODELS = new Set(['gemini-3.1-flash-image-preview']);
@@ -192,6 +203,16 @@ export const isGoogleImageResponseModel = (model: string): boolean => {
     hasModifier(parsed, 'image') &&
     (hasModifier(parsed, 'flash') || hasModifier(parsed, 'pro'))
   );
+};
+
+export const isGoogleNanoBananaModel = (model: string | undefined): boolean => {
+  if (!model) return false;
+
+  const normalizedModelId = normalizeGoogleModelId(model);
+  if (!normalizedModelId) return false;
+  if (NANO_BANANA_MODEL_ALIASES.has(normalizedModelId)) return true;
+
+  return parseGoogleModelId(model)?.family === 'nanoBanana';
 };
 
 export const shouldUseGoogleImageSearchTypes = (model: string): boolean => {
