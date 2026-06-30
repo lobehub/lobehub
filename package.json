@@ -548,7 +548,7 @@
     "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
-    "vite": "8.0.14",
+    "vite": "8.0.16",
     "vite-plugin-pwa": "^1.3.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "3.2.4"
