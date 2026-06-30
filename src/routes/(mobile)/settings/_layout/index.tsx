@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Outlet } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
@@ -9,13 +9,13 @@ import SettingsContextProvider from '../../../(main)/settings/_layout/ContextPro
 import Header from './Header';
 
 const MobileSettingsWrapper = memo(() => {
+  const contextValue = useMemo(
+    () => ({ showOpenAIApiKey: true, showOpenAIProxyUrl: true }),
+    [],
+  );
+
   return (
-    <SettingsContextProvider
-      value={{
-        showOpenAIApiKey: true,
-        showOpenAIProxyUrl: true,
-      }}
-    >
+    <SettingsContextProvider value={contextValue}>
       <MobileContentLayout header={<Header />}>
         <Outlet />
       </MobileContentLayout>

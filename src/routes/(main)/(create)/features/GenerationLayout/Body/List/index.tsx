@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, Suspense } from 'react';
+import { memo, Suspense, useMemo } from 'react';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useGlobalStore } from '@/store/global';
@@ -23,8 +23,13 @@ const List = memo<
   const useFetchGenerationTopics = useStore((s: any) => s.useFetchGenerationTopics);
   useFetchGenerationTopics(!!isLogin);
 
+  const contextValue = useMemo(
+    () => ({ namespace, useStore: useStore as any }),
+    [namespace, useStore],
+  );
+
   return (
-    <GenerationTopicStoreProvider value={{ namespace, useStore: useStore as any }}>
+    <GenerationTopicStoreProvider value={contextValue}>
       <Suspense fallback={<SkeletonList rows={6} />}>
         <Flexbox gap={4} paddingBlock={1}>
           <TopicList viewMode={viewMode} />
