@@ -2,6 +2,8 @@ import type { ISlashMenuOption } from '@lobehub/editor';
 import debug from 'debug';
 import { createElement, useCallback } from 'react';
 
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { projectFileService } from '@/services/projectFile';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -9,7 +11,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 
 import { useAgentId } from '../hooks/useAgentId';
-import { searchProjectFileMentionIndex } from './localFileMentionIndex';
+import { compactDirectoryTail, compactFileName } from './MentionMenu/localFileDisplay';
 import LocalFileIcon from './MentionMenu/LocalFileIcon';
 
 const MAX_LOCAL_FILE_MENTION_ITEMS = 20;
@@ -22,9 +24,8 @@ export interface UseLocalFileMentionResult {
 
 export const useLocalFileMention = (): UseLocalFileMentionResult => {
   const agentId = useAgentId();
-  const heterogeneousType = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
-  );
+  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
   const isLocalSystemEnabled = useAgentStore(
     chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
   );
@@ -34,6 +35,9 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const searchDeviceId =
+    targetDeviceId && targetDeviceId !== currentDeviceId ? targetDeviceId : undefined;
 
   const enableLocalFileMention = !!heterogeneousType || isLocalSystemEnabled;
 
@@ -56,12 +60,15 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
           limit: MAX_LOCAL_FILE_MENTION_ITEMS,
           workingDirectory,
         });
-        const files = await searchProjectFileMentionIndex(
-          workingDirectory,
-          keywords,
-          MAX_LOCAL_FILE_MENTION_ITEMS,
-          currentDeviceId,
-        );
+        if (!workingDirectory) return [];
+
+        const result = await projectFileService.searchProjectFiles({
+          deviceId: searchDeviceId,
+          limit: MAX_LOCAL_FILE_MENTION_ITEMS,
+          query: keywords,
+          scope: workingDirectory,
+        });
+        const files = result?.entries.filter((entry) => !entry.isDirectory) ?? [];
 
         log('Search indexed local files completed', {
           count: files.length,
@@ -70,31 +77,40 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
             name: file.name,
             path: file.path,
           })),
+          root: result?.root,
+          source: result?.source,
           workingDirectory,
         });
 
-        return files.map((file) => ({
-          icon: createElement(LocalFileIcon, {
-            isDirectory: file.isDirectory,
-            name: file.name,
-          }),
-          key: `local-file-${file.path}`,
-          label: file.name || file.path,
-          metadata: {
-            isDirectory: file.isDirectory,
-            name: file.name || file.path.split('/').pop() || file.path,
-            path: file.path,
-            relativePath: file.relativePath,
-            timestamp: 0,
-            type: 'localFile' as const,
-          },
-        }));
+        return files.map((file) => {
+          const name = file.name || file.path.split('/').pop() || file.path;
+          const displayPath = file.relativePath || file.path;
+          const description = compactDirectoryTail(displayPath, name, file.isDirectory);
+
+          return {
+            icon: createElement(LocalFileIcon, {
+              isDirectory: file.isDirectory,
+              name,
+            }),
+            key: `local-file-${file.path}`,
+            label: compactFileName(name),
+            metadata: {
+              ...(description ? { description } : {}),
+              isDirectory: file.isDirectory,
+              name,
+              path: file.path,
+              relativePath: file.relativePath,
+              timestamp: 0,
+              type: 'localFile' as const,
+            },
+          };
+        });
       } catch (error) {
         console.error('[useLocalFileMention] Failed to search local files:', error);
         return [];
       }
     },
-    [currentDeviceId, enableLocalFileMention, workingDirectory],
+    [enableLocalFileMention, searchDeviceId, workingDirectory],
   );
 
   return { enableLocalFileMention, searchLocalFiles };
