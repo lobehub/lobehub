@@ -1,6 +1,7 @@
+import type { ModelExtendParams } from '@lobechat/model-runtime';
 import {
   applyModelExtendParams,
-  type ModelExtendParams,
+  resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig } from '@lobechat/types';
@@ -8,7 +9,7 @@ import type { LobeAgentChatConfig } from '@lobechat/types';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
 export type { ModelExtendParams };
-export { resolveDefaultThinkingLevelForModel };
+export { resolveDefaultEnableAdaptiveThinkingForModel, resolveDefaultThinkingLevelForModel };
 
 /**
  * Context for resolving model parameters
