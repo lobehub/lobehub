@@ -372,6 +372,7 @@
   "memory.on.title": "启用记忆工具",
   "memory.title": "记忆",
   "mention.category.agents": "助理",
+  "mention.category.files": "文件",
   "mention.category.members": "成员",
   "mention.category.skills": "技能",
   "mention.category.tools": "工具",

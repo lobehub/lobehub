@@ -137,6 +137,7 @@ export const useMentionCategories = (): MentionCategory[] => {
           metadata: {
             actionCategory: item.category,
             actionType: item.type,
+            description: item.description,
             timestamp: 0,
             type: 'skill' as const,
           },
@@ -158,6 +159,7 @@ export const useMentionCategories = (): MentionCategory[] => {
           metadata: {
             actionCategory: item.category,
             actionType: item.type,
+            description: item.description,
             timestamp: 0,
             type: 'tool' as const,
           },

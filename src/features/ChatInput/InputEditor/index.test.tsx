@@ -174,6 +174,7 @@ vi.mock('@/store/user/selectors', () => ({
   systemAgentSelectors: {
     inputCompletion: () => mocks.inputCompletionConfig,
   },
+  userProfileSelectors: { userId: () => 'user-id' },
 }));
 
 vi.mock('../hooks/useAgentId', () => ({ useAgentId: () => 'agent-id' }));

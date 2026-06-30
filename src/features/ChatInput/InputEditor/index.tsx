@@ -8,7 +8,7 @@ import {
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import { isCommandPressed } from '@lobechat/utils';
-import type { IEditor } from '@lobehub/editor';
+import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
@@ -17,6 +17,7 @@ import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
+import { useTranslation } from 'react-i18next';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
@@ -60,11 +61,14 @@ const className = cx(
   mentionFilledClassName,
 );
 
+type MentionOption = ISlashMenuOption | ISlashSectionOption;
+
 const InputEditor = memo<{
   defaultRows?: number;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
 }>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+  const { t } = useTranslation('chat');
   const [
     editor,
     slashMenuRef,
@@ -128,6 +132,16 @@ const InputEditor = memo<{
   const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  const mentionSections = useMemo<ISlashSectionOption[]>(
+    () =>
+      categories.map((category) => ({
+        items: category.items,
+        key: `mention-section-${category.id}`,
+        label: category.label,
+        type: 'section',
+      })),
+    [categories],
+  );
 
   const fuse = useMemo(
     () =>
@@ -148,11 +162,43 @@ const InputEditor = memo<{
           Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
         ]);
 
-        return [...localFileItems, ...mentionItems];
+        const rankByKey = new Map(mentionItems.map((item, index) => [String(item.key), index]));
+        const matchedSections = categories
+          .map((category): ISlashSectionOption => {
+            const items = category.items
+              .filter((item) => rankByKey.has(String(item.key)))
+              .sort(
+                (a, b) =>
+                  (rankByKey.get(String(a.key)) ?? Number.MAX_SAFE_INTEGER) -
+                  (rankByKey.get(String(b.key)) ?? Number.MAX_SAFE_INTEGER),
+              );
+
+            return {
+              items,
+              key: `mention-section-${category.id}`,
+              label: category.label,
+              type: 'section',
+            };
+          })
+          .filter((section) => section.items.length > 0);
+
+        if (localFileItems.length > 0) {
+          return [
+            {
+              items: localFileItems,
+              key: 'mention-section-local-file',
+              label: t('mention.category.files' as any),
+              type: 'section',
+            },
+            ...matchedSections,
+          ] satisfies MentionOption[];
+        }
+
+        return matchedSections;
       }
-      return [...allMentionItems];
+      return mentionSections;
     },
-    [allMentionItems, fuse, searchLocalFiles],
+    [categories, fuse, mentionSections, searchLocalFiles, t],
   );
 
   const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileMention);
