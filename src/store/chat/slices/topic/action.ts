@@ -1060,9 +1060,13 @@ export class ChatTopicActionImpl {
     this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
 
     this.#get().internal_updateTopicLoading(id, true);
-    await topicService.updateTopic(id, data);
-    await this.#get().refreshTopic();
-    this.#get().internal_updateTopicLoading(id, false);
+    try {
+      await topicService.updateTopic(id, data);
+      await this.#get().refreshTopic();
+    } finally {
+      // Rename "Topic" -> "New" can fail after opening a loading owner; always release it.
+      this.#get().internal_updateTopicLoading(id, false);
+    }
   };
 
   internal_createTopic = async (params: CreateTopicParams): Promise<string> => {

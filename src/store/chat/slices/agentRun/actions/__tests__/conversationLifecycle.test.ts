@@ -485,7 +485,7 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: null,
+            activeTopicId: undefined,
             executeClientAgent: vi.fn().mockReturnValue(executePromise),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
@@ -573,7 +573,7 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: null,
+            activeTopicId: undefined,
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {

@@ -17,12 +17,7 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   const handleSave = useCallback(
     async (newTitle: string) => {
-      try {
-        useChatStore.getState().internal_updateTopicLoading(id, true);
-        await updateTopicTitle(id, newTitle);
-      } finally {
-        useChatStore.getState().internal_updateTopicLoading(id, false);
-      }
+      await updateTopicTitle(id, newTitle);
     },
     [id, updateTopicTitle],
   );

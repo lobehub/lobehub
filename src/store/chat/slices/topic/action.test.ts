@@ -1280,6 +1280,52 @@ describe('topic action', () => {
       expect(switchTopicSpy).toHaveBeenCalled();
     });
   });
+  describe('internal_updateTopic', () => {
+    it('should release the loading owner when updating a topic fails', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const topic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: topicId,
+        sessionId: agentId,
+        title: 'Topic',
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              isLoadingMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          topicLoadingIdCounts: {},
+          topicLoadingIds: [],
+        });
+      });
+
+      vi.spyOn(topicService, 'updateTopic').mockRejectedValue(new Error('rename failed'));
+
+      await act(async () => {
+        await expect(
+          result.current.internal_updateTopic(topicId, { title: 'New' }),
+        ).rejects.toThrow('rename failed');
+      });
+
+      expect(useChatStore.getState().topicLoadingIds).not.toContain(topicId);
+      expect(useChatStore.getState().topicLoadingIdCounts[topicId]).toBeUndefined();
+    });
+  });
   describe('updateTopicLoading', () => {
     it('should call update topicLoadingId', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1331,6 +1377,14 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'agent-1';
       const key = topicMapKey({ agentId });
+      const optimisticTopic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: 'tmp_topic_1',
+        sessionId: agentId,
+        title: '666',
+        updatedAt: Date.now(),
+      };
 
       act(() => {
         useChatStore.setState({
@@ -1339,7 +1393,9 @@ describe('topic action', () => {
             [key]: {
               currentPage: 0,
               hasMore: false,
-              items: [{ id: 'tmp_topic_1', sessionId: agentId, title: '666' }],
+              isExpandingPageSize: false,
+              isLoadingMore: false,
+              items: [optimisticTopic],
               pageSize: 20,
               total: 1,
             },
