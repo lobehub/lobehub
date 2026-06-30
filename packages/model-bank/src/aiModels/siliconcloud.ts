@@ -13,6 +13,33 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      'LongCat-2.0 is a 1600B MoE language model from Meituan designed for agent development scenarios. It natively supports tool calling, multi-step reasoning, and long-context tasks, with strong performance in code generation, automated workflows, and complex instruction execution. It is deeply integrated with productivity tools including Claude Code, OpenClaw, OpenCode, and Kilo Code.',
+    displayName: 'LongCat-2.0',
+    family: 'longcat',
+    generation: 'longcat-2.0',
+    id: 'meituan-longcat/LongCat-2.0',
+    organization: 'Meituan',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-30',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       "GLM-5.2 is Z.ai's latest flagship model designed for long-horizon task scenarios, offering significant improvements in long-horizon task capabilities compared to GLM-5.1. This 753B MoE model supports a stable 1M-token context window, features stronger programming capabilities, and supports multiple thinking effort levels for a flexible balance between performance and latency.",
     displayName: 'GLM-5.2',
     family: 'glm',
