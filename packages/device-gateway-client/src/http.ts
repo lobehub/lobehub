@@ -221,6 +221,14 @@ export class GatewayHttpClient {
       const text = await res.text().catch(() => '');
       return { error: text || `HTTP ${res.status}`, success: false };
     }
+    const data = await res.json().catch(() => null);
+    if (data && (data.success === false || data.status === 'rejected')) {
+      return {
+        error: data.error ?? data.reason ?? 'DEVICE_REJECTED',
+        success: false,
+      };
+    }
+
     return { success: true };
   }
 
