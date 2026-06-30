@@ -227,7 +227,7 @@ const isAgentRuntimeRunningByContext =
 /**
  * Check if agent runtime should still show visible loading in a specific context.
  * The underlying operation may remain running for terminal bookkeeping after a
- * no-tool stream has ended.
+ * producer has emitted visible_output_end.
  */
 const isAgentRuntimeVisiblyRunningByContext =
   (context: MessageMapKeyInput) =>

@@ -433,7 +433,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('clears visible loading immediately for a plain no-tool answer', async () => {
+    it('keeps visible loading for a plain no-tool stream boundary', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -445,11 +445,11 @@ describe('createGatewayEventHandler', () => {
         'msg-initial',
         undefined,
       );
-      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
     it('keeps visible loading after stream_end when tool calls need another step', async () => {
@@ -487,6 +487,27 @@ describe('createGatewayEventHandler', () => {
         'msg-initial',
         undefined,
       );
+    });
+  });
+
+  describe('visible_output_end', () => {
+    it('clears visible loading without completing the operation', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('visible_output_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
     });
   });
 

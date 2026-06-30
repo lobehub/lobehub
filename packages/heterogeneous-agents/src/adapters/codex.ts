@@ -819,7 +819,10 @@ export class CodexAdapter implements AgentEventAdapter {
       events.push(this.makeEvent('step_complete', data));
     }
 
-    if (this.started) events.push(this.makeEvent('stream_end', {}));
+    if (this.started) {
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('visible_output_end', {}));
+    }
     events.push(this.makeEvent('agent_runtime_end', {}));
 
     return events;
@@ -847,7 +850,7 @@ export class CodexAdapter implements AgentEventAdapter {
     };
 
     const events: HeterogeneousAgentEvent[] = this.started
-      ? [this.makeEvent('stream_end', {})]
+      ? [this.makeEvent('stream_end', {}), this.makeEvent('visible_output_end', {})]
       : [];
     events.push(this.makeEvent('error', data));
 

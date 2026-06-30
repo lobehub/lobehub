@@ -18,19 +18,23 @@ describe('ClaudeCodeAdapter', () => {
       expect(adapter.sessionId).toBe('sess_123');
     });
 
-    it('emits stream_end + agent_runtime_end on success result', () => {
+    it('emits visible_output_end before agent_runtime_end on success result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
       const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'agent_runtime_end']);
+      expect(events.map((e) => e.type)).toEqual([
+        'stream_end',
+        'visible_output_end',
+        'agent_runtime_end',
+      ]);
     });
 
     it('emits error on failed result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
       const events = adapter.adapt({ is_error: true, result: 'boom', type: 'result' });
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data.message).toBe('boom');
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data.message).toBe('boom');
     });
 
     it('classifies auth failures from failed result events', () => {
@@ -41,15 +45,15 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
       const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
         agentType: 'claude-code',
         clearEchoedContent: true,
         code: 'auth_required',
         docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
         stderr: rawError,
       });
-      expect(events[1].data.message).toBe(
+      expect(events[2].data.message).toBe(
         'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
       );
     });
@@ -67,8 +71,8 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
         agentType: 'claude-code',
         clearEchoedContent: true,
         code: 'overloaded',
@@ -88,8 +92,8 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
         agentType: 'claude-code',
         code: 'overloaded',
         message: rawError,
@@ -117,8 +121,8 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
         agentType: 'claude-code',
         clearEchoedContent: true,
         code: 'overloaded',
@@ -148,8 +152,8 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({ code: 'overloaded', message: rawError });
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({ code: 'overloaded', message: rawError });
     });
 
     it('replays a real session that streamed a turn then overloaded → overloaded + clears echo', () => {
@@ -218,7 +222,7 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: { rateLimitType: 'seven_day' },
       });
@@ -250,10 +254,10 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({ error: rawError, message: rawError });
-      expect(events[1].data).not.toHaveProperty('code', 'rate_limit');
-      expect(events[1].data).not.toHaveProperty('rateLimitInfo');
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({ error: rawError, message: rawError });
+      expect(events[2].data).not.toHaveProperty('code', 'rate_limit');
+      expect(events[2].data).not.toHaveProperty('rateLimitInfo');
     });
 
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
@@ -282,8 +286,8 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
         agentType: 'claude-code',
         clearEchoedContent: true,
         code: 'rate_limit',

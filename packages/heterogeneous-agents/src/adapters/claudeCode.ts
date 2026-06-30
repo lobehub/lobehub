@@ -1383,7 +1383,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // wrongly inherit the previous run's task-completion tag).
     this.pendingTaskCompletion = undefined;
 
-    return [...events, this.makeEvent('stream_end', {}), finalEvent];
+    return [
+      ...events,
+      this.makeEvent('stream_end', {}),
+      this.makeEvent('visible_output_end', {}),
+      finalEvent,
+    ];
   }
 
   /**

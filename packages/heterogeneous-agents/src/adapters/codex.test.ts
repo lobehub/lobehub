@@ -97,8 +97,12 @@ describe('CodexAdapter', () => {
       type: 'error',
     });
 
-    expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
-    expect(events[1].data).toMatchObject({
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events[2].data).toMatchObject({
       agentType: 'codex',
       clearEchoedContent: true,
       message:
@@ -123,8 +127,12 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((event) => event.type)).toEqual([
+        'stream_end',
+        'visible_output_end',
+        'error',
+      ]);
+      expect(events[2].data).toMatchObject({
         agentType: 'codex',
         clearEchoedContent: true,
         code: 'rate_limit',
@@ -157,7 +165,7 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           resetsAt: expectedResetAt,
@@ -187,7 +195,7 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           resetsAt: expectedResetAt,
@@ -219,13 +227,13 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           status: 'rejected',
         },
       });
-      expect(events[1].data.rateLimitInfo).not.toHaveProperty('resetsAt');
+      expect(events[2].data.rateLimitInfo).not.toHaveProperty('resetsAt');
     } finally {
       vi.useRealTimers();
     }
@@ -908,7 +916,7 @@ describe('CodexAdapter', () => {
     expect(flushed).toEqual([]);
   });
 
-  it('emits stream_end + agent_runtime_end on successful turn completion', () => {
+  it('emits visible_output_end before agent_runtime_end on successful turn completion', () => {
     const adapter = new CodexAdapter();
 
     adapter.adapt({ type: 'turn.started' });
@@ -923,6 +931,7 @@ describe('CodexAdapter', () => {
     expect(events.map((event) => event.type)).toEqual([
       'step_complete',
       'stream_end',
+      'visible_output_end',
       'agent_runtime_end',
     ]);
   });
@@ -955,6 +964,9 @@ describe('CodexAdapter', () => {
       }),
       expect.objectContaining({
         type: 'stream_end',
+      }),
+      expect.objectContaining({
+        type: 'visible_output_end',
       }),
       expect.objectContaining({
         type: 'agent_runtime_end',

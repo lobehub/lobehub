@@ -147,6 +147,18 @@ export class AgentRuntimeCoordinator {
     }
   }
 
+  private async publishVisibleOutputEnd(
+    operationId: string,
+    state: AgentState,
+    stepIndex: number,
+  ): Promise<void> {
+    await this.streamEventManager.publishStreamEvent(operationId, {
+      data: { reason: state.status },
+      stepIndex,
+      type: 'visible_output_end',
+    });
+  }
+
   /**
    * Save Agent state and handle corresponding events
    */
@@ -159,11 +171,13 @@ export class AgentRuntimeCoordinator {
 
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
+        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        await this.publishVisibleOutputEnd(operationId, state, stepIndex);
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
           operationId,
           reason: state.status,
-          stepIndex: state.stepCount ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(state),
         });
         log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
@@ -187,12 +201,14 @@ export class AgentRuntimeCoordinator {
 
       // This ensures agent_runtime_end is sent after all step events.
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+        const stepIndex =
+          stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0;
+        await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
           operationId,
           reason: stepResult.newState.status,
-          stepIndex:
-            stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(stepResult.newState),
         });
         log(

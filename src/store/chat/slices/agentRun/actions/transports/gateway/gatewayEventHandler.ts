@@ -364,7 +364,6 @@ export const createGatewayEventHandler = (
   // streaming. Without this, heterogeneous server-mode messages render the
   // collapsed "completed" state from the first chunk on.
   let reasoningOperationId: string | undefined;
-  let currentStreamHasToolCalls = false;
 
   const startReasoningIfNeeded = () => {
     if (reasoningOperationId) return;
@@ -430,7 +429,6 @@ export const createGatewayEventHandler = (
           // Reset accumulators for the new stream
           accumulatedContent = '';
           accumulatedReasoning = '';
-          currentStreamHasToolCalls = false;
           get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Skip the DB read ONLY for native gateway streams — those carry
@@ -522,7 +520,6 @@ export const createGatewayEventHandler = (
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
             endReasoningIfNeeded();
-            currentStreamHasToolCalls = true;
             hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
@@ -556,17 +553,20 @@ export const createGatewayEventHandler = (
         enqueue(() => {
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
+        });
+        break;
+      }
 
-          if (!currentStreamHasToolCalls) {
-            // Example: a plain "hello" answer can finish streaming several
-            // seconds before Gateway publishes agent_runtime_end. At that point
-            // there is no tool gap or next step to show, so retire only the
-            // visible loading state. The operation itself still waits for
-            // agent_runtime_end so cache write-through, queue drain, unread,
-            // and notification side effects keep their terminal ordering.
-            get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
-            if (context.topicId) get().internal_updateTopicLoading(context.topicId, false);
-          }
+      case 'visible_output_end': {
+        enqueue(() => {
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
+          // Example: CC/Codex may emit stream_end -> stream_start(newStep) for
+          // assistant-assistant transitions. Only this explicit producer signal
+          // means visible output is done; the operation still waits for
+          // agent_runtime_end to preserve terminal side-effect ordering.
+          get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+          if (context.topicId) get().internal_updateTopicLoading(context.topicId, false);
         });
         break;
       }
