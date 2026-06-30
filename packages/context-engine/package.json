@@ -22,9 +22,9 @@
     "@lobechat/prompts": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
-    "es-toolkit": "^1.43.0",
+    "es-toolkit": "^1.49.0",
     "immer": "^10.2.0",
-    "tokenx": "^1.2.1",
+    "tokenx": "^1.3.0",
     "ts-md5": "^2.0.1",
     "unist-builder": "^4.0.0",
     "xast-util-to-xml": "^4.0.0",
@@ -32,6 +32,6 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "@types/debug": "^4.1.12"
+    "@types/debug": "^4.1.13"
   }
 }

@@ -17,6 +17,6 @@
     "fast-glob": "^3.3.3"
   },
   "devDependencies": {
-    "vitest": "^3.2.6"
+    "vitest": "3.2.4"
   }
 }

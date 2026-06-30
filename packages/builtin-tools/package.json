@@ -49,7 +49,7 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "@lobehub/icons": "^5.4.0"
+    "@lobehub/icons": "^5.10.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
