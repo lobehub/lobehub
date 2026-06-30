@@ -87,6 +87,9 @@ const AgentWorkingSidebar = memo(() => {
   const isLocalSystemEnabled = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
   );
+  const isChatMode = useAgentStore((s) =>
+    activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
+  );
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   // Unified precedence (topic > per-device choice > legacy > device default), so
   // the sidebar resolves the same directory the runtime bar / git status do.
@@ -115,7 +118,10 @@ const AgentWorkingSidebar = memo(() => {
   // remote device RPC; local "This device" must keep Electron IPC + file-open
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
-  const filesAvailable = (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
+  // Files tab is an agent-mode affordance — in plain chat mode the working
+  // directory is irrelevant to the user, so hide the tab even when one resolves.
+  const filesAvailable =
+    !isChatMode && (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
