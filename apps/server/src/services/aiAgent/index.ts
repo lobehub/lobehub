@@ -2050,16 +2050,22 @@ export class AiAgentService {
         historyMessagesCache = [];
       }
 
-      // ── Regenerate: drop the anchor user message's existing answer branches ──
+      // ── Regenerate: drop the anchor user message's existing answer branch ──
       // In gateway/server runtime mode the client only sends `parentMessageId`
       // (the user message being regenerated) and lets the server rebuild the
-      // context from the flat topic query above. That query still returns the
-      // anchor's *previous* assistant branch (the answer being replaced) and —
-      // when a middle turn is regenerated — the later turns that continued from
-      // it. Leaving them in makes the model see an already-answered turn and
-      // "continue" it instead of producing a fresh answer (`[U1, A1]` → continue
-      // rather than `[U1]` → A2). Drop everything descending from the anchor so
-      // history ends at the user message.
+      // context. The topic query above still returns the anchor's *previous*
+      // assistant branch (the answer being replaced) and — when a middle turn is
+      // regenerated — the later turns that continued from it. Leaving them in
+      // makes the model see an already-answered turn and "continue" it instead of
+      // producing a fresh answer (`[U1, A1]` → continue rather than `[U1]` → A2).
+      //
+      // The branch must be pruned even after `/compact`: compaction hides the
+      // grouped messages and `query` returns a synthetic `compressedGroup` node
+      // that carries neither `parentId` nor (for compaction) the group's
+      // `parentMessageId`, so ancestry can't be walked from `query` output alone.
+      // We load the raw message tree (including hidden/compacted messages) and
+      // compute the anchor's descendants from it, then drop both regular
+      // descendant messages and any group node whose members fall in that branch.
       //
       // Scoped to a `user`-role anchor: the human-approval resume path anchors on
       // a tool message and must keep the in-flight turn (including parallel-tool
@@ -2068,22 +2074,43 @@ export class AiAgentService {
         historyMessagesCache &&
         effectiveResume &&
         parentMessageId &&
-        resumeParentMessage?.role === 'user'
+        resumeParentMessage?.role === 'user' &&
+        appContext?.topicId
       ) {
-        const byId = new Map(historyMessagesCache.map((msg) => [msg.id, msg]));
-        const isDescendantOfAnchor = (id: string) => {
-          let cursor: string | null | undefined = id;
+        const tree = await this.messageModel.queryTopicMessageTree({
+          threadId: appContext.threadId,
+          topicId: appContext.topicId,
+        });
+        const parentOf = new Map(tree.map((row) => [row.id, row.parentId]));
+        const descendsFromAnchor = (id: string | null | undefined) => {
+          let cursor = id ? parentOf.get(id) : undefined;
           const seen = new Set<string>();
           while (cursor && !seen.has(cursor)) {
             if (cursor === parentMessageId) return true;
             seen.add(cursor);
-            cursor = byId.get(cursor)?.parentId;
+            cursor = parentOf.get(cursor);
           }
           return false;
         };
-        historyMessagesCache = historyMessagesCache.filter(
-          (msg) => msg.id === parentMessageId || !isDescendantOfAnchor(msg.id),
+        // Message ids on the anchor's old branch (old answer + later turns),
+        // including messages hidden inside compaction groups.
+        const descendantIds = new Set(
+          tree.filter((row) => descendsFromAnchor(row.id)).map((row) => row.id),
         );
+        // Group nodes whose members fall on that branch (e.g. a compacted old branch).
+        const prunedGroupIds = new Set(
+          tree
+            .filter((row) => row.messageGroupId && descendantIds.has(row.id))
+            .map((row) => row.messageGroupId as string),
+        );
+        historyMessagesCache = historyMessagesCache.filter((msg) => {
+          if (msg.id === parentMessageId) return true;
+          // Synthetic MessageGroup nodes carry the group id, not a message id.
+          if (msg.role === 'compressedGroup' || msg.role === 'compareGroup') {
+            return !prunedGroupIds.has(msg.id);
+          }
+          return !descendantIds.has(msg.id);
+        });
       }
 
       return historyMessagesCache;

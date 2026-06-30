@@ -446,6 +446,34 @@ export class MessageModel {
   };
 
   /**
+   * Lightweight parent/group links for the FULL message tree of a topic,
+   * INCLUDING messages hidden inside MessageGroups (compression / parallel).
+   *
+   * `query` replaces grouped messages with synthetic group nodes that expose
+   * neither their members' `parentId` nor (for compaction) the group's
+   * `parentMessageId`, so branch-ancestry can't be reconstructed from `query`
+   * output alone. This returns the raw `id → parentId` / `messageGroupId` links
+   * so callers (e.g. server-runtime regenerate pruning) can walk ancestry across
+   * a compacted range.
+   */
+  queryTopicMessageTree = async ({
+    threadId,
+    topicId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ id: string; messageGroupId: string | null; parentId: string | null }[]> => {
+    return this.db
+      .select({
+        id: messages.id,
+        messageGroupId: messages.messageGroupId,
+        parentId: messages.parentId,
+      })
+      .from(messages)
+      .where(and(this.ownership(), this.matchTopic(topicId), this.matchThread(threadId)));
+  };
+
+  /**
    * Query messages with full relations (files, plugins, translations, etc.)
    *
    * This is the low-level query method that accepts a custom where condition.
