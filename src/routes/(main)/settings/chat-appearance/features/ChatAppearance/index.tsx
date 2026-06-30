@@ -96,6 +96,27 @@ const ChatAppearance = memo(() => {
       </FormGroup>
 
       <FormGroup
+        active={false}
+        collapsible={false}
+        desc={t('settingChatAppearance.linkIcon.desc')}
+        title={t('settingChatAppearance.linkIcon.title')}
+        variant={'filled'}
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {loadingStates.enableMessageLinkIcon && (
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+            )}
+            <Switch
+              checked={general.enableMessageLinkIcon ?? true}
+              onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
+            />
+          </Flexbox>
+        }
+      >
+        {null}
+      </FormGroup>
+
+      <FormGroup
         collapsible={false}
         desc={t('settingChatAppearance.fontSize.desc')}
         gap={16}

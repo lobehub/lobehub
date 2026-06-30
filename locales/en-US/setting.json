@@ -615,6 +615,8 @@
   "settingChatAppearance.fontSize.marks.normal": "Standard",
   "settingChatAppearance.fontSize.title": "Font Size",
   "settingChatAppearance.highlighterTheme.title": "Code Highlight Theme",
+  "settingChatAppearance.linkIcon.desc": "Show a website icon before links in messages. Turn this off if links look oversized when copied into email or other apps.",
+  "settingChatAppearance.linkIcon.title": "Link Icon",
   "settingChatAppearance.mermaidTheme.title": "Mermaid Theme",
   "settingChatAppearance.title": "Chat Appearance",
   "settingChatAppearance.transitionMode.desc": "Choose how chat messages appear",

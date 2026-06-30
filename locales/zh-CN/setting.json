@@ -615,6 +615,8 @@
   "settingChatAppearance.fontSize.marks.normal": "标准",
   "settingChatAppearance.fontSize.title": "字体大小",
   "settingChatAppearance.highlighterTheme.title": "代码高亮主题",
+  "settingChatAppearance.linkIcon.desc": "在消息链接前显示网站图标。如果复制到邮件等应用后链接显得过大，可关闭此项。",
+  "settingChatAppearance.linkIcon.title": "链接图标",
   "settingChatAppearance.mermaidTheme.title": "Mermaid 主题",
   "settingChatAppearance.title": "聊天外观",
   "settingChatAppearance.transitionMode.desc": "选择聊天消息的显示方式",
