@@ -68,5 +68,5 @@ export const getMutate = (): ScopedMutator => {
 export const mutate: ScopedMutator = (async (...args: Parameters<ScopedMutator>) => {
   const [key, ...rest] = args;
   const finalKey = typeof key === 'function' ? key : augmentKey(key, getActiveWorkspaceId());
-  return await getMutate()(finalKey as any, ...(rest as [any, any]));
+  return getMutate()(finalKey as any, ...(rest as [any, any]));
 }) as ScopedMutator;

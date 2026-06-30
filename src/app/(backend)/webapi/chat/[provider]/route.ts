@@ -35,7 +35,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
     }
 
-    return await modelRuntime.chat(data, {
+    return modelRuntime.chat(data, {
       user: userId,
       ...traceOptions,
       signal: req.signal,

@@ -60,7 +60,7 @@ export const emitClientAgentSignalSourceEvent = async <
   const timestamp = input.timestamp ?? Date.now();
 
   try {
-    return await agentSignalService.emitClientGatewaySourceEvent({
+    return agentSignalService.emitClientGatewaySourceEvent({
       payload: input.payload,
       scopeKey: input.scopeKey,
       sourceId: input.sourceId ?? createSourceId(input.sourceType, timestamp),

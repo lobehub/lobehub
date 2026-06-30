@@ -86,7 +86,7 @@ const getVerificationKey = async () => {
     const { importJWK } = await import('jose');
 
     // Now, in any environment, `importJWK` will correctly identify this object as a public key.
-    return await importJWK(publicKeyJwk, 'RS256');
+    return importJWK(publicKeyJwk, 'RS256');
   } catch (error) {
     log('Failed to get JWKS public key: %O', error);
     throw new Error(`JWKS_KEY public key retrieval failed: ${(error as Error).message}`, {

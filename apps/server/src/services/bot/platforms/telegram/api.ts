@@ -458,11 +458,11 @@ export class TelegramApi {
     };
 
     try {
-      return await attempt();
+      return attempt();
     } catch (error) {
       if (!isTransientNetworkError(error)) throw error;
       log('Telegram API %s: transient network error, retrying once: %O', method, error);
-      return await attempt();
+      return attempt();
     }
   }
 
@@ -529,11 +529,11 @@ export class TelegramApi {
     };
 
     try {
-      return await attempt();
+      return attempt();
     } catch (error) {
       if (!isTransientNetworkError(error)) throw error;
       log('Telegram API %s: transient network error, retrying once: %O', method, error);
-      return await attempt();
+      return attempt();
     }
   }
 

@@ -67,7 +67,7 @@ export const knowledgeBaseRouter = router({
       assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
 
       try {
-        return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
+        return ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
           input.knowledgeBaseId,
           input.ids,
         );

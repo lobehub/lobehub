@@ -355,7 +355,7 @@ export class AgentBridgeService {
     AgentBridgeService.startupControllers.set(threadId, controller);
 
     try {
-      return await task(controller.signal);
+      return task(controller.signal);
     } finally {
       if (AgentBridgeService.startupControllers.get(threadId) === controller) {
         AgentBridgeService.startupControllers.delete(threadId);

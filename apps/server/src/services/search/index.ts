@@ -97,7 +97,7 @@ export class SearchService {
     const results = await pMap(
       input.urls,
       async (url) => {
-        return await this.crawlWithRetry(crawler, url, input.impls);
+        return this.crawlWithRetry(crawler, url, input.impls);
       },
       { concurrency: this.crawlConcurrency },
     );
@@ -164,7 +164,7 @@ export class SearchService {
    */
   private async queryWithImpl(impl: SearchServiceImpl, query: string, params?: SearchParams) {
     try {
-      return await impl.query(query, params);
+      return impl.query(query, params);
     } catch (e) {
       console.error('[SearchService] query failed', {
         provider: impl.constructor.name || 'UnknownSearchImpl',

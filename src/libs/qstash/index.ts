@@ -172,7 +172,7 @@ export async function verifyQStashSignature(request: Request, rawBody: string): 
   const receiver = new Receiver({ currentSigningKey, nextSigningKey });
 
   try {
-    return await receiver.verify({ body: rawBody, signature });
+    return receiver.verify({ body: rawBody, signature });
   } catch (error) {
     log('QStash signature verification failed: %O', error);
     return false;

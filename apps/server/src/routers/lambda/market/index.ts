@@ -79,7 +79,7 @@ export const marketRouter = router({
       log('getAgentsByPlugin input: %O', input);
 
       try {
-        return await ctx.discoverService.getAgentsByPlugin(input);
+        return ctx.discoverService.getAgentsByPlugin(input);
       } catch (error) {
         log('Error fetching agents by plugin: %O', error);
         throw new TRPCError({
@@ -104,7 +104,7 @@ export const marketRouter = router({
       log('  getAssistantCategories: marketProcedure\n input: %O', input);
 
       try {
-        return await ctx.discoverService.getAssistantCategories(input);
+        return ctx.discoverService.getAssistantCategories(input);
       } catch (error) {
         log('Error fetching assistant categories: %O', error);
         throw new TRPCError({
@@ -127,7 +127,7 @@ export const marketRouter = router({
       log('getAssistantDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getAssistantDetail(input);
+        return ctx.discoverService.getAssistantDetail(input);
       } catch (error) {
         log('Error fetching assistants detail: %O', error);
         throw new TRPCError({
@@ -149,7 +149,7 @@ export const marketRouter = router({
       log('getAssistantIdentifiers called with input: %O', input);
 
       try {
-        return await ctx.discoverService.getAssistantIdentifiers(input);
+        return ctx.discoverService.getAssistantIdentifiers(input);
       } catch (error) {
         log('Error fetching assistant identifiers: %O', error);
         throw new TRPCError({
@@ -181,7 +181,7 @@ export const marketRouter = router({
       log('getAssistantList input: %O', input);
 
       try {
-        return await ctx.discoverService.getAssistantList(input);
+        return ctx.discoverService.getAssistantList(input);
       } catch (error) {
         log('Error fetching assistant list: %O', error);
         throw new TRPCError({
@@ -205,7 +205,7 @@ export const marketRouter = router({
       log('getGroupAgentCategories input: %O', input);
 
       try {
-        return await ctx.discoverService.getGroupAgentCategories(input);
+        return ctx.discoverService.getGroupAgentCategories(input);
       } catch (error) {
         log('Error fetching group agent categories: %O', error);
         throw new TRPCError({
@@ -227,7 +227,7 @@ export const marketRouter = router({
       log('getGroupAgentDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getGroupAgentDetail(input);
+        return ctx.discoverService.getGroupAgentDetail(input);
       } catch (error) {
         log('Error fetching group agent detail: %O', error);
         throw new TRPCError({
@@ -241,7 +241,7 @@ export const marketRouter = router({
     log('getGroupAgentIdentifiers called');
 
     try {
-      return await ctx.discoverService.getGroupAgentIdentifiers();
+      return ctx.discoverService.getGroupAgentIdentifiers();
     } catch (error) {
       log('Error fetching group agent identifiers: %O', error);
       throw new TRPCError({
@@ -270,7 +270,7 @@ export const marketRouter = router({
       log('getGroupAgentList input: %O', input);
 
       try {
-        return await ctx.discoverService.getGroupAgentList(input);
+        return ctx.discoverService.getGroupAgentList(input);
       } catch (error) {
         log('Error fetching group agent list: %O', error);
         throw new TRPCError({
@@ -291,7 +291,7 @@ export const marketRouter = router({
     .query(async ({ input, ctx }) => {
       log('getLegacyPluginList input: %O', input);
       try {
-        return await ctx.discoverService.getLegacyPluginList(input);
+        return ctx.discoverService.getLegacyPluginList(input);
       } catch (error) {
         log('Error fetching legacy plugin list: %O', error);
         throw new TRPCError({
@@ -315,7 +315,7 @@ export const marketRouter = router({
       log('getMcpCategories input: %O', input);
 
       try {
-        return await ctx.discoverService.getMcpCategories(input);
+        return ctx.discoverService.getMcpCategories(input);
       } catch (error) {
         log('Error fetching mcp categories: %O', error);
         throw new TRPCError({
@@ -337,7 +337,7 @@ export const marketRouter = router({
       log('getMcpDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getMcpDetail(input);
+        return ctx.discoverService.getMcpDetail(input);
       } catch (error) {
         console.error('Error fetching mcp detail: %O', error);
         throw new TRPCError({
@@ -366,7 +366,7 @@ export const marketRouter = router({
       log('getMcpList input: %O', input);
 
       try {
-        return await ctx.discoverService.getMcpList(input);
+        return ctx.discoverService.getMcpList(input);
       } catch (error) {
         log('Error fetching mcp list: %O', error);
         throw new TRPCError({
@@ -389,7 +389,7 @@ export const marketRouter = router({
       log('getMcpManifest input: %O', input);
 
       try {
-        return await ctx.discoverService.getMcpManifest(input);
+        return ctx.discoverService.getMcpManifest(input);
       } catch (error) {
         log('Error fetching mcp manifest: %O', error);
         throw new TRPCError({
@@ -412,7 +412,7 @@ export const marketRouter = router({
       log('getModelCategories input: %O', input);
 
       try {
-        return await ctx.discoverService.getModelCategories(input);
+        return ctx.discoverService.getModelCategories(input);
       } catch (error) {
         log('Error fetching model categories: %O', error);
         throw new TRPCError({
@@ -433,7 +433,7 @@ export const marketRouter = router({
       log('getModelDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getModelDetail(input);
+        return ctx.discoverService.getModelDetail(input);
       } catch (error) {
         log('Error fetching model details: %O', error);
         throw new TRPCError({
@@ -447,7 +447,7 @@ export const marketRouter = router({
     log('getModelIdentifiers called');
 
     try {
-      return await ctx.discoverService.getModelIdentifiers();
+      return ctx.discoverService.getModelIdentifiers();
     } catch (error) {
       log('Error fetching model identifiers: %O', error);
       throw new TRPCError({
@@ -475,7 +475,7 @@ export const marketRouter = router({
       log('getModelList input: %O', input);
 
       try {
-        return await ctx.discoverService.getModelList(input);
+        return ctx.discoverService.getModelList(input);
       } catch (error) {
         log('Error fetching model list: %O', error);
         throw new TRPCError({
@@ -499,7 +499,7 @@ export const marketRouter = router({
       log('getPluginCategories input: %O', input);
 
       try {
-        return await ctx.discoverService.getPluginCategories(input);
+        return ctx.discoverService.getPluginCategories(input);
       } catch (error) {
         log('Error fetching plugin categories: %O', error);
         throw new TRPCError({
@@ -521,7 +521,7 @@ export const marketRouter = router({
       log('getPluginDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getPluginDetail(input);
+        return ctx.discoverService.getPluginDetail(input);
       } catch (error) {
         log('Error fetching plugin details: %O', error);
         throw new TRPCError({
@@ -535,7 +535,7 @@ export const marketRouter = router({
     log('getPluginIdentifiers called');
 
     try {
-      return await ctx.discoverService.getPluginIdentifiers();
+      return ctx.discoverService.getPluginIdentifiers();
     } catch (error) {
       log('Error fetching plugin identifiers: %O', error);
       throw new TRPCError({
@@ -563,7 +563,7 @@ export const marketRouter = router({
       log('getPluginList input: %O', input);
 
       try {
-        return await ctx.discoverService.getPluginList(input);
+        return ctx.discoverService.getPluginList(input);
       } catch (error) {
         log('Error fetching plugin list: %O', error);
         throw new TRPCError({
@@ -586,7 +586,7 @@ export const marketRouter = router({
       log('getProviderDetail input: %O', input);
 
       try {
-        return await ctx.discoverService.getProviderDetail(input);
+        return ctx.discoverService.getProviderDetail(input);
       } catch (error) {
         log('Error fetching provider details: %O', error);
         throw new TRPCError({
@@ -600,7 +600,7 @@ export const marketRouter = router({
     log('getProviderIdentifiers called');
 
     try {
-      return await ctx.discoverService.getProviderIdentifiers();
+      return ctx.discoverService.getProviderIdentifiers();
     } catch (error) {
       log('Error fetching provider identifiers: %O', error);
       throw new TRPCError({
@@ -627,7 +627,7 @@ export const marketRouter = router({
       log('getProviderList input: %O', input);
 
       try {
-        return await ctx.discoverService.getProviderList(input);
+        return ctx.discoverService.getProviderList(input);
       } catch (error) {
         log('Error fetching provider list: %O', error);
         throw new TRPCError({
@@ -649,7 +649,7 @@ export const marketRouter = router({
       log('getUserInfo input: %O', input);
 
       try {
-        return await ctx.discoverService.getUserInfo(input);
+        return ctx.discoverService.getUserInfo(input);
       } catch (error) {
         log('Error fetching user info: %O', error);
         throw new TRPCError({

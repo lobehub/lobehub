@@ -92,7 +92,7 @@ export const isAgentSelfIterationFeatureEnabledForUser = async (userId: string) 
  */
 export const isAgentSignalEnabledForUser = async (_db: LobeChatDatabase, userId: string) => {
   try {
-    return await isAgentSelfIterationFeatureEnabledForUser(userId);
+    return isAgentSelfIterationFeatureEnabledForUser(userId);
   } catch {
     return false;
   }

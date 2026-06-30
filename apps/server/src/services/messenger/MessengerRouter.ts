@@ -366,7 +366,7 @@ export class MessengerRouter {
     this.loadingPromises.set(key, promise);
 
     try {
-      return await promise;
+      return promise;
     } finally {
       this.loadingPromises.delete(key);
     }

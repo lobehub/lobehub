@@ -101,7 +101,7 @@ export const composioToolsRouter = router({
       const content = data?.data || data?.result || data;
       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
 
-      return await MCPService.processToolCallResult({
+      return MCPService.processToolCallResult({
         content: [{ text: contentStr, type: 'text' }],
         isError: false,
       });

@@ -46,7 +46,7 @@ export const usageRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findAndGroupByDateRange(
+      return ctx.usageRecordService.findAndGroupByDateRange(
         input.startAt,
         input.endAt,
         input.agentId,
@@ -61,7 +61,7 @@ export const usageRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findAndGroupByDay(input.mo, input.agentId);
+      return ctx.usageRecordService.findAndGroupByDay(input.mo, input.agentId);
     }),
 
   findByMonth: usageProcedure
@@ -72,6 +72,6 @@ export const usageRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.usageRecordService.findByMonth(input.mo, input.agentId);
+      return ctx.usageRecordService.findByMonth(input.mo, input.agentId);
     }),
 });

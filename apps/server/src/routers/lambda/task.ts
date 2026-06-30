@@ -836,7 +836,7 @@ export const taskRouter = router({
           ctx.userId,
           ctx.workspaceId ?? undefined,
         );
-        return await runner.runTask({
+        return runner.runTask({
           continueTopicId: input.continueTopicId,
           extraPrompt: input.prompt,
           taskId: task.id,

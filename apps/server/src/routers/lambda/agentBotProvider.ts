@@ -140,7 +140,7 @@ export const agentBotProviderRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
       try {
-        return await ctx.agentBotProviderModel.create(payload);
+        return ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
         if (e?.cause?.code === '23505') {
           throw new TRPCError({

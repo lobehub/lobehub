@@ -833,7 +833,7 @@ export class MemoryExtractionExecutor {
     const normalized = text.trim();
     if (!normalized) return 0;
 
-    return await encodeAsync(normalized);
+    return encodeAsync(normalized);
   }
 
   private async trimTextToTokenLimit(text: string, tokenLimit?: number) {

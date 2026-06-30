@@ -224,7 +224,7 @@ export class ToolExecutionService {
     try {
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
-        return await this.executeCloudMCPTool(payload, context, mcpParams);
+        return this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
       // MCP servers only the user's machine can reach must not be called from

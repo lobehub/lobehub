@@ -721,7 +721,7 @@ export const connectorRouter = router({
       // update/delete/reset.
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       try {
-        return await syncConnectorToolsById(input.id, ctx);
+        return syncConnectorToolsById(input.id, ctx);
       } catch (err: any) {
         throw new TRPCError({
           cause: err,
@@ -746,7 +746,7 @@ export const connectorRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return callConnectorToolById(input, ctx);
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });

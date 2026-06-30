@@ -372,7 +372,7 @@ export class ClientToolExecutionActionImpl {
     const budgetMs = executionTimeoutMs ?? FALLBACK_EXECUTION_TIMEOUT_MS;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      return await Promise.race([
+      return Promise.race([
         task(),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {

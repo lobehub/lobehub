@@ -1298,7 +1298,7 @@ export const aiAgentRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
-      return await ctx.aiAgentService.execAgent({
+      return ctx.aiAgentService.execAgent({
         agentId,
         appContext,
         autoStart,
@@ -1610,7 +1610,7 @@ export const aiAgentRouter = router({
         });
 
         // External procedure name stays `execSubAgentTask`; the service method is `execSubAgent`.
-        return await ctx.aiAgentService.execSubAgent({
+        return ctx.aiAgentService.execSubAgent({
           agentId,
           groupId,
           instruction,

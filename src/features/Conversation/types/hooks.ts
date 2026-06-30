@@ -211,7 +211,7 @@ export interface ConversationHooks {
    * @example
    * ```ts
    * onToolApprovalRequired: async (toolCall) => {
-   *   return await showCustomApprovalDialog(toolCall);
+   *   return showCustomApprovalDialog(toolCall);
    * }
    * ```
    */
