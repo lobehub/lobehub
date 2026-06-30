@@ -93,6 +93,31 @@ vi.mock('@/store/tool', () => ({
         } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
+      {
+        identifier: 'lobe-image-generation',
+        manifest: {
+          api: [
+            {
+              description: 'Generate image',
+              name: 'generateImage',
+              parameters: {
+                properties: {
+                  prompt: { type: 'string' },
+                },
+                required: ['prompt'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-image-generation',
+          meta: {
+            title: 'Image Generation',
+            avatar: 'I',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
     ],
   }),
 }));
@@ -121,6 +146,8 @@ vi.mock('../isCanUseFC', () => ({
 
 let mockCurrentAgentPlugins: string[] = [];
 let mockCurrentAgentDisabledPlugins: string[] = [];
+let mockCurrentChatConfig: { enableAgentMode?: boolean; memory?: { enabled?: boolean } } = {};
+let mockImageOutputSupport = false;
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
@@ -133,11 +160,18 @@ vi.mock('@/store/agent/selectors', () => ({
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
-    currentChatConfig: () => ({}),
+    currentChatConfig: () => mockCurrentChatConfig,
     isCloudSandboxEnabled: () => false,
     isLocalSystemEnabled: () => false,
     isMemoryToolEnabled: () => false,
   },
+}));
+
+vi.mock('@/store/aiInfra', () => ({
+  aiModelSelectors: {
+    isModelSupportImageOutput: () => () => mockImageOutputSupport,
+  },
+  getAiInfraStoreState: () => ({}),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -171,6 +205,8 @@ describe('toolEngineering', () => {
     mockCurrentAgentPlugins = [];
     mockCurrentAgentDisabledPlugins = [];
     mockIsCanUseFC = true;
+    mockCurrentChatConfig = {};
+    mockImageOutputSupport = false;
   });
 
   describe('createToolsEngine', () => {
@@ -229,6 +265,60 @@ describe('toolEngineering', () => {
   });
 
   describe('createChatToolsEngine', () => {
+    it('should enable image generation in chat mode when model lacks native image output', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockImageOutputSupport = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-image-generation');
+    });
+
+    it('should not enable image generation in chat mode when model has native image output', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockImageOutputSupport = true;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-image-chat',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-image-chat',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should not enable image generation in chat mode when model cannot call tools', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
     it('should include web browsing tool as default when no tools are provided', () => {
       const toolsEngine = createAgentToolsEngine({
         model: 'gpt-4',
@@ -332,6 +422,38 @@ describe('toolEngineering', () => {
         id: 'lobe-web-browsing',
         reason: 'incompatible',
       });
+    });
+
+    it('should not enable image generation by default in agent mode', () => {
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should allow image generation explicit activation in agent mode', () => {
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+        toolIds: ['lobe-image-generation'],
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-image-generation');
     });
   });
 
