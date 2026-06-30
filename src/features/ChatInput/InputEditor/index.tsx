@@ -197,7 +197,7 @@ const InputEditor = memo<{
             {
               items: localFileItems,
               key: 'mention-section-local-file',
-              label: t('mention.category.files' as any),
+              label: t('mention.category.files'),
               type: 'section',
             },
             ...matchedSections,

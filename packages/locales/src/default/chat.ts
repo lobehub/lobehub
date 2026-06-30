@@ -301,6 +301,7 @@ export default {
   'memberSelection.setInitialMembers': 'Select Group members',
   'members': 'Members',
   'mention.category.agents': 'Agents',
+  'mention.category.files': 'Files',
   'mention.category.members': 'Members',
   'mention.category.skills': 'Skills',
   'mention.category.tools': 'Tools',
