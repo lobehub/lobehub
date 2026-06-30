@@ -3,7 +3,7 @@ import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
@@ -72,12 +72,22 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const openDocument = useChatStore((s) => s.openDocument);
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const renameRafRef = useRef<number>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(timeoutRef.current);
+      if (renameRafRef.current) cancelAnimationFrame(renameRafRef.current);
+    };
+  }, []);
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
     // Match the new-file flow: leave the extension out of the selection so
     // the user can retype only the stem.
-    requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
+    if (renameRafRef.current) cancelAnimationFrame(renameRafRef.current);
+    renameRafRef.current = requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
   const ops = useDocumentTreeOps({ agentId, data, mutate });
@@ -135,11 +145,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const focusNewRowForRename = useCallback((pendingId: string) => {
     // Defer past the current task so React commits the inserted row and the
     // tree adapter rebuilds its id→path map before we trigger rename.
-    setTimeout(() => {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
       treeRef.current?.startRenaming(pendingId);
       // After pierre's input.select() runs in its own layout effect, narrow
       // selection to the stem so the `.md` extension stays intact.
-      requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
+      if (renameRafRef.current) cancelAnimationFrame(renameRafRef.current);
+      renameRafRef.current = requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
     }, 0);
   }, []);
 
