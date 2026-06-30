@@ -262,11 +262,18 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // existing metadata — a jsonb update replaces the whole column, so other
         // keys (e.g. description) must be carried over. Also migrates legacy rows
         // that stored headers as a 'header' credential (cleared below).
+        //
+        // Guard on `connector`: only rewrite metadata once the connector record is
+        // loaded, so we never overwrite a populated column with `{}` (which would
+        // drop sibling keys like description). In practice the form can't be
+        // submitted before `connector` resolves, but this keeps it safe.
         const headers = cleanRecord(mcp.headers);
-        const nextMetadata: Record<string, unknown> = { ...(connector?.metadata ?? {}) };
-        if (headers) nextMetadata.customHeaders = headers;
-        else delete nextMetadata.customHeaders;
-        patch.metadata = nextMetadata;
+        if (connector) {
+          const nextMetadata: Record<string, unknown> = { ...(connector.metadata ?? {}) };
+          if (headers) nextMetadata.customHeaders = headers;
+          else delete nextMetadata.customHeaders;
+          patch.metadata = nextMetadata;
+        }
 
         if (urlChanged) {
           // Clear stale auth credentials whenever the server URL changes.
