@@ -178,6 +178,46 @@ describe('topic action', () => {
       );
       expect(topicId).toEqual('new-topic-id');
     });
+
+    it('should release the fire-and-forget summary loading owner when title summary finishes', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }, { id: 'message2' }] as UIChatMessage[];
+      let resolveSummary!: () => void;
+      const summaryPromise = new Promise<void>((resolve) => {
+        resolveSummary = resolve;
+      });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          topicLoadingIdCounts: {},
+          topicLoadingIds: [],
+        });
+      });
+
+      vi.spyOn(result.current, 'internal_createTopic').mockResolvedValue('new-topic-id');
+      vi.spyOn(result.current, 'summaryTopicTitle').mockReturnValue(summaryPromise);
+
+      await act(async () => {
+        await result.current.saveToTopic();
+      });
+
+      expect(useChatStore.getState().topicLoadingIds).toEqual(['new-topic-id']);
+      expect(useChatStore.getState().topicLoadingIdCounts).toEqual({ 'new-topic-id': 1 });
+
+      await act(async () => {
+        resolveSummary();
+        await summaryPromise;
+      });
+
+      await waitFor(() => {
+        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
+        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
+      });
+    });
   });
   describe('refreshTopic', () => {
     beforeEach(() => {

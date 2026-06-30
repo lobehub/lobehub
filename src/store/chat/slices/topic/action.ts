@@ -138,8 +138,15 @@ export class ChatTopicActionImpl {
 
     this.#get().internal_updateTopicLoading(topicId, true);
     // 2. auto summary topic Title
-    // we don't need to wait for summary, just let it run async
-    summaryTopicTitle(topicId, messages);
+    // We don't need to await the summary, but this owner keeps the new topic
+    // spinning immediately until the fire-and-forget title summary settles.
+    void summaryTopicTitle(topicId, messages)
+      .catch((error) => {
+        console.error('[saveToTopic] Failed to summarize topic title:', error);
+      })
+      .finally(() => {
+        this.#get().internal_updateTopicLoading(topicId, false);
+      });
 
     return topicId;
   };
