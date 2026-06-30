@@ -1,29 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getProjectFileIndexMock } = vi.hoisted(() => ({
-  getProjectFileIndexMock: vi.fn(),
+const { searchProjectFilesMock } = vi.hoisted(() => ({
+  searchProjectFilesMock: vi.fn(),
 }));
 
-vi.mock('@/services/electron/localFileService', () => ({
-  localFileService: {
-    getProjectFileIndex: getProjectFileIndexMock,
+vi.mock('@/services/projectFile', () => ({
+  projectFileService: {
+    searchProjectFiles: searchProjectFilesMock,
   },
 }));
 
 describe('localFileMentionIndex', () => {
   beforeEach(() => {
-    vi.resetModules();
-    getProjectFileIndexMock.mockReset();
+    searchProjectFilesMock.mockReset();
   });
 
-  it('should reuse the project file index across keyword searches', async () => {
-    getProjectFileIndexMock.mockResolvedValue({
+  it('searches project files through the host-side search service', async () => {
+    searchProjectFilesMock.mockResolvedValue({
       entries: [
         {
-          isDirectory: false,
-          name: 'index.ts',
-          path: '/workspace/project/src/index.ts',
-          relativePath: 'src/index.ts',
+          isDirectory: true,
+          name: 'components',
+          path: '/workspace/project/src/components',
+          relativePath: 'src/components/',
         },
         {
           isDirectory: false,
@@ -32,19 +31,27 @@ describe('localFileMentionIndex', () => {
           relativePath: 'src/components/Button.tsx',
         },
       ],
-      indexedAt: '2026-04-28T00:00:00.000Z',
       root: '/workspace/project',
+      searchedAt: '2026-04-28T00:00:00.000Z',
       source: 'git',
-      totalCount: 2,
     });
 
     const { searchProjectFileMentionIndex } = await import('./localFileMentionIndex');
 
-    await searchProjectFileMentionIndex('/workspace/project', 'src', 20);
-    const secondResult = await searchProjectFileMentionIndex('/workspace/project', 'button', 20);
+    const result = await searchProjectFileMentionIndex(
+      '/workspace/project',
+      'button',
+      20,
+      'device-1',
+    );
 
-    expect(getProjectFileIndexMock).toHaveBeenCalledTimes(1);
-    expect(secondResult).toEqual([
+    expect(searchProjectFilesMock).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      limit: 20,
+      query: 'button',
+      scope: '/workspace/project',
+    });
+    expect(result).toEqual([
       expect.objectContaining({
         path: '/workspace/project/src/components/Button.tsx',
       }),

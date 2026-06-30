@@ -1,11 +1,11 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Center, copyToClipboard, Empty, Flexbox } from '@lobehub/ui';
+import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
 import type { MenuProps } from 'antd';
 import { message } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileIcon, RefreshCwIcon } from 'lucide-react';
+import { FileIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +19,7 @@ import {
 } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { localFileService } from '@/services/electron/localFileService';
+import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
@@ -54,26 +55,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 0;
   `,
   subheader: css`
-    display: flex;
     flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 4px 8px;
-    padding-inline: 14px 6px;
-  `,
-  count: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
+    padding-block: 6px 8px;
+    padding-inline: 12px;
   `,
 }));
 
 const stripTrailingSlash = (value: string) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
 const FILE_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const FILE_SEARCH_DEBOUNCE_MS = 180;
+const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
 
 const getParentRelativePath = (relativePath: string): string | null => {
   const cleaned = stripTrailingSlash(relativePath);
@@ -114,7 +106,7 @@ const getAncestorIds = (filePath: string): string[] => {
 const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const isRemote = !!deviceId;
-  const { data, isLoading, isValidating, mutate } = useProjectFiles(deviceId, workingDirectory);
+  const { data, isLoading } = useProjectFiles(deviceId, workingDirectory);
   const { data: gitFiles } = useGitWorkingTreeFiles(
     deviceId,
     workingDirectory,
@@ -123,14 +115,27 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
-  const nodes = useMemo(() => buildTreeNodes(entries), [entries]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
+  const [isSearching, setIsSearching] = useState(false);
+  const normalizedDebouncedQuery = debouncedQuery.trim();
+  const isFiltering = normalizedDebouncedQuery.length > 0;
+  const displayEntries = useMemo(
+    () => (isFiltering ? (searchEntries ?? []) : entries),
+    [entries, isFiltering, searchEntries],
+  );
+  const nodes = useMemo(() => buildTreeNodes(displayEntries), [displayEntries]);
   const gitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
   const dirtyFilePaths = useMemo(() => new Set(gitStatus.map((entry) => entry.path)), [gitStatus]);
   // Pre-expand top-level directories so the user sees something useful on first
   // paint without having to click through every folder.
   const defaultExpandedIds = useMemo(
-    () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
-    [nodes],
+    () =>
+      nodes
+        .filter((node) => node.isFolder && (isFiltering || node.parentId == null))
+        .map((node) => node.id),
+    [isFiltering, nodes],
   );
   const treeStyleVars = useMemo(
     () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
@@ -138,6 +143,47 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!normalizedDebouncedQuery) {
+      setIsSearching(false);
+      setSearchEntries(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+    setSearchEntries(undefined);
+
+    void projectFileService
+      .searchProjectFiles({
+        deviceId,
+        limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
+        query: normalizedDebouncedQuery,
+        scope: workingDirectory,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setSearchEntries(result?.entries ?? []);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('[Files] Failed to search project files:', error);
+        setSearchEntries([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId, normalizedDebouncedQuery, workingDirectory]);
 
   // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
   const prevDefaultRef = useRef<string[]>([]);
@@ -150,6 +196,11 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   }, [defaultExpandedIds]);
 
   const treeRef = useRef<ExplorerTreeHandle>(null);
+
+  useEffect(() => {
+    if (!isFiltering) return;
+    treeRef.current?.setExpanded(defaultExpandedIds);
+  }, [defaultExpandedIds, isFiltering]);
 
   const revealRequest = useGlobalStore((s) => s.status.workingSidebarRevealRequest);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
@@ -255,7 +306,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [dirtyFilePaths, isRemote, openNode, setWorkingSidebarTab, t],
   );
 
-  const fileCount = data?.totalCount ?? entries.filter((e) => !e.isDirectory).length;
   const isEmpty = nodes.length === 0;
 
   if (!data && isLoading) {
@@ -269,18 +319,31 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   return (
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <div className={styles.subheader}>
-        <span className={styles.count}>{t('workingPanel.files.count', { count: fileCount })}</span>
-        <ActionIcon
-          icon={RefreshCwIcon}
-          loading={isValidating}
+        <SearchBar
+          allowClear
+          placeholder={t('workingPanel.files.searchPlaceholder')}
           size={'small'}
-          title={t('workingPanel.files.refresh')}
-          onClick={() => void mutate()}
+          style={{ width: '100%' }}
+          styles={{ input: { width: '100%' } }}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={stopPropagation}
         />
       </div>
-      {isEmpty ? (
+      {isEmpty && isFiltering && isSearching ? (
+        <Center flex={1}>
+          <NeuralNetworkLoading size={32} />
+        </Center>
+      ) : isEmpty ? (
         <Center flex={1} gap={8} paddingBlock={24}>
-          <Empty description={t('workingPanel.files.empty')} icon={FileIcon} />
+          <Empty
+            icon={FileIcon}
+            description={t(
+              isFiltering && debouncedQuery === searchQuery
+                ? 'workingPanel.files.noSearchResults'
+                : 'workingPanel.files.empty',
+            )}
+          />
         </Center>
       ) : (
         <div className={styles.tree} style={treeStyleVars}>

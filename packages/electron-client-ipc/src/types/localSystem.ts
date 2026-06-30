@@ -248,7 +248,18 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
 }
 
 export interface OpenLocalFileParams {

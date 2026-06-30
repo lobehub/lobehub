@@ -31,7 +31,12 @@ const makeDeps = (): DeviceControlDeps => ({
     indexedAt: '',
     root: '',
     source: 'glob' as const,
-    totalCount: 0,
+  })),
+  searchProjectFiles: vi.fn(async () => ({
+    entries: [],
+    root: '',
+    searchedAt: '',
+    source: 'glob' as const,
   })),
 });
 
@@ -94,10 +99,13 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
-  it('delegates getProjectFileIndex and getLocalFilePreview to injected deps', async () => {
+  it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);
     expect(deps.getProjectFileIndex).toHaveBeenCalledWith({ scope: root });
+
+    await executeDeviceRpc('searchProjectFiles', { query: 'agent', scope: root }, deps);
+    expect(deps.searchProjectFiles).toHaveBeenCalledWith({ query: 'agent', scope: root });
 
     const previewParams = { path: path.join(root, 'AGENTS.md'), workingDirectory: root };
     await executeDeviceRpc('getLocalFilePreview', previewParams, deps);

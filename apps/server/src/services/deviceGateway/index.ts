@@ -31,6 +31,7 @@ import type {
   DeviceMoveProjectFileItem,
   DeviceMoveProjectFileResultItem,
   DeviceProjectFileIndexResult,
+  DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
   DeviceWriteProjectFileResult,
   ProjectSkillMeta,
@@ -615,6 +616,42 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Project file search for a directory on a remote device via the
+   * `searchProjectFiles` device RPC. The device performs matching and returns a
+   * compact tree subset with ancestor directories.
+   */
+  async searchProjectFiles(params: {
+    deviceId: string;
+    limit?: number;
+    query: string;
+    scope: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceProjectFileSearchResult | undefined> {
+    const { userId, deviceId, limit, query, scope, timeout = 30_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceProjectFileSearchResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'searchProjectFiles', params: { limit, query, scope } },
+      );
+
+      if (!result.success || !result.data) {
+        log('searchProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('searchProjectFiles: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

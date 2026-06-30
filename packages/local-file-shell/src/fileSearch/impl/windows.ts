@@ -17,6 +17,7 @@ const logger = createLogger('fileSearch:windows');
  * Priority: fd > powershell > fast-glob
  */
 type WindowsFallbackTool = 'fast-glob' | 'fd' | 'powershell';
+type FastGlobStatsEntry = { path: string; stats: Stats };
 
 /**
  * Windows file search implementation
@@ -323,12 +324,13 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
 
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
     const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
+    const limit = this.normalizePositiveLimit(params.limit);
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });
 
     try {
-      const files = await fg(params.pattern, {
+      const options = {
         absolute: true,
         cwd: searchPath,
         // Windows hidden files use attributes, not dot prefix
@@ -336,9 +338,13 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         ignore: ['**/node_modules/**', '**/.git/**'],
         onlyFiles: false,
         stats: true,
-      });
+      };
 
-      const sortedFiles = (files as unknown as Array<{ path: string; stats: Stats }>)
+      const files = limit
+        ? await this.collectLimitedFastGlobEntries(params.pattern, options, limit)
+        : ((await fg(params.pattern, options)) as unknown as FastGlobStatsEntry[]);
+
+      const sortedFiles = files
         .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())
         .map((f) => f.path);
 
@@ -360,6 +366,22 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         total_files: 0,
       };
     }
+  }
+
+  private async collectLimitedFastGlobEntries(
+    pattern: string,
+    options: Parameters<typeof fg.stream>[1],
+    limit: number,
+  ): Promise<FastGlobStatsEntry[]> {
+    const entries: FastGlobStatsEntry[] = [];
+    const stream = fg.stream(pattern, options);
+
+    for await (const entry of stream as AsyncIterable<FastGlobStatsEntry>) {
+      entries.push(entry);
+      if (entries.length >= limit) break;
+    }
+
+    return entries;
   }
 
   private async getFilesWithStats(

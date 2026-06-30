@@ -406,6 +406,31 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Search project files on a remote device. The device performs the match and
+   * returns only the result subtree needed by the UI.
+   */
+  searchProjectFiles: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        limit: z.number().int().positive().max(500).optional(),
+        query: z.string(),
+        scope: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.searchProjectFiles({
+        deviceId: input.deviceId,
+        limit: input.limit,
+        query: input.query,
+        scope: input.scope,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /**
    * Read-only local file preview for a file on a remote device. The web client
    * receives render data, not a `localfile://` URL; saving remains unsupported.
    */

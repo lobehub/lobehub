@@ -25,6 +25,7 @@ import type {
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   ProjectFileIndexParams,
+  ProjectFileSearchParams,
 } from './types';
 import { initWorkspace, listProjectSkills, statPath } from './workspace';
 
@@ -39,6 +40,7 @@ export const DEVICE_RPC_METHODS = [
   'listProjectSkills',
   'statPath',
   'getProjectFileIndex',
+  'searchProjectFiles',
   'getLocalFilePreview',
   'moveLocalFiles',
   'renameLocalFile',
@@ -93,6 +95,10 @@ export const executeDeviceRpc = async (
 
     case 'getProjectFileIndex': {
       return deps.getProjectFileIndex(params as ProjectFileIndexParams);
+    }
+
+    case 'searchProjectFiles': {
+      return deps.searchProjectFiles(params as ProjectFileSearchParams);
     }
 
     case 'getLocalFilePreview': {

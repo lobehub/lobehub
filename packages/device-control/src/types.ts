@@ -114,7 +114,18 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
 }
 
 /**
@@ -145,4 +156,6 @@ export interface DeviceControlDeps extends WorkspaceScanDeps {
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /** Search project files without shipping the whole index to the caller. */
+  searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
 }

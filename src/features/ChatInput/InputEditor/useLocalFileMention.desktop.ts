@@ -1,6 +1,6 @@
 import type { ISlashMenuOption } from '@lobehub/editor';
 import debug from 'debug';
-import { createElement, useCallback, useEffect } from 'react';
+import { createElement, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -9,10 +9,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 
 import { useAgentId } from '../hooks/useAgentId';
-import {
-  searchProjectFileMentionIndex,
-  warmProjectFileMentionIndex,
-} from './localFileMentionIndex';
+import { searchProjectFileMentionIndex } from './localFileMentionIndex';
 import LocalFileIcon from './MentionMenu/LocalFileIcon';
 
 const MAX_LOCAL_FILE_MENTION_ITEMS = 20;
@@ -40,11 +37,6 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
 
   const enableLocalFileMention = !!heterogeneousType || isLocalSystemEnabled;
 
-  useEffect(() => {
-    if (!enableLocalFileMention) return;
-    warmProjectFileMentionIndex(workingDirectory);
-  }, [enableLocalFileMention, workingDirectory]);
-
   const searchLocalFiles = useCallback(
     async (matchingString: string): Promise<ISlashMenuOption[]> => {
       const keywords = matchingString.trim();
@@ -68,6 +60,7 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
           workingDirectory,
           keywords,
           MAX_LOCAL_FILE_MENTION_ITEMS,
+          currentDeviceId,
         );
 
         log('Search indexed local files completed', {
@@ -101,7 +94,7 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
         return [];
       }
     },
-    [enableLocalFileMention, workingDirectory],
+    [currentDeviceId, enableLocalFileMention, workingDirectory],
   );
 
   return { enableLocalFileMention, searchLocalFiles };

@@ -366,7 +366,13 @@ export interface DeviceProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface DeviceProjectFileSearchResult {
+  entries: DeviceProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
 }
 
 export interface DeviceLocalFilePreviewText {

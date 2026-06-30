@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   defaultGetLocalFilePreview,
   defaultGetProjectFileIndex,
+  defaultSearchProjectFiles,
   type DeviceControlDeps,
   executeDeviceRpc,
 } from '@lobechat/device-control';
@@ -356,6 +357,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const deviceControlDeps: DeviceControlDeps = {
     getLocalFilePreview: defaultGetLocalFilePreview,
     getProjectFileIndex: defaultGetProjectFileIndex,
+    searchProjectFiles: defaultSearchProjectFiles,
   };
 
   client.on('rpc_request', async (request: RpcRequestMessage) => {
