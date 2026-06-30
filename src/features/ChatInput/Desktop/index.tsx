@@ -9,7 +9,7 @@ import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import CurrentModelNotice from '@/features/ChatInput/CurrentModelNotice';
+import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -166,7 +166,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         onDragOver={skillDrop.onDragOver}
         onDrop={skillDrop.onDrop}
       >
-        {!isConfigLoading && <CurrentModelNotice />}
+        {!isConfigLoading && <ChatInputNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}

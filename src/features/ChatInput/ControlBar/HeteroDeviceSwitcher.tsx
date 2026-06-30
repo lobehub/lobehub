@@ -23,10 +23,10 @@ import {
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { lambdaQuery } from '@/libs/trpc/client';
-import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -342,7 +342,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   // Workspace-scoped agent: every workspace member runs through one device pool,
   // so personal devices (only reachable by their registering user) must be
   // suppressed from the picker. The server enforces the same rule on writes.
@@ -377,34 +376,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     clientExecutionAvailable: isDesktop,
   });
 
+  const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
-
-      // `executionTarget` is the single source of truth — the server tool
-      // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
-      let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
-      if (target === 'local') {
-        nextBoundDeviceId = currentDeviceId;
-        if (!nextBoundDeviceId) {
-          try {
-            nextBoundDeviceId = (await gatewayConnectionService.getDeviceInfo())?.deviceId;
-          } catch {
-            nextBoundDeviceId = undefined;
-          }
-        }
-        if (isHetero && !nextBoundDeviceId) return;
-      }
-
-      await updateAgentConfigById(agentId, {
-        agencyConfig: {
-          ...agencyConfig,
-          executionTarget: target,
-          ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
-        },
-      });
+      await selectExecutionTarget(target, deviceId);
     },
-    [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
+    [selectExecutionTarget],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.

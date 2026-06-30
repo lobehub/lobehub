@@ -265,10 +265,13 @@ export default {
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
   'input.more': 'More',
+  'input.sandboxModeNotice':
+    'Running in a temporary Cloud Sandbox. Local runs are faster and can access your files.',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
   'input.stop': 'Stop',
+  'input.switchToLocal': 'Use local machine',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
