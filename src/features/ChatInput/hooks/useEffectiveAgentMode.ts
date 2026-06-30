@@ -14,11 +14,14 @@ export const resolveEffectiveAgentMode = ({
   supportToolUse,
 }: ResolveEffectiveAgentModeParams) => {
   const currentMode: ChatInputMode = enableAgentMode && supportToolUse ? 'agent' : 'chat';
+  // Example: stored Agent mode + a model without tool calling should render chat-only runtime UI.
+  const isAgentRuntimeMode = currentMode === 'agent';
 
   return {
     canSelectAgentMode: supportToolUse,
     currentMode,
     isAgentModeUnavailable: enableAgentMode && !supportToolUse,
+    isAgentRuntimeMode,
     supportToolUse,
   };
 };

@@ -97,12 +97,15 @@ describe('googleModelId', () => {
       'google/nano-banana-pro-preview',
       'gemini-2.5-flash-image',
       'gemini-3-pro-image-preview',
+      'gemini-3-pro-image-preview:image',
+      'gemini-3.1-flash-image-preview:image',
       'gemini-3.1-flash-lite-image',
+      'gemini-3.1-flash-lite-image:image',
     ])('detects Nano Banana model %s', (model) => {
       expect(isGoogleNanoBananaModel(model)).toBe(true);
     });
 
-    it.each(['gemini-3.5-pro', 'gemini-3.1-flash-lite', undefined])(
+    it.each(['gemini-3.5-pro', 'gemini-3.5-pro:image', 'gemini-3.1-flash-lite', undefined])(
       'does not detect non-Nano Banana model %s',
       (model) => {
         expect(isGoogleNanoBananaModel(model)).toBe(false);

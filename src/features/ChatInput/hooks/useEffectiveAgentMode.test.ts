@@ -8,6 +8,7 @@ describe('resolveEffectiveAgentMode', () => {
       canSelectAgentMode: true,
       currentMode: 'agent',
       isAgentModeUnavailable: false,
+      isAgentRuntimeMode: true,
       supportToolUse: true,
     });
   });
@@ -17,6 +18,7 @@ describe('resolveEffectiveAgentMode', () => {
       canSelectAgentMode: false,
       currentMode: 'chat',
       isAgentModeUnavailable: true,
+      isAgentRuntimeMode: false,
       supportToolUse: false,
     });
   });
@@ -26,6 +28,7 @@ describe('resolveEffectiveAgentMode', () => {
       canSelectAgentMode: true,
       currentMode: 'chat',
       isAgentModeUnavailable: false,
+      isAgentRuntimeMode: false,
       supportToolUse: true,
     });
   });
