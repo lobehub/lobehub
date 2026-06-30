@@ -1,6 +1,6 @@
 'use client';
 
-import { type DropdownItem } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui/base-ui';
 import {
   ActionIcon,
   Block,

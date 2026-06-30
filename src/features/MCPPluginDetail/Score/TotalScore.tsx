@@ -1,4 +1,4 @@
-import { Block, Center, Flexbox, Popover } from '@lobehub/ui';
+import {  Block, Center, Flexbox, Popover  } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';

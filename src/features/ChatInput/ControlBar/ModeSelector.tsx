@@ -1,4 +1,4 @@
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import {  Flexbox, Icon, Popover, Tooltip  } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,

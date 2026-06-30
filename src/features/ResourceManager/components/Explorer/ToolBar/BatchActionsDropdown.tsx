@@ -1,4 +1,4 @@
-import { type DropdownItem } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui/base-ui';
 import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import {

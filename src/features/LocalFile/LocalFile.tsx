@@ -1,4 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui/base-ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';

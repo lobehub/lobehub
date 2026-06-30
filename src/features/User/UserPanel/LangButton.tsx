@@ -1,4 +1,4 @@
-import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
+import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui/base-ui';
 import { DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';

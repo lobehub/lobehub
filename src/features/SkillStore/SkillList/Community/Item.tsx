@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui/base-ui';
 import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';

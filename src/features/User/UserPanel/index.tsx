@@ -1,6 +1,6 @@
 'use client';
 
-import { Popover } from '@lobehub/ui';
+import {  Popover  } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type PropsWithChildren } from 'react';
 import { memo, Suspense, useState } from 'react';

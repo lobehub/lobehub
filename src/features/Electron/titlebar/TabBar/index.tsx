@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui/base-ui';
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { ChevronDown, Plus } from 'lucide-react';

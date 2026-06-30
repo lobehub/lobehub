@@ -1,5 +1,5 @@
 import type { IconType } from '@lobehub/icons';
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
+import {  type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip  } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';

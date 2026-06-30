@@ -1,4 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui/base-ui';
 import { Button, SplitButton } from '@lobehub/ui/base-ui';
 import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

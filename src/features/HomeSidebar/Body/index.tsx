@@ -1,7 +1,7 @@
 'use client';
 
 import type { MenuProps } from '@lobehub/ui';
-import { Accordion, ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import {  Accordion, ActionIcon, DropdownMenu, Flexbox, Icon  } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-react';
 import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';

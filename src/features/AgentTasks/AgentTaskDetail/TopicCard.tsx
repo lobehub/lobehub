@@ -10,7 +10,7 @@ import {
   stopPropagation,
   Tag,
   Text,
-} from '@lobehub/ui';
+} from '@lobehub/ui/base-ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {

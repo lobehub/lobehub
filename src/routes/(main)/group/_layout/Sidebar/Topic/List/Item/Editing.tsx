@@ -1,4 +1,4 @@
-import { Input, Popover, stopPropagation } from '@lobehub/ui';
+import {  Input, Popover, stopPropagation  } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 
 import { useOverlayPopoverPortalProps } from '@/features/NavPanel/OverlayContainer';

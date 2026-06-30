@@ -1,4 +1,4 @@
-import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
+import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui/base-ui';
 import { DropdownMenu, Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';

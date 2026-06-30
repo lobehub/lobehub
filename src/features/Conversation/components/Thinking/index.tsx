@@ -1,4 +1,4 @@
-import { Accordion, AccordionItem, ScrollArea } from '@lobehub/ui';
+import {  Accordion, AccordionItem, ScrollArea  } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';

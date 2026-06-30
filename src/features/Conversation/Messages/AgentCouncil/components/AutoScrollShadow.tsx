@@ -1,4 +1,4 @@
-import { ScrollArea } from '@lobehub/ui';
+import {  ScrollArea  } from '@lobehub/ui/base-ui';
 import type { PropsWithChildren, RefObject } from 'react';
 import { memo, useEffect } from 'react';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { PopoverPopup, PopoverPortal, PopoverPositioner, PopoverRoot } from '@lobehub/ui';
+import {  PopoverPopup, PopoverPortal, PopoverPositioner, PopoverRoot  } from '@lobehub/ui/base-ui';
 
 import AgentContent from './AgentContent';
 import GroupContent from './GroupContent';

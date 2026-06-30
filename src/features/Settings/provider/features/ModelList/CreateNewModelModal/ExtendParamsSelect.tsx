@@ -1,4 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui/base-ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Space, Tag, theme, Typography } from 'antd';
 import { type ExtendParamsType } from 'model-bank';

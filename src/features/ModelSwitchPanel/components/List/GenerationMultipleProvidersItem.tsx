@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import { 
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -8,7 +8,7 @@ import {
   DropdownMenuSubmenuTrigger,
   Flexbox,
   menuSharedStyles,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import type { ComponentType } from 'react';

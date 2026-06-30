@@ -1,5 +1,5 @@
 import { type ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext } from '@lobehub/ui';
+import {  Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext  } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Pin, Settings, Store, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

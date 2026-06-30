@@ -2,7 +2,7 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui/base-ui';
 import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
