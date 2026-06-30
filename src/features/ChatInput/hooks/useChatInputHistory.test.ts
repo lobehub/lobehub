@@ -193,6 +193,39 @@ describe('useChatInputHistory', () => {
     expect(editor.focus).toHaveBeenCalledTimes(2);
   });
 
+  it('reads history from the current scope only', () => {
+    addInputHistory({ agentId: 'agent-1', markdown: 'scoped prompt', userId: 'user-a' });
+    addInputHistory({ agentId: 'agent-2', markdown: 'other agent prompt', userId: 'user-a' });
+
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      setDocument: vi.fn(),
+    } as unknown as IEditor;
+    const isComposingRef = { current: false };
+
+    const { result } = renderHook(() =>
+      useChatInputHistory({
+        editor,
+        enabled: true,
+        getMarkdownContent: () => '',
+        isComposingRef,
+        scope: { agentId: 'agent-1', userId: 'user-a' },
+      }),
+    );
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'scoped prompt', {
+      keepHistory: true,
+    });
+    expect(editor.setDocument).not.toHaveBeenCalledWith('markdown', 'other agent prompt', {
+      keepHistory: true,
+    });
+  });
+
   it('falls back to markdown when saved JSON cannot be restored', () => {
     const incompatibleEditorData = { root: { children: [{ text: 'item', type: 'list' }] } };
     addInputHistory({ json: incompatibleEditorData, markdown: '- fallback prompt' });

@@ -4,6 +4,7 @@ import {
   addInputHistory,
   CHAT_INPUT_HISTORY_STORAGE_KEY,
   getInputHistory,
+  getInputHistoryStorageKey,
 } from './inputHistoryStorage';
 
 describe('inputHistoryStorage', () => {
@@ -37,8 +38,29 @@ describe('inputHistoryStorage', () => {
   it('ignores empty markdown', () => {
     addInputHistory({ markdown: '   ' });
 
-    expect(localStorage.getItem(CHAT_INPUT_HISTORY_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(getInputHistoryStorageKey())).toBeNull();
     expect(getInputHistory()).toEqual([]);
+  });
+
+  it('isolates history by user and agent', () => {
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(2000)
+      .mockReturnValueOnce(3000);
+
+    addInputHistory({ agentId: 'agent-1', markdown: 'user A prompt', userId: 'user-a' });
+    addInputHistory({ agentId: 'agent-1', markdown: 'user B prompt', userId: 'user-b' });
+    addInputHistory({ agentId: 'agent-2', markdown: 'user A agent 2 prompt', userId: 'user-a' });
+
+    expect(getInputHistory({ agentId: 'agent-1', userId: 'user-a' })).toEqual([
+      { createdAt: 1000, markdown: 'user A prompt' },
+    ]);
+    expect(getInputHistory({ agentId: 'agent-1', userId: 'user-b' })).toEqual([
+      { createdAt: 2000, markdown: 'user B prompt' },
+    ]);
+    expect(getInputHistory({ agentId: 'agent-2', userId: 'user-a' })).toEqual([
+      { createdAt: 3000, markdown: 'user A agent 2 prompt' },
+    ]);
   });
 
   it('deduplicates by trimmed markdown and keeps the latest editor state', () => {
@@ -68,7 +90,7 @@ describe('inputHistoryStorage', () => {
   });
 
   it('treats corrupt storage as empty and recovers on next write', () => {
-    localStorage.setItem(CHAT_INPUT_HISTORY_STORAGE_KEY, '{not json');
+    localStorage.setItem(getInputHistoryStorageKey(), '{not json');
 
     expect(getInputHistory()).toEqual([]);
 
@@ -79,7 +101,7 @@ describe('inputHistoryStorage', () => {
 
   it('drops malformed entries when reading', () => {
     localStorage.setItem(
-      CHAT_INPUT_HISTORY_STORAGE_KEY,
+      getInputHistoryStorageKey(),
       JSON.stringify([
         { createdAt: 1, markdown: 'good prompt' },
         { createdAt: 2, markdown: '   ' },
@@ -88,5 +110,18 @@ describe('inputHistoryStorage', () => {
     );
 
     expect(getInputHistory()).toEqual([{ createdAt: 1, markdown: 'good prompt' }]);
+  });
+
+  it('drops the legacy global key instead of reading it', () => {
+    const legacyStorageKey = 'lobechat:chat-input-history:v1';
+
+    localStorage.setItem(
+      legacyStorageKey,
+      JSON.stringify([{ createdAt: 1, markdown: 'legacy prompt' }]),
+    );
+
+    expect(getInputHistory({ agentId: 'agent-1', userId: 'user-a' })).toEqual([]);
+    expect(localStorage.getItem(legacyStorageKey)).toBeNull();
+    expect(localStorage.getItem(CHAT_INPUT_HISTORY_STORAGE_KEY)).toBeNull();
   });
 });

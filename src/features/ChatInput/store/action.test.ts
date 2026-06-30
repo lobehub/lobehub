@@ -32,6 +32,7 @@ describe('ChatInput store actions', () => {
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
     };
     const store = createStore({
+      agentId: 'agent-1',
       editor: editor as unknown as IEditor,
       onSend: ({ clearContent }) => {
         clearContent();
@@ -40,7 +41,7 @@ describe('ChatInput store actions', () => {
 
     store.getState().handleSendButton();
 
-    expect(getInputHistory()[0]).toMatchObject({
+    expect(getInputHistory({ agentId: 'agent-1' })[0]).toMatchObject({
       json: editorData,
       markdown: 'Hello',
     });
@@ -61,6 +62,7 @@ describe('ChatInput store actions', () => {
     store.getState().handleSendButton();
 
     expect(getInputHistory()).toEqual([]);
+    expect(editor.getDocument).not.toHaveBeenCalled();
   });
 
   it('does not record history when no send handler is configured', () => {

@@ -1,8 +1,8 @@
 import type { IEditor } from '@lobehub/editor';
 import type { RefObject } from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
-import type { ChatInputHistoryEntry } from '../inputHistoryStorage';
+import type { ChatInputHistoryEntry, ChatInputHistoryScope } from '../inputHistoryStorage';
 import { getInputHistory } from '../inputHistoryStorage';
 
 interface InputHistoryNavigatorOptions {
@@ -100,9 +100,8 @@ interface UseChatInputHistoryOptions {
   enabled: boolean;
   getMarkdownContent: () => string;
   isComposingRef: RefObject<boolean>;
+  scope?: ChatInputHistoryScope;
 }
-
-const HISTORY_SET_DOCUMENT_OPTIONS = { keepHistory: true };
 
 const focusEditorAfterHistoryNavigation = (editor: IEditor, onFocusRestored: () => void) => {
   requestAnimationFrame(() => {
@@ -115,16 +114,16 @@ const focusEditorAfterHistoryNavigation = (editor: IEditor, onFocusRestored: () 
 
 const restoreHistoryEntryDocument = (editor: IEditor, entry: ChatInputHistoryEntry) => {
   if (!entry.json) {
-    editor.setDocument('markdown', entry.markdown, HISTORY_SET_DOCUMENT_OPTIONS);
+    editor.setDocument('markdown', entry.markdown, { keepHistory: true });
     return;
   }
 
   try {
-    editor.setDocument('json', entry.json, HISTORY_SET_DOCUMENT_OPTIONS);
+    editor.setDocument('json', entry.json, { keepHistory: true });
   } catch {
     // Example: a rich-input list/code node can fail after rich input is disabled;
     // markdown stays portable across different chat input plugin sets.
-    editor.setDocument('markdown', entry.markdown, HISTORY_SET_DOCUMENT_OPTIONS);
+    editor.setDocument('markdown', entry.markdown, { keepHistory: true });
   }
 };
 
@@ -133,8 +132,8 @@ export const useChatInputHistory = ({
   enabled,
   getMarkdownContent,
   isComposingRef,
+  scope,
 }: UseChatInputHistoryOptions) => {
-  const navigatorRef = useRef<InputHistoryNavigator | null>(null);
   const skipNextBlurResetRef = useRef(false);
   const skipNextChangeResetRef = useRef(false);
 
@@ -168,26 +167,18 @@ export const useChatInputHistory = ({
     });
   }, [runHistoryDocumentMutation]);
 
-  const getNavigator = useCallback(() => {
-    if (!navigatorRef.current) {
-      navigatorRef.current = createInputHistoryNavigator({
-        applyEntry: restoreEntry,
-        clearInput,
-        getEntries: getInputHistory,
-        getMarkdownContent,
-      });
-    }
-
-    return navigatorRef.current;
-  }, [clearInput, getMarkdownContent, restoreEntry]);
-
-  useEffect(() => {
-    navigatorRef.current = null;
-  }, [getNavigator]);
+  const navigator = useMemo(() => {
+    return createInputHistoryNavigator({
+      applyEntry: restoreEntry,
+      clearInput,
+      getEntries: () => getInputHistory(scope),
+      getMarkdownContent,
+    });
+  }, [clearInput, getMarkdownContent, restoreEntry, scope]);
 
   const reset = useCallback(() => {
-    navigatorRef.current?.reset();
-  }, []);
+    navigator.reset();
+  }, [navigator]);
 
   const handleEditorBlur = useCallback(() => {
     if (skipNextBlurResetRef.current) {
@@ -215,9 +206,9 @@ export const useChatInputHistory = ({
 
       if (shouldIgnoreInputHistoryKeyDown(event, isComposingRef.current)) return false;
 
-      return getNavigator().handleKeyDown(event);
+      return navigator.handleKeyDown(event);
     },
-    [editor, enabled, getNavigator, isComposingRef],
+    [editor, enabled, isComposingRef, navigator],
   );
 
   return {

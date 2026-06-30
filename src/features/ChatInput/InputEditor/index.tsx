@@ -31,6 +31,7 @@ import {
   labPreferSelectors,
   settingsSelectors,
   systemAgentSelectors,
+  userProfileSelectors,
 } from '@/store/user/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
@@ -94,7 +95,10 @@ const InputEditor = memo<{
   const state = useEditorState(editor);
   const { allowed: canCreateContent } = usePermission('create_content');
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
+  const userId = useUserStore(userProfileSelectors.userId);
   const { enableScope, disableScope } = useHotkeysContext();
+  const agentId = useAgentId();
+  const inputHistoryScope = useMemo(() => ({ agentId, userId }), [agentId, userId]);
 
   const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
@@ -108,13 +112,13 @@ const InputEditor = memo<{
     enabled: isInputHistoryEnabled,
     getMarkdownContent,
     isComposingRef,
+    scope: inputHistoryScope,
   });
 
   // --- Category-based mention system ---
   const categories = useMentionCategories();
 
   // Get agent's model info for vision support check and handle paste upload
-  const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const heterogeneousType = useAgentStore(

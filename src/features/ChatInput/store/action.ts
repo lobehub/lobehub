@@ -1,5 +1,8 @@
 import { type StateCreator } from 'zustand/vanilla';
 
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
 import { removeDraft } from '../draftStorage';
 import { addInputHistory } from '../inputHistoryStorage';
 import { type PublicState, type State } from './initialState';
@@ -50,8 +53,15 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (get().sendButtonProps?.disabled) return;
 
     const onSend = get().onSend;
-    const markdown = get().getMarkdownContent();
-    const json = get().getJSONState();
+    const historyEnabled = !!onSend && (get().feature?.inputHistory ?? true);
+    const historySnapshot = historyEnabled
+      ? {
+          agentId: get().agentId,
+          json: get().getJSONState(),
+          markdown: get().getMarkdownContent(),
+          userId: userProfileSelectors.userId(useUserStore.getState()),
+        }
+      : undefined;
 
     onSend?.({
       clearContent: () => editor?.cleanDocument(),
@@ -60,8 +70,8 @@ export const store: CreateStore = (publicState) => (set, get) => ({
       getMarkdownContent: get().getMarkdownContent,
     });
 
-    if (onSend && (get().feature?.inputHistory ?? true)) {
-      addInputHistory({ json, markdown });
+    if (historySnapshot) {
+      addInputHistory(historySnapshot);
     }
 
     const { draftKey } = get();
