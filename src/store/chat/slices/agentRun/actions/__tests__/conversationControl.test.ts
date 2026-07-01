@@ -2,6 +2,7 @@ import { type ConversationContext, RequestTrigger } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { lambdaClient } from '@/libs/trpc/client';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
 import { useChatStore } from '../../../../store';
@@ -18,6 +19,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     aiAgent: {
       processHumanIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+      submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
   },
 }));
@@ -1942,12 +1944,13 @@ describe('ConversationControl actions', () => {
       );
     });
 
-    it("CURRENT BEHAVIOR: falls back to global-state optimistic context (empty op) and still submits when the operation is GC'd", async () => {
-      // Characterizes action.ts ~735/~758: when the resolved op has already been
-      // garbage-collected (not present in `operations`), the optimistic context
-      // is the empty object `{}` (global-state fallback) rather than carrying the
-      // stale operationId — but the IPC submit STILL fires with that operationId,
-      // and the call does NOT throw. Locked as-is.
+    it("falls back to global-state optimistic context and routes a GC'd op to the remote tRPC transport", async () => {
+      // When the resolved op has already been garbage-collected (not present in
+      // `operations`), the optimistic context is the empty object `{}`
+      // (global-state fallback) rather than carrying the stale operationId. With
+      // no live op to prove local-desktop provenance, the answer routes to the
+      // universal remote transport (tRPC) — the run has already ended, so this is
+      // a harmless no-op either way — and the call does NOT throw.
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'hetero-agent';
@@ -2004,14 +2007,16 @@ describe('ConversationControl actions', () => {
         {},
       );
 
-      // IPC submit still fires with the (stale) resolved operationId + cancel.
-      expect(submitInterventionSpy).toHaveBeenCalledWith(
+      // Remote tRPC submit fires with the (stale) resolved operationId + cancel;
+      // the desktop IPC path is not taken for a GC'd (non-local) op.
+      expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).toHaveBeenCalledWith(
         expect.objectContaining({
           cancelled: true,
           operationId: 'gc-op-id',
           toolCallId: 'cc_call_1',
         }),
       );
+      expect(submitInterventionSpy).not.toHaveBeenCalled();
     });
 
     it('flips topic status on the passed context, NOT the active topic, when submitting from a background conversation', async () => {
