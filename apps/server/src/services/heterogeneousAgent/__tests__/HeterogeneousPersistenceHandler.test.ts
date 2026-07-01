@@ -1444,4 +1444,99 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(h.messages.get('asst-2')?.content).toBe('step2');
     });
   });
+
+  describe('per-message session provenance (heteroSessionId / heteroMessageId)', () => {
+    it('stamps the CC session id + turn message id on the assistant, its tools, and its usage', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Bash',
+        arguments: '{}',
+        id: 'tc-1',
+        identifier: 'bash',
+        type: 'default',
+      };
+
+      await h.handler.ingest({
+        events: [
+          // system.init: carries the CC session id but opens no new assistant.
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          // A real turn boundary: opens a new assistant for CC message cc-1.
+          buildEvent('stream_start', 1, {
+            messageId: 'cc-1',
+            newStep: true,
+            sessionId: 'sess-A',
+          }),
+          buildEvent('stream_chunk', 2, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('step_complete', 3, {
+            phase: 'turn_metadata',
+            usage: { totalInputTokens: 1, totalOutputTokens: 1, totalTokens: 2 },
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const assistant = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+      expect(assistant.metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+      });
+
+      const toolRow = [...h.messages.values()].find((m) => m.role === 'tool')!;
+      expect(toolRow.metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+      });
+
+      // recordUsage overwrites the row's metadata wholesale — provenance must survive.
+      const usageWrite = h.messageModel.update.mock.calls.find(
+        ([, patch]: [string, any]) => patch?.metadata?.usage,
+      )!;
+      expect(usageWrite[1].metadata).toMatchObject({
+        heteroMessageId: 'cc-1',
+        heteroSessionId: 'sess-A',
+        usage: { totalTokens: 2 },
+      });
+    });
+
+    it('records a mid-topic session fork per-message so a diff pinpoints the break', async () => {
+      // The tpc_PZAmvtpkfHE1 scenario: `--resume` failed, CC opened a fresh
+      // session mid-conversation, and the topic-level single heteroSessionId
+      // could not show WHERE the history was lost. Per-message stamping does.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_start', 0, { sessionId: 'sess-A' }),
+          buildEvent('stream_start', 1, { messageId: 'cc-1', newStep: true, sessionId: 'sess-A' }),
+          buildEvent('stream_chunk', 2, { chunkType: 'text', content: 'turn 1' }),
+          // Next turn resumes into a DIFFERENT session — the fork.
+          buildEvent('stream_start', 3, { messageId: 'cc-2', newStep: true, sessionId: 'sess-B' }),
+          buildEvent('stream_chunk', 4, { chunkType: 'text', content: 'turn 2' }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const newAssistants = [...h.messages.values()].filter(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      );
+      const sessById = new Map(
+        newAssistants.map((m) => [m.metadata?.heteroMessageId, m.metadata?.heteroSessionId]),
+      );
+      expect(sessById.get('cc-1')).toBe('sess-A');
+      expect(sessById.get('cc-2')).toBe('sess-B');
+    });
+  });
 });

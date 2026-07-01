@@ -738,6 +738,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.makeEvent('stream_start', {
         model: raw.model,
         provider: 'claude-code',
+        // The CC session id every message this run produces belongs to. A
+        // change in this value across a topic means CC forked a new session.
+        sessionId: this.sessionId,
       }),
     ];
   }
@@ -1488,7 +1491,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.started = true;
       this.currentMessageId = messageId;
       this.currentTurnHadToolUse = false;
-      return [this.makeEvent('stream_start', { model, provider: 'claude-code' })];
+      return [
+        this.makeEvent('stream_start', {
+          model,
+          provider: 'claude-code',
+          sessionId: this.sessionId,
+        }),
+      ];
     }
 
     if (messageId === this.currentMessageId) {
@@ -1524,6 +1533,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           model,
           newStep: true,
           provider: 'claude-code',
+          sessionId: this.sessionId,
         }),
       ];
     }
@@ -1588,6 +1598,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         model,
         newStep: true,
         provider: 'claude-code',
+        sessionId: this.sessionId,
       }),
     ];
   }
