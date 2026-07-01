@@ -9,7 +9,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { messageStateSelectors, useConversationStore } from '../store';
-import ForwardPopover from './ForwardPopover';
+import ForwardModal from './ForwardModal';
 
 const styles = createStaticStyles(({ css }) => ({
   // Zero-height anchor at the bottom of the conversation column. The composer is
@@ -56,7 +56,7 @@ const SelectionFloatBar = memo(() => {
 
   const disabled = selectedCount === 0;
 
-  // Esc exits selection mode. When the forward popover is open, its own Esc
+  // Esc exits selection mode. When the forward dialog is open, its own Esc
   // handler closes it first — skip so a single Esc doesn't do both.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -110,19 +110,19 @@ const SelectionFloatBar = memo(() => {
             >
               {t('messageForward.bar.delete')}
             </Button>
-            <ForwardPopover disabled={disabled} open={forwardOpen} onOpenChange={setForwardOpen}>
-              <Button
-                disabled={disabled}
-                icon={<Icon icon={Forward} />}
-                shape={'round'}
-                type={'primary'}
-              >
-                {t('messageForward.bar.forward')}
-              </Button>
-            </ForwardPopover>
+            <Button
+              disabled={disabled}
+              icon={<Icon icon={Forward} />}
+              shape={'round'}
+              type={'primary'}
+              onClick={() => setForwardOpen(true)}
+            >
+              {t('messageForward.bar.forward')}
+            </Button>
           </Flexbox>
         </Block>
       </Center>
+      <ForwardModal open={forwardOpen} onClose={() => setForwardOpen(false)} />
     </div>
   );
 });
