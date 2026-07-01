@@ -6,7 +6,7 @@ import {
   RequestTrigger,
   type SemanticSearchSchemaType,
 } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import { ChunkModel } from '@/database/models/chunk';
@@ -14,6 +14,7 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { type KnowledgeBaseDocumentHit, SearchRepo } from '@/database/repositories/search';
 import { knowledgeBaseFiles } from '@/database/schemas';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
@@ -137,8 +138,16 @@ export class KnowledgeBaseSearchService {
 
       let finalFileIds = input.fileIds ?? [];
       if (knowledgeIds.length > 0) {
+        // Scope the knowledge-base → file resolution to the caller so a user
+        // cannot resolve another user's knowledgeBaseId to the victim's fileIds.
         const knowledgeFiles = await this.serverDB.query.knowledgeBaseFiles.findMany({
-          where: inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeIds),
+          where: and(
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              knowledgeBaseFiles,
+            ),
+          ),
         });
         finalFileIds = knowledgeFiles.map((f) => f.fileId).concat(finalFileIds);
       }
