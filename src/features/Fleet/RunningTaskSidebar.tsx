@@ -20,6 +20,7 @@ import { type ChatTopicStatus } from '@/types/topic';
 
 import { getIdleColumnKeys } from './idleColumns';
 import RowsSwitcher from './RowsSwitcher';
+import { getFleetSidebarStatus } from './runningStatus';
 import { useFleetStore } from './store';
 import { type FleetColumn } from './types';
 
@@ -71,12 +72,19 @@ interface RunningStatusProps {
  */
 const RunningStatus = memo<RunningStatusProps>(({ agentId, status, topicId }) => {
   const { isDarkMode } = useTheme();
+  const context = useMemo(() => ({ agentId, topicId }), [agentId, topicId]);
   const startedAt = useChatStore(
-    operationSelectors.getVisibleAgentRuntimeStartTimeByContext({ agentId, topicId }),
+    operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context),
   );
+  const isRuntimeRunning = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
   const elapsed = useElapsedClock(startedAt);
+  const sidebarStatus = getFleetSidebarStatus({
+    isRuntimeRunning,
+    status,
+    visibleStartedAt: startedAt,
+  });
 
-  if (!elapsed) return <StatusDot status={status} />;
+  if (!elapsed) return <StatusDot status={sidebarStatus} />;
 
   const ringColor = isDarkMode
     ? cssVar.colorWarningBorder
