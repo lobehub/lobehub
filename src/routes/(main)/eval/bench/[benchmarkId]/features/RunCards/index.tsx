@@ -73,7 +73,7 @@ const RunCards = memo<RunCardsProps>(({ datasetId, onCreateRun, benchmarkId }) =
               {t('run.empty.description')}
             </Text>
           </Flexbox>
-          <Button icon={Plus} size="small" variant="filled" onClick={onCreateRun}>
+          <Button icon={<Plus size={14} />} size="small" type="primary" onClick={onCreateRun}>
             {t('run.actions.create')}
           </Button>
         </Flexbox>
