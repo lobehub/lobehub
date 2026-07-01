@@ -1,6 +1,6 @@
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
-import { ChatErrorType } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -36,9 +36,10 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
     }
 
     return await modelRuntime.chat(data, {
-      user: userId,
       ...traceOptions,
+      metadata: { trigger: RequestTrigger.Chat },
       signal: req.signal,
+      user: userId,
     });
   } catch (e) {
     const {

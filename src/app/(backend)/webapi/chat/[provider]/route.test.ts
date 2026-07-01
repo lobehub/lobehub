@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { type LobeRuntimeAI } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
-import { ChatErrorType } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '@/auth';
@@ -102,8 +102,9 @@ describe('POST handler', () => {
 
       expect(response).toEqual(mockChatResponse);
       expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
-        user: 'test-user-id',
+        metadata: { trigger: RequestTrigger.Chat },
         signal: expect.anything(),
+        user: 'test-user-id',
       });
     });
 
