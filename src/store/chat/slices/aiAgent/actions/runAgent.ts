@@ -269,6 +269,11 @@ export class AgentActionImpl {
         // before agent_runtime_end reconciles cache, queue, unread, and
         // notification side effects. Retire only visible loading here.
         this.#get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+        if (operation.parentOperationId) {
+          this.#get().updateOperationMetadata(operation.parentOperationId, {
+            visibleLoadingDone: true,
+          });
+        }
         break;
       }
 
