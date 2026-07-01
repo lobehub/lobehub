@@ -102,11 +102,14 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Act — operations, flows & buttons** ([act.md](references/act.md))
 
 - [ ] Action leads the user forward; success offers a primary "go to result".
+- [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back), success → close / go-to-result; no bare `Result` without `extra`, and "auto-closing in Ns" copy only when the close can actually fire.
+- [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
 - [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
 - [ ] Scrollable content + actions/status → pin them in a fixed footer/header, not inside the scroll area (verify at the overflowing state).
-- [ ] Exactly one primary button per surface.
+- [ ] Exactly one primary button per surface — and it's the visually dominant control (back / cancel / secondary never out-weighs it; verify on the rendered screen, not from `variant`).
 - [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom).
+- [ ] An action that commits as a specific identity (OAuth consent, send-as, publish-to) shows the identity **and** a switch-account / re-auth path — never locks the user to the currently-logged-in one.
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 

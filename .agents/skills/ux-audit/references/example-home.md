@@ -5,6 +5,10 @@ Use it as a **template for the output shape**, not as current-state truth (the c
 re-verify before citing). Surface = center column (agent greeting → composer → onboarding
 banner → "上新" model chips → "简报" feed) plus the left sidebar (nav / 最近 / 助理).
 
+**Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic +
+CLS) ⏳ not yet run — see §4 for what they'd add. Verdicts about the render (e.g. "one
+primary button") are L1 inferences here, pending L2 confirmation.
+
 ## 1 — Patterns in use
 
 | Pattern (family)                           | Where                                                                                   | Rating | Note                                 |
@@ -72,3 +76,19 @@ a bare empty list, no "create your first agent" guidance.
   init-flag-gated-on-success failure mode (gap ①).
 - **Noted, not yet landed:** predictable promo slots (gap ⑥) — captured here; promote to a
   checklist item if a second surface repeats it.
+
+## 4 — Pending: L2 visual + L3 dynamic
+
+This audit is L1-only; several verdicts are inferences a later pass should confirm or
+quantify. What the other layers would add on this surface:
+
+- **L2 (visual)** — confirm the composer send button truly reads as the single dominant
+  control; check the rendered 简报 skeleton vs loaded card (height match, CLS symptom); the
+  typewriter greeting's wrapping /truncation; narrow-width layout of the model chips row.
+- **L3 (dynamic)** —
+  - Force the 简报 fetch offline to **confirm gap ① live** (permanent skeleton, no retry).
+  - Drive the send journey to **confirm gap ④** (is an in-progress/locked state shown; does
+    success lead forward).
+  - **Measure home CLS** across the loading→content swap (inject the layout-shift observer
+    from [layer-3-dynamic.md](layer-3-dynamic.md)) and report the number + verdict — the
+    skeleton coverage looks good in code, but only the metric proves it.

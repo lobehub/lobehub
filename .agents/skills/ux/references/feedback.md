@@ -58,7 +58,11 @@ clothes. The error path must drive the flag / a separate `error` state, not be f
 > ✅ A panel whose data request errors or exceeds its timeout shows "加载失败" with a
 > **Reload** button that refetches. ❌ A `NeuralNetworkLoading` that spins indefinitely when
 > the request hangs. ❌ `isInit` set only in the success handler, so a failed fetch leaves
-> the skeleton up forever. _(pairs with Read §1.1 error state, §4.1 loading visuals.)_
+> the skeleton up forever. ❌ A builtin-client consent page auto-submits a hidden form on
+> mount and renders `Result status="success"` with a spinner + "redirecting…"; if that POST
+> fails the user is stuck on a **permanent success-styled spinner** with no retry
+> (`OAuthConsent/Consent/BuiltinConsent.tsx`) — a loading state that both can't fail and
+> mislabels itself "success". _(pairs with Read §1.1 error state, §4.1 loading visuals.)_
 
 **Checklist**
 

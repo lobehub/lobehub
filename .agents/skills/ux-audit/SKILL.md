@@ -1,8 +1,8 @@
 ---
 name: ux-audit
-description: 'Audit a page / surface against the Designing Interfaces pattern language + the ux skill checklists, then land findings. Use to run a repeatable, standards-based UX review of one screen.'
+description: 'Audit a page / surface against the Designing Interfaces pattern language + the ux skill checklists, then land findings. Three layers — static (code), visual (screenshots), dynamic (automated user journey + perf). Use to run a repeatable, standards-based UX review of one screen.'
 disable-model-invocation: true
-argument-hint: '<page-or-surface>'
+argument-hint: '<page-or-surface> [--l1 | --l2 | --l3]'
 ---
 
 # UX Audit
@@ -11,111 +11,125 @@ A repeatable, standards-based UX review of **one surface at a time**. The benchm
 two things together:
 
 1. **Jenifer Tidwell, _Designing Interfaces_** — the pattern language for what a good
-   interface is _made of_ (navigation, layout, input, commands, data display, feedback).
-   See [`references/pattern-catalog.md`](references/pattern-catalog.md).
+   interface is _made of_. See [`references/pattern-catalog.md`](references/pattern-catalog.md).
 2. **The [`ux`](../ux/SKILL.md) skill** — LobeHub's execution checklists for how a flow
-   should _behave_ (empty/loading/error, loading-can-fail, draft safety, forward
-   momentum, one primary button, live streams, …).
+   should _behave_.
 
-The audit answers two questions for the surface: **which patterns does it use** (and how
-well), and **where is the experience weak** (each gap tied to a checklist item). It also
-feeds back: recurring gaps become new `ux` checklist items; the audit itself can become a
-worked-example reference.
+The audit answers: **which patterns does the surface use** (and how well), and **where is
+the experience weak** (each gap tied to a checklist item). Recurring gaps feed back as new
+`ux` checklist items; the audit itself becomes a worked-example reference.
 
 Do **one surface per run** — a full-app sweep is too much for a single pass. Re-run per
 page as the product grows; that's the "continuous" part.
 
+## Three layers — pick by what you need to catch
+
+An audit is not one activity. A finding is only trustworthy from a layer that can actually
+_see_ it. Each layer has its own procedure file; run the ones the surface needs.
+
+| Layer          | File                                                | What it does                                                   | Catches                                                                                                                                                              | Cost                             |
+| -------------- | --------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **L1 Static**  | [layer-1-static.md](references/layer-1-static.md)   | Read the code                                                  | Missing states/branches (empty/error/retry), no draft persist, absent patterns, structural issues                                                                    | cheap, offline, **every audit**  |
+| **L2 Visual**  | [layer-2-visual.md](references/layer-2-visual.md)   | Screenshots of the rendered surface                            | Real visual hierarchy & dominant control, spacing/contrast/alignment, truncation/overflow, how empty/loading/error actually look, responsive breakpoints, dark/light | medium; needs a render           |
+| **L3 Dynamic** | [layer-3-dynamic.md](references/layer-3-dynamic.md) | Drive the real user journey via **agent-testing** + instrument | In-progress/locked states, forced error/empty states, does step N lead to N+1, focus/keyboard, **quantified CLS / LCP / INP / long-tasks**                           | high; needs a running env + auth |
+
+### Coverage matrix — which layer can conclude what
+
+The core rule: **a verdict must come from a layer that can see it.** Don't tick a visual or
+runtime verdict off the code.
+
+| Finding type                                                              |     L1      |        L2        | L3  |
+| ------------------------------------------------------------------------- | :---------: | :--------------: | :-: |
+| Missing empty/error branch, no retry, draft not persisted, absent pattern |     ✅      |        —         |  —  |
+| Real visual hierarchy / is the dominant control the primary action        | ❌ misleads |        ✅        | ✅  |
+| Spacing / alignment / contrast / truncation / overflow / dark mode        |     ❌      |        ✅        |  —  |
+| Off-screen selection; what empty/loading/error actually render as         |     ❌      |        ✅        | ✅  |
+| Responsive breakpoints (narrow / mobile)                                  |     ❌      |        ✅        | ✅  |
+| In-progress / locked states; forced error / empty; capability-gated       |     ❌      |        ❌        | ✅  |
+| Journey stitching (forward momentum across steps)                         |    weak     |       weak       | ✅  |
+| Focus order / keyboard reachability                                       |     ❌      |        ❌        | ✅  |
+| **CLS / LCP / INP / long-task numbers**                                   |     ❌      | qualitative only | ✅  |
+
+> ⚠️ The recurring trap this prevents: ticking "one primary button" or "empty is a real
+> page" from a `variant` prop in the code. Those are **L2** verdicts — confirm them on the
+> render, never from L1 alone.
+
+### Tiering — don't run all three every time
+
+- **L1 always** — fast, complete-coverage baseline for every surface.
+- **Add L2** when the findings are about layout, hierarchy, rendered states, or responsive.
+- **Add L3** when you need to walk a journey, force states L1/L2 can't reach, or measure
+  performance (CLS etc.).
+
+`--l1 / --l2 / --l3` scopes a run to one layer; default is L1 (+ L2 if screenshots are
+supplied).
+
 ## Ground rule: evidence, not vibes
 
-Every finding cites `file:line`. Before you assert a load-bearing claim ("no error
-state", "draft not persisted"), **open the code and confirm it** — don't trust a summary
-or a screenshot. A wrong "it's missing" is worse than no finding. When you delegate the
-surface map to an Explore agent, still re-read the 2–3 files behind your top findings
-yourself.
+Every finding cites its evidence — `file:line` (L1), a screenshot you **verified with the
+Read tool** (L2), or a captured value / snapshot (L3). Before asserting a load-bearing
+claim, confirm it in the layer that owns it; a wrong "it's missing" is worse than no
+finding.
 
-## Procedure
+## Ground rule: benchmark the surface _class_, not just our own artifact
 
-### 1 — Scope & map the surface
+Reading our code can only surface flaws in **what we built** — it is structurally blind to a
+capability we **never built at all**, because an entirely-absent affordance leaves no
+`file:line`, no dead branch, no half-wired button to grep for. The checklists guard the
+_quality of the states that exist_; they do **not** tell you which states a surface of this
+_class_ is expected to have.
 
-Pin down exactly what's being audited (the route + its feature tree). A screenshot from
-the user is the ideal anchor — enumerate every block the user sees, top to bottom, plus
-the surrounding chrome (nav, header, sidebar).
+So before (or alongside) reading code, name the surface's **class** and its domain
+conventions: how do the mature, comparable products build this exact screen, and what do
+they offer that a first version forgets? An **OAuth consent** screen's class norms, for
+example (GitHub / Google / Okta): show _which identity_ you're authorizing as **and let the
+user switch account / re-authenticate**, name the requesting app, list the scopes, allow
+deny, and point to later revocation. A **file picker**, a **checkout**, a **share dialog**
+each carry their own class norms. Write this expected-capability list _first_, then audit
+gaps against it — otherwise the audit only ever polishes the paths that already exist and
+silently blesses a missing one.
 
-- Find the route segment (`src/routes/**`) and the feature components (`src/features/**`)
-  it delegates to. An **Explore** agent is good here — ask it to return the component
-  tree, and for each block: the data-fetching mechanism, and which of empty / loading /
-  error / retry states exist or are **missing**, with `file:line`.
-- Produce a block list: `[greeting] [composer] [banner] [chips] [feed] [sidebar…]`.
+> ❌ The first pass of the OAuth audit measured consent against our internal state
+> checklists only and reported button-hierarchy / retry gaps, while missing the **biggest**
+> one: the consent screen locks the user into the current identity with **no switch-account**
+> path (`OAuthConsent/Login.tsx`) — a class norm every comparable OAuth provider ships. A
+> competitor-norms pass catches this on minute one; a code-only pass never can.
 
-### 2 — Inventory patterns in use
+## Severity rubric (shared)
 
-Walk [`references/pattern-catalog.md`](references/pattern-catalog.md) family by family.
-For each block, tag the Tidwell pattern(s) it implements and rate the execution:
-
-- **✅ solid** — used well.
-- **⚠️ partial / misused** — the pattern is there but incomplete or fighting its intent.
-
-Output a table: `Pattern | Where (block + file) | ✅/⚠️ | one-line note`. This is the
-"patterns in use" half of the report — it also surfaces **missing** patterns (a data feed
-with no _Update Indicator_; a list with no _empty state_).
-
-### 3 — Audit states & flows against the ux checklists
-
-For every block, walk the relevant [`ux`](../ux/SKILL.md) module (Read / Edit / Act /
-Feedback / Grow). Record each gap as **present / missing / misleading** with `file:line`
-evidence. High-yield checks, in order of how often they're the real problem here:
-
-- **Loading can fail** (Feedback §4.2) — does every fetch have a terminal failure + retry,
-  or does it spin forever / silently degrade? Watch for an init-flag set _only_ on success
-  → permanent skeleton on error.
-- **Empty vs failed vs not-loaded** (Read §1.1) — are the variants distinguished, or does a
-  failed load masquerade as "nothing here"?
-- **Draft safety** (Edit §2.1) — is typed input persisted across reload/crash, or in-memory
-  only?
-- **Forward momentum & action states** (Act §3.1) — confirm → in-progress (locked) →
-  done/error; success leads forward.
-- **One primary button per surface**, **pinned actions outside scroll** (Act §3.2 / §3.3).
-- **Live / polling streams** (Read §1.7) — new-item indicator, manual refresh, no reorder
-  under the user.
-- **Predictable affordances** — is anything randomized / rotating / ephemeral where the
-  user needs a stable mental model (promo slots, placeholders holding real content)?
-
-### 4 — Rank by severity
-
-- 🔴 **Breaks trust** — data or input loss, stuck/permanent states, misleading "empty" that
-  hides a failure, silent send failure.
+- 🔴 **Breaks trust** — data / input loss, stuck / permanent states, a misleading "empty"
+  that hides a failure, silent send failure.
 - 🟠 **Dead-ends or misleads** — no forward path, ambiguous state, missing in-progress
-  feedback, empty state that isn't a real page.
+  feedback, an empty state that isn't a real page.
 - 🟡 **Friction / inconsistency / missed delight** — predictability, redundant controls,
-  progressive-disclosure gaps.
+  progressive-disclosure gaps, CLS jank.
 
-### 5 — Output the report
+## Output (shared)
 
-Use the two-part shape (see the worked example,
-[`references/example-home.md`](references/example-home.md)):
+See the worked example, [`references/example-home.md`](references/example-home.md). Note
+**which layers ran**, then:
 
-1. **Patterns in use** — the table from step 2, grouped by pattern family, with a
-   one-line overall read.
-2. **Experience gaps** — ranked list; each item names the finding, the `ux` checklist
-   item (or catalog pattern) it violates, `file:line` evidence, and a one-line remedy.
-3. **Skill feedback** — which findings are real instances of existing checklist items
-   (good worked examples) vs **new generalizable gaps** worth adding to `ux`.
+1. **Patterns in use** — table (from L1/L2), grouped by pattern family, with a one-line read.
+2. **Experience gaps** — ranked; each names the finding, the `ux` checklist item / catalog
+   pattern it violates, the **layer + evidence** it came from, and a one-line remedy.
+3. **Skill feedback** — real instances of existing checklist items vs new generalizable gaps
+   worth adding to `ux`.
 
-### 6 — Land the findings
+## Land the findings (shared)
 
-Don't let the audit evaporate:
-
-- **Concrete bugs** → fix the top 🔴 in the same or a follow-up branch, or file them.
-- **Generalizable gaps** → add / strengthen a checklist item in the `ux` skill (put the
-  rule + a ✅/❌ example in the right module reference, and mirror a line into the `ux`
-  Quick review checklist). Cite the audited surface as the ❌ example.
-- **The audit** → optionally save it as a `references/example-<page>.md` here so the next
-  run has a template.
+- **Concrete bugs** → fix the top 🔴, or file as Linear sub-issues under the "UX Audit"
+  parent (per-page container issue → one sub-issue per finding).
+- **Generalizable gaps** → add / strengthen a `ux` checklist item (rule + ✅/❌ example in
+  the right module, mirror a line into the ux Quick review); cite the audited surface as the
+  ❌ example.
+- **The audit** → save it as `references/example-<page>.md` so the next run has a template.
 
 ## Related skills
 
-- **[ux](../ux/SKILL.md)** — the execution checklists this audit measures against, and
-  where generalizable findings get landed.
+- **[ux](../ux/SKILL.md)** — the execution checklists this audit measures against, and where
+  generalizable findings get landed.
+- **agent-testing** — the automation framework L3 drives (agent-browser CDP: snapshot / eval
+  / screenshot / GIF). L3 assumes its Step 0 env + auth are green.
 - **review-checklist** — code-level review; this skill is its design-level sibling.
 - **skills-audit** — the same "periodic, evidence-based audit" shape, applied to the skill
-  catalog instead of a UI surface.
+  catalog.
