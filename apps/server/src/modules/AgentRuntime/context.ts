@@ -16,6 +16,13 @@ import { type IStreamEventManager } from './types';
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  /**
+   * Allows call_llm to publish visible_output_end immediately after a no-tool
+   * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
+   * as a final answer; injected multi-step agents such as GraphAgent can emit
+   * tools: [] for an intermediate graph node and continue to another node.
+   */
+  allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
   botPlatformContext?: BotPlatformContext;
   discordContext?: any;

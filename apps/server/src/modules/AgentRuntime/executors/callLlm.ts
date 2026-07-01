@@ -1436,7 +1436,13 @@ export const callLlm =
                 type: 'stream_end',
               });
 
-              if (toolsCalling.length === 0 && tool_calls.length === 0) {
+              const canPublishEarlyFinalAnswerVisibleEnd =
+                ctx.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
+              if (
+                canPublishEarlyFinalAnswerVisibleEnd &&
+                toolsCalling.length === 0 &&
+                tool_calls.length === 0
+              ) {
                 try {
                   // Example: a no-tool answer can publish stream_end, then spend
                   // several seconds in DB/Redis persistence before terminal done.

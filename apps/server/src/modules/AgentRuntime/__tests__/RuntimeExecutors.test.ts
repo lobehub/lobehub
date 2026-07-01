@@ -510,6 +510,38 @@ describe('RuntimeExecutors', () => {
       ).toBeUndefined();
     });
 
+    it('does not publish early visible_output_end for injected multi-step agents', async () => {
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        allowEarlyFinalAnswerVisibleOutputEnd: false,
+      });
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          // GraphAgent extraction calls can have tools: [] and still continue to the next node.
+          stepLabel: 'research:extract',
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
+    });
+
     // preserveThinking gates whether reasoning is replayed into the next LLM
     // payload (state.messages). The DB copy powers UI display after refresh and
     // is always persisted regardless of the gate.

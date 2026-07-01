@@ -761,8 +761,7 @@ export class AgentRuntimeService {
 
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
         const stateProvider =
@@ -2424,6 +2423,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      allowEarlyFinalAnswerVisibleOutputEnd: !this.agentFactory,
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
@@ -2479,8 +2479,7 @@ export class AgentRuntimeService {
               activeDeviceId,
               devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
               deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
-                | Record<string, string>
-                | undefined,
+                Record<string, string> | undefined,
             };
           }
         },
