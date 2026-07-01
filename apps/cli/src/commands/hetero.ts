@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
+import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   AgentContentBlock,
   AgentImageSource,
@@ -477,6 +480,95 @@ const exec = async (options: ExecOptions): Promise<void> => {
     serverIngester = new SerialServerIngester(sink);
   }
 
+  // ─── AskUserQuestion MCP — remote Human-in-the-loop (claude-code only) ──────
+  //
+  // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
+  // bridge over the server's Redis stream instead of Electron IPC:
+  //   - request out: `bridge.events()` ride the normal ingest sink → server
+  //     `heteroIngest` → Redis stream → renderer shows the AskUserQuestion card.
+  //   - response back: the sandbox can't read Redis, so a long-poll pulls the
+  //     `agent_intervention_response` off the stream (published by the browser's
+  //     `submitHeteroIntervention`) and resolves the pending bridge call.
+  // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
+  // absent user never strands CC.
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  let askServer: AskUserMcpServer | undefined;
+  let askBridge: AskUserBridge | undefined;
+  let askMcpConfigPath: string | undefined;
+  const askPollAbort = new AbortController();
+  if (serverIngest && agentType === 'claude-code' && serverIngester) {
+    askServer = new AskUserMcpServer();
+    await askServer.start();
+    askBridge = askServer.registerOperation(operationId);
+    askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+    await writeFile(
+      askMcpConfigPath,
+      JSON.stringify({
+        mcpServers: {
+          lobe_cc: {
+            alwaysLoad: true,
+            type: 'http',
+            url: askServer.urlForOperation(operationId),
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    // (i) Forward bridge events into the same ordered ingest path as CC's. The
+    // request always goes out. For responses, only forward the ones the browser
+    // can't have published itself — producer-side timeout / session_ended — so
+    // the renderer's card un-sticks; browser-originated answers (success /
+    // user_cancelled) are already on the stream via `submitHeteroIntervention`.
+    void (async () => {
+      for await (const event of askBridge!.events()) {
+        if (event.type === 'agent_intervention_response') {
+          const reason = (event.data as { cancelReason?: string })?.cancelReason;
+          if (reason !== 'timeout' && reason !== 'session_ended') continue;
+        }
+        serverIngester!.push(event as AgentStreamEvent);
+      }
+    })();
+
+    // (ii) Long-poll the server for the user's answer — only while a question is
+    // actually pending, so an idle run holds no server invocation.
+    void (async () => {
+      const client = await getTrpcClient();
+      let lastEventId = '$';
+      while (!askPollAbort.signal.aborted) {
+        if (askBridge!.pendingCount === 0) {
+          await sleep(200);
+          continue;
+        }
+        try {
+          const res = await client.aiAgent.waitInterventionResponse.query({
+            lastEventId,
+            operationId,
+          });
+          lastEventId = res.lastEventId;
+          for (const event of res.events) {
+            const data = event.data as {
+              cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
+              cancelled?: boolean;
+              result?: unknown;
+              toolCallId: string;
+            };
+            // Idempotent: resolve() no-ops on an unknown / already-settled id.
+            askBridge!.resolve(data.toolCallId, {
+              cancelReason: data.cancelReason,
+              cancelled: data.cancelled,
+              result: data.result,
+            });
+          }
+        } catch {
+          // Transient (server hiccup / token refresh) — back off and retry.
+          // The bridge's 5-min timeout still bounds the overall wait.
+          await sleep(1000);
+        }
+      }
+    })();
+  }
+
   /**
    * Spawn one agent process and stream all its events into the server ingester.
    *
@@ -682,7 +774,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // ─── First run (with --resume if provided) ───────────────────────────────
 
   const interceptResume = !!options.resume;
-  const extraArgs = buildExtraArgs(options);
+  const extraArgs = [
+    ...(buildExtraArgs(options) ?? []),
+    // Point CC at the lobe_cc AskUserQuestion MCP server we just mounted.
+    ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
+  ];
   const first = await runOneAgent(
     {
       agentType: options.type,
@@ -772,6 +868,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
+
+  // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
+  // pending (→ CC's tool returns cleanly), close the server, drop the temp
+  // config. Best-effort — the process is about to exit anyway.
+  askPollAbort.abort();
+  if (askServer) {
+    askServer.unregisterOperation(operationId);
+    await askServer.stop().catch(() => {});
+  }
+  if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
   if (code !== null) process.exit(result.ingestError ? 1 : code);
   if (signal === 'SIGINT') process.exit(130);

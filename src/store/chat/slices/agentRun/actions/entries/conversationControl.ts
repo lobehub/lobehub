@@ -7,6 +7,7 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 
+import { lambdaClient } from '@/libs/trpc/client';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors } from '@/store/chat/selectors';
@@ -860,22 +861,32 @@ export class ConversationControlActionImpl {
       );
     }
 
-    // Forward to the producer (Electron main → bridge.resolve). Dynamic
-    // import keeps `@/services/electron/*` out of non-Electron bundles.
+    // Forward the answer to the producer. Two transports, picked by where the
+    // producer lives:
+    //   - gateway/remote (`lh hetero exec` in a sandbox / device): publish via
+    //     tRPC → Redis stream → the exec's long-poll → `bridge.resolve()`.
+    //   - desktop (local CC in Electron main): Electron IPC → `bridge.resolve()`.
+    // Both are idempotent on an unknown / already-settled toolCallId, so firing
+    // against a bridge that already timed out is safe.
     try {
-      const { heterogeneousAgentService } = await import('@/services/electron/heterogeneousAgent');
-      await heterogeneousAgentService.submitIntervention(
-        actionType === 'submit'
-          ? { operationId, result: payload ?? {}, toolCallId }
-          : {
-              cancelReason: actionType === 'skip' ? 'user_cancelled' : 'user_cancelled',
-              cancelled: true,
-              operationId,
-              toolCallId,
-            },
-      );
+      if (this.#shouldUseGatewayResume(effectiveContext)) {
+        await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
+          actionType === 'submit'
+            ? { operationId, result: payload ?? {}, toolCallId }
+            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+        );
+      } else {
+        // Dynamic import keeps `@/services/electron/*` out of non-Electron bundles.
+        const { heterogeneousAgentService } =
+          await import('@/services/electron/heterogeneousAgent');
+        await heterogeneousAgentService.submitIntervention(
+          actionType === 'submit'
+            ? { operationId, result: payload ?? {}, toolCallId }
+            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+        );
+      }
     } catch (err) {
-      console.error('[submitHeteroIntervention] IPC submitIntervention failed:', err);
+      console.error('[submitHeteroIntervention] submitIntervention failed:', err);
     }
 
     // Sidebar topic row was swapped to the `waitingForHuman` hand icon when

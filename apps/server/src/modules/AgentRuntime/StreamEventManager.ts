@@ -360,6 +360,49 @@ export class StreamEventManager {
   }
 
   /**
+   * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
+   * One `XREAD BLOCK`, no loop: returns events after `lastEventId` (blocking up
+   * to `blockMs` for the first), or an empty list + unchanged cursor on timeout.
+   *
+   * `lastEventId` defaults to `'$'` (only events published after this call
+   * lands) so a fresh poll doesn't replay history; the caller threads the
+   * returned `lastEventId` into its next call to stay gap-free.
+   */
+  async readEventsOnce(
+    operationId: string,
+    lastEventId: string = '$',
+    blockMs: number = 25_000,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    const results = await this.redis.xread('BLOCK', blockMs, 'STREAMS', streamKey, lastEventId);
+    if (!results || results.length === 0) return { events: [], lastEventId };
+
+    const [, messages] = results[0];
+    const events: StreamEvent[] = [];
+    let currentLastId = lastEventId;
+
+    for (const [id, fields] of messages) {
+      const eventData: any = {};
+      for (let i = 0; i < fields.length; i += 2) {
+        const key = fields[i];
+        const value = fields[i + 1];
+        if (key === 'data') {
+          eventData[key] = JSON.parse(value);
+        } else if (key === 'stepIndex' || key === 'timestamp') {
+          eventData[key] = parseInt(value);
+        } else {
+          eventData[key] = value;
+        }
+      }
+      events.push({ ...eventData, id } as StreamEvent);
+      currentLastId = id;
+    }
+
+    return { events, lastEventId: currentLastId };
+  }
+
+  /**
    * Get stream event history
    */
   async getStreamHistory(operationId: string, count: number = 100): Promise<StreamEvent[]> {

@@ -22,6 +22,7 @@ import { topics } from '@/database/schemas';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
@@ -413,6 +414,38 @@ const HeteroFinishSchema = z.object({
   result: z.enum(['success', 'error', 'cancelled']),
   sessionId: z.string().optional(),
   topicId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.waitInterventionResponse` — the exec-side long-poll. The
+ * `lh hetero exec` producer calls this in a loop while an `AskUserBridge`
+ * pending is in flight, draining `agent_intervention_response` events off the
+ * op's Redis stream (which the sandbox can't read directly). `lastEventId`
+ * threads the cursor forward across polls; `'$'` on the first call means
+ * "only events published from now on".
+ */
+const WaitInterventionResponseSchema = z.object({
+  blockMs: z.number().int().positive().max(30_000).default(25_000),
+  lastEventId: z.string().default('$'),
+  operationId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
+ * Human-in-the-loop. The user's answer to an `agent_intervention_request` is
+ * published back onto the op's Redis stream as an `agent_intervention_response`,
+ * where both the renderer (card → resolved) and the exec long-poll converge on
+ * it by `toolCallId`. Mutually exclusive: `result` on submit, `cancelled` on
+ * skip/cancel.
+ */
+const SubmitHeteroInterventionSchema = z.object({
+  cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
+  cancelled: z.boolean().optional(),
+  operationId: z.string().min(1),
+  result: z.unknown().optional(),
+  /** Producer step index; harmless placeholder — correlation is by toolCallId. */
+  stepIndex: z.number().int().nonnegative().default(0),
+  toolCallId: z.string().min(1),
 });
 
 const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -1316,6 +1349,70 @@ export const aiAgentRouter = router({
       });
     }
   }),
+
+  /**
+   * Exec-side long-poll for remote Human-in-the-loop (op-JWT auth, same as
+   * `heteroIngest`). The `lh hetero exec` producer — which holds only an
+   * op-scoped JWT + tRPC and never the server's Redis — pulls
+   * `agent_intervention_response` events off the op's Redis stream through this
+   * server-mediated read, then resolves its in-process `AskUserBridge`. One
+   * bounded `XREAD BLOCK` per call; the producer loops while a pending is in
+   * flight, threading `lastEventId` forward so nothing is missed between polls.
+   */
+  waitInterventionResponse: heteroAgentProcedure
+    .input(WaitInterventionResponseSchema)
+    .query(async ({ input }) => {
+      const { operationId, lastEventId, blockMs } = input;
+
+      const streamEventManager = createStreamEventManager();
+      const { events, lastEventId: nextEventId } = await streamEventManager.readEventsOnce(
+        operationId,
+        lastEventId,
+        blockMs,
+      );
+
+      // Only intervention responses matter to the producer; everything else on
+      // the stream is already going out via its own outbound ingest path.
+      return {
+        events: events.filter((e) => e.type === 'agent_intervention_response'),
+        lastEventId: nextEventId,
+      };
+    }),
+
+  /**
+   * Browser leg of remote Human-in-the-loop (user auth). Publishes the user's
+   * answer to an `agent_intervention_request` back onto the op's Redis stream
+   * as an `agent_intervention_response`. Two consumers converge on it by
+   * `toolCallId`: the renderer (card → resolved) and the exec long-poll
+   * (`waitInterventionResponse` → `bridge.resolve`). Symmetric with the
+   * desktop path, which resolves the bridge over Electron IPC instead.
+   */
+  submitHeteroIntervention: aiAgentWriteProcedure
+    .input(SubmitHeteroInterventionSchema)
+    .mutation(async ({ input }) => {
+      const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
+
+      log(
+        'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
+        operationId,
+        toolCallId,
+        cancelled ?? false,
+      );
+
+      const streamEventManager = createStreamEventManager();
+      await streamEventManager.publishStreamEvent(operationId, {
+        data: {
+          cancelReason: cancelled ? (cancelReason ?? 'user_cancelled') : undefined,
+          cancelled,
+          result: cancelled ? undefined : result,
+          toolCallId,
+        },
+        stepIndex,
+        type: 'agent_intervention_response',
+      });
+
+      return { success: true as const };
+    }),
 
   processHumanIntervention: aiAgentWriteProcedure
     .input(ProcessHumanInterventionSchema)
