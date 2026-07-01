@@ -21,6 +21,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 import ChatPreview from './ChatPreview';
 import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
+import LinkIconPreview from './LinkIconPreview';
 import MermaidPreview from './MermaidPreview';
 
 const ChatAppearance = memo(() => {
@@ -96,9 +97,9 @@ const ChatAppearance = memo(() => {
       </FormGroup>
 
       <FormGroup
-        active={false}
         collapsible={false}
         desc={t('settingChatAppearance.linkIcon.desc')}
+        gap={16}
         title={t('settingChatAppearance.linkIcon.title')}
         variant={'filled'}
         extra={
@@ -113,7 +114,7 @@ const ChatAppearance = memo(() => {
           </Flexbox>
         }
       >
-        {null}
+        <LinkIconPreview />
       </FormGroup>
 
       <FormGroup
