@@ -126,4 +126,19 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(mockApiHandler).toHaveBeenCalledWith({}, context);
     expect(result.success).toBe(true);
   });
+
+  it('returns a recoverable UNKNOWN_API error for a hallucinated apiName', async () => {
+    // The runtime mock only exposes `createDocument`; calling a non-existent
+    // API (e.g. a model hallucinating `viewTopic`) must NOT throw a hard error
+    // — it should return a structured result that lists the real APIs so the
+    // model can self-correct.
+    const result = await executor.execute({ ...buildPayload('{}'), apiName: 'viewTopic' }, context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('UNKNOWN_API');
+    expect(result.content).toContain('viewTopic');
+    // The available APIs are surfaced to guide the model.
+    expect(result.content).toContain('createDocument');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
 });

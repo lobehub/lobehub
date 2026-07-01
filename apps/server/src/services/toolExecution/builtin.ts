@@ -95,8 +95,26 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // Await runtime in case factory is async
     const runtime = await getServerRuntime(identifier, context);
 
-    if (!runtime[apiName]) {
-      throw new Error(`Builtin tool ${identifier}'s ${apiName} is not implemented`);
+    if (typeof runtime[apiName] !== 'function') {
+      // An unknown apiName is almost always a model hallucination (calling an
+      // API that the tool never declared in its manifest). Return a structured,
+      // recoverable error listing the tool's real APIs instead of throwing a
+      // hard error the model cannot act on. The throw here also sits outside
+      // the try/catch below, so it would otherwise surface as an uncaught
+      // failure rather than a tool result.
+      const availableApis = Object.keys(runtime).filter(
+        (key) => typeof runtime[key] === 'function',
+      );
+      const message =
+        `Builtin tool "${identifier}" has no API named "${apiName}". ` +
+        `Available APIs: ${availableApis.join(', ')}. ` +
+        `Do not call APIs that are not listed above.`;
+      log('Unknown apiName for %s: %s (available: %o)', identifier, apiName, availableApis);
+      return {
+        content: message,
+        error: { code: 'UNKNOWN_API', message },
+        success: false,
+      };
     }
 
     try {
