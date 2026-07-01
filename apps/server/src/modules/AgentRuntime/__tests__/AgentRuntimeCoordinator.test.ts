@@ -353,7 +353,7 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
-    it('still publishes terminal visible_output_end when an earlier step published it', async () => {
+    it('does not republish visible_output_end when a following finish step enters done', async () => {
       const operationId = 'test-operation-id';
       const stepResult = {
         executionTime: 1000,
@@ -369,12 +369,17 @@ describe('AgentRuntimeCoordinator', () => {
 
       await coordinator.saveStepResult(operationId, stepResult as any);
 
-      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(operationId, {
-        data: { reason: 'done' },
+      expect(mockStreamManager.publishStreamEvent).not.toHaveBeenCalledWith(
+        operationId,
+        expect.objectContaining({ type: 'visible_output_end' }),
+      );
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId,
+        reason: 'done',
         stepIndex: 5,
-        type: 'visible_output_end',
+        uiMessages: undefined,
       });
-      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalled();
     });
 
     it('should publish end event when status becomes error', async () => {

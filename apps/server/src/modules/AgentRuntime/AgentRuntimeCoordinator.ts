@@ -180,7 +180,7 @@ export class AgentRuntimeCoordinator {
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
-        if (!hasVisibleOutputEndPublished(state, stepIndex)) {
+        if (!hasVisibleOutputEndPublished(state)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
@@ -211,12 +211,12 @@ export class AgentRuntimeCoordinator {
 
       // This ensures agent_runtime_end is sent after all step events.
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
-        // Example: call_llm step 0 can early-publish visible_output_end, while
-        // AgentRuntime.step has already advanced newState.stepCount to 1.
-        // Compare/publish by the executor step index to avoid a duplicate hint.
+        // Example: call_llm step 3 can early-publish visible_output_end, then
+        // finish step 4 enters done. Keep terminal stepIndex for end payloads,
+        // but suppress visible_output_end once the operation marker exists.
         const stepIndex =
           stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
-        if (!hasVisibleOutputEndPublished(stepResult.newState, stepIndex)) {
+        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
