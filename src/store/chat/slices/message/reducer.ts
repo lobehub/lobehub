@@ -7,7 +7,7 @@ import {
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import i18n from 'i18next';
-import { current, produce } from 'immer';
+import { current, isDraft, produce } from 'immer';
 
 import { merge } from '@/utils/merge';
 
@@ -96,6 +96,12 @@ export type MessageDispatch =
   | DeleteMessageTool
   | DeleteMessages;
 
+const getPlainPluginState = (pluginState: UIChatMessage['pluginState']) => {
+  if (!pluginState) return pluginState;
+
+  return isDraft(pluginState) ? current(pluginState) : pluginState;
+};
+
 export const messagesReducer = (
   state: UIChatMessage[],
   payload: MessageDispatch,
@@ -145,17 +151,18 @@ export const messagesReducer = (
         const message = draftState.find((i) => i.id === id);
         if (!message) return;
 
+        const pluginState = getPlainPluginState(message.pluginState);
         let newState;
-        if (!message.pluginState) {
+        if (!pluginState) {
           newState = { [key]: value } as any;
         } else {
-          newState = merge(message.pluginState, { [key]: value });
+          newState = merge(pluginState, { [key]: value });
         }
 
-        // Compare against a plain snapshot, not the raw draft proxy — fast-deep-equal's
-        // traversal of an Immer draft is an implementation detail that can change between
-        // immer patch releases (e.g. immer 11.1.9 broke this exact comparison vs 11.1.8).
-        if (message.pluginState && isEqual(current(message.pluginState), newState)) return;
+        // Compare against a plain snapshot, not the raw draft proxy. With
+        // `{ existingKey: 'existingValue' }`, an equal update must not refresh
+        // `updatedAt` just because Immer wrapped the previous value.
+        if (isEqual(pluginState, newState)) return;
 
         message.pluginState = newState;
         message.updatedAt = Date.now();
