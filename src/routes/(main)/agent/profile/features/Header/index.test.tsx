@@ -138,6 +138,10 @@ vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
 }));
 
+vi.mock('@/features/AgentBreadcrumb', () => ({
+  default: () => null,
+}));
+
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left?: ReactNode; right?: ReactNode }) => (
     <header>
