@@ -998,6 +998,8 @@ export class MessengerRouter {
     // the bare id so direct platform API calls see what they expect.
     const chatId = client.extractChatId((event.channel as any).id as string);
     const args = event.text?.trim() ?? '';
+    const replyChatId =
+      creds.platform === 'telegram' && chatId.startsWith('-') ? senderId : chatId;
 
     // Slack / Discord reply privately (ephemeral / DM); Telegram has no
     // `replyPrivately`, so fall back to a direct message in the slash
@@ -1005,7 +1007,7 @@ export class MessengerRouter {
     const replyPrivately = binder.replyPrivately;
     const reply = replyPrivately
       ? (text: string) => replyPrivately.call(binder, event.channel, event.user, text)
-      : (text: string) => binder.sendDmText(chatId, text);
+      : (text: string) => binder.sendDmText(replyChatId, text);
 
     const command = this.commands.find((c) => c.name === cmdName);
     if (!command) {
@@ -1065,7 +1067,7 @@ export class MessengerRouter {
         authorUserId: senderId,
         authorUserName: event.user.userName,
         binder,
-        chatId,
+        chatId: replyChatId,
         interaction,
         // `isDM` lets handlers like `/agents` keep the picker public in
         // DMs (so it stays in history) and widen to an ephemeral when
