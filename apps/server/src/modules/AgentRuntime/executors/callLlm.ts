@@ -1204,6 +1204,30 @@ export const callLlm =
                       }, BUFFER_INTERVAL);
                     }
                   },
+                  // Some Gemini / Nano Banana image responses arrive via the
+                  // legacy single-image `base64_image` event instead of
+                  // `content_part` (the Google stream transform emits it when a
+                  // response can't be classified as multimodal). Without this
+                  // handler the image is silently dropped server-side — never
+                  // uploaded, never persisted — and, on channels that omit the
+                  // Image response modality, the raw base64 leaks into text and
+                  // bloats the context. Mirror the onContentPart image branch:
+                  // register a placeholder part, upload to object storage, and
+                  // mark the turn multimodal so raw base64 never lands in content.
+                  onBase64Image: async ({ image }) => {
+                    if (firstChunkAt === undefined) {
+                      firstChunkAt = Date.now() - llmStartTime;
+                    }
+
+                    // `image.data` is a full data URI (`data:<mime>;base64,<...>`).
+                    const mimeType = /^data:([^;]+);/.exec(image.data)?.[1];
+                    const partIndex = contentParts.length;
+                    contentParts.push({ image: image.data, type: 'image' });
+                    hasContentImages = true;
+                    contentImageUploads.push(
+                      uploadPartImage(contentParts, partIndex, image.data, mimeType),
+                    );
+                  },
                   onReasoningPart: async (part) => {
                     if (firstChunkAt === undefined) {
                       firstChunkAt = Date.now() - llmStartTime;

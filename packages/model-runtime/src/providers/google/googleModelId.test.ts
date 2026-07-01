@@ -71,6 +71,11 @@ describe('googleModelId', () => {
       'gemini-3.5-pro-image-preview',
       'google/gemini-3.5-pro-image-preview-free',
       'nano-banana-pro-preview',
+      // Every Nano Banana alias is an image-output model regardless of modifiers,
+      // so it must request the Image response modality (LOBE nano-banana-lite bug).
+      'nano-banana',
+      'nano-banana-lite',
+      'google/nano-banana-lite',
     ])('detects image-response model %s', (model) => {
       expect(isGoogleImageResponseModel(model)).toBe(true);
     });
