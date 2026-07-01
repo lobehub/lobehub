@@ -1,35 +1,97 @@
 #!/usr/bin/env bash
 #
-# electron-dev.sh — Manage Electron dev environment for testing
+# electron-dev.sh — Manage Electron dev environment(s) for testing
 #
-# Usage:
-#   ./electron-dev.sh start   # Kill existing, start fresh, wait until ready
-#   ./electron-dev.sh stop    # Kill all Electron-related processes
-#   ./electron-dev.sh status  # Check if Electron is running and CDP is reachable
-#   ./electron-dev.sh restart # Stop then start
+# Single instance (legacy, backward compatible):
+#   ./electron-dev.sh start        # CDP 9222, default userData, default Vite port
+#   ./electron-dev.sh stop
+#   ./electron-dev.sh status
+#   ./electron-dev.sh restart
+#
+# Instance pool (concurrent isolated instances — e.g. one git worktree each):
+#   ./electron-dev.sh start <id>   # CDP 9222+id, Vite 5173+id, own userData + IPC id
+#   ./electron-dev.sh stop <id>    # stop ONLY instance <id> (never touches siblings)
+#   ./electron-dev.sh stop --all   # stop every pool instance
+#   ./electron-dev.sh status <id>
+#   ./electron-dev.sh list         # list running pool instances
+#
+# Each pool instance <id> gets, all env-driven so instances never collide:
+#   CDP port   = CDP_BASE + id   (9222 + id)
+#   Vite port  = VITE_BASE + id  (5173 + id)   → needs LOBE_DESKTOP_VITE_PORT support
+#   userData   = $POOL_DIR/ud-<id> (login state copied from the golden profile)
+#   IPC id     = lobehub-desktop-dev-<id>       → needs LOBE_IPC_ID support
+# Drive each with a DISTINCT agent-browser session, else the daemon reuses one
+# connection across ports:  agent-browser --session s<port> --cdp <port> ...
 #
 # Environment variables:
-#   CDP_PORT          — Chrome DevTools Protocol port (default: 9222)
-#   ELECTRON_LOG      — Log file path (default: /tmp/electron-dev.log)
-#   ELECTRON_WAIT_S   — Max seconds to wait for CDP to become reachable (default: 90)
-#   RENDERER_WAIT_S   — Max seconds to wait for SPA after CDP is up (default: 60)
-#   FORCE_KILL_USER   — When set to 1, silently kill the user's `bun run dev`
-#                       Electron without confirmation (default: always confirm-by-action)
+#   CDP_PORT          — (legacy only) CDP port (default: 9222)
+#   ELECTRON_LOG      — (legacy only) log file path (default: /tmp/electron-dev.log)
+#   CDP_BASE          — pool CDP base (default: 9222 → instance id adds on top)
+#   VITE_BASE         — pool Vite base (default: 5173)
+#   POOL_DIR          — pool state dir (default: /tmp/lobe-electron-pool)
+#   LOBE_GOLDEN_PROFILE — userData to copy login state from
+#                       (default: ~/Library/Application Support/lobehub-desktop-dev)
+#   KEEP_DATA=1       — on `stop <id>`, keep the instance's userData dir
+#   ELECTRON_WAIT_S   — max seconds to wait for CDP (default: 90)
+#   RENDERER_WAIT_S   — max seconds to wait for the SPA (default: 60)
 #
 set -euo pipefail
 
-CDP_PORT="${CDP_PORT:-9222}"
-ELECTRON_LOG="${ELECTRON_LOG:-/tmp/electron-dev.log}"
+# Capture legacy env overrides BEFORE we clobber the same-named internals.
+ENV_CDP_PORT="${CDP_PORT:-}"
+ENV_ELECTRON_LOG="${ELECTRON_LOG:-}"
+
+CMD="${1:-help}"
+INSTANCE="${2:-}" # empty = legacy single instance; integer = pool member
+
+CDP_BASE="${CDP_BASE:-9222}"
+VITE_BASE="${VITE_BASE:-5173}"
 ELECTRON_WAIT_S="${ELECTRON_WAIT_S:-90}"
 RENDERER_WAIT_S="${RENDERER_WAIT_S:-60}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-PIDFILE="/tmp/electron-dev-cdp-${CDP_PORT}.pid"
+POOL_DIR="${POOL_DIR:-/tmp/lobe-electron-pool}"
+GOLDEN_PROFILE="${LOBE_GOLDEN_PROFILE:-$HOME/Library/Application Support/lobehub-desktop-dev}"
 
-# Project-scoped electron path prefix used for pgrep matching. Any Electron
-# binary from this project (main + helpers, with or without --remote-debugging-port)
-# starts with this string in its argv[0], so a single substring match catches all.
+# Project-scoped electron path prefix used for pgrep matching in LEGACY mode only
+# (pool mode never uses it — it would cross instances). Any Electron binary from
+# this project starts with this string in its argv[0].
 PROJECT_ELECTRON_PATH="${PROJECT_ROOT}/apps/desktop/node_modules/.pnpm/electron@"
+
+# Per-instance vars, filled by derive_instance.
+POOL_MODE=0
+CDP_PORT=""
+VITE_PORT=""
+USER_DATA_DIR=""
+IPC_ID=""
+ELECTRON_LOG=""
+PIDFILE=""
+
+# Resolve the target instance's ports/paths from its id (empty id = legacy).
+derive_instance() {
+  local id="$1"
+  if [ -z "$id" ]; then
+    POOL_MODE=0
+    CDP_PORT="${ENV_CDP_PORT:-$CDP_BASE}"
+    VITE_PORT="" # legacy: no override, config default applies
+    USER_DATA_DIR="" # legacy: default userData
+    IPC_ID="" # legacy: default IPC id
+    ELECTRON_LOG="${ENV_ELECTRON_LOG:-/tmp/electron-dev.log}"
+    PIDFILE="/tmp/electron-dev-cdp-${CDP_PORT}.pid"
+  else
+    [[ "$id" =~ ^[0-9]+$ ]] || {
+      echo "[electron-dev] instance id must be a non-negative integer, got: $id" >&2
+      exit 1
+    }
+    POOL_MODE=1
+    CDP_PORT=$((CDP_BASE + id))
+    VITE_PORT=$((VITE_BASE + id))
+    USER_DATA_DIR="$POOL_DIR/ud-$id"
+    IPC_ID="lobehub-desktop-dev-$id"
+    ELECTRON_LOG="$POOL_DIR/instance-$id.log"
+    PIDFILE="$POOL_DIR/instance-$id.pid"
+  fi
+}
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -44,24 +106,15 @@ expand_descendants() {
   done
 }
 
-# Find seed PIDs related to this project's Electron dev session.
-# Matches REGARDLESS of whether --remote-debugging-port was passed, so it also
-# catches a plain `bun run dev` session the user started outside this script.
-find_project_pids() {
+# Seed PIDs for the CURRENT instance only. Pool mode scopes strictly to this
+# instance (pidfile session leader + whoever holds this instance's CDP/Vite
+# ports) so stopping one instance never kills a sibling. Legacy mode additionally
+# sweeps the project's Electron + electron-vite (to tear down a stray `bun run
+# dev` the user started outside this script).
+find_instance_pids() {
   local pids=""
 
-  # 1. Any process whose command line mentions this project's electron path
-  #    (covers the main Electron binary AND every Helper subprocess)
-  local electron_pids
-  electron_pids=$(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)
-  pids="$pids $electron_pids"
-
-  # 2. electron-vite dev server (narrow match to avoid catching unrelated Vite invocations)
-  local vite_pids
-  vite_pids=$(pgrep -f "electron-vite[/.].*\\bdev\\b" 2>/dev/null || true)
-  pids="$pids $vite_pids"
-
-  # 3. The launcher subshell from a previous `start` (saved to pidfile)
+  # 1. Launcher subshell saved by a previous `start`
   if [ -f "$PIDFILE" ]; then
     local saved_pid
     saved_pid=$(cat "$PIDFILE" 2>/dev/null || true)
@@ -70,30 +123,37 @@ find_project_pids() {
     fi
   fi
 
-  # 4. Whatever is currently bound to the CDP port — catches strays whose
-  #    binary path doesn't match (e.g. orphaned from a crashed restart)
+  # 2. Whatever is bound to this instance's CDP port
   local port_pid
   port_pid=$(lsof -ti tcp:"$CDP_PORT" -sTCP:LISTEN 2>/dev/null || true)
   pids="$pids $port_pid"
 
-  # `|| true` because `grep -v '^$'` exits 1 when input has no non-empty
-  # lines, which (with pipefail + set -e) silently kills the caller.
+  # 3. Whatever is bound to this instance's Vite port (pool mode)
+  if [ -n "$VITE_PORT" ]; then
+    local vite_pid
+    vite_pid=$(lsof -ti tcp:"$VITE_PORT" -sTCP:LISTEN 2>/dev/null || true)
+    pids="$pids $vite_pid"
+  fi
+
+  # 4. Legacy only: broad project matching (would cross pool instances)
+  if [ "$POOL_MODE" = "0" ]; then
+    pids="$pids $(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)"
+    pids="$pids $(pgrep -f "electron-vite[/.].*\\bdev\\b" 2>/dev/null || true)"
+  fi
+
+  # `|| true` because `grep -v '^$'` exits 1 on all-empty input, which with
+  # pipefail + set -e would silently kill the caller.
   echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' || true
 }
 
-# Wait for the CDP HTTP endpoint to respond, with a deadline + early bail-out
-# if the launcher process died (no point waiting if Electron crashed).
 wait_for_cdp() {
-  local deadline=$(( $(date +%s) + ELECTRON_WAIT_S ))
+  local deadline=$(($(date +%s) + ELECTRON_WAIT_S))
   echo "[electron-dev] Waiting for CDP on port ${CDP_PORT} (up to ${ELECTRON_WAIT_S}s)..."
-
   while [ "$(date +%s)" -lt "$deadline" ]; do
     if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
       echo "[electron-dev] CDP is reachable."
       return 0
     fi
-
-    # If our launcher subshell died, abort early so we don't hang the full timeout
     if [ -f "$PIDFILE" ]; then
       local saved_pid
       saved_pid=$(cat "$PIDFILE" 2>/dev/null || true)
@@ -104,75 +164,92 @@ wait_for_cdp() {
         return 1
       fi
     fi
-
     sleep 2
   done
-
   echo "[electron-dev] ERROR: CDP did not respond within ${ELECTRON_WAIT_S}s"
   echo "[electron-dev] Last 30 lines of $ELECTRON_LOG:"
   tail -30 "$ELECTRON_LOG" 2>/dev/null || true
   return 1
 }
 
-# After CDP is up, wait until the SPA renders interactive elements.
 wait_for_renderer() {
-  local deadline=$(( $(date +%s) + RENDERER_WAIT_S ))
+  local deadline=$(($(date +%s) + RENDERER_WAIT_S))
   echo "[electron-dev] Waiting for SPA to load (up to ${RENDERER_WAIT_S}s)..."
-
   while [ "$(date +%s)" -lt "$deadline" ]; do
     local snap
-    snap=$(agent-browser --cdp "$CDP_PORT" snapshot -i 2>&1 || true)
+    snap=$(agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" snapshot -i 2>&1 || true)
     if echo "$snap" | grep -qE '\b(link|button)\b'; then
       echo "[electron-dev] Renderer ready."
       return 0
     fi
     sleep 2
   done
-
   echo "[electron-dev] WARNING: Renderer not interactive within ${RENDERER_WAIT_S}s — proceeding anyway."
   return 0
+}
+
+# Copy the login-bearing items from the golden profile into a fresh userData dir
+# (skips the multi-GB caches). No-op if the dir already exists.
+seed_userdata() {
+  local dst="$1"
+  [ -d "$dst" ] && return 0
+  if [ ! -d "$GOLDEN_PROFILE" ]; then
+    echo "[electron-dev] WARNING: golden profile not found at $GOLDEN_PROFILE — instance will start signed out."
+    mkdir -p "$dst"
+    return 0
+  fi
+  echo "[electron-dev] Seeding login state from golden profile → $dst"
+  mkdir -p "$dst"
+  local items=(
+    "lobehub-settings.json" "Local State" "Preferences"
+    "Cookies" "Cookies-journal" "Local Storage" "IndexedDB"
+    "Session Storage" "Network Persistent State" "lobehub-storage"
+  )
+  local f
+  for f in "${items[@]}"; do
+    [ -e "$GOLDEN_PROFILE/$f" ] && cp -R "$GOLDEN_PROFILE/$f" "$dst/" 2>/dev/null || true
+  done
 }
 
 # ── Commands ─────────────────────────────────────────────────────────
 
 do_stop() {
-  echo "[electron-dev] Stopping Electron dev environment..."
+  local label="legacy"
+  [ "$POOL_MODE" = "1" ] && label="instance $INSTANCE (cdp $CDP_PORT)"
+  echo "[electron-dev] Stopping Electron dev ($label)..."
 
   local seed_pids
-  seed_pids=$(find_project_pids)
+  seed_pids=$(find_instance_pids)
 
-  # Expand to include all descendants — catches helpers spawned by the main
-  # process AFTER our pgrep snapshot, and the launcher's child node/electron-vite
-  # process tree.
   local all_pids=""
+  local pid
   for pid in $seed_pids; do
     all_pids="$all_pids $(expand_descendants "$pid")"
   done
   all_pids=$(echo "$all_pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' || true)
 
   if [ -z "$all_pids" ]; then
-    echo "[electron-dev] No project Electron/vite processes found."
+    echo "[electron-dev] No matching Electron/vite processes found."
   else
     local count
     count=$(echo "$all_pids" | tr ' ' '\n' | grep -c .)
     echo "[electron-dev] Sending SIGTERM to $count process(es): $all_pids"
-    for pid in $all_pids; do
-      kill "$pid" 2>/dev/null || true
-    done
+    for pid in $all_pids; do kill "$pid" 2>/dev/null || true; done
 
-    # Wait up to 5s for graceful exit
     local waited=0
     while [ $waited -lt 5 ]; do
       local any_alive=0
       for pid in $all_pids; do
-        if kill -0 "$pid" 2>/dev/null; then any_alive=1; break; fi
+        if kill -0 "$pid" 2>/dev/null; then
+          any_alive=1
+          break
+        fi
       done
       [ "$any_alive" = "0" ] && break
       sleep 1
       waited=$((waited + 1))
     done
 
-    # SIGKILL anyone still alive
     for pid in $all_pids; do
       if kill -0 "$pid" 2>/dev/null; then
         echo "[electron-dev] Force-killing PID $pid"
@@ -181,110 +258,103 @@ do_stop() {
     done
   fi
 
-  # Belt-and-suspenders: anything still bound to the CDP port goes away
+  # Belt-and-suspenders: free this instance's CDP port.
   local port_pid
   port_pid=$(lsof -ti tcp:"$CDP_PORT" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$port_pid" ]; then
-    echo "[electron-dev] Port $CDP_PORT still bound by PID $port_pid; force-killing"
+    echo "[electron-dev] CDP port $CDP_PORT still bound by $port_pid; force-killing"
     # shellcheck disable=SC2086
     kill -9 $port_pid 2>/dev/null || true
   fi
 
-  # Also re-sweep the project's electron processes — sometimes the OS spawns
-  # new helpers during shutdown that didn't exist when we first enumerated.
-  local stragglers
-  stragglers=$(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)
-  if [ -n "$stragglers" ]; then
-    echo "[electron-dev] Cleaning up stragglers: $stragglers"
-    for pid in $stragglers; do
-      kill -9 "$pid" 2>/dev/null || true
-    done
+  # Legacy only: re-sweep stray project electron (pool mode must NOT — sibling-safe).
+  if [ "$POOL_MODE" = "0" ]; then
+    local stragglers
+    stragglers=$(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)
+    if [ -n "$stragglers" ]; then
+      echo "[electron-dev] Cleaning up stragglers: $stragglers"
+      for pid in $stragglers; do kill -9 "$pid" 2>/dev/null || true; done
+    fi
   fi
 
-  # Close any agent-browser sessions connected to this port
-  agent-browser --cdp "$CDP_PORT" close --all 2>/dev/null || true
-
+  agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close --all 2>/dev/null || true
   rm -f "$PIDFILE"
-  echo "[electron-dev] Stopped."
+
+  # Pool mode: wipe the instance's userData unless asked to keep it.
+  if [ "$POOL_MODE" = "1" ] && [ -n "$USER_DATA_DIR" ]; then
+    if [ "${KEEP_DATA:-0}" = "1" ]; then
+      echo "[electron-dev] Keeping userData: $USER_DATA_DIR"
+    else
+      rm -rf "$USER_DATA_DIR"
+      echo "[electron-dev] Removed userData: $USER_DATA_DIR"
+    fi
+  fi
+
+  echo "[electron-dev] Stopped ($label)."
 }
 
 do_status() {
-  local pids
-  pids=$(find_project_pids)
-
-  if [ -z "$pids" ]; then
-    echo "[electron-dev] No project Electron processes found."
-    return 1
-  fi
-
-  echo "[electron-dev] Project processes: $pids"
-
   if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
     local url
-    url=$(agent-browser --cdp "$CDP_PORT" get url 2>&1 | tail -1 || echo "?")
-    echo "[electron-dev] CDP port ${CDP_PORT} is reachable. URL: $url"
+    url=$(agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" get url 2>&1 | tail -1 || echo "?")
+    echo "[electron-dev] CDP $CDP_PORT reachable. URL: $url"
     return 0
-  else
-    echo "[electron-dev] CDP port ${CDP_PORT} is NOT reachable (no --remote-debugging-port, or still loading)."
-    return 2
   fi
+  echo "[electron-dev] CDP $CDP_PORT NOT reachable (not started, or still loading)."
+  return 2
 }
 
 do_start() {
-  # Already up and CDP is reachable → nothing to do
   if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
-    echo "[electron-dev] CDP already reachable on port $CDP_PORT. Skipping start."
-    echo "[electron-dev] Use 'restart' to force a fresh session."
+    echo "[electron-dev] CDP already reachable on $CDP_PORT. Skipping start (use 'restart')."
     return 0
   fi
 
-  # Detect the user's existing dev session (or stale processes) BEFORE killing
-  local existing
-  existing=$(find_project_pids)
-  if [ -n "$existing" ]; then
-    echo "[electron-dev] Existing project Electron/vite processes detected:"
-    echo "$existing" | tr ' ' '\n' | sed 's/^/[electron-dev]   PID /'
-    echo "[electron-dev] Tearing them down so we can start a CDP-enabled session..."
-  fi
+  # Clear stale state for THIS instance/session first.
+  do_stop_quiet_for_start
 
-  do_stop
-
-  # Wait for port + user-data-dir locks to release. Without this, the new
-  # Electron may fail with "user data directory in use" or fail to bind CDP.
+  # Wait for this instance's ports to release.
   local waited=0
   while [ $waited -lt 10 ]; do
-    if ! lsof -i tcp:"$CDP_PORT" >/dev/null 2>&1 \
-       && ! pgrep -f "$PROJECT_ELECTRON_PATH" >/dev/null 2>&1; then
-      break
-    fi
-    [ $waited -eq 0 ] && echo "[electron-dev] Waiting for port + Electron locks to release..."
+    local busy=0
+    lsof -i tcp:"$CDP_PORT" >/dev/null 2>&1 && busy=1
+    [ -n "$VITE_PORT" ] && lsof -i tcp:"$VITE_PORT" >/dev/null 2>&1 && busy=1
+    [ "$busy" = "0" ] && break
+    [ $waited -eq 0 ] && echo "[electron-dev] Waiting for ports to release..."
     sleep 1
     waited=$((waited + 1))
   done
 
-  echo "[electron-dev] Starting Electron dev server..."
-  echo "[electron-dev]   Project:  $PROJECT_ROOT"
-  echo "[electron-dev]   CDP port: $CDP_PORT"
-  echo "[electron-dev]   Log:      $ELECTRON_LOG"
+  # Env prefix + userData seeding for pool instances.
+  local env_assignments=""
+  if [ "$POOL_MODE" = "1" ]; then
+    mkdir -p "$POOL_DIR"
+    seed_userdata "$USER_DATA_DIR"
+    env_assignments="LOBE_DESKTOP_USER_DATA_DIR='$USER_DATA_DIR' LOBE_DESKTOP_VITE_PORT=$VITE_PORT LOBE_IPC_ID='$IPC_ID'"
+  fi
 
-  : > "$ELECTRON_LOG"  # Truncate log
+  echo "[electron-dev] Starting Electron dev..."
+  echo "[electron-dev]   Project:   $PROJECT_ROOT"
+  echo "[electron-dev]   CDP port:  $CDP_PORT"
+  [ -n "$VITE_PORT" ] && echo "[electron-dev]   Vite port: $VITE_PORT"
+  [ -n "$USER_DATA_DIR" ] && echo "[electron-dev]   userData:  $USER_DATA_DIR"
+  [ -n "$IPC_ID" ] && echo "[electron-dev]   IPC id:    $IPC_ID"
+  echo "[electron-dev]   Log:       $ELECTRON_LOG"
 
-  # Launch in a new session (setsid) so the whole process tree shares a PGID
-  # we can later signal in one shot. `setsid bash -c '... exec ...' &` keeps
-  # the bash shell as the session leader; its PID is what we save.
-  # macOS doesn't ship setsid by default — fall back to plain bash; cleanup
-  # still works via `expand_descendants` walking the process tree.
+  mkdir -p "$(dirname "$ELECTRON_LOG")"
+  : >"$ELECTRON_LOG"
+
   local launch_cmd="
     cd '$PROJECT_ROOT/apps/desktop'
-    exec npx electron-vite dev -- --remote-debugging-port=$CDP_PORT
+    exec env $env_assignments npx electron-vite dev -- --remote-debugging-port=$CDP_PORT
   "
   if command -v setsid >/dev/null 2>&1; then
-    setsid bash -c "$launch_cmd" >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+    setsid bash -c "$launch_cmd" >>"$ELECTRON_LOG" 2>&1 </dev/null &
   else
-    bash -c "$launch_cmd" >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+    bash -c "$launch_cmd" >>"$ELECTRON_LOG" 2>&1 </dev/null &
   fi
   local launcher_pid=$!
-  echo "$launcher_pid" > "$PIDFILE"
+  echo "$launcher_pid" >"$PIDFILE"
   echo "[electron-dev] Launcher PID (session leader): $launcher_pid"
 
   if ! wait_for_cdp; then
@@ -292,12 +362,18 @@ do_start() {
     do_stop
     return 1
   fi
+  wait_for_renderer || true
 
-  if ! wait_for_renderer; then
-    echo "[electron-dev] Renderer not interactive — you may need to wait more."
+  if [ "$POOL_MODE" = "1" ]; then
+    echo "[electron-dev] Ready! Drive it with: agent-browser --session s$CDP_PORT --cdp $CDP_PORT snapshot -i"
+  else
+    echo "[electron-dev] Ready! Use: agent-browser --cdp $CDP_PORT snapshot -i"
   fi
+}
 
-  echo "[electron-dev] Ready! Use: agent-browser --cdp $CDP_PORT snapshot -i"
+# Quiet stop used at the head of start — never wipes userData.
+do_stop_quiet_for_start() {
+  KEEP_DATA=1 do_stop >/dev/null 2>&1 || true
 }
 
 do_restart() {
@@ -306,22 +382,81 @@ do_restart() {
   do_start
 }
 
+do_list() {
+  echo "[electron-dev] Pool instances (dir: $POOL_DIR):"
+  local found=0
+  if [ -d "$POOL_DIR" ]; then
+    local pf id port reach
+    for pf in "$POOL_DIR"/instance-*.pid; do
+      [ -e "$pf" ] || continue
+      found=1
+      id=$(basename "$pf" | sed -E 's/instance-([0-9]+)\.pid/\1/')
+      port=$((CDP_BASE + id))
+      if curl -sf --max-time 2 "http://localhost:${port}/json/version" >/dev/null 2>&1; then
+        reach="UP"
+      else
+        reach="down"
+      fi
+      echo "  instance $id → cdp $port [$reach], vite $((VITE_BASE + id)), ud $POOL_DIR/ud-$id"
+    done
+  fi
+  [ "$found" = "0" ] && echo "  (none)"
+}
+
+do_stop_all() {
+  local found=0
+  if [ -d "$POOL_DIR" ]; then
+    local pf id
+    for pf in "$POOL_DIR"/instance-*.pid; do
+      [ -e "$pf" ] || continue
+      found=1
+      id=$(basename "$pf" | sed -E 's/instance-([0-9]+)\.pid/\1/')
+      INSTANCE="$id"
+      derive_instance "$id"
+      do_stop
+    done
+  fi
+  [ "$found" = "0" ] && echo "[electron-dev] No pool instances to stop."
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
-case "${1:-help}" in
-  start)   do_start ;;
-  stop)    do_stop ;;
-  status)  do_status ;;
-  restart) do_restart ;;
+case "$CMD" in
+  start)
+    derive_instance "$INSTANCE"
+    do_start
+    ;;
+  stop)
+    if [ "$INSTANCE" = "--all" ]; then
+      do_stop_all
+    else
+      derive_instance "$INSTANCE"
+      do_stop
+    fi
+    ;;
+  status)
+    derive_instance "$INSTANCE"
+    do_status
+    ;;
+  restart)
+    derive_instance "$INSTANCE"
+    do_restart
+    ;;
+  list)
+    do_list
+    ;;
   *)
-    echo "Usage: $0 {start|stop|status|restart}"
+    echo "Usage: $0 {start|stop|status|restart} [<id>]   |   $0 stop --all   |   $0 list"
     echo ""
-    echo "  start   — Start Electron dev with CDP. Detects + tears down any"
-    echo "            existing project Electron (e.g. \`bun run dev\`) first."
-    echo "  stop    — Kill all project Electron/vite processes (main + helpers"
-    echo "            + descendants), with SIGTERM → 5s wait → SIGKILL fallback."
-    echo "  status  — Check if Electron is running and CDP is reachable."
-    echo "  restart — Stop then start."
+    echo "  start [<id>]   — Start an instance. No id = legacy single instance (CDP 9222)."
+    echo "                   <id> = pool member: CDP 9222+id, Vite 5173+id, own userData"
+    echo "                   (login copied from the golden profile) + IPC id."
+    echo "  stop [<id>]    — Stop an instance. Pool stop is sibling-safe. KEEP_DATA=1 to"
+    echo "                   preserve the instance's userData."
+    echo "  stop --all     — Stop every pool instance."
+    echo "  status [<id>]  — Check whether the instance's CDP is reachable."
+    echo "  restart [<id>] — Stop then start."
+    echo "  list           — List pool instances and their CDP reachability."
     exit 1
     ;;
 esac
