@@ -461,7 +461,8 @@ table ai_models {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, provider_id, user_id) [pk]
+    (id, provider_id, user_id) [name: 'ai_models_id_provider_id_user_id_unique', unique]
+    (id, provider_id, user_id, workspace_id) [name: 'ai_models_id_provider_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_models_user_id_idx']
     workspace_id [name: 'ai_models_workspace_id_idx']
   }
@@ -488,7 +489,8 @@ table ai_providers {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, user_id) [pk]
+    (id, user_id) [name: 'ai_providers_id_user_id_unique', unique]
+    (id, user_id, workspace_id) [name: 'ai_providers_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_providers_user_id_idx']
     workspace_id [name: 'ai_providers_workspace_id_idx']
   }
@@ -616,6 +618,42 @@ table verifications {
 
   indexes {
     identifier [name: 'verification_identifier_idx']
+  }
+}
+
+table client_bootstrap_metrics {
+  id text [pk, not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  app_version text [not null]
+  platform varchar [not null]
+  is_login boolean [not null]
+  cold boolean [not null]
+  total_ms integer [not null]
+  user_id text
+  anon_id text
+  browser text
+  os text
+  country text
+  details jsonb
+
+  indexes {
+    (app_version, created_at) [name: 'idx_bootstrap_metrics_version_created']
+    (platform, created_at) [name: 'idx_bootstrap_metrics_platform_created']
+    created_at [name: 'idx_bootstrap_metrics_created']
+    (cold, created_at) [name: 'idx_bootstrap_metrics_cold_created']
+  }
+}
+
+table client_bootstrap_spans {
+  id text [pk, not null]
+  metric_id text [not null]
+  name text [not null]
+  start_ms integer [not null]
+  dur_ms integer [not null]
+
+  indexes {
+    metric_id [name: 'idx_bootstrap_spans_metric']
+    name [name: 'idx_bootstrap_spans_name']
   }
 }
 

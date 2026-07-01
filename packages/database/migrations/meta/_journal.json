@@ -805,6 +805,13 @@
       "when": 1782009459420,
       "tag": "0114_add_verify_run_scenario_context",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1782895726665,
+      "tag": "0115_client_bootstrap_metrics",
+      "breakpoints": true
     }
   ],
   "version": "6"

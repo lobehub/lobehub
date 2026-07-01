@@ -1,11 +1,10 @@
 /**
  * @vitest-environment happy-dom
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   bootTimingSnapshot: vi.fn(() => ({ marks: {}, spans: [] })),
-  enableBusinessFeatures: vi.fn(() => true),
   getServerConfigStoreState: vi.fn(() => ({ serverConfig: { bootstrapMetricsSampleRate: 1 } })),
   getUserStoreState: vi.fn(() => ({ user: null })),
   isLogin: vi.fn(() => false),
@@ -18,9 +17,6 @@ vi.mock('@/libs/bootTiming', () => ({
 
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: mocks.getServerConfigStoreState,
-  serverConfigSelectors: {
-    enableBusinessFeatures: mocks.enableBusinessFeatures,
-  },
 }));
 
 vi.mock('@/store/user', () => ({
@@ -46,10 +42,11 @@ vi.mock('nanoid', () => ({
   nanoid: () => 'test-anon-id',
 }));
 
-const INGEST_URL = 'https://ingest.example.com/boot';
+const DEFAULT_INGEST_URL = '/api/ingest/bootstrap';
+const CUSTOM_INGEST_URL = 'https://ingest.example.com/boot';
 
 describe('startBootMetricsFinalize', () => {
-  let sendBeaconSpy: ReturnType<typeof vi.spyOn>;
+  let sendBeaconSpy: MockInstance<typeof navigator.sendBeacon>;
 
   beforeEach(() => {
     vi.resetModules();
@@ -86,7 +83,6 @@ describe('startBootMetricsFinalize', () => {
     vi.spyOn(performance, 'getEntriesByName').mockReturnValue([]);
 
     mocks.bootTimingSnapshot.mockReturnValue({ marks: {}, spans: [] });
-    mocks.enableBusinessFeatures.mockReturnValue(true);
     mocks.getServerConfigStoreState.mockReturnValue({
       serverConfig: { bootstrapMetricsSampleRate: 1 },
     });
@@ -94,7 +90,7 @@ describe('startBootMetricsFinalize', () => {
     mocks.isLogin.mockReturnValue(false);
     mocks.isProductUsageEventEnabled.mockReturnValue(true);
 
-    process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL = INGEST_URL;
+    delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
   });
 
   afterEach(() => {
@@ -102,25 +98,14 @@ describe('startBootMetricsFinalize', () => {
     delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
   });
 
-  it('does not call sendBeacon when ingest URL is unset', async () => {
-    delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
+  it('uses the same-origin ingest endpoint by default', async () => {
     const { startBootMetricsFinalize } = await import('./finalize');
     startBootMetricsFinalize();
     await vi.runAllTimersAsync();
-    expect(sendBeaconSpy).not.toHaveBeenCalled();
-  });
 
-  it('does not call sendBeacon when not cloud edition and not cloud host', async () => {
-    mocks.enableBusinessFeatures.mockReturnValue(false);
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: { hostname: 'localhost' },
-      writable: true,
-    });
-    const { startBootMetricsFinalize } = await import('./finalize');
-    startBootMetricsFinalize();
-    await vi.runAllTimersAsync();
-    expect(sendBeaconSpy).not.toHaveBeenCalled();
+    expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+    const [url] = sendBeaconSpy.mock.calls[0] as [string, Blob];
+    expect(url).toBe(DEFAULT_INGEST_URL);
   });
 
   it('does not call sendBeacon when telemetry is opted out', async () => {
@@ -143,6 +128,8 @@ describe('startBootMetricsFinalize', () => {
   });
 
   it('calls sendBeacon exactly once with text/plain Blob when all gates pass', async () => {
+    process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL = CUSTOM_INGEST_URL;
+
     const { startBootMetricsFinalize } = await import('./finalize');
     startBootMetricsFinalize();
     await vi.runAllTimersAsync();
@@ -150,7 +137,7 @@ describe('startBootMetricsFinalize', () => {
     expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
 
     const [url, blob] = sendBeaconSpy.mock.calls[0] as [string, Blob];
-    expect(url).toBe(INGEST_URL);
+    expect(url).toBe(CUSTOM_INGEST_URL);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe('text/plain');
 

@@ -3,35 +3,16 @@ import { nanoid } from 'nanoid';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { isProductUsageEventEnabled } from '@/libs/analytics/productUsageEvent';
 import { bootTiming } from '@/libs/bootTiming';
-import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { getUserStoreState } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import { buildBootMetricsPayload } from './buildPayload';
 
 const SEEN_KEY = 'lobe:boot:seen';
-
-const ALLOWED_HOSTNAMES = ['app.lobehub.com'];
+const DEFAULT_INGEST_URL = '/api/ingest/bootstrap';
 
 let sent = false;
-
-const isCloudHost = (): boolean => {
-  try {
-    return ALLOWED_HOSTNAMES.includes(window.location.hostname);
-  } catch {
-    return false;
-  }
-};
-
-const isCloudEdition = (): boolean => {
-  try {
-    const state = getServerConfigStoreState();
-    if (!state) return isCloudHost();
-    return serverConfigSelectors.enableBusinessFeatures(state);
-  } catch {
-    return false;
-  }
-};
 
 const readCold = (): boolean => {
   try {
@@ -95,14 +76,13 @@ const sendPayload = (ingestUrl: string): void => {
         : undefined;
 
     const navEntry = performance.getEntriesByType('navigation')[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+      PerformanceNavigationTiming | undefined;
     const navResponseStartMs = navEntry?.responseStart;
 
     const fcpEntry = performance.getEntriesByName('first-contentful-paint')[0];
     const fcpMs = fcpEntry?.startTime;
 
-    const isLogin = authSelectors.isLogin(userState);
+    const isLogin = Boolean(authSelectors.isLogin(userState));
     const userId = userState.user?.id;
 
     const payload = buildBootMetricsPayload({
@@ -131,17 +111,18 @@ const sendPayload = (ingestUrl: string): void => {
 
 export const startBootMetricsFinalize = (): void => {
   try {
-    const ingestUrl = process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
-    if (!ingestUrl) return;
+    const ingestUrl = process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL ?? DEFAULT_INGEST_URL;
 
-    if (!isCloudEdition()) return;
     if (!isProductUsageEventEnabled()) return;
 
     try {
       const state = getServerConfigStoreState();
       const sampleRate =
-        (state?.serverConfig as Record<string, unknown> & { bootstrapMetricsSampleRate?: number })
-          ?.bootstrapMetricsSampleRate ?? 1;
+        (
+          state?.serverConfig as unknown as {
+            bootstrapMetricsSampleRate?: number;
+          }
+        )?.bootstrapMetricsSampleRate ?? 1;
       if (Math.random() >= sampleRate) return;
     } catch {
       void 0;
