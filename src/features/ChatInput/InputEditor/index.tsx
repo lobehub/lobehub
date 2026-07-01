@@ -3,7 +3,6 @@ import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import {
   chainInputCompletion,
-  escapeXmlAttr,
   INPUT_COMPLETION_PROMPT_VERSION,
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
@@ -46,6 +45,7 @@ import {
 } from './ActionTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
+import { INSERT_LOCAL_FILE_MENTION_COMMAND } from './LocalFileMention';
 import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
@@ -435,13 +435,9 @@ const InputEditor = memo<{
     if (mention.metadata?.type === 'topic') {
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
-    if (mention.metadata?.type === 'localFile') {
-      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
-      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
-      const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
-
-      return `<localFile name="${name}" path="${path}"${isDirectory} />`;
-    }
+    // localFile references are their own node (LocalFileMentionNode) and serialize
+    // via that plugin's always-registered markdown writer — they never reach this
+    // generic mention writer, which is only wired up when mentionOption is enabled.
     return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
   }, []);
 
@@ -458,6 +454,12 @@ const InputEditor = memo<{
         type: String(option.metadata.actionType),
       };
       editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else if (option.metadata?.type === 'localFile') {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_MENTION_COMMAND, {
+        isDirectory: !!option.metadata.isDirectory,
+        name: String(option.metadata.name ?? option.label),
+        path: String(option.metadata.path ?? ''),
+      });
     } else {
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
         label: String(option.label),

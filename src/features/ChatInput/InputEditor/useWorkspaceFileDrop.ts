@@ -1,10 +1,9 @@
 import { WORKSPACE_FILE_DRAG_MIME } from '@lobechat/const';
-import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
-import { $getSelection, $isRangeSelection } from 'lexical';
 import type React from 'react';
 import { useCallback } from 'react';
 
 import { useChatInputStore } from '../store';
+import { INSERT_LOCAL_FILE_MENTION_COMMAND } from './LocalFileMention';
 import { readWorkspaceFileDragData } from './workspaceFileDragData';
 
 interface UseWorkspaceFileDropResult {
@@ -18,10 +17,11 @@ interface UseWorkspaceFileDropResult {
  * it never interferes with the file-upload drop zone (keyed off `Files`) or the
  * skill-chip drop (keyed off its own MIME).
  *
- * On drop it inserts a `localFile` mention — identical to the `@`-menu and
- * folder-drop paths (see {@link insertLocalFolderMentions}) — instead of
- * uploading the file. The markdownWriter in InputEditor serializes it to
- * `<localFile name="..." path="..." isDirectory />`.
+ * On drop it inserts a `LocalFileMention` node — the same compact icon+name chip
+ * used by the `@`-menu and folder-drop paths. That node owns its
+ * `<localFile … />` markdown writer via an always-registered plugin, so the drop
+ * serializes correctly even when the generic `mentionOption` writer is disabled
+ * (e.g. the web client with no other mention categories).
  */
 export const useWorkspaceFileDrop = (): UseWorkspaceFileDropResult => {
   const editor = useChatInputStore((s) => s.editor);
@@ -44,25 +44,11 @@ export const useWorkspaceFileDrop = (): UseWorkspaceFileDropResult => {
 
       if (!editor) return;
 
-      const lexicalEditor = editor.getLexicalEditor();
-      lexicalEditor?.focus();
-
-      editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-        label: payload.name,
-        metadata: {
-          isDirectory: payload.isDirectory,
-          name: payload.name,
-          path: payload.path,
-          type: 'localFile',
-        },
-      });
-
-      // Trailing space so the user can keep typing without adding one manually.
-      lexicalEditor?.update(() => {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          selection.insertText(' ');
-        }
+      editor.getLexicalEditor()?.focus();
+      editor.dispatchCommand(INSERT_LOCAL_FILE_MENTION_COMMAND, {
+        isDirectory: payload.isDirectory,
+        name: payload.name,
+        path: payload.path,
       });
     },
     [editor],
