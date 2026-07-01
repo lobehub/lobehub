@@ -104,6 +104,31 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('should still publish end event when visible output event publish fails', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'done', stepCount: 5 };
+      const error = new Error('redis down');
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+      mockStreamManager.publishStreamEvent.mockRejectedValueOnce(error);
+
+      try {
+        await coordinator.saveAgentState(operationId, newState as any);
+      } finally {
+        consoleError.mockRestore();
+      }
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: newState,
+        operationId,
+        reason: 'done',
+        stepIndex: newState.stepCount,
+        uiMessages: undefined,
+      });
+    });
+
     it('should publish end event when status changes to error', async () => {
       const operationId = 'test-operation-id';
       const previousState = { status: 'running', stepCount: 3 };
@@ -232,6 +257,34 @@ describe('AgentRuntimeCoordinator', () => {
 
       expect(mockStateManager.loadAgentState).toHaveBeenCalledWith(operationId);
       expect(mockStateManager.saveStepResult).toHaveBeenCalledWith(operationId, stepResult);
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId,
+        reason: 'done',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
+    });
+
+    it('should still publish step-result end event when visible output event publish fails', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'done', stepCount: 5 },
+        stepIndex: 5,
+      };
+      const error = new Error('redis down');
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+      mockStreamManager.publishStreamEvent.mockRejectedValueOnce(error);
+
+      try {
+        await coordinator.saveStepResult(operationId, stepResult as any);
+      } finally {
+        consoleError.mockRestore();
+      }
+
       expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
         finalState: stepResult.newState,
         operationId,

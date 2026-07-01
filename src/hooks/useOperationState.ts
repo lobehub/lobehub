@@ -39,8 +39,13 @@ export const useOperationState = (context: ConversationContext): OperationState 
     operationSelectors.isAgentRuntimeVisiblyRunningByContext(context)(s),
   );
 
-  // Check if input should show loading (sendMessage + AI runtime)
+  // Check if input actions should stay blocked until operation bookkeeping ends.
   const isInputLoading = useChatStore((s) =>
+    operationSelectors.isInputLoadingByContext(context)(s),
+  );
+
+  // Check if input should still show visible loading controls.
+  const isInputVisiblyLoading = useChatStore((s) =>
     operationSelectors.isInputVisiblyLoadingByContext(context)(s),
   );
 
@@ -122,6 +127,7 @@ export const useOperationState = (context: ConversationContext): OperationState 
       },
       isAIGenerating,
       isInputLoading,
+      isInputVisiblyLoading,
       sendMessageError,
     };
   }, [
@@ -130,6 +136,7 @@ export const useOperationState = (context: ConversationContext): OperationState 
     toolCallingStreamIds,
     isAIGenerating,
     isInputLoading,
+    isInputVisiblyLoading,
     sendMessageError,
   ]);
 

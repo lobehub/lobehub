@@ -93,7 +93,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   const isUpdating = useHomeStore((s) => s.agentUpdatingId === id);
 
   // Separate loading state from chat store - only show loading for this specific agent
-  const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
+  const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');

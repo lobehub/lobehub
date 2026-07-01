@@ -364,6 +364,7 @@ const AgentStreamEventSchema = z.object({
     'stream_start',
     'stream_chunk',
     'stream_end',
+    'visible_output_end',
     'stream_retry',
     'tool_start',
     'tool_end',

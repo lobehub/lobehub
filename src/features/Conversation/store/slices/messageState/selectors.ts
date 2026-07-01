@@ -59,9 +59,14 @@ const selectedMessageCount = (s: State) => s.selectedMessageIds.length;
 const isAIGenerating = (s: State) => s.operationState.isAIGenerating;
 
 /**
- * Check if input should be in loading state (from sendMessage through AI generation)
+ * Check if input actions should stay blocked until operation bookkeeping ends.
  */
 const isInputLoading = (s: State) => s.operationState.isInputLoading;
+
+/**
+ * Check if input should show visible loading controls.
+ */
+const isInputVisiblyLoading = (s: State) => s.operationState.isInputVisiblyLoading;
 
 /**
  * Get send message error for this context (if any)
@@ -189,6 +194,7 @@ export const messageStateSelectors = {
   isAIGenerating,
   isAssistantGroupItemGenerating,
   isInputLoading,
+  isInputVisiblyLoading,
   isMessageCollapsed,
   isMessageContinuing,
   isMessageCreating,

@@ -272,7 +272,7 @@ const ChatInput = memo<ChatInputProps>(
     }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
-    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputVisiblyLoading);
     const isInputQueueBlocked = useChatStore((s) =>
       operationSelectors.isInputLoadingByContext(context)(s),
     );

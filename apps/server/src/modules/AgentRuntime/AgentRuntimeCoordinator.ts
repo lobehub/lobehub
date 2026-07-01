@@ -152,11 +152,18 @@ export class AgentRuntimeCoordinator {
     state: AgentState,
     stepIndex: number,
   ): Promise<void> {
-    await this.streamEventManager.publishStreamEvent(operationId, {
-      data: { reason: state.status },
-      stepIndex,
-      type: 'visible_output_end',
-    });
+    try {
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: { reason: state.status },
+        stepIndex,
+        type: 'visible_output_end',
+      });
+    } catch (error) {
+      // Example: a transient Redis write failure may drop the early UI hint.
+      // Keep publishing agent_runtime_end because it is the authoritative
+      // terminal event that drains queues and reconciles final state.
+      console.error('Failed to publish visible_output_end:', error);
+    }
   }
 
   /**

@@ -591,10 +591,16 @@ describe('Operation Selectors', () => {
 
       const context = { agentId: 'agent1', topicId: 'topic1' };
 
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+      expect(operationSelectors.isAgentRuntimeRunning(result.current)).toBe(true);
+      expect(operationSelectors.isMainWindowAgentRuntimeRunning(result.current)).toBe(true);
       expect(operationSelectors.isAgentRuntimeRunningByContext(context)(result.current)).toBe(true);
       expect(operationSelectors.isInputLoadingByContext(context)(result.current)).toBe(true);
       expect(operationSelectors.canSendMessage(result.current)).toBe(false);
 
+      expect(operationSelectors.isAgentVisiblyRunning('agent1')(result.current)).toBe(false);
+      expect(operationSelectors.isAgentRuntimeVisiblyRunning(result.current)).toBe(false);
+      expect(operationSelectors.isMainWindowAgentRuntimeVisiblyRunning(result.current)).toBe(false);
       expect(
         operationSelectors.isAgentRuntimeVisiblyRunningByContext(context)(result.current),
       ).toBe(false);

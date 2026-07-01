@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
@@ -508,6 +509,24 @@ describe('createGatewayEventHandler', () => {
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
       expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('keeps topic loading when another message is queued in the same context', async () => {
+      const store = createMockStore();
+      (store as any).queuedMessages = {
+        [messageMapKey({ agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any)]: [
+          { content: 'next' },
+        ],
+      };
+      const handler = createHandler(store);
+
+      handler(makeEvent('visible_output_end'));
+      await flush();
+
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
   });
 
