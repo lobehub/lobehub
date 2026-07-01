@@ -15,7 +15,7 @@ interface ModelBreakdownProps {
 }
 
 const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation('spend');
 
   const columns = [
     {

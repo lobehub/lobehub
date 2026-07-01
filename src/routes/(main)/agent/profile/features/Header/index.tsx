@@ -36,7 +36,10 @@ import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'spend'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -88,7 +91,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { t } = useTranslation(['setting', 'chat', 'file', 'common', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -195,7 +198,7 @@ const Header = memo(() => {
       {
         icon: <Icon icon={BarChart3} />,
         key: 'usage-stats',
-        label: t('usageStats.entry', { ns: 'setting' }),
+        label: t('usageStats.entry', { ns: 'spend' }),
         onClick: () => {
           if (activeAgentId) navigate(`/agent/${activeAgentId}/stats`);
         },

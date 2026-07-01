@@ -1,7 +1,8 @@
 'use client';
 
 import { BarChart } from '@lobehub/charts';
-import { Block, Flexbox, Segmented, Skeleton, Text } from '@lobehub/ui';
+import { Block, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +23,7 @@ interface UsageTrendChartProps {
 }
 
 const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation('spend');
   const [type, setType] = useState<ShowType>(ShowType.Spend);
 
   const inputKey = t('usageStats.chart.input');

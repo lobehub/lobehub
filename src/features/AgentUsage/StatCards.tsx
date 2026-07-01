@@ -22,7 +22,7 @@ const desc = (text: string) => (
 );
 
 const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation('spend');
   const suffix = ` · ${rangeLabel}`;
 
   return (
@@ -42,7 +42,7 @@ const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
         statistic={{
           description: desc(
             t('usageStats.cards.cacheDesc', {
-              rate: Math.round(summary.cacheHitRate * 100),
+              rate: String(Math.round(summary.cacheHitRate * 100)),
               read: formatUsageValue(summary.cacheReadTokens),
             }),
           ),

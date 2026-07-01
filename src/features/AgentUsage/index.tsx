@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,7 +36,7 @@ const EMPTY_SUMMARY = {
 };
 
 const AgentUsage = memo(() => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation('spend');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
   const [range, setRange] = useState<TimeRange>('30d');
