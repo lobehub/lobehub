@@ -1,12 +1,13 @@
 'use client';
 
 import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
-import { Grid, Icon, Modal } from '@lobehub/ui';
+import { Grid, Icon } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { MessageSquare, Settings2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useGlobalStore } from '@/store/global';
 import { type HotkeyGroupId } from '@/types/hotkey';
 
@@ -23,7 +24,7 @@ const HotkeyHelperPanel = memo(() => {
   const handleClose = () => updateSystemStatus({ showHotkeyHelper: false });
 
   return (
-    <Modal
+    <ImperativeModal
       centered
       footer={null}
       open={open}
@@ -57,7 +58,7 @@ const HotkeyHelperPanel = memo(() => {
       <Grid gap={32}>
         <HotkeyContent groupId={active} />
       </Grid>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

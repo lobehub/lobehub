@@ -1,9 +1,9 @@
-import { Modal } from '@lobehub/ui';
 import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import PluginSettingsConfig from '@/features/PluginSettings';
 import { pluginHelpers } from '@/store/tool';
 
@@ -35,7 +35,7 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
     const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(schema);
 
     return (
-      <Modal
+      <ImperativeModal
         allowFullscreen
         destroyOnHidden
         footer={null}
@@ -76,7 +76,7 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
         ) : (
           <APIs id={id} />
         )}
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

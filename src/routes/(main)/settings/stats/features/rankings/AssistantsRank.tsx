@@ -1,11 +1,12 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { BarList } from '@lobehub/charts';
-import { ActionIcon, Avatar, Modal } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
@@ -82,7 +83,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
         />
       </StatsFormGroup>
       {showExtra && (
-        <Modal
+        <ImperativeModal
           footer={null}
           loading={isLoading || !data}
           open={open}
@@ -97,7 +98,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
             rightLabel={t('stats.assistantsRank.right')}
             onValueChange={(item) => navigate(item.link)}
           />
-        </Modal>
+        </ImperativeModal>
       )}
     </>
   );

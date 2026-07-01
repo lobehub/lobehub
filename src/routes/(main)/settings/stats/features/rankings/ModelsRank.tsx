@@ -1,11 +1,12 @@
 import { type ModelRankItem } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Modal } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
@@ -55,7 +56,7 @@ export const TopicsRank = memo(() => {
         />
       </StatsFormGroup>
       {showExtra && (
-        <Modal
+        <ImperativeModal
           footer={null}
           loading={isLoading || !data}
           open={open}
@@ -69,7 +70,7 @@ export const TopicsRank = memo(() => {
             loading={isLoading || !data}
             rightLabel={t('stats.modelsRank.right')}
           />
-        </Modal>
+        </ImperativeModal>
       )}
     </>
   );

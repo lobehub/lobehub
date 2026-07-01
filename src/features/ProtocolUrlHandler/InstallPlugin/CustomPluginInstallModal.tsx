@@ -1,10 +1,11 @@
 'use client';
 
-import { Alert, Block, Flexbox, Modal, Text } from '@lobehub/ui';
+import { Alert, Block, Flexbox, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { usePermission } from '@/hooks/usePermission';
@@ -178,7 +179,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       : t('protocolInstall.actions.installAnyway');
 
     return (
-      <Modal
+      <ImperativeModal
         open
         confirmLoading={loading || testState.loading}
         okButtonProps={{ disabled: !canCreate || !canEdit }}
@@ -221,7 +222,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
             )}
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

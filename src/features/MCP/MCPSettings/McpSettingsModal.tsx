@@ -1,8 +1,11 @@
 'use client';
 
-import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import ImperativeModal from '@/components/ImperativeModal';
 
 import { type SettingsRef } from './index';
 import Settings from './index';
@@ -41,7 +44,7 @@ const McpSettingsModal = memo<McpSettingsModalProps>(({ identifier, open, onClos
   );
 
   return (
-    <Modal
+    <ImperativeModal
       destroyOnHidden
       footer={footer}
       open={open}
@@ -50,7 +53,7 @@ const McpSettingsModal = memo<McpSettingsModalProps>(({ identifier, open, onClos
       onCancel={onClose}
     >
       <Settings hideFooter identifier={identifier} ref={settingsRef} />
-    </Modal>
+    </ImperativeModal>
   );
 });
 

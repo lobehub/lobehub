@@ -1,10 +1,11 @@
 'use client';
 
-import { Avatar, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
@@ -97,7 +98,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
           )}
         </Flexbox>
         {isCommunityMCP && (
-          <Modal
+          <ImperativeModal
             destroyOnHidden
             footer={null}
             open={detailOpen}
@@ -108,7 +109,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
             <Suspense fallback={<McpDetailLoading />}>
               <McpDetail noSettings identifier={identifier} />
             </Suspense>
-          </Modal>
+          </ImperativeModal>
         )}
         {isCustomPlugin && (
           <PluginDetailModal

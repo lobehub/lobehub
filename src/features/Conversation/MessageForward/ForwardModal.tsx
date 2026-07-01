@@ -1,12 +1,13 @@
 'use client';
 
 import { Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
-import { Button, Modal } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 import { useHomeStore } from '@/store/home';
@@ -148,7 +149,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
   const avatarOf = (avatar: unknown) => (typeof avatar === 'string' ? avatar : undefined);
 
   return (
-    <Modal
+    <ImperativeModal
       destroyOnHidden
       footer={null}
       open={open}
@@ -241,7 +242,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

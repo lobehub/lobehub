@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Modal, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
@@ -146,7 +148,7 @@ const MessengerSettings = memo(() => {
         )}
       </Flexbox>
 
-      <Modal
+      <ImperativeModal
         footer={null}
         open={blocked !== null}
         width={480}
@@ -175,7 +177,7 @@ const MessengerSettings = memo(() => {
             </Button>
           </Flexbox>
         )}
-      </Modal>
+      </ImperativeModal>
     </div>
   );
 });
