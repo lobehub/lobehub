@@ -111,10 +111,22 @@ export class AgentRuntime {
       if (runtimeContext.phase === 'human_approved_tool') {
         const approvedPayload = runtimeContext.payload as {
           approvedToolCall: ChatToolPayload;
+          assistantMessageId?: string;
           parentMessageId: string;
           skipCreateToolMessage: boolean;
         };
         const toolCalling = approvedPayload.approvedToolCall;
+
+        // The resume seeded an assistant placeholder (assistantMessageId) for
+        // this operation, but the first instruction here is a tool execution —
+        // not an LLM call — so nothing consumes the placeholder and it would be
+        // left as an empty orphan sibling once the follow-up call_llm creates
+        // its own message. Stash the id on state so the first call_llm after
+        // the tool result reuses the placeholder instead (consumed once, then
+        // cleared in the instruction loop below).
+        if (approvedPayload.assistantMessageId) {
+          newState.pendingAssistantMessageId = approvedPayload.assistantMessageId;
+        }
 
         rawInstructions = {
           payload: {
@@ -193,6 +205,14 @@ export class AgentRuntime {
 
         // Update state
         currentState = result.newState;
+
+        // A call_llm consumes any resume-seeded assistant placeholder exactly
+        // once — it has now either reused that message id or created its own —
+        // so clear the seed before the next step. Otherwise a later assistant
+        // turn in the same operation would reuse the id and overwrite this one.
+        if (instruction.type === 'call_llm' && currentState.pendingAssistantMessageId) {
+          currentState.pendingAssistantMessageId = undefined;
+        }
 
         // Keep the last nextContext
         if (result.nextContext) {

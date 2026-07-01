@@ -645,9 +645,13 @@ export class GeneralChatAgent implements Agent {
           return { reason: 'queued_message_interrupt', type: 'finish' };
         }
 
-        // No pending tools, continue to call LLM with tool results
+        // No pending tools, continue to call LLM with tool results.
+        // When this operation resumed by executing a tool first (e.g. the tools
+        // activator), reuse the placeholder seeded for that resume so this turn
+        // fills it instead of orphaning it (undefined for normal turns).
         return this.toLLMCall(
           {
+            assistantMessageId: state.pendingAssistantMessageId,
             messages: state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
@@ -683,9 +687,13 @@ export class GeneralChatAgent implements Agent {
           return { reason: 'queued_message_interrupt', type: 'finish' };
         }
 
-        // No pending tools, continue to call LLM with tool results
+        // No pending tools, continue to call LLM with tool results.
+        // When this operation resumed by executing a tool first (e.g. the tools
+        // activator), reuse the placeholder seeded for that resume so this turn
+        // fills it instead of orphaning it (undefined for normal turns).
         return this.toLLMCall(
           {
+            assistantMessageId: state.pendingAssistantMessageId,
             messages: state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
