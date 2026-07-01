@@ -211,8 +211,11 @@ export class AgentRuntimeCoordinator {
 
       // This ensures agent_runtime_end is sent after all step events.
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+        // Example: call_llm step 0 can early-publish visible_output_end, while
+        // AgentRuntime.step has already advanced newState.stepCount to 1.
+        // Compare/publish by the executor step index to avoid a duplicate hint.
         const stepIndex =
-          stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0;
+          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
         if (!hasVisibleOutputEndPublished(stepResult.newState, stepIndex)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         }

@@ -324,6 +324,35 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('does not republish visible_output_end when AgentRuntime.step advanced stepCount', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: {
+          metadata: { [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: 0 },
+          status: 'done',
+          stepCount: 1,
+        },
+        stepIndex: 0,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 0 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishStreamEvent).not.toHaveBeenCalledWith(
+        operationId,
+        expect.objectContaining({ type: 'visible_output_end' }),
+      );
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId,
+        reason: 'done',
+        stepIndex: 0,
+        uiMessages: undefined,
+      });
+    });
+
     it('still publishes terminal visible_output_end when an earlier step published it', async () => {
       const operationId = 'test-operation-id';
       const stepResult = {
