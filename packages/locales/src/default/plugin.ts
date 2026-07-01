@@ -113,6 +113,7 @@ export default {
   'builtins.github.render.error': 'Error',
   'builtins.github.render.rawResult': 'Raw result',
   'builtins.github.render.updatedAt': 'Updated {{time}}',
+  'builtins.linear.render.empty': 'No {{collection}} found',
   'builtins.linear.render.updatedAt': 'Updated {{time}}',
   'builtins.lobe-cloud-sandbox.apiName.editFile': 'Edit file',
   'builtins.lobe-cloud-sandbox.apiName.executeCode': 'Execute code',

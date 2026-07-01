@@ -32,6 +32,7 @@
   "builtins.github.render.error": "Error",
   "builtins.github.render.rawResult": "Raw result",
   "builtins.github.render.updatedAt": "Updated {{time}}",
+  "builtins.linear.render.empty": "No {{collection}} found",
   "builtins.linear.render.updatedAt": "Updated {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Activate Tools",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} not found",
