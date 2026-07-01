@@ -1,10 +1,9 @@
 'use client';
 
-import { ActionIcon, Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
 import { Button, Modal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { X } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -187,36 +186,12 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
 
         <div className={styles.divider} />
 
-        {/* Right: recipients + forwarded content + note */}
+        {/* Right: forwarded content preview + note */}
         <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
-          <Text strong>{t('messageForward.modal.recipients', { count: selectedIds.length })}</Text>
-          <Flexbox gap={4} style={{ maxHeight: 140, minHeight: 44, overflowY: 'auto' }}>
-            {selectedAgents.length === 0 ? (
-              <Text style={{ fontSize: 12, padding: '8px 0' }} type={'secondary'}>
-                {t('messageForward.modal.noRecipients')}
-              </Text>
-            ) : (
-              selectedAgents.map((agent) => (
-                <Flexbox horizontal align={'center'} className={styles.row} gap={8} key={agent.id}>
-                  <AgentAvatar avatar={avatarOf(agent.avatar)} />
-                  <Text ellipsis style={{ flex: 1 }}>
-                    {agent.title || t('untitledAgent')}
-                  </Text>
-                  <ActionIcon
-                    icon={X}
-                    size={'small'}
-                    title={t('messageForward.modal.removeRecipient')}
-                    onClick={() => toggle(agent.id)}
-                  />
-                </Flexbox>
-              ))
-            )}
-          </Flexbox>
-
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('messageForward.transcript.header', { count: preview.count })}
+          </Text>
           <Flexbox className={styles.preview} gap={4}>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {t('messageForward.transcript.header', { count: preview.count })}
-            </Text>
             {preview.lines.map((line, i) => (
               <div className={styles.previewLine} key={i}>
                 <Text strong style={{ fontSize: 12 }}>
