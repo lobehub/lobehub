@@ -127,3 +127,27 @@ is about not landing on that empty view when a better one exists.
 - [ ] Falls back to a populated view when the default would be empty. _(Certainty)_
 - [ ] Default decided from resolved state, not mid-load. _(Certainty)_
 - [ ] A manual pick is tracked separately and sticks. _(Natural)_
+
+## 1.7 Live / polling streams・Certainty・Natural
+
+A feed that **refreshes on a timer** (polling / subscription — a notification list, a task
+brief, an activity stream) is a _News Stream_ pattern, and it owes the user control over
+the churn. Silent background updates that reorder rows, or that quietly replace what the
+user is reading, break their place and their trust. Three things every live stream needs:
+a way to **know** something changed (an unobtrusive "N new" indicator, not a silent swap),
+a way to **pull** on demand (a manual refresh, so the user isn't hostage to the interval),
+and a promise **not to yank the ground** — don't reorder or drop the row under an active
+read/interaction; stage new items and let the user choose to merge them. And a refresh
+that _fails_ must not masquerade as "nothing new" — distinguish "failed to refresh" from
+"no updates" (pairs with §1.1 and Feedback §4.2).
+
+> ✅ A feed shows a "3 new" pill the user taps to bring new items in; a manual refresh
+> control sits in the header. ❌ A 10s poll silently reshuffles the list mid-read, and a
+> failed poll looks identical to an empty feed.
+
+**Checklist**
+
+- [ ] New background items are signaled (indicator / "N new"), not silently swapped in. _(Meaningful)_
+- [ ] Manual refresh available — the user isn't hostage to the poll interval. _(Certainty)_
+- [ ] Active read/interaction isn't reordered or dropped under the user; new items are staged. _(Natural)_
+- [ ] A failed refresh is distinct from "no new items", never shown as empty. _(Certainty)_

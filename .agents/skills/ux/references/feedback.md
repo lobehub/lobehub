@@ -50,14 +50,20 @@ fails again; keep any already-loaded context rather than blowing the surface awa
 > or failed request spin forever. Treat the failure path as required, not optional: it's a
 > large part of what makes the experience feel trustworthy.
 
+A common shape of this bug: the surface gates its "ready" render on an **init flag that is
+set only on a successful fetch** (`if (!isInit) return <Skeleton/>`). On error the flag
+never flips, so the skeleton is **permanent** — an infinite spinner wearing a skeleton's
+clothes. The error path must drive the flag / a separate `error` state, not be forgotten.
+
 > ✅ A panel whose data request errors or exceeds its timeout shows "加载失败" with a
 > **Reload** button that refetches. ❌ A `NeuralNetworkLoading` that spins indefinitely when
-> the request hangs, with no way forward. _(pairs with Read §1.1 error state, §4.1 loading
-> visuals.)_
+> the request hangs. ❌ `isInit` set only in the success handler, so a failed fetch leaves
+> the skeleton up forever. _(pairs with Read §1.1 error state, §4.1 loading visuals.)_
 
 **Checklist**
 
 - [ ] Every loading state has a terminal failure path — on error or after a bounded timeout, not an infinite spinner. _(Certainty)_
+- [ ] An init/ready flag isn't gated on success only — the error path resolves the loading state too, no permanent skeleton. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
 - [ ] Already-loaded context is preserved on failure — don't wipe the surface. _(Meaningful)_

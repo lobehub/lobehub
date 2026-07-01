@@ -92,10 +92,12 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
 - [ ] Large numbers roll the unit at each 1000× (K→M→B→T), never a coefficient ≥ 1000; use the shared `formatUsageValue` / `formatShortenNumber`.
 - [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
+- [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty).
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
-- [ ] Editors back up in-progress input locally and recover it after refresh/crash/failed-save; destructive exits warn, never silently discard.
+- [ ] Editors back up in-progress input to durable storage (survives reload, not in-memory only) and recover it after refresh/crash/failed-save; destructive exits warn, never silently discard.
+- [ ] Input affordances are stable: static placeholder, no clickable/retrievable content hidden in it.
 
 **Act — operations, flows & buttons** ([act.md](references/act.md))
 
@@ -118,6 +120,8 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 
 ## Related skills
 
+- **ux-audit** — a repeatable, _Designing Interfaces_-benchmarked audit of one surface; run
+  it to find gaps and land them back into these checklists.
 - **modal** — imperative `createModal` state-machine wiring for confirm/progress/done.
 - **DESIGN.md** (Voice & Content) — wording for confirm / done / empty / error states.
 - **react** — component priority, `Button` usage, styling.
