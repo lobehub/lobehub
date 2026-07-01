@@ -399,6 +399,8 @@
   "rename": "重命名",
   "reset": "重置",
   "restartToUpdate": "重启以更新",
+  "restoreToInput": "恢复到输入框",
+  "restoreToInputSuccess": "已恢复到输入框",
   "retry": "重试",
   "run": "运行",
   "save": "保存",

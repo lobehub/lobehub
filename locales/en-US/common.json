@@ -399,6 +399,8 @@
   "rename": "Rename",
   "reset": "Reset",
   "restartToUpdate": "Restart to Update",
+  "restoreToInput": "Restore to input",
+  "restoreToInputSuccess": "Restored to input",
   "retry": "Retry",
   "run": "Run",
   "save": "Save",

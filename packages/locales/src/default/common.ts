@@ -475,6 +475,8 @@ export default {
   'releaseNotes': 'Version Details',
   'rename': 'Rename',
   'reset': 'Reset',
+  'restoreToInput': 'Restore to input',
+  'restoreToInputSuccess': 'Restored to input',
   'retry': 'Retry',
   'run': 'Run',
   'save': 'Save',
