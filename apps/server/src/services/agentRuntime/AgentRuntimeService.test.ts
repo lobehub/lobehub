@@ -102,18 +102,14 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobechat/agent-runtime', () => ({
+// Spread the real module and override only `AgentRuntime` (to stub `.step()`).
+// Keeps the real status predicates + package-hosted executors (e.g. `finish`),
+// so this mock survives future executor migrations without edits.
+vi.mock('@lobechat/agent-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
-  // Mirror the real status predicates (packages/agent-runtime/src/utils/status.ts)
-  // so completion-lifecycle / getOperationStatus paths don't crash on the mock.
-  isBlockedStatus: (status: string) =>
-    status === 'waiting_for_human' ||
-    status === 'waiting_for_async_tool' ||
-    status === 'interrupted',
-  isParkedStatus: (status: string) =>
-    status === 'waiting_for_human' || status === 'waiting_for_async_tool',
 }));
 
 vi.mock('@/server/services/queue', () => ({
