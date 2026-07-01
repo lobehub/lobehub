@@ -56,7 +56,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   sheetSeamless: css`
     border: none;
     border-radius: 0;
-    background: transparent;
     box-shadow: none;
   `,
   titleSpacer: css`
