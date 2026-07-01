@@ -31,16 +31,26 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline: -4px;
     padding-inline: 4px;
   `,
+  // Shared container holding the message preview and the note input, split by a
+  // divider above the input.
   preview: css`
-    overflow-y: auto;
-    flex: 1;
-
-    padding-block: 12px;
-    padding-inline: 12px;
+    overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
+  `,
+  previewLines: css`
+    overflow-y: auto;
+    flex: 1;
+    padding-block: 12px;
+    padding-inline: 12px;
+  `,
+  note: css`
+    background: transparent;
+  `,
+  noteDivider: css`
+    block-size: 1px;
+    background: ${cssVar.colorBorderSecondary};
   `,
   previewLine: css`
     overflow: hidden;
@@ -191,31 +201,35 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('messageForward.transcript.header', { count: preview.count })}
           </Text>
-          <Flexbox className={styles.preview} gap={4}>
-            {preview.lines.map((line, i) => (
-              <div className={styles.previewLine} key={i}>
-                <Text strong style={{ fontSize: 12 }}>
-                  {line.role}:
-                </Text>{' '}
-                {line.text}
-              </div>
-            ))}
-            {preview.count > preview.lines.length && (
-              <div className={styles.previewMore}>
-                {t('messageForward.modal.moreMessages', {
-                  count: preview.count - preview.lines.length,
-                })}
-              </div>
-            )}
+          <Flexbox className={styles.preview} flex={1}>
+            <Flexbox className={styles.previewLines} flex={1} gap={4}>
+              {preview.lines.map((line, i) => (
+                <div className={styles.previewLine} key={i}>
+                  <Text strong style={{ fontSize: 12 }}>
+                    {line.role}:
+                  </Text>{' '}
+                  {line.text}
+                </div>
+              ))}
+              {preview.count > preview.lines.length && (
+                <div className={styles.previewMore}>
+                  {t('messageForward.modal.moreMessages', {
+                    count: preview.count - preview.lines.length,
+                  })}
+                </div>
+              )}
+            </Flexbox>
+            <div className={styles.noteDivider} />
+            <TextArea
+              autoSize={{ maxRows: 4, minRows: 2 }}
+              className={styles.note}
+              placeholder={t('messageForward.modal.notePlaceholder')}
+              resize={false}
+              value={note}
+              variant={'borderless'}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </Flexbox>
-
-          <TextArea
-            autoSize={{ maxRows: 4, minRows: 2 }}
-            placeholder={t('messageForward.modal.notePlaceholder')}
-            resize={false}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
 
           <Flexbox horizontal gap={8} justify={'flex-end'}>
             <Button onClick={handleClose}>{t('messageForward.bar.cancel')}</Button>
