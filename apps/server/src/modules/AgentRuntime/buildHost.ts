@@ -1,5 +1,6 @@
 import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
 
+import { ServerLifecycleSink } from './adapters/ServerLifecycleSink';
 import { ServerMessageTransport } from './adapters/ServerMessageTransport';
 import { ServerOperationStore } from './adapters/ServerOperationStore';
 import { ServerStreamSink } from './adapters/ServerStreamSink';
@@ -16,6 +17,11 @@ import { type RuntimeExecutorContext } from './context';
  * adapters get added here); today it covers the `finish` executor.
  */
 export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
+  // Only present when the operation registered hooks — mirrors the prior
+  // `if (ctx.hookDispatcher)` guard in the human-approve executor.
+  lifecycle: ctx.hookDispatcher
+    ? new ServerLifecycleSink(ctx.hookDispatcher, ctx.operationId)
+    : undefined,
   operation: {
     operationId: ctx.operationId,
     stepIndex: ctx.stepIndex,
