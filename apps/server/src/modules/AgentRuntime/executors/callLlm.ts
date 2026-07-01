@@ -64,6 +64,7 @@ import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { AiModelModel } from '@/database/models/aiModel';
 import { FileModel } from '@/database/models/file';
 import { MessageModel as MessageModelClass } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -290,9 +291,22 @@ export const callLlm =
         const modelKnowledgeCutoff =
           modelCard?.knowledgeCutoff ??
           (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
-        const modelDisplayName =
+        let modelDisplayName =
           modelCard?.displayName ??
           (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
+
+        // Custom/remote user models aren't in the bundled model bank, so both cards
+        // miss. Fall back to the user's own AI model record so server-side runs still
+        // surface identity (the inbox `{{model}}` fallback no longer exists).
+        if (!modelDisplayName && ctx.serverDB && ctx.userId) {
+          try {
+            const aiModelModel = new AiModelModel(ctx.serverDB, ctx.userId);
+            const userModel = await aiModelModel.findByIdAndProvider(model, provider);
+            modelDisplayName = userModel?.displayName ?? undefined;
+          } catch (error) {
+            log('Failed to resolve user model display name for %s: %O', model, error);
+          }
+        }
 
         let modelExtendParams = readExtendParams(modelCard);
 
