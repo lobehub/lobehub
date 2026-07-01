@@ -6,7 +6,7 @@ import {
   type BuilderSuggestionMode,
   chainBuilderSuggestion,
 } from '@lobechat/prompts';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 
 import { aiChatService } from '@/services/aiChat';
@@ -54,15 +54,11 @@ export const useBuilderSuggestions = ({
   const [nonce, setNonce] = useState(0);
   const markRegenerated = useBuilderSuggestionFeedbackStore((s) => s.markRegenerated);
 
-  // The context summary is deliberately NOT part of the SWR key: config autosaves
-  // stream in new summaries for the same target and must not trigger a refetch.
-  // We read the latest value from a ref at fetch time so target switches and
-  // manual refreshes (both change the key) always generate from fresh context.
-  const latestContextSummaryRef = useRef(contextSummary);
-  latestContextSummaryRef.current = contextSummary;
-
-  // Key on target identity only — a target switch or a nonce bump regenerates;
-  // autosaves that merely change the summary do not.
+  // Key on target identity only — the context summary is deliberately kept out of
+  // the key so config autosaves (which stream in new summaries for the same target)
+  // don't refetch. Only a target switch or a nonce bump regenerates; the fetcher
+  // closure reads the current summary, which is always the latest value on the
+  // render that changes the key.
   const key =
     enabled && contextSummary && model && provider
       ? (['builder-suggestion', mode, builderAgentId, targetId, nonce] as const)
@@ -72,7 +68,7 @@ export const useBuilderSuggestions = ({
     key,
     async ([, requestMode, requestBuilderAgentId]) => {
       const { messages, schema } = chainBuilderSuggestion({
-        contextSummary: latestContextSummaryRef.current,
+        contextSummary,
         locale,
         mode: requestMode,
       });
