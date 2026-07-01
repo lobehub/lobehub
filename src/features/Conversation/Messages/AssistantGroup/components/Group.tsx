@@ -85,23 +85,38 @@ const getTurnDurationMs = (
 };
 
 /**
- * `createdAt` of the turn's last step (its last child block resolved against the
- * raw `dbMessages`), normalized to epoch ms. Used to anchor the tail running
- * indicator's elapsed timer to "time since the last step" instead of the whole
- * run — the operation's own startTime marks the run's beginning.
+ * `createdAt` of the turn's last step, normalized to epoch ms. Used to anchor the
+ * tail running indicator's elapsed timer to "time since the last step" instead of
+ * the whole run — the operation's own startTime marks the run's beginning.
+ *
+ * When the last block ends on tool calls, its freshest message is the tool RESULT
+ * row (`result_msg_id`), created when the tool finished — not the assistant block
+ * that issued the call. Anchoring to the block id alone would fold the tool's
+ * runtime back into the elapsed time, defeating the point. So we take the latest
+ * `createdAt` across the block and its tool-result rows.
  */
 const getLastBlockCreatedAt = (
   dbMessages: { createdAt?: Date | number | string | null; id: string }[] | undefined,
-  lastBlockId: string | undefined,
+  lastBlock: AssistantContentBlock | undefined,
 ): number | undefined => {
-  if (!Array.isArray(dbMessages) || !lastBlockId) return undefined;
-  const message = dbMessages.find((item) => item.id === lastBlockId);
-  if (message?.createdAt == null) return undefined;
-  const time =
-    message.createdAt instanceof Date
-      ? message.createdAt.getTime()
-      : new Date(message.createdAt).getTime();
-  return Number.isNaN(time) ? undefined : time;
+  if (!Array.isArray(dbMessages) || !lastBlock) return undefined;
+
+  const candidateIds = new Set<string>([lastBlock.id]);
+  for (const tool of lastBlock.tools ?? []) {
+    if (tool.result_msg_id) candidateIds.add(tool.result_msg_id);
+  }
+
+  let latest: number | undefined;
+  for (const message of dbMessages) {
+    if (!candidateIds.has(message.id) || message.createdAt == null) continue;
+    const time =
+      message.createdAt instanceof Date
+        ? message.createdAt.getTime()
+        : new Date(message.createdAt).getTime();
+    if (Number.isNaN(time)) continue;
+    if (latest === undefined || time > latest) latest = time;
+  }
+  return latest;
 };
 
 interface PartitionedBlocks {
@@ -435,9 +450,10 @@ const Group = memo<GroupChildrenProps>(
     );
     const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
-    const lastBlockId = blocks.at(-1)?.id;
+    const lastBlock = blocks.at(-1);
+    const lastBlockId = lastBlock?.id;
     const lastBlockCreatedAt = useConversationStore((s) =>
-      getLastBlockCreatedAt(s.dbMessages, lastBlockId),
+      getLastBlockCreatedAt(s.dbMessages, lastBlock),
     );
 
     const { segments, postToolTailPromoted } = useMemo(
