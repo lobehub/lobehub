@@ -266,10 +266,18 @@ export class VerifyExecutorService {
       });
 
       if (!spawned?.verifierOperationId) {
+        // The runner resolved without an operation id — the spawn never
+        // persisted an operation. Log the returned shape at error level (this
+        // path lands in production runtime logs, unlike the debug-only `log`).
+        console.error(
+          '[verify] agent verifier returned no operation id for item %s: %O',
+          item.id,
+          spawned,
+        );
         await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
           completedAt: new Date(),
           status: 'failed',
-          toulmin: { limitation: 'Agent verifier failed to start.' },
+          toulmin: { limitation: 'Agent verifier failed to start (no operation id returned).' },
           verdict: 'uncertain',
         });
         return;
@@ -286,11 +294,18 @@ export class VerifyExecutorService {
         verifierOperationId: spawned.verifierOperationId,
       });
     } catch (error) {
-      log('agent verifier spawn failed for item %s: %O', item.id, error);
+      // Surface the real cause: the spawn throws during agent startup (before
+      // the verifier operation is persisted), and this catch previously only
+      // emitted a debug-level line + a generic limitation — so in production the
+      // actual error was invisible and the check just read "failed to start".
+      // Log at error level (reaches runtime logs) and thread the message into
+      // the verdict limitation so it is queryable from verify_check_results.
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error('[verify] agent verifier spawn failed for item %s: %O', item.id, error);
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
         status: 'failed',
-        toulmin: { limitation: 'Agent verifier failed to start.' },
+        toulmin: { limitation: `Agent verifier failed to start: ${detail}` },
         verdict: 'uncertain',
       });
     }
