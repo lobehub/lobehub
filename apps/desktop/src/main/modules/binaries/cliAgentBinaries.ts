@@ -215,14 +215,24 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
 >;
 
 // Well-known absolute install locations probed when a bare command isn't on
-// PATH. The Codex desktop app bundles a fully functional CLI inside Codex.app
-// (sharing ~/.codex auth/config) but never symlinks it into PATH, so
-// `which codex` misses an otherwise working install.
+// PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's
+// official installer can put `claude` under ~/.local/bin, while the Codex
+// desktop app bundles a functional CLI inside Codex.app without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
-  if (platform() !== 'darwin') return [];
-
   switch (agentType) {
+    case 'claude-code': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'claude'),
+        path.join(homedir(), '.bun', 'bin', 'claude'),
+        path.join(homedir(), '.npm-global', 'bin', 'claude'),
+        path.join(homedir(), 'Library', 'pnpm', 'claude'),
+      ];
+    }
     case 'codex': {
+      if (platform() !== 'darwin') return [];
+
       const bundledCli = path.join('Codex.app', 'Contents', 'Resources', 'codex');
       return [
         path.join('/Applications', bundledCli),
@@ -288,14 +298,17 @@ const defineValidatedBinary = (
 /**
  * Claude Code CLI
  * @see https://docs.claude.com/en/docs/claude-code
+ *
+ * Goes through `detectHeterogeneousCliCommand` so Finder/launchd-started
+ * desktop builds can still discover user-local installs such as
+ * `~/.local/bin/claude` when that directory is absent from the inherited PATH.
  */
-export const claudeCodeBinary: BinarySpec = defineValidatedBinary({
-  candidates: ['claude'],
+export const claudeCodeBinary: BinarySpec = {
   description: 'Claude Code - Anthropic official agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('claude-code', 'claude'),
   name: 'claude',
   priority: 1,
-  validateKeywords: ['claude code'],
-});
+};
 
 /**
  * OpenAI Codex CLI
