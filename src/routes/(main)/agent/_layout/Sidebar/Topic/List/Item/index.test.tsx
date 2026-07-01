@@ -93,6 +93,9 @@ vi.mock('@/store/chat', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     getAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
+    getVisibleAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
+    isAgentRuntimeRunningByContext: () => () => false,
+    isAgentRuntimeVisiblyRunningByContext: () => () => false,
     isTopicUnreadCompleted: () => () => false,
   },
 }));
