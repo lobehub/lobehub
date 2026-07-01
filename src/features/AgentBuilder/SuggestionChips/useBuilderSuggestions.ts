@@ -6,7 +6,7 @@ import {
   type BuilderSuggestionMode,
   chainBuilderSuggestion,
 } from '@lobechat/prompts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { aiChatService } from '@/services/aiChat';
@@ -40,41 +40,6 @@ type GenerateEnvelope = {
   tracingId?: string;
 } | null;
 
-interface BuilderSuggestionRequest {
-  builderAgentId: string;
-  contextSummary: string;
-  mode: BuilderSuggestionMode;
-  nonce: number;
-  targetId?: string;
-}
-
-type BuilderSuggestionTarget = Pick<
-  BuilderSuggestionRequest,
-  'builderAgentId' | 'mode' | 'targetId'
->;
-
-const createSuggestionRequest = ({
-  builderAgentId,
-  contextSummary,
-  mode,
-  nonce,
-  targetId,
-}: BuilderSuggestionRequest): BuilderSuggestionRequest => ({
-  builderAgentId,
-  contextSummary,
-  mode,
-  nonce,
-  targetId,
-});
-
-const isSameSuggestionTarget = (
-  request: BuilderSuggestionRequest | undefined,
-  { builderAgentId, mode, targetId }: BuilderSuggestionTarget,
-) =>
-  request?.builderAgentId === builderAgentId &&
-  request.mode === mode &&
-  request.targetId === targetId;
-
 export const useBuilderSuggestions = ({
   mode,
   builderAgentId,
@@ -85,45 +50,29 @@ export const useBuilderSuggestions = ({
   enabled,
   targetId,
 }: UseBuilderSuggestionsParams): BuilderSuggestionsResult => {
+  // Bumping the nonce forces a fresh generation (SWR key change) on manual refresh.
+  const [nonce, setNonce] = useState(0);
+  const markRegenerated = useBuilderSuggestionFeedbackStore((s) => s.markRegenerated);
+
+  // The context summary is deliberately NOT part of the SWR key: config autosaves
+  // stream in new summaries for the same target and must not trigger a refetch.
+  // We read the latest value from a ref at fetch time so target switches and
+  // manual refreshes (both change the key) always generate from fresh context.
   const latestContextSummaryRef = useRef(contextSummary);
   latestContextSummaryRef.current = contextSummary;
 
-  const [request, setRequest] = useState<BuilderSuggestionRequest | undefined>(() =>
-    enabled && contextSummary
-      ? createSuggestionRequest({ builderAgentId, contextSummary, mode, nonce: 0, targetId })
-      : undefined,
-  );
-  const markRegenerated = useBuilderSuggestionFeedbackStore((s) => s.markRegenerated);
-
-  useEffect(() => {
-    if (!enabled || !contextSummary) return;
-
-    setRequest((previousRequest) => {
-      if (isSameSuggestionTarget(previousRequest, { builderAgentId, mode, targetId })) {
-        return previousRequest;
-      }
-
-      return createSuggestionRequest({ builderAgentId, contextSummary, mode, nonce: 0, targetId });
-    });
-  }, [builderAgentId, contextSummary, enabled, mode, targetId]);
-
+  // Key on target identity only — a target switch or a nonce bump regenerates;
+  // autosaves that merely change the summary do not.
   const key =
-    enabled && request && model && provider
-      ? ([
-          'builder-suggestion',
-          request.mode,
-          request.builderAgentId,
-          request.targetId,
-          request.contextSummary,
-          request.nonce,
-        ] as const)
+    enabled && contextSummary && model && provider
+      ? (['builder-suggestion', mode, builderAgentId, targetId, nonce] as const)
       : null;
 
   const { data, isLoading, error } = useSWR(
     key,
-    async ([, requestMode, requestBuilderAgentId, , requestContextSummary]) => {
+    async ([, requestMode, requestBuilderAgentId]) => {
       const { messages, schema } = chainBuilderSuggestion({
-        contextSummary: requestContextSummary,
+        contextSummary: latestContextSummaryRef.current,
         locale,
         mode: requestMode,
       });
@@ -160,21 +109,8 @@ export const useBuilderSuggestions = ({
 
   const refresh = useCallback(() => {
     markRegenerated(data?.tracingId);
-    const latestContextSummary = latestContextSummaryRef.current;
-    if (!enabled || !latestContextSummary) return;
-
-    setRequest((previousRequest) =>
-      createSuggestionRequest({
-        builderAgentId,
-        contextSummary: latestContextSummary,
-        mode,
-        nonce: isSameSuggestionTarget(previousRequest, { builderAgentId, mode, targetId })
-          ? previousRequest!.nonce + 1
-          : 1,
-        targetId,
-      }),
-    );
-  }, [builderAgentId, data?.tracingId, enabled, markRegenerated, mode, targetId]);
+    setNonce((n) => n + 1);
+  }, [data?.tracingId, markRegenerated]);
 
   return {
     error,
