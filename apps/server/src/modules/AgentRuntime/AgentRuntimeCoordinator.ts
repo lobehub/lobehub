@@ -180,7 +180,7 @@ export class AgentRuntimeCoordinator {
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
-        if (!hasVisibleOutputEndPublished(state)) {
+        if (!hasVisibleOutputEndPublished(state, stepIndex)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({
@@ -213,7 +213,7 @@ export class AgentRuntimeCoordinator {
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
         const stepIndex =
           stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0;
-        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
+        if (!hasVisibleOutputEndPublished(stepResult.newState, stepIndex)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
         }
         await this.streamEventManager.publishAgentRuntimeEnd({

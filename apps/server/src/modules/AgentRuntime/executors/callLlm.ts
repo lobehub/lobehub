@@ -99,7 +99,7 @@ import {
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
-import { VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY } from '../visibleOutputEnd';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 
 export const callLlm =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -108,7 +108,7 @@ export const callLlm =
     const llmPayload = payload as CallLLMPayload;
     const { operationId, stepIndex, streamManager } = ctx;
     const events: AgentEvent[] = [];
-    let visibleOutputEndPublished = false;
+    let visibleOutputEndPublishedStepIndex: number | undefined;
 
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
@@ -1446,7 +1446,7 @@ export const callLlm =
                     stepIndex,
                     type: 'visible_output_end',
                   });
-                  visibleOutputEndPublished = true;
+                  visibleOutputEndPublishedStepIndex = stepIndex;
                 } catch (error) {
                   // Terminal saveStepResult still publishes the same hint as a fallback.
                   console.error('Failed to publish visible_output_end:', error);
@@ -1569,11 +1569,12 @@ export const callLlm =
               }
 
               // Propagate stepLabel from instruction to state metadata for hook consumers
-              if (stepLabel || visibleOutputEndPublished) {
+              if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
                 const stateMetadata = { ...newState.metadata };
                 if (stepLabel) stateMetadata._stepLabel = stepLabel;
-                if (visibleOutputEndPublished) {
-                  stateMetadata[VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY] = true;
+                if (visibleOutputEndPublishedStepIndex !== undefined) {
+                  stateMetadata[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY] =
+                    visibleOutputEndPublishedStepIndex;
                 }
                 newState.metadata = stateMetadata;
               }

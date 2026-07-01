@@ -7,7 +7,7 @@ import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
-import { VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY } from '../visibleOutputEnd';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -467,7 +467,7 @@ describe('RuntimeExecutors', () => {
         mockStreamManager.publishStreamEvent.mock.invocationCallOrder[visibleEndIndex],
       ).toBeLessThan(mockMessageModel.update.mock.invocationCallOrder[0]);
       expect(result.newState.metadata).toMatchObject({
-        [VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY]: true,
+        [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: ctx.stepIndex,
       });
     });
 
@@ -505,7 +505,9 @@ describe('RuntimeExecutors', () => {
           ([, event]) => event.type === 'visible_output_end',
         ),
       ).toBe(false);
-      expect(result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY]).toBeUndefined();
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
     });
 
     // preserveThinking gates whether reasoning is replayed into the next LLM

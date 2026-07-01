@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeCoordinator } from '../AgentRuntimeCoordinator';
 import { createAgentStateManager, createStreamEventManager } from '../factory';
-import { VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY } from '../visibleOutputEnd';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 
 // Mock factory module to avoid Redis/env access
 vi.mock('../factory', () => ({
@@ -300,7 +300,7 @@ describe('AgentRuntimeCoordinator', () => {
       const stepResult = {
         executionTime: 1000,
         newState: {
-          metadata: { [VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY]: true },
+          metadata: { [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: 5 },
           status: 'done',
           stepCount: 5,
         },
@@ -322,6 +322,30 @@ describe('AgentRuntimeCoordinator', () => {
         stepIndex: 5,
         uiMessages: undefined,
       });
+    });
+
+    it('still publishes terminal visible_output_end when an earlier step published it', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: {
+          metadata: { [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: 3 },
+          status: 'done',
+          stepCount: 5,
+        },
+        stepIndex: 5,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(operationId, {
+        data: { reason: 'done' },
+        stepIndex: 5,
+        type: 'visible_output_end',
+      });
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalled();
     });
 
     it('should publish end event when status becomes error', async () => {
