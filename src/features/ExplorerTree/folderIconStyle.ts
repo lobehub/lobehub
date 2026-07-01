@@ -15,6 +15,12 @@ const FILE_ICON_SIZE = '16px';
 // `--trees-item-row-gap` exactly.
 const RESERVED_FILE_ICON_OFFSET = '22px';
 
+// Lucide `file-text` glyph (v1.17.0), matched to the Pages (文稿) list item icon
+// so document rows read as manuscripts rather than generic files. Painted as a
+// CSS mask (not a background-image) so the slot inherits the themed tree
+// foreground color instead of the colored material `file.svg`.
+const FILE_TEXT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`;
+
 const MATERIAL_FILE_ICON_ASSETS_URL = genCdnUrl({
   path: 'assets',
   pkg: '@lobehub/assets-fileicon',
@@ -114,6 +120,8 @@ const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('
 
 const cssUrl = (url: string) => `url("${cssString(url)}")`;
 
+const svgMaskUrl = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+
 const iconUrl = (iconsUrl: string, iconName: string, open = false) =>
   `${iconsUrl}/${iconName}${open ? '-open' : ''}.svg`;
 
@@ -203,7 +211,15 @@ ${MATERIAL_FILE_PREFIX_RULES.map(({ iconName, prefixes }) =>
 ).join('\n')}
 `;
 
-export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL) => `
+// pierre renders its own <svg> in the file icon slot; we paint the material /
+// 文稿 glyph over it, so hide the built-in one.
+const HIDE_FILE_SLOT_SVG_CSS = `
+  [data-item-type="file"] > [data-item-section="icon"] > svg {
+    visibility: hidden;
+  }
+`;
+
+const getFolderIconCSS = (iconsUrl: string) => `
   [data-item-type="folder"] [data-item-section="content"] {
     display: flex;
     align-items: center;
@@ -222,6 +238,11 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
   [data-item-type="folder"][aria-expanded="true"] [data-item-section="content"]::before {
     background-image: ${iconBackground(iconsUrl, 'folder', true)};
   }
+${getFolderIconRules(iconsUrl)}
+`;
+
+// Material file icons keyed off extension / name (js, json, .gitignore, …).
+const getMaterialFileIconCSS = (iconsUrl: string) => `
   [data-item-type="file"] > [data-item-section="icon"] {
     margin-inline-start: var(${FILE_ICON_OFFSET_VAR}, 0px);
     background-image: ${iconBackground(iconsUrl, 'file')};
@@ -229,14 +250,42 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
     background-repeat: no-repeat;
     background-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
   }
-  [data-item-type="file"] > [data-item-section="icon"] > svg {
-    visibility: hidden;
-  }
-${getFolderIconRules(iconsUrl)}
+${HIDE_FILE_SLOT_SVG_CSS}
 ${getFileIconRules(iconsUrl)}
 `;
 
+// Every row in the agent documents tree is a manuscript, so paint the file slot
+// with the shared 文稿 glyph (themed, monochrome) instead of extension-specific
+// material icons.
+const DOCUMENT_FILE_ICON_CSS = `
+  [data-item-type="file"] > [data-item-section="icon"] {
+    margin-inline-start: var(${FILE_ICON_OFFSET_VAR}, 0px);
+    background-color: var(--trees-fg-override, currentColor);
+    -webkit-mask-image: ${svgMaskUrl(FILE_TEXT_ICON_SVG)};
+    -webkit-mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
+    mask-image: ${svgMaskUrl(FILE_TEXT_ICON_SVG)};
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
+  }
+${HIDE_FILE_SLOT_SVG_CSS}
+`;
+
+export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL) => `
+${getFolderIconCSS(iconsUrl)}
+${getMaterialFileIconCSS(iconsUrl)}
+`;
+
 export const FOLDER_ICON_CSS = getExplorerTreeIconCSS();
+
+// Folder rows keep their material icons; file rows use the 文稿 glyph. Used by
+// the agent documents tree only — the project Files tree keeps FOLDER_ICON_CSS.
+export const DOCUMENT_TREE_ICON_CSS = `
+${getFolderIconCSS(MATERIAL_FILE_ICON_ASSETS_URL)}
+${DOCUMENT_FILE_ICON_CSS}
+`;
 
 // pierre/trees marks the clicked row as model-focused, which otherwise paints
 // a pointer-only ring.

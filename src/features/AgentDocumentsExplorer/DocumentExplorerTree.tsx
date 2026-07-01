@@ -15,8 +15,8 @@ import type {
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import {
+  DOCUMENT_TREE_ICON_CSS,
   ExplorerTree,
-  FOLDER_ICON_CSS,
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
@@ -33,7 +33,7 @@ import { canDropDocument } from './utils/canDrop';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-const DOCUMENT_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
