@@ -714,6 +714,48 @@ describe('GatewayActionImpl', () => {
       });
     });
 
+    it('should keep optimistic topic metadata when replacing the placeholder topic id', async () => {
+      const { action, internalReplaceTopicId } = createExecuteTestAction();
+      const selectedRepo = 'https://github.com/lobehub/lobehub';
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: null, threadId: null, scope: 'main' },
+        message: 'Create a project topic',
+        optimisticTopic: {
+          id: 'tmp-topic',
+          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          title: 'Create a project topic',
+        },
+      });
+
+      expect(internalReplaceTopicId).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        nextId: 'topic-1',
+        previousId: 'tmp-topic',
+        value: {
+          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          sessionId: 'agent-1',
+          title: 'Create a project topic',
+        },
+      });
+    });
+
     it('should forward metadata trigger to execAgentTask', async () => {
       const { action } = createExecuteTestAction();
 
