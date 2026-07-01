@@ -1,5 +1,5 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
-import { type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -28,7 +28,6 @@ const styles = createStaticStyles(({ css }) => ({
   arrowIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
-
     transition: transform 0.15s ease;
 
     @media (prefers-reduced-motion: reduce) {
@@ -102,7 +101,6 @@ const styles = createStaticStyles(({ css }) => ({
   hero: css`
     padding: 16px;
     border-radius: ${cssVar.borderRadius};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   heroValue: css`
@@ -135,9 +133,7 @@ const styles = createStaticStyles(({ css }) => ({
   progressFill: css`
     height: 100%;
     border-radius: 999px;
-
     background: ${cssVar.colorPrimary};
-
     transition: width 0.3s ease;
 
     @media (prefers-reduced-motion: reduce) {

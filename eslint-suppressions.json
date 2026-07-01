@@ -84,11 +84,6 @@
       "count": 1
     }
   },
-  "src/components/SplitButton/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/AgentDocumentsExplorer/ConvertToSkillModal.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -1255,11 +1250,6 @@
     }
   },
   "src/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/routes/(main)/eval/bench/[benchmarkId]/features/TestCasesTab/index.tsx": {
     "no-restricted-imports": {
       "count": 1
     }

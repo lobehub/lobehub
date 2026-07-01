@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, Plus } from 'lucide-react';
 import { memo } from 'react';
@@ -72,7 +73,7 @@ const RunCards = memo<RunCardsProps>(({ datasetId, onCreateRun, benchmarkId }) =
               {t('run.empty.description')}
             </Text>
           </Flexbox>
-          <Button icon={Plus} size="small" variant="filled" onClick={onCreateRun}>
+          <Button icon={<Plus size={14} />} size="small" type="primary" onClick={onCreateRun}>
             {t('run.actions.create')}
           </Button>
         </Flexbox>

@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
+import { type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import { type FC } from 'react';
