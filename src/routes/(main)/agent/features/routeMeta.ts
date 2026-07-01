@@ -1,4 +1,5 @@
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, MessagesSquareIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
@@ -53,4 +54,36 @@ export const agentRouteMeta = routeMeta({
   DynamicMeta: AgentDynamicMeta,
   icon: MessageSquare,
   titleKey: 'navigation.chat',
+});
+
+const TopicsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('electron');
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const meta = useAgentStore((s) => {
+    const agentId = params.aid ?? '';
+    const agent = s.agentMap[agentId];
+
+    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
+
+    return agentSelectors.getAgentMetaById(agentId)(s);
+  });
+  const hasMeta = Object.keys(meta).length > 0;
+  const agentTitle = hasMeta ? meta.title : undefined;
+
+  usePublishDynamicRouteMeta(
+    {
+      avatar: meta.avatar,
+      backgroundColor: meta.backgroundColor,
+      title: [t('navigation.topics'), agentTitle].filter(Boolean).join(' · ') || undefined,
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const topicsRouteMeta = routeMeta({
+  DynamicMeta: TopicsDynamicMeta,
+  icon: MessagesSquareIcon,
+  titleKey: 'navigation.topics',
 });

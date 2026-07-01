@@ -30,6 +30,7 @@ export default {
   'navigation.settings': 'Settings',
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',
+  'navigation.topics': 'Topics',
   'navigation.unpin': 'Unpin',
   'fleet.addColumn': 'Add column',
   'fleet.createTask': 'Create task',

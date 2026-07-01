@@ -63,6 +63,7 @@
   "navigation.settings": "设置",
   "navigation.task": "任务",
   "navigation.tasks": "任务",
+  "navigation.topics": "话题",
   "navigation.unpin": "取消固定",
   "notification.finishChatGeneration": "AI 消息已生成完毕",
   "proxy.auth": "需要认证",

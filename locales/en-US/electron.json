@@ -63,6 +63,7 @@
   "navigation.settings": "Settings",
   "navigation.task": "Task",
   "navigation.tasks": "Tasks",
+  "navigation.topics": "Topics",
   "navigation.unpin": "Unpin",
   "notification.finishChatGeneration": "AI message generation completed",
   "proxy.auth": "Authentication Required",
