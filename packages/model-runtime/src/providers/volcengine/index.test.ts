@@ -121,5 +121,21 @@ describe('LobeVolcengineAI - custom features', () => {
       expect(calledPayload.thinking).toEqual({ type: 'enabled' });
       expect(calledPayload.reasoning.effort).toBe('high');
     });
+
+    it('should enable parallel_tool_calls for doubao-seed models with tools', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'doubao-seed-2.0-pro',
+        tools: [
+          {
+            function: { name: 'lobe-creds____injectCredsToSandbox', parameters: {} },
+            type: 'function',
+          },
+        ],
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.parallel_tool_calls).toBe(true);
+    });
   });
 });

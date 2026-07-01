@@ -37,6 +37,11 @@ export interface StreamContext {
    */
   returnedCitationArray?: ChatCitationItem[];
   /**
+   * Volcengine Doubao Seed: buffer for in-flight `seed:tool_call` text blocks
+   * that span multiple stream chunks before the closing tag arrives.
+   */
+  seedToolCallBuffer?: string;
+  /**
    * O series models need a condition to separate part
    */
   startReasoning?: boolean;

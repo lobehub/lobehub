@@ -3,6 +3,9 @@ import { ModelProvider } from 'model-bank';
 import type { ChatStreamPayload } from '@/types/index';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { OpenAIStream } from '../../core/streams/openai/openai';
+import { isDoubaoSeedModel } from '../../core/streams/volcengine/parseSeedToolCall';
+import { VolcengineSeedAIStream } from '../../core/streams/volcengine/seedStream';
 import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';
@@ -61,7 +64,16 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
         ...rest,
         ...(params.thinking?.type && { thinking: { type: params.thinking.type } }),
         ...(params.reasoning_effort && { reasoning_effort: params.reasoning_effort }),
+        ...(payload.tools?.length &&
+          isDoubaoSeedModel(payload.model) && { parallel_tool_calls: true }),
       } as any;
+    },
+    handleStream: (stream, options) => {
+      if (isDoubaoSeedModel(options.payload?.model) && options.payload?.tools?.length) {
+        return VolcengineSeedAIStream(stream, options);
+      }
+
+      return OpenAIStream(stream, options);
     },
   },
   createImage: createVolcengineImage,
