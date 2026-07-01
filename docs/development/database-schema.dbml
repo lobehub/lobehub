@@ -461,8 +461,7 @@ table ai_models {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, provider_id, user_id) [name: 'ai_models_id_provider_id_user_id_unique', unique]
-    (id, provider_id, user_id, workspace_id) [name: 'ai_models_id_provider_id_user_id_workspace_id_unique', unique]
+    (id, provider_id, user_id) [pk]
     user_id [name: 'ai_models_user_id_idx']
     workspace_id [name: 'ai_models_workspace_id_idx']
   }
@@ -489,8 +488,7 @@ table ai_providers {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, user_id) [name: 'ai_providers_id_user_id_unique', unique]
-    (id, user_id, workspace_id) [name: 'ai_providers_id_user_id_workspace_id_unique', unique]
+    (id, user_id) [pk]
     user_id [name: 'ai_providers_user_id_idx']
     workspace_id [name: 'ai_providers_workspace_id_idx']
   }
