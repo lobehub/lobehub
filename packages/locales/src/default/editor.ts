@@ -43,6 +43,7 @@ export default {
   'actionTag.category.tool': 'Tool',
   'actionTag.tooltip.agentSkill':
     "Loads a skill bundle from this agent's documents for the request.",
+  'actionTag.tooltip.clickToView': 'Click to view details',
   'actionTag.tooltip.command': 'Runs a client-side slash command before sending.',
   'actionTag.tooltip.projectSkill':
     "Sent as a slash invocation so the agent's CLI runs the matching project skill.",
