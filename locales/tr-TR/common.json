@@ -1,5 +1,6 @@
 {
   "about": "Hakkında",
+  "addNew": "Yeni ekle",
   "advanceSettings": "Gelişmiş Ayarlar",
   "agentOnboardingPromo.actionLabel": "Şimdi dene",
   "agentOnboardingPromo.description": "Aracı ekiplerinizi Lobe AI ile kısa bir sohbet üzerinden kurun. Mevcut aracılarınız değişmeden kalır.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "İçerik politikası kontrolü başarısız oldu. Lütfen isteminizi gözden geçirin.",
   "getDesktopApp": "Masaüstü Uygulamasını İndir",
   "goToTarget": "Hedefe git",
+  "gotIt": "Anladım",
   "historyRange": "Geçmiş Aralığı",
   "home.suggestQuestions": "Bu örnekleri deneyin",
   "import": "İçe Aktar",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Aşağı taşı",
   "navPanel.moveUp": "Yukarı taşı",
   "navPanel.pinned": "Sabitlendi",
+  "navPanel.privateAgents": "Özel",
+  "navPanel.publicAgents": "Çalışma Alanı",
   "navPanel.resetDefault": "Varsayılan Ayarlara Sıfırla",
   "navPanel.searchAgent": "Temsilci Ara...",
   "navPanel.searchRecent": "Son Arananlar...",

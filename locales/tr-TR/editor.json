@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Beceri",
   "actionTag.category.tool": "Araç",
   "actionTag.tooltip.agentSkill": "Bu temsilcinin belgelerinden isteğe yönelik bir beceri paketi yükler.",
+  "actionTag.tooltip.clickToView": "Detayları görmek için tıklayın",
   "actionTag.tooltip.command": "Göndermeden önce istemci tarafında bir slash komutu çalıştırır.",
   "actionTag.tooltip.projectSkill": "Ajanın CLI'sinin eşleşen proje becerisini çalıştırması için bir eğik çizgi çağrısı olarak gönderilir.",
   "actionTag.tooltip.skill": "Bu istek için yeniden kullanılabilir bir beceri paketini yükler.",

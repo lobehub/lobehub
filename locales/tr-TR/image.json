@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Oluşturma Konusunu Sil",
   "topic.deleteConfirmDesc": "Bu oluşturma konusunu silmek üzeresiniz. Bu işlem geri alınamaz, lütfen dikkatli olun.",
   "topic.empty": "Henüz oluşturma konusu yok",
+  "topic.privateTitle": "Özel",
   "topic.title": "Resim Teması",
-  "topic.untitled": "Varsayılan Konu"
+  "topic.untitled": "Varsayılan Konu",
+  "topic.visibility.existingLocked": "Mevcut konunun görünürlüğü sabitlenmiştir. Farklı bir alan seçmek için yeni bir konu oluşturun.",
+  "topic.workspaceTitle": "Çalışma Alanı"
 }

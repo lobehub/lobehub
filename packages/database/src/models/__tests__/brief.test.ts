@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentCronJobs, agents, briefs, tasks, users } from '../../schemas';
+import { agentCronJobs, agents, briefs, tasks, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { BriefModel } from '../brief';
 
@@ -119,6 +119,58 @@ describe('BriefModel', () => {
       const { briefs } = await model.list({ type: 'decision' });
       expect(briefs).toHaveLength(1);
       expect(briefs[0].type).toBe('decision');
+    });
+
+    it('should not leak briefs across users in workspace mode', async () => {
+      const wsId = 'brief-leak-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({
+          id: wsId,
+          name: 'Brief Leak WS',
+          primaryOwnerId: userId,
+          slug: 'brief-leak-ws',
+        })
+        .onConflictDoNothing();
+
+      const alice = new BriefModel(serverDB, userId, wsId);
+      const bob = new BriefModel(serverDB, userId2, wsId);
+
+      await alice.create({ summary: 'Alice secret', title: 'Alice brief', type: 'result' });
+      await bob.create({ summary: 'Bob secret', title: 'Bob brief', type: 'result' });
+
+      const aliceList = await alice.list();
+      expect(aliceList.total).toBe(1);
+      expect(aliceList.briefs[0].title).toBe('Alice brief');
+
+      const bobList = await bob.list();
+      expect(bobList.total).toBe(1);
+      expect(bobList.briefs[0].title).toBe('Bob brief');
+    });
+
+    it('should not leak briefs to other workspace members via findById', async () => {
+      const wsId = 'brief-leak-findbyid-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({
+          id: wsId,
+          name: 'Brief Leak FindById WS',
+          primaryOwnerId: userId,
+          slug: 'brief-leak-findbyid-ws',
+        })
+        .onConflictDoNothing();
+
+      const alice = new BriefModel(serverDB, userId, wsId);
+      const bob = new BriefModel(serverDB, userId2, wsId);
+
+      const aliceBrief = await alice.create({
+        summary: 'Alice secret',
+        title: 'Alice brief',
+        type: 'result',
+      });
+
+      expect(await alice.findById(aliceBrief.id)).not.toBeNull();
+      expect(await bob.findById(aliceBrief.id)).toBeNull();
     });
   });
 

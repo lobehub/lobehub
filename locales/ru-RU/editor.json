@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Навык",
   "actionTag.category.tool": "Инструмент",
   "actionTag.tooltip.agentSkill": "Загружает набор навыков из документов этого агента для запроса.",
+  "actionTag.tooltip.clickToView": "Нажмите, чтобы просмотреть детали",
   "actionTag.tooltip.command": "Выполняет клиентскую slash-команду перед отправкой.",
   "actionTag.tooltip.projectSkill": "Отправляется как вызов через слэш, чтобы CLI агента запускал соответствующий навык проекта.",
   "actionTag.tooltip.skill": "Загружает для этого запроса переиспользуемый пакет навыков.",

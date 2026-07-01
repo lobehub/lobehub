@@ -26,13 +26,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
+interface ConfigGroupModalProps extends ModalProps {
+  scope?: 'private' | 'public';
+}
+
+const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 'public' }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEdit } = usePermission('edit_own_content');
   // Map SidebarGroup to SessionGroupItem-like structure for the sortable list
   const sessionGroupItems = useHomeStore(
     (s) =>
-      homeAgentListSelectors.agentGroups(s).map((g) => ({
+      (scope === 'private'
+        ? homeAgentListSelectors.privateAgentGroups(s)
+        : homeAgentListSelectors.agentGroups(s)
+      ).map((g) => ({
         id: g.id,
         name: g.name,
         sort: g.sort,
@@ -81,7 +88,7 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
             if (!canEdit) return;
 
             setLoading(true);
-            await addGroup(t('sessionGroup.newGroup'));
+            await addGroup(t('sessionGroup.newGroup'), scope === 'private' ? 'private' : undefined);
             setLoading(false);
           }}
         >

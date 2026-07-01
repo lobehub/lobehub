@@ -59,6 +59,10 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     // File-specific fields
     url: item.url,
+
+    userId: item.userId,
+
+    visibility: item.visibility,
   };
 };
 

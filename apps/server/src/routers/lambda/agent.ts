@@ -81,15 +81,33 @@ export const agentRouter = router({
       z.object({
         config: CreateAgentSchema.optional(),
         groupId: z.string().optional(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const agent = await ctx.agentModel.create({
         ...input.config,
         sessionGroupId: input.groupId,
+        // Router-level `visibility` wins over any nested config value so the
+        // sidebar's "Create in Private" entry can't be overridden by a stale
+        // default config.
+        ...(input.visibility ? { visibility: input.visibility } : {}),
       });
 
       return { agentId: agent.id };
+    }),
+
+  /**
+   * Publish a private agent into the workspace. **One-way** — once an agent
+   * is shared, workspace members may already depend on it, so it can't slip
+   * back to `private`. Only the creator of a still-private agent can run
+   * this; the underlying SQL enforces both rules.
+   */
+  publishAgentToWorkspace: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.agentModel.publishToWorkspace(input.id);
     }),
 
   createAgentFiles: agentProcedure
@@ -269,13 +287,27 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .query(async ({ ctx, input }): Promise<KnowledgeItem[]> => {
-      const knowledgeBases = await ctx.knowledgeBaseModel.query();
+      // Look up the target agent's visibility so we can (a) apply the
+      // "public agent cannot reach caller's private rows" defensive filter
+      // in the model layer, and (b) hard-force `visibility='public'` when
+      // the agent is public — the client tab is a UX aid, not a gate.
+      const agentVisibility = await ctx.agentModel.getAgentVisibility(input.agentId);
+      const effectiveVisibility =
+        agentVisibility === 'public' ? ('public' as const) : input.visibility;
+
+      const knowledgeBases = await ctx.knowledgeBaseModel.query({
+        callerAgentVisibility: agentVisibility,
+        visibility: effectiveVisibility,
+      });
 
       const files = await ctx.fileModel.query({
+        callerAgentVisibility: agentVisibility,
         showFilesInKnowledgeBase: false,
+        visibility: effectiveVisibility,
       });
 
       const knowledge = await ctx.agentModel.getAgentAssignedKnowledge(input.agentId);
@@ -289,7 +321,9 @@ export const agentRouter = router({
             fileType: file.fileType,
             id: file.id,
             name: file.name,
+            ownerUserId: file.userId,
             type: KnowledgeType.File,
+            visibility: file.visibility as 'private' | 'public',
           })),
         ...knowledgeBases.map((knowledgeBase) => ({
           avatar: knowledgeBase.avatar,
@@ -297,7 +331,9 @@ export const agentRouter = router({
           enabled: knowledge.knowledgeBases.some((item) => item.id === knowledgeBase.id),
           id: knowledgeBase.id,
           name: knowledgeBase.name,
+          ownerUserId: knowledgeBase.userId,
           type: KnowledgeType.KnowledgeBase,
+          visibility: knowledgeBase.visibility,
         })),
       ];
     }),

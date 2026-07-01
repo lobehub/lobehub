@@ -168,6 +168,8 @@
   "sidebar.expandAll": "展开所有分组",
   "sidebar.title": "话题",
   "taskManager.agent": "任务助手",
+  "taskManager.agentSelector.privateGroup": "私人",
+  "taskManager.agentSelector.workspaceGroup": "工作区",
   "taskManager.welcome": "问我关于你的任务",
   "temp": "临时",
   "title": "话题"

@@ -46,6 +46,7 @@ import type {
 } from '@lobechat/types';
 import { buildHeteroExecArgs, RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
@@ -972,7 +973,12 @@ export class AiAgentService {
       agentConfig = await this.agentService.getAgentConfig(identifier);
     }
     if (!agentConfig) {
-      throw new Error(`Agent not found: ${identifier}`);
+      // `agentService.getAgentConfig` already routes through `AgentModel`'s
+      // workspace + visibility ownership predicate, so a cross-user private
+      // agent resolves to null here. Surface that as NOT_FOUND (not a generic
+      // 500) so callers — chat, bot, cron task, sub-agent, REST — return a
+      // uniform 404 and we never leak whether the id exists for another user.
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Agent not found: ${identifier}` });
     }
 
     // Use actual agent ID from config for subsequent operations

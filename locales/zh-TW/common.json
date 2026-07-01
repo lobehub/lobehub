@@ -1,5 +1,6 @@
 {
   "about": "關於",
+  "addNew": "新增",
   "advanceSettings": "進階設定",
   "agentOnboardingPromo.actionLabel": "立即試用",
   "agentOnboardingPromo.description": "和 Lobe AI 快速聊幾句，即可設定你的助理團隊。你現有的助理不會受到影響。",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "內容政策檢查未通過。請修改您的提示。",
   "getDesktopApp": "下載桌面應用程式",
   "goToTarget": "前往目標",
+  "gotIt": "了解",
   "historyRange": "歷史範圍",
   "home.suggestQuestions": "試試這些範例",
   "import": "匯入",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "下移",
   "navPanel.moveUp": "上移",
   "navPanel.pinned": "已釘選",
+  "navPanel.privateAgents": "私人",
+  "navPanel.publicAgents": "工作區",
   "navPanel.resetDefault": "重設為預設值",
   "navPanel.searchAgent": "搜尋助手...",
   "navPanel.searchRecent": "搜尋最近項目...",

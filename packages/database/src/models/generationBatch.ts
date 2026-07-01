@@ -6,7 +6,7 @@ import type {
   VideoGenerationAsset,
 } from '@lobechat/types';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, exists } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
@@ -15,12 +15,17 @@ import type {
   GenerationBatchWithGenerations,
   NewGenerationBatch,
 } from '../schemas/generation';
-import { generationBatches } from '../schemas/generation';
+import { generationBatches, generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { GenerationModel } from './generation';
 
 const log = debug('lobe-image:generation-batch-model');
+
+type GenerationBatchColumns = Pick<
+  typeof generationBatches,
+  'generationTopicId' | 'userId' | 'workspaceId'
+>;
 
 export class GenerationBatchModel {
   private db: LobeChatDatabase;
@@ -37,14 +42,48 @@ export class GenerationBatchModel {
     this.generationModel = new GenerationModel(db, userId, workspaceId);
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, generationBatches);
+  private ownership = (batchTable: GenerationBatchColumns = generationBatches) =>
+    and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, batchTable),
+      exists(
+        this.db
+          .select({ id: generationTopics.id })
+          .from(generationTopics)
+          .where(
+            and(
+              eq(generationTopics.id, batchTable.generationTopicId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                generationTopics,
+              ),
+            ),
+          ),
+      ),
+    );
 
   async create(value: NewGenerationBatch): Promise<GenerationBatchItem> {
     log('Creating generation batch: %O', {
       topicId: value.generationTopicId,
       userId: this.userId,
     });
+
+    const [topic] = await this.db
+      .select({ id: generationTopics.id })
+      .from(generationTopics)
+      .where(
+        and(
+          eq(generationTopics.id, value.generationTopicId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            generationTopics,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!topic) {
+      throw new Error('Generation topic not found');
+    }
 
     const [result] = await this.db
       .insert(generationBatches)
@@ -60,9 +99,11 @@ export class GenerationBatchModel {
   async findById(id: string): Promise<GenerationBatchItem | undefined> {
     log('Finding generation batch by ID: %s for user: %s', id, this.userId);
 
-    const result = await this.db.query.generationBatches.findFirst({
-      where: and(eq(generationBatches.id, id), this.ownership()),
-    });
+    const [result] = await this.db
+      .select()
+      .from(generationBatches)
+      .where(and(eq(generationBatches.id, id), this.ownership()))
+      .limit(1);
 
     log('Generation batch %s: %s', id, result ? 'found' : 'not found');
     return result;
@@ -71,10 +112,11 @@ export class GenerationBatchModel {
   async findByTopicId(topicId: string): Promise<GenerationBatchItem[]> {
     log('Finding generation batches by topic ID: %s for user: %s', topicId, this.userId);
 
-    const results = await this.db.query.generationBatches.findMany({
-      orderBy: (table, { desc }) => [desc(table.createdAt)],
-      where: and(eq(generationBatches.generationTopicId, topicId), this.ownership()),
-    });
+    const results = await this.db
+      .select()
+      .from(generationBatches)
+      .where(and(eq(generationBatches.generationTopicId, topicId), this.ownership()))
+      .orderBy(desc(generationBatches.createdAt));
 
     log('Found %d generation batches for topic %s', results.length, topicId);
     return results;
@@ -92,7 +134,8 @@ export class GenerationBatchModel {
 
     const results = await this.db.query.generationBatches.findMany({
       orderBy: (table, { asc }) => [asc(table.createdAt)],
-      where: and(eq(generationBatches.generationTopicId, topicId), this.ownership()),
+      where: (table, { and, eq }) =>
+        and(eq(table.generationTopicId, topicId), this.ownership(table)),
       with: {
         generations: {
           orderBy: (table, { asc }) => [asc(table.createdAt), asc(table.id)],
@@ -186,7 +229,7 @@ export class GenerationBatchModel {
 
     // 1. First, get generations with their assets to collect file URLs for cleanup
     const batchWithGenerations = await this.db.query.generationBatches.findFirst({
-      where: and(eq(generationBatches.id, id), this.ownership()),
+      where: (table, { and, eq }) => and(eq(table.id, id), this.ownership(table)),
       with: {
         generations: {
           columns: {

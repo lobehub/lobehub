@@ -141,9 +141,17 @@ export class AgentDocumentsService {
   private documentService: DocumentService;
   private topicDocumentModel: TopicDocumentModel;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
-    this.documentService = new DocumentService(db, userId, workspaceId);
+    // Public-agent gate flows through DocumentService → DocumentModel so
+    // agentDocuments list / attach / read cannot see the caller's own
+    // private documents when the invoking agent itself is workspace-public.
+    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
   }
 

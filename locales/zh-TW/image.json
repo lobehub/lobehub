@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "刪除生成主題",
   "topic.deleteConfirmDesc": "即將刪除該生成主題，刪除後將無法復原，請謹慎操作。",
   "topic.empty": "暫無生成主題",
+  "topic.privateTitle": "私人",
   "topic.title": "繪畫主題",
-  "topic.untitled": "預設主題"
+  "topic.untitled": "預設主題",
+  "topic.visibility.existingLocked": "當前主題的可見性已固定。請創建一個新主題以選擇不同的空間。",
+  "topic.workspaceTitle": "工作區"
 }

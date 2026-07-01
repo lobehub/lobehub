@@ -11,10 +11,11 @@ import { useHomeStore } from '@/store/home';
 
 interface CreateGroupModalProps extends ModalProps {
   id: string;
+  visibility?: 'private' | 'public';
 }
 
 const CreateGroupModal = memo<CreateGroupModalProps>(
-  ({ id, open, onCancel }: CreateGroupModalProps) => {
+  ({ id, open, onCancel, visibility }: CreateGroupModalProps) => {
     const { t } = useTranslation('chat');
     const { allowed: canCreate } = usePermission('create_content');
 
@@ -44,7 +45,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
               return message.warning(t('sessionGroup.tooLong'));
 
             setLoading(true);
-            const groupId = await addGroup(input);
+            const groupId = await addGroup(input, visibility);
             await updateAgentGroup(id, groupId);
             toggleExpandSessionGroup(groupId, true);
             setLoading(false);

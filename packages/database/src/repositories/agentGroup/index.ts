@@ -405,6 +405,11 @@ export class AgentGroupRepository {
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
+    // Mirror the group's visibility onto the synthetic supervisor agent so
+    // workspace members don't see a stray supervisor when the parent group is
+    // private. Defaults to 'public' to match the column default.
+    const groupVisibility = groupParams.visibility ?? 'public';
+
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
       .insert(agents)
@@ -422,6 +427,7 @@ export class AgentGroupRepository {
         title: supervisorConfig?.title ?? 'Supervisor',
         userId: this.userId,
         virtual: true,
+        visibility: groupVisibility,
         workspaceId: this.workspaceId ?? null,
       })
       .returning();

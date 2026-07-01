@@ -8,6 +8,7 @@ import {
   BookPlusIcon,
   DownloadIcon,
   FolderInputIcon,
+  GlobeIcon,
   LinkIcon,
   PencilIcon,
   Trash,
@@ -25,6 +26,8 @@ import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useTreeStore } from '@/store/tree';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import MoveToFolderModal from '../MoveToFolderModal';
@@ -38,6 +41,8 @@ interface UseFileItemDropdownParams {
   onRenameStart?: () => void;
   sourceType?: string;
   url: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }
 
 interface UseFileItemDropdownReturn {
@@ -55,16 +60,20 @@ export const useFileItemDropdown = ({
   fileType,
   sourceType,
   onRenameStart,
+  userId,
+  visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
-  const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
+  const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
+  const currentUserId = useUserStore(userProfileSelectors.userId);
 
-  const { deleteResource, moveResource, refreshFileList } = useFileStore(
+  const { deleteResource, moveResource, refreshFileList, publishFileToWorkspace } = useFileStore(
     (s) => ({
       deleteResource: s.deleteResource,
       moveResource: s.moveResource,
+      publishFileToWorkspace: s.publishFileToWorkspace,
       refreshFileList: s.refreshFileList,
     }),
     shallow,
@@ -207,8 +216,43 @@ export const useFileItemDropdown = ({
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Only the creator of a still-private file (not a folder, since folders
+    // live in the `documents` table and have their own publish flow) sees the
+    // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
+    const isOwnPrivateFile =
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      visibility === 'private' &&
+      !!currentUserId &&
+      userId === currentUserId;
+
     return (
       [
+        canEditResources &&
+          isOwnPrivateFile && {
+            icon: <Icon icon={GlobeIcon} />,
+            key: 'publishToWorkspace',
+            label: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: t('resources.publishToWorkspace.confirm', { ns: 'chat' }),
+                okText: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+                title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+                onOk: async () => {
+                  try {
+                    await publishFileToWorkspace(id);
+                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                  } catch (error) {
+                    console.error(error);
+                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                  }
+                },
+              });
+            },
+          },
+        canEditResources && isOwnPrivateFile && { type: 'divider' },
         ...libraryRelatedActions,
         hasKnowledgeBaseActions && {
           type: 'divider',
@@ -341,6 +385,7 @@ export const useFileItemDropdown = ({
     addFilesToKnowledgeBase,
     appOrigin,
     canEditResources,
+    currentUserId,
     deleteResource,
     filename,
     id,
@@ -352,10 +397,14 @@ export const useFileItemDropdown = ({
     message,
     moveResource,
     onRenameStart,
+    publishFileToWorkspace,
     refreshFileList,
     removeFilesFromKnowledgeBase,
+    sourceType,
     t,
     url,
+    userId,
+    visibility,
   ]);
 
   return { menuItems };

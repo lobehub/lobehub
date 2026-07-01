@@ -32,6 +32,7 @@
   "builtins.github.render.error": "Ошибка",
   "builtins.github.render.rawResult": "Исходный результат",
   "builtins.github.render.updatedAt": "Обновлено {{time}}",
+  "builtins.linear.render.empty": "{{collection}} не найдено",
   "builtins.linear.render.updatedAt": "Обновлено {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Активировать инструменты",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} не найдено",

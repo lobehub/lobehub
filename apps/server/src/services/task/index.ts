@@ -64,6 +64,10 @@ export interface CreateTaskInput {
   schedulePattern?: string;
   scheduleTimezone?: string;
   sortOrder?: number;
+  // Explicit visibility for the new task. When omitted, the service derives it
+  // from `parentTaskId` (if present) or `assigneeAgentId`'s visibility, and
+  // finally falls back to the schema default ('public').
+  visibility?: 'private' | 'public';
 }
 
 export interface UpdateStatusResult {
@@ -117,17 +121,93 @@ export class TaskService {
 
     const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
 
+    let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
       const parent = await this.resolveOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
+      parentVisibility = parent.visibility;
     }
 
+    // Pull the model/provider snapshot and the agent's visibility in a single
+    // SQL — both are needed for the same `tasks.create` row, and a second
+    // round-trip would just retrace the same primary-key path.
+    let agentVisibility: 'private' | 'public' | null = null;
     if (input.assigneeAgentId) {
-      const snapshot = await this.agentModel.getAgentModelConfig(input.assigneeAgentId);
-      if (snapshot) createData.config = snapshot;
+      const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
+      if (agentInfo) {
+        if (agentInfo.snapshot) createData.config = agentInfo.snapshot;
+        agentVisibility = agentInfo.visibility;
+      }
     }
+
+    // Resolve visibility precedence: explicit caller value > parent task
+    // (subtasks inherit) > assignee agent (private agent → private task) >
+    // schema default ('public').
+    if (createData.visibility === undefined) {
+      if (parentVisibility) {
+        createData.visibility = parentVisibility;
+      } else if (agentVisibility === 'private') {
+        createData.visibility = 'private';
+      }
+    }
+
+    // Invariant: a public task can never be executed by a private agent. The
+    // explicit-override branch above can produce this combination if the
+    // caller passes `visibility='public'` while picking a private agent, so
+    // we have to assert here even though the inference path can't.
+    this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
+
+    // Invariant: a subtask can never be more public than its parent (LOBE-10962
+    // #3). Otherwise workspace members see an orphaned child whose parent is
+    // hidden, leaking the existence of a private task. The inference path
+    // already inherits parent visibility, but the explicit-override path can
+    // produce a `Private parent + Public child` combo if the caller insists.
+    this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
     return this.taskModel.create(createData);
+  }
+
+  /**
+   * Enforces the invariant: a subtask cannot be more public than its parent.
+   * Promotion lattice is `private ≤ public`; child visibility ≤ parent
+   * visibility. Throws `BAD_REQUEST` on violation. No constraint when there
+   * is no parent.
+   */
+  assertParentVisibilityCompat(
+    childVisibility: 'private' | 'public' | undefined,
+    parentVisibility: 'private' | 'public' | undefined,
+  ): void {
+    if (parentVisibility !== 'private') return;
+    if (childVisibility !== 'public') return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A subtask cannot be more public than its parent. Promote the parent task first, or make this subtask private.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: a public task must never be assigned to a private
+   * agent. Throws `BAD_REQUEST` on violation. The reverse combination
+   * (private task + public agent) is allowed by design — a workspace agent
+   * may execute owner-only tasks without leaking, since task content stays
+   * scoped to the creator via `ownership()`.
+   *
+   * `agentVisibility = null` means either no assignee or the agent could not
+   * be resolved (e.g. caller cannot see it). In both cases the combo is
+   * unconstrained because no private agent is actually involved.
+   */
+  assertAgentVisibilityCompat(
+    taskVisibility: 'private' | 'public' | undefined,
+    agentVisibility: 'private' | 'public' | null,
+  ): void {
+    if (taskVisibility !== 'public') return;
+    if (agentVisibility !== 'private') return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A public task cannot be assigned to a private agent. Either pick a workspace agent or make the task private first.',
+    });
   }
 
   /**
@@ -400,9 +480,12 @@ export class TaskService {
 
   private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
     if (!assigneeAgentId) return;
+    // `existsById` already applies the workspace + visibility predicate, so a
+    // cross-user private agent never resolves. NOT_FOUND (not BAD_REQUEST or
+    // FORBIDDEN) keeps every private-agent leak path returning the same code.
     const exists = await this.agentModel.existsById(assigneeAgentId);
     if (!exists) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Assignee agent not found' });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Assignee agent not found' });
     }
   }
 
@@ -774,6 +857,7 @@ export class TaskService {
       status: task.status,
       userId: task.assigneeUserId,
       verify: this.taskModel.getVerifyConfig(task),
+      visibility: task.visibility,
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,

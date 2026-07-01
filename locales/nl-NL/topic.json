@@ -168,6 +168,8 @@
   "sidebar.expandAll": "Alle groepen uitvouwen",
   "sidebar.title": "Onderwerpen",
   "taskManager.agent": "Taakagent",
+  "taskManager.agentSelector.privateGroup": "Privé",
+  "taskManager.agentSelector.workspaceGroup": "Werkruimte",
   "taskManager.welcome": "Vraag me naar je taken",
   "temp": "Tijdelijk",
   "title": "Onderwerp"

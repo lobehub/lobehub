@@ -14,7 +14,7 @@ const VideoLayout = () => {
       breadcrumb={[{ href: '/video', title: t('tab.video') }]}
       generationTopicsSelector={generationTopicSelectors.generationTopics}
       namespace="video"
-      navKey="video"
+      navKey="image"
       useStore={useVideoStore}
       viewModeStatusKey="videoTopicViewMode"
     />

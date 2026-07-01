@@ -1064,11 +1064,6 @@
       "count": 1
     }
   },
-  "src/routes/(main)/community/(detail)/agent/features/Sidebar/ActionButton/ForkAndChat.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/routes/(main)/community/(detail)/agent/features/StatusPage/index.tsx": {
     "no-restricted-imports": {
       "count": 1

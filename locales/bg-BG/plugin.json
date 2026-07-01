@@ -32,6 +32,7 @@
   "builtins.github.render.error": "Грешка",
   "builtins.github.render.rawResult": "Суров резултат",
   "builtins.github.render.updatedAt": "Обновено {{time}}",
+  "builtins.linear.render.empty": "Не е намерен {{collection}}",
   "builtins.linear.render.updatedAt": "Обновено {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "Активиране на инструменти",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} не са намерени",

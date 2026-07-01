@@ -29,6 +29,9 @@
   "topic.createNew": "إنشاء موضوع جديد",
   "topic.deleteConfirm": "حذف موضوع الفيديو",
   "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الفيديو هذا. لا يمكن التراجع عن هذا الإجراء.",
+  "topic.privateTitle": "خاص",
   "topic.title": "مواضيع الفيديو",
-  "topic.untitled": "موضوع افتراضي"
+  "topic.untitled": "موضوع افتراضي",
+  "topic.visibility.existingLocked": "تم تثبيت الرؤية للموضوع الحالي. قم بإنشاء موضوع جديد لاختيار مساحة مختلفة.",
+  "topic.workspaceTitle": "مساحة العمل"
 }

@@ -26,15 +26,29 @@ export const sessionGroupRouter = router({
       z.object({
         name: z.string(),
         sort: z.number().optional(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const data = await ctx.sessionGroupModel.create({
         name: input.name,
         sort: input.sort,
+        ...(input.visibility ? { visibility: input.visibility } : {}),
       });
 
       return data?.id;
+    }),
+
+  /**
+   * Publish a private folder into the workspace. One-way — mirrors the
+   * agent/chatGroup rule: once shared, other members may have anchored their
+   * own work to it, so we never re-privatize.
+   */
+  publishSessionGroupToWorkspace: sessionProcedure
+    .use(withScopedPermission('session_group:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.sessionGroupModel.publishToWorkspace(input.id);
     }),
 
   getSessionGroup: sessionProcedure.query(async ({ ctx }): Promise<SessionGroupItem[]> => {

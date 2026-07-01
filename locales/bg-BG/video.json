@@ -29,6 +29,9 @@
   "topic.createNew": "Създаване на нова тема",
   "topic.deleteConfirm": "Изтриване на видео тема",
   "topic.deleteConfirmDesc": "Ще изтриете тази видео тема. Това действие не може да бъде отменено.",
+  "topic.privateTitle": "Частно",
   "topic.title": "Видео теми",
-  "topic.untitled": "Тема по подразбиране"
+  "topic.untitled": "Тема по подразбиране",
+  "topic.visibility.existingLocked": "Видимостта е фиксирана за текущата тема. Създайте нова тема, за да изберете различно пространство.",
+  "topic.workspaceTitle": "Работно пространство"
 }

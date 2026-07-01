@@ -13,6 +13,10 @@ import type { LobeChatDatabase } from '../type';
 import type { GenerationTopicType } from '../types/generation';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
+type GenerationTopicUpdate = Pick<Partial<ImageGenerationTopic>, 'coverUrl' | 'title'> & {
+  visibility?: 'private' | 'public';
+};
+
 export class GenerationTopicModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -54,7 +58,17 @@ export class GenerationTopicModel {
     );
   };
 
-  create = async (title: string, type?: GenerationTopicType) => {
+  findById = async (id: string): Promise<GenerationTopicItem | undefined> => {
+    const [topic] = await this.db
+      .select()
+      .from(generationTopics)
+      .where(and(eq(generationTopics.id, id), this.ownership()))
+      .limit(1);
+
+    return topic;
+  };
+
+  create = async (title: string, type?: GenerationTopicType, visibility?: 'private' | 'public') => {
     const [newGenerationTopic] = await this.db
       .insert(generationTopics)
       .values(
@@ -63,6 +77,7 @@ export class GenerationTopicModel {
           {
             title,
             type: type ?? 'image',
+            ...(this.workspaceId ? { visibility: visibility ?? 'private' } : {}),
           },
         ),
       )
@@ -73,7 +88,7 @@ export class GenerationTopicModel {
 
   update = async (
     id: string,
-    data: Partial<ImageGenerationTopic>,
+    data: GenerationTopicUpdate,
   ): Promise<GenerationTopicItem | undefined> => {
     const [updatedTopic] = await this.db
       .update(generationTopics)

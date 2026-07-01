@@ -1,5 +1,6 @@
 {
   "about": "Относно",
+  "addNew": "Добави ново",
   "advanceSettings": "Разширени настройки",
   "agentOnboardingPromo.actionLabel": "Опитайте сега",
   "agentOnboardingPromo.description": "Настройте своите екипи от агенти в кратък чат с Lobe AI. Съществуващите ви агенти ще останат непроменени.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Проверката на съдържателната политика не беше успешна. Моля, коригирайте подсказката.",
   "getDesktopApp": "Изтеглете настолното приложение",
   "goToTarget": "Отиди до целта",
+  "gotIt": "Разбрах",
   "historyRange": "Обхват на историята",
   "home.suggestQuestions": "Опитайте с тези примери",
   "import": "Импортирай",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Преместване надолу",
   "navPanel.moveUp": "Преместване нагоре",
   "navPanel.pinned": "Закачено",
+  "navPanel.privateAgents": "Частни",
+  "navPanel.publicAgents": "Работно пространство",
   "navPanel.resetDefault": "Възстановяване на настройките по подразбиране",
   "navPanel.searchAgent": "Търсене на агент...",
   "navPanel.searchRecent": "Търсене в скорошни...",

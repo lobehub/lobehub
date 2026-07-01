@@ -9,6 +9,8 @@ export interface TreeItem {
   slug?: string | null;
   sourceType?: string;
   url: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }
 
 export interface TreeDataState {

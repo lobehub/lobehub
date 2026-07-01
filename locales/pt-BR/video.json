@@ -29,6 +29,9 @@
   "topic.createNew": "Criar Novo Tópico",
   "topic.deleteConfirm": "Excluir Tópico de Vídeo",
   "topic.deleteConfirmDesc": "Você está prestes a excluir este tópico de vídeo. Esta ação não poderá ser desfeita.",
+  "topic.privateTitle": "Privado",
   "topic.title": "Tópicos de Vídeo",
-  "topic.untitled": "Tópico Padrão"
+  "topic.untitled": "Tópico Padrão",
+  "topic.visibility.existingLocked": "A visibilidade está fixa para o tópico atual. Crie um novo tópico para escolher um espaço diferente.",
+  "topic.workspaceTitle": "Espaço de Trabalho"
 }

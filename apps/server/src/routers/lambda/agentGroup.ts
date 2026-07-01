@@ -397,6 +397,17 @@ export const agentGroupRouter = router({
       return ctx.chatGroupModel.updateAgentInGroup(input.groupId, input.agentId, input.updates);
     }),
 
+  /**
+   * Publish a private chat group into the workspace. One-way: once shared,
+   * other workspace members may already be using it, so we never let it slip
+   * back to `private`. Restricted to the creator's own still-private group.
+   */
+  publishGroupToWorkspace: agentGroupProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.chatGroupModel.publishToWorkspace(input.id);
+    }),
+
   updateGroup: agentGroupProcedureWrite
     .input(
       z.object({

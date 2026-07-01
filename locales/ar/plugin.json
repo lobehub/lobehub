@@ -32,6 +32,7 @@
   "builtins.github.render.error": "خطأ",
   "builtins.github.render.rawResult": "النتيجة الخام",
   "builtins.github.render.updatedAt": "تم التحديث {{time}}",
+  "builtins.linear.render.empty": "لم يتم العثور على {{collection}}",
   "builtins.linear.render.updatedAt": "تم التحديث {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "تفعيل الأدوات",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} غير موجود",

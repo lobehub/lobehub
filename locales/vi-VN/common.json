@@ -1,5 +1,6 @@
 {
   "about": "Giới thiệu",
+  "addNew": "Thêm mới",
   "advanceSettings": "Cài đặt nâng cao",
   "agentOnboardingPromo.actionLabel": "Dùng thử ngay",
   "agentOnboardingPromo.description": "Thiết lập các nhóm trợ lý của bạn qua một cuộc trò chuyện nhanh với Lobe AI. Các trợ lý hiện có của bạn sẽ không thay đổi.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Kiểm tra chính sách nội dung không đạt. Vui lòng chỉnh sửa lại yêu cầu của bạn.",
   "getDesktopApp": "Tải ứng dụng trên máy tính",
   "goToTarget": "Đi đến mục tiêu",
+  "gotIt": "Hiểu rồi",
   "historyRange": "Phạm vi lịch sử",
   "home.suggestQuestions": "Hãy thử những ví dụ này",
   "import": "Nhập khẩu",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Di chuyển xuống",
   "navPanel.moveUp": "Di chuyển lên",
   "navPanel.pinned": "Đã ghim",
+  "navPanel.privateAgents": "Riêng tư",
+  "navPanel.publicAgents": "Không gian làm việc",
   "navPanel.resetDefault": "Đặt lại về mặc định",
   "navPanel.searchAgent": "Tìm kiếm tác nhân...",
   "navPanel.searchRecent": "Tìm kiếm gần đây...",

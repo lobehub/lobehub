@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Eliminar tema de generación",
   "topic.deleteConfirmDesc": "Estás a punto de eliminar este tema de generación. Esta acción no se puede deshacer, procede con precaución.",
   "topic.empty": "No hay temas de generación",
+  "topic.privateTitle": "Privado",
   "topic.title": "Tema de pintura",
-  "topic.untitled": "Tema predeterminado"
+  "topic.untitled": "Tema predeterminado",
+  "topic.visibility.existingLocked": "La visibilidad está fijada para el tema actual. Crea un nuevo tema para elegir un espacio diferente.",
+  "topic.workspaceTitle": "Espacio de trabajo"
 }

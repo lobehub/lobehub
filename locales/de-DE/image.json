@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Generierungsthema löschen",
   "topic.deleteConfirmDesc": "Sie sind dabei, dieses Generierungsthema zu löschen. Diese Aktion kann nicht rückgängig gemacht werden. Bitte seien Sie vorsichtig.",
   "topic.empty": "Keine Generierungsthemen",
+  "topic.privateTitle": "Privat",
   "topic.title": "Thema des Gemäldes",
-  "topic.untitled": "Standardthema"
+  "topic.untitled": "Standardthema",
+  "topic.visibility.existingLocked": "Die Sichtbarkeit ist für das aktuelle Thema festgelegt. Erstellen Sie ein neues Thema, um einen anderen Bereich auszuwählen.",
+  "topic.workspaceTitle": "Arbeitsbereich"
 }

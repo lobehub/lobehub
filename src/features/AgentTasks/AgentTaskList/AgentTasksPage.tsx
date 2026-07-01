@@ -25,6 +25,7 @@ import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
+import TaskListVisibilityFilter from './TaskListVisibilityFilter';
 import TasksGroupConfig from './TasksGroupConfig';
 
 interface TaskCreateActionBehaviorParams {
@@ -117,6 +118,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
+            {!agentId && <TaskListVisibilityFilter />}
             {(inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}

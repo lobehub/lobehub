@@ -5,6 +5,7 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
 import { usePermission } from '@/hooks/usePermission';
 import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
@@ -66,6 +67,7 @@ const EmptyPlaceholder = () => {
   const { t } = useTranslation('components');
 
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
+  const uploadTopLevel = useTopLevelFileUpload();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
   const currentFolderId = useCurrentFolderId();
@@ -113,8 +115,7 @@ const EmptyPlaceholder = () => {
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
-            await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
-
+            await uploadTopLevel([file]);
             return false;
           }}
         >
@@ -134,6 +135,9 @@ const EmptyPlaceholder = () => {
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
+            // Directory upload keeps its own path — the whole tree inherits
+            // its root's visibility, so we skip the mode-driven default and
+            // let the server infer from the parent chain.
             await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
             return false;

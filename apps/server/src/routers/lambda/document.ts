@@ -58,6 +58,10 @@ export const documentRouter = router({
         parentId: z.string().optional(),
         slug: z.string().optional(),
         title: z.string(),
+        // Workspace-only knob; ignored in personal mode by the model layer.
+        // When omitted: top-level docs default to 'private' (sidebar's primary
+        // entry point), nested docs inherit the parent's visibility.
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -93,6 +97,7 @@ export const documentRouter = router({
             parentId: z.string().optional(),
             slug: z.string().optional(),
             title: z.string(),
+            visibility: z.enum(['private', 'public']).optional(),
           }),
         ),
       }),
@@ -370,6 +375,19 @@ export const documentRouter = router({
       });
 
       return ctx.documentModel.transferTo(input.documentId, input.targetWorkspaceId, ctx.userId);
+    }),
+
+  /**
+   * Publish a private document subtree into the workspace. **One-way** — once
+   * published, other workspace members may already reference the page, so it
+   * can't slip back to `private`. Only the creator can run this; the
+   * underlying SQL enforces both rules.
+   */
+  publishDocumentToWorkspace: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.documentService.publishToWorkspace(input.id);
     }),
 
   copyDocumentToWorkspace: documentProcedure

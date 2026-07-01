@@ -306,9 +306,11 @@ export default {
   'mention.category.agents': 'Agents',
   'mention.category.files': 'Files',
   'mention.category.members': 'Members',
+  'mention.category.privateAgents': 'Private',
   'mention.category.skills': 'Skills',
   'mention.category.tools': 'Tools',
   'mention.category.topics': 'Topics',
+  'mention.category.workspaceAgents': 'Workspace',
   'mention.title': 'Mention Members',
   'messageAction.collapse': 'Collapse Message',
   'messageAction.continueGeneration': 'Continue Generating',
@@ -479,6 +481,23 @@ export default {
   'newCodexAgent': 'Add Codex',
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
+  'agent.publishToWorkspace': 'Publish to Workspace',
+  'agent.publishToWorkspaceConfirm':
+    'Other workspace members will be able to use this agent. You will not be able to make it private again.',
+  'agent.publishToWorkspaceSuccess': 'Published to workspace',
+  'resources.publishToWorkspace.menu': 'Publish to Workspace',
+  'resources.publishToWorkspace.confirm':
+    'Other workspace members will be able to see this file. You will not be able to make it private again.',
+  'resources.publishToWorkspace.success': 'Published to workspace',
+  'resources.publishToWorkspace.error': 'Failed to publish file to workspace',
+  'resources.visibility.privateTooltip': 'Only you can see this file',
+  'resources.visibility.label': 'Visibility',
+  'resources.visibility.private': 'Private',
+  'resources.visibility.workspace': 'Workspace',
+  'resources.mode.privateHint': 'Your own drawer — only you can see these files',
+  'resources.mode.workspaceHint': 'Shared with everyone in this workspace',
+  'resources.knowledgePicker.publicAgentHint':
+    'Public agents can only reference workspace resources. Publish a private resource to the workspace first if you want to attach it.',
 
   // Op status tray (floating panel above the chat input during a run)
   'opStatusTray.status.compressing': 'Compressing context',
@@ -665,6 +684,10 @@ export default {
   'sessionGroup.noAvailableAgents': 'No available agents',
   'sessionGroup.noMatchingAgents': 'No matching agents found',
   'sessionGroup.noSelectedAgents': 'Please select agents',
+  'sessionGroup.publishToWorkspace': 'Publish to Workspace',
+  'sessionGroup.publishToWorkspaceConfirm':
+    'Other workspace members will be able to use this folder. You will not be able to make it private again.',
+  'sessionGroup.publishToWorkspaceSuccess': 'Published to workspace',
   'sessionGroup.rename': 'Rename Category',
   'sessionGroup.renameSuccess': 'Renamed successfully',
   'sessionGroup.searchAgents': 'Search agents',
@@ -945,6 +968,15 @@ export default {
   'taskDetail.topicMenu.stopConfirm.title': 'Stop Run?',
   'taskDetail.topicSource': 'From {{identifier}}',
   'taskDetail.updateFailed': 'Failed to update task',
+  'taskDetail.publishToWorkspace.menuLabel': 'Publish to Workspace',
+  'taskDetail.publishToWorkspace.confirmTitle': 'Publish task to workspace?',
+  'taskDetail.publishToWorkspace.confirmContent':
+    'Once published, this task becomes visible to all workspace members and cannot be reverted to private.',
+  'taskDetail.publishToWorkspace.confirmHint':
+    'Past runs remain private. Only runs created after publishing will be visible to workspace members.',
+  'taskDetail.publishToWorkspace.confirmOk': 'Publish',
+  'taskDetail.publishToWorkspace.errorPrivateAgent':
+    'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
@@ -952,8 +984,19 @@ export default {
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
   'createTask.titlePlaceholder': 'Task title',
+  'createTask.visibility.changeFailed': 'Failed to change task visibility',
+  'createTask.visibility.helperPrivate': 'Only you can see this task.',
+  'createTask.visibility.helperWorkspace': 'Everyone in this workspace can see this task.',
+  'createTask.visibility.label': 'Visibility',
+  'createTask.visibility.privateAgentDisabled':
+    'Private agents can only run private tasks. Pick a workspace agent or switch this task to Private.',
+  'createTask.visibility.privateAgentLocked': 'Private agents can only run private tasks.',
+  'createTask.visibility.private': 'Private',
+  'createTask.visibility.workspace': 'Workspace',
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',
+  'taskList.visibility.all': 'All',
+  'taskList.visibility.label': 'Visibility',
   'taskList.breadcrumb.task': 'Task',
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',

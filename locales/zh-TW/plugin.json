@@ -32,6 +32,7 @@
   "builtins.github.render.error": "錯誤",
   "builtins.github.render.rawResult": "原始結果",
   "builtins.github.render.updatedAt": "更新於 {{time}}",
+  "builtins.linear.render.empty": "未找到{{collection}}",
   "builtins.linear.render.updatedAt": "更新於 {{time}}",
   "builtins.lobe-activator.apiName.activateTools": "啟用工具",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} 未找到",
