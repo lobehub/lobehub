@@ -10,7 +10,6 @@ import { authSelectors } from '@/store/user/selectors';
 import { buildBootMetricsPayload } from './buildPayload';
 
 const SEEN_KEY = 'lobe:boot:seen';
-const DEFAULT_INGEST_URL = '/api/ingest/bootstrap';
 
 let sent = false;
 
@@ -111,7 +110,8 @@ const sendPayload = (ingestUrl: string): void => {
 
 export const startBootMetricsFinalize = (): void => {
   try {
-    const ingestUrl = process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL ?? DEFAULT_INGEST_URL;
+    const ingestUrl = process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
+    if (!ingestUrl) return;
 
     if (!isProductUsageEventEnabled()) return;
 

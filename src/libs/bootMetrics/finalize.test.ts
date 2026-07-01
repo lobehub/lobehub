@@ -42,8 +42,7 @@ vi.mock('nanoid', () => ({
   nanoid: () => 'test-anon-id',
 }));
 
-const DEFAULT_INGEST_URL = '/api/ingest/bootstrap';
-const CUSTOM_INGEST_URL = 'https://ingest.example.com/boot';
+const INGEST_URL = 'https://ingest.example.com/boot';
 
 describe('startBootMetricsFinalize', () => {
   let sendBeaconSpy: MockInstance<typeof navigator.sendBeacon>;
@@ -90,7 +89,7 @@ describe('startBootMetricsFinalize', () => {
     mocks.isLogin.mockReturnValue(false);
     mocks.isProductUsageEventEnabled.mockReturnValue(true);
 
-    delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
+    process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL = INGEST_URL;
   });
 
   afterEach(() => {
@@ -98,14 +97,12 @@ describe('startBootMetricsFinalize', () => {
     delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
   });
 
-  it('uses the same-origin ingest endpoint by default', async () => {
+  it('does not call sendBeacon when ingest URL is unset', async () => {
+    delete process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL;
     const { startBootMetricsFinalize } = await import('./finalize');
     startBootMetricsFinalize();
     await vi.runAllTimersAsync();
-
-    expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
-    const [url] = sendBeaconSpy.mock.calls[0] as [string, Blob];
-    expect(url).toBe(DEFAULT_INGEST_URL);
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
   });
 
   it('does not call sendBeacon when telemetry is opted out', async () => {
@@ -128,8 +125,6 @@ describe('startBootMetricsFinalize', () => {
   });
 
   it('calls sendBeacon exactly once with text/plain Blob when all gates pass', async () => {
-    process.env.NEXT_PUBLIC_BOOTSTRAP_METRICS_INGEST_URL = CUSTOM_INGEST_URL;
-
     const { startBootMetricsFinalize } = await import('./finalize');
     startBootMetricsFinalize();
     await vi.runAllTimersAsync();
@@ -137,7 +132,7 @@ describe('startBootMetricsFinalize', () => {
     expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
 
     const [url, blob] = sendBeaconSpy.mock.calls[0] as [string, Blob];
-    expect(url).toBe(CUSTOM_INGEST_URL);
+    expect(url).toBe(INGEST_URL);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe('text/plain');
 
