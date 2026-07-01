@@ -214,6 +214,9 @@ vi.mock('./plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
 vi.mock('./ReferTopic', () => ({ INSERT_REFER_TOPIC_COMMAND: 'insert-refer-topic' }));
+vi.mock('./LocalFileMention', () => ({
+  INSERT_LOCAL_FILE_MENTION_COMMAND: 'insert-local-file-mention',
+}));
 vi.mock('./useLocalFileMention', () => ({
   useLocalFileMention: () => ({
     enableLocalFileMention: false,
