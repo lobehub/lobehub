@@ -7,7 +7,11 @@ import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
+import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+
+type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
+type PublishStreamEventCall = [string, PublishedStreamEvent];
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -457,7 +461,7 @@ describe('RuntimeExecutors', () => {
         state,
       );
 
-      const calls = mockStreamManager.publishStreamEvent.mock.calls;
+      const calls = mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[];
       const streamEndIndex = calls.findIndex(([, event]) => event.type === 'stream_end');
       const visibleEndIndex = calls.findIndex(([, event]) => event.type === 'visible_output_end');
 
@@ -501,7 +505,7 @@ describe('RuntimeExecutors', () => {
       );
 
       expect(
-        mockStreamManager.publishStreamEvent.mock.calls.some(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
           ([, event]) => event.type === 'visible_output_end',
         ),
       ).toBe(false);
@@ -533,7 +537,7 @@ describe('RuntimeExecutors', () => {
       );
 
       expect(
-        mockStreamManager.publishStreamEvent.mock.calls.some(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
           ([, event]) => event.type === 'visible_output_end',
         ),
       ).toBe(false);
