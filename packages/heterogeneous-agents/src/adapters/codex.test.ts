@@ -491,6 +491,76 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('preserves completed web_search query details for tool rendering', () => {
+    const adapter = new CodexAdapter();
+    const query = 'OpenAI Codex CLI install official documentation';
+
+    const started = adapter.adapt({
+      item: {
+        action: { type: 'other' },
+        id: 'ws_search',
+        query: '',
+        type: 'web_search',
+      },
+      type: 'item.started',
+    });
+    const completed = adapter.adapt({
+      item: {
+        action: {
+          queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+          query,
+          type: 'search',
+        },
+        id: 'ws_search',
+        query,
+        status: 'completed',
+        type: 'web_search',
+      },
+      type: 'item.completed',
+    });
+
+    expect(started[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [
+          {
+            apiName: 'web_search',
+            arguments: JSON.stringify({
+              action: { type: 'other' },
+              id: 'ws_search',
+              query: '',
+              type: 'web_search',
+            }),
+            id: 'ws_search',
+            identifier: 'codex',
+          },
+        ],
+      },
+      type: 'stream_chunk',
+    });
+    expect(completed[0]).toMatchObject({
+      data: {
+        content: 'Completed web_search.',
+        isError: false,
+        pluginState: {
+          action: {
+            queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+            query,
+            type: 'search',
+          },
+          query,
+          status: 'completed',
+        },
+        toolCallId: 'ws_search',
+      },
+      type: 'tool_result',
+    });
+    expect(completed[1]).toMatchObject({
+      data: { isSuccess: true, toolCallId: 'ws_search' },
+      type: 'tool_end',
+    });
+  });
+
   it('truncates oversized Codex command output before forwarding tool results', () => {
     const adapter = new CodexAdapter();
     const oversizedOutput = 'x'.repeat(25_010);

@@ -17,6 +17,7 @@ const CODEX_COMMAND_API = 'command_execution';
 const CODEX_FILE_CHANGE_API = 'file_change';
 const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
+const CODEX_WEB_SEARCH_API = 'web_search';
 const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
 const CODEX_COMMAND_OUTPUT_MAX_LENGTH = 25_000;
 
@@ -73,6 +74,11 @@ interface CodexMcpToolCallItem extends CodexBaseItem {
   tool?: string;
 }
 
+interface CodexWebSearchItem extends CodexBaseItem {
+  action?: unknown;
+  query?: unknown;
+}
+
 interface CodexCollabAgentState {
   message?: string | null;
   status?: string;
@@ -92,7 +98,8 @@ type CodexToolItem =
   | CodexCommandExecutionItem
   | CodexFileChangeItem
   | CodexMcpToolCallItem
-  | CodexTodoListItem;
+  | CodexTodoListItem
+  | CodexWebSearchItem;
 
 interface ZonedDateTimeParts {
   day: number;
@@ -117,6 +124,9 @@ const isMcpToolCallItem = (item: CodexToolItem): item is CodexMcpToolCallItem =>
 
 const isTodoListItem = (item: CodexToolItem): item is CodexTodoListItem =>
   item.type === CODEX_TODO_LIST_API;
+
+const isWebSearchItem = (item: CodexToolItem): item is CodexWebSearchItem =>
+  item.type === CODEX_WEB_SEARCH_API;
 
 const normalizeTodoListItems = (item: CodexTodoListItem) =>
   (item.items || [])
@@ -191,6 +201,24 @@ const stringifyUnknown = (value: unknown): string => {
 const getRecordString = (record: Record<string, unknown>, key: string): string | undefined => {
   const value = record[key];
   return typeof value === 'string' && value.trim() ? value : undefined;
+};
+
+const getWebSearchQuery = (item: CodexWebSearchItem): string | undefined => {
+  if (typeof item.query === 'string' && item.query.trim()) return item.query.trim();
+
+  return isRecord(item.action) ? getRecordString(item.action, 'query') : undefined;
+};
+
+const synthesizeWebSearchPluginState = (item: CodexWebSearchItem) => {
+  const query = getWebSearchQuery(item);
+
+  if (item.action === undefined && !query && !item.status) return;
+
+  return {
+    ...(item.action === undefined ? {} : { action: item.action }),
+    ...(query ? { query } : {}),
+    ...(item.status ? { status: item.status } : {}),
+  };
 };
 
 const unwrapMcpResultEnvelope = (value: unknown): unknown => {
@@ -368,6 +396,10 @@ const summarizeCollabToolCall = (item: CodexCollabToolCallItem): string => {
   return `${toolName} completed.`;
 };
 
+const summarizeWebSearch = (item: CodexWebSearchItem): string => {
+  return `Completed ${item.type}.`;
+};
+
 const summarizeFallbackTool = (item: CodexToolItem): string => {
   return `Completed ${item.type}.`;
 };
@@ -397,6 +429,7 @@ const getToolContent = (item: CodexToolItem, isSuccess: boolean): string => {
   if (isFileChangeItem(item)) return summarizeFileChange(item);
   if (isMcpToolCallItem(item)) return getMcpResultContent(item);
   if (isCollabToolCallItem(item)) return summarizeCollabToolCall(item);
+  if (isWebSearchItem(item)) return summarizeWebSearch(item);
 
   return summarizeFallbackTool(item);
 };
@@ -478,7 +511,9 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
           ? synthesizeMcpToolPluginState(item)
           : isCollabToolCallItem(item)
             ? synthesizeCollabToolPluginState(item)
-            : undefined;
+            : isWebSearchItem(item)
+              ? synthesizeWebSearchPluginState(item)
+              : undefined;
 
   return {
     content: output,

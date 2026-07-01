@@ -1,6 +1,7 @@
 'use client';
 
 export interface CodexWebSearchArgs extends Record<string, unknown> {
+  action?: unknown;
   query?: unknown;
   results?: unknown;
   search_query?: unknown;
@@ -14,7 +15,16 @@ export interface CodexWebSearchResult {
 }
 
 const QUERY_KEYS = ['query', 'search_query', 'searchQuery', 'q', 'keyword', 'keywords', 'term'];
-const NESTED_ARG_KEYS = ['args', 'arguments', 'input', 'params', 'request', 'payload', 'data'];
+const NESTED_ARG_KEYS = [
+  'args',
+  'arguments',
+  'input',
+  'params',
+  'request',
+  'payload',
+  'data',
+  'action',
+];
 const RESULT_KEYS = ['results', 'search_results', 'searchResults', 'items', 'sources', 'citations'];
 const TITLE_KEYS = ['title', 'name', 'pageTitle', 'source'];
 const URL_KEYS = ['url', 'link', 'href', 'sourceUrl'];
