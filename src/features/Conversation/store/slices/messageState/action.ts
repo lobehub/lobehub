@@ -22,10 +22,10 @@ export interface MessageEditingAction {
   selectRange: (id: string) => void;
   /**
    * Select every selectable message from the top of the conversation down to
-   * the anchor (the message selection started from), inclusive. Mirrors
-   * WeChat's "选择到这里".
+   * `targetId` (inclusive) — the "here" marker line. Falls back to the anchor
+   * when no target is given. Mirrors WeChat's "选择到这里".
    */
-  selectToHere: () => void;
+  selectToHere: (targetId?: string) => void;
   /**
    * Toggle message editing state
    */
@@ -105,10 +105,11 @@ export const messageEditingSlice: StateCreator<
 
     set({ selectedMessageIds: [...next], selectionAnchorId: id }, false, 'selectRange');
   },
-  selectToHere: () => {
+  selectToHere: (targetId) => {
     const { displayMessages, selectionAnchorId } = get();
-    const anchorIndex = selectionAnchorId
-      ? displayMessages.findIndex((m) => m.id === selectionAnchorId)
+    const anchorId = targetId ?? selectionAnchorId;
+    const anchorIndex = anchorId
+      ? displayMessages.findIndex((m) => m.id === anchorId)
       : displayMessages.length - 1;
     if (anchorIndex < 0) return;
 
