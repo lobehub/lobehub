@@ -113,8 +113,7 @@ const SelectionFloatBar = memo(() => {
             <Button
               disabled={disabled}
               icon={<Icon icon={Forward} />}
-              shape={'round'}
-              type={'primary'}
+              type={'text'}
               onClick={() => setForwardOpen(true)}
             >
               {t('messageForward.bar.forward')}

@@ -336,6 +336,7 @@ export default {
   'messageForward.modal.searchPlaceholder': 'Search agents…',
   'messageForward.modal.sendCount': 'Forward ({{count}})',
   'messageForward.modal.title': 'Forward to Agent',
+  'messageForward.role.agent': 'Agent',
   'messageForward.role.assistant': 'Assistant',
   'messageForward.role.user': 'User',
   'messageForward.success': 'Forwarded to {{title}}',
