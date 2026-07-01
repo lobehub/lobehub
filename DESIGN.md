@@ -95,6 +95,8 @@ Two things make this system different from a fixed palette, and both matter when
 
 The YAML above lists the default **Light** theme. The Dark theme redefines the same token names with different values and lives in **[DESIGN.dark.md](./DESIGN.dark.md)** — every other section here (typography, layout, motion, shapes, components, voice, values) is theme-independent and applies to both. Build against token names, not values.
 
+> **Scope — this file is the design _system_, not the interaction playbook.** DESIGN.md covers what the product looks and sounds like: tokens (color, typography, elevation, radius), the component inventory, and Voice & Content. It deliberately does **not** cover how a flow should behave over time. For any **interaction detail** — empty / loading / error states, lists at scale, selection & scroll restoration, pickers, number formatting, draft safety, action momentum & confirm flows, button hierarchy, entity lifecycle, capability guardrails, progressive disclosure — consult the **ux** skill (`.agents/skills/ux/`). Rule of thumb: **static look & wording → here; dynamic behavior → the ux skill.**
+
 ## Design Values
 
 The philosophy behind every LobeHub interface. Read these before designing a flow.
