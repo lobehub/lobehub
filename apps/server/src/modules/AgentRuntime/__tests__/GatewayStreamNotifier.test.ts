@@ -79,6 +79,39 @@ describe('GatewayStreamNotifier', () => {
       );
     });
 
+    it('awaits stream_end gateway push before resolving', async () => {
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      const result = notifier.publishStreamEvent('op-1', {
+        data: { finalContent: 'final answer' },
+        stepIndex: 0,
+        type: 'stream_end' as const,
+      });
+      let resolved = false;
+      void result.then(() => {
+        resolved = true;
+      });
+
+      await Promise.resolve();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${gatewayUrl}/api/operations/push-event`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(resolved).toBe(false);
+
+      resolveFetch();
+
+      await expect(result).resolves.toBe('publishStreamEvent-result');
+      expect(resolved).toBe(true);
+    });
+
     it('still returns inner result even if gateway fails', async () => {
       mockFetch.mockRejectedValueOnce(new Error('network error'));
 

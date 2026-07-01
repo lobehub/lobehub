@@ -70,7 +70,15 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ): Promise<string> {
     const result = await this.inner.publishStreamEvent(operationId, event);
-    this.pushEvent(operationId, { ...event, operationId, timestamp: Date.now() });
+    const gatewayEvent = { ...event, operationId, timestamp: Date.now() };
+    if (event.type === 'stream_end') {
+      // `visible_output_end` may be published immediately after `stream_end`.
+      // Await the Gateway push for this boundary so the client applies
+      // stream_end.finalContent before closing visible loading/reasoning.
+      await this.pushEvent(operationId, gatewayEvent);
+    } else {
+      void this.pushEvent(operationId, gatewayEvent);
+    }
     return result;
   }
 
@@ -80,7 +88,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     chunkData: StreamChunkData,
   ): Promise<string> {
     const result = await this.inner.publishStreamChunk(operationId, stepIndex, chunkData);
-    this.pushEvent(operationId, {
+    void this.pushEvent(operationId, {
       data: chunkData,
       operationId,
       stepIndex,
@@ -107,7 +115,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       userId: initialState?.userId || 'unknown',
     });
 
-    this.pushEvent(operationId, {
+    void this.pushEvent(operationId, {
       data: initialState,
       operationId,
       stepIndex: 0,
@@ -125,7 +133,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
     const errorType = finalState?.error?.type || finalState?.error?.errorType;
 
-    this.pushEvent(operationId, {
+    void this.pushEvent(operationId, {
       // Forward `uiMessages` to the gateway push channel so terminal-state
       // clients consuming /push-event get the canonical UIChatMessage[]
       // snapshot — the final step has no later step_start to carry a fresh
@@ -192,7 +200,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
   // ─── Gateway HTTP helpers ───
 
-  private pushEvent(operationId: string, event: Record<string, unknown>) {
+  private async pushEvent(operationId: string, event: Record<string, unknown>): Promise<void> {
     // Mirror the Redis publisher's chokepoint — strip
     // `finalState.messages` + tool-set fields off the gateway WS push
     // payload too. The gateway forwards events verbatim to clients, and
@@ -201,10 +209,12 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // crashed the xadd path.
     const sanitizedEvent =
       event.data === undefined ? event : { ...event, data: stripFinalStateInEventData(event.data) };
-    this.httpPost('/api/operations/push-event', {
-      event: sanitizedEvent,
-      operationId,
-    }).catch(() => {});
+    const pushes: Promise<void>[] = [
+      this.httpPost('/api/operations/push-event', {
+        event: sanitizedEvent,
+        operationId,
+      }),
+    ];
 
     // Single-connection multiplexing: also deliver to the mirror op's channel so
     // the event rides down that connection's WebSocket. The event payload keeps
@@ -212,21 +222,29 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // back to the right member column. Only the delivery channel changes.
     const mirrorTo = this.mirrorTargets.get(operationId);
     if (mirrorTo) {
-      this.mirrorPush(mirrorTo, sanitizedEvent);
+      pushes.push(this.mirrorPush(mirrorTo, sanitizedEvent));
+      await Promise.all(pushes);
       return;
     }
     // Queue worker: target not in the in-process map. Resolve it from persisted
     // metadata once, then mirror this (and future) events. Concurrent events for
     // the same op share one resolution and fire their mirror pushes in order.
     if (!this.mirrorResolved.has(operationId)) {
-      void this.resolveMirror(operationId).then((target) => {
-        if (target) this.mirrorPush(target, sanitizedEvent);
-      });
+      pushes.push(
+        this.resolveMirror(operationId).then(async (target) => {
+          if (target) await this.mirrorPush(target, sanitizedEvent);
+        }),
+      );
     }
+
+    await Promise.all(pushes);
   }
 
-  private mirrorPush(mirrorTo: string, event: Record<string, unknown>) {
-    this.httpPost('/api/operations/push-event', { event, operationId: mirrorTo }).catch(() => {});
+  private mirrorPush(mirrorTo: string, event: Record<string, unknown>): Promise<void> {
+    return this.httpPost('/api/operations/push-event', {
+      event,
+      operationId: mirrorTo,
+    });
   }
 
   /**
