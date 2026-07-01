@@ -118,10 +118,13 @@ const toAgentDocumentContextPayload = (
   content: doc.content,
   contentCharCount: doc.contentCharCount,
   description: doc.description,
+  documentId: doc.documentId,
   filename: doc.filename,
+  fileType: doc.fileType,
   id: doc.id,
   isFolder: doc.isFolder,
   loadRules: doc.loadRules,
+  parentId: doc.parentId,
   policy: doc.policy,
   policyLoad: doc.policyLoad,
   policyLoadFormat: doc.policyLoadFormat,
@@ -629,11 +632,12 @@ export class AgentDocumentsService {
   async listDocuments(
     agentId: string,
     sourceType?: AgentDocumentListSourceType,
-    options?: { includeArchivedToolResults?: boolean },
+    options?: { includeArchivedToolResults?: boolean; parentId?: string },
   ) {
-    const docs = sourceType
-      ? await this.agentDocumentModel.listByAgent(agentId, { sourceType })
-      : await this.agentDocumentModel.listByAgent(agentId);
+    const docs = await this.agentDocumentModel.listByAgent(agentId, {
+      parentId: options?.parentId,
+      sourceType,
+    });
 
     return options?.includeArchivedToolResults ? docs : excludeArchivedToolResults(docs);
   }

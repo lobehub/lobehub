@@ -951,9 +951,10 @@ export class AgentDocumentModel {
 
   async listByAgent(
     agentId: string,
-    options?: { sourceType?: AgentDocumentListSourceType },
+    options?: { parentId?: string; sourceType?: AgentDocumentListSourceType },
   ): Promise<AgentDocumentListItem[]> {
     const sourceType = options?.sourceType;
+    const parentId = options?.parentId;
     const results = await this.db
       .select({
         description: documents.description,
@@ -976,6 +977,7 @@ export class AgentDocumentModel {
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
           ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+          ...(parentId ? [eq(documents.parentId, parentId)] : []),
         ),
       )
       .orderBy(desc(agentDocuments.updatedAt));
