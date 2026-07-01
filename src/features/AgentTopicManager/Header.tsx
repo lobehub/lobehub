@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, Input, Text, Tooltip } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Icon, Input, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
-import { ChevronRight, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -27,8 +26,6 @@ const Header = memo<HeaderProps>(({ agentId }) => {
   const displayTitle = isInbox
     ? agentTitle || t('inbox.title', { ns: 'chat' })
     : agentTitle || t('defaultSession', { ns: 'common' });
-  const viewMode = useTopicsViewStore((s) => s.viewMode);
-  const setViewMode = useTopicsViewStore((s) => s.setViewMode);
   const search = useTopicsViewStore((s) => s.search);
   const setSearch = useTopicsViewStore((s) => s.setSearch);
 
@@ -57,33 +54,6 @@ const Header = memo<HeaderProps>(({ agentId }) => {
             },
           ]}
         />
-      }
-      right={
-        <Flexbox horizontal align={'center'} gap={6}>
-          <Tabs
-            activeKey={viewMode}
-            size={'small'}
-            items={[
-              {
-                key: 'card',
-                label: (
-                  <Tooltip title={t('management.view.card')}>
-                    <Icon icon={LayoutGrid} />
-                  </Tooltip>
-                ),
-              },
-              {
-                key: 'list',
-                label: (
-                  <Tooltip title={t('management.view.list')}>
-                    <Icon icon={ListIcon} />
-                  </Tooltip>
-                ),
-              },
-            ]}
-            onChange={(key) => setViewMode(key as 'card' | 'list')}
-          />
-        </Flexbox>
       }
     >
       <Input
