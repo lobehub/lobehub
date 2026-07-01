@@ -17,6 +17,12 @@ import {
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
 
+// Renderer dev-server port. Overridable per instance (e.g. one git worktree per
+// concurrent dev instance) via LOBE_DESKTOP_VITE_PORT; `electron-vite dev` injects
+// the matching ELECTRON_RENDERER_URL into the main process automatically. Kept
+// deterministic (still `strictPort`) so the HMR `clientPort` stays in sync.
+const DEV_VITE_PORT = Number(process.env.LOBE_DESKTOP_VITE_PORT) || 5173;
+
 /**
  * Force `base: '/'` in renderer config. The `electron-vite` preset
  * unconditionally rewrites base to `'./'` in production (with `enforce: 'pre'`),
@@ -345,14 +351,14 @@ export default defineConfig({
     // silently sliding, and `clientPort` baked into the HMR injection has to match.
     server: {
       hmr: {
-        clientPort: 5173,
+        clientPort: DEV_VITE_PORT,
         host: '127.0.0.1',
         protocol: 'ws',
       },
       // Force IPv4 so main-process `fetch` skips happy-eyeballs dual-stack
       // attempts that surface as ETIMEDOUT under cold-start request bursts.
       host: '127.0.0.1',
-      port: 5173,
+      port: DEV_VITE_PORT,
       strictPort: true,
     },
   },

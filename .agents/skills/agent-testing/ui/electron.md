@@ -30,6 +30,14 @@ After `start` succeeds, connect with: `agent-browser --cdp 9222 snapshot -i`
 
 **Always run `$SCRIPT stop` when done testing** — `pkill -f "Electron"` alone won't catch all helper processes.
 
+> **Concurrent instances (N worktrees / parallel verification)?** `electron-dev.sh`
+> drives a pool: `start <id>` gives each instance its own CDP port, userData dir
+> (with copied login state), and — via env — its own Vite port + IPC id, so
+> multiple isolated dev instances run at once. Drive each with a distinct
+> `agent-browser --session s<port> --cdp <port>` (the daemon otherwise reuses one
+> session across ports). Full design, the collision matrix, and the login-copy
+> recipe: [../references/multi-instance.md](../references/multi-instance.md).
+
 #### Environment Variables
 
 | Variable          | Default                 | Description                              |

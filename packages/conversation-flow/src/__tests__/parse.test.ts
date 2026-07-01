@@ -637,76 +637,125 @@ describe('parse', () => {
       expect(children[1].tools[0].result_msg_id).toBe('t1');
     });
 
-    // Guard for the narrow scope above: when MORE than one toolless prose step
-    // precedes the first tool call, the head is NOT folded. collectAssistantChain
-    // stops at the first toolless continuation, so folding here would emit a
-    // tools-less assistantGroup and still leave the tool step split. The multi-
-    // prose prelude must instead stay as plain assistant bubbles — and crucially
-    // we must never produce an assistantGroup with no tools.
-    it('should not fold a multi-step toolless prelude (no tools-less assistantGroup)', () => {
+    // Regression: Codex can stream several plain assistant progress messages
+    // between tool-using steps. They are still one continuous run and must stay
+    // inside the same assistantGroup instead of rendering as disconnected
+    // standalone Codex bubbles.
+    it('should fold multiple toolless assistant continuations into one tool chain', () => {
       const messages: Message[] = [
         {
-          content: 'Can you check the build status?',
+          content: 'Can you connect to CF and inspect usage?',
           createdAt: 0,
           id: 'u1',
           role: 'user',
           updatedAt: 0,
         },
         {
-          content: 'Sure, let me think about where to look.',
+          content: 'OAuth token can access the CF REST API.',
           createdAt: 1,
-          id: 'a-head', // toolless, parent is the user message
+          id: 'a-rest',
           parentId: 'u1',
           role: 'assistant',
+          tools: [
+            {
+              apiName: 'command',
+              arguments: '{}',
+              id: 't-rest',
+              identifier: 'codex',
+              type: 'default',
+            },
+          ],
           updatedAt: 1,
         },
         {
-          content: 'The CI config is probably under .github/workflows.',
+          content: 'account list',
           createdAt: 2,
-          id: 'a-prose', // SECOND toolless prose step before any tool
-          parentId: 'a-head',
-          role: 'assistant',
+          id: 't-rest',
+          parentId: 'a-rest',
+          role: 'tool',
+          tool_call_id: 't-rest',
           updatedAt: 2,
         },
         {
-          content: 'Reading it now.',
+          content: 'GraphQL root only has viewer.',
           createdAt: 3,
-          id: 'a-tool',
-          parentId: 'a-prose',
+          id: 'a-viewer',
+          parentId: 'a-rest',
           role: 'assistant',
-          tools: [
-            { apiName: 'readFile', arguments: '{}', id: 't1', identifier: 'fs', type: 'default' },
-          ],
           updatedAt: 3,
         },
         {
-          content: 'name: CI',
+          content: 'GraphQL schema confirms lowercase viewer.',
           createdAt: 4,
-          id: 't1',
-          parentId: 'a-tool',
-          role: 'tool',
-          tool_call_id: 't1',
+          id: 'a-schema',
+          parentId: 'a-viewer',
+          role: 'assistant',
           updatedAt: 4,
+        },
+        {
+          content: 'Now reading the account analytics fields.',
+          createdAt: 5,
+          id: 'a-analytics',
+          parentId: 'a-schema',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command',
+              arguments: '{}',
+              id: 't-analytics',
+              identifier: 'codex',
+              type: 'default',
+            },
+          ],
+          updatedAt: 5,
+        },
+        {
+          content: 'workersInvocationsAdaptive',
+          createdAt: 6,
+          id: 't-analytics',
+          parentId: 'a-analytics',
+          role: 'tool',
+          tool_call_id: 't-analytics',
+          updatedAt: 6,
+        },
+        {
+          content: 'I found the Workers and Durable Objects usage datasets.',
+          createdAt: 7,
+          id: 'a-final',
+          parentId: 'a-analytics',
+          role: 'assistant',
+          updatedAt: 7,
         },
       ] as Message[];
 
       const result = parse(messages);
 
-      // No assistantGroup may exist without tools in any of its children.
-      const toollessGroups = result.flatList.filter(
-        (m) =>
-          m.role === 'assistantGroup' &&
-          ((m as any).children ?? []).every((c: any) => !c.tools || c.tools.length === 0),
-      );
-      expect(toollessGroups).toHaveLength(0);
+      expect(result.flatList).toHaveLength(2);
+      expect(result.flatList[0].id).toBe('u1');
+      expect(result.flatList[1].role).toBe('assistantGroup');
 
-      // The two prose steps render as plain assistant bubbles; the tool step
-      // forms its own (well-formed) assistantGroup.
-      const head = result.flatList.find((m) => m.id === 'a-head');
-      expect(head?.role).toBe('assistant');
-      const toolGroup = result.flatList.find((m) => m.id === 'a-tool');
-      expect(toolGroup?.role).toBe('assistantGroup');
-      expect((toolGroup as any).children[0].tools[0].result_msg_id).toBe('t1');
+      const children = (result.flatList[1] as any).children;
+      expect(children.map((c: any) => c.id)).toEqual([
+        'a-rest',
+        'a-viewer',
+        'a-schema',
+        'a-analytics',
+        'a-final',
+      ]);
+      expect(children[0].tools[0].result_msg_id).toBe('t-rest');
+      expect(children[1].tools).toBeUndefined();
+      expect(children[2].tools).toBeUndefined();
+      expect(children[3].tools[0].result_msg_id).toBe('t-analytics');
+
+      const contextGroup = result.contextTree.find((node: any) => node.id === 'a-rest') as any;
+      expect(contextGroup?.type).toBe('assistantGroup');
+      expect(contextGroup.children.map((node: any) => node.id)).toEqual([
+        'a-rest',
+        'a-viewer',
+        'a-schema',
+        'a-analytics',
+        'a-final',
+      ]);
     });
   });
 
