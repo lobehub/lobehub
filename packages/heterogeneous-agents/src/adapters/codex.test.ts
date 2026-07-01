@@ -561,6 +561,39 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('preserves completed web_search action queries for tool rendering', () => {
+    const adapter = new CodexAdapter();
+    const query = 'OpenAI Codex CLI install official documentation';
+    const completed = adapter.adapt({
+      item: {
+        action: {
+          queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+          type: 'search',
+        },
+        id: 'ws_search',
+        status: 'completed',
+        type: 'web_search',
+      },
+      type: 'item.completed',
+    });
+    const result = completed.find((event) => event.type === 'tool_result');
+
+    expect(result).toMatchObject({
+      data: {
+        pluginState: {
+          action: {
+            queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+            type: 'search',
+          },
+          query,
+          status: 'completed',
+        },
+        toolCallId: 'ws_search',
+      },
+      type: 'tool_result',
+    });
+  });
+
   it('truncates oversized Codex command output before forwarding tool results', () => {
     const adapter = new CodexAdapter();
     const oversizedOutput = 'x'.repeat(25_010);

@@ -203,10 +203,21 @@ const getRecordString = (record: Record<string, unknown>, key: string): string |
   return typeof value === 'string' && value.trim() ? value : undefined;
 };
 
+const getFirstStringFromArray = (value: unknown): string | undefined => {
+  if (!Array.isArray(value)) return;
+
+  for (const item of value) {
+    if (typeof item === 'string' && item.trim()) return item.trim();
+  }
+};
+
+const getWebSearchActionQuery = (action: Record<string, unknown>): string | undefined =>
+  getRecordString(action, 'query')?.trim() || getFirstStringFromArray(action.queries);
+
 const getWebSearchQuery = (item: CodexWebSearchItem): string | undefined => {
   if (typeof item.query === 'string' && item.query.trim()) return item.query.trim();
 
-  return isRecord(item.action) ? getRecordString(item.action, 'query') : undefined;
+  return isRecord(item.action) ? getWebSearchActionQuery(item.action) : undefined;
 };
 
 const synthesizeWebSearchPluginState = (item: CodexWebSearchItem) => {

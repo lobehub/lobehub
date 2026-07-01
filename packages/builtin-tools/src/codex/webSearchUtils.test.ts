@@ -15,6 +15,18 @@ describe('getWebSearchQuery', () => {
     ).toBe('OpenAI Codex CLI install official documentation');
   });
 
+  it('reads the completed Codex web_search query from action queries', () => {
+    expect(
+      getWebSearchQuery({
+        action: {
+          queries: ['OpenAI Codex CLI install official documentation'],
+          type: 'search',
+        },
+        status: 'completed',
+      }),
+    ).toBe('OpenAI Codex CLI install official documentation');
+  });
+
   it('keeps direct args query as the first match', () => {
     expect(
       getWebSearchQuery({
