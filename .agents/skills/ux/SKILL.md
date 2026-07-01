@@ -109,6 +109,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
+- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner.
 - [ ] Capability-gated feature warns (soft, reactive, load-gated) when the model can't deliver it; copy gives the remedy.
 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))

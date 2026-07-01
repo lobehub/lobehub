@@ -34,7 +34,35 @@ optimal.
 - [ ] Skeleton lines sized like the text they replace (height ≈ real). _(Certainty)_
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
 
-## 4.2 Capability-gated features・Certainty・Meaningful
+## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
+
+A loading state that can only ever resolve to _success_ is a bug. Any async fetch can hang,
+time out, or error, so every loading state needs a **terminal failure path**: after a
+bounded wait (or on an error) the spinner / skeleton must give way to an explicit **failed**
+state that says it didn't load and offers a **Reload / Retry** button. An indefinite spinner
+is indistinguishable from a dead one — the user is stuck with no recourse but to reload the
+whole app, and can't even tell whether anything is still happening. A failed-with-retry
+state hands control back and restores certainty. Retry re-runs the _same_ fetch (SWR
+`mutate` / query refetch), shows loading again while it re-runs, and stays available if it
+fails again; keep any already-loaded context rather than blowing the surface away.
+
+> **We under-build this today** — most surfaces only draw loading + success and let a slow
+> or failed request spin forever. Treat the failure path as required, not optional: it's a
+> large part of what makes the experience feel trustworthy.
+
+> ✅ A panel whose data request errors or exceeds its timeout shows "加载失败" with a
+> **Reload** button that refetches. ❌ A `NeuralNetworkLoading` that spins indefinitely when
+> the request hangs, with no way forward. _(pairs with Read §1.1 error state, §4.1 loading
+> visuals.)_
+
+**Checklist**
+
+- [ ] Every loading state has a terminal failure path — on error or after a bounded timeout, not an infinite spinner. _(Certainty)_
+- [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
+- [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
+- [ ] Already-loaded context is preserved on failure — don't wipe the surface. _(Meaningful)_
+
+## 4.3 Capability-gated features・Certainty・Meaningful
 
 A feature can be fully built and still produce a broken result when the selected model —
 or its still-loading config — **can't deliver the capability the feature depends on**
