@@ -55,6 +55,9 @@ export const restoreToInputAction = defineAction({
           // 2. Rebuild the pending attachments. These files are already uploaded,
           //    so we only need their db id (send reads `f.id`) plus a url for the
           //    thumbnail; the `file` stand-in just feeds the preview UI.
+          //    `skipRemoveFile` marks them as references to already-persisted
+          //    files — removing one from the composer must NOT delete the file
+          //    still backing the original message.
           // `alt`-only items (image/video/audio) carry no size or mime, so the
           // `file` stand-in gets a generic `type` prefix good enough for the
           // preview's `startsWith('image'|'video')` branch.
@@ -67,6 +70,7 @@ export const restoreToInputAction = defineAction({
               fileUrl: item.url,
               id: item.id,
               previewUrl: item.url,
+              skipRemoveFile: true,
               status: 'success' as const,
             }));
 
@@ -79,6 +83,7 @@ export const restoreToInputAction = defineAction({
               fileUrl: f.url,
               id: f.id,
               previewUrl: f.url,
+              skipRemoveFile: true,
               status: 'success' as const,
             })),
           ];
