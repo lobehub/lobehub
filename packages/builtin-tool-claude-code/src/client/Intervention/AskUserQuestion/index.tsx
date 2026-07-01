@@ -113,12 +113,12 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         </Text>
       </Flexbox>
       <Flexbox horizontal gap={8}>
-        <Button disabled={submitting} icon={X} onClick={handleSkip}>
+        <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
           {t('claudeCode.askUserQuestion.skip')}
         </Button>
         <Button
           disabled={isSubmitDisabled}
-          icon={Send}
+          icon={<Icon icon={Send} />}
           loading={submitting}
           type="primary"
           onClick={handleSubmit}
