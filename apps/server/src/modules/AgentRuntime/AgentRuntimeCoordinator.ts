@@ -5,6 +5,7 @@ import debug from 'debug';
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
+import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
@@ -179,7 +180,9 @@ export class AgentRuntimeCoordinator {
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
         const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
-        await this.publishVisibleOutputEnd(operationId, state, stepIndex);
+        if (!hasVisibleOutputEndPublished(state)) {
+          await this.publishVisibleOutputEnd(operationId, state, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
           operationId,
@@ -210,7 +213,9 @@ export class AgentRuntimeCoordinator {
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
         const stepIndex =
           stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0;
-        await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
+        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
+          await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
           operationId,

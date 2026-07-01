@@ -7,6 +7,7 @@ import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
+import { VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY } from '../visibleOutputEnd';
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -437,6 +438,74 @@ describe('RuntimeExecutors', () => {
           provider: 'openai',
         }),
       );
+    });
+
+    it('publishes visible_output_end before persistence for no-tool final answers', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const calls = mockStreamManager.publishStreamEvent.mock.calls;
+      const streamEndIndex = calls.findIndex(([, event]) => event.type === 'stream_end');
+      const visibleEndIndex = calls.findIndex(([, event]) => event.type === 'visible_output_end');
+
+      expect(streamEndIndex).toBeGreaterThanOrEqual(0);
+      expect(visibleEndIndex).toBeGreaterThan(streamEndIndex);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.invocationCallOrder[visibleEndIndex],
+      ).toBeLessThan(mockMessageModel.update.mock.invocationCallOrder[0]);
+      expect(result.newState.metadata).toMatchObject({
+        [VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY]: true,
+      });
+    });
+
+    it('does not publish early visible_output_end for tool-call steps', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_METADATA_KEY]).toBeUndefined();
     });
 
     // preserveThinking gates whether reasoning is replayed into the next LLM
