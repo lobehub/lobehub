@@ -124,6 +124,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
+import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectory } from './resolveDeviceWorkingDirectory';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
@@ -1312,10 +1313,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
     const heteroType = (heteroProviderType ?? model) as
-      | 'claude-code'
-      | 'codex'
-      | 'hermes'
-      | 'openclaw';
+      'claude-code' | 'codex' | 'hermes' | 'openclaw';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -2081,36 +2079,7 @@ export class AiAgentService {
           threadId: appContext.threadId,
           topicId: appContext.topicId,
         });
-        const parentOf = new Map(tree.map((row) => [row.id, row.parentId]));
-        const descendsFromAnchor = (id: string | null | undefined) => {
-          let cursor = id ? parentOf.get(id) : undefined;
-          const seen = new Set<string>();
-          while (cursor && !seen.has(cursor)) {
-            if (cursor === parentMessageId) return true;
-            seen.add(cursor);
-            cursor = parentOf.get(cursor);
-          }
-          return false;
-        };
-        // Message ids on the anchor's old branch (old answer + later turns),
-        // including messages hidden inside compaction groups.
-        const descendantIds = new Set(
-          tree.filter((row) => descendsFromAnchor(row.id)).map((row) => row.id),
-        );
-        // Group nodes whose members fall on that branch (e.g. a compacted old branch).
-        const prunedGroupIds = new Set(
-          tree
-            .filter((row) => row.messageGroupId && descendantIds.has(row.id))
-            .map((row) => row.messageGroupId as string),
-        );
-        historyMessagesCache = historyMessagesCache.filter((msg) => {
-          if (msg.id === parentMessageId) return true;
-          // Synthetic MessageGroup nodes carry the group id, not a message id.
-          if (msg.role === 'compressedGroup' || msg.role === 'compareGroup') {
-            return !prunedGroupIds.has(msg.id);
-          }
-          return !descendantIds.has(msg.id);
-        });
+        historyMessagesCache = pruneRegeneratedBranch(historyMessagesCache, tree, parentMessageId);
       }
 
       return historyMessagesCache;
@@ -4282,8 +4251,7 @@ export class AiAgentService {
     if (topicId) {
       const topic = await this.topicModel.findById(topicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
-        | { deviceId?: string; heteroType?: string; operationId?: string }
-        | undefined;
+        { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
 
       if (
         runningOp?.deviceId &&
