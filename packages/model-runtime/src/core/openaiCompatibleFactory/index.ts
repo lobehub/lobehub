@@ -213,11 +213,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     ) => OpenAI.ChatCompletionCreateParamsStreaming;
     handleStream?: (
       stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
-      options: {
-        callbacks?: ChatStreamCallbacks;
-        inputStartAt?: number;
-        payload?: ChatPayloadForTransformStream;
-      },
+      options: OpenAIStreamOptions & { inputStartAt?: number },
     ) => ReadableStream;
     handleStreamBizErrorType?: (error: {
       message: string;
@@ -657,6 +653,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model: payload.model,
             pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
+            tools: postPayload.tools,
           },
         };
 
@@ -732,9 +729,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           return StreamingResponse(
             chatCompletion?.handleStream
               ? chatCompletion.handleStream(prod, {
-                  callbacks: streamOptions.callbacks,
+                  ...streamOptions,
                   inputStartAt,
-                  payload: streamOptions.payload,
                 })
               : OpenAIStream(prod, {
                   ...streamOptions,
@@ -763,9 +759,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
-                callbacks: streamOptions.callbacks,
+                ...streamOptions,
+                enableStreaming: false,
                 inputStartAt,
-                payload: streamOptions.payload,
               })
             : OpenAIStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
           {

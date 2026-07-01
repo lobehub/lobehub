@@ -1,7 +1,7 @@
 import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import type { ChatStreamCallbacks } from '../../../types';
+import type { OpenAIStreamOptions } from '../openai/openai';
 import { transformOpenAIStream } from '../openai/openai';
 import type {
   ChatPayloadForTransformStream,
@@ -11,6 +11,7 @@ import type {
 import {
   convertIterableToStream,
   createCallbacksTransformer,
+  createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
 } from '../protocol';
@@ -72,14 +73,14 @@ export const transformVolcengineSeedStream = (
   const item = chunk.choices?.[0];
 
   if (item?.finish_reason) {
+    const processedBase = normalizeSeedStreamChunks(base, streamContext);
     const flushed = flushSeedToolCallBuffer(streamContext.seedToolCallBuffer ?? '');
     streamContext.seedToolCallBuffer = '';
 
     if (flushed.length === 0) {
-      return normalizeSeedStreamChunks(base, streamContext);
+      return processedBase;
     }
 
-    const processedBase = normalizeSeedStreamChunks(base, streamContext);
     const baseChunks = Array.isArray(processedBase) ? processedBase : [processedBase];
 
     return [...baseChunks, ...flushed.map((c) => ({ ...c, id: chunk.id ?? c.id }))];
@@ -92,24 +93,23 @@ export const VolcengineSeedAIStream = (
   stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
   {
     callbacks,
+    bizErrorTypeTransformer,
     payload,
     inputStartAt,
     enableStreaming = true,
-  }: {
-    callbacks?: ChatStreamCallbacks;
-    enableStreaming?: boolean;
-    inputStartAt?: number;
-    payload?: ChatPayloadForTransformStream;
-  } = {},
+  }: OpenAIStreamOptions & { inputStartAt?: number } = {},
 ) => {
   const streamContext: StreamContext = { id: '' };
   const readableStream =
-    stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+    stream instanceof ReadableStream
+      ? stream
+      : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   const transformWithPayload = (chunk: OpenAI.ChatCompletionChunk, context: StreamContext) =>
     transformVolcengineSeedStream(chunk, context, payload);
 
   return readableStream
+    .pipeThrough(createFirstErrorHandleTransformer(bizErrorTypeTransformer, payload?.provider))
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
         enableStreaming,

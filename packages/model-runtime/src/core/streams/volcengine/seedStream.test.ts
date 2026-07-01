@@ -98,4 +98,30 @@ describe('transformVolcengineSeedStream', () => {
     expect(streamContext.seedToolCallBuffer).toBe('');
     expect(toolChunk?.data[0].function.name).toBe('lobe-creds____injectCredsToSandbox');
   });
+
+  it('should parse closing tag on the terminal content chunk before flushing', () => {
+    const streamContext: StreamContext = {
+      id: 'resp-5',
+      seedToolCallBuffer:
+        'seed:tool_call<function name="lobe-creds____injectCredsToSandbox"><parameter name="keys" string="false">["shuyou"]',
+    };
+    const chunk = {
+      choices: [
+        {
+          delta: { content: '</parameter></function></seed:tool_call>' },
+          finish_reason: 'stop',
+          index: 0,
+        },
+      ],
+      id: 'resp-5',
+      object: 'chat.completion.chunk',
+    } as OpenAI.ChatCompletionChunk;
+
+    const result = transformVolcengineSeedStream(chunk, streamContext, seedPayload);
+    const chunks = Array.isArray(result) ? result : [result];
+    const toolChunk = chunks.find((item) => item.type === 'tool_calls');
+
+    expect(streamContext.seedToolCallBuffer).toBe('');
+    expect(toolChunk?.data[0].function.name).toBe('lobe-creds____injectCredsToSandbox');
+  });
 });
