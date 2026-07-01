@@ -628,6 +628,11 @@ Document content here.
           activeTopicDocument: {
             agentDocumentId: 'agd_123',
             documentId: 'docs_123',
+            snapshot: {
+              markdown: '# Topic Plan\n\nDraft body',
+              metadata: { charCount: 24, lineCount: 3, title: 'Topic Plan' },
+              xml: '<doc><heading id="h1">Topic Plan</heading></doc>',
+            },
             title: 'Topic Plan',
           },
         },
@@ -641,8 +646,12 @@ Document content here.
       expect(userMessage?.content).toContain('<active_topic_document>');
       expect(userMessage?.content).toContain('document_id="docs_123"');
       expect(userMessage?.content).toContain('agent_document_id="agd_123"');
+      expect(userMessage?.content).toContain('<current_document_snapshot>');
+      expect(userMessage?.content).toContain('<markdown chars="24" lines="3">');
+      expect(userMessage?.content).toContain('<doc_xml_structure>');
       expect(userMessage?.content).toContain('scope="currentTopic"');
       expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
+      expect(userMessage?.content).toContain('Call readDocument with format="xml" only when');
       expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
     });
 
