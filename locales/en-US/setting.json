@@ -615,7 +615,7 @@
   "settingChatAppearance.fontSize.marks.normal": "Standard",
   "settingChatAppearance.fontSize.title": "Font Size",
   "settingChatAppearance.highlighterTheme.title": "Code Highlight Theme",
-  "settingChatAppearance.linkIcon.desc": "Turn this off if links look oversized when copied into email or other apps.",
+  "settingChatAppearance.linkIcon.desc": "Turn this off if you don't need it.",
   "settingChatAppearance.linkIcon.previewMessage": "Check out <site></site> and <repo></repo> for more details.",
   "settingChatAppearance.linkIcon.title": "Show icons in message links",
   "settingChatAppearance.mermaidTheme.title": "Mermaid Theme",
