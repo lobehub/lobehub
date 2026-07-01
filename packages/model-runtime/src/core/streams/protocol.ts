@@ -15,8 +15,6 @@ export type ChatPayloadForTransformStream = {
   pricing?: Pricing;
   pricingOptions?: ComputeChatCostOptions;
   provider?: string;
-  /** Original request tools — used by provider-specific stream adapters (e.g. Doubao Seed). */
-  tools?: unknown[];
 };
 
 /**

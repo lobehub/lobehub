@@ -66,7 +66,7 @@ export const transformVolcengineSeedStream = (
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
   const base = transformOpenAIStream(chunk, streamContext, payload);
 
-  if (!isDoubaoSeedModel(payload?.model) || !payload?.tools?.length) {
+  if (!isDoubaoSeedModel(payload?.model)) {
     return base;
   }
 

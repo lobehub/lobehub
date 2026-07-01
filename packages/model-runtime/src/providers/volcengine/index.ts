@@ -69,7 +69,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
       } as any;
     },
     handleStream: (stream, options) => {
-      if (isDoubaoSeedModel(options.payload?.model) && options.payload?.tools?.length) {
+      if (isDoubaoSeedModel(options.payload?.model)) {
         return VolcengineSeedAIStream(stream, options);
       }
 

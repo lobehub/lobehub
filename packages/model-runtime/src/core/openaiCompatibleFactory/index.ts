@@ -213,7 +213,12 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     ) => OpenAI.ChatCompletionCreateParamsStreaming;
     handleStream?: (
       stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
-      options: OpenAIStreamOptions & { inputStartAt?: number },
+      options: {
+        bizErrorTypeTransformer?: OpenAIStreamOptions['bizErrorTypeTransformer'];
+        callbacks?: ChatStreamCallbacks;
+        inputStartAt?: number;
+        payload?: ChatPayloadForTransformStream;
+      },
     ) => ReadableStream;
     handleStreamBizErrorType?: (error: {
       message: string;
@@ -653,7 +658,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model: payload.model,
             pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
-            tools: postPayload.tools,
           },
         };
 
@@ -729,8 +733,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           return StreamingResponse(
             chatCompletion?.handleStream
               ? chatCompletion.handleStream(prod, {
-                  ...streamOptions,
+                  bizErrorTypeTransformer: streamOptions.bizErrorTypeTransformer,
+                  callbacks: streamOptions.callbacks,
                   inputStartAt,
+                  payload: streamOptions.payload,
                 })
               : OpenAIStream(prod, {
                   ...streamOptions,
@@ -759,9 +765,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
-                ...streamOptions,
-                enableStreaming: false,
+                bizErrorTypeTransformer: streamOptions.bizErrorTypeTransformer,
+                callbacks: streamOptions.callbacks,
                 inputStartAt,
+                payload: streamOptions.payload,
               })
             : OpenAIStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
           {

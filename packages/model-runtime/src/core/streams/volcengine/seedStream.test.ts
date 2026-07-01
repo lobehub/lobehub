@@ -9,9 +9,6 @@ const INJECT_CREDS_BLOCK =
 
 const seedPayload = {
   model: 'doubao-seed-2.0-pro',
-  tools: [
-    { function: { name: 'lobe-creds____injectCredsToSandbox', parameters: {} }, type: 'function' },
-  ],
 };
 
 describe('transformVolcengineSeedStream', () => {
@@ -76,7 +73,6 @@ describe('transformVolcengineSeedStream', () => {
 
     const result = transformVolcengineSeedStream(chunk, streamContext, {
       model: 'doubao-pro-32k',
-      tools: seedPayload.tools,
     });
     const chunks = Array.isArray(result) ? result : [result];
 
