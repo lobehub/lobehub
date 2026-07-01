@@ -1,5 +1,5 @@
 import isEqual from 'fast-deep-equal';
-import { produce } from 'immer';
+import { current, produce } from 'immer';
 
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
@@ -39,10 +39,7 @@ type ReplaceChatTopicIdAction = ChatTopicScope & {
 };
 
 export type ChatTopicDispatch =
-  | AddChatTopicAction
-  | UpdateChatTopicAction
-  | DeleteChatTopicAction
-  | ReplaceChatTopicIdAction;
+  AddChatTopicAction | UpdateChatTopicAction | DeleteChatTopicAction | ReplaceChatTopicIdAction;
 
 export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch): ChatTopic[] => {
   switch (payload.type) {
@@ -70,9 +67,9 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           const currentTopic = draftState[topicIndex];
           const mergedTopic = { ...currentTopic, ...value };
 
-          // Only update if the merged value is different from current (excluding updatedAt)
-
-          if (!isEqual(currentTopic, mergedTopic)) {
+          // Only update if the merged value is different from current (excluding updatedAt).
+          // Compare against a plain snapshot, not the raw draft proxy — see message/reducer.ts.
+          if (!isEqual(current(currentTopic), mergedTopic)) {
             // TODO: updatedAt type needs to be changed to Date later
             // @ts-ignore
             draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
