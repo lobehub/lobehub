@@ -1048,9 +1048,6 @@ export class MessengerRouter {
     const isDmChannel =
       event.channel.isDM === true ||
       (creds.platform === 'slack' && chatId.startsWith('D')) ||
-      // Telegram private-chat ids equal the user id (positive); group /
-      // supergroup ids are negative. chat-sdk doesn't set `isDM` on slash
-      // events (see the openDM block above), so probe the id sign.
       (creds.platform === 'telegram' && !chatId.startsWith('-'));
 
     // Discord slash commands arrive as deferred interactions (the
