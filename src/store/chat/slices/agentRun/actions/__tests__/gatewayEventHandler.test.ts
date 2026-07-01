@@ -477,6 +477,28 @@ describe('createGatewayEventHandler', () => {
       expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
+    it('applies finalContent before ending a reasoning-only stream', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking text' }));
+      handler(makeEvent('stream_end', { finalContent: 'final answer' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'final answer' },
+        },
+        { operationId: 'op-1' },
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+    });
+
     it('should clear tool streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
