@@ -553,6 +553,31 @@ Literal dot content`;
       expect(result.manifest.name).toBe('literal-dot-skill');
     });
 
+    it('should report "not found" (not silently import the root skill) when basePath misses', async () => {
+      // User explicitly requested a subdirectory via the GitHub URL path, but no SKILL.md
+      // exists there. Even though the repo has a root-level SKILL.md, we must NOT fall
+      // through and silently import that unrelated skill — it must be reported as missing.
+      const testFiles = {
+        'repo-main/SKILL.md': new TextEncoder().encode(
+          '---\nname: root\ndescription: root\n---\nRoot',
+        ),
+        'repo-main/README.md': new TextEncoder().encode('# Repo'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      // Nonexistent subpath
+      await expect(
+        parser.parseZipPackage(buffer, { basePath: 'skills/does-not-exist' }),
+      ).rejects.toThrow('SKILL.md not found');
+
+      // Invalid-regex-looking subpath must behave the same (no silent root import)
+      await expect(parser.parseZipPackage(buffer, { basePath: '[invalid' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
     it('should still resolve the basePath via the fallback when the root prefix differs', async () => {
       // When findGitHubRootPrefix picks a prefix that does not match the SKILL.md's
       // top-level directory, the exact lookup misses and the fallback must still find

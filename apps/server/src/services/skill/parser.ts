@@ -224,6 +224,12 @@ export class SkillParser {
           skillMdPath: matchWithBasePath,
         };
       }
+
+      // basePath was explicitly requested (GitHub subdirectory import) but no SKILL.md
+      // exists there. Do NOT fall through to the generic root/first-level lookup below:
+      // that would silently import an unrelated root skill (e.g. "repo-main/SKILL.md")
+      // when the user asked for a specific subdirectory. Report "not found" instead.
+      return { skillMdContent: '', skillMdPath: null };
     }
 
     // Check root directory first
