@@ -15,6 +15,12 @@ export interface MessageEditingAction {
    */
   exitSelectionMode: () => void;
   /**
+   * Shift-click range select: add every selectable message between the current
+   * anchor and `id` (inclusive) to the selection, then move the anchor to `id`.
+   * Falls back to a plain toggle when there is no anchor yet.
+   */
+  selectRange: (id: string) => void;
+  /**
    * Select every selectable message from the top of the conversation down to
    * the anchor (the message selection started from), inclusive. Mirrors
    * WeChat's "选择到这里".
@@ -68,6 +74,37 @@ export const messageEditingSlice: StateCreator<
       'exitSelectionMode',
     );
   },
+  selectRange: (id) => {
+    const { displayMessages, selectionAnchorId, selectedMessageIds } = get();
+    const anchorIndex = selectionAnchorId
+      ? displayMessages.findIndex((m) => m.id === selectionAnchorId)
+      : -1;
+    const targetIndex = displayMessages.findIndex((m) => m.id === id);
+    // No anchor yet (or target missing): behave like a plain select-on.
+    if (targetIndex < 0 || anchorIndex < 0) {
+      set(
+        {
+          selectedMessageIds: toggleBooleanList(selectedMessageIds, id, true),
+          selectionAnchorId: id,
+        },
+        false,
+        'selectRange',
+      );
+      return;
+    }
+
+    const [lo, hi] =
+      anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+    const rangeIds = displayMessages
+      .slice(lo, hi + 1)
+      .filter((m) => isSelectableRole(m.role))
+      .map((m) => m.id);
+
+    const next = new Set(selectedMessageIds);
+    for (const rangeId of rangeIds) next.add(rangeId);
+
+    set({ selectedMessageIds: [...next], selectionAnchorId: id }, false, 'selectRange');
+  },
   selectToHere: () => {
     const { displayMessages, selectionAnchorId } = get();
     const anchorIndex = selectionAnchorId
@@ -93,7 +130,9 @@ export const messageEditingSlice: StateCreator<
     const current = get().selectedMessageIds;
     const next = selected ?? !current.includes(id);
     set(
-      { selectedMessageIds: toggleBooleanList(current, id, next) },
+      // Move the anchor to the last interacted message so Shift-range and
+      // "select to here" both reference the user's current focus.
+      { selectedMessageIds: toggleBooleanList(current, id, next), selectionAnchorId: id },
       false,
       'toggleMessageSelected',
     );

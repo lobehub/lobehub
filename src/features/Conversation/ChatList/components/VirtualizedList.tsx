@@ -84,6 +84,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
     const isAutoScrollEnabled = useAutoScrollEnabled();
 
+    // While multi-selecting, let message rows span the full stream width so the
+    // clickable/highlight band fills the available space instead of the centered
+    // reading column.
+    const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
+
     // Store actions
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
     const setScrollState = useConversationStore((s) => s.setScrollState);
@@ -347,7 +352,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
             }
 
             return (
-              <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+              <WideScreenContainer
+                fullWidth={isSelectionMode}
+                key={messageId}
+                style={{ position: 'relative' }}
+              >
                 {content}
                 {isLastItem && isAutoScrollEnabled && !spacerActive && <AutoScroll />}
               </WideScreenContainer>
