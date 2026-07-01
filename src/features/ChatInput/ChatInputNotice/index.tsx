@@ -13,7 +13,22 @@ import { useChatInputNotice } from './useChatInputNotice';
 
 const styles = createStaticStyles(({ css }) => ({
   alert: css`
-    .ant-alert-message {
+    /* @lobehub/ui's root style sets align-items: flex-start, top-aligning the
+     * action button against the (shorter) icon+text row instead of centering
+     * it. */
+    align-items: center !important;
+
+    /* Antd's alert section defaults to flex: 1, stretching to fill all
+     * leftover width and pushing the action button to the far edge. Shrink
+     * it to content so the action sits right next to the message. */
+    .ant-alert-section {
+      flex: 0 1 auto !important;
+    }
+
+    /* The rendered title class is .ant-alert-title (not .ant-alert-message,
+     * which this version of antd no longer emits) — matching line-height to
+     * the icon's forced height keeps them vertically aligned. */
+    .ant-alert-title {
       font-size: 12px;
       line-height: 18px !important;
     }
@@ -42,7 +57,7 @@ const SwitchToLocalAction = memo(() => {
   };
 
   return (
-    <Button loading={loading} size={'small'} onClick={handleClick}>
+    <Button loading={loading} size={'small'} type={'primary'} onClick={handleClick}>
       {t('input.switchToLocal')}
     </Button>
   );
