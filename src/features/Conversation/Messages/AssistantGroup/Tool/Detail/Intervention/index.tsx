@@ -189,6 +189,7 @@ const Intervention = memo<InterventionProps>(
         return (
           <Flexbox gap={12}>
             <BuiltinToolInterventionRender
+              actionsPortalTarget={actionsPortalTarget}
               apiName={apiName}
               args={parsedArgs}
               identifier={identifier}

@@ -156,6 +156,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-direction: column;
     align-items: center;
 
-    width: min(520px, 92vw);
+    width: min(640px, 92vw);
   `,
 }));

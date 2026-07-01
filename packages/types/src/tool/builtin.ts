@@ -416,6 +416,14 @@ export interface BuiltinServerRuntimeOutput {
 }
 
 export interface BuiltinInterventionProps<Arguments = any> {
+  /**
+   * When present, a custom intervention should portal its action footer
+   * (submit / skip + status) into this node so it stays pinned below the
+   * scrollable content instead of scrolling with it. Hosts that render a fixed
+   * footer (e.g. the global approval card) supply this; when absent the
+   * component renders its footer inline.
+   */
+  actionsPortalTarget?: HTMLElement | null;
   apiName?: string;
   args: Arguments;
   identifier?: string;

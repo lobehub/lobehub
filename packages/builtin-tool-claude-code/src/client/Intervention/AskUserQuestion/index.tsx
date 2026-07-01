@@ -1,10 +1,12 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tabs, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, Check, PenLine, Send, X } from 'lucide-react';
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { AskUserQuestionArgs } from '../../../types';
@@ -55,6 +57,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
+  const { actionsPortalTarget } = props;
   const {
     activeQuestion,
     activeTab,
@@ -76,6 +79,55 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     setActiveTab,
     submitting,
   } = useAskUserForm(props);
+
+  const footer = (
+    <Flexbox horizontal align="center" gap={8} justify="space-between" width={'100%'}>
+      <Flexbox horizontal align="center" gap={12}>
+        {escapeActive ? (
+          <Text
+            className={styles.escapeLink}
+            fontSize={12}
+            type="secondary"
+            onClick={expired || submitting ? undefined : handleEscapeToggle}
+          >
+            <Icon icon={ArrowLeft} size={12} />
+            {t('claudeCode.askUserQuestion.escape.back')}
+          </Text>
+        ) : (
+          <Text
+            className={styles.escapeLink}
+            fontSize={12}
+            type="secondary"
+            onClick={expired || submitting ? undefined : handleEscapeToggle}
+          >
+            {t('claudeCode.askUserQuestion.escape.enter')}
+            <Icon icon={PenLine} size={12} />
+          </Text>
+        )}
+        <Text fontSize={12} type="secondary">
+          {expired
+            ? t('claudeCode.askUserQuestion.timeExpired')
+            : t('claudeCode.askUserQuestion.timeRemaining', {
+                time: formatRemaining(remainingMs),
+              })}
+        </Text>
+      </Flexbox>
+      <Flexbox horizontal gap={8}>
+        <Button disabled={submitting} icon={X} onClick={handleSkip}>
+          {t('claudeCode.askUserQuestion.skip')}
+        </Button>
+        <Button
+          disabled={isSubmitDisabled}
+          icon={Send}
+          loading={submitting}
+          type="primary"
+          onClick={handleSubmit}
+        >
+          {t('claudeCode.askUserQuestion.submit')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
 
   return (
     <Flexbox gap={12}>
@@ -120,52 +172,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         )
       )}
 
-      <Flexbox horizontal align="center" gap={8} justify="space-between">
-        <Flexbox horizontal align="center" gap={12}>
-          {escapeActive ? (
-            <Text
-              className={styles.escapeLink}
-              fontSize={12}
-              type="secondary"
-              onClick={expired || submitting ? undefined : handleEscapeToggle}
-            >
-              <Icon icon={ArrowLeft} size={12} />
-              {t('claudeCode.askUserQuestion.escape.back')}
-            </Text>
-          ) : (
-            <Text
-              className={styles.escapeLink}
-              fontSize={12}
-              type="secondary"
-              onClick={expired || submitting ? undefined : handleEscapeToggle}
-            >
-              {t('claudeCode.askUserQuestion.escape.enter')}
-              <Icon icon={PenLine} size={12} />
-            </Text>
-          )}
-          <Text fontSize={12} type="secondary">
-            {expired
-              ? t('claudeCode.askUserQuestion.timeExpired')
-              : t('claudeCode.askUserQuestion.timeRemaining', {
-                  time: formatRemaining(remainingMs),
-                })}
-          </Text>
-        </Flexbox>
-        <Flexbox horizontal gap={8}>
-          <Button disabled={submitting} icon={X} onClick={handleSkip}>
-            {t('claudeCode.askUserQuestion.skip')}
-          </Button>
-          <Button
-            disabled={isSubmitDisabled}
-            icon={Send}
-            loading={submitting}
-            type="primary"
-            onClick={handleSubmit}
-          >
-            {t('claudeCode.askUserQuestion.submit')}
-          </Button>
-        </Flexbox>
-      </Flexbox>
+      {actionsPortalTarget ? createPortal(footer, actionsPortalTarget) : footer}
     </Flexbox>
   );
 });
