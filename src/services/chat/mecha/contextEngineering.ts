@@ -70,6 +70,7 @@ import {
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 import {
+  getRuntimeModelDisplayName,
   getRuntimeModelKnowledgeCutoff,
   isCanUseAudio,
   isCanUseVideo,
@@ -397,12 +398,14 @@ export const contextEngineering = async ({
     try {
       const credsResult = await lambdaClient.market.creds.list.query();
       const userCreds = (credsResult as any)?.data ?? [];
-      credsList = userCreds.map((cred: any): CredSummary => ({
-        description: cred.description,
-        key: cred.key,
-        name: cred.name,
-        type: cred.type,
-      }));
+      credsList = userCreds.map(
+        (cred: any): CredSummary => ({
+          description: cred.description,
+          key: cred.key,
+          name: cred.name,
+          type: cred.type,
+        }),
+      );
       log('Creds context resolved: count=%d', credsList?.length ?? 0);
     } catch (error) {
       // Silently fail - creds context is optional
@@ -704,6 +707,7 @@ export const contextEngineering = async ({
 
     // Model info
     model,
+    modelDisplayName: getRuntimeModelDisplayName(model, provider),
     modelKnowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
     provider,
 

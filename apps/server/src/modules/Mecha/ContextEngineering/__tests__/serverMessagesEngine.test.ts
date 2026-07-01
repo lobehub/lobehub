@@ -89,6 +89,26 @@ describe('serverMessagesEngine', () => {
       );
     });
 
+    it('should inject model name and id when displayName is provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        messages,
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        provider: 'lobehub',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+      );
+    });
+
     it('should handle empty messages', async () => {
       const result = await serverMessagesEngine({
         messages: [],
