@@ -16,12 +16,21 @@ const styles = createStaticStyles(({ css }) => ({
   // MessageForwardFooter while selecting). Count on the leading edge, actions on
   // the trailing edge.
   bar: css`
+    position: relative;
+
     inline-size: 100%;
     padding-block: 12px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  // Pinned to the side so the actions stay centered regardless of the count.
+  count: css`
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 16px;
+    transform: translateY(-50%);
   `,
 }));
 
@@ -69,8 +78,10 @@ const SelectionFooterBar = memo(() => {
 
   return (
     <>
-      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-        <Text type={'secondary'}>{t('messageForward.bar.selected', { count: selectedCount })}</Text>
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'center'}>
+        <Text className={styles.count} type={'secondary'}>
+          {t('messageForward.bar.selected', { count: selectedCount })}
+        </Text>
         <Flexbox horizontal align={'center'} gap={4}>
           <Button icon={<Icon icon={X} />} type={'text'} onClick={exitSelectionMode}>
             {t('messageForward.bar.cancel')}
