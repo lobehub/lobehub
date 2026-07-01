@@ -100,7 +100,7 @@ describe('LobeAiHubMixAI', () => {
       // Falls back to the default gateway when no custom baseURL is set
       const def = (params.routers as any)({ apiKey: 'test' }, {});
       expect(def.find((r: any) => r.apiType === 'anthropic').options.baseURL).toBe(
-        'https://aihubmix.com',
+        'https://api.inferera.com',
       );
     });
   });
@@ -134,7 +134,7 @@ describe('LobeAiHubMixAI', () => {
       await instance.models();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://aihubmix.com/api/v1/models',
+        'https://api.inferera.com/api/v1/models',
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',
