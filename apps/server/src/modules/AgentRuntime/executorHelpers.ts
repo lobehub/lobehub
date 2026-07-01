@@ -1,5 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER } from '@lobechat/business-const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
@@ -115,6 +116,17 @@ export const buildServerVirtualSubAgentRunner = (
   const topicId = ctx.topicId ?? state.metadata?.topicId;
   if (!agentId || !topicId) return undefined;
 
+  // Resolve the sub-agent's default model HERE, at the spawn site, from the
+  // parent agent's config (carried on the runtime state). The child run is then
+  // handed an explicit model/provider, so the execution side never re-reads the
+  // parent's `agencyConfig.subagent`. Falls back to the global default.
+  const parentAgentConfig = state.metadata?.agentConfig as
+    | { agencyConfig?: { subagent?: { model?: string; provider?: string } } }
+    | undefined;
+  const parentSubAgentModel = parentAgentConfig?.agencyConfig?.subagent;
+  const subAgentModel = parentSubAgentModel?.model || DEFAULT_SUB_AGENT_MODEL;
+  const subAgentProvider = parentSubAgentModel?.provider || DEFAULT_SUB_AGENT_PROVIDER;
+
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
       // 1. Create the pending placeholder tool message (mirrors the normal
@@ -140,8 +152,10 @@ export const buildServerVirtualSubAgentRunner = (
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
+        model: subAgentModel,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
+        provider: subAgentProvider,
         timeout,
         title: description,
         topicId,

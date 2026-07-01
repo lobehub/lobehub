@@ -15,6 +15,7 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
@@ -161,13 +162,34 @@ export class StreamingExecutorActionImpl {
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     // - isSubAgent: filters out lobe-agent tool to prevent nested sub-agent creation
     // - disableTools: clears all plugins for broadcast scenarios
-    const agentConfig = resolveAgentConfig({
+    const resolvedAgentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
       isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
     });
+
+    // Sub-agents run on a dedicated, separately-configurable default model
+    // (`agencyConfig.subagent`) instead of inheriting the parent agent's main
+    // model. Falls back to the global default (deepseek-v4-flash) when unset.
+    // resolveAgentConfig returns an immer-frozen config, so build a new object
+    // rather than mutating in place.
+    const agentConfig: ResolvedAgentConfig =
+      isSubAgent && resolvedAgentConfig.agentConfig
+        ? {
+            ...resolvedAgentConfig,
+            agentConfig: {
+              ...resolvedAgentConfig.agentConfig,
+              model:
+                resolvedAgentConfig.agentConfig.agencyConfig?.subagent?.model ||
+                DEFAULT_SUB_AGENT_MODEL,
+              provider:
+                resolvedAgentConfig.agentConfig.agencyConfig?.subagent?.provider ||
+                DEFAULT_SUB_AGENT_PROVIDER,
+            },
+          }
+        : resolvedAgentConfig;
 
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(

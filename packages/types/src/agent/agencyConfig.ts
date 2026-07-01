@@ -533,6 +533,16 @@ export interface LobeAgentAgencyConfig {
   executionTarget?: DeviceExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
+   * Default model used by sub-agents this agent spawns via
+   * `lobe-agent.callSubAgent`. When unset, sub-agents fall back to the global
+   * default (`DEFAULT_SUB_AGENT_MODEL`, e.g. deepseek-v4-flash) rather than
+   * inheriting the parent agent's main model. Configurable in the params panel.
+   */
+  subagent?: {
+    model?: string;
+    provider?: string;
+  };
+  /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any
    * `verifyRubricId`. Use for one-off checks that don't warrant a reusable
    * rubric. References `verify_criteria.id`.

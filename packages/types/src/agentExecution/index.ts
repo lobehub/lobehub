@@ -367,10 +367,19 @@ export interface ExecVirtualSubAgentParams {
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
   instruction: string;
+  /**
+   * Model the sub-agent should run on, resolved by the spawn site from the
+   * parent agent's `agencyConfig.subagent`. Passed explicitly so the execution
+   * side never re-reads the parent config. Falls back to the global default
+   * (`DEFAULT_SUB_AGENT_MODEL`) at the spawn site when unset.
+   */
+  model?: string;
   /** The parent placeholder tool message ID */
   parentMessageId: string;
   /** Parent operation ID to bridge and resume on completion */
   parentOperationId: string;
+  /** Provider for {@link model}. */
+  provider?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Thread title shown in UI */
