@@ -69,13 +69,27 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
 
   // Browser leg: user JWT.
   const userCaller = () => aiAgentRouter.createCaller({ jwtPayload: { userId }, userId } as any);
-  // Exec leg: hetero-operation JWT.
+  // Exec leg: hetero-operation JWT (server-minted, ownership-exempt).
   const heteroCaller = () =>
     aiAgentRouter.createCaller({
       jwtPayload: { userId },
       oidcAuth: { purpose: 'hetero-operation', sub: userId },
       userId,
     } as any);
+  // Exec leg via an owner OIDC token (a desktop reusing its own session): a
+  // normal token whose `purpose` is NOT `hetero-operation` → heteroAuthKind
+  // resolves to 'user', so the ownership guard applies.
+  const ownerTokenCaller = (sub: string) =>
+    aiAgentRouter.createCaller({
+      jwtPayload: { userId: sub },
+      oidcAuth: { sub },
+      userId: sub,
+    } as any);
+
+  const insertOperation = async (id: string, ownerId: string) => {
+    const { agentOperations } = await import('@/database/schemas');
+    await serverDB.insert(agentOperations).values({ id, status: 'running', userId: ownerId });
+  };
 
   it('submit → wait round-trips a structured answer, filtered to the response', async () => {
     await userCaller().submitHeteroIntervention({
@@ -135,5 +149,65 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     });
 
     expect(res.events).toHaveLength(0);
+  });
+
+  describe('waitInterventionResponse ownership guard', () => {
+    it('lets an owner token read its own operation', async () => {
+      await insertOperation('op-owned', userId);
+      await userCaller().submitHeteroIntervention({
+        operationId: 'op-owned',
+        result: { answer: 'yes' },
+        toolCallId: 't-own',
+      });
+
+      const res = await ownerTokenCaller(userId).waitInterventionResponse({
+        lastEventId: '0',
+        operationId: 'op-owned',
+      });
+
+      expect(res.events).toHaveLength(1);
+      expect(res.events[0].data).toMatchObject({ toolCallId: 't-own' });
+    });
+
+    it("rejects an owner token reading another user's operation", async () => {
+      const otherUserId = await createTestUser(serverDB);
+      await insertOperation('op-others', otherUserId);
+      // The victim's answer lands on the stream…
+      await userCaller().submitHeteroIntervention({
+        operationId: 'op-others',
+        result: { secret: 'leak me' },
+        toolCallId: 't-victim',
+      });
+
+      // …but a different signed-in user must not be able to long-poll it.
+      await expect(
+        ownerTokenCaller(userId).waitInterventionResponse({
+          lastEventId: '0',
+          operationId: 'op-others',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      await cleanupTestUser(serverDB, otherUserId);
+    });
+
+    it('rejects an owner token for an unknown operation id', async () => {
+      await expect(
+        ownerTokenCaller(userId).waitInterventionResponse({
+          lastEventId: '0',
+          operationId: 'op-missing',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('exempts the server-minted operation token from the ownership lookup', async () => {
+      // No agent_operations row exists for this id; the operation-token path
+      // must still succeed (it's trusted as server-minted).
+      const res = await heteroCaller().waitInterventionResponse({
+        lastEventId: '0',
+        operationId: 'op-no-row',
+      });
+
+      expect(res.events).toHaveLength(0);
+    });
   });
 });

@@ -165,9 +165,10 @@ export interface IStreamEventManager {
   /**
    * Single bounded read of a stream — the long-poll primitive. Returns every
    * event after `lastEventId`, blocking up to `blockMs` for the first one; on
-   * timeout returns an empty list with `lastEventId` unchanged so the caller
-   * can immediately re-poll from the same cursor. Unlike `subscribeStreamEvents`
-   * this does NOT loop — one request, one bounded wait.
+   * timeout returns an empty list. The returned `lastEventId` is always a
+   * CONCRETE stream id (never the `'$'` sentinel), so the caller can immediately
+   * re-poll from it without a gap. Unlike `subscribeStreamEvents` this does NOT
+   * loop — one request, one bounded wait.
    *
    * Used by the heterogeneous `lh hetero exec` producer (which holds only an
    * op-scoped JWT + tRPC, never Redis) to pull `agent_intervention_response`

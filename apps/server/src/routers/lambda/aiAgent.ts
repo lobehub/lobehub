@@ -18,7 +18,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { topics } from '@/database/schemas';
+import { agentOperations, topics } from '@/database/schemas';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -1361,8 +1361,32 @@ export const aiAgentRouter = router({
    */
   waitInterventionResponse: heteroAgentProcedure
     .input(WaitInterventionResponseSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const { operationId, lastEventId, blockMs } = input;
+
+      // Ownership guard, mirroring heteroIngest / heteroFinish. The op stream is
+      // read by `operationId` alone, so an owner-token caller (a logged-in
+      // desktop reusing its own OIDC session) must prove it owns THIS operation
+      // — otherwise any signed-in user could long-poll another run's
+      // `agent_intervention_response` payloads by id. Bind the guard to the
+      // operation row directly (tighter than the topic-level guard the write
+      // paths use, since the read has no topicId to key on). The operation-token
+      // path is exempt: it's server-minted and handed only to the sandbox /
+      // device running this op.
+      if (ctx.heteroAuthKind === 'user') {
+        const [operationRow] = await ctx.serverDB
+          .select({ userId: agentOperations.userId })
+          .from(agentOperations)
+          .where(eq(agentOperations.id, operationId))
+          .limit(1);
+
+        if (operationRow?.userId !== ctx.userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Operation not found or not owned by the caller',
+          });
+        }
+      }
 
       const streamEventManager = createStreamEventManager();
       const { events, lastEventId: nextEventId } = await streamEventManager.readEventsOnce(
