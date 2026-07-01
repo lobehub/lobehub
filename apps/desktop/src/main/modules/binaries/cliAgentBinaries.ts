@@ -214,6 +214,14 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   Pick<ValidatedDetectorOptions, 'validateKeywords'>
 >;
 
+// The default (bare) command each agent type is shipped to run. The well-known
+// fallback locations below hold *this* binary, so they may only be probed when
+// the requested command is the default — never for a custom command.
+const DEFAULT_COMMAND: Record<HeterogeneousCliAgentType, string> = {
+  'claude-code': 'claude',
+  'codex': 'codex',
+};
+
 // Well-known absolute install locations probed when a bare command isn't on
 // PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's
 // official installer can put `claude` under ~/.local/bin, while the Codex
@@ -255,10 +263,12 @@ export const detectHeterogeneousCliCommand = async (
   const status = await detectValidatedCommand(command, validator);
   if (status.available) return status;
 
-  // A bare command missing from PATH may still live at a well-known install
-  // location (e.g. the Codex desktop app's bundled CLI). Don't second-guess
-  // an explicit user-configured path.
-  if (!command.trim().includes(path.sep)) {
+  // The default command missing from PATH may still live at a well-known install
+  // location (e.g. the Codex desktop app's bundled CLI). Only probe those for the
+  // default command: the well-known paths hold the *default* binary, so applying
+  // them to a custom command (e.g. `claude-beta`) would silently resolve it to
+  // stock `claude` instead of reporting the configured command as missing.
+  if (command.trim() === DEFAULT_COMMAND[agentType]) {
     for (const candidate of getWellKnownCommandPaths(agentType)) {
       const fallbackStatus = await detectValidatedCommand(candidate, validator);
       if (fallbackStatus.available) return fallbackStatus;

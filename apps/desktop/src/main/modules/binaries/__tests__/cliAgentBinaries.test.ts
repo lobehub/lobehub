@@ -214,6 +214,31 @@ describe('cliAgentBinaries', () => {
       }
     });
 
+    it('does not fall back to well-known Claude paths for a custom command', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which claude-beta
+
+        const { detectHeterogeneousCliCommand } = await import('../cliAgentBinaries');
+        const status = await detectHeterogeneousCliCommand('claude-code', 'claude-beta');
+
+        expect(status.available).toBe(false);
+        // Only the custom command's own `which` runs — the ~/.local/bin/claude
+        // fallback must NOT, or a missing `claude-beta` would silently resolve
+        // to stock `claude` instead of reporting the configured command missing.
+        expect(execFileMock).toHaveBeenCalledTimes(1);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
     it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
