@@ -67,6 +67,7 @@ describe('runAgent actions', () => {
     act(() => {
       useChatStore.setState({
         internal_dispatchMessage: vi.fn(),
+        completeOperation: vi.fn(),
         optimisticUpdateMessageContent: vi.fn(),
         refreshMessages: vi.fn(),
         updateOperationMetadata: vi.fn(),
@@ -486,6 +487,32 @@ describe('runAgent actions', () => {
         expect(replaceMessages).toHaveBeenCalledWith(uiMessages, {
           context: { agentId: 'agent-1', topicId: 'topic-1' },
         });
+      });
+    });
+
+    describe('visible_output_end event', () => {
+      it('clears visible loading without completing the operation', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const event: StreamEvent = {
+          data: { reason: 'completed' },
+          operationId: TEST_IDS.OPERATION_ID,
+          stepIndex: 1,
+          timestamp: Date.now(),
+          type: 'visible_output_end',
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID }),
+          );
+        });
+
+        expect(result.current.updateOperationMetadata).toHaveBeenCalledWith(TEST_IDS.OPERATION_ID, {
+          visibleLoadingDone: true,
+        });
+        expect(result.current.completeOperation).not.toHaveBeenCalled();
       });
     });
 
