@@ -4,7 +4,12 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ConversationContext,
+  ExecAgentResult,
+  MessageMetadata,
+} from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
@@ -367,7 +372,7 @@ export class GatewayActionImpl {
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
-    optimisticTopic?: { id: string; title: string };
+    optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
@@ -492,12 +497,14 @@ export class GatewayActionImpl {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (context.agentId) consumePendingTopicRepos(context.agentId);
       if (optimisticTopic) {
+        const topicMetadata = optimisticTopic.metadata ?? initialTopicMetadata;
         this.#get().internal_replaceTopicId({
           agentId: context.agentId,
           groupId: context.groupId,
           nextId: result.topicId,
           previousId: optimisticTopic.id,
           value: {
+            ...(topicMetadata ? { metadata: topicMetadata } : {}),
             ...(context.groupId ? {} : { sessionId: context.agentId }),
             title: optimisticTopic.title,
           },

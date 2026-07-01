@@ -8,6 +8,7 @@ import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
+import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getSessionStoreState } from '@/store/session';
@@ -78,6 +79,7 @@ beforeEach(() => {
 afterEach(() => {
   executeHeterogeneousAgentMock.mockReset();
   mockConstEnv.isDesktop = false;
+  setPendingTopicRepos(TEST_IDS.SESSION_ID, []);
   vi.restoreAllMocks();
 });
 
@@ -563,6 +565,82 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+      });
+
+      it('should keep a gateway optimistic topic in its pending repo project group', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const selectedRepo = 'https://github.com/lobehub/lobehub';
+        let resolveGateway!: () => void;
+        const gatewayPromise = new Promise<any>((resolve) => {
+          resolveGateway = () =>
+            resolve({
+              assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              operationId: 'gateway-op-1',
+              userMessageId: TEST_IDS.USER_MESSAGE_ID,
+            });
+        });
+        const executeGatewayAgentSpy = vi.fn().mockReturnValue(gatewayPromise);
+
+        setPendingTopicRepos(agentId, [selectedRepo]);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Create a project topic',
+          });
+        });
+
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
+
+        // A pending repo selected before the first send used to be missing from
+        // the tmp topic, so By Project grouped it under "No directory" until
+        // the server topic replaced it.
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+          expect.objectContaining({
+            metadata: {
+              repos: [selectedRepo],
+              workingDirectory: selectedRepo,
+            },
+          }),
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                repos: [selectedRepo],
+                workingDirectory: selectedRepo,
+              },
+            }),
+          }),
+        );
+
+        await act(async () => {
+          resolveGateway();
+          await sendPromise;
+        });
       });
 
       it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {

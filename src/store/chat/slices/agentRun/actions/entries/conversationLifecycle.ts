@@ -12,6 +12,7 @@ import type {
   ChatImageItem,
   ChatThreadType,
   ChatToolPayload,
+  ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
   MessageMetadata,
@@ -37,6 +38,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import {
   dbMessageSelectors,
   displayMessageSelectors,
@@ -124,6 +126,7 @@ type SendMessageServerResponseMeta = SendMessageServerResponse & {
 
 interface OptimisticTopicPlaceholder {
   id: string;
+  metadata?: ChatTopicMetadata;
   title: string;
 }
 
@@ -558,9 +561,38 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempId, operationId);
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
+    const existingTopic = operationContext.topicId
+      ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+      : undefined;
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const agentWorkingDirectory =
+      runtimeType === 'hetero' && heterogeneousProvider
+        ? agentByIdSelectors.getAgentWorkingDirectoryById(
+            agentId,
+            currentDeviceId,
+          )(getAgentStoreState())
+        : undefined;
+    const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
+    const pendingTopicRepos =
+      runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
+        ? getPendingTopicRepos(operationContext.agentId)
+        : [];
+    // Example: a pending repo topic without this metadata renders under "No directory"
+    // until the server topic replaces `tmp_topic_*`.
+    const optimisticTopicMetadata: ChatTopicMetadata | undefined =
+      pendingTopicRepos.length > 0
+        ? { repos: pendingTopicRepos, workingDirectory: pendingTopicRepos[0] }
+        : workingDirectory
+          ? { workingDirectory }
+          : undefined;
+
     const optimisticTopic: OptimisticTopicPlaceholder | undefined =
       !operationContext.topicId && !context.isolatedTopic
-        ? { id: `tmp_topic_${nanoid()}`, title: newTopicTitle }
+        ? {
+            id: `tmp_topic_${nanoid()}`,
+            ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
+            title: newTopicTitle,
+          }
         : undefined;
     let optimisticTopicActive = false;
     let optimisticTopicResolved = false;
@@ -577,13 +609,19 @@ export class ConversationLifecycleActionImpl {
       groupId: operationContext.groupId ?? undefined,
     };
 
-    const addResolvedTopicPlaceholder = (topicId: string, title: string, action: string) => {
+    const addResolvedTopicPlaceholder = (
+      topicId: string,
+      title: string,
+      action: string,
+      metadata?: ChatTopicMetadata,
+    ) => {
       this.#get().internal_dispatchTopic(
         {
           ...optimisticTopicScope,
           type: 'addTopic',
           value: {
             id: topicId,
+            ...(metadata ? { metadata } : {}),
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title,
           },
@@ -598,6 +636,7 @@ export class ConversationLifecycleActionImpl {
           topicId,
           title || t('defaultTitle', { ns: 'topic' }),
           'sendMessage/reconcileOptimisticTopic/add',
+          optimisticTopic?.metadata,
         );
         return;
       }
@@ -607,6 +646,7 @@ export class ConversationLifecycleActionImpl {
         nextId: topicId,
         previousId: optimisticTopic.id,
         value: {
+          ...(optimisticTopic.metadata ? { metadata: optimisticTopic.metadata } : {}),
           ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
           title: title || t('defaultTitle', { ns: 'topic' }),
         },
@@ -636,6 +676,7 @@ export class ConversationLifecycleActionImpl {
         optimisticTopic.id,
         optimisticTopic.title,
         'sendMessage/optimisticCreateTopic',
+        optimisticTopic.metadata,
       );
       this.#get().internal_updateTopicLoading(optimisticTopic.id, true);
       optimisticTopicActive = true;
@@ -660,16 +701,6 @@ export class ConversationLifecycleActionImpl {
       // over the agent-level default. Without this, a topic pinned to dir A
       // would silently execute under the agent's current default dir B and
       // lose resume.
-      const existingTopic = operationContext.topicId
-        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
-        : undefined;
-      const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-      const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
-        agentId,
-        currentDeviceId,
-      )(getAgentStoreState());
-      const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
-
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
