@@ -180,6 +180,11 @@ export const MessageTaskCallbackSchema = z.object({
 
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
+  // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
+  // NOT strip them from writes going through UpdateMessageParamsSchema /
+  // CreateMessageParamsSchema (the renderer executor's `messageService` path).
+  heteroMessageId: z.string().optional(),
+  heteroSessionId: z.string().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
@@ -262,6 +267,20 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  /**
+   * The CC-native `message.id` of the hetero-agent (Claude Code) turn that
+   * produced this message. Forensic provenance stamped by both the server
+   * persistence handler and the renderer executor, so a diff can tie a row
+   * back to its CC turn.
+   */
+  heteroMessageId?: string;
+  /**
+   * The CC-native session id this hetero-agent message was produced under.
+   * `topic.metadata.heteroSessionId` keeps only the single latest value (written
+   * at run end); this per-message copy lets a diff pinpoint the exact row where
+   * CC forked to a new session — the signal for a lost-`--resume` "session break".
+   */
+  heteroSessionId?: string;
   /** @deprecated use the top-level message `usage` field instead */
   inputAudioTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
