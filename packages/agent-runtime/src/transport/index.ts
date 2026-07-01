@@ -4,6 +4,7 @@ export * from './host';
 export * from './lifecycle';
 export * from './llm';
 export * from './message';
+export * from './operation';
 export * from './stream';
 export * from './subAgent';
 export * from './tool';
