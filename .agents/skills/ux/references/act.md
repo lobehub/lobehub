@@ -36,7 +36,32 @@ tertiary. Never a pile of primary buttons competing for attention.
 
 - [ ] Exactly one primary button per surface. _(Certainty)_
 
-## 3.3 Entity lifecycle completeness・Meaningful・Certainty
+## 3.3 Pin actions & status outside the scroll region・Certainty・Meaningful
+
+When a surface pairs a **scrollable content area** with action controls (submit / skip /
+confirm) or live status (a countdown, save state, error), those controls must live in a
+**fixed header / footer outside the scroll region** — never inside the scrolling content
+where they slide away. A submit button that scrolls off reads as "there's no way to
+proceed"; a countdown that scrolls off hides the deadline the user is racing. Scroll the
+content; pin the actions. This is an easy trap because it **only shows up once the content
+is tall enough to scroll** — short demo data keeps the footer on-screen and hides the bug.
+
+Concretely: give the surface a fixed footer slot and render the action row into it (e.g.
+portal the buttons into the card's footer), so loading a taller body scrolls only the body.
+When the same component is embedded in a host that provides **no** fixed footer slot,
+render the actions inline as a fallback — pin only when a slot exists.
+
+> ✅ The global approval card pins the ask-user **skip / submit + countdown** in a bordered
+> footer; only the question and its options scroll. ❌ The footer living inside the
+> `overflow-y: auto` body, so a long option list scrolls the submit button out of view.
+
+**Checklist**
+
+- [ ] Scrollable content + actions/status → actions & status pinned in a fixed header/footer, not inside the scroll area. _(Certainty)_
+- [ ] Verified at the tall/overflowing state, not just short demo data. _(Certainty)_
+- [ ] Portal into the host's fixed slot when present; fall back to inline when the host has none. _(Meaningful)_
+
+## 3.4 Entity lifecycle completeness・Meaningful・Certainty
 
 The recurring trap: a feature ships only the **display** of a list, but edit / delete /
 management are never built — so the user can add something and then be stuck with it. For

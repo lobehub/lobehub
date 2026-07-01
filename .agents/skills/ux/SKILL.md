@@ -102,6 +102,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Action leads the user forward; success offers a primary "go to result".
 - [ ] Bulk action has a single-item entry (and vice versa).
 - [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] Scrollable content + actions/status → pin them in a fixed footer/header, not inside the scroll area (verify at the overflowing state).
 - [ ] Exactly one primary button per surface.
 - [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom).
 
