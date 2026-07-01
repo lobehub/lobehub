@@ -8,13 +8,6 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-export interface ChatInputNotice {
-  /** Optional inline action button. `switchToLocal` re-targets execution to this machine. */
-  action?: 'switchToLocal';
-  key: 'input.modelUnavailable' | 'input.sandboxModeNotice';
-  type: 'info' | 'warning';
-}
-
 interface ResolveChatInputNoticeParams {
   currentChatModel?: unknown;
   isHeterogeneousAgent: boolean;
@@ -38,7 +31,7 @@ export const resolveChatInputNotice = ({
   isHeterogeneousAgent,
   isModelConfigReady,
   isSandboxTarget,
-}: ResolveChatInputNoticeParams): ChatInputNotice | undefined => {
+}: ResolveChatInputNoticeParams) => {
   // Model-config notices (warning) take priority over the sandbox tip (info):
   // an unusable model blocks the send, the sandbox is only a softer suggestion.
   // They don't apply to heterogeneous agents (own toolchain) or before the
@@ -49,14 +42,18 @@ export const resolveChatInputNotice = ({
     // image/video; once absent from the chat selector, it should read as unavailable.
     !currentChatModel
   )
-    return { key: 'input.modelUnavailable', type: 'warning' };
+    return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
 
   // Sandbox is an ephemeral environment; nudge desktop users toward a device
   // (e.g. local) for a better experience. Applies to hetero agents too, so it
-  // sits outside the model-notice guard above.
+  // sits outside the model-notice guard above. `action: 'switchToLocal'`
+  // re-targets execution to this machine.
   if (isSandboxTarget)
-    return { action: 'switchToLocal', key: 'input.sandboxModeNotice', type: 'info' };
+    return { action: 'switchToLocal', key: 'input.sandboxModeNotice', type: 'info' } as const;
 };
+
+/** Union of every notice shape `resolveChatInputNotice` can return. */
+export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNotice>>;
 
 export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const agentId = useAgentId();
