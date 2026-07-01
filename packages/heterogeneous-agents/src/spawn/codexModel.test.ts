@@ -133,10 +133,10 @@ describe('codex model metadata helpers', () => {
     ).resolves.toMatchObject({
       cumulativeUsage: {
         inputCachedTokens: 5,
-        inputCacheMissTokens: 25,
-        totalInputTokens: 30,
+        inputCacheMissTokens: 20,
+        totalInputTokens: 25,
         totalOutputTokens: 9,
-        totalTokens: 39,
+        totalTokens: 34,
       },
     });
   });

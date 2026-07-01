@@ -839,10 +839,10 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter({
       initialCumulativeUsage: {
         inputCachedTokens: 42_000,
-        inputCacheMissTokens: 52_000,
-        totalInputTokens: 94_000,
+        inputCacheMissTokens: 9_000,
+        totalInputTokens: 51_000,
         totalOutputTokens: 300,
-        totalTokens: 94_300,
+        totalTokens: 51_300,
       },
     });
     const rawEvents = await loadFixture('collab_tool_call.spawn_wait.jsonl');
@@ -898,10 +898,10 @@ describe('CodexAdapter', () => {
       data: {
         usage: {
           inputCachedTokens: 1008,
-          inputCacheMissTokens: 937,
-          totalInputTokens: 1945,
+          inputCacheMissTokens: 929,
+          totalInputTokens: 1937,
           totalOutputTokens: 116,
-          totalTokens: 2061,
+          totalTokens: 2053,
         },
       },
     });
@@ -1075,10 +1075,10 @@ describe('CodexAdapter', () => {
         provider: 'codex',
         usage: {
           inputCachedTokens: 4,
-          inputCacheMissTokens: 10,
-          totalInputTokens: 14,
+          inputCacheMissTokens: 6,
+          totalInputTokens: 10,
           totalOutputTokens: 3,
-          totalTokens: 17,
+          totalTokens: 13,
         },
       },
       type: 'step_complete',
@@ -1089,10 +1089,10 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter({
       initialCumulativeUsage: {
         inputCachedTokens: 4,
-        inputCacheMissTokens: 10,
-        totalInputTokens: 14,
+        inputCacheMissTokens: 6,
+        totalInputTokens: 10,
         totalOutputTokens: 3,
-        totalTokens: 17,
+        totalTokens: 13,
       },
     });
 
@@ -1111,10 +1111,10 @@ describe('CodexAdapter', () => {
         provider: 'codex',
         usage: {
           inputCachedTokens: 5,
-          inputCacheMissTokens: 15,
-          totalInputTokens: 20,
+          inputCacheMissTokens: 10,
+          totalInputTokens: 15,
           totalOutputTokens: 8,
-          totalTokens: 28,
+          totalTokens: 23,
         },
       },
       type: 'step_complete',

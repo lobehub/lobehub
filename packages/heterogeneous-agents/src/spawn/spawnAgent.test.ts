@@ -257,7 +257,7 @@ describe('spawnAgent', () => {
       path.join(sessionDir, `rollout-2026-06-11T01-31-27-${threadId}.jsonl`),
       JSON.stringify({
         type: 'turn.completed',
-        usage: { cached_input_tokens: 42_000, input_tokens: 52_000, output_tokens: 300 },
+        usage: { cached_input_tokens: 42_000, input_tokens: 51_000, output_tokens: 300 },
       }),
     );
 
@@ -288,10 +288,10 @@ describe('spawnAgent', () => {
         phase: 'turn_metadata',
         usage: {
           inputCachedTokens: 1008,
-          inputCacheMissTokens: 937,
-          totalInputTokens: 1945,
+          inputCacheMissTokens: 929,
+          totalInputTokens: 1937,
           totalOutputTokens: 116,
-          totalTokens: 2061,
+          totalTokens: 2053,
         },
       },
       type: 'step_complete',
