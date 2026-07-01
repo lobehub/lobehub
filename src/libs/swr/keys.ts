@@ -90,6 +90,23 @@ export const agentKeys = {
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
+// ---- agent builder (opening-suggestion chips) ---------------------------
+// Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
+// `contextSummary` is intentionally NOT part of the key so config autosaves for
+// the same target don't refetch; `nonce` bumps on manual refresh.
+export const agentBuilderKeys = {
+  suggestions: def(
+    'agentBuilder:suggestions',
+    (mode: string, builderAgentId: string, targetId: string | undefined, nonce: number) => [
+      'agentBuilder:suggestions',
+      mode,
+      builderAgentId,
+      targetId,
+      nonce,
+    ],
+  ),
+};
+
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
@@ -845,6 +862,7 @@ export const matchDomain =
 export const swrKeys = {
   agent: { ...agentKeys, ...agentConfigKeys },
   agentBot: agentBotKeys,
+  agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,

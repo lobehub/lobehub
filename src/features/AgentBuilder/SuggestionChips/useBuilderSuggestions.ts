@@ -9,6 +9,7 @@ import {
 import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 
+import { swrKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 
 import { useBuilderSuggestionFeedbackStore } from './feedbackStore';
@@ -61,17 +62,15 @@ export const useBuilderSuggestions = ({
   // render that changes the key.
   const key =
     enabled && contextSummary && model && provider
-      ? (['builder-suggestion', mode, builderAgentId, targetId, nonce] as const)
+      ? swrKeys.agentBuilder.suggestions(mode, builderAgentId, targetId, nonce)
       : null;
 
   const { data, isLoading, error } = useSWR(
     key,
-    async ([, requestMode, requestBuilderAgentId]) => {
-      const { messages, schema } = chainBuilderSuggestion({
-        contextSummary,
-        locale,
-        mode: requestMode,
-      });
+    async () => {
+      // Read mode/context/agent from the closure: SWR runs the fetcher from the
+      // render that changed the key, so these already hold the latest values.
+      const { messages, schema } = chainBuilderSuggestion({ contextSummary, locale, mode });
       const abortController = new AbortController();
       const envelope = (await aiChatService.generateJSON(
         {
@@ -80,7 +79,7 @@ export const useBuilderSuggestions = ({
           provider,
           schema,
           tracing: {
-            agentId: requestBuilderAgentId,
+            agentId: builderAgentId,
             promptVersion: BUILDER_SUGGESTION_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.BuilderSuggestion,
             schemaName: BUILDER_SUGGESTION_SCHEMA_NAME,
