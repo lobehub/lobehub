@@ -48,10 +48,13 @@ export function defineConfig(config: CustomNextConfig) {
               // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
               // which may not be picked up by Next.js output tracing.
               'node_modules/@napi-rs/canvas/**/*',
-              'node_modules/@napi-rs/canvas-*/**/*',
-              // pnpm real package locations (including platform-specific bindings with `.node`)
-              'node_modules/.pnpm/@napi-rs+canvas*/**/*',
-              'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
+              'node_modules/@napi-rs/canvas-*/package.json',
+              'node_modules/@napi-rs/canvas-*/*.node',
+              // Broad pnpm globs also match the symlink directory
+              // `.../@napi-rs/canvas-linux-x64-gnu`; Turbopack 16.3.0-preview.5
+              // tries to hash that directory as a file during Docker output tracing.
+              'node_modules/.pnpm/@napi-rs+canvas-*/node_modules/@napi-rs/canvas-*/package.json',
+              'node_modules/.pnpm/@napi-rs+canvas-*/node_modules/@napi-rs/canvas-*/*.node',
             ]
           : []),
       ],
