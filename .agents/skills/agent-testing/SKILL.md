@@ -18,7 +18,7 @@ One skill for all agentic end-to-end testing — local-first today, designed to
 also run as full cloud automation. Every test session follows the same
 contract:
 
-```
+```text
 Step -2: Read the two living logs → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub → Step 5: Teardown
 ```
 
@@ -568,7 +568,7 @@ Skip teardown only when the user explicitly wants the environment left up (e.g.
 
 ## Directory map
 
-```
+```text
 agent-testing/
 ├── SKILL.md            # this router
 ├── cli/index.md        # backend verification via the LobeHub CLI

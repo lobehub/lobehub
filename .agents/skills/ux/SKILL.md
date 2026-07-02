@@ -1,6 +1,6 @@
 ---
 name: ux
-description: 'LobeHub product design values / principles / checklists. Load this skill whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
+description: 'LobeHub product design values / principles / checklists. Use whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
 user-invocable: false
 ---
 
