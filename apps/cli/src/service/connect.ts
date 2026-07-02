@@ -87,7 +87,9 @@ function requireLinuxSystemd() {
   try {
     execFileSync('systemctl', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (error) {
-    throw new Error(`systemctl is not available on this system: ${getExecErrorMessage(error)}`);
+    throw new Error(`systemctl is not available on this system: ${getExecErrorMessage(error)}`, {
+      cause: error,
+    });
   }
   try {
     systemctl(['show-environment']);
@@ -99,6 +101,7 @@ function requireLinuxSystemd() {
         'On Debian/Ubuntu minimal systems, install `libpam-systemd` and `dbus-user-session`, then start a user session or enable linger.',
         getExecErrorMessage(error),
       ].join(' '),
+      { cause: error },
     );
   }
 }
@@ -107,8 +110,46 @@ function importServiceEnvironment(): void {
   systemctl(['import-environment'], 'inherit');
 }
 
+function assertNoConnectDaemonRunning(): void {
+  let daemonPids: number[];
+  try {
+    daemonPids = execFileSync('ps', ['-eo', 'pid=,command='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split('\n')
+      .map((line) => {
+        const trimmed = line.trim();
+        const separatorIndex = trimmed.indexOf(' ');
+        if (separatorIndex === -1) return null;
+
+        const pid = Number.parseInt(trimmed.slice(0, separatorIndex), 10);
+        const command = trimmed.slice(separatorIndex + 1);
+        return pid !== process.pid &&
+          command.includes('connect') &&
+          command.includes('--daemon-child')
+          ? pid
+          : null;
+      })
+      .filter((pid): pid is number => pid !== null);
+  } catch {
+    return;
+  }
+
+  if (daemonPids.length === 0) return;
+
+  throw new Error(
+    [
+      `Background connect daemon is already running (PID ${daemonPids.join(', ')}).`,
+      'Stop it before starting the systemd service.',
+      'Run `lh connect stop`, then retry this command.',
+    ].join(' '),
+  );
+}
+
 export function installConnectService(): void {
   requireLinuxSystemd();
+  assertNoConnectDaemonRunning();
 
   fs.mkdirSync(path.join(os.homedir(), process.env.LOBEHUB_CLI_HOME || '.lobehub'), {
     mode: 0o700,
@@ -143,6 +184,7 @@ export function uninstallConnectService(): boolean {
 export function startConnectService(): boolean {
   if (!fs.existsSync(path.join(getUserServiceDir(), SERVICE_NAME))) return false;
   requireLinuxSystemd();
+  assertNoConnectDaemonRunning();
   importServiceEnvironment();
   systemctl(['start', SERVICE_NAME], 'inherit');
   return true;
@@ -158,6 +200,7 @@ export function stopConnectService(): boolean {
 export function restartConnectService(): boolean {
   if (!fs.existsSync(path.join(getUserServiceDir(), SERVICE_NAME))) return false;
   requireLinuxSystemd();
+  assertNoConnectDaemonRunning();
   importServiceEnvironment();
   systemctl(['restart', SERVICE_NAME], 'inherit');
   return true;
