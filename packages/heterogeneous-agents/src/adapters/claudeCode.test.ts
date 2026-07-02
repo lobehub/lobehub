@@ -1292,9 +1292,12 @@ describe('ClaudeCodeAdapter', () => {
   describe('multi-step execution (message.id boundary)', () => {
     it('does NOT emit step boundary for the first assistant after init', () => {
       const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({ subtype: 'init', session_id: 'sess-A', type: 'system' });
 
-      // First assistant message after init — should NOT trigger newStep
+      // First assistant message after init — should NOT open a new step
+      // (no stream_end, no newStep), but it DOES emit a non-newStep stream_start
+      // carrying the turn's message.id so the reducer can stamp it as
+      // `currentMainMessageId` (→ heteroMessageId on the seeded assistant).
       const events = adapter.adapt({
         message: { id: 'msg_1', content: [{ text: 'step 1', type: 'text' }] },
         type: 'assistant',
@@ -1302,7 +1305,11 @@ describe('ClaudeCodeAdapter', () => {
 
       const types = events.map((e) => e.type);
       expect(types).not.toContain('stream_end');
-      expect(types).not.toContain('stream_start');
+      const streamStart = events.find((e) => e.type === 'stream_start');
+      expect(streamStart).toBeDefined();
+      expect(streamStart!.data.newStep).toBeUndefined();
+      expect(streamStart!.data.messageId).toBe('msg_1');
+      expect(streamStart!.data.sessionId).toBe('sess-A');
       // Should still emit content
       const chunk = events.find((e) => e.type === 'stream_chunk');
       expect(chunk).toBeDefined();

@@ -785,7 +785,7 @@ export const executeHeterogeneousAgent = async (
         // register the global lookup, and seed the thread bucket bubble.
         for (const x of intent.tools) {
           if (!x.isNew) continue;
-          const subToolMetadata = heteroProvenance();
+          const subToolMetadata = heteroProvenance(intent.subagentMessageId);
           const toolMsg = {
             agentId: context.agentId,
             content: '',
@@ -852,9 +852,12 @@ export const executeHeterogeneousAgent = async (
       case 'recordUsage': {
         const t = subagentThreads.get(intent.threadId);
         const update = {
-          // Wholesale metadata overwrite — re-stamp the session provenance the
-          // createMessage write put there, or usage would wipe it.
-          metadata: { ...heteroProvenance(), usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the session + message
+          // provenance the createMessage write put there, or usage would wipe it.
+          metadata: {
+            ...heteroProvenance(intent.subagentMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };

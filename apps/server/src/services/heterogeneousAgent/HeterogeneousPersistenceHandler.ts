@@ -1082,7 +1082,7 @@ export class HeterogeneousPersistenceHandler {
         // register them in the global tool-message map for tool_result lookup.
         for (const t of intent.tools) {
           if (!t.isNew) continue;
-          const subToolMetadata = this.heteroProvenance(state);
+          const subToolMetadata = this.heteroProvenance(state, intent.subagentMessageId);
           await this.deps.messageModel.create(
             {
               agentId: state.agentId ?? undefined,
@@ -1112,9 +1112,12 @@ export class HeterogeneousPersistenceHandler {
 
       case 'recordUsage': {
         await this.deps.messageModel.update(intent.messageId, {
-          // Wholesale metadata overwrite — re-stamp the session provenance the
-          // createMessage write put there, or usage would wipe it.
-          metadata: { ...this.heteroProvenance(state), usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the session + message
+          // provenance the createMessage write put there, or usage would wipe it.
+          metadata: {
+            ...this.heteroProvenance(state, intent.subagentMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         });
