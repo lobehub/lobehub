@@ -3,7 +3,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { loadCredentials } from '../auth/credentials';
+import { CLI_API_KEY_ENV } from '../constants/auth';
+import { getRunningDaemonPid } from '../daemon/manager';
+
 const SERVICE_NAME = 'lobehub-connect.service';
+const ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
+const SERVICE_ENV_NAMES = [
+  'AGENT_GATEWAY_URL',
+  'DEBUG',
+  'LH_GATEWAY_URL',
+  'LOBEHUB_CLI_CHANNEL',
+  'LOBEHUB_CLI_HOME',
+  CLI_API_KEY_ENV,
+  'LOBEHUB_JWT',
+  'LOBEHUB_SERVER',
+];
 
 export interface ConnectServiceStatus {
   active: boolean;
@@ -107,49 +122,42 @@ function requireLinuxSystemd() {
 }
 
 function importServiceEnvironment(): void {
-  systemctl(['import-environment'], 'inherit');
+  const staleServiceEnvNames = SERVICE_ENV_NAMES.filter((name) => process.env[name] === undefined);
+  if (staleServiceEnvNames.length > 0) {
+    systemctl(['unset-environment', ...staleServiceEnvNames], 'inherit');
+  }
+
+  const environmentNames = Object.keys(process.env).filter((name) => ENV_NAME_PATTERN.test(name));
+  if (environmentNames.length > 0) {
+    systemctl(['import-environment', ...environmentNames], 'inherit');
+  }
 }
 
 function assertNoConnectDaemonRunning(): void {
-  let daemonPids: number[];
-  try {
-    daemonPids = execFileSync('ps', ['-eo', 'pid=,command='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .split('\n')
-      .map((line) => {
-        const trimmed = line.trim();
-        const separatorIndex = trimmed.indexOf(' ');
-        if (separatorIndex === -1) return null;
-
-        const pid = Number.parseInt(trimmed.slice(0, separatorIndex), 10);
-        const command = trimmed.slice(separatorIndex + 1);
-        return pid !== process.pid &&
-          command.includes('connect') &&
-          command.includes('--daemon-child')
-          ? pid
-          : null;
-      })
-      .filter((pid): pid is number => pid !== null);
-  } catch {
-    return;
-  }
-
-  if (daemonPids.length === 0) return;
+  const daemonPid = getRunningDaemonPid();
+  if (daemonPid === null) return;
 
   throw new Error(
     [
-      `Background connect daemon is already running (PID ${daemonPids.join(', ')}).`,
+      `Background connect daemon is already running (PID ${daemonPid}).`,
       'Stop it before starting the systemd service.',
       'Run `lh connect stop`, then retry this command.',
     ].join(' '),
   );
 }
 
+function assertConnectServiceAuthAvailable(): void {
+  if (process.env.LOBEHUB_JWT || process.env[CLI_API_KEY_ENV] || loadCredentials()) return;
+
+  throw new Error(
+    `No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV} before starting the connect service.`,
+  );
+}
+
 export function installConnectService(): void {
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
+  assertConnectServiceAuthAvailable();
 
   fs.mkdirSync(path.join(os.homedir(), process.env.LOBEHUB_CLI_HOME || '.lobehub'), {
     mode: 0o700,
@@ -185,6 +193,7 @@ export function startConnectService(): boolean {
   if (!fs.existsSync(path.join(getUserServiceDir(), SERVICE_NAME))) return false;
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
+  assertConnectServiceAuthAvailable();
   importServiceEnvironment();
   systemctl(['start', SERVICE_NAME], 'inherit');
   return true;
@@ -201,6 +210,7 @@ export function restartConnectService(): boolean {
   if (!fs.existsSync(path.join(getUserServiceDir(), SERVICE_NAME))) return false;
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
+  assertConnectServiceAuthAvailable();
   importServiceEnvironment();
   systemctl(['restart', SERVICE_NAME], 'inherit');
   return true;
