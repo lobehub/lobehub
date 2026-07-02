@@ -34,12 +34,28 @@ is heavier and shifts the layout; an in-place text→skeleton swap is optimal.
 > width), same padding (`RunningTaskSidebar.tsx`) — so the load→content swap is in-place with no
 > relayout. ❌ A bare full-row block or a centred spinner the real rows later push aside.
 
+An **elapsed / progress readout for a long op** (a generation clock, an upload %, "running for
+2:14") has a subtler honesty trap than the skeleton: if it counts from **local component
+state**, it silently **resets to 0 on remount** — the item scrolls out of a virtual feed and
+back, the route is revisited, a re-render remounts the node — and the user sees a minute-long
+job claim it just started. Derive the start from a **persisted timestamp keyed by the job id**
+(sessionStorage / store), so the readout recovers the _true_ elapsed on remount rather than
+lying; and **clear that key when the job leaves the active state** so a finished / removed job
+doesn't leak a stale start onto a later one that reuses the slot.
+
+> ✅ The create-page `ElapsedTime` reads `generation_start_time_{generationId}` from
+> sessionStorage on mount (writing it once if absent), so a generation's clock survives a remount
+> and shows real duration; on `!isActive` it `removeItem`s the key
+> (`image/…/GenerationItem/ElapsedTime.tsx:33-49`). ❌ A `useState(0)` counter started in the
+> mount effect — every remount restarts the timer at zero.
+
 **Checklist**
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders. _(Natural)_
 - [ ] Skeleton reuses the loaded component's chrome — content swap, not relayout. _(Certainty・Natural)_
 - [ ] Skeleton lines match the real text's **height and typical width proportion** (long title line over a shorter subtitle, not equal full-width bars). _(Certainty)_
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
+- [ ] A long-op elapsed / progress readout derives from a **persisted start timestamp keyed by job id** (survives remount, shows true duration) and clears the key when the job ends — never a local counter that resets to 0 on remount. _(Certainty・Natural)_
 
 ## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
 
@@ -66,6 +82,21 @@ The flag is often **disguised as data-presence** — `loaded = Array.isArray(map
 as "is the data here yet". A failed fetch leaves the entry `undefined` → `loaded` stays
 false → permanent skeleton. Don't read "present in a success-populated map" as "loaded";
 branch the fetch's real `error`.
+
+The mirror-image trap on a **compound** gate — one that holds the skeleton until a **secondary /
+dependent** fetch resolves (a detail that waits on the assignee's config, a row that waits on its
+owner) — is gating on that dependency being **present** in the map. When the dependency
+legitimately resolves to **absent** (deleted, out-of-scope, `null` by design) it never lands in
+the map, so a presence-gate **hangs forever** on a perfectly healthy state. Gate on the dependency
+fetch's **in-flight** flag instead: block only while it's genuinely loading, and **release on
+settled** — data _or_ resolved-`null` _or_ error alike. "Absent" is a resolved state, not a pending
+one.
+
+> ✅ **Task detail** gets the compound gate right: it blocks the skeleton on `agentConfigLoading`
+> (the assignee-config fetch's **in-flight** flag), not on the assignee being present in the map, so
+> a task whose assignee was deleted / moved out of scope resolves to `null` and **releases** the gate
+> instead of spinning forever (`useActiveTaskDetail.ts:66-77`); the task skeleton itself is likewise
+> gated on "resolving", not on `data === undefined`.
 
 A third shape, in a **transient / auto-dismissing** surface (an upload dock, a progress toast,
 a status snackbar that clears itself after N seconds): auto-dismiss is a **success** affordance,
@@ -159,6 +190,7 @@ xSearchLoading || !xInit` flips only on success, so a failed load hangs a **perm
 
 - [ ] Every loading state has a terminal failure path — on error or after a bounded timeout, not an infinite spinner. _(Certainty)_
 - [ ] An init/ready flag isn't gated on success only — the error path resolves the loading state too, no permanent skeleton. _(Certainty)_
+- [ ] A compound gate waiting on a **secondary/dependent** fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error), never on the dependency being **present** in a map — a legitimately absent dependency (deleted / out-of-scope) must not hang the gate. _(Certainty)_
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
@@ -179,9 +211,28 @@ Stay reactive — the reminder clears the moment the user switches to a capable 
 unsupported state. Scope to the mode that needs it — one reminder per root cause — and
 state both the problem and the remedy.
 
+**Soft-inline is right only when the user can fix it _in context_.** The "never a hard block"
+rule above assumes a **model / config** capability — the user switches the model dropdown and
+the feature works, so blocking them would be gratuitous. A different class of gap is
+**structural**: the capability is absent because of the **platform / deployment**, not a choice
+the user can flip on this screen — a build served without the backend the feature needs (no
+database, a client-only distribution), a plan that doesn't include the feature. Here there is
+nothing to switch, so a soft inline warning over a half-working surface is _worse_ than honest:
+render a **full-surface gate** that says the feature isn't available in this context **and
+carries the remedy** (how to self-host / enable the backend, upgrade the plan), not a bare "not
+supported". The distinction is user-fixable-here → soft inline; not-fixable-here → full gate
+with a path out. Both still owe the remedy.
+
+> ✅ The image-generation surface renders `NotSupportClient` — a full-surface explainer with
+> feature cards + links to self-hosting-database docs and the hosted app — when the client build
+> lacks the DB backend generation needs (`image/NotSupportClient.tsx`), instead of showing a dead
+> composer. The remedy is _in the gate_. ❌ A model-capability gap hard-blocking the surface, or
+> conversely a platform-absent feature faking a working UI that silently no-ops.
+
 **Checklist**
 
-- [ ] Missing capability shows a soft inline warning, never a hard block. _(Meaningful)_
+- [ ] A **model / config** capability gap (user can switch here) shows a soft inline warning, never a hard block. _(Meaningful)_
+- [ ] A **platform / deployment** capability gap (not fixable on this screen) shows a full-surface gate **with the remedy** (self-host / enable / upgrade), never a soft warning over a half-working surface or a faked-working no-op. _(Certainty・Meaningful)_
 - [ ] Reminder is reactive — clears when a capable model is selected. _(Natural)_
 - [ ] No warning while config is still loading; only on resolved-unsupported. _(Certainty)_
 - [ ] Scoped to the dependent mode; one reminder per root cause. _(Natural・Certainty)_

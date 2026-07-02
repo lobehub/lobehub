@@ -249,6 +249,14 @@ status map reads as `{}`, so _every_ row looks inactive and the bulk action beco
 **wiper**. Treat "unknown / errored / not-yet-loaded" as **ineligible** (disable the action),
 never as the inactive value that makes a row a removal target.
 
+And **conditional** polling (poll only _while_ something is in flight) must start from **reactive
+state**, not from a function passed to the fetcher's `refreshInterval`. SWR's function-form
+`refreshInterval` is re-evaluated **only after a timer fires**, so if its first evaluation returns
+`0` (nothing in flight yet — the common cold-start), no timer is ever scheduled and polling
+**silently never starts**, even once work begins. Derive a reactive `shouldPoll` boolean from the
+store and pass `refreshInterval: shouldPoll ? interval : 0` so a re-render (not a stale timer) turns
+the poll on the moment activity appears, and off the moment it settles.
+
 > ✅ A feed shows a "3 new" pill the user taps to bring new items in; a manual refresh
 > control sits in the header. ❌ A 10s poll silently reshuffles the list mid-read, and a
 > failed poll looks identical to an empty feed.
@@ -257,6 +265,11 @@ never as the inactive value that makes a row a removal target.
 > running-topics poll errors the status map empties, **every** open column reads as idle, and
 > one click wipes the whole board (`Fleet/idleColumns.ts`, `RunningTaskSidebar.tsx`,
 > `useRunningTopics.ts`).
+> ✅ **Task detail** polls the activity feed only while a run is live and starts it correctly: a
+> reactive `shouldPoll = hasInFlightActivity(detail)` selector feeds `refreshInterval: shouldPoll ?
+TASK_DETAIL_POLL_INTERVAL : 0` (`store/task/slices/detail/action.ts:300-315`), so a re-render turns
+> polling on when work appears and off when it settles — dodging the function-form `refreshInterval`
+> cold-start trap (its own comment spells out why) and never hammering a finished task.
 
 **Checklist**
 
@@ -264,6 +277,7 @@ never as the inactive value that makes a row a removal target.
 - [ ] Manual refresh available — the user isn't hostage to the poll interval. _(Certainty)_
 - [ ] Active read/interaction isn't reordered or dropped under the user; new items are staged. _(Natural)_
 - [ ] A failed refresh is distinct from "no new items", never shown as empty. _(Certainty)_
+- [ ] Conditional polling starts from **reactive state** (`shouldPoll` boolean → `refreshInterval`), not a function-form `refreshInterval` — the function form never schedules a first timer if its initial value is `0`, so polling silently never starts. _(Certainty・Natural)_
 - [ ] A bulk/destructive control derived from a live-status map gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value that makes a row a removal target. _(Certainty・Meaningful)_
 
 ## 1.8 Find-by-search once a surface has many entries・Natural・Certainty

@@ -56,8 +56,8 @@ two absent generation-class affordances (cancel, result→input).
 
 The surface is strong where it counts — these are the ✅ half of the 回灌 loop and the "don't
 regress" list for the next refactor. Most live in the **shared shell**
-(`src/routes/(main)/(create)/features/`), so any future generation surface inherits them; all are
-validated ✅ instances (none promoted to a new `ux` example this run — see §4):
+(`src/routes/(main)/(create)/features/`), so any future generation surface inherits them; two of
+them (marked `→ landed as ux … ✅`) taught the checklists a latent sub-rule this run — see §4:
 
 - **✅ 亮点 — Durable batch feed as persistent gallery.** Submitted batches are server-side and
   survive reload, so `GenerationFeed` is a real gallery, not an in-session scratchpad — this is
@@ -72,13 +72,20 @@ validated ✅ instances (none promoted to a new `ux` example this run — see §
   composer take reference images and video frames inline — the reference-upload class norm is met.
   Load-bearing precisely because gap ⑤ is about the _missing_ bridge back: the accept side is
   already built, so result→input reuse is a wiring gap, not a from-scratch feature.
-- **✅ 亮点 — Capability gate present.** `image/NotSupportClient.tsx` renders a CLI / self-hosted
-  upsell instead of a broken surface when the capability is unavailable — the class-norm capability
-  gate a code-only read is often blind to (per the benchmark ground rule) is actually shipped here.
-- **✅ 亮点 — Elapsed time survives remount.** `VideoLoadingItem`'s `ElapsedTime` is
-  sessionStorage-backed, so the per-job elapsed clock keeps counting across a remount rather than
-  resetting to zero — an honest "how long this has run" signal for minute-long video jobs, not a
-  cosmetic spinner.
+- **✅ 亮点 — Capability gate present. → landed as ux Feedback §4.3 ✅** `image/NotSupportClient.tsx`
+  renders a full-surface CLI / self-hosted explainer **with the remedy** (self-host-DB + hosted-app
+  links) instead of a broken composer when the client build lacks the generation backend. This
+  sharpened §4.3: its "soft inline warning, never a hard block" rule silently assumed a
+  **user-fixable-here (model/config)** gap; this is a **platform/deployment** gap the user _can't_
+  flip on-screen, so a full-surface gate carrying the remedy is correct — a distinction §4.3 didn't
+  draw before.
+- **✅ 亮点 — Elapsed time survives remount. → landed as ux Feedback §4.1 ✅** `ElapsedTime` reads
+  `generation_start_time_{generationId}` from sessionStorage on mount and `removeItem`s it when the
+  job leaves active (`image/…/GenerationItem/ElapsedTime.tsx:33-49`), so the per-job clock recovers
+  true duration across a remount rather than resetting to zero. This extracted a latent §4.1 rule
+  the skeleton-focused prose didn't state: a long-op elapsed / progress readout must derive from a
+  **persisted start-timestamp keyed by job id** (survives remount) and clear it on completion, never
+  a local counter that restarts at 0.
 
 ## 3 — Experience gaps (ranked)
 
@@ -145,10 +152,20 @@ retry, hence minor — but "failed refresh ≠ still in progress" is the §1.7 r
   — permanent skeleton, and the new `Array.isArray(map[id])`-as-init-flag shape), Act **§3.1**
   (gap ③ — action-failure must surface, and the sibling-actions-toast-but-these-don't
   inconsistency), Edit **§2.1** (gap ⑥, second instance).
-- **Landed as a new/strengthened `ux` item:** Act **§3.1** — a **long-running / costly async
-  op (generation, export, upload) needs a Cancel affordance**, not delete-after-the-fact (gap
-  ②); mirrored into the Quick review. This is the generalizable one — it recurs on any
-  surface with a minutes-long, billable background job.
+- **Landed as a new/strengthened `ux` item (from a gap ❌):** Act **§3.1** — a **long-running /
+  costly async op (generation, export, upload) needs a Cancel affordance**, not
+  delete-after-the-fact (gap ②); mirrored into the Quick review. This is the generalizable one —
+  it recurs on any surface with a minutes-long, billable background job.
+- **Landed from a good case ✅ (the other half of 回灌 — each sharpened a rule, not just decorated
+  it):**
+  - Feedback **§4.1** — extracted a latent sub-rule from `ElapsedTime`: a long-op elapsed /
+    progress readout must derive from a **persisted start-timestamp keyed by job id** (survives
+    remount) and clear it on completion, never a local counter that restarts at 0. The old §4.1
+    prose was skeleton/CLS-only and never stated this.
+  - Feedback **§4.3** — `NotSupportClient` split the capability-gate rule in two: the existing
+    "soft inline warning, never a hard block" assumed a **user-fixable-here (model/config)** gap;
+    a **platform/deployment** gap the user can't flip on-screen instead wants a **full-surface
+    gate carrying the remedy**. §4.3 didn't draw this distinction before.
 - **Noted, not yet landed** (promote if a second surface repeats): result→input reuse for
   generation surfaces (gap ⑤); example-gallery first-run for creation tools (gap ④).
 

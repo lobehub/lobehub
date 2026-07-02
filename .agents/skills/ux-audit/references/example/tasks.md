@@ -57,18 +57,22 @@ into an uncaught handler, so the optimistic UI reverts with no word to the user.
 ## 2 — Strengths / good cases (don't regress)
 
 The read/monitor spine is mature — these are the ✅ half of the 回灌 loop and the "don't regress"
-list for the next refactor (which is mostly write-path work, so it's easy to nick these). One
-lands as a **✅ example in the `ux` checklists** (see §4):
+list for the next refactor (which is mostly write-path work, so it's easy to nick these). **Three
+land as ✅ examples in the `ux` checklists** (see §4):
 
-- **✅ 亮点 — Detail loading /not-found state machine.** `useActiveTaskDetail.ts` gates the
-  skeleton on "resolving", **not** on `data === undefined`, and an assignee that resolves to
-  `null` **releases** the gate instead of deadlocking — so a task with no assignee still renders
-  instead of spinning forever. (The one soft spot is that a _transient fetch error_ still coerces
-  to "Task not found" — gap ②; the machine itself is the model.)
-- **✅ 亮点 — Live polling without the `refreshInterval` trap.** the activity feed polls 10s **only
-  while** `hasInFlightActivity`, in **reactive-boolean** form rather than a function-valued
-  `refreshInterval` — so it dodges the stale-closure trap and stops polling the moment the run
-  goes idle instead of hammering a finished task.
+- **✅ 亮点 — Detail loading /not-found state machine (→ landed as ux Feedback §4.2 ✅).**
+  `useActiveTaskDetail.ts` gates the skeleton on "resolving", **not** on `data === undefined`, and
+  the assignee-config gate keys off the fetch's **in-flight** flag (`agentConfigLoading`, `:66-77`),
+  so an assignee that resolves to `null` (deleted / out-of-scope) **releases** the gate instead of
+  deadlocking — a task with no assignee still renders instead of spinning forever. Extracted a
+  latent **compound-gate** sub-rule into Feedback §4.2. (The one soft spot: a _transient fetch
+  error_ still coerces to "Task not found" — gap ②; the gate machine itself is the model.)
+- **✅ 亮点 — Live polling without the `refreshInterval` trap (→ landed as ux Read §1.7 ✅).** the
+  activity feed polls 10s **only while** `hasInFlightActivity`, driven by a **reactive-boolean**
+  `shouldPoll` selector feeding `refreshInterval` (`detail/action.ts:300-315`) rather than a
+  function-valued `refreshInterval` — so it dodges SWR's cold-start trap (the function form never
+  schedules a first timer if its initial value is `0`) and stops the moment the run goes idle.
+  Extracted the "conditional polling starts from reactive state" sub-rule into Read §1.7.
 - **✅ 亮点 — Run-all flow — the mutation model (→ landed as ux Act §3.1 ✅).** `TaskSubtasks.tsx:204-255`
   runs preview → **locked confirm** → `partialFailure` vs `kickedOff` toasts, so a bulk run tells
   the user exactly what happened even on partial success. This is cited as the **✅** for Act §3.1
@@ -216,9 +220,22 @@ write. **This is a seam _between_ the two surfaces — see the method note below
     assignee / parent, so a detail title/priority edit leaves the list row stale (gap ⑬). Mirrored
     into the Quick review. Plus a method note (⚠️ under gap ⑬): split-by-surface fan-out needs a
     reader that owns the shared-store seam, or it drops coherence bugs by construction.
+- **Good cases landed as ✅ examples (the ✅ half of 回灌 — each sharpened a rule, not just decorated it):**
+  - Feedback **§4.2** — new **compound-gate** sub-rule + ✅: a gate waiting on a _secondary/dependent_
+    fetch must key off its **in-flight** flag and release on resolved-absent (`null`), never on the
+    dependency being present in a map. Extracted from `useActiveTaskDetail.ts:66-77` (the assignee-
+    config gate) — the current rule only covered a primary fetch's success-only init flag; this adds
+    the "absent dependency is a resolved state, not a pending one" distinction. Checklist line added.
+  - Read **§1.7** — new **conditional-polling** sub-rule + ✅: start polling from **reactive state**
+    (`shouldPoll` boolean → `refreshInterval`), not a function-form `refreshInterval` (which never
+    schedules a first timer if the initial value is `0`, so polling silently never starts). Extracted
+    from `detail/action.ts:300-315`. Checklist line added.
+  - Act **§3.1** — the **run-all** flow (`TaskSubtasks.tsx:204-255`) is cited as the ✅ for the
+    job-control rule (preview → locked confirm → `partialFailure` vs `kickedOff` toasts).
 - **Validated existing rules** (good ❌ examples to cite): Read §1.2 sort/search over a
   partial paginated page (gap ⑤); Edit §2.1 in-memory draft lost on close (gap ⑩); Act §3.2
-  terminal-state control visibility (gap ⑪, pending L2).
+  terminal-state control visibility (gap ⑪, pending L2). Good ✅ instance already covered by an
+  existing rule (cited, not re-landed): comment-draft-preserved-on-failure (Edit §2.1).
 
 ## 5 — Pending: L2 visual + L3 dynamic
 
