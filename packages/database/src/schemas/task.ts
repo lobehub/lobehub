@@ -88,6 +88,14 @@ export const tasks = pgTable(
     config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, etc.
     error: text('error'),
 
+    // Visibility (mirrors agent.visibility semantics). Workspace-mode rows can be
+    // 'public' (visible to every workspace member) or 'private' (only the
+    // creator sees them). Personal-mode rows are implicitly private to their
+    // owner and the column is ignored.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     // Timestamps
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
@@ -113,6 +121,7 @@ export const tasks = pgTable(
     index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
     index('tasks_workspace_id_idx').on(t.workspaceId),
+    index('tasks_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.createdByUserId),
     uniqueIndex('tasks_identifier_workspace_id_unique')
       .on(t.workspaceId, t.identifier)
       .where(isNotNull(t.workspaceId)),
@@ -140,6 +149,13 @@ export const taskDependencies = pgTable(
     // 'blocks' | 'relates'
     type: text('type').notNull().default('blocks'),
 
+    // Mirror of parent task's visibility. Kept in lockstep with `tasks.visibility`
+    // by `TaskModel.updateVisibility` cascade so this row can be filtered without
+    // joining back to `tasks`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     // Reserved for conditional dependencies: {"on": "success"} / {"on": "failure"}
     condition: jsonb('condition'),
 
@@ -151,6 +167,7 @@ export const taskDependencies = pgTable(
     index('task_deps_depends_on_id_idx').on(t.dependsOnId),
     index('task_deps_user_id_idx').on(t.userId),
     index('task_dependencies_workspace_id_idx').on(t.workspaceId),
+    index('task_deps_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 
@@ -177,6 +194,12 @@ export const taskDocuments = pgTable(
     // 'agent' | 'user' | 'system'
     pinnedBy: text('pinned_by').notNull().default('agent'),
 
+    // Mirror of parent task's visibility. Same cascade contract as
+    // `task_dependencies.visibility`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     createdAt: createdAt(),
   },
   (t) => [
@@ -185,6 +208,7 @@ export const taskDocuments = pgTable(
     index('task_docs_document_id_idx').on(t.documentId),
     index('task_docs_user_id_idx').on(t.userId),
     index('task_documents_workspace_id_idx').on(t.workspaceId),
+    index('task_docs_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 
@@ -222,6 +246,14 @@ export const taskTopics = pgTable(
     reviewIteration: integer('review_iteration'), // which iteration (1, 2, 3...)
     reviewedAt: timestamptz('reviewed_at'),
 
+    // Snapshot of the task's visibility at the time this run was created.
+    // Topics inherit `tasks.visibility` on insert but are **not** cascaded by
+    // `TaskModel.updateVisibility` (LOBE-11028): promoting a task to public
+    // must not retroactively expose runs that happened while it was private.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
@@ -231,6 +263,7 @@ export const taskTopics = pgTable(
     index('task_topics_user_id_idx').on(t.userId),
     index('task_topics_status_idx').on(t.taskId, t.status),
     index('task_topics_workspace_id_idx').on(t.workspaceId),
+    index('task_topics_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 
@@ -321,6 +354,15 @@ export const taskComments = pgTable(
     briefId: text('brief_id').references(() => briefs.id, { onDelete: 'set null' }),
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
 
+    // Mirror of parent task's visibility. Same cascade contract as the other
+    // task-child tables (`task_dependencies` / `task_documents` / `task_topics`).
+    // Lets `commentsOwnership` filter without joining back to `tasks`, and
+    // closes the leak where a workspace member who somehow obtained a
+    // commentId could touch a comment on a task they cannot see.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
@@ -331,6 +373,7 @@ export const taskComments = pgTable(
     index('task_comments_brief_id_idx').on(t.briefId),
     index('task_comments_topic_id_idx').on(t.topicId),
     index('task_comments_workspace_id_idx').on(t.workspaceId),
+    index('task_comments_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 

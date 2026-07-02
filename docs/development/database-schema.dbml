@@ -25,6 +25,7 @@ table agents {
   opening_message text
   opening_questions text[] [default: `[]`]
   session_group_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -37,6 +38,7 @@ table agents {
     description [name: 'agents_description_idx']
     session_group_id [name: 'agents_session_group_id_idx']
     workspace_id [name: 'agents_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'agents_workspace_visibility_idx']
     (workspace_id, slug) [name: 'agents_slug_workspace_id_unique', unique]
   }
 }
@@ -461,7 +463,8 @@ table ai_models {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, provider_id, user_id) [pk]
+    (id, provider_id, user_id) [name: 'ai_models_id_provider_id_user_id_unique', unique]
+    (id, provider_id, user_id, workspace_id) [name: 'ai_models_id_provider_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_models_user_id_idx']
     workspace_id [name: 'ai_models_workspace_id_idx']
   }
@@ -488,7 +491,8 @@ table ai_providers {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, user_id) [pk]
+    (id, user_id) [name: 'ai_providers_id_user_id_unique', unique]
+    (id, user_id, workspace_id) [name: 'ai_providers_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_providers_user_id_idx']
     workspace_id [name: 'ai_providers_workspace_id_idx']
   }
@@ -634,6 +638,7 @@ table chat_groups {
   workspace_id text
   group_id text
   pinned boolean [default: false]
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -643,6 +648,7 @@ table chat_groups {
     user_id [name: 'chat_groups_user_id_idx']
     group_id [name: 'chat_groups_group_id_idx']
     workspace_id [name: 'chat_groups_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'chat_groups_workspace_visibility_idx']
   }
 }
 
@@ -824,6 +830,7 @@ table documents {
   editor_data jsonb
   slug varchar(255)
   workspace_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -839,6 +846,7 @@ table documents {
     (client_id, user_id) [name: 'documents_client_id_user_id_unique', unique]
     (slug, user_id) [name: 'documents_slug_user_id_unique', unique]
     workspace_id [name: 'documents_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'documents_workspace_visibility_idx']
     (workspace_id, slug) [name: 'documents_slug_workspace_id_unique', unique]
   }
 }
@@ -858,6 +866,7 @@ table files {
   chunk_task_id uuid
   embedding_task_id uuid
   workspace_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -870,6 +879,7 @@ table files {
     embedding_task_id [name: 'files_embedding_task_id_idx']
     (client_id, user_id) [name: 'files_client_id_user_id_unique', unique]
     workspace_id [name: 'files_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'files_workspace_visibility_idx']
   }
 }
 
@@ -915,6 +925,7 @@ table knowledge_bases {
   is_public boolean [default: false]
   settings jsonb
   workspace_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -923,6 +934,7 @@ table knowledge_bases {
     (client_id, user_id) [name: 'knowledge_bases_client_id_user_id_unique', unique]
     user_id [name: 'knowledge_bases_user_id_idx']
     workspace_id [name: 'knowledge_bases_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'knowledge_bases_workspace_visibility_idx']
   }
 }
 
@@ -956,6 +968,7 @@ table generation_topics {
   title text
   cover_url text
   type varchar(32) [not null, default: 'image']
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -963,6 +976,7 @@ table generation_topics {
   indexes {
     user_id [name: 'generation_topics_user_id_idx']
     workspace_id [name: 'generation_topics_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'generation_topics_workspace_visibility_idx']
   }
 }
 
@@ -1822,6 +1836,7 @@ table session_groups {
   user_id text [not null]
   client_id text
   workspace_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1830,6 +1845,7 @@ table session_groups {
     (client_id, user_id) [name: 'session_groups_client_id_user_id_unique', unique]
     user_id [name: 'session_groups_user_id_idx']
     workspace_id [name: 'session_groups_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'session_groups_workspace_visibility_idx']
   }
 }
 
@@ -1925,6 +1941,7 @@ table task_comments {
   editor_data jsonb
   brief_id text
   topic_id text
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1937,6 +1954,7 @@ table task_comments {
     brief_id [name: 'task_comments_brief_id_idx']
     topic_id [name: 'task_comments_topic_id_idx']
     workspace_id [name: 'task_comments_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_comments_workspace_visibility_idx']
   }
 }
 
@@ -1947,6 +1965,7 @@ table task_dependencies {
   user_id text [not null]
   workspace_id text
   type text [not null, default: 'blocks']
+  visibility text [not null, default: 'public']
   condition jsonb
   created_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -1956,6 +1975,7 @@ table task_dependencies {
     depends_on_id [name: 'task_deps_depends_on_id_idx']
     user_id [name: 'task_deps_user_id_idx']
     workspace_id [name: 'task_dependencies_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_deps_workspace_visibility_idx']
   }
 }
 
@@ -1966,6 +1986,7 @@ table task_documents {
   user_id text [not null]
   workspace_id text
   pinned_by text [not null, default: 'agent']
+  visibility text [not null, default: 'public']
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -1974,6 +1995,7 @@ table task_documents {
     document_id [name: 'task_docs_document_id_idx']
     user_id [name: 'task_docs_user_id_idx']
     workspace_id [name: 'task_documents_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_docs_workspace_visibility_idx']
   }
 }
 
@@ -1992,6 +2014,7 @@ table task_topics {
   review_scores jsonb
   review_iteration integer
   reviewed_at "timestamp with time zone"
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -2003,6 +2026,7 @@ table task_topics {
     user_id [name: 'task_topics_user_id_idx']
     (task_id, status) [name: 'task_topics_status_idx']
     workspace_id [name: 'task_topics_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_topics_workspace_visibility_idx']
   }
 }
 
@@ -2035,6 +2059,7 @@ table tasks {
   context jsonb [default: `{}`]
   config jsonb [default: `{}`]
   error text
+  visibility text [not null, default: 'public']
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
@@ -2054,6 +2079,7 @@ table tasks {
     automation_mode [name: 'tasks_automation_mode_idx']
     (status, last_heartbeat_at) [name: 'tasks_heartbeat_idx']
     workspace_id [name: 'tasks_workspace_id_idx']
+    (workspace_id, visibility, created_by_user_id) [name: 'tasks_workspace_visibility_idx']
     (workspace_id, identifier) [name: 'tasks_identifier_workspace_id_unique', unique]
   }
 }

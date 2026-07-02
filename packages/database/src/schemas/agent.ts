@@ -74,6 +74,16 @@ export const agents = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see and use the agent; `private` constrains it to
+     * the creator (`user_id`). Ignored in personal mode where the row is
+     * implicitly private to its owner.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
@@ -84,6 +94,7 @@ export const agents = pgTable(
     index('agents_description_idx').on(t.description),
     index('agents_session_group_id_idx').on(t.sessionGroupId),
     index('agents_workspace_id_idx').on(t.workspaceId),
+    index('agents_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     uniqueIndex('agents_slug_workspace_id_unique')
       .on(t.workspaceId, t.slug)
       .where(isNotNull(t.workspaceId)),
