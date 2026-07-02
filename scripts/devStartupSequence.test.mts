@@ -6,11 +6,11 @@ import { __testing } from './devStartupSequence.mts';
 
 const { findFreePort, resolveNextPort, resolveVitePortEnv } = __testing;
 
-const listenOnPort = (port: number) =>
+const listenOnPort = (port: number, host?: string) =>
   new Promise<net.Server>((resolve, reject) => {
     const server = net.createServer();
     server.once('error', reject);
-    server.listen(port, () => resolve(server));
+    server.listen({ host, port }, () => resolve(server));
   });
 
 const closeServer = (server: net.Server) =>
@@ -36,6 +36,16 @@ describe('findFreePort', () => {
     try {
       const free = await findFreePort(45_679);
       expect(free).toBe(45_680);
+    } finally {
+      await closeServer(occupied);
+    }
+  });
+
+  it('skips a port held by a loopback-only listener', async () => {
+    const occupied = await listenOnPort(45_682, '127.0.0.1');
+    try {
+      const free = await findFreePort(45_682);
+      expect(free).toBe(45_683);
     } finally {
       await closeServer(occupied);
     }

@@ -19,15 +19,30 @@ const NEXT_HOST = 'localhost';
 
 const MAX_PORT_SCAN_ATTEMPTS = 100;
 
-const isPortFree = (port: number) =>
+// Probe loopback addresses in addition to the wildcard: a server bound only to
+// 127.0.0.1 would not conflict with a wildcard bind (SO_REUSEADDR on BSD), yet
+// it still hijacks the localhost URLs every dev consumer actually hits.
+const PROBE_HOSTS: (string | undefined)[] = ['127.0.0.1', '::1', undefined];
+
+const canBind = (port: number, host?: string) =>
   new Promise<boolean>((resolve) => {
     const server = net.createServer();
     server.unref();
-    server.once('error', () => resolve(false));
-    server.listen(port, () => {
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      // An unavailable address family (e.g. no IPv6) is not "port busy".
+      resolve(error.code !== 'EADDRINUSE' && error.code !== 'EACCES');
+    });
+    server.listen({ host, port }, () => {
       server.close(() => resolve(true));
     });
   });
+
+const isPortFree = async (port: number): Promise<boolean> => {
+  for (const host of PROBE_HOSTS) {
+    if (!(await canBind(port, host))) return false;
+  }
+  return true;
+};
 
 const findFreePort = async (startPort: number): Promise<number> => {
   for (let port = startPort; port < startPort + MAX_PORT_SCAN_ATTEMPTS; port++) {
