@@ -418,7 +418,7 @@ const ReportViewer = memo(() => {
         icon={X}
         title={t('report.error.title')}
         action={
-          <Button icon={RefreshCw} onClick={() => void mutate()}>
+          <Button icon={<RefreshCw size={16} />} onClick={() => void mutate()}>
             {t('report.actions.retry')}
           </Button>
         }

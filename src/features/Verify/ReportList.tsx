@@ -299,7 +299,7 @@ const VerifyReportsPage = memo(() => {
           icon={X}
           title={t('reports.error.title')}
         />
-        <Button icon={RefreshCw} onClick={() => void mutate()}>
+        <Button icon={<RefreshCw size={16} />} onClick={() => void mutate()}>
           {t('reports.actions.retry')}
         </Button>
       </Center>
@@ -314,7 +314,7 @@ const VerifyReportsPage = memo(() => {
             <Text as={'h2'}>{t('reports.title')}</Text>
             <Text type={'secondary'}>{t('reports.subtitle')}</Text>
           </Flexbox>
-          <Button icon={RefreshCw} size={'small'} onClick={() => void mutate()}>
+          <Button icon={<RefreshCw size={14} />} size={'small'} onClick={() => void mutate()}>
             {t('reports.actions.refresh')}
           </Button>
         </Flexbox>
@@ -328,7 +328,7 @@ const VerifyReportsPage = memo(() => {
               icon={ClipboardCheck}
               title={t('reports.empty.title')}
             />
-            <Button icon={ClipboardCheck} type={'primary'} onClick={() => navigate('/tasks')}>
+            <Button icon={<ClipboardCheck size={16} />} type={'primary'} onClick={() => navigate('/tasks')}>
               {t('reports.empty.action')}
             </Button>
           </Center>
