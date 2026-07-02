@@ -53,6 +53,12 @@ For each block, walk the relevant [`ux`](../../ux/SKILL.md) module and record ea
 - **Forward momentum & action states** (Act §3.1) — confirm → in-progress (locked) →
   done/error present in code?
 - **Live / polling streams** (Read §1.7) — new-item signal, manual refresh, no reorder.
+- **Closed-loop / cross-surface entry points** (Grow §5.3) — does this surface lead the user
+  onward to the data / management area of whatever it configures, or does it dead-end? A
+  config-only pane (a toggle with no link to the thing it governs), or one that only _promises_
+  the destination in copy, is a gap L1 misses unless you ask it explicitly — the link that
+  should exist has no `file:line`. Ask it on **every** surface, including the small "just a
+  form" ones; that's where it hides.
 - **Pinned actions / draft scope / etc.** as the surface warrants.
 
 ### 4 — Rank & record

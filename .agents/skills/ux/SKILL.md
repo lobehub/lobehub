@@ -87,12 +87,15 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Read — viewing data & lists** ([read.md](references/read.md))
 
 - [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state.
+- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404).
 - [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
+- [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows).
 - [ ] Capped/scrollable/virtualized list scrolls the restored active item into view on mount (`block: 'nearest'`, re-run after async rows mount).
 - [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
 - [ ] Large numbers roll the unit at each 1000× (K→M→B→T), never a coefficient ≥ 1000; use the shared `formatUsageValue` / `formatShortenNumber`.
 - [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
-- [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty).
+- [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value.
+- [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
@@ -106,20 +109,27 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
 - [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
 - [ ] Scrollable content + actions/status → pin them in a fixed footer/header, not inside the scroll area (verify at the overflowing state).
 - [ ] Exactly one primary button per surface — and it's the visually dominant control (back / cancel / secondary never out-weighs it; verify on the rendered screen, not from `variant`).
-- [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom).
+- [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom). A protective marker (pin / keep / lock) is honored by every removal path (bulk close, clear-idle, auto-cleanup) — a marker that gates nothing is a decorative no-op.
 - [ ] An action that commits as a specific identity (OAuth consent, send-as, publish-to) shows the identity **and** a switch-account / re-auth path — never locks the user to the currently-logged-in one.
+- [ ] Unrecoverable / wide-blast action (clear-all, delete-account, wipe) needs an explicit gesture (type-to-confirm / checkbox), not one-click danger; and reports partial failure, never silent half-completion.
+- [ ] A minted secret (API key / token) is shown in full once at creation (persistent reveal + Copy), hashed at rest, masked thereafter — never re-revealed from a list.
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
-- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner.
+- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry.
+- [ ] An awaited write that gates navigation/advance resets its busy flag in `finally` + offers retry — a failed write never permanently disables the forward/Back control.
+- [ ] Autosave surfaces a save-state (saving → saved → failed with retry), never a silent write; the save-state enum actually includes a `failed` variant (a catch that resets to `idle` is a silent write); one save-feedback convention across a multi-field surface, ideally in the shared form wrapper.
 - [ ] Capability-gated feature warns (soft, reactive, load-gated) when the model can't deliver it; copy gives the remedy.
 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))
 
 - [ ] Advanced capability is progressively disclosed / discoverable at the moment of need.
+- [ ] A config surface for a feature with its own data/management area links to it in-context (close the config → manage loop) — not just a promise in copy.
+- [ ] Multi-step flow (>2 steps: wizard/onboarding) shows a step/progress indicator (position + total) and keeps non-essential steps skippable with a visible escape hatch.
 
 ## Related skills
 
