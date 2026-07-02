@@ -317,21 +317,7 @@ After({ tags: '@scroll' }, async function (this: CustomWorld) {
 });
 
 Then('用户消息不应固定在聊天列表顶部', async function (this: CustomWorld) {
-  const rect = await this.page.evaluate(() => {
-    const wrappers = Array.from(document.querySelectorAll('.message-wrapper'));
-    if (wrappers.length < 2) return null;
-    const userWrapper = wrappers.at(-2) as HTMLElement;
-    let scrollParent: HTMLElement | null = userWrapper.parentElement;
-    while (scrollParent) {
-      const style = window.getComputedStyle(scrollParent);
-      if (style.overflowY === 'auto' || style.overflowY === 'scroll') break;
-      scrollParent = scrollParent.parentElement;
-    }
-    if (!scrollParent) return null;
-    const wrapperRect = userWrapper.getBoundingClientRect();
-    const parentRect = scrollParent.getBoundingClientRect();
-    return { delta: wrapperRect.top - parentRect.top };
-  });
+  const rect = await measurePinDelta(this);
 
   expect(rect).not.toBeNull();
   // Pin is cancelled: the user message should have been pushed down by the
@@ -340,11 +326,11 @@ Then('用户消息不应固定在聊天列表顶部', async function (this: Cust
   expect(Math.abs(rect!.delta)).toBeGreaterThan(150);
 });
 
-Then('用户消息应固定在聊天列表顶部', async function (this: CustomWorld) {
-  // Find the user message (the penultimate `.message-wrapper`) and check its
-  // top is close to the scroll container top. We allow some slack because
-  // virtua lays out with some padding and the header can stick.
-  const rect = await this.page.evaluate(() => {
+// Measures the user message (penultimate `.message-wrapper`) top relative to
+// its scroll container top. Slack is allowed because virtua lays out with some
+// padding and the header can stick.
+async function measurePinDelta(world: CustomWorld) {
+  return world.page.evaluate(() => {
     const wrappers = Array.from(document.querySelectorAll('.message-wrapper'));
     if (wrappers.length < 2) return null;
     const userWrapper = wrappers.at(-2) as HTMLElement;
@@ -358,15 +344,32 @@ Then('用户消息应固定在聊天列表顶部', async function (this: CustomW
     const wrapperRect = userWrapper.getBoundingClientRect();
     const parentRect = scrollParent.getBoundingClientRect();
     return {
+      delta: wrapperRect.top - parentRect.top,
       parentTop: parentRect.top,
       userTop: wrapperRect.top,
-      delta: wrapperRect.top - parentRect.top,
     };
   });
+}
+
+Then('用户消息应固定在聊天列表顶部', async function (this: CustomWorld) {
+  // The pin uses a smooth (`align:'start', smooth:true`) scroll that re-fires on
+  // every layout bump while the reply streams — so the anchored position is
+  // reached *repeatedly*, not at one fixed instant. Sampling once after a fixed
+  // wait races that animation and flakes (a mid-animation frame reads ~260px).
+  // Poll for a settled frame within the slack instead. If the pin genuinely
+  // never lands, the loop exhausts and the final assertion still fails with the
+  // real delta — so a true regression is not masked.
+  const PIN_SLACK = 150;
+  const deadline = Date.now() + 5000;
+  let rect = await measurePinDelta(this);
+  while ((!rect || Math.abs(rect.delta) > PIN_SLACK) && Date.now() < deadline) {
+    await this.page.waitForTimeout(100);
+    rect = await measurePinDelta(this);
+  }
 
   expect(rect, 'failed to resolve user message + scroll parent').not.toBeNull();
   // Pin anchors with `align: 'start'` — tolerate ~150 px of slack for headers.
-  expect(Math.abs(rect!.delta)).toBeLessThanOrEqual(150);
+  expect(Math.abs(rect!.delta)).toBeLessThanOrEqual(PIN_SLACK);
 });
 
 Then('聊天列表底部补偿区域高度不应收缩', async function (this: CustomWorld) {
