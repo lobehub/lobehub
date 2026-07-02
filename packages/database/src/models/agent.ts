@@ -16,6 +16,7 @@ import {
   agentsFiles,
   agentsKnowledgeBases,
   agentsToSessions,
+  briefs,
   chatGroupsAgents,
   devices,
   documents,
@@ -23,6 +24,11 @@ import {
   knowledgeBases,
   messages,
   sessions,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
   threads,
   topics,
 } from '../schemas';
@@ -1133,13 +1139,49 @@ export class AgentModel {
         .set(ownershipUpdate)
         .where(eq(agentCronJobs.agentId, agentId));
 
-      // 12. Update agent bot providers (transfer, not delete)
+      // 12. Update tasks assigned to or created by this agent. The scheduled
+      // task dispatcher uses `createdByUserId` as the execution owner, so tasks
+      // must move with the agent instead of staying under the old owner.
+      const movedTasks = await trx
+        .update(tasks)
+        .set({
+          createdByUserId: targetUserId,
+          updatedAt: new Date(),
+          workspaceId: targetWorkspaceId,
+        })
+        .where(or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)))
+        .returning({ id: tasks.id });
+      const movedTaskIds = movedTasks.map((task) => task.id);
+
+      if (movedTaskIds.length > 0) {
+        await trx
+          .update(taskDependencies)
+          .set(ownershipUpdate)
+          .where(inArray(taskDependencies.taskId, movedTaskIds));
+        await trx
+          .update(taskDocuments)
+          .set(ownershipUpdate)
+          .where(inArray(taskDocuments.taskId, movedTaskIds));
+        await trx
+          .update(taskTopics)
+          .set(ownershipUpdate)
+          .where(inArray(taskTopics.taskId, movedTaskIds));
+        await trx
+          .update(taskComments)
+          .set(ownershipUpdate)
+          .where(inArray(taskComments.taskId, movedTaskIds));
+        await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
+      }
+
+      await trx.update(briefs).set(ownershipUpdate).where(eq(briefs.agentId, agentId));
+
+      // 13. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
         .set(ownershipUpdate)
         .where(eq(agentBotProviders.agentId, agentId));
 
-      // 13. Remove chat group associations (groups belong to source workspace context)
+      // 14. Remove chat group associations (groups belong to source workspace context)
       await trx.delete(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, agentId));
 
       return { agentId, slug };
