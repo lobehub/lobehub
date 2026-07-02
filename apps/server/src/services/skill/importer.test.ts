@@ -1,9 +1,11 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentSkills, files, globalFiles, users } from '@lobechat/database/schemas';
+import { agentSkills, files, globalFiles, users, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AgentSkillModel } from '@/database/models/agentSkill';
 
 import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
@@ -1161,6 +1163,133 @@ description: A nested skill
 
       // Clean up other user
       await db.delete(users).where(eq(users.id, otherUserId));
+    });
+  });
+
+  // Regression for LOBE-10893: a skill imported while running inside a workspace
+  // must be written with `workspace_id = <ws>`, not the importer's personal scope
+  // (`workspace_id IS NULL`). Otherwise it is invisible to every workspace member
+  // — including the creator whenever they operate in workspace mode — and a
+  // re-import of a name that already exists personally hits a unique violation.
+  describe('workspace scoping (LOBE-10893)', () => {
+    let workspaceId: string;
+    let wsImporter: SkillImporter;
+
+    beforeEach(async () => {
+      // agent_skills.workspace_id has an FK to workspaces.id, so the workspace
+      // row must exist before a workspace-scoped skill can be inserted.
+      const [ws] = await db
+        .insert(workspaces)
+        .values({ name: 'Test Workspace', primaryOwnerId: userId, slug: `ws-${userId}` })
+        .returning();
+      workspaceId = ws.id;
+      wsImporter = new SkillImporter(db, userId, workspaceId);
+    });
+
+    it('createUserSkill writes workspace_id when running in a workspace', async () => {
+      const result = await wsImporter.createUserSkill({
+        content: '# WS content',
+        description: 'A workspace skill',
+        name: 'Workspace Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('personal import stays personal (workspace_id IS NULL)', async () => {
+      const result = await importer.createUserSkill({
+        content: '# personal',
+        description: 'A personal skill',
+        name: 'Personal Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBeNull();
+    });
+
+    it('importFromUrl lands the skill in the workspace scope', async () => {
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# Imported',
+        manifest: { name: 'Imported Workspace Skill', description: 'from url' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/ws-skill.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('is visible to other workspace members but hidden from personal scope', async () => {
+      const created = await wsImporter.createUserSkill({
+        content: '# shared',
+        description: 'A shared workspace skill',
+        identifier: 'shared-ws-skill',
+        name: 'Shared Workspace Skill',
+      });
+
+      // Another member of the SAME workspace (different user, same workspaceId).
+      // Workspace reads filter by workspace_id only, so a member must see it.
+      const memberId = `member-${userId}`;
+      await db.insert(users).values({ id: memberId });
+      const memberView = await new AgentSkillModel(db, memberId, workspaceId).findById(created.id);
+      expect(memberView?.id).toBe(created.id);
+
+      // The importer's OWN personal scope (no workspaceId) must NOT see it.
+      const personalView = await new AgentSkillModel(db, userId).findById(created.id);
+      expect(personalView).toBeUndefined();
+
+      await db.delete(users).where(eq(users.id, memberId));
+    });
+
+    it('does not collide with a same-named skill in the user personal scope', async () => {
+      // The user already has a personal skill named "pdf" (a different identifier).
+      await importer.createUserSkill({
+        content: '# personal pdf',
+        description: 'personal pdf skill',
+        identifier: 'personal-pdf',
+        name: 'pdf',
+      });
+
+      // Importing a market/URL skill also named "pdf" into the workspace must
+      // succeed: the personal partial unique `(user_id, name) WHERE ws IS NULL`
+      // and the workspace partial unique `(ws, name) WHERE ws IS NOT NULL` are
+      // disjoint. Pre-fix this insert wrote workspace_id = NULL and blew up on
+      // the personal unique index.
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# workspace pdf',
+        manifest: { name: 'pdf', description: 'workspace pdf skill' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/anthropics-skills-pdf.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.name).toBe('pdf');
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
     });
   });
 });
