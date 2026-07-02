@@ -1374,11 +1374,6 @@
       "count": 1
     }
   },
-  "src/routes/(main)/settings/skill/features/Actions.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/routes/(main)/settings/skill/features/BuiltinSkillItem.tsx": {
     "no-restricted-imports": {
       "count": 1

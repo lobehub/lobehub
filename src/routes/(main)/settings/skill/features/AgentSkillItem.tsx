@@ -2,7 +2,7 @@
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
 import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Space } from 'antd';
 import { cssVar } from 'antd-style';
@@ -10,7 +10,6 @@ import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
@@ -38,7 +37,6 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
   const [loading, setLoading] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -179,31 +177,26 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     if (isBuiltin) {
       createBuiltinAgentSkillDetailModal({ identifier: skill.identifier });
     } else {
-      setDetailOpen(true);
+      createModal({
+        content: (
+          <Suspense fallback={<div style={{ height: '100%' }} />}>
+            <AgentSkillDetail skillId={skill.id} />
+          </Suspense>
+        ),
+        footer: null,
+        styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+        title: tp('dev.title.skillDetails'),
+        width: 960,
+      });
     }
   };
 
   const renderDetailModal = () => {
     if (isBuiltin) return null;
     return (
-      <>
-        <ImperativeModal
-          destroyOnHidden
-          footer={null}
-          open={detailOpen}
-          styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-          title={tp('dev.title.skillDetails')}
-          width={960}
-          onCancel={() => setDetailOpen(false)}
-        >
-          <Suspense fallback={<div style={{ height: '100%' }} />}>
-            <AgentSkillDetail skillId={skill.id} />
-          </Suspense>
-        </ImperativeModal>
-        <Suspense>
-          <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
-        </Suspense>
-      </>
+      <Suspense>
+        <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
+      </Suspense>
     );
   };
 
