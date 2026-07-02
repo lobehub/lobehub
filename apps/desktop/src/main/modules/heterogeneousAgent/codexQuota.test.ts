@@ -107,8 +107,8 @@ describe('fetchCodexQuota', () => {
 
     mockRpcRateLimits(child, {
       rateLimits: {
-        primary: { resetsAt: 1_718_800_000, usedPercent: 4 },
-        secondary: { resetsAt: 1_719_300_000, usedPercent: 52 },
+        primary: { resetsAt: 1_718_800_000, usedPercent: 4, windowDurationMins: 15 },
+        secondary: { resetsAt: 1_719_300_000, usedPercent: 52, windowDurationMins: 60 },
       },
     });
 
@@ -126,12 +126,12 @@ describe('fetchCodexQuota', () => {
       session: {
         resetsAt: 1_718_800_000 * 1000,
         usedPercent: 4,
-        windowMinutes: 300,
+        windowMinutes: 15,
       },
       weekly: {
         resetsAt: 1_719_300_000 * 1000,
         usedPercent: 52,
-        windowMinutes: 10_080,
+        windowMinutes: 60,
       },
       rateLimitResetCredits: {
         availableCount: 2,

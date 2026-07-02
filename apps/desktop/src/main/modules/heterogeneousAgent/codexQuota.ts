@@ -53,6 +53,7 @@ interface RpcResponse {
 interface RpcRateWindow {
   resetsAt?: number;
   usedPercent?: number;
+  windowDurationMins?: number;
 }
 
 interface RpcRateLimitsResponse {
@@ -245,11 +246,18 @@ const fetchBackendResetCredits = async (
 
 const mapRpcWindow = (
   raw: RpcRateWindow | undefined,
-  windowMinutes: number,
+  fallbackWindowMinutes: number,
 ): CodexQuotaWindow | null => {
   if (!raw || typeof raw.usedPercent !== 'number' || !Number.isFinite(raw.usedPercent)) {
     return null;
   }
+
+  const windowMinutes =
+    typeof raw.windowDurationMins === 'number' &&
+    Number.isFinite(raw.windowDurationMins) &&
+    raw.windowDurationMins > 0
+      ? Math.floor(raw.windowDurationMins)
+      : fallbackWindowMinutes;
 
   return {
     resetsAt:

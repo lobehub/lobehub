@@ -1,7 +1,8 @@
 'use client';
 
 import type { CodexQuotaSnapshot, CodexQuotaWindow } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Flexbox, Icon, Popover, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, GaugeIcon, RefreshCwIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
