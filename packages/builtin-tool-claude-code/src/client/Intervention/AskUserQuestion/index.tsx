@@ -134,6 +134,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
       {!escapeActive && isMulti && (
         <Tabs
           activeKey={activeTab}
+          variant="square"
           items={questions.map((q, idx) => {
             const done = isQuestionAnswered(q, picks, custom);
             return {
