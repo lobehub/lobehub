@@ -119,6 +119,29 @@ one.
 > instead of spinning forever (`useActiveTaskDetail.ts:66-77`); the task skeleton itself is likewise
 > gated on "resolving", not on `data === undefined`.
 
+A close cousin, and the most deceptive: the error branch **exists in the very same component
+and even reads the real fetch `error`** — but it's ordered **after** an `if (isLoading) return <Skeleton/>` early-return whose `isLoading` is the data-presence flag (`!map[id]`). On a
+first-load failure the entry never lands, so `isLoading` stays true, the skeleton
+short-circuits the function, and the error render **below it is unreachable** — it paints only
+on a **revalidation** failure, when the data is already present. A resolved **not-found**
+(`null`) hits the same wall: dropped in the success handler, it never populates the map either,
+so a deleted / missing record shows a **permanent skeleton** instead of a 404. Ordering is the
+bug: a built error branch a first-load failure can't reach is as good as an absent one. Check
+`error` / not-found **before** the loading gate, or make the gate go false on **settled** (data
+/ `null` / error).
+
+> ❌ **Agent document view** (`/agent/:aid/docs/:docId`) has the error state written but
+> ordering-dead: `DocumentIdMode` renders `{error && <EditorError/>}` off the real SWR `error`,
+> but only after `if (isLoading) return <EditorSkeleton/>`, where `isLoading =
+editorSelectors.isDocumentLoading(id) = !documents[id]` (`EditorCanvas/DocumentIdMode.tsx`,
+> `store/document/slices/editor/selectors.ts`). `useFetchDocument` writes `documents[id]` only in
+> its `onData`, and returns **`null` (not a throw) on not-found**, dropped by an early return
+> (`store/document/slices/document/action.ts`). So a first-load 500 **and** a deleted / bad
+> `docId` both leave the entry `undefined` → **permanent skeleton, no retry**; the `EditorError`
+> alert can only appear when a later focus-revalidation fails over already-loaded content. ✅
+> Branch `error` and resolved-`null` **before** the loading gate → a failed state (reason +
+> Reload via `mutate`) and a real not-found, keeping the skeleton only for `!error && no-data-yet`.
+
 A third shape, in a **transient / auto-dismissing** surface (an upload dock, a progress toast,
 a status snackbar that clears itself after N seconds): auto-dismiss is a **success** affordance,
 not a universal one. When the timer also fires on the **failed** state it clears the error — and
@@ -207,12 +230,35 @@ xSearchLoading || !xInit` flips only on success, so a failed load hangs a **perm
 > skeleton** on the core chat — no reason, no Reload. ✅ Branch the fetch's `error` to a failed
 > state with Retry (see the topic audit).
 
+A distinct shape lives on the **load-more / infinite-scroll** path, not the initial load. The
+first page renders fine, so the surface _looks_ healthy — the trap is the **next-page** fetch:
+its `catch` merely resets `isLoadingMore` to false with **no error state and no retry**, so a
+failed page-N load makes the "Loading more…" row **vanish** and the list just stops,
+indistinguishable from reaching the end — while `hasMore` is still `true`. Worse, when the
+trigger is an `IntersectionObserver`, any scroll nudge re-fires it → the surface **silently
+retries a failing endpoint** with zero user feedback. A pagination failure owes the same
+terminal state as an initial one: an inline **"couldn't load more — Retry"** row at the list
+tail, kept distinct from the genuine end-of-list.
+
+> ❌ **Agent topics** (`/agent/:aid/topics`) hits both shapes. The initial fetch reads only
+> `{ isLoading }` and **never `error`** (`AgentTopicManager/index.tsx:76`); the view map is
+> populated only in the SWR success `onData`, so a failed load leaves it empty and the page
+> renders the **first-run "no topics yet — start a chat" empty** (`EmptyState.tsx:35`) — a
+> failure masquerading as onboarding, no reason, no retry (Read §1.1). And
+> `loadMoreAgentTopicsView`'s `catch` only flips `isLoadingMore` back to false
+> (`store/chat/slices/topic/action.ts:678-689`, same in `loadMoreTopics:765-776`) — a failed
+> page-N load silently drops the "Loading more…" row (`index.tsx:251`) with `hasMore` still
+> true and the observer (`index.tsx:185-193`) re-firing on scroll. ✅ Branch the initial `error`
+> to a failed state with Reload; render a Retry row when a page fetch rejects.
+
 **Checklist**
 
 - [ ] Every loading state has a terminal failure path — on error or after a bounded timeout, not an infinite spinner. _(Certainty)_
+- [ ] A **load-more / infinite-scroll** page fetch that fails shows an inline Retry at the list tail (distinct from end-of-list), never a silently vanished "loading more" row with `hasMore` still true — and doesn't let an `IntersectionObserver` re-fire into a silent retry loop. _(Certainty)_
 - [ ] An init/ready flag isn't gated on success only — the error path resolves the loading state too, no permanent skeleton. _(Certainty)_
 - [ ] The error state is actually **consumed by a surface**, not just modeled in the store — an `errorMap` / `isXError` selector / `retryX` action with **zero call sites** (`rg` the consumers) is a permanent skeleton wearing a built-but-orphaned error path; the store having the right shape doesn't discharge the obligation. _(Certainty)_
 - [ ] A compound gate waiting on a **secondary/dependent** fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error), never on the dependency being **present** in a map — a legitimately absent dependency (deleted / out-of-scope) must not hang the gate. _(Certainty)_
+- [ ] An error branch isn't **ordered after** a data-presence loading gate — `{error && …}` placed below `if (isLoading) return <Skeleton/>` where `isLoading = !map[id]` is **unreachable on first-load failure** (a failed / not-found fetch never populates the map, so the skeleton short-circuits; it paints only on a **revalidation** failure over already-loaded data), and a resolved-`null` not-found hangs the same permanent skeleton. Check `error` / not-found **before** the loading gate, or flip the gate on settled. _(Certainty)_
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_

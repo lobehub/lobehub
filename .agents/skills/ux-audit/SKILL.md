@@ -1,7 +1,6 @@
 ---
 name: ux-audit
 description: 'Audit a page / surface against the Designing Interfaces pattern language + the ux skill checklists, then land findings. Three layers — static (code), visual (screenshots), dynamic (automated user journey + perf). Use to run a repeatable, standards-based UX review of one screen.'
-disable-model-invocation: true
 argument-hint: '<page-or-surface> [--l1 | --l2 | --l3]'
 ---
 
@@ -177,8 +176,8 @@ open-redirect guard, a smart default: these are the **good cases**. Name them, c
   reports no good cases can only ever sharpen the ❌ side of the checklists.
 - **They protect.** "Don't regress this" is a finding. The next refactor needs to know
   which behaviors are load-bearing — the **Strengths worth preserving** block in
-  [`example/tasks.md`](references/example/tasks.md) (the loading/not-found state machine,
-  comment-draft-preserved-on-failure, the run-all preview → confirm flow) and the **✅ 亮点**
+  [`example/task-detail.md`](references/example/task-detail.md) (the loading/not-found state
+  machine, comment-draft-preserved-on-failure, the run-all preview → confirm flow) and the **✅ 亮点**
   rows in [`example/home.md`](references/example/home.md) (empty-send → day's-hint fallback,
   drawer-not-navigate surface contract) are exactly that list.
 - **They calibrate severity.** A gap reads differently against a surface that is otherwise
@@ -186,8 +185,8 @@ open-redirect guard, a smart default: these are the **good cases**. Name them, c
 
 > ❌ The drift this prevents: an audit whose "Patterns in use" ✅ rows are one-word ticks
 > ("persistent", "strong", "textbook") while every gap gets a paragraph — the good cases
-> demoted to checkboxes. [`example/tasks.md`](references/example/tasks.md) is the model to
-> match: each standout pattern carries its `file:line` and a **✅ 亮点** call-out, so the
+> demoted to checkboxes. [`example/task-detail.md`](references/example/task-detail.md) is the model
+> to match: each standout pattern carries its `file:line` and a **✅ 亮点** call-out, so the
 > strengths are as legible as the gaps.
 
 ## Severity rubric (shared)

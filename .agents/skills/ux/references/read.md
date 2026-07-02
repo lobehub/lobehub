@@ -53,6 +53,24 @@ are different screens.
 > ❌ A detail page that `return null`s until its record loads is **not** a loading state — it's a blank flash on the happy path and a **permanent blank** if the fetch fails (no skeleton, no error): **Eval** run / case / dataset detail all `if (!record) return null` (`eval/bench/[benchmarkId]/runs/[runId]/index.tsx`, `.../cases/[caseId]/index.tsx`, `.../datasets/[datasetId]/index.tsx`). Render a skeleton, then an error state.
 > ❌ **Resource** repeats the failure-as-empty trap four times: the Explorer reads only `{ isLoading, isValidating }` (the swr already exposes `error`, unread) so a failed resource fetch renders the "create your first resource" onboarding (`ResourceManager/components/Explorer/index.tsx`, `EmptyPlaceholder.tsx`); the sidebar KB list (`resource/(home)/_layout/Body/LibraryList/index.tsx`), the search overlay (`SearchResultsOverlay.tsx` → false "no results"), and the folder tree (`LibraryHierarchy/index.tsx` → false "add folder") all do the same.
 
+**A third mask: the failed fetch hidden behind a non-empty _static_ fallback.** When a list is
+assembled by **merging a fetched set with a static / frontend-only set** — `[...fetched,
+...PLACEHOLDERS]`, a catalog padded with "coming soon" rows, defaults spliced in — a failed
+fetch doesn't even read as empty: the static half keeps `length > 0`, so **both** a `length ===
+0 → <Empty>` guard **and** an `error`-unread call site render a **plausible partial catalog**,
+silently dropping the entire fetched half. A `fallbackData: []` on the fetch makes it automatic.
+Read `error` and branch a failed state _before_ merging in the static entries — a non-empty
+length is not proof the fetch succeeded.
+
+> ❌ **Channel** (`/agent/:aid/channel`) reads only `{ data, isLoading }` from
+> `useFetchPlatformDefinitions` / `useFetchBotProviders` (`channel/index.tsx:37-42`), both with
+> `fallbackData: []` (`store/agent/slices/bot/action.ts:122,130`). A failed platform-definitions
+> fetch → `platforms = []` → `allPlatforms` becomes just the frontend-only
+> `COMING_SOON_PLATFORMS` (`index.tsx:62-68`), so `allPlatforms.length > 0` stays true and the
+> surface renders a **coming-soon-only catalog** — every real and already-connected channel gone,
+> no error, no retry; a failed providers fetch makes a configured bot read as never-connected,
+> inviting a duplicate credential re-entry. ✅ Branch `error` before assembling the merged list.
+
 **Distinguishing the two empty variants is a call-site wiring job, not just a component one.** A common miss: the `Empty` component _already_ ships a `search` / "no match" variant, but the list renders it **bare** and never passes the flag — so a legitimate zero-result search shows the first-run "create your first…" onboarding, and the built variant + its i18n keys are dead code. The query is in scope at the call site; thread it in (`search={!!q || !!category}`) and add a clear-filters action.
 
 > ❌ **Discover / Community** lists: all five `*Empty` components take a `search?: boolean` that swaps to the "no results" copy (`community/features/AssistantEmpty.tsx:11-27` + McpEmpty / ModelEmpty / ProviderEmpty / SkillEmpty twins), but every `features/List/index.tsx:17` renders `<XEmpty/>` with **no prop** (`grep 'search={'` over the area → 0 hits), so `q=zzznomatch` returns zero rows and shows the onboarding empty with no clear-filters — the built variant unreachable. (`SearchResultCount.tsx`, a "N results for X" affirmation, is likewise imported by nothing.) ✅ Pass `search` from the page → `List` → `Empty` and add a clear-filters CTA.
@@ -88,6 +106,7 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 - [ ] Empty variants distinguished: "no data yet" vs "no filter match". _(Certainty)_
 - [ ] Error is checked **before** the empty branch — a failed fetch never renders as empty (`!error && length === 0` gates empty); read `error`, don't coerce `data ?? []`. _(Certainty・Meaningful)_
 - [ ] On a **metrics / aggregate** surface (dashboard, stats, cost), a failed fetch never falls through to a **zero-valued default** (`data?.summary ?? {…:0}`, `?? 0`) — a confident `$0` reads as real data, not "empty"; branch `error` before rendering any aggregate. _(Certainty・Meaningful)_
+- [ ] A list merged from a fetched set + a **static/frontend set** (`[...fetched, ...placeholders]`, a catalog padded with "coming soon" rows) branches `error` **before** merging — a failed fetch there keeps `length > 0` via the static entries, so neither the empty guard nor an error-unread call site catches it (a plausible partial catalog); `fallbackData: []` makes it automatic. _(Certainty・Meaningful)_
 - [ ] A detail page reads `error` before falling to `NotFound` — a failed fetch shows a reload state, not a "doesn't exist" 404 (deleted vs failed-to-load are different screens). _(Certainty・Meaningful)_
 - [ ] Always-rendered chrome still renders a body empty placeholder. _(Meaningful)_
 - [ ] Loading designed (skeleton / NeuralNetworkLoading), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
@@ -116,6 +135,30 @@ that can drift from the server's page; the browse state is shareable / restorabl
 URL; and there's no local-vs-server divergence to reconcile. Reach for this whenever a list
 has more than one read-state dimension — the alternative (local `useState` per control + a
 manual refetch) is where the partial-page traps breed.
+
+**Getting the search box server-side is not the whole job.** _Every_ read dimension that
+narrows, reorders, or **summarizes** the set must run server-side too — a surface can query
+search correctly and still lie through the other dimensions, each held client-side over the
+loaded page: a **facet filter** (status / type / date) hides matches on unfetched pages → a
+**false empty**; a **sort** (by title / created) orders only the loaded rows while lazy-loaded
+later pages append out of order → a list that visibly _isn't_ sorted; a **count badge** that
+tallies the loaded rows **under-reports** ("Completed 3" when 40 exist unfetched); and a **bulk
+action scoped to "the filtered set"** (archive-stale, select-all-then-act) silently operates on
+the partial page only. A per-dimension audit that greenlights the surface because "search hits
+the server" misses the four that don't — so check filter, sort, the counts, and bulk-scope
+_each_ against the full set, not just the search input.
+
+> ❌ **Agent topics** (`/agent/:aid/topics`) infinite-scrolls 30 rows/page but applies **all**
+> of status/trigger/time/project filtering, `sortTopics`, grouping, and the per-status **count
+> badges** client-side over the loaded pages (`AgentTopicManager/index.tsx:99-140`,
+> `utils.ts:68`), while only **search** goes server-side (BM25, `useSearchTopics`). So sorting
+> by title orders just the loaded rows (later pages append unsorted), filtering to a rare status
+> shows a **false "no match"** with matches unfetched, the tab counts under-report, and "Archive
+> stale >3mo" (`Toolbar.tsx:349`) mutates only the loaded page — the search dimension is right,
+> the other four lie. The kicker: `getTopics` **already accepts** `excludeStatuses` /
+> `excludeTriggers` (the sidebar's `loadMoreTopics` passes them, `store/chat/slices/topic/action.ts:724-734`);
+> the management fetch just omits them. ✅ Send filter/sort into the query, or lift the read-state
+> to the URL + fetch key (above).
 
 > ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
 > `title/content.includes(keyword)` over the loaded set **and disables load-more while
@@ -147,6 +190,7 @@ manual refetch) is where the partial-page traps breed.
 - [ ] List designed across 1 → 10k rows (plain → pagination → virtual scroll). _(Certainty)_
 - [ ] Batch-select / bulk actions added once counts get large. _(Certainty)_
 - [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page — no false "no results" for unfetched rows. _(Certainty・Meaningful)_
+- [ ] Server-side coverage isn't just the search box — **sort, facet filters, the count badges, and any "act on the filtered set" bulk op** each query/compute over the full set too; server-side search + client-side sort/filter/counts still false-empties, mis-orders across pages, and under-counts. _(Certainty・Meaningful)_
 - [ ] Multi-dimension list read-state (`q`/`sort`/`filter`/`page`) lives in the URL and the fetch key derives from it — server-query, deep-link, and restore by construction, not local state + manual refetch. _(Certainty・Natural)_
 - [ ] Empty / loading / error co-designed with the data state (§1.1). _(Natural)_
 

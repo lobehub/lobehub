@@ -1,253 +1,177 @@
-# Worked example — Task Workspace (`/tasks` list + `/task/[id]` detail) audit
+# Worked example — Tasks list /kanban (任务列表) audit
 
-A real run of this skill against the **Task Workspace** (`@/features/AgentTasks`), 2026-07 —
-an agent task board: a cross-agent list/kanban (`/tasks`) + a single-task detail that doubles
-as an **async agent-run monitor** (`/task/[taskId]`) with a live activity feed, subtasks,
-comments, artifacts, and schedule / verify config. Use it as a template for the output shape,
-not as current-state truth (the code moves; re-verify before citing).
+A real run of this skill against the **agent tasks list** — the cross-agent list/kanban board
+(`/tasks`) and its agent-scoped twin (`/agent/:aid/tasks`), 2026-07 (LOBE-11219). Use it as a
+template for the output shape, not as current-state truth (the code moves; re-verify before
+citing).
 
-**One pair of surfaces, two entry points (not a duplicate).** The audit resolved the parent
-issue's warning: the "Chat-side" tasks routes (`agent/:aid/tasks`, `agent/:aid/task/:taskId`,
-`desktopRouter.config.tsx:121-136`) and the standalone workspace routes (`/tasks`,
-`/task/:taskId`, `:637-669`) **delegate to the same components** — `AgentTasksPage` and
-`TaskDetailPage` — parameterized by `agentId` / `showTaskAgentPanelToggle`
-(`routes/(main)/tasks/index.tsx`, `.../agent/tasks/index.tsx`, `.../task/[taskId]/index.tsx`).
-So this is **one** list surface + **one** detail surface, audited once.
+> **One pair of surfaces, audited as two focused reports.** The tasks list and the single-task
+> **detail** (`/task/:taskId`) share one store and one feature package but are **different
+> surfaces** with different class norms, so they get one report each: this file (the list) and
+> its sibling [`task-detail.md`](task-detail.md) (the detail / run-monitor). They were first
+> audited together; the combined run's `ux` 回灌 is already landed (§4). The **cross-surface
+> seam** between them (list `tasks` array vs detail `taskDetailMap`) is a real gap — owned here
+> as **gap L③**, cross-referenced from the detail report.
 
-**Surface class:** agent task board / issue tracker + async-job monitor — benchmark against
-Linear / Asana (list · kanban · grouping · priority · assignee) **and** Devin / GitHub Actions
-run pages / cron dashboards (run · pause · stop · retry · live log · schedule).
+**Both route trees delegate to one component.** The Chat-side `agent/:aid/tasks`
+(`desktopRouter.config.tsx:121-128`) and the standalone `/tasks` (`:643`) both render
+`AgentTasksPage` parameterized by `agentId` / all-agents (`routes/(main)/agent/tasks/index.tsx`,
+`routes/(main)/tasks/index.tsx:3`). One list surface, audited once.
+
+**Surface class:** agent task board / issue-tracker list — benchmark against Linear / Asana /
+GitHub Issues (list · kanban · grouping · priority · assignee · **live status** · bulk ops).
 **Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic + CLS)
-⏳ not yet run — see §5. Verdicts about the render are L1 inferences here, pending L2.
+⏳ not yet run — see §5.
 
 **Load-bearing files:** `features/AgentTasks/AgentTaskList/{AgentTasksPage,TaskList,KanbanBoard,
-KanbanColumn,EmptyState,CreateTaskInlineEntry}`, `AgentTaskDetail/{TaskDetailPage,
-useActiveTaskDetail,TaskDetailRunPauseAction,TaskDetailHeaderActions,TaskActivities,TaskSubtasks,
-TaskVerifyConfig,TaskInstruction,CommentInput,TopicCard}`, `CreateTaskModal/*`,
-`store/task/slices/{list,detail,lifecycle,config}/action.ts`, `services/task.ts`,
+KanbanColumn,EmptyState,CreateTaskInlineEntry}`, `features/AgentTasks/features/AgentTaskItem.tsx`,
+`features/AgentTasks/hooks/useTaskItemContextMenu.tsx`, `CreateTaskModal/*`,
+`store/task/slices/{list,detail,lifecycle}/action.ts`, `store/task/selectors/listSelectors.ts`,
 `apps/server/src/routers/lambda/task.ts`.
 
 ## 1 — Patterns in use
 
-| Pattern (family)                      | Where                                                                                         | Rating | Note                                                       |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------- |
-| Overview + Detail (nav)               | list rows → `taskDetailPath` (`AgentTaskItem.tsx:65`); detail sections                        | ✅     | click row opens detail                                     |
-| Deep-linking / breadcrumb (nav)       | `shared/Breadcrumb.tsx`; copy-link (`HeaderActions.tsx:49`, `useTaskItemContextMenu.tsx:202`) | ✅     | workspace-aware absolute URL                               |
-| List ⇄ Kanban toggle (nav)            | `TasksGroupConfig.tsx:163`, persisted `setViewMode`                                           | ✅     | view choice sticks                                         |
-| Grouping / sub-grouping / sort (data) | `TaskList.tsx:143-201`, `listViewOptions.ts`                                                  | ⚠️     | rich — but **client-side over ≤50 rows** (gap ⑤)           |
-| Empty-as-onboarding (growth)          | `EmptyState.tsx` (greeting + inline create + templates)                                       | ✅     | strong onboarding hero — highlight                         |
-| Loading Skeleton (feedback)           | list `TaskList.tsx:203`, kanban `KanbanColumn.tsx:253`, detail `useActiveTaskDetail`          | ⚠️     | detail solid; **list can't fail** (gap ①)                  |
-| **Failure + Retry (feedback)**        | list fetch / detail fetch                                                                     | — abs. | the surface's dominant gap (①②)                            |
-| Live activity feed (data)             | `TaskActivities.tsx` + 10s poll (`detail/action.ts:48`)                                       | ✅     | reversed chronological, real empty                         |
-| Not-found / 404 (data)                | `TaskDetailPage.tsx:39-59`                                                                    | ⚠️     | real screen, but **failed-load reads as 404** (gap ②)      |
-| Optimistic mutation (act)             | kanban drag (`KanbanBoard.tsx:133`), status, delete                                           | ⚠️     | some roll back + toast, most log-only (gaps ③④⑥⑦⑧)         |
-| Run / pause / stop control (act)      | `TaskDetailRunPauseAction.tsx`, `TopicCard.tsx`                                               | ⚠️     | works, but start/stop failures silent (gap ③)              |
-| Editable-in-place / autosave (edit)   | title, instruction, comment, config                                                           | ⚠️     | debounced save, **no `failed` state** (gaps ④⑥)            |
-| Confirmation (act)                    | delete / brief / artifact / stop-topic / run-all                                              | ✅⚠️   | broad; **task-level Stop unconfirmed** (gap ⑨)             |
-| Context menu (act)                    | `useTaskItemContextMenu.tsx` (status/priority/run/copy/delete)                                | ✅⚠️   | complete; menu run/status failures silent (gap ⑦)          |
-| Inline create + modal (act/edit)      | `CreateTaskInlineEntry.tsx`, `CreateTaskModal/*`                                              | ⚠️     | create failure silent (③); **draft not persisted** (gap ⑩) |
+| Pattern (family)                   | Where                                                                      | Rating | Note                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
+| Overview + Detail (nav)            | row → `taskDetailPath` (`AgentTaskItem.tsx:65-72`)                         | ✅     | click row / subtask opens detail                       |
+| Deep-linking / breadcrumb (nav)    | copy-link builds absolute workspace URL (`useTaskItemContextMenu.tsx:142`) | ✅     |                                                        |
+| List ⇄ Kanban toggle (nav)         | `TasksGroupConfig.tsx`, persisted `viewMode`                               | ✅     | view choice sticks                                     |
+| Grouping / sub-group / sort (data) | `TaskList.tsx:135-201`, `listViewOptions`                                  | ⚠️     | rich — but **client-side over a ≤50 cap** (gap L②)     |
+| Empty-as-onboarding (growth)       | `EmptyState.tsx:36-99` (greeting + inline create + templates)              | ✅     | strong first-run hero — **亮点** (§2)                  |
+| Permission-gated actions (act)     | create/edit gated on `usePermission` + tooltip reason                      | ✅     | `AgentTasksPage.tsx:60,125` — **亮点** (§2)            |
+| Hidden-completed footer (data)     | "N completed hidden · show" (`TaskList.tsx:224-243`)                       | ✅     | reversible disclosure                                  |
+| Loading Skeleton (feedback)        | list `TaskList.tsx:203-213`, kanban `KanbanBoard.tsx:203`                  | ⚠️     | gated `!isInit` → **permanent on error** (gap L①)      |
+| **Failure + Retry (feedback)**     | list / group fetch                                                         | — abs. | the surface's dominant gap (L①)                        |
+| Empty state variants (data)        | generic `Empty` (`TaskList.tsx:216-222`)                                   | ⚠️     | **no CTA, no no-match variant** (gap L⑥)               |
+| Live / status feed (data)          | per-row `useFetchTaskDetail` polls in-flight rows only                     | ⚠️     | list-level status **not** refreshed; no indicator (L⑥) |
+| Optimistic mutation (act)          | kanban drag / context-menu status / inline create                          | ⚠️     | **most swallow failure** (gaps L③L④)                   |
+| Lists at scale (data)              | plain `.map`, no windowing (`TaskList.tsx:43-48`)                          | — abs. | no virtualization / pagination (gap L②)                |
+| Inline create + modal (act/edit)   | `CreateTaskInlineEntry.tsx`, `CreateTaskModal/*`                           | ⚠️     | **draft not persisted** (gap L⑤)                       |
 
-**Read:** the **read/monitor spine is mature** (detail state machine, live polling, activity
-feed, confirmations). The weakness clusters hard in **Feedback** — every fetch that can hang has
-no retry (①②), and **nearly every write swallows its failure** (create ③, run/pause ③, delete ④,
-config/status autosave ④, comment/menu ⑦⑧): a catch that only `console.error`s, or a re-throw
-into an uncaught handler, so the optimistic UI reverts with no word to the user. Plus a
-**Read-at-scale** cap (⑤) — the list silently truncates at 50.
+**Read:** navigation, view-toggle, first-run onboarding and permission-gating are mature. The
+weakness clusters in **Feedback / Read-at-scale**: no error path (L①), no virtualization over a
+silent 50-row cap (L②), a stale-across-surface list row (L③), several silent-failure write paths
+(L④), an unprotected create draft (L⑤), and a quasi-live list that under-serves liveness while
+its empty state dead-ends (L⑥).
 
 ## 2 — Strengths / good cases (don't regress)
 
-The read/monitor spine is mature — these are the ✅ half of the 回灌 loop and the "don't regress"
-list for the next refactor (which is mostly write-path work, so it's easy to nick these). **Three
-land as ✅ examples in the `ux` checklists** (see §4):
+The read/onboarding spine is strong — these are the ✅ half of the 回灌 loop and the "don't
+regress" list for the (mostly write-path) next refactor:
 
-- **✅ 亮点 — Detail loading /not-found state machine (→ landed as ux Feedback §4.2 ✅).**
-  `useActiveTaskDetail.ts` gates the skeleton on "resolving", **not** on `data === undefined`, and
-  the assignee-config gate keys off the fetch's **in-flight** flag (`agentConfigLoading`, `:66-77`),
-  so an assignee that resolves to `null` (deleted / out-of-scope) **releases** the gate instead of
-  deadlocking — a task with no assignee still renders instead of spinning forever. Extracted a
-  latent **compound-gate** sub-rule into Feedback §4.2. (The one soft spot: a _transient fetch
-  error_ still coerces to "Task not found" — gap ②; the gate machine itself is the model.)
-- **✅ 亮点 — Live polling without the `refreshInterval` trap (→ landed as ux Read §1.7 ✅).** the
-  activity feed polls 10s **only while** `hasInFlightActivity`, driven by a **reactive-boolean**
-  `shouldPoll` selector feeding `refreshInterval` (`detail/action.ts:300-315`) rather than a
-  function-valued `refreshInterval` — so it dodges SWR's cold-start trap (the function form never
-  schedules a first timer if its initial value is `0`) and stops the moment the run goes idle.
-  Extracted the "conditional polling starts from reactive state" sub-rule into Read §1.7.
-- **✅ 亮点 — Run-all flow — the mutation model (→ landed as ux Act §3.1 ✅).** `TaskSubtasks.tsx:204-255`
-  runs preview → **locked confirm** → `partialFailure` vs `kickedOff` toasts, so a bulk run tells
-  the user exactly what happened even on partial success. This is cited as the **✅** for Act §3.1
-  and is the model every other mutation on this surface should copy (they mostly don't — gaps
-  ③⑦⑧).
-- **✅ 亮点 — Comment draft preserved on failure.** the comment editor is cleared **only after**
-  `await` resolves, so a failed post keeps the typed draft in place rather than eating it — the
-  draft-safety half of the write path is already right (the missing half is the failure _toast_ —
-  gap ⑥).
-- **✅ 亮点 — Broad confirmation coverage.** destructive / disruptive actions across the surface —
-  delete, brief, artifact, stop-topic, run-all — are gated behind confirms (Confirmation row, §1
-  table). The gap is _consistency_, not absence: the task-level Stop is the one sibling left
-  unconfirmed (gap ⑨).
+- **✅ 亮点 — Empty-as-onboarding hero.** First-run empty isn't a blank slate: `EmptyState.tsx:36-99`
+  renders a greeting, an inline create composer, and recommended task templates (with their own
+  skeletons + refresh), gated on `isListEmpty` (`AgentTasksPage.tsx:64,146`). The empty state
+  doubles as the primary entry point — the model an empty data list should follow.
+- **✅ 亮点 — Permission-gated actions carry their reason.** Create / edit are gated on
+  `usePermission('create_content')` with a tooltip `reason` wired consistently across the header
+  `+`, the inline composer submit, the context menu, and run-all (`AgentTasksPage.tsx:60,125`,
+  `CreateTaskInlineEntry.tsx:285`) — a disabled control that says _why_, not a dead one.
+- **✅ 亮点 — Reactive per-row polling.** Each row's `useFetchTaskDetail` polls 10 s **only while**
+  that task has in-flight activity (`store/task/slices/detail/action.ts:300-315`, reactive
+  `shouldPoll` boolean → `refreshInterval`), dodging SWR's function-form cold-start trap. (Caveat:
+  it refreshes the row's _detail_, not the list's own status field — see gap L⑥.)
+- **✅ — Hidden-completed footer.** Completed tasks collapse behind a "N hidden · show" footer
+  (`TaskList.tsx:224-243`) rather than padding the list — reversible progressive disclosure.
 
 ## 3 — Experience gaps (ranked)
 
-**① List / kanban fetch failure → permanent skeleton, no retry — Feedback §4.2** 🔴
-`isTaskListInit` / `isTaskGroupListInit` flip to `true` **only** in the SWR `onSuccess`
-callback (`store/task/slices/list/action.ts:146-155`, `:110-116`); there is **no `onError`**, and
-the hook's `error` / `isLoading` are **discarded at the call site** (`AgentTasksPage.tsx:63` calls
-`useFetchTaskList(...)` without assigning the return). `TaskList.tsx:203` / `KanbanBoard.tsx:203`
-render the skeleton on `!isInit`. So when `taskService.list()` exhausts SWR's retries, `isInit`
-stays `false` **forever** → skeleton spins with no error, no retry. The init-flag-gated-on-success
-trap — identical to the Eval module's nine-fetch version.
+**L① List / kanban fetch failure → permanent skeleton, no retry — Feedback §4.2** 🔴
+`isTaskListInit` / `isTaskGroupListInit` flip `true` **only** in the SWR `onSuccess`
+(`store/task/slices/list/action.ts:146-155`, `:110-116`); there is **no `onError`** anywhere in
+`src/store/task`, and the hook's `error` / `isLoading` are **discarded at the call site** —
+`AgentTasksPage.tsx:62-63` calls `useFetchTaskList(...)` without assigning the return (kanban:
+`KanbanBoard.tsx:89-90`). `TaskList.tsx:203` renders the skeleton on `!isInit`. So once
+`taskService.list()` exhausts SWR's retries, `isInit` stays `false` **forever** → skeleton spins
+with no error, no retry. And error is never checked before empty: `isListEmpty = isTaskListInit &&
+tasks.length === 0` (`listSelectors.ts:41`) is `false` on failure, so the page falls through the
+onboarding hero into the permanent skeleton — a failed load reads as neither empty nor error.
+_Remedy:_ add `onError` → an error state + Reload; read the hook's `error` at the call site.
 
-**② Failed task-detail fetch masquerades as "Task not found" (404), no retry — Read §1.1** 🟠
-`fetchTaskDetail` throws `Task not found` when `result.data` is falsy **and** propagates any
-network / 500 rejection the same way (`detail/action.ts:124-129`); `useActiveTaskDetail.ts:60`
-then sets `isNotFound = !!taskError && !hasTaskDetail`, and `TaskDetailPage.tsx:39-59` renders a
-terminal `NotFound` whose only action is "Back to tasks". A transient fetch failure (after SWR
-retries) therefore tells the user the task was **deleted** and offers **no Reload** — deleted vs
-failed-to-load conflated. The code comment (`useActiveTaskDetail.ts:49-51`) reasoned only about
-the missing case, not the errored one. (The rest of this machine is good — see Strengths.)
+**L② List sort / group / filter run client-side over a 50-row cap; no virtualization — Read §1.2** 🟠
+The server caps the list at `limit` default **50** (`apps/server/src/routers/lambda/task.ts`), and
+`fetchTaskList` passes no limit/offset, so 50 rows load while `tasksTotal` can be larger.
+`TaskList.tsx:135-201` then filters, sorts, and groups **entirely in-memory over those 50** — no
+pagination, no load-more, no windowing (plain `.map`, `TaskList.tsx:43-48`; kanban maps all,
+`KanbanColumn.tsx:260`). A user with 60 tasks sees 50, and any sort/group silently orders a partial
+set (the paginated-sort-client-side trap). Each visible row _also_ mounts its own
+`useFetchTaskDetail(task.identifier)` (`AgentTaskItem.tsx:48`) → up to 50 detail SWR subscriptions
+per list paint. _Remedy:_ server-side sort/group/paginate (URL-driven keys), virtualize, batch the
+per-row detail.
 
-**③ Run / Pause / Run-now / Create failures are silent — Act §3.1 / Feedback §4.2** 🔴
-`runTask` catches and only `console.error`s (`lifecycle/action.ts:49-52`) — no re-throw, no
-toast; its callers `handleRunOrPause` / `handleRunNow` use `try/finally` with **no catch**
-(`TaskDetailRunPauseAction.tsx:60-67`, `:84-91`). A failed run rolls the optimistic
-`status: 'running'` back on refresh, so the button **silently snaps back to "Run"** with no
-error. The **pause** path (`updateTaskStatus(taskId, 'paused')`) and **createTask**
-(`detail/action.ts:150-174`, `try/finally` no catch; callers `CreateTaskInlineEntry.tsx:126`,
-`CreateTaskContent.tsx:83` don't catch) are the same shape — an unhandled rejection, zero
-feedback, on the surface's primary action. This is the **job-control** twin of the optimistic-
-mutation rule: a run/pause/stop/retry that only logs its failure reads as a dead button.
+**L③ Detail edits don't propagate to the list — two un-normalized caches — Act §3.1 (cross-surface)** 🟠
+The list reads a `tasks` array (`useFetchTaskList` `onSuccess`); the detail reads `taskDetailMap`.
+`updateTask` patches only the map and refreshes the list **only** when assignee / parent changed
+(`store/task/slices/detail/action.ts:295-297`). So editing a task's **title / priority / model /
+instruction** from the detail leaves the **list row stale** — visible when list + detail are
+mounted together (Chat portal) or on cached back-navigation (`revalidateOnFocus:false`). This is a
+seam **between** this surface and [`task-detail.md`](task-detail.md); a per-surface read misses it
+by construction (see the method note in §4). _Remedy:_ one normalized map, or invalidate the list
+on every successful write, not a gated subset.
 
-**④ Config & status autosave fail silently; the save-state can't represent failure — Feedback §4.4** 🟠
-`updateVerifyConfig`, `updateTaskModelConfig`, `updatePeriodicInterval`, `setAutomationMode`,
-`updateSchedule` all catch-and-`console.error` (`config/action.ts:121-132,151-167,224-229,279-284`),
-as does `TaskVerifyConfig.doSave` (`:202-204`) and `TaskInstruction`'s debounced save
-(`TaskInstruction.tsx:98-100`). The store's optimistic engine reverts the value on failure but
-says nothing — a silent-write trap. Compounding it, `taskSaveStatus` is `saving | saved | idle`
-with **no `failed`**: on error `updateTask` / `#transitionStatus` reset to `idle`
-(`detail/action.ts:284`, `lifecycle/action.ts:106`), and the header renders `AutoSaveHint` only
-while `saving` (`TaskDetailPage.tsx:68`) — the enum literally can't represent failure.
-(`updateTask` itself does toast — `detail/action.ts:286` — the one exception.)
+**L④ Context-menu / drag / create write failures are silent — Act §3.1** 🟡
+The context menu fires `void updateTaskStatus(...)` (`useTaskItemContextMenu.tsx:114`, `:279`) —
+`#transitionStatus` `console.error`s and rethrows (`lifecycle/action.ts:104-109`), but the `void`
+drops it, so a failed status change silently reverts on the next refresh. Kanban `handleDragEnd`
+awaits `updateTaskStatus` in `try { } catch { revert }` with an **empty catch**
+(`KanbanBoard.tsx:137-141`) — reverts the card, no toast. `createTask` (`detail/action.ts:150-174`,
+`try/finally` no catch) rejects up to `CreateTaskInlineEntry.handleSubmit` (`:107-155`), which
+`await`s it with **no catch and no error toast** — a failed create leaves the composer unclear'd
+with no word. All three should toast at the store-action boundary (the run-all flow and detail
+`updateTask` already do — see §2 / task-detail.md).
 
-**⑤ List sort / group / filter run client-side over a 50-row cap; no load-more — Read §1.2** 🟠
-The server caps the list at `limit` default **50**, max 100 (`apps/server/src/routers/lambda/
-task.ts:99`), and the store's `fetchTaskList` passes **no** limit/offset, so exactly 50 rows load
-while `tasksTotal` (`data.total`) can be larger. `TaskList.tsx:135-201` then filters, sorts, and
-groups **entirely in-memory over those 50** — with **no pagination, no virtualization, no
-load-more**. A user with 60 tasks sees 50, and any sort/group silently orders a partial set (the
-paginated-sort-client-side trap). Each visible row _also_ fires its own
-`useFetchTaskDetail(task.identifier)` (`AgentTaskItem.tsx:47`) → up to 50 detail requests per
-list paint.
-
-**⑥ Instruction / comment / feedback submit show no failure — Act §3.1 / Feedback §4.4** 🟡
-`addComment` has no catch and doesn't toast (`detail/action.ts:76-89`); `CommentInput` /
-`CommentCard.handleSave` / `FeedbackInput` await it in `try/finally` with no catch
-(`CommentInput.tsx:57-65`, `CommentCard.tsx:97-104`). Draft is safe on the comment path (editor
-cleared only after `await` resolves — good), but the failed post is an unhandled rejection with no
-message. Instruction autosave is the §④ shape.
-
-**⑦ Context-menu run / status changes are fire-and-forget — Act §3.1** 🟡
-The context menu calls `void updateTaskStatus(...)` (`useTaskItemContextMenu.tsx:114`) and
-`runTask` (which only logs); kanban drag reverts visually but shows no toast
-(`KanbanBoard.tsx:139-141`). A failed status/run from the menu gives no feedback. (Status does
-flip `taskSaveStatus`, but that's surfaced only on the detail page.)
-
-**⑧ Delete-task failure is silent, and optimistic-before-confirm — Act §3.1** 🟡
-`deleteTask` optimistically removes the row (`detail/action.ts:180`), then on failure rolls back
-and **re-throws** with no toast (`:190-198`); the confirm modal's `onOk`
-(`TaskDetailHeaderActions.tsx:38-41`) doesn't catch, so a failed delete rejects silently and the
-navigate to `/tasks` is skipped — the detail page flickers out and back with no explanation.
-
-**⑨ Task-level "Stop" is unconfirmed and gives no feedback — Act §3.1** 🟡
-The header Stop (`TaskDetailRunPauseAction.tsx:189-200`) pauses the whole task with **no confirm
-and no success toast**, while the per-topic "Stop Run" **is** confirmed (`TopicCard.tsx:77-89`).
-Stopping an in-progress agent run is disruptive; the two sibling stop controls should confirm
-consistently (consistency-is-semantic).
-
-**⑩ Create draft not persisted — modal `maskClosable` / collapse loses typed content — Edit §2.1** 🟡
-`CreateTaskContent` and `CreateTaskInlineEntry` hold draft in local `useState`
+**L⑤ Create draft not persisted — modal `maskClosable` discards typed content — Edit §2.1** 🟡
+`CreateTaskContent` / `CreateTaskInlineEntry` hold the draft in local `useState`
 (`CreateTaskContent.tsx:51`, `CreateTaskInlineEntry.tsx:64`); the modal is `maskClosable: true`
 (`CreateTaskModal/index.tsx:11`), so a stray backdrop click discards everything typed with no
-warning, and the minimize→inline handoff opens a fresh inline entry rather than carrying the
-draft. (Twin of the home-composer in-memory-draft ❌ already in Edit §2.1.)
+warning, and the minimize → inline handoff opens a fresh entry rather than carrying the draft.
+(Twin of the home-composer in-memory-draft ❌ already in Edit §2.1.) _Remedy:_ back the draft to
+localStorage keyed per agent, or warn on dirty close.
 
-**⑪ Section polish — Read §1.1 / Act §3.2** 🟡
-`TaskArtifacts.tsx:124` returns `null` on zero artifacts — the whole section vanishes, so "no
-artifacts yet" is indistinguishable from "feature missing"; `TaskParentBar.tsx:57-60` swallows a
-parent-fetch error and silently shows `backlog`; and `TaskDetailRunPauseAction.tsx:178` returns
-`null` when a task is terminal (`completed`/`failed`/`canceled`) so the run-control region reads
-empty with no "what now" — **confirm on the render (L2)**, don't conclude from the code.
-
-**⑫ Hardcoded English `defaultValue` / raw literals — i18n** 🟡
-Several user-facing strings bypass locale files: `TopicCard.tsx:79-88` (stop-run confirm),
-`TopicChatDrawer/index.tsx:150,157,185` (copy-id labels), `detail/action.ts:287` ("Failed to
-update task"), `TaskArtifacts.tsx:36` (`node.title || 'Untitled'`). They only show if a `zh-CN`
-key is missing, but the `defaultValue` fallbacks flag keys that may be absent.
-
-**⑬ Detail edits don't propagate to the list — two un-normalized caches — Act §3.1 (cross-surface)** 🟠
-The list reads a `tasks` array (`useFetchTaskList` `onSuccess`); the detail reads `taskDetailMap`;
-`updateTaskDetail` patches only the map (`detail/reducer.ts:74`). Sync is a full `refreshTaskList()`
-(`list/action.ts:67`) mounted on _some_ paths (run / status / create / delete) but **gated** on
-`updateTask` to fire only when assignee / parent changed (`detail/action.ts:295-297`). So editing a
-task's **title / priority / model / instruction** from the detail leaves the list row **stale** —
-visible when list + detail are mounted together (Chat portal) or on cached back-navigation
-(`revalidateOnFocus:false`). Fix: one normalized map, or invalidate the list on every successful
-write. **This is a seam _between_ the two surfaces — see the method note below.**
-
-> ⚠️ **Method blind spot this run hit.** ⑬ was missed on the first pass because the audit was split
-> into a per-surface list reader and a per-surface detail reader, each told to ignore the other — so
-> the shared-store seam (list `tasks` vs detail `taskDetailMap`, stitched by a gated `refreshTaskList`)
-> was owned by neither, and the ux-audit checklists have no cross-surface / cache-coherence item. When
-> a surface pair edits + lists the **same entity**, add a reader that owns the seam (the shared store),
-> or the split-by-surface fan-out will silently drop coherence bugs.
+**L⑥ Quasi-live list under-serves liveness, and the empty state dead-ends — Read §1.7 / §1.1** 🟡
+The list is a live surface (running tasks change status), but the row's top-level status tag reads
+`toTaskStatus(task.status)` from the **non-polled list fetch** (`AgentTaskItem.tsx:62,101,166`);
+the per-row detail poll refreshes subtasks/activities but never `refreshTaskList`, so a
+running→completed transition can show a **stale top-level status** until a mutation or remount, and
+there is **no Update Indicator / "N new" / manual refresh** anywhere. Separately, the generic
+`Empty` (`TaskList.tsx:216-222`) is description + icon with **no CTA** and **no no-match variant**,
+so a list filtered/grouped to zero rows (while `isListEmpty` is false) dead-ends with no
+create/clear-filters affordance. _Remedy:_ refresh the list-level status on the same poll (or a
+"N updated · refresh" pill), and give the zero-rows `Empty` a create / clear-filters CTA.
+**(the visible staleness needs L3 to confirm — see §5.)**
 
 ## 4 — Skill feedback (回灌)
 
-- **Landed as strengthened `ux` items** from this audit:
-  - Act **§3.1** — the optimistic-mutation bullet is extended to **run / pause / stop / retry
-    job-control** actions, with a task-workspace ❌ (`runTask` console.error-only,
-    `lifecycle/action.ts:49-52` + uncaught `handleRunOrPause`) vs ✅ (`TaskSubtasks` run-all)
-    (gaps ③⑦). Mirrored into the Quick review.
-  - Read **§1.1** — new ❌ example: task detail coerces a transient fetch error into a permanent
-    "Task not found" via a fetcher that throws on both missing-and-errored + `isNotFound =
-!!error` (`fetchTaskDetail`, `useActiveTaskDetail.ts:60`) (gap ②).
-  - Feedback **§4.2** — new ❌ example: task list `isTaskListInit` set only in `onSuccess` with
-    the hook's `error` discarded at the call site (gap ①).
-  - Feedback **§4.4** — new ❌ example: task config autosave (verify / schedule / model /
-    interval) catches-and-logs, and `taskSaveStatus` has no `failed` variant (gap ④).
-  - Act **§3.1** — new **cross-surface coherence** rule + ❌ example: list `tasks` array and detail
-    `taskDetailMap` are two un-normalized copies, and `updateTask` refreshes the list only for
-    assignee / parent, so a detail title/priority edit leaves the list row stale (gap ⑬). Mirrored
-    into the Quick review. Plus a method note (⚠️ under gap ⑬): split-by-surface fan-out needs a
-    reader that owns the shared-store seam, or it drops coherence bugs by construction.
-- **Good cases landed as ✅ examples (the ✅ half of 回灌 — each sharpened a rule, not just decorated it):**
-  - Feedback **§4.2** — new **compound-gate** sub-rule + ✅: a gate waiting on a _secondary/dependent_
-    fetch must key off its **in-flight** flag and release on resolved-absent (`null`), never on the
-    dependency being present in a map. Extracted from `useActiveTaskDetail.ts:66-77` (the assignee-
-    config gate) — the current rule only covered a primary fetch's success-only init flag; this adds
-    the "absent dependency is a resolved state, not a pending one" distinction. Checklist line added.
-  - Read **§1.7** — new **conditional-polling** sub-rule + ✅: start polling from **reactive state**
-    (`shouldPoll` boolean → `refreshInterval`), not a function-form `refreshInterval` (which never
-    schedules a first timer if the initial value is `0`, so polling silently never starts). Extracted
-    from `detail/action.ts:300-315`. Checklist line added.
-  - Act **§3.1** — the **run-all** flow (`TaskSubtasks.tsx:204-255`) is cited as the ✅ for the
-    job-control rule (preview → locked confirm → `partialFailure` vs `kickedOff` toasts).
-- **Validated existing rules** (good ❌ examples to cite): Read §1.2 sort/search over a
-  partial paginated page (gap ⑤); Edit §2.1 in-memory draft lost on close (gap ⑩); Act §3.2
-  terminal-state control visibility (gap ⑪, pending L2). Good ✅ instance already covered by an
-  existing rule (cited, not re-landed): comment-draft-preserved-on-failure (Edit §2.1).
+- **Already landed by the combined run (validated-existing here):** Feedback **§4.2** ❌ (gap L①,
+  the `isTaskListInit`-only-on-success + error-discarded-at-call-site permanent skeleton); Read
+  **§1.2** ❌ (gap L②, sort/group over a partial paginated page); Act **§3.1** cross-surface
+  coherence rule + ❌ (gap L③, list `tasks` vs detail `taskDetailMap`); Act **§3.1** job-control /
+  optimistic ❌ (gap L④); Edit **§2.1** in-memory draft (gap L⑤). Read **§1.7** live-feed ❌ and
+  Read **§1.1** empty-variant (gap L⑥). All already cite this surface.
+- **No new generalizable rule from this split run.** The two fresh angles (list-level status
+  staleness while rows poll individually; the generic `Empty` with no CTA / no no-match) are both
+  **instances of already-complete rules** (Read §1.7 live feed owes an indicator + refresh; Read
+  §1.1 empty owes a CTA and a no-match variant), not a missing distinction — so, per the good-case
+  rule, nothing is landed; they're recorded as ❌ examples.
+- **Noted, not landed (candidate):** _a list whose **rows** are individually live (each polls its
+  own detail) but whose **list** fetch is static — the row summary goes stale while its detail
+  refreshes_. Per-row polling ≠ list freshness. Promote to a Read §1.7 sub-rule if a second surface
+  repeats it.
+
+> ⚠️ **Method note (carried from the combined run).** The cross-surface seam L③ was missed on the
+> first per-surface pass because a list-only reader and a detail-only reader each ignored the
+> other, so the shared-store seam was owned by neither. When a surface pair edits + lists the
+> **same entity**, one reader must own the seam (the shared store) — this split keeps L③ owned
+> here and cross-referenced from the detail report, not dropped between them.
 
 ## 5 — Pending: L2 visual + L3 dynamic
 
-L1-only; a later pass should confirm / quantify:
-
-- **L2 (visual)** — how the list skeleton reads vs the onboarding hero; whether a terminal-state
-  task's detail (run-control `null`, gap ⑪) leaves an obvious next action; kanban at many
-  columns; the artifacts total-hide (gap ⑪); narrow-width + dark-mode of the create modal.
+- **L2 (visual)** — how the list skeleton reads vs the onboarding hero; the zero-rows `Empty`
+  (gap L⑥); kanban at many columns; narrow-width + dark-mode of the create modal.
 - **L3 (dynamic)** —
-  - Force the list fetch offline → **confirm gap ① live** (permanent skeleton, no retry).
-  - Force the detail fetch to 500 → **confirm gap ②** (shows "Task not found", no reload).
-  - Force a run start / pause / create to fail → **confirm gap ③** (button snaps back, no toast).
-  - Force a schedule / verify save to fail → **confirm gap ④** (value reverts silently).
-  - Seed 60+ tasks → **confirm gap ⑤** (only 50 render, sort/group over the partial set).
-  - **Measure list CLS/LCP** across skeleton→content and the 50 per-row detail fetches (gap ⑤).
+  - Force the list fetch offline → **confirm gap L① live** (permanent skeleton, no retry, no empty).
+  - Seed 60+ tasks → **confirm gap L②** (only 50 render; sort/group over the partial set).
+  - Edit a task's title/priority from the detail with the list mounted → **confirm gap L③** (stale row).
+  - Let a running task complete while the list is open → **confirm gap L⑥** (stale status, no indicator).
+  - Fail a context-menu status change / kanban drag / create → **confirm gap L④** (silent revert).
+  - **Measure list CLS/LCP** across skeleton→content and the up-to-50 per-row detail fetches (gap L②).
