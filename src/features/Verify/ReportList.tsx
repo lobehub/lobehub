@@ -1,7 +1,8 @@
 'use client';
 
 import type { VerifyRunStatus, VerifyVerdict } from '@lobechat/types';
-import { Block, Button, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Check,

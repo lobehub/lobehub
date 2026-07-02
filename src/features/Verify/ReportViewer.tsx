@@ -3,7 +3,6 @@
 import type { VerifyRunContext } from '@lobechat/types';
 import {
   Block,
-  Button,
   Center,
   Drawer,
   Empty,
@@ -15,7 +14,8 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cx } from 'antd-style';
 import { AlertTriangle, Check, CircleHelp, Clock3, FileText, RefreshCw, X } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +38,7 @@ const filenameFromUrl = (url: string): string => {
   }
 };
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     width: 100%;
     max-width: 880px;
@@ -64,18 +64,18 @@ const useStyles = createStyles(({ css, token }) => ({
     max-width: 100%;
     padding-block: 6px;
     padding-inline: 10px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
 
     font-size: 13px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-align: start;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
 
     &:hover {
-      border-color: ${token.colorLink};
-      color: ${token.colorLink};
+      border-color: ${cssVar.colorLink};
+      color: ${cssVar.colorLink};
     }
 
     span {
@@ -96,13 +96,13 @@ const useStyles = createStyles(({ css, token }) => ({
     max-height: 200px;
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     white-space: pre-wrap;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   evidenceVideo: css`
     align-self: flex-start;
@@ -111,35 +111,35 @@ const useStyles = createStyles(({ css, token }) => ({
     max-width: 100%;
     height: auto;
     max-height: 360px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
     object-fit: contain;
   `,
   resultCard: css`
     padding-block: 10px;
     padding-inline: 14px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   stateBanner: css`
     padding-block: 10px;
     padding-inline: 14px;
-    border: 1px solid ${token.colorInfoBorder};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorInfoBorder};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${token.colorInfoText};
-    background: ${token.colorInfoBg};
+    color: ${cssVar.colorInfoText};
+    background: ${cssVar.colorInfoBg};
   `,
   scopeBlock: css`
     padding-block: 10px;
     padding-inline: 14px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   scopeKey: css`
     flex-shrink: 0;
@@ -148,13 +148,13 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 12px;
     line-height: 20px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   scopeValue: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     line-height: 20px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     word-break: break-word;
   `,
   stat: css`
@@ -194,7 +194,6 @@ const VerdictTag = memo<{ verdict?: string | null }>(({ verdict }) => {
 
 /** A single labelled row in the scope header (e.g. "Branch  docs/foo"). */
 const ScopeRow = memo<{ label: string; value?: string | null }>(({ label, value }) => {
-  const { styles } = useStyles();
   if (!value) return null;
   return (
     <Flexbox horizontal gap={8}>
@@ -211,7 +210,6 @@ const ScopeRow = memo<{ label: string; value?: string | null }>(({ label, value 
  */
 const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string | null }>(
   ({ context, scenario }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('verify');
     if (scenario !== 'coding' || !context) return null;
 
@@ -236,7 +234,6 @@ const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string |
 /** Fetches a file-backed text evidence and renders it decoded (avoids the raw
  *  download's mojibake) with syntax highlighting. */
 const DocumentViewer = memo<{ url: string }>(({ url }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('verify');
   const { fileData, loading, error } = useTextFileLoader(url);
 
@@ -274,7 +271,6 @@ const DocumentViewer = memo<{ url: string }>(({ url }) => {
 /** A file-backed (non-media) evidence — opens its decoded content in a right-side
  *  detail drawer instead of navigating to the raw file. */
 const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('verify');
   const [open, setOpen] = useState(false);
   const title = evidence.description || filenameFromUrl(evidence.fileUrl!);
@@ -307,7 +303,6 @@ const EvidenceList = memo<{
   evidence: VerifyResultWithEvidence['evidence'];
   imageMaxHeight?: number;
 }>(({ evidence, imageMaxHeight = 360 }) => {
-  const { styles } = useStyles();
   if (evidence.length === 0) return null;
   return (
     <Flexbox gap={8}>
@@ -346,7 +341,6 @@ const EvidenceList = memo<{
 
 /** A single check — a stacked card with its title, verdict, reasoning and evidence. */
 const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('verify');
   return (
     <Block className={styles.resultCard} gap={6}>
@@ -393,7 +387,6 @@ const ReportPageState = memo<{
  * mobile so a narrow viewport never overflows horizontally.
  */
 const ReportViewer = memo(() => {
-  const { styles, cx } = useStyles();
   const { t } = useTranslation('verify');
   const isMobile = useIsMobile();
   const { runId } = useParams<{ runId: string }>();
