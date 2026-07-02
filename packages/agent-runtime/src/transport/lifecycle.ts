@@ -5,6 +5,19 @@ export interface ToolCallMockResult {
   isMocked: true;
 }
 
+export interface LifecycleDispatchParams {
+  /** The lifecycle hook event payload. */
+  event: AnyHookEvent;
+  /**
+   * Per-operation webhook configs (the server keeps them on
+   * `state.metadata._hooks` for production/queue mode). Opaque to the package
+   * and forwarded verbatim to the adapter.
+   */
+  serializedHooks?: unknown;
+  /** Which of the coarse-grained hook types this dispatch fires. */
+  type: AgentHookType;
+}
+
 /**
  * Lifecycle dispatch port. Decouples executors from the server-side
  * `HookDispatcher`: an executor calls `lifecycle.dispatch(...)` at its key
@@ -17,13 +30,9 @@ export interface ToolCallMockResult {
  *
  * `dispatchBeforeToolCall` is the one interception point (returns a mock result
  * to skip real execution); everything else is fire-and-forget observation.
- *
- * `serializedHooks` carries the per-operation webhook configs (the server keeps
- * them on `state.metadata._hooks` for production/queue mode); it is opaque to
- * the package and forwarded verbatim to the adapter.
  */
 export interface LifecycleSink {
-  dispatch: (type: AgentHookType, event: AnyHookEvent, serializedHooks?: unknown) => Promise<void>;
+  dispatch: (params: LifecycleDispatchParams) => Promise<void>;
   dispatchBeforeToolCall: (
     event: Omit<ToolCallHookEvent, 'mock' | 'operationId'>,
   ) => Promise<ToolCallMockResult | null>;

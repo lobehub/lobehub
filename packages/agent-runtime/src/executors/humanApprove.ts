@@ -33,9 +33,8 @@ export const requestHumanApprove =
 
     // Fire-and-forget lifecycle hook (webhook configs carried via state).
     lifecycle
-      ?.dispatch(
-        'beforeHumanIntervention',
-        {
+      ?.dispatch({
+        event: {
           operationId,
           pendingTools: pendingToolsCalling.map((t: any) => ({
             apiName: t.apiName,
@@ -44,8 +43,9 @@ export const requestHumanApprove =
           stepIndex,
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
-      )
+        serializedHooks: state.metadata?._hooks,
+        type: 'beforeHumanIntervention',
+      })
       .catch(() => {});
 
     const newState = structuredClone(state);

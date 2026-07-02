@@ -1,6 +1,5 @@
 import type {
-  AgentHookType,
-  AnyHookEvent,
+  LifecycleDispatchParams,
   LifecycleSink,
   ToolCallMockResult,
 } from '@lobechat/agent-runtime';
@@ -19,11 +18,7 @@ export class ServerLifecycleSink implements LifecycleSink {
     private readonly operationId: string,
   ) {}
 
-  async dispatch(
-    type: AgentHookType,
-    event: AnyHookEvent,
-    serializedHooks?: unknown,
-  ): Promise<void> {
+  async dispatch({ type, event, serializedHooks }: LifecycleDispatchParams): Promise<void> {
     await this.hookDispatcher.dispatch(
       this.operationId,
       type as any,
