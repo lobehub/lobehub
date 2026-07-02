@@ -87,7 +87,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Read — viewing data & lists** ([read.md](references/read.md))
 
 - [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state. If the `Empty` component ships a `search`/no-match variant, **wire it** — don't render `<Empty/>` bare so a zero-result search shows the first-run onboarding.
-- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404).
+- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404). On a **metrics/dashboard** surface the failure default is a zero-valued object (`?? {…:0}`) that renders as a confident `$0` — read `error` before any aggregate, don't fall through to zeros.
 - [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
 - [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows).
 - [ ] Capped/scrollable/virtualized list scrolls the restored active item into view on mount (`block: 'nearest'`, re-run after async rows mount).

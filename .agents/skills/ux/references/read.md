@@ -31,6 +31,25 @@ gets its own state (reason + Reload). Error is not a kind of empty.
 > ✅ The agent **Documents** tab keeps its new-folder / new-doc toolbar and renders an `Empty` below it when there are no documents.
 > ❌ A bare title over skeleton rows, or a toolbar over dead space.
 > ❌ `Devices` renders a failed device-list fetch as the "Connect your first device" onboarding empty (`DeviceManager.tsx` reads only `{data, isLoading}`), falsely telling the user they own no devices — the same `data ?? [] → empty` trap in `Messenger`, `Creds`, `Skill`, `Stats`, `SystemTools` (7 settings tabs at once); and in **Eval** overview, where a failed benchmark fetch renders the "create your first benchmark" onboarding empty (`eval/index.tsx`).
+
+**On a metrics / aggregate surface the masquerade wears its worst mask: the failure looks
+like _real data_, not "empty".** A dashboard's failure default isn't an empty array — it's a
+**zero-valued object** (`data?.summary ?? { totalCost: 0, … }`, `?? 0`), so an errored fetch
+renders **plausible, legitimate-looking numbers** — "this agent cost you $0.00 / 0 tokens" —
+with nothing on screen signalling anything went wrong. This is strictly worse than the list
+case: an empty list at least invites suspicion ("did this fail?"); a confident `$0`, by
+contrast, reads as the truth. Same fix, higher stakes: always read `error`, then branch to a
+failed state before rendering any aggregate — never fall through to a zero default. Three
+states, not one: failed (reason + Reload), genuinely-zero (a real empty page), and real data
+are different screens.
+
+> ❌ **Agent stats / Usage & Cost** (`/agent/:aid/stats`) reads only `{ data, isLoading }`
+> from `useAgentUsageStats` — **`error` unread** (`AgentUsage/index.tsx:46`) — then coerces a
+> failure into `summary={data?.summary ?? EMPTY_SUMMARY}` (all zeros, `index.tsx:98`),
+> `rows={data?.byModel ?? []}`, and an empty chart. A 500 / offline / auth failure renders a
+> confident **"$0.00 cost, 0 tokens"** dashboard, no reason, no retry — indistinguishable
+> from an agent that genuinely hasn't run. ✅ Branch `error` → a failed card with Reload
+> (`mutate`); show the zero/empty page only on `!error && totalRequests === 0`.
 > ❌ A detail page that `return null`s until its record loads is **not** a loading state — it's a blank flash on the happy path and a **permanent blank** if the fetch fails (no skeleton, no error): **Eval** run / case / dataset detail all `if (!record) return null` (`eval/bench/[benchmarkId]/runs/[runId]/index.tsx`, `.../cases/[caseId]/index.tsx`, `.../datasets/[datasetId]/index.tsx`). Render a skeleton, then an error state.
 > ❌ **Resource** repeats the failure-as-empty trap four times: the Explorer reads only `{ isLoading, isValidating }` (the swr already exposes `error`, unread) so a failed resource fetch renders the "create your first resource" onboarding (`ResourceManager/components/Explorer/index.tsx`, `EmptyPlaceholder.tsx`); the sidebar KB list (`resource/(home)/_layout/Body/LibraryList/index.tsx`), the search overlay (`SearchResultsOverlay.tsx` → false "no results"), and the folder tree (`LibraryHierarchy/index.tsx` → false "add folder") all do the same.
 
@@ -68,6 +87,7 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 - [ ] Empty state is a real page with explanation + CTA, not a blank screen. _(Meaningful)_
 - [ ] Empty variants distinguished: "no data yet" vs "no filter match". _(Certainty)_
 - [ ] Error is checked **before** the empty branch — a failed fetch never renders as empty (`!error && length === 0` gates empty); read `error`, don't coerce `data ?? []`. _(Certainty・Meaningful)_
+- [ ] On a **metrics / aggregate** surface (dashboard, stats, cost), a failed fetch never falls through to a **zero-valued default** (`data?.summary ?? {…:0}`, `?? 0`) — a confident `$0` reads as real data, not "empty"; branch `error` before rendering any aggregate. _(Certainty・Meaningful)_
 - [ ] A detail page reads `error` before falling to `NotFound` — a failed fetch shows a reload state, not a "doesn't exist" 404 (deleted vs failed-to-load are different screens). _(Certainty・Meaningful)_
 - [ ] Always-rendered chrome still renders a body empty placeholder. _(Meaningful)_
 - [ ] Loading designed (skeleton / NeuralNetworkLoading), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
