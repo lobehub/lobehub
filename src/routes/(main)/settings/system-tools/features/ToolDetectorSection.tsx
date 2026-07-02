@@ -7,6 +7,7 @@ import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { binaryService } from '@/services/electron/binary';
 
@@ -127,14 +128,19 @@ const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
   const [toolStatuses, setToolStatuses] = useState<Record<string, BinaryStatus>>({});
   const [detecting, setDetecting] = useState(true);
+  // A failed `detectAll` used to be swallowed (console.error), leaving every tool
+  // rendered as "not detected" — a failure masquerading as an all-missing
+  // environment. Track it so we can render a failure + Retry instead (ux Read §1.1).
+  const [detectError, setDetectError] = useState<unknown>();
 
   const detectTools = useCallback(async (force = false) => {
     try {
       setDetecting(true);
       const statuses = await binaryService.detectAll(force);
       setToolStatuses(statuses);
+      setDetectError(undefined);
     } catch (error) {
-      console.error('Failed to detect tools:', error);
+      setDetectError(error);
     } finally {
       setDetecting(false);
     }
@@ -174,6 +180,12 @@ const ToolDetectorSection = memo(() => {
       title: t(categoryConfig.titleKey),
     }),
   );
+
+  // Nothing detected AND the scan errored → a real failure, not an empty
+  // environment. Show the reason + Retry rather than a wall of "not detected".
+  if (detectError && Object.keys(toolStatuses).length === 0) {
+    return <AsyncError error={detectError} variant={'block'} onRetry={handleRedetect} />;
+  }
 
   return (
     <Form

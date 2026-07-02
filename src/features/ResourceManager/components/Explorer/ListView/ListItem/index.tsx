@@ -139,6 +139,8 @@ const FileListItem = ({
   slug,
   sourceType,
   url,
+  userId,
+  visibility,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -223,6 +225,8 @@ const FileListItem = ({
     onRenameStart: isFolder ? handleRenameStart : undefined,
     sourceType,
     url,
+    userId,
+    visibility,
   });
 
   const handleCheckboxClick = useCallback(

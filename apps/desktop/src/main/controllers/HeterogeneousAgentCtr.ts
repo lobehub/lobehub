@@ -8,7 +8,10 @@ import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
 
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import type {
+  CodexQuotaSnapshot,
+  HeterogeneousAgentSessionError,
+} from '@lobechat/electron-client-ipc';
 import {
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
@@ -38,6 +41,7 @@ import { app as electronApp, BrowserWindow } from 'electron';
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -160,6 +164,11 @@ interface StopSessionParams {
 
 interface GetSessionInfoParams {
   sessionId: string;
+}
+
+interface GetCodexQuotaParams {
+  command?: string;
+  env?: Record<string, string>;
 }
 
 interface SessionInfo {
@@ -1297,6 +1306,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
     const session = this.sessions.get(params.sessionId);
     return { agentSessionId: session?.agentSessionId };
+  }
+
+  @IpcMethod()
+  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
+    const command = params.command?.trim() || 'codex';
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return fetchCodexQuota({
+      command: status.available && status.path ? status.path : command,
+      env: Object.keys(env).length > 0 ? env : undefined,
+    });
   }
 
   /**

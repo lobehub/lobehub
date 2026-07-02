@@ -45,8 +45,11 @@ export class FileModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files);
+  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+    buildWorkspaceWhere(
+      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      files,
+    );
 
   /**
    * Get file by ID without userId filter (public access)
@@ -300,9 +303,18 @@ export class FileModel {
     sorter,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
-  }: QueryFileListParams = {}) => {
+    callerAgentVisibility,
+    visibility,
+  }: QueryFileListParams & {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    visibility?: 'private' | 'public';
+  } = {}) => {
     // 1. Build where clause
-    let whereClause = and(q ? ilike(files.name, `%${q}%`) : undefined, this.ownership());
+    let whereClause = and(
+      q ? ilike(files.name, `%${q}%`) : undefined,
+      this.ownership(callerAgentVisibility),
+      visibility ? eq(files.visibility, visibility) : undefined,
+    );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
       if (Array.isArray(fileTypePrefix)) {
@@ -346,6 +358,7 @@ export class FileModel {
         updatedAt: files.updatedAt,
         url: files.url,
         userId: files.userId,
+        visibility: files.visibility,
       })
       .from(files);
 
@@ -443,6 +456,25 @@ export class FileModel {
       .update(files)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(files.id, id), this.ownership()));
+
+  /**
+   * Publish a private file into the workspace. **One-way only** — mirrors
+   * `AgentModel.publishToWorkspace`. The combined `user_id = ?` +
+   * `visibility = 'private'` guards lock the operation to the creator's own
+   * still-private file; an already-public row is a no-op.
+   */
+  publishToWorkspace = async (fileId: string) =>
+    this.db
+      .update(files)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(files.id, fileId),
+          this.ownership(),
+          eq(files.userId, this.userId),
+          eq(files.visibility, 'private'),
+        ),
+      );
 
   /**
    * get the corresponding file type prefix according to FilesTabs

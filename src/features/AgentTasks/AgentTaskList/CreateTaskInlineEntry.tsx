@@ -9,6 +9,7 @@ import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -21,7 +22,10 @@ import { useTaskStore } from '@/store/task';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
+import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { useAgentVisibility } from '../shared/useAgentVisibility';
 
 interface CreateTaskInlineEntryProps {
   agentId?: string;
@@ -61,10 +65,22 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
+  const activeWorkspaceId = useActiveWorkspaceId();
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
+  // Default to private in workspace mode so the user has to opt in to share.
+  // In personal mode the chip is hidden and the value is never sent.
+  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+
+  // LOBE-10961: a private agent can only run a private task. Coerce + lock the
+  // visibility chip when the selected agent is private.
+  const assigneeVisibility = useAgentVisibility(assigneeAgentId);
+  const isPrivateAgent = assigneeVisibility === 'private';
+  useEffect(() => {
+    if (isPrivateAgent && visibility === 'public') setVisibility('private');
+  }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
 
@@ -72,9 +88,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
   // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
-  // /agent/B/tasks, so without this the hidden assignee would stay on A.
+  // /agent/B/tasks and /agent/A/tasks -> /tasks, so without this the hidden
+  // assignee would stay on the previous scoped agent.
   useEffect(() => {
-    if (lockAssignee) setAssigneeAgentId(agentId);
+    if (lockAssignee) {
+      setAssigneeAgentId(agentId);
+      return;
+    }
+
+    if (!agentId) setAssigneeAgentId(undefined);
   }, [agentId, lockAssignee]);
 
   useEffect(() => {
@@ -130,12 +152,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       name,
       parentTaskId,
       priority: priority || undefined,
+      // Only send visibility in workspace mode; personal mode lets the server
+      // fall through to the schema default ('public', inert in personal mode).
+      visibility: activeWorkspaceId ? visibility : undefined,
     });
 
     if (result) {
       setPriority(0);
       setAssigneeAgentId(agentId);
       setInstruction('');
+      setVisibility('private');
       editor?.cleanDocument?.();
       onCreated?.({
         agentId: result.assigneeAgentId ?? undefined,
@@ -143,6 +169,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       });
     }
   }, [
+    activeWorkspaceId,
     agentId,
     assigneeAgentId,
     createTask,
@@ -152,6 +179,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     parentTaskId,
     priority,
     canCreateTask,
+    visibility,
   ]);
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -268,6 +296,22 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               </AssigneeAgentSelector>
             );
           })()}
+
+          {activeWorkspaceId && (
+            <TaskVisibilityTag
+              visibility={visibility}
+              lockedReason={
+                isPrivateAgent
+                  ? t('createTask.visibility.privateAgentLocked', {
+                      defaultValue: 'Private agents can only run private tasks.',
+                    })
+                  : undefined
+              }
+              onChange={setVisibility}
+            >
+              <TaskVisibilityChipLabel visibility={visibility} />
+            </TaskVisibilityTag>
+          )}
 
           <ActionIcon
             icon={Paperclip}

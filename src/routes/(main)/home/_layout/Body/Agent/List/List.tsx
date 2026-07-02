@@ -22,10 +22,11 @@ interface SessionListProps {
   itemClassName?: string;
   itemStyle?: CSSProperties;
   onMoreClick?: () => void;
+  visibility?: 'private' | 'public';
 }
 
 const List = memo<SessionListProps>(
-  ({ onMoreClick, dataSource, groupId, itemStyle, itemClassName }) => {
+  ({ onMoreClick, dataSource, groupId, itemStyle, itemClassName, visibility }) => {
     const { t } = useTranslation('chat');
 
     // Early return for empty state
@@ -48,7 +49,7 @@ const List = memo<SessionListProps>(
 
     if (isEmpty) {
       return showCreateButton ? (
-        <CreateAgentButton className={itemClassName} groupId={groupId} />
+        <CreateAgentButton className={itemClassName} groupId={groupId} visibility={visibility} />
       ) : null;
     }
 
@@ -68,7 +69,9 @@ const List = memo<SessionListProps>(
             onClick={onMoreClick || openAllAgentsDrawer}
           />
         )}
-        {showCreateButton && <CreateAgentButton className={itemClassName} groupId={groupId} />}
+        {showCreateButton && (
+          <CreateAgentButton className={itemClassName} groupId={groupId} visibility={visibility} />
+        )}
       </Flexbox>
     );
   },

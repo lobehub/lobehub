@@ -12,6 +12,8 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { workspaceMembers } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { EditLockService } from '@/server/services/editLock';
@@ -65,6 +67,10 @@ const createSchema = z.object({
   priority: z.number().min(0).max(4).optional(),
   schedulePattern: z.string().optional(),
   scheduleTimezone: z.string().optional(),
+  // When omitted, the server derives visibility from the parent task or the
+  // assignee agent's visibility (private agent → private task). UI surfaces
+  // such as the top-level "Tasks" create form pass it explicitly.
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 const updateSchema = z.object({
@@ -102,6 +108,10 @@ const listSchema = z.object({
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+  // UI-side narrowing of the result set. Omitted means "All" (the chip's
+  // default 'private' is enforced client-side; the server stays permissive
+  // so router tests / external callers don't have to know the chip).
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 const groupListSchema = z.object({
@@ -118,6 +128,7 @@ const groupListSchema = z.object({
     .min(1)
     .max(10),
   parentTaskId: z.string().nullish(),
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 // Helper: resolve id/identifier and throw if not found
@@ -128,17 +139,23 @@ async function resolveOrThrow(model: TaskModel, id: string) {
 }
 
 async function assertAssigneeAgentBelongsToUser(
-  model: AgentModel,
+  db: LobeChatDatabase,
+  callerCtx: { userId: string; workspaceId?: string },
   assigneeAgentId?: string | null,
 ) {
   if (!assigneeAgentId) return;
 
-  const exists = await model.existsById(assigneeAgentId);
-  if (!exists) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Assignee agent not found',
-    });
+  try {
+    await assertAgentUsableBy(db, assigneeAgentId, callerCtx);
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') {
+      // Preserve the task-context message so the UI surfaces "Assignee agent
+      // not found" instead of the generic "Agent not found". Cross-user access
+      // to a private agent still resolves to NOT_FOUND, never FORBIDDEN, so we
+      // don't leak existence of someone else's private agent.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Assignee agent not found' });
+    }
+    throw error;
   }
 }
 
@@ -237,7 +254,11 @@ export const taskRouter = router({
       try {
         const model = ctx.taskModel;
         const task = await resolveOrThrow(model, input.id);
-        await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.authorAgentId);
+        await assertAssigneeAgentBelongsToUser(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          input.authorAgentId,
+        );
         const comment = await model.addComment({
           authorAgentId: input.authorAgentId,
           authorUserId: input.authorAgentId ? undefined : ctx.userId,
@@ -985,7 +1006,11 @@ export const taskRouter = router({
     const { id, parentTaskId, ...data } = input;
     try {
       const model = ctx.taskModel;
-      await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
+      await assertAssigneeAgentBelongsToUser(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        data.assigneeAgentId,
+      );
       const resolved = await resolveOrThrow(model, id);
 
       // Collaborative edit lock: reject writes to a workspace task another member
@@ -1001,10 +1026,28 @@ export const taskRouter = router({
         }
       }
 
+      // Reject changing the assignee to a private agent on a public task —
+      // visibility invariant from LOBE-10961. `undefined` means "no change";
+      // `null` clears the assignee and is always safe.
+      if (data.assigneeAgentId) {
+        const agentVisibility = await ctx.agentModel.getAgentVisibility(data.assigneeAgentId);
+        ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
+      }
+
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined
           : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
+
+      // Reparenting a public task under a private one breaks the parent
+      // visibility invariant from LOBE-10962 #3 — workspace members would
+      // still see the child while its new parent is hidden. `undefined`
+      // means "no change"; `null` clears the parent and is always safe.
+      if (resolvedParentTaskId) {
+        const newParent = await model.findById(resolvedParentTaskId);
+        ctx.taskService.assertParentVisibilityCompat(resolved.visibility, newParent?.visibility);
+      }
+
       const updateData =
         parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
       const task = await model.update(resolved.id, updateData);
@@ -1020,6 +1063,98 @@ export const taskRouter = router({
       });
     }
   }),
+
+  updateVisibility: taskProcedureWrite
+    .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+
+        // Visibility is a one-way commitment: once a task is published to the
+        // workspace, retracting it back to private would yank a resource other
+        // members may already be running, referencing, or commenting on. The
+        // product surface enforces this via a "Publish to Workspace" action
+        // that has no inverse — any caller asking for public→private here is
+        // either a stale UI path or a direct API client and should be rejected.
+        // Placed before the edit-lock check because the invariant is schema-
+        // level, not concurrency-level: there is no legitimate "wait for the
+        // lock and try again" outcome.
+        if (resolved.visibility === 'public' && input.visibility === 'private') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Task visibility cannot be reverted from public to private',
+          });
+        }
+
+        // Mirror the edit-lock contract from `update`: reject visibility flips
+        // while another workspace member is actively editing this task. Without
+        // this check a collaborator could silently retitle a private task to
+        // public (or vice versa) while you're mid-edit. LOBE-10962 #1.
+        if (ctx.workspaceId) {
+          const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
+          if (blockedBy) {
+            throw new TRPCError({
+              cause: { data: { code: 'DocumentLocked' } },
+              code: 'CONFLICT',
+              message: 'Task is being edited by another user',
+            });
+          }
+        }
+
+        // Owner can always change visibility on their own tasks. In workspace
+        // mode, allow workspace owners to override (mirrors the transferTask
+        // policy at line ~1166): only they can change visibility on tasks
+        // created by other members.
+        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
+          const [membership] = await ctx.serverDB
+            .select({ role: workspaceMembers.role })
+            .from(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, ctx.workspaceId),
+                eq(workspaceMembers.userId, ctx.userId),
+                isNull(workspaceMembers.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!membership || membership.role !== 'owner') {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the task creator or workspace owner can change visibility',
+            });
+          }
+        }
+
+        // Promoting a task to public while a private agent is its assignee
+        // breaks the visibility invariant from LOBE-10961. Reject early —
+        // the user should reassign first, then promote.
+        if (input.visibility === 'public' && resolved.assigneeAgentId) {
+          const agentVisibility = await ctx.agentModel.getAgentVisibility(resolved.assigneeAgentId);
+          ctx.taskService.assertAgentVisibilityCompat(input.visibility, agentVisibility);
+        }
+
+        // Promoting a subtask to public while its parent is still private
+        // would orphan the child in the workspace view (LOBE-10962 #3). The
+        // user must promote the parent chain first, or keep the subtask
+        // private.
+        if (input.visibility === 'public' && resolved.parentTaskId) {
+          const parent = await ctx.taskModel.findById(resolved.parentTaskId);
+          ctx.taskService.assertParentVisibilityCompat(input.visibility, parent?.visibility);
+        }
+
+        const updated = await ctx.taskModel.updateVisibility(resolved.id, input.visibility);
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        return { data: updated, message: 'Task visibility updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateVisibility]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task visibility',
+        });
+      }
+    }),
 
   acquireTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
     if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };

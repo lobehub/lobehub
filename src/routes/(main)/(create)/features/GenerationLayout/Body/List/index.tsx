@@ -15,8 +15,10 @@ import TopicList from './TopicList';
 import TopicUrlSync from './TopicUrlSync';
 
 const List = memo<
-  Pick<GenerationLayoutCommonProps, 'namespace' | 'useStore' | 'viewModeStatusKey'>
->(({ namespace, useStore, viewModeStatusKey }) => {
+  Pick<GenerationLayoutCommonProps, 'namespace' | 'useStore' | 'viewModeStatusKey'> & {
+    visibility?: 'private' | 'public';
+  }
+>(({ namespace, useStore, viewModeStatusKey, visibility }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const viewMode = useGlobalStore((s) => systemStatusSelectors[viewModeStatusKey](s));
 
@@ -27,7 +29,7 @@ const List = memo<
     <GenerationTopicStoreProvider value={{ namespace, useStore: useStore as any }}>
       <Suspense fallback={<SkeletonList rows={6} />}>
         <Flexbox gap={4} paddingBlock={1}>
-          <TopicList viewMode={viewMode} />
+          <TopicList viewMode={viewMode} visibility={visibility} />
           <TopicUrlSync />
         </Flexbox>
       </Suspense>

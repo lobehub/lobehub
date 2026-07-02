@@ -16,9 +16,13 @@ export interface UseProjectSkillsResult {
    * rename / delete are stubbed (disabled) until the filesystem-mutation IPC
    * lands.
    */
+  /** The thrown error from the SWR scan, if it failed. */
+  error: unknown;
   getRowActions: (item: SkillListItem) => SkillRowAction[];
   isLoading: boolean;
   items: SkillListItem[];
+  /** Retry the failed scan (SWR `mutate`). */
+  mutate: () => void;
   onOpenFile: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill: (item: SkillListItem) => void;
   raw: ListProjectSkillsResult | undefined;
@@ -45,7 +49,7 @@ export const useProjectSkills = (
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const isRemote = !!deviceId;
 
-  const { data, isLoading } = useFetchProjectSkills(workingDirectory, deviceId);
+  const { data, error, isLoading, mutate } = useFetchProjectSkills(workingDirectory, deviceId);
 
   // listProjectSkills approves `data.root` for preview. Hand that exact value
   // back to openLocalFile so LocalFileProtocolManager.createPreviewUrl's
@@ -122,5 +126,16 @@ export const useProjectSkills = (
     ];
   };
 
-  return { getRowActions, isLoading, items, onOpenFile, onOpenSkill, raw: data };
+  return {
+    error,
+    getRowActions,
+    isLoading,
+    items,
+    mutate: () => {
+      void mutate();
+    },
+    onOpenFile,
+    onOpenSkill,
+    raw: data,
+  };
 };

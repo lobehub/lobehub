@@ -175,6 +175,30 @@ describe('toAgentContextDocuments', () => {
     expect(result.map((d) => d.id)).toEqual(['doc']);
   });
 
+  // LOBE-11072: children inherit their `custom/folder` parent's title so the
+  // progressive index can fold same-folder siblings under a readable name. The
+  // folder row is still dropped — only its title survives, on the children.
+  it('stamps folderTitle on children of a custom/folder and drops the folder row', () => {
+    const rows = [
+      buildDoc({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        id: 'folder-agentdoc',
+        isFolder: true,
+        title: 'dailyBrief',
+      }),
+      buildDoc({ id: 'child-1', parentId: 'folder-doc', sourceType: 'file' }),
+      buildDoc({ id: 'child-2', parentId: 'folder-doc', sourceType: 'file' }),
+      buildDoc({ id: 'root', parentId: null, sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['child-1', 'child-2', 'root']);
+    expect(result.map((d) => d.folderTitle)).toEqual(['dailyBrief', 'dailyBrief', undefined]);
+    expect(result.map((d) => d.parentId)).toEqual(['folder-doc', 'folder-doc', undefined]);
+  });
+
   it('keeps non-folder skill rows such as the SKILL.md index', () => {
     const rows = [
       buildDoc({

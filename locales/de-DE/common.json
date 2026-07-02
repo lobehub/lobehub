@@ -1,5 +1,6 @@
 {
   "about": "Über",
+  "addNew": "Neu hinzufügen",
   "advanceSettings": "Erweiterte Einstellungen",
   "agentOnboardingPromo.actionLabel": "Jetzt ausprobieren",
   "agentOnboardingPromo.description": "Richte deine Agent-Teams in einem kurzen Chat mit Lobe AI ein. Deine vorhandenen Agenten bleiben unverändert.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Inhaltsrichtlinienprüfung fehlgeschlagen. Bitte überarbeiten Sie Ihre Eingabe.",
   "getDesktopApp": "Desktop-App herunterladen",
   "goToTarget": "Zum Ziel gehen",
+  "gotIt": "Verstanden",
   "historyRange": "Verlaufsspanne",
   "home.suggestQuestions": "Probieren Sie diese Beispiele aus",
   "import": "Importieren",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Nach unten verschieben",
   "navPanel.moveUp": "Nach oben verschieben",
   "navPanel.pinned": "Angeheftet",
+  "navPanel.privateAgents": "Privat",
+  "navPanel.publicAgents": "Arbeitsbereich",
   "navPanel.resetDefault": "Auf Standard zurücksetzen",
   "navPanel.searchAgent": "Agent suchen...",
   "navPanel.searchRecent": "Zuletzt gesucht...",

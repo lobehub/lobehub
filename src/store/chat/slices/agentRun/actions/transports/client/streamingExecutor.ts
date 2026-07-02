@@ -510,6 +510,16 @@ export class StreamingExecutorActionImpl {
     // Create a new array to avoid modifying the original messages
     const messages = [...originalMessages];
 
+    // Decide tool / function-calling capability from real data, not a guess.
+    // The enabled-model list hydrates asynchronously (auth session → aiProvider
+    // runtime-state SWR); until it's ready `isCanUseFC` optimistically assumes
+    // tool use so we don't drop tools for a capable model. But this is the
+    // outbound path: `createAgentToolsEngine` below bakes the tool set into the
+    // payload and the `/webapi/chat/[provider]` route forwards it to the provider
+    // without rechecking capability. Wait (bounded) for the list so a fast first
+    // send after reload never attaches tools to a model that can't use them.
+    await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
+
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
     // ===========================================

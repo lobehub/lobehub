@@ -18,6 +18,7 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
@@ -47,7 +48,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgContainer};
   `,
   capabilityIcon: css`
@@ -67,7 +67,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgContainer};
   `,
   emptyHero: css`
@@ -94,11 +93,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   option: css`
     cursor: pointer;
-
     padding: 20px;
-
     background: ${cssVar.colorBgContainer};
-
     transition: background 0.15s ease;
 
     &:hover {
@@ -118,7 +114,6 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1px;
-
     background: ${cssVar.colorBorderSecondary};
   `,
   optionIcon: css`
@@ -301,7 +296,7 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   // Devices come from an authed lambda procedure, so only query once signed in
   // (desktop always queries — it lists the local device's registered cwd).
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { data, isLoading } = useClientDataSWR(
+  const { data, isLoading, error, mutate } = useClientDataSWR(
     isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
     () => deviceService.listDevices(),
   );
@@ -328,48 +323,47 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   // Hook must run before any early return so render order stays stable.
   const canEditDevice = useCanEditDevice();
 
-  if (isLoading) return <ListSkeleton />;
-
   // ─── Empty state: onboarding hero + connect options + capabilities ───
-  if (devices.length === 0) {
-    return (
-      <Flexbox gap={32}>
-        <Flexbox className={styles.emptyCard}>
-          <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
-            <span className={styles.heroIcon}>
-              <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
-            </span>
-            <Text fontSize={18} weight={600}>
-              {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
-            </Text>
-            <Text style={{ maxWidth: 440 }} type={'secondary'}>
-              {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
-            </Text>
-          </Flexbox>
-
-          <div className={isWorkspace ? undefined : styles.optionGrid}>
-            {!isWorkspace && (
-              <ConnectOption
-                badge={t('devices.empty.methodDesktop.badge')}
-                desc={t('devices.empty.methodDesktop.desc')}
-                icon={MonitorDownIcon}
-                title={t('devices.empty.methodDesktop.title')}
-                onClick={() => onConnect('desktop')}
-              />
-            )}
-            <ConnectOption
-              desc={t('devices.empty.methodCli.desc')}
-              icon={TerminalIcon}
-              title={t('devices.empty.methodCli.title')}
-              onClick={() => onConnect('cli')}
-            />
-          </div>
+  // Now gated by AsyncBoundary so a *failed* device fetch renders a failure +
+  // Retry instead of this "connect your first device" onboarding (which falsely
+  // told the user they own no devices — ux Read §1.1 error-as-empty trap).
+  const emptyState = (
+    <Flexbox gap={32}>
+      <Flexbox className={styles.emptyCard}>
+        <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
+          <span className={styles.heroIcon}>
+            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+          </span>
+          <Text fontSize={18} weight={600}>
+            {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
+          </Text>
+          <Text style={{ maxWidth: 440 }} type={'secondary'}>
+            {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
+          </Text>
         </Flexbox>
 
-        <Capabilities />
+        <div className={isWorkspace ? undefined : styles.optionGrid}>
+          {!isWorkspace && (
+            <ConnectOption
+              badge={t('devices.empty.methodDesktop.badge')}
+              desc={t('devices.empty.methodDesktop.desc')}
+              icon={MonitorDownIcon}
+              title={t('devices.empty.methodDesktop.title')}
+              onClick={() => onConnect('desktop')}
+            />
+          )}
+          <ConnectOption
+            desc={t('devices.empty.methodCli.desc')}
+            icon={TerminalIcon}
+            title={t('devices.empty.methodCli.title')}
+            onClick={() => onConnect('cli')}
+          />
+        </div>
       </Flexbox>
-    );
-  }
+
+      <Capabilities />
+    </Flexbox>
+  );
 
   const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
@@ -417,79 +411,92 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   };
 
   return (
-    <Flexbox horizontal align={'flex-start'} gap={16}>
-      <Flexbox className={styles.listCol} flex={1}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.listHeader}
-          justify={'space-between'}
-        >
+    <AsyncBoundary
+      data={data}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={devices.length === 0}
+      isLoading={isLoading}
+      loading={<ListSkeleton />}
+      onRetry={() => mutate()}
+    >
+      <Flexbox horizontal align={'flex-start'} gap={16}>
+        <Flexbox className={styles.listCol} flex={1}>
           <Flexbox
             horizontal
             align={'center'}
-            className={editableDevices.length > 0 ? styles.selectAll : undefined}
-            gap={8}
-            onClick={editableDevices.length > 0 ? toggleAll : undefined}
+            className={styles.listHeader}
+            justify={'space-between'}
           >
-            {editableDevices.length > 0 && (
-              <Checkbox checked={allChecked} indeterminate={someChecked} />
-            )}
-            <Text fontSize={12} type={'secondary'} weight={500}>
-              {selectionActive
-                ? t('devices.selection.selected', { count: checkedCount })
-                : t('devices.selection.total', { count: devices.length })}
-            </Text>
-          </Flexbox>
-          {selectionActive && (
-            <Button
-              danger
-              icon={<Icon icon={Trash2Icon} />}
-              loading={removeMutation.isPending}
-              size={'small'}
-              onClick={handleBulkRemove}
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={editableDevices.length > 0 ? styles.selectAll : undefined}
+              gap={8}
+              onClick={editableDevices.length > 0 ? toggleAll : undefined}
             >
-              {t('devices.actions.removeSelected', { count: checkedCount })}
-            </Button>
-          )}
+              {editableDevices.length > 0 && (
+                <Checkbox checked={allChecked} indeterminate={someChecked} />
+              )}
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {selectionActive
+                  ? t('devices.selection.selected', { count: checkedCount })
+                  : t('devices.selection.total', { count: devices.length })}
+              </Text>
+            </Flexbox>
+            {selectionActive && (
+              <Button
+                danger
+                icon={<Icon icon={Trash2Icon} />}
+                loading={removeMutation.isPending}
+                size={'small'}
+                onClick={handleBulkRemove}
+              >
+                {t('devices.actions.removeSelected', { count: checkedCount })}
+              </Button>
+            )}
+          </Flexbox>
+          <Flexbox className={styles.listScroll} gap={2} padding={4}>
+            {devices.map((device) => {
+              const editable = canEditDevice(device);
+              return (
+                <DeviceItem
+                  checked={checkedIds.has(device.deviceId)}
+                  device={device}
+                  isCurrent={isCurrent(device.deviceId)}
+                  key={device.deviceId}
+                  selected={device.deviceId === selectedId}
+                  selectionActive={selectionActive}
+                  // Withholding the handler also withholds the checkbox; non-
+                  // editable rows render without a tick so bulk selection only
+                  // ever includes devices the server would accept.
+                  onCheckChange={
+                    editable ? (next) => toggleChecked(device.deviceId, next) : undefined
+                  }
+                  onSelect={() =>
+                    setSelectedId((prev) =>
+                      prev === device.deviceId ? undefined : device.deviceId,
+                    )
+                  }
+                />
+              );
+            })}
+          </Flexbox>
         </Flexbox>
-        <Flexbox className={styles.listScroll} gap={2} padding={4}>
-          {devices.map((device) => {
-            const editable = canEditDevice(device);
-            return (
-              <DeviceItem
-                checked={checkedIds.has(device.deviceId)}
-                device={device}
-                isCurrent={isCurrent(device.deviceId)}
-                key={device.deviceId}
-                selected={device.deviceId === selectedId}
-                selectionActive={selectionActive}
-                // Withholding the handler also withholds the checkbox; non-
-                // editable rows render without a tick so bulk selection only
-                // ever includes devices the server would accept.
-                onCheckChange={
-                  editable ? (next) => toggleChecked(device.deviceId, next) : undefined
-                }
-                onSelect={() =>
-                  setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
-                }
-              />
-            );
-          })}
-        </Flexbox>
+        {selected && (
+          <Flexbox className={styles.detailCol} flex={1}>
+            {/* keyed on deviceId so the form state resets when the selection changes */}
+            <DeviceDetailPanel
+              device={selected}
+              isCurrent={isCurrent(selected.deviceId)}
+              key={selected.deviceId}
+              onClose={() => setSelectedId(undefined)}
+            />
+          </Flexbox>
+        )}
       </Flexbox>
-      {selected && (
-        <Flexbox className={styles.detailCol} flex={1}>
-          {/* keyed on deviceId so the form state resets when the selection changes */}
-          <DeviceDetailPanel
-            device={selected}
-            isCurrent={isCurrent(selected.deviceId)}
-            key={selected.deviceId}
-            onClose={() => setSelectedId(undefined)}
-          />
-        </Flexbox>
-      )}
-    </Flexbox>
+    </AsyncBoundary>
   );
 });
 

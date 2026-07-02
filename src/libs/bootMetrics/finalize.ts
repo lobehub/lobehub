@@ -13,15 +13,20 @@ const SEEN_KEY = 'lobe:boot:seen';
 
 let sent = false;
 
-const readCold = (): boolean => {
-  try {
-    const cold = !localStorage.getItem(SEEN_KEY);
-    localStorage.setItem(SEEN_KEY, '1');
-    return cold;
-  } catch {
-    return false;
+let wasHidden = false;
+try {
+  if (typeof document !== 'undefined') {
+    wasHidden =
+      document.visibilityState === 'hidden' ||
+      (document as Document & { prerendering?: boolean }).prerendering === true;
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') wasHidden = true;
+    });
   }
-};
+} catch {
+  void 0;
+}
 
 const getPlatform = (): 'desktop' | 'mobile' | 'web' => {
   if (isDesktop) return 'desktop';
@@ -61,8 +66,9 @@ const scheduleAfterFirstPaint = (task: () => void): void => {
   runWhenIdle();
 };
 
-const sendPayload = (ingestUrl: string): void => {
+const sendPayload = (ingestUrl: string, cold: boolean): void => {
   if (sent) return;
+  if (wasHidden) return;
 
   try {
     const snapshot = bootTiming.snapshot();
@@ -88,7 +94,7 @@ const sendPayload = (ingestUrl: string): void => {
       dimensions: {
         anonId: nanoid(),
         appVersion: CURRENT_VERSION,
-        cold: readCold(),
+        cold,
         isLogin,
         platform: getPlatform(),
         userId,
@@ -99,9 +105,14 @@ const sendPayload = (ingestUrl: string): void => {
       snapshot,
     });
 
+    if (!payload) return;
+
     if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(ingestUrl, new Blob([JSON.stringify(payload)], { type: 'text/plain' }));
-      sent = true;
+      const queued = navigator.sendBeacon(
+        ingestUrl,
+        new Blob([JSON.stringify(payload)], { type: 'text/plain' }),
+      );
+      if (queued) sent = true;
     }
   } catch {
     void 0;
@@ -114,6 +125,14 @@ export const startBootMetricsFinalize = (): void => {
     if (!ingestUrl) return;
 
     if (!isProductUsageEventEnabled()) return;
+
+    let cold = false;
+    try {
+      cold = !localStorage.getItem(SEEN_KEY);
+      localStorage.setItem(SEEN_KEY, '1');
+    } catch {
+      cold = false;
+    }
 
     try {
       const state = getServerConfigStoreState();
@@ -128,10 +147,10 @@ export const startBootMetricsFinalize = (): void => {
       void 0;
     }
 
-    scheduleAfterFirstPaint(() => sendPayload(ingestUrl));
+    scheduleAfterFirstPaint(() => sendPayload(ingestUrl, cold));
 
     const pagehideHandler = () => {
-      if (!sent) sendPayload(ingestUrl);
+      if (!sent) sendPayload(ingestUrl, cold);
       window.removeEventListener('pagehide', pagehideHandler);
     };
 

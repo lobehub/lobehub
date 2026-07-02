@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Fähigkeit",
   "actionTag.category.tool": "Werkzeug",
   "actionTag.tooltip.agentSkill": "Lädt ein Fertigkeitenpaket aus den Dokumenten dieses Agenten für die Anfrage.",
+  "actionTag.tooltip.clickToView": "Klicken Sie, um Details anzuzeigen",
   "actionTag.tooltip.command": "Führt vor dem Senden einen clientseitigen Slash-Befehl aus.",
   "actionTag.tooltip.projectSkill": "Als Slash-Befehl gesendet, damit die CLI des Agenten die passende Projektfertigkeit ausführt.",
   "actionTag.tooltip.skill": "Lädt für diese Anfrage ein wiederverwendbares Fähigkeitspaket.",

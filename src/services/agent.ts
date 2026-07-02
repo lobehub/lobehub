@@ -62,6 +62,14 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /**
+   * `private` keeps the agent visible only to its creator within the active
+   * workspace; `public` (default) makes it visible to every member. The
+   * router enforces this — sidebar "Create in Private" forwards `'private'`
+   * verbatim, all other creators (templates, marketplace import, etc.)
+   * default to `'public'`.
+   */
+  visibility?: 'private' | 'public';
 }
 
 export interface CreateAgentResult {
@@ -111,7 +119,19 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      visibility: params.visibility,
     });
+  };
+
+  /**
+   * Publish a private agent to the workspace. One-way action — `private`
+   * agents cannot be re-privatized once shared, because other workspace
+   * members may already be using them. Caller should refresh the sidebar
+   * list afterwards so the agent moves from the Private bucket to the
+   * shared list.
+   */
+  publishAgentToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
   };
 
   /**
@@ -167,8 +187,10 @@ class AgentService {
     });
   };
 
-  getFilesAndKnowledgeBases = async (agentId: string) => {
-    return lambdaClient.agent.getKnowledgeBasesAndFiles.query({ agentId });
+  getFilesAndKnowledgeBases = async (agentId: string, visibility?: 'private' | 'public') => {
+    return lambdaClient.agent.getKnowledgeBasesAndFiles.query(
+      visibility ? { agentId, visibility } : { agentId },
+    );
   };
 
   getAgentConfigById = async (agentId: string) => {

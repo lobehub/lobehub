@@ -665,4 +665,34 @@ describe('TaskTopicModel', () => {
       expect(removed).toBe(false);
     });
   });
+
+  describe('add — parent visibility mirroring', () => {
+    it('should snapshot the parent task’s public visibility onto the topic row', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Public task', visibility: 'public' });
+      await createTopic('tpc_pub');
+
+      await topicModel.add(task.id, 'tpc_pub', { seq: 1 });
+
+      const row = (
+        await serverDB.select().from(taskTopics).where(eq(taskTopics.taskId, task.id)).limit(1)
+      )[0];
+      expect(row.visibility).toBe('public');
+    });
+
+    it('should snapshot the parent task’s private visibility onto the topic row', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Private task', visibility: 'private' });
+      await createTopic('tpc_priv');
+
+      await topicModel.add(task.id, 'tpc_priv', { seq: 1 });
+
+      const row = (
+        await serverDB.select().from(taskTopics).where(eq(taskTopics.taskId, task.id)).limit(1)
+      )[0];
+      expect(row.visibility).toBe('private');
+    });
+  });
 });

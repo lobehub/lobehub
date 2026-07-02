@@ -512,6 +512,7 @@ export class ChatTopicActionImpl {
                   isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -609,6 +610,7 @@ export class ChatTopicActionImpl {
                   hasMore,
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -640,7 +642,7 @@ export class ChatTopicActionImpl {
       {
         agentTopicsViewMap: {
           ...agentTopicsViewMap,
-          [key]: { ...currentData, isLoadingMore: true },
+          [key]: { ...currentData, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -667,6 +669,7 @@ export class ChatTopicActionImpl {
               currentPage: nextPage,
               hasMore,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               total: result.total,
             },
@@ -675,12 +678,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreAgentTopicsView(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           agentTopicsViewMap: {
             ...this.#get().agentTopicsViewMap,
-            [key]: { ...this.#get().agentTopicsViewMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().agentTopicsViewMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,
@@ -712,7 +719,7 @@ export class ChatTopicActionImpl {
       {
         topicDataMap: {
           ...topicDataMap,
-          [key]: { ...currentData!, isLoadingMore: true },
+          [key]: { ...currentData!, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -752,6 +759,7 @@ export class ChatTopicActionImpl {
               hasMore,
               isInbox: currentData?.isInbox,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               pageSize,
               total: result.total,
@@ -762,12 +770,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreTopics(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           topicDataMap: {
             ...this.#get().topicDataMap,
-            [key]: { ...this.#get().topicDataMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().topicDataMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,

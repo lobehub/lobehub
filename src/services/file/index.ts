@@ -15,11 +15,20 @@ interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
   knowledgeBaseId?: string;
   parentId?: string;
   url: string;
+  visibility?: 'private' | 'public';
 }
 
 export class FileService {
   createFile = async (
-    params: UploadFileParams & { parentId?: string },
+    params: UploadFileParams & {
+      parentId?: string;
+      /**
+       * Workspace visibility for the new file. `undefined` lets the server
+       * apply its default (top-level workspace uploads default to `'private'`,
+       * children inherit their parent document). Personal mode ignores this.
+       */
+      visibility?: 'private' | 'public';
+    },
     knowledgeBaseId?: string,
   ): Promise<{ id: string; url: string }> => {
     return lambdaClient.file.createFile.mutate({ ...params, knowledgeBaseId } as CreateFileParams);
@@ -156,6 +165,10 @@ export class FileService {
     targetWorkspaceId: string | null,
   ) => {
     return lambdaClient.file.copyEntityToWorkspace.mutate({ entityType, id, targetWorkspaceId });
+  };
+
+  publishFileToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.file.publishFileToWorkspace.mutate({ id });
   };
 }
 

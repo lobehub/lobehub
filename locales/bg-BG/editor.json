@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Умение",
   "actionTag.category.tool": "Инструмент",
   "actionTag.tooltip.agentSkill": "Зарежда пакет с умения от документите на този агент за заявката.",
+  "actionTag.tooltip.clickToView": "Щракнете, за да видите подробности",
   "actionTag.tooltip.command": "Изпълнява локална slash команда преди изпращане.",
   "actionTag.tooltip.projectSkill": "Изпраща се като команда със знак наклонена черта, така че CLI на агента да изпълни съответното умение за проект.",
   "actionTag.tooltip.skill": "Зарежда многократно използваем пакет с умения за тази заявка.",

@@ -45,7 +45,40 @@ describe('generationTopicRouter', () => {
     const result = await caller.createTopic();
 
     expect(result).toBe(mockTopicId);
-    expect(mockCreate).toHaveBeenCalledWith('', undefined);
+    expect(mockCreate).toHaveBeenCalledWith('', undefined, undefined);
+  });
+
+  it('should create a workspace topic with explicit public visibility', async () => {
+    const mockTopicId = 'topic-public';
+    const mockCreatedTopic = {
+      id: mockTopicId,
+      title: '',
+      userId: 'test-user',
+      workspaceId: 'workspace-1',
+      coverUrl: null,
+      type: 'image',
+      visibility: 'public',
+      accessedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const mockCreate = vi.fn().mockResolvedValue(mockCreatedTopic);
+    vi.mocked(GenerationTopicModel).mockImplementation(
+      () =>
+        ({
+          create: mockCreate,
+        }) as any,
+    );
+
+    const caller = generationTopicRouter.createCaller({
+      ...mockCtx,
+      workspaceId: 'workspace-1',
+    });
+    const result = await caller.createTopic({ type: 'image', visibility: 'public' } as any);
+
+    expect(result).toBe(mockTopicId);
+    expect(mockCreate).toHaveBeenCalledWith('', 'image', 'public');
   });
 
   it('should get all generation topics', async () => {

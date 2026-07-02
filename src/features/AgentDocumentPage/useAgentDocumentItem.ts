@@ -17,7 +17,7 @@ import {
  * bundle rename.
  */
 export const useAgentDocumentItem = (agentId: string | undefined, documentId: string) => {
-  const { data, mutate } = useClientDataSWR(
+  const { data, error, mutate } = useClientDataSWR(
     agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
     () => agentDocumentService.listDocuments({ agentId: agentId! }),
   );
@@ -29,5 +29,5 @@ export const useAgentDocumentItem = (agentId: string | undefined, documentId: st
       ? data?.find((d) => d.documentId === item.parentId)
       : undefined;
 
-  return { item, mutate, skillBundle };
+  return { error, item, mutate, skillBundle };
 };

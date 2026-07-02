@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Generatieonderwerp verwijderen",
   "topic.deleteConfirmDesc": "Je staat op het punt dit generatieonderwerp te verwijderen. Deze actie kan niet ongedaan worden gemaakt, wees voorzichtig.",
   "topic.empty": "Geen generatieonderwerpen",
+  "topic.privateTitle": "Privé",
   "topic.title": "Schilderthema",
-  "topic.untitled": "Standaardonderwerp"
+  "topic.untitled": "Standaardonderwerp",
+  "topic.visibility.existingLocked": "De zichtbaarheid is vastgezet voor het huidige onderwerp. Maak een nieuw onderwerp om een andere ruimte te kiezen.",
+  "topic.workspaceTitle": "Werkruimte"
 }

@@ -106,6 +106,15 @@ interface AssistantMessageDbLike {
  */
 interface OperationState {
   agentId: string | null;
+  /**
+   * CC-native session id this run is producing, captured off the stream_start
+   * event stream and stamped on every persisted message's
+   * `metadata.heteroSessionId`. Run-global and stable; a change ACROSS a topic
+   * (visible only because it's copied per-message) means CC forked a new
+   * session — the forensic signal for a lost-`--resume` "session break".
+   * Recovered on a cold replica from the current assistant's stamped metadata.
+   */
+  heteroSessionId: string | undefined;
   lastStepIndex: number;
   main: MainAgentRunState;
   operationId: string;
@@ -387,6 +396,11 @@ export class HeterogeneousPersistenceHandler {
 
     state = {
       agentId: topic?.agentId ?? null,
+      // Left undefined until the run's own stream_start reports it (or a cold
+      // replica recovers it from a stamped message). NOT seeded from
+      // topic.metadata.heteroSessionId: that holds the id we ASKED CC to resume,
+      // which differs from the actual id when a fork/new session occurred.
+      heteroSessionId: undefined,
       lastStepIndex: 0,
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
@@ -488,6 +502,13 @@ export class HeterogeneousPersistenceHandler {
     // `currentSubagentMessageId` from `metadata.subagentMessageId`.
     if (typeof snapshot.metadata.mainMessageId === 'string') {
       state.main.currentMainMessageId = snapshot.metadata.mainMessageId;
+    }
+
+    // Recover the run's CC session id from a previously-stamped message so a
+    // cold replica that never saw this run's stream_start still stamps the
+    // right session id on the messages it persists.
+    if (!state.heteroSessionId && typeof snapshot.metadata.heteroSessionId === 'string') {
+      state.heteroSessionId = snapshot.metadata.heteroSessionId;
     }
 
     if (snapshot.textSnapshotSeq > state.main.lastTextSnapshotSeq) {
@@ -732,6 +753,14 @@ export class HeterogeneousPersistenceHandler {
    * replays it against the previous reducer state.
    */
   private async reduceAndApply(state: OperationState, event: AgentStreamEvent) {
+    // Capture the CC-native session id off the stream_start stream so every
+    // message persisted below carries the session it belongs to. Stable per
+    // run; the copy is what makes a mid-topic session fork detectable.
+    if (event.type === 'stream_start') {
+      const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
+      if (typeof sid === 'string' && sid.length > 0) state.heteroSessionId = sid;
+    }
+
     const { intents, state: next } = reduceMainAgent(state.main, event, this.mainReduceCtx(state));
 
     for (const intent of intents) {
@@ -745,10 +774,31 @@ export class HeterogeneousPersistenceHandler {
     state.main = next;
   }
 
+  /**
+   * Per-message provenance stamped on every hetero-persisted row: the CC
+   * session id the turn ran under (`heteroSessionId`) and, when known, the CC
+   * `message.id` of the turn (`heteroMessageId`). A per-message copy lets a
+   * diff pinpoint the exact row where CC forked to a new session / lost
+   * `--resume` history — something the topic-level single `heteroSessionId`
+   * can never show. Returns `{}` when neither is known, so callers can spread
+   * it without minting empty metadata.
+   */
+  private heteroProvenance(
+    state: OperationState,
+    heteroMessageId?: string,
+  ): { heteroMessageId?: string; heteroSessionId?: string } {
+    const out: { heteroMessageId?: string; heteroSessionId?: string } = {};
+    if (state.heteroSessionId) out.heteroSessionId = state.heteroSessionId;
+    if (heteroMessageId) out.heteroMessageId = heteroMessageId;
+    return out;
+  }
+
   private async applyMainIntent(state: OperationState, intent: MainAgentIntent) {
     switch (intent.kind) {
       case 'createAssistant': {
-        const createMetadata: Record<string, any> = {};
+        const createMetadata: Record<string, any> = {
+          ...this.heteroProvenance(state, intent.mainMessageId),
+        };
         if (intent.signal) createMetadata.signal = intent.signal;
         // Persist the turn's CC message.id so a cold replica can recover
         // `currentMainMessageId` (via refreshMainStateFromDb) and dedupe a
@@ -807,10 +857,12 @@ export class HeterogeneousPersistenceHandler {
         // Phase 2: create new tool rows with reducer-preallocated ids.
         for (const tool of intent.tools) {
           if (!tool.isNew) continue;
+          const toolMetadata = this.heteroProvenance(state, state.main.currentMainMessageId);
           await this.deps.messageModel.create(
             {
               agentId: state.agentId ?? undefined,
               content: '',
+              ...(Object.keys(toolMetadata).length > 0 ? { metadata: toolMetadata } : {}),
               parentId: intent.assistantMessageId,
               plugin: {
                 apiName: tool.payload.apiName,
@@ -841,7 +893,13 @@ export class HeterogeneousPersistenceHandler {
       case 'recordUsage': {
         const update: Record<string, any> = {};
         if (intent.usage !== undefined) {
-          update.metadata = { ...state.main.turnMetadata, usage: intent.usage };
+          // This overwrites the row's metadata wholesale, so re-stamp the
+          // provenance the createAssistant write put there, or usage would wipe it.
+          update.metadata = {
+            ...state.main.turnMetadata,
+            ...this.heteroProvenance(state, state.main.currentMainMessageId),
+            usage: intent.usage,
+          };
         }
         if (intent.model) update.model = intent.model;
         if (intent.provider) update.provider = intent.provider;
@@ -965,17 +1023,19 @@ export class HeterogeneousPersistenceHandler {
       }
 
       case 'createMessage': {
+        const subMetadata: Record<string, any> = {
+          ...this.heteroProvenance(state, intent.subagentMessageId),
+        };
+        // Persist the turn's CC message.id so a cold replica can recover
+        // `currentSubagentMessageId` (via buildSubagentSnapshot) and avoid
+        // a spurious turn boundary that fragments one CC turn into multiple
+        // in-thread assistant rows + empty shells.
+        if (intent.subagentMessageId) subMetadata.subagentMessageId = intent.subagentMessageId;
         await this.deps.messageModel.create(
           {
             agentId: intent.agentId ?? undefined,
             content: intent.content,
-            // Persist the turn's CC message.id so a cold replica can recover
-            // `currentSubagentMessageId` (via buildSubagentSnapshot) and avoid
-            // a spurious turn boundary that fragments one CC turn into multiple
-            // in-thread assistant rows + empty shells.
-            ...(intent.subagentMessageId
-              ? { metadata: { subagentMessageId: intent.subagentMessageId } }
-              : {}),
+            ...(Object.keys(subMetadata).length > 0 ? { metadata: subMetadata } : {}),
             parentId: intent.parentId,
             role: intent.role,
             threadId: intent.threadId,
@@ -1022,10 +1082,12 @@ export class HeterogeneousPersistenceHandler {
         // register them in the global tool-message map for tool_result lookup.
         for (const t of intent.tools) {
           if (!t.isNew) continue;
+          const subToolMetadata = this.heteroProvenance(state, intent.subagentMessageId);
           await this.deps.messageModel.create(
             {
               agentId: state.agentId ?? undefined,
               content: '',
+              ...(Object.keys(subToolMetadata).length > 0 ? { metadata: subToolMetadata } : {}),
               parentId: intent.assistantMessageId,
               plugin: {
                 apiName: t.payload.apiName,
@@ -1050,7 +1112,12 @@ export class HeterogeneousPersistenceHandler {
 
       case 'recordUsage': {
         await this.deps.messageModel.update(intent.messageId, {
-          metadata: { usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the session + message
+          // provenance the createMessage write put there, or usage would wipe it.
+          metadata: {
+            ...this.heteroProvenance(state, intent.subagentMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         });

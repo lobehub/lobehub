@@ -10,7 +10,11 @@ import { z } from 'zod';
 
 import type { InterventionAnswer } from './AskUserBridge';
 import { AskUserBridge } from './AskUserBridge';
-import { ASK_USER_MCP_SERVER_NAME, ASK_USER_TOOL_NAME } from './constants';
+import {
+  ASK_USER_MCP_SERVER_NAME,
+  ASK_USER_TOOL_NAME,
+  DEFAULT_ASK_USER_TIMEOUT_MS,
+} from './constants';
 
 /**
  * Mirrors CC's built-in `AskUserQuestion` schema. CC's schema:
@@ -142,7 +146,7 @@ export class AskUserMcpServer {
   private readonly progressIntervalMs: number;
 
   constructor(private readonly options: AskUserMcpServerOptions = {}) {
-    this.pendingTimeoutMs = options.pendingTimeoutMs ?? 5 * 60 * 1000;
+    this.pendingTimeoutMs = options.pendingTimeoutMs ?? DEFAULT_ASK_USER_TIMEOUT_MS;
     this.progressIntervalMs = options.progressIntervalMs ?? 30_000;
   }
 

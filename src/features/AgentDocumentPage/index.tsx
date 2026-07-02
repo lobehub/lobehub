@@ -31,7 +31,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   const { aid } = useParams<{ aid: string }>();
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
-  const { item, mutate, skillBundle } = useAgentDocumentItem(agentId, documentId);
+  const { error: itemError, item, mutate, skillBundle } = useAgentDocumentItem(agentId, documentId);
 
   const enableFloatingChatPanel = useUserStore(
     labPreferSelectors.enableAgentDocumentFloatingChatPanel,
@@ -62,13 +62,14 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         agentDocumentId={item?.id}
         agentId={agentId}
         documentId={documentId}
+        itemError={itemError}
         title={title}
         updatedAt={item?.updatedAt}
         onBack={backToChat}
         onDeleted={backToChat}
       />
     ),
-    [agentId, backToChat, documentId, item?.id, item?.updatedAt, title],
+    [agentId, backToChat, documentId, item?.id, item?.updatedAt, itemError, title],
   );
 
   return (

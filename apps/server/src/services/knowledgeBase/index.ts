@@ -89,15 +89,27 @@ export class KnowledgeBaseSearchService {
   private fileModel: FileModel;
   private searchRepo: SearchRepo;
   private documentServiceInstance?: DocumentService;
+  private callerAgentVisibility?: 'private' | 'public' | null;
 
   private workspaceId?: string;
 
-  constructor(serverDB: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    serverDB: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.serverDB = serverDB;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
     this.chunkModel = new ChunkModel(serverDB, userId, workspaceId);
-    this.documentModel = new DocumentModel(serverDB, userId, workspaceId);
+    // Public-agent gate: `documentModel.ownership()` excludes caller-private
+    // rows, so a workspace-shared agent cannot resolve chunks back to a
+    // private document body. Chunks themselves don't yet have a visibility
+    // mirror (spec §2.3 defers that migration), so the doc-layer gate is the
+    // enforcement point today.
+    this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
     this.fileModel = new FileModel(serverDB, userId, workspaceId);
     this.searchRepo = new SearchRepo(serverDB, userId, workspaceId);
   }
@@ -107,6 +119,7 @@ export class KnowledgeBaseSearchService {
       this.serverDB,
       this.userId,
       this.workspaceId,
+      this.callerAgentVisibility,
     );
     return this.documentServiceInstance;
   }

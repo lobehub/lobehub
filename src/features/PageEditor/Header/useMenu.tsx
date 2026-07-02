@@ -1,13 +1,24 @@
 import { isDesktop } from '@lobechat/const';
 import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
-import { Clock3Icon, CopyPlus, Download, Link2, Maximize2, Trash2, UserRound } from 'lucide-react';
+import {
+  Clock3Icon,
+  CopyPlus,
+  Download,
+  Link2,
+  Maximize2,
+  Trash2,
+  UserRound,
+  UsersIcon,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { usePermission } from '@/hooks/usePermission';
@@ -48,6 +59,14 @@ export const useMenu = (): { menuItems: any[] } => {
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
   const transferMenuItems = useDocumentTransferMenuItem(documentId) as DropdownItem[] | null;
 
+  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  // Same guard as the sidebar item: workspace mode + private page + edit perm.
+  // Backend also enforces the creator + `visibility='private'` invariants.
+  const canPublish = Boolean(
+    activeWorkspaceId && pageDocument?.visibility === 'private' && canEditPage,
+  );
+
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,
     systemStatusSelectors.wideScreen(s),
@@ -67,6 +86,25 @@ export const useMenu = (): { menuItems: any[] } => {
       console.error('Failed to duplicate page:', error);
       message.error(t('pageEditor.duplicateError'));
     }
+  };
+
+  const handlePublish = () => {
+    if (!canPublish || !documentId) return;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('pageList.publishConfirm.content'),
+      okText: t('pageList.publishConfirm.ok'),
+      onOk: async () => {
+        try {
+          await publishPageToWorkspace(documentId);
+          message.success(t('pageList.publishSuccess'));
+        } catch (error) {
+          console.error('Failed to publish page:', error);
+          message.error(t('pageList.publishError'));
+        }
+      },
+      title: t('pageList.publishConfirm.title'),
+    });
   };
 
   const handleExportMarkdown = async () => {
@@ -161,6 +199,16 @@ export const useMenu = (): { menuItems: any[] } => {
         type: 'divider' as const,
       },
       ...((transferMenuItems ?? []) as DropdownItem[]),
+      ...(canPublish
+        ? [
+            {
+              icon: <Icon icon={UsersIcon} />,
+              key: 'publish-to-workspace',
+              label: t('pageList.publishToWorkspace'),
+              onClick: handlePublish,
+            } as DropdownItem,
+          ]
+        : []),
       {
         children: [
           {
@@ -207,6 +255,7 @@ export const useMenu = (): { menuItems: any[] } => {
     authorName,
     canCreatePage,
     canEditPage,
+    canPublish,
     storeApi,
     t,
     message,
@@ -216,6 +265,7 @@ export const useMenu = (): { menuItems: any[] } => {
     togglePageAgentPanel,
     showViewModeSwitch,
     handleDuplicate,
+    handlePublish,
     handleExportMarkdown,
     transferMenuItems,
   ]);

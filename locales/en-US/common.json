@@ -1,5 +1,6 @@
 {
   "about": "About",
+  "addNew": "Add new",
   "advanceSettings": "Advanced Settings",
   "agentOnboardingPromo.actionLabel": "Try it now",
   "agentOnboardingPromo.description": "Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Content policy check failed. Please revise your prompt.",
   "getDesktopApp": "Get Desktop App",
   "goToTarget": "Go to target",
+  "gotIt": "Got it",
   "historyRange": "History Range",
   "home.suggestQuestions": "Try these examples",
   "import": "Import",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Move Down",
   "navPanel.moveUp": "Move Up",
   "navPanel.pinned": "Pinned",
+  "navPanel.privateAgents": "Private",
+  "navPanel.publicAgents": "Workspace",
   "navPanel.resetDefault": "Reset to Default",
   "navPanel.searchAgent": "Search Agent...",
   "navPanel.searchRecent": "Search Recent...",

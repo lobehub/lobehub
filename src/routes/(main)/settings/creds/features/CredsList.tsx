@@ -9,6 +9,7 @@ import { LogIn } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
@@ -44,7 +45,7 @@ const CredsList: FC = () => {
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const credsApi = useCredsApi();
 
-  const { data, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
+  const { data, isLoading, error, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
@@ -92,13 +93,20 @@ const CredsList: FC = () => {
 
   return (
     <div className={styles.container}>
-      {isLoading ? (
-        <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-          <Spin />
-        </Flexbox>
-      ) : credentials.length === 0 ? (
-        <Empty className={styles.empty} description={t('creds.empty')} />
-      ) : (
+      <AsyncBoundary
+        data={data}
+        empty={<Empty className={styles.empty} description={t('creds.empty')} />}
+        error={error}
+        errorVariant={'block'}
+        isEmpty={credentials.length === 0}
+        isLoading={isLoading}
+        loading={
+          <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
+            <Spin />
+          </Flexbox>
+        }
+        onRetry={() => refetch()}
+      >
         <Flexbox gap={0}>
           {credentials.map((cred) => (
             <CredItem
@@ -113,7 +121,7 @@ const CredsList: FC = () => {
             />
           ))}
         </Flexbox>
-      )}
+      </AsyncBoundary>
     </div>
   );
 };

@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Kỹ năng",
   "actionTag.category.tool": "Công cụ",
   "actionTag.tooltip.agentSkill": "Tải một gói kỹ năng từ tài liệu của đại lý này cho yêu cầu.",
+  "actionTag.tooltip.clickToView": "Nhấn để xem chi tiết",
   "actionTag.tooltip.command": "Chạy lệnh slash phía client trước khi gửi.",
   "actionTag.tooltip.projectSkill": "Được gửi dưới dạng lệnh gạch chéo để CLI của tác nhân chạy kỹ năng dự án tương ứng.",
   "actionTag.tooltip.skill": "Tải gói kỹ năng có thể tái sử dụng cho yêu cầu này.",

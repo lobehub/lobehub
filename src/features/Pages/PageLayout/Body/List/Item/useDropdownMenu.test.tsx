@@ -11,6 +11,11 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
+const storeMock = vi.hoisted(() => ({
+  activeWorkspaceId: undefined as string | undefined,
+  document: undefined as { id: string; visibility?: 'private' | 'public' | null } | undefined,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -62,11 +67,37 @@ vi.mock('@/store/electron', () => ({
 }));
 
 vi.mock('@/store/page', () => ({
-  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      duplicatePage: vi.fn(),
-      removePage: vi.fn(),
-    }),
+  pageSelectors: {
+    getDocumentById: (_id: string) => (_s: unknown) => storeMock.document,
+    getFilteredDocuments: (_s: unknown) => (storeMock.document ? [storeMock.document] : []),
+  },
+  usePageStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        duplicatePage: vi.fn(),
+        publishPageToWorkspace: vi.fn(),
+        removePage: vi.fn(),
+      }),
+    {
+      getState: () => ({
+        duplicatePage: vi.fn(),
+        publishPageToWorkspace: vi.fn(),
+        removePage: vi.fn(),
+      }),
+    },
+  ),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => storeMock.activeWorkspaceId,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => undefined,
+}));
+
+vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
+  useDocumentTransferMenuItem: () => [],
 }));
 
 const getMenuItem = (
@@ -78,6 +109,8 @@ describe('Page list item dropdown menu', () => {
   beforeEach(() => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
+    storeMock.activeWorkspaceId = undefined;
+    storeMock.document = undefined;
   });
 
   it('disables page management actions for workspace viewers', () => {
@@ -92,5 +125,54 @@ describe('Page list item dropdown menu', () => {
     expect(getMenuItem(items, 'rename')).toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'duplicate')).toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'delete')).toMatchObject({ disabled: true });
+  });
+
+  it('exposes "publish to workspace" for private pages in workspace mode', () => {
+    storeMock.activeWorkspaceId = 'ws-1';
+    storeMock.document = { id: 'page-1', visibility: 'private' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'publishToWorkspace')).toBeTruthy();
+  });
+
+  it('hides "publish to workspace" for workspace-visible pages', () => {
+    storeMock.activeWorkspaceId = 'ws-1';
+    storeMock.document = { id: 'page-1', visibility: 'public' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'publishToWorkspace')).toBeUndefined();
+  });
+
+  it('hides "publish to workspace" in personal mode even for private pages', () => {
+    storeMock.activeWorkspaceId = undefined;
+    storeMock.document = { id: 'page-1', visibility: 'private' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'publishToWorkspace')).toBeUndefined();
+  });
+
+  it('hides "publish to workspace" for viewers without edit permission', () => {
+    storeMock.activeWorkspaceId = 'ws-1';
+    storeMock.document = { id: 'page-1', visibility: 'private' };
+    permissionMock.edit_own_content = false;
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'publishToWorkspace')).toBeUndefined();
   });
 });

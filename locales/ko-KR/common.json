@@ -1,5 +1,6 @@
 {
   "about": "정보",
+  "addNew": "새로 추가",
   "advanceSettings": "고급 설정",
   "agentOnboardingPromo.actionLabel": "지금 사용해 보기",
   "agentOnboardingPromo.description": "Lobe AI와 짧게 대화하며 에이전트 팀을 설정하세요. 기존 에이전트는 그대로 유지됩니다.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "콘텐츠 정책 확인에 실패했습니다. 프롬프트를 수정해주세요.",
   "getDesktopApp": "데스크톱 앱 받기",
   "goToTarget": "대상으로 이동",
+  "gotIt": "알겠습니다",
   "historyRange": "기록 범위",
   "home.suggestQuestions": "이런 예시를 시도해 보세요",
   "import": "가져오기",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "아래로 이동",
   "navPanel.moveUp": "위로 이동",
   "navPanel.pinned": "고정됨",
+  "navPanel.privateAgents": "개인",
+  "navPanel.publicAgents": "작업 공간",
   "navPanel.resetDefault": "기본값으로 재설정",
   "navPanel.searchAgent": "도우미 검색…",
   "navPanel.searchRecent": "최근 검색...",

@@ -168,6 +168,8 @@
   "sidebar.expandAll": "모든 그룹 확장",
   "sidebar.title": "주제",
   "taskManager.agent": "작업 에이전트",
+  "taskManager.agentSelector.privateGroup": "개인",
+  "taskManager.agentSelector.workspaceGroup": "작업 공간",
   "taskManager.welcome": "작업에 대해 물어보세요",
   "temp": "임시",
   "title": "주제"

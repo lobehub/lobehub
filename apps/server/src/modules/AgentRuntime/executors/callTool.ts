@@ -13,6 +13,7 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 
+import { AgentModel } from '@/database/models/agent';
 import {
   type DeviceAccessReason,
   isDeviceToolIdentifier,
@@ -188,8 +189,7 @@ export const callTool =
           // true here; recording the policy reason inline lets an operator
           // distinguish first-party vs bot-owner runs without joining logs.
           const policy = state.metadata?.deviceAccessPolicy as
-            | { canUseDevice: boolean; reason: DeviceAccessReason }
-            | undefined;
+            { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
           logDeviceToolAudit({
             apiName: chatToolPayload.apiName,
             botContext: state.metadata?.botContext,
@@ -235,19 +235,39 @@ export const callTool =
             args: parsedArgs,
             manifest: effectiveManifestMap[chatToolPayload.identifier],
           });
+          // Resolve caller-agent visibility once so tool runtimes can inherit
+          // it onto side-effects (private-agent output → private docs) and gate
+          // reads (public agent must not touch caller's private docs). Mirrors
+          // the task side's `assertAgentVisibilityCompat` invariant.
+          const toolCallAgentId = state.metadata?.agentId;
+          const toolCallWorkspaceId = state.metadata?.workspaceId ?? ctx.workspaceId;
+          let agentVisibility: 'private' | 'public' | null = null;
+          if (toolCallAgentId && ctx.serverDB && ctx.userId) {
+            try {
+              const agentModel = new AgentModel(ctx.serverDB, ctx.userId, toolCallWorkspaceId);
+              agentVisibility = await agentModel.getAgentVisibility(toolCallAgentId);
+            } catch (error) {
+              // Non-fatal: if we can't resolve visibility, fall back to null so
+              // downstream defaults kick in (existing schema fallback for
+              // writes; unchanged ownership for reads).
+              log(`[${operationLogId}] Failed to resolve agent visibility: %O`, error);
+            }
+          }
+
           // Execute tool using ToolExecutionService
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
           execution = await executeToolWithRetry(
             () =>
               toolExecutionService.executeTool(chatToolPayload, {
                 activeDeviceId: state.metadata?.activeDeviceId,
-                agentId: state.metadata?.agentId,
+                agentId: toolCallAgentId,
                 agentMember: buildServerAgentMemberRunner(
                   ctx,
                   state,
                   chatToolPayload,
                   payload.parentMessageId,
                 ),
+                agentVisibility,
                 // Assistant message owning this tool call (≠ source user message).
                 assistantMessageId: payload.parentMessageId,
                 documentId: state.metadata?.documentId,
@@ -288,7 +308,7 @@ export const callTool =
                 // creation; resume-safe via computeDeviceContext (recovers it
                 // from the prior tool message's pluginState.metadata).
                 workingDirectory: state.metadata?.deviceSystemInfo?.workingDirectory,
-                workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
+                workspaceId: toolCallWorkspaceId,
               }),
             {
               isInterrupted: () => isOperationInterrupted(ctx),
@@ -474,8 +494,7 @@ export const callTool =
 
         // Persist ToolsActivator discovery results to state.activatedStepTools
         const discoveredTools = executionResult.state?.activatedTools as
-          | Array<{ identifier: string }>
-          | undefined;
+          Array<{ identifier: string }> | undefined;
         if (discoveredTools?.length) {
           const existingIds = new Set(
             (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),

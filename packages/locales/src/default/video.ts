@@ -31,6 +31,10 @@ export default {
   'topic.deleteConfirm': 'Delete Video Topic',
   'topic.deleteConfirmDesc':
     'You are about to delete this video topic. This action cannot be undone.',
+  'topic.privateTitle': 'Private',
   'topic.title': 'Video Topics',
   'topic.untitled': 'Default Topic',
+  'topic.visibility.existingLocked':
+    'Visibility is fixed for the current topic. Create a new topic to choose a different space.',
+  'topic.workspaceTitle': 'Workspace',
 } as const;

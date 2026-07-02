@@ -15,6 +15,7 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/server';
 import type { LobeChatDatabase } from '@/database/type';
+import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
 import { isAgentSignalEnabledForUser } from './featureGate';
@@ -145,6 +146,18 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
   context: Pick<AgentSignalExecutionContext, 'agentId' | 'userId' | 'workspaceId'>,
 ): Promise<QueuedAgentSignalEmissionResult> => {
   const db = await getServerDB();
+
+  // Reject signals targeting an agent the caller can't use. Source events from
+  // user-facing TRPC routes (`emitSourceEvent` / `triggerSourceEvent`) accept a
+  // free-form `agentId`; without this gate a workspace member could enqueue
+  // events against another user's private agent. Server-internal callers always
+  // pass an agentId the user owns, so the check is a no-op for them.
+  if (context.agentId) {
+    await assertAgentUsableBy(db, context.agentId, {
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    });
+  }
 
   if (!(await isAgentSignalEnabledForUser(db, context.userId))) {
     return {

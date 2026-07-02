@@ -168,6 +168,8 @@
   "sidebar.expandAll": "توسيع جميع المجموعات",
   "sidebar.title": "المواضيع",
   "taskManager.agent": "وكيل المهام",
+  "taskManager.agentSelector.privateGroup": "خاص",
+  "taskManager.agentSelector.workspaceGroup": "مساحة العمل",
   "taskManager.welcome": "اسألني عن مهامك",
   "temp": "مؤقت",
   "title": "الموضوع"

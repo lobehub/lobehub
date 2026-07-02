@@ -17,6 +17,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
@@ -377,7 +378,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     if (error) {
       return (
         <Center flex={1} paddingBlock={24}>
-          <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>
+          <AsyncError
+            error={error}
+            variant={'block'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
         </Center>
       );
     }

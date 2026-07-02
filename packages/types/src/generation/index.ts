@@ -6,6 +6,7 @@ export interface ImageGenerationTopic {
   id: string;
   title?: string | null;
   updatedAt: Date;
+  visibility?: 'private' | 'public' | null;
 }
 
 export interface BaseGenerationAsset {

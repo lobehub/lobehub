@@ -11,11 +11,14 @@ import type { AskUserQuestionItem } from '../../../types';
 export const FREEFORM_PAYLOAD_KEY = '__freeform__';
 
 /**
- * Server-side bridge timeout (matches `AskUserMcpServer.pendingTimeoutMs`).
- * Not strictly synchronized — server is authoritative — but keeps the on-screen
- * countdown close to reality without plumbing a deadline through every layer.
+ * Server-side bridge timeout — mirrors `DEFAULT_ASK_USER_TIMEOUT_MS` in
+ * `@lobechat/heterogeneous-agents` `askUser/constants.ts` (the authoritative
+ * clock). Kept as a local literal because this package has no dep on that one;
+ * **keep the two in sync**. Not strictly synchronized at runtime — server is
+ * authoritative — but keeps the on-screen countdown close to reality without
+ * plumbing a deadline through every layer.
  */
-export const COUNTDOWN_MS = 5 * 60 * 1000;
+export const COUNTDOWN_MS = 10 * 60 * 1000;
 
 /** Key under tool message `pluginState` where the in-progress draft lives. */
 export const DRAFT_PLUGIN_STATE_KEY = 'askUserDraft';

@@ -93,7 +93,11 @@ const AgentDocumentRightPanel = memo(() => {
   // Deduped against AgentDocumentsGroup's own fetch (same SWR key). When the
   // agent has no plain documents (e.g. only skills) we default to the Skills
   // tab so the panel doesn't open on an empty Documents view.
-  const { data: documentList = [], isLoading: isDocumentListLoading } = useClientDataSWR(
+  const {
+    data: documentList = [],
+    error: documentListError,
+    isLoading: isDocumentListLoading,
+  } = useClientDataSWR(
     activeAgentId ? agentDocumentSWRKeys.documentsList(activeAgentId) : null,
     () => agentDocumentService.listDocuments({ agentId: activeAgentId! }),
   );
@@ -117,7 +121,9 @@ const AgentDocumentRightPanel = memo(() => {
   );
   const activeTab: AgentDocumentPanelTab =
     pickedTab ??
-    (isSkillEntry || (!isDocumentListLoading && !hasDocuments) ? 'skills' : 'documents');
+    (isSkillEntry || (!documentListError && !isDocumentListLoading && !hasDocuments)
+      ? 'skills'
+      : 'documents');
 
   return (
     <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>

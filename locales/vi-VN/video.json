@@ -29,6 +29,9 @@
   "topic.createNew": "Tạo Chủ Đề Mới",
   "topic.deleteConfirm": "Xóa chủ đề video",
   "topic.deleteConfirmDesc": "Bạn sắp xóa chủ đề video này. Hành động này không thể hoàn tác.",
+  "topic.privateTitle": "Riêng tư",
   "topic.title": "Chủ đề video",
-  "topic.untitled": "Chủ đề mặc định"
+  "topic.untitled": "Chủ đề mặc định",
+  "topic.visibility.existingLocked": "Chế độ hiển thị đã được cố định cho chủ đề hiện tại. Tạo một chủ đề mới để chọn không gian khác.",
+  "topic.workspaceTitle": "Không gian làm việc"
 }

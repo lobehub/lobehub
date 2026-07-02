@@ -1,12 +1,14 @@
 import type { StateCreator } from 'zustand/vanilla';
 
 import type { ResourceManagerMode } from '@/features/ResourceManager';
+import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import type { FilesTabs, SortType } from '@/types/files';
 
-import type { SelectAllState, State, ViewMode } from './initialState';
+import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
 import { initialState } from './initialState';
+import { readPersistedResourceMode, writePersistedResourceMode } from './modePersistence';
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
@@ -147,6 +149,45 @@ export class ResourceManagerStoreActionImpl {
 
   setLibraryId = (libraryId?: string): void => {
     this.#set({ libraryId });
+  };
+
+  setListVisibility = (
+    listVisibility: ResourceListVisibilityFilter,
+    workspaceId?: string,
+  ): void => {
+    // Skip the write path when the mode didn't actually change — clicking the
+    // already-active tab shouldn't invalidate the list.
+    if (this.#get().listVisibility === listVisibility) return;
+
+    // Reset selection when the visible pool changes so a leftover "select all"
+    // does not accidentally target rows that are no longer on screen.
+    this.#set({ listVisibility, selectAllState: 'none', selectedFileIds: [] });
+
+    // Drop the previous mode's rows from the file store immediately. Without
+    // this, `mergeServerResourcesWithOptimistic` would keep showing them until
+    // the SWR fetch for the new mode resolves — the "space switch" feels
+    // broken because the list looks unchanged for a beat. Clearing gives the
+    // Explorer a clean slate so its skeleton (see `isNavigating`) renders
+    // right away and the new items slot in when they arrive.
+    useFileStore.getState().clearCurrentQueryResources();
+
+    // Persist per workspace so the next visit picks up the same space. Personal
+    // mode (no workspaceId) intentionally skips the write — the toggle isn't
+    // rendered there and there's no scope to key the record against.
+    writePersistedResourceMode(workspaceId, listVisibility);
+  };
+
+  /**
+   * Reload `listVisibility` from localStorage for the given workspace. Called
+   * on Sidebar mount / whenever the active workspace changes so the "space"
+   * you left off in comes back. Falls back to the initialState default when no
+   * record exists.
+   */
+  hydrateListVisibility = (workspaceId: string | undefined): void => {
+    const persisted = readPersistedResourceMode(workspaceId);
+    const next = persisted ?? initialState.listVisibility;
+    if (this.#get().listVisibility === next) return;
+    this.#set({ listVisibility: next, selectAllState: 'none', selectedFileIds: [] });
   };
 
   setMode = (mode: ResourceManagerMode): void => {

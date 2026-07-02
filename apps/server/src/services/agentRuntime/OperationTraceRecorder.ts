@@ -347,8 +347,8 @@ export class OperationTraceRecorder {
       toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
       toolsCalling: presentation.toolsCalling,
       toolsResult: presentation.toolsResult,
-      totalCost: presentation.totalCost,
-      totalTokens: presentation.totalTokens,
+      totalCost: presentation.stepCost ?? 0,
+      totalTokens: presentation.stepTotalTokens ?? 0,
     };
   }
 }

@@ -9,6 +9,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import { createBatchResumeModal } from './features/BatchResumeModal';
@@ -26,10 +27,8 @@ const POLLING_INTERVAL = 3000;
 const styles = createStaticStyles(({ css }) => ({
   panel: css`
     overflow: hidden;
-
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgContainer};
   `,
   panelBody: css`
@@ -79,18 +78,16 @@ const RunDetail = memo(() => {
 
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
 
-  useFetchRunDetail(runId!, pollingConfig);
+  const { error, isLoading, mutate } = useFetchRunDetail(runId!, pollingConfig);
   useFetchRunResults(runId!, pollingConfig);
-
-  if (!runDetail) return null;
 
   const hasResults = !!runResults?.results?.length;
   const isFinished =
-    runDetail.status === 'completed' ||
-    runDetail.status === 'failed' ||
-    runDetail.status === 'aborted';
+    runDetail?.status === 'completed' ||
+    runDetail?.status === 'failed' ||
+    runDetail?.status === 'aborted';
 
-  const metrics = runDetail.metrics;
+  const metrics = runDetail?.metrics;
   const completedCases = metrics?.completedCases ?? 0;
   const totalCases = metrics?.totalCases ?? 0;
   const progress = totalCases > 0 ? Math.round((completedCases / totalCases) * 100) : 0;
@@ -98,131 +95,145 @@ const RunDetail = memo(() => {
   const errorCount = (metrics?.errorCases ?? 0) + (metrics?.timeoutCases ?? 0);
   const canRetry = isFinished && errorCount > 0;
 
-  const k = runDetail.config?.k ?? 1;
+  const k = runDetail?.config?.k ?? 1;
   const canBatchResume = (runResults?.results ?? []).some(
     (result: any) => !!getResumeTarget(result, k),
   );
 
+  // Skeleton → error → (resolved-null) blank, instead of a bare `return null`
+  // that flashed blank on the happy path and stayed permanently blank on a
+  // failed fetch (ux Read §1.1). A page-level failure gets a reason + Reload.
   return (
-    <Flexbox gap={24} padding={24} style={{ margin: '0 auto', maxWidth: 1440, width: '100%' }}>
-      <RunHeader
-        benchmarkId={benchmarkId!}
-        hideStart={runDetail.status === 'idle'}
-        run={runDetail}
-      />
+    <AsyncBoundary
+      data={runDetail}
+      error={error}
+      errorVariant={'page'}
+      isEmpty={!runDetail}
+      isLoading={isLoading}
+      onRetry={() => mutate()}
+    >
+      {runDetail && (
+        <Flexbox gap={24} padding={24} style={{ margin: '0 auto', maxWidth: 1440, width: '100%' }}>
+          <RunHeader
+            benchmarkId={benchmarkId!}
+            hideStart={runDetail.status === 'idle'}
+            run={runDetail}
+          />
 
-      {/* Report panel (when finished) or state panel (when not finished) */}
-      {isFinished ? (
-        <section className={styles.panel}>
-          <header className={styles.panelHeader}>
-            <span className={styles.panelLabel}>{t('run.detail.report')}</span>
-          </header>
-          <div className={styles.panelBody}>
-            <StatsCards metrics={runDetail.metrics ?? undefined} />
-            {hasResults && (
-              <BenchmarkCharts
+          {/* Report panel (when finished) or state panel (when not finished) */}
+          {isFinished ? (
+            <section className={styles.panel}>
+              <header className={styles.panelHeader}>
+                <span className={styles.panelLabel}>{t('run.detail.report')}</span>
+              </header>
+              <div className={styles.panelBody}>
+                <StatsCards metrics={runDetail.metrics ?? undefined} />
+                {hasResults && (
+                  <BenchmarkCharts
+                    benchmarkId={benchmarkId!}
+                    results={runResults.results}
+                    runId={runId!}
+                  />
+                )}
+              </div>
+            </section>
+          ) : (
+            <section className={styles.panel}>
+              <header className={styles.panelHeader}>
+                <span className={styles.panelLabel}>{t('run.detail.report')}</span>
+              </header>
+              <div className={styles.stateBody}>
+                {runDetail.status === 'running' ? (
+                  <RunningState />
+                ) : runDetail.status === 'pending' ? (
+                  <PendingState hint={t('run.pending.hint')} />
+                ) : runDetail.status === 'external' ? (
+                  <PendingState hint={t('run.external.hint')} />
+                ) : (
+                  <IdleState run={runDetail} />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Case Results (always shown when results exist) */}
+          {hasResults && (
+            <section className={styles.panel}>
+              <header className={styles.panelHeader}>
+                <span className={styles.panelLabel}>{t('run.detail.caseResults')}</span>
+                {(showProgress || canRetry || canBatchResume) && (
+                  <Flexbox horizontal align="center" gap={8}>
+                    {showProgress && (
+                      <>
+                        <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
+                          {completedCases}/{totalCases} {t('run.detail.progressCases')}
+                        </Text>
+                        <Progress
+                          percent={progress}
+                          showInfo={false}
+                          size="small"
+                          status={isActive ? 'active' : undefined}
+                          style={{ margin: 0, width: 120 }}
+                        />
+                        <Text fontSize={12} type={'secondary'}>
+                          {progress}%
+                        </Text>
+                      </>
+                    )}
+                    {canBatchResume && (
+                      <Button
+                        icon={<Play size={14} />}
+                        size="small"
+                        onClick={() =>
+                          createBatchResumeModal({
+                            onConfirm: (targets) => batchResumeRunCases(runId!, targets),
+                            runId: runId!,
+                          })
+                        }
+                      >
+                        {t('run.actions.batchResume')}
+                      </Button>
+                    )}
+                    {canRetry && (
+                      <Button
+                        icon={<RotateCcw size={14} />}
+                        loading={retrying}
+                        size="small"
+                        onClick={() => {
+                          confirmModal({
+                            content: t('run.actions.retryErrors.confirm'),
+                            onOk: async () => {
+                              setRetrying(true);
+                              try {
+                                await retryRunErrors(runId!);
+                              } finally {
+                                setRetrying(false);
+                              }
+                            },
+                            title: t('run.actions.retryErrors'),
+                          });
+                        }}
+                      >
+                        {t('run.actions.retryErrors')}
+                      </Button>
+                    )}
+                  </Flexbox>
+                )}
+              </header>
+              <CaseResultsTable
                 benchmarkId={benchmarkId!}
+                k={k}
                 results={runResults.results}
                 runId={runId!}
+                runStatus={runDetail.status}
+                onResumeCase={(testCaseId, threadId) => resumeRunCase(runId!, testCaseId, threadId)}
+                onRetryCase={(testCaseId) => retryRunCase(runId!, testCaseId)}
               />
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className={styles.panel}>
-          <header className={styles.panelHeader}>
-            <span className={styles.panelLabel}>{t('run.detail.report')}</span>
-          </header>
-          <div className={styles.stateBody}>
-            {runDetail.status === 'running' ? (
-              <RunningState />
-            ) : runDetail.status === 'pending' ? (
-              <PendingState hint={t('run.pending.hint')} />
-            ) : runDetail.status === 'external' ? (
-              <PendingState hint={t('run.external.hint')} />
-            ) : (
-              <IdleState run={runDetail} />
-            )}
-          </div>
-        </section>
+            </section>
+          )}
+        </Flexbox>
       )}
-
-      {/* Case Results (always shown when results exist) */}
-      {hasResults && (
-        <section className={styles.panel}>
-          <header className={styles.panelHeader}>
-            <span className={styles.panelLabel}>{t('run.detail.caseResults')}</span>
-            {(showProgress || canRetry || canBatchResume) && (
-              <Flexbox horizontal align="center" gap={8}>
-                {showProgress && (
-                  <>
-                    <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
-                      {completedCases}/{totalCases} {t('run.detail.progressCases')}
-                    </Text>
-                    <Progress
-                      percent={progress}
-                      showInfo={false}
-                      size="small"
-                      status={isActive ? 'active' : undefined}
-                      style={{ margin: 0, width: 120 }}
-                    />
-                    <Text fontSize={12} type={'secondary'}>
-                      {progress}%
-                    </Text>
-                  </>
-                )}
-                {canBatchResume && (
-                  <Button
-                    icon={<Play size={14} />}
-                    size="small"
-                    onClick={() =>
-                      createBatchResumeModal({
-                        onConfirm: (targets) => batchResumeRunCases(runId!, targets),
-                        runId: runId!,
-                      })
-                    }
-                  >
-                    {t('run.actions.batchResume')}
-                  </Button>
-                )}
-                {canRetry && (
-                  <Button
-                    icon={<RotateCcw size={14} />}
-                    loading={retrying}
-                    size="small"
-                    onClick={() => {
-                      confirmModal({
-                        content: t('run.actions.retryErrors.confirm'),
-                        onOk: async () => {
-                          setRetrying(true);
-                          try {
-                            await retryRunErrors(runId!);
-                          } finally {
-                            setRetrying(false);
-                          }
-                        },
-                        title: t('run.actions.retryErrors'),
-                      });
-                    }}
-                  >
-                    {t('run.actions.retryErrors')}
-                  </Button>
-                )}
-              </Flexbox>
-            )}
-          </header>
-          <CaseResultsTable
-            benchmarkId={benchmarkId!}
-            k={k}
-            results={runResults.results}
-            runId={runId!}
-            runStatus={runDetail.status}
-            onResumeCase={(testCaseId, threadId) => resumeRunCase(runId!, testCaseId, threadId)}
-            onRetryCase={(testCaseId) => retryRunCase(runId!, testCaseId)}
-          />
-        </section>
-      )}
-    </Flexbox>
+    </AsyncBoundary>
   );
 });
 

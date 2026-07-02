@@ -175,6 +175,8 @@ export default {
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',
   'taskManager.agent': 'Task Agent',
+  'taskManager.agentSelector.privateGroup': 'Private',
+  'taskManager.agentSelector.workspaceGroup': 'Workspace',
   'taskManager.welcome': 'Ask me about your tasks',
   'temp': 'Temporary',
   'title': 'Topic',

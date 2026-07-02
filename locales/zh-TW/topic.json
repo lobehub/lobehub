@@ -168,6 +168,8 @@
   "sidebar.expandAll": "展開所有群組",
   "sidebar.title": "主題",
   "taskManager.agent": "任務代理",
+  "taskManager.agentSelector.privateGroup": "私人",
+  "taskManager.agentSelector.workspaceGroup": "工作區",
   "taskManager.welcome": "可以詢問我有關你的待辦事項",
   "temp": "臨時",
   "title": "話題"

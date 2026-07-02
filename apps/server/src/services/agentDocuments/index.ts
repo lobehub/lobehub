@@ -118,10 +118,13 @@ const toAgentDocumentContextPayload = (
   content: doc.content,
   contentCharCount: doc.contentCharCount,
   description: doc.description,
+  documentId: doc.documentId,
   filename: doc.filename,
+  fileType: doc.fileType,
   id: doc.id,
   isFolder: doc.isFolder,
   loadRules: doc.loadRules,
+  parentId: doc.parentId,
   policy: doc.policy,
   policyLoad: doc.policyLoad,
   policyLoadFormat: doc.policyLoadFormat,
@@ -141,9 +144,17 @@ export class AgentDocumentsService {
   private documentService: DocumentService;
   private topicDocumentModel: TopicDocumentModel;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
-    this.documentService = new DocumentService(db, userId, workspaceId);
+    // Public-agent gate flows through DocumentService → DocumentModel so
+    // agentDocuments list / attach / read cannot see the caller's own
+    // private documents when the invoking agent itself is workspace-public.
+    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
   }
 
@@ -629,11 +640,12 @@ export class AgentDocumentsService {
   async listDocuments(
     agentId: string,
     sourceType?: AgentDocumentListSourceType,
-    options?: { includeArchivedToolResults?: boolean },
+    options?: { includeArchivedToolResults?: boolean; parentId?: string },
   ) {
-    const docs = sourceType
-      ? await this.agentDocumentModel.listByAgent(agentId, { sourceType })
-      : await this.agentDocumentModel.listByAgent(agentId);
+    const docs = await this.agentDocumentModel.listByAgent(agentId, {
+      parentId: options?.parentId,
+      sourceType,
+    });
 
     return options?.includeArchivedToolResults ? docs : excludeArchivedToolResults(docs);
   }

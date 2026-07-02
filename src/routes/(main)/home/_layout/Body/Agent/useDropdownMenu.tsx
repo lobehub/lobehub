@@ -4,6 +4,7 @@ import { ArrowDownIcon, ArrowUpIcon, Hash, LucideCheck, SlidersHorizontalIcon } 
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -20,12 +21,13 @@ export const useAgentActionsDropdownMenu = ({
 }: AgentActionsDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation('common');
 
-  const [agentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.agentPageSize(s),
-    systemStatusSelectors.sidebarItems(s),
-    systemStatusSelectors.hiddenSidebarSections(s),
-    s.updateSystemStatus,
-  ]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
+  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
+  const hiddenSections = useGlobalStore(
+    systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
+  );
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('agent');

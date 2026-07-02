@@ -31,7 +31,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
-    const service = new AgentDocumentsService(db, userId, context.workspaceId);
+    const service = new AgentDocumentsService(
+      db,
+      userId,
+      context.workspaceId,
+      context.agentVisibility,
+    );
     const { taskId } = context;
     let workspaceSlugPromise: Promise<string | undefined> | undefined;
     const emitDocumentOutcome = async (input: {
@@ -183,11 +188,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
             ),
           ),
-        listDocuments: async ({ agentId, sourceType }) => {
+        listDocuments: async ({ agentId, parentId, sourceType }) => {
           // Agents discover archived tool results via this path (see
           // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
           const docs = await service.listDocuments(agentId, sourceType, {
             includeArchivedToolResults: true,
+            parentId,
           });
           return docs.map((d) => ({
             documentId: d.documentId,
@@ -196,11 +202,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             title: d.title,
           }));
         },
-        listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
+        listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
           const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
             includeArchivedToolResults: true,
           });
-          return docs.map((d) => ({
+          // Topic listing joins through topic associations rather than the agent
+          // folder tree, so the folder filter is applied in-memory here.
+          const filtered = parentId ? docs.filter((d) => d.parentId === parentId) : docs;
+          return filtered.map((d) => ({
             documentId: d.documentId,
             filename: d.filename,
             id: d.id,

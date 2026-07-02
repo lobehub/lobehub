@@ -1895,4 +1895,82 @@ describe('FileModel', () => {
       ).rejects.toThrow('File not found');
     });
   });
+
+  describe('publishToWorkspace', () => {
+    const wsId = 'publish-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Publish WS',
+        slug: 'publish-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own private file to public', async () => {
+      await serverDB.insert(files).values({
+        id: 'priv-file-1',
+        name: 'priv.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-priv',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('priv-file-1');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'priv-file-1'),
+      });
+      expect(file?.visibility).toBe('public');
+    });
+
+    it('should leave already-public files untouched (no-op when the row is not private)', async () => {
+      await serverDB.insert(files).values({
+        id: 'pub-file-1',
+        name: 'pub.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-pub',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+
+      await wsFileModel.publishToWorkspace('pub-file-1');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+      expect(after?.visibility).toBe('public');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to publish another member’s private file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-priv-file',
+        name: 'others.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-others',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('others-priv-file');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-priv-file'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+  });
 });

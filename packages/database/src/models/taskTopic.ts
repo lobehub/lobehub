@@ -21,7 +21,24 @@ export class TaskTopicModel {
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, taskTopics);
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: taskTopics.userId,
+        visibility: taskTopics.visibility,
+        workspaceId: taskTopics.workspaceId,
+      },
+    );
+
+  /** Look up the parent task's visibility so newly added topics mirror it. */
+  private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
+    const row = await this.db
+      .select({ visibility: tasks.visibility })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    return row[0]?.visibility ?? 'public';
+  }
 
   /**
    * Mirror a terminal taskTopic transition onto the underlying topic record:
@@ -48,6 +65,7 @@ export class TaskTopicModel {
     topicId: string,
     params: { operationId?: string; seq: number },
   ): Promise<void> {
+    const visibility = await this.getTaskVisibility(taskId);
     await this.db
       .insert(taskTopics)
       .values({
@@ -56,6 +74,7 @@ export class TaskTopicModel {
         taskId,
         topicId,
         userId: this.userId,
+        visibility,
         workspaceId: this.workspaceId ?? null,
       })
       .onConflictDoNothing();

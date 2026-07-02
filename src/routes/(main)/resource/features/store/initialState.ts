@@ -4,6 +4,21 @@ import { FilesTabs, SortType } from '@/types/files';
 export type ViewMode = 'list' | 'masonry';
 export type SelectAllState = 'all' | 'loaded' | 'none';
 
+/**
+ * Resources Sidebar mode — the "space" the user is currently in inside a
+ * team workspace:
+ *
+ * - `'private'` — my drawer: list only shows the caller's own private rows;
+ *   new uploads land as `visibility: 'private'`.
+ * - `'workspace'` — team share: list only shows public rows; new uploads
+ *   land as `visibility: 'public'`.
+ *
+ * Personal mode (no workspaceId) ignores this — the toggle isn't rendered
+ * and uploads carry no visibility hint (the server treats them as owner-only
+ * anyway).
+ */
+export type ResourceListVisibilityFilter = 'private' | 'workspace';
+
 export interface State {
   /**
    * Current file category filter
@@ -17,6 +32,12 @@ export interface State {
    * Current library ID
    */
   libraryId?: string;
+  /**
+   * Workspace mode visibility filter for the top-level resource list.
+   * Only surfaces the filter chip in Explorer's header when a workspace is
+   * active and the user has not drilled into a library or folder.
+   */
+  listVisibility: ResourceListVisibilityFilter;
   /**
    * View mode for displaying resources
    */
@@ -56,6 +77,7 @@ export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
   libraryId: undefined,
+  listVisibility: 'workspace',
   mode: 'explorer',
   pendingRenameItemId: null,
   searchQuery: null,

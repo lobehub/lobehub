@@ -435,6 +435,32 @@ export const executeHeterogeneousAgent = async (
   let resumeFallbackTriggered = false;
 
   /**
+   * CC-native session id this run is producing, captured off the stream_start
+   * event stream and stamped on every message created below. Mirrors the server
+   * handler's `OperationState.heteroSessionId`: `topic.metadata.heteroSessionId`
+   * only keeps the single latest value (written at run end), so a per-message
+   * copy is what lets a diff pinpoint the exact row where CC forked to a new
+   * session — the forensic signal for a lost-`--resume` "session break".
+   */
+  let heteroSessionId: string | undefined;
+
+  /**
+   * Per-message provenance stamped on every row this run persists: the CC
+   * session id (`heteroSessionId`) and, when known, the turn's CC `message.id`
+   * (`heteroMessageId`). Returns `{}` when neither is known so callers can
+   * spread it without minting empty metadata. Mirrors the server handler's
+   * `heteroProvenance`.
+   */
+  const heteroProvenance = (
+    heteroMessageId?: string,
+  ): { heteroMessageId?: string; heteroSessionId?: string } => {
+    const out: { heteroMessageId?: string; heteroSessionId?: string } = {};
+    if (heteroSessionId) out.heteroSessionId = heteroSessionId;
+    if (heteroMessageId) out.heteroMessageId = heteroMessageId;
+    return out;
+  };
+
+  /**
    * Global `tool_use.id → tool message DB id` lookup, shared across the
    * main agent and every subagent run. `tool_result` events identify
    * the target row by `toolCallId` alone (no scope context needed), so
@@ -668,10 +694,12 @@ export const executeHeterogeneousAgent = async (
 
       case 'createMessage': {
         const t = subagentThreads.get(intent.threadId);
+        const subMetadata = heteroProvenance(intent.subagentMessageId);
         const msg = {
           agentId: intent.agentId ?? undefined,
           content: intent.content,
           id: intent.messageId,
+          ...(Object.keys(subMetadata).length > 0 ? { metadata: subMetadata } : {}),
           parentId: intent.parentId,
           role: intent.role,
           threadId: intent.threadId,
@@ -757,10 +785,12 @@ export const executeHeterogeneousAgent = async (
         // register the global lookup, and seed the thread bucket bubble.
         for (const x of intent.tools) {
           if (!x.isNew) continue;
+          const subToolMetadata = heteroProvenance(intent.subagentMessageId);
           const toolMsg = {
             agentId: context.agentId,
             content: '',
             id: x.toolMessageId,
+            ...(Object.keys(subToolMetadata).length > 0 ? { metadata: subToolMetadata } : {}),
             parentId: intent.assistantMessageId,
             plugin: {
               apiName: x.payload.apiName,
@@ -822,7 +852,12 @@ export const executeHeterogeneousAgent = async (
       case 'recordUsage': {
         const t = subagentThreads.get(intent.threadId);
         const update = {
-          metadata: { usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the session + message
+          // provenance the createMessage write put there, or usage would wipe it.
+          metadata: {
+            ...heteroProvenance(intent.subagentMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };
@@ -865,12 +900,14 @@ export const executeHeterogeneousAgent = async (
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
       case 'createAssistant': {
+        const createMetadata: Record<string, any> = { ...heteroProvenance(intent.mainMessageId) };
+        if (intent.signal) createMetadata.signal = intent.signal;
         try {
           await messageService.createMessage({
             agentId: intent.agentId ?? context.agentId,
             content: '',
             id: intent.messageId,
-            ...(intent.signal ? { metadata: { signal: intent.signal } } : {}),
+            ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
             model: intent.model,
             parentId: intent.parentId,
             provider: intent.provider,
@@ -952,11 +989,13 @@ export const executeHeterogeneousAgent = async (
         // register the global lookup so a later tool_result resolves.
         for (const x of intent.tools) {
           if (!x.isNew) continue;
+          const toolMetadata = heteroProvenance(mainState.currentMainMessageId);
           try {
             await messageService.createMessage({
               agentId: context.agentId,
               content: '',
               id: x.toolMessageId,
+              ...(Object.keys(toolMetadata).length > 0 ? { metadata: toolMetadata } : {}),
               parentId: intent.assistantMessageId,
               plugin: {
                 apiName: x.payload.apiName,
@@ -1001,7 +1040,12 @@ export const executeHeterogeneousAgent = async (
 
       case 'recordUsage': {
         const update = {
-          metadata: { usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the provenance the
+          // createAssistant write put there, or usage would wipe it.
+          metadata: {
+            ...heteroProvenance(mainState.currentMainMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };
@@ -1038,6 +1082,14 @@ export const executeHeterogeneousAgent = async (
    * matches arrival.
    */
   const reduceAndApplyMain = async (event: AgentStreamEvent) => {
+    // Capture the CC-native session id off the stream_start stream so every
+    // message persisted below carries the session it belongs to (mirrors the
+    // server handler). Stable per run; the copy makes a mid-topic fork visible.
+    if (event.type === 'stream_start') {
+      const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
+      if (typeof sid === 'string' && sid.length > 0) heteroSessionId = sid;
+    }
+
     const ctx: MainAgentReduceCtx = {
       agentId: context.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),

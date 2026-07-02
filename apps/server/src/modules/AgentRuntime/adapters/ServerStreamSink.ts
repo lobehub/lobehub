@@ -14,7 +14,9 @@ export class ServerStreamSink implements StreamSink {
   ) {}
 
   async publishChunk(chunk: StreamChunkInput): Promise<void> {
-    await this.streamManager.publishStreamChunk(this.operationId, chunk.stepIndex, chunk as any);
+    // `stepIndex` is a positional arg to the manager, not part of the chunk data.
+    const { stepIndex, ...data } = chunk;
+    await this.streamManager.publishStreamChunk(this.operationId, stepIndex, data as any);
   }
 
   async publishEvent(event: RuntimeStreamEvent): Promise<void> {

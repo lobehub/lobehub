@@ -55,6 +55,10 @@ vi.mock('@/features/Recommendations', () => ({
   useRecommendationsVisible: () => mocks.state.recommendationsVisible,
 }));
 
+vi.mock('@/components/AsyncError', () => ({
+  default: () => <div data-testid="async-error" />,
+}));
+
 vi.mock('@/routes/(main)/home/features/components/GroupBlock', () => ({
   default: ({
     action,
@@ -122,6 +126,7 @@ beforeEach(() => {
   mocks.state.isLogin = true;
   mocks.state.recommendationsVisible = true;
   mocks.useFetchBriefs.mockClear();
+  mocks.useFetchBriefs.mockReturnValue({ error: undefined, isLoading: false, mutate: vi.fn() });
 });
 
 describe('DailyBrief', () => {
@@ -143,5 +148,21 @@ describe('DailyBrief', () => {
     expect(screen.getByText('Brief')).toBeInTheDocument();
     expect(screen.getByText('Brief item')).toBeInTheDocument();
     expect(screen.getByText('View all tasks')).toBeInTheDocument();
+  });
+
+  it('renders a retryable error state when the first brief fetch fails', () => {
+    mocks.state.isBriefsInit = false;
+    mocks.useFetchBriefs.mockReturnValue({
+      error: new Error('brief fetch failed'),
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<DailyBrief />);
+
+    expect(screen.getByTestId('group-block')).toBeInTheDocument();
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.getByTestId('async-error')).toBeInTheDocument();
+    expect(screen.queryByText('Brief skeleton')).not.toBeInTheDocument();
   });
 });

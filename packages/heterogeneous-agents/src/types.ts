@@ -66,6 +66,16 @@ export interface StreamStartData {
   externalSignal?: ExternalSignalContext;
   model?: string;
   provider?: string;
+  /**
+   * CC-native session id (`system:init.session_id`), carried on every
+   * stream_start so the server can stamp it on each persisted message's
+   * `metadata.heteroSessionId`. The topic-level `heteroSessionId` only keeps
+   * the single latest value; a per-message copy lets a diff pinpoint the exact
+   * row where CC forked to a new session (e.g. `--resume` hit a recycled /
+   * empty session and started fresh) — the forensic signal for a lost-history
+   * "session break".
+   */
+  sessionId?: string;
 }
 
 /**

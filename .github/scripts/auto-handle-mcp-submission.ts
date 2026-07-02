@@ -13,6 +13,8 @@
  * Anything that is not a confident match is left untouched for normal triage.
  */
 
+import { classify } from './shared/mcp-submission-classifier';
+
 declare global {
   // @ts-ignore
   var process: {
@@ -69,176 +71,6 @@ async function githubRequest<T>(
   // Some endpoints (e.g. label add) return 200 with a body; others may be empty.
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as T;
-}
-
-/**
- * Pull the first plausible "server repo" GitHub URL out of the issue body.
- * Skips links to lobehub's own org and the MCP registry org so we land on the
- * submitter's repository.
- */
-function extractRepoUrl(body: string): string | null {
-  // github.com first-path segments that are NOT repositories (attachments,
-  // pasted screenshots, org pages, etc.). `user-attachments` is the big one —
-  // pasted images land at github.com/user-attachments/assets/... and must never
-  // be mistaken for a server repo.
-  const reserved = new Set([
-    'about',
-    'apps',
-    'collections',
-    'explore',
-    'features',
-    'join',
-    'login',
-    'marketplace',
-    'notifications',
-    'orgs',
-    'pricing',
-    'readme',
-    'search',
-    'settings',
-    'sponsors',
-    'topics',
-    'user-attachments',
-  ]);
-  // Our own org and the upstream registry — skip so we land on the submitter's repo.
-  const ignoredOwners = new Set(['lobehub', 'lobechat', 'modelcontextprotocol']);
-  const regex = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)/gi;
-
-  for (const match of body.matchAll(regex)) {
-    const owner = match[1];
-    let repo = match[2];
-    // Strip trailing junk like ".git", ")", ".", ","
-    repo = repo.replace(/\.git$/i, '').replace(/[).,]+$/, '');
-    if (!owner || !repo) continue;
-    const ownerLc = owner.toLowerCase();
-    if (reserved.has(ownerLc)) continue;
-    if (ignoredOwners.has(ownerLc)) continue;
-    return `https://github.com/${owner}/${repo}`;
-  }
-
-  return null;
-}
-
-interface Classification {
-  // How the server is delivered — only `local` (installable) servers can be
-  // self-published via the CLI; `remote` (URL-only) and `unknown` must go to a human.
-  delivery: 'local' | 'remote' | 'unknown';
-  isSubmission: boolean;
-  reason: string;
-  repoUrl: string | null;
-}
-
-/**
- * Decide whether an issue is a *new MCP server listing request*.
- *
- * High precision on purpose — this drives a hard auto-close. We require an
- * add/submit intent + the word "mcp" + a GitHub repo URL, and explicitly bail
- * out on the two confusable categories observed in real issues:
- *   - marketplace / existing-listing bugs (scoring stuck, outdated version…)
- *   - feedback about the publishing CLI itself (which we actively welcome)
- */
-function classify(title: string, body: string): Classification {
-  const text = `${title}\n${body}`.toLowerCase();
-  const repoUrl = extractRepoUrl(body);
-
-  const hasMcp = /\bmcp\b/.test(text);
-
-  // Explicit "add / submit my server" intent. The `[MCP Submission]` and
-  // `[MCP Plugin]` title prefixes are themselves a declaration of intent.
-  const hasAddVerb =
-    /\b(?:add|submit|submission|submitting|list(?:ing)?|publish|index|register|include)\b/.test(
-      text,
-    ) ||
-    /上架|收录|添加|提交|登记/.test(text) ||
-    /^\s*\[mcp\s*(?:submission|plugin)\]/i.test(title);
-
-  // Marketplace framing — keeps us on listing requests and off random MCP bug
-  // reports that merely mention "mcp" and a verb in passing. A leading `[MCP…`
-  // title tag counts as context.
-  const hasMarketContext =
-    /marketplace|市场|上架|收录|登记/.test(text) || /^\s*\[mcp\b/i.test(title);
-
-  // Problem with the marketplace pipeline or an already-listed server — NOT a
-  // new submission. Leave these for humans.
-  const isMarketplaceBug =
-    /scoring|re-?scan|re-?index|stuck|outdated|out of date|stale|not updating|won'?t update|wrong version|shows? (?:old|outdated|wrong)|disappeared|removed from|missing from|not show(?:ing)?|not syncing|sync(?:ing)? (?:from|issue)|canonical cache/.test(
-      text,
-    );
-
-  // Feedback about the publishing CLI / flow — we explicitly invite these, so
-  // never auto-close them.
-  const isCliFeedback =
-    /market-cli|publish-mcp|publishing skill/.test(text) ||
-    /\bcli\b.+(?:fail|error|issue|problem|bug|not work|can'?t|unable)/.test(text) ||
-    /(?:fail|error|unable|can'?t|cannot).*(?:submit|publish|login|connect|verify ownership)/.test(
-      text,
-    );
-
-  // Delivery method. The CLI can only self-publish *installable* servers
-  // (npm / npx / uvx / pip / docker / stdio). A bare GitHub repo URL does NOT
-  // count — some remote-only servers link a repo yet ship "no install, no npm".
-  // Servers that also offer a remote endpoint but ARE installable stay `local`,
-  // because the CLI can still serve the installable path.
-  // Strong, unambiguous "installable" signals — these prove the CLI can publish it.
-  const hasStrongInstall =
-    /\bnpx\b|\buvx\b|\bpipx\b|\bpip install\b|\bdocker run\b/.test(text) ||
-    /"command"\s*:/.test(text) ||
-    /npmjs\.com\/package\//.test(text);
-  // A bare "stdio" mention is weak — remote submissions often name it in a negation
-  // or comparison ("Transport: SSE, not stdio"), so it must not outrank a remote signal.
-  const hasStdioMention = /\bstdio\b/.test(text);
-  const hasRemoteSignal =
-    /"url"\s*:/.test(text) ||
-    /\bstreamable[- ]?http\b|\bsse\b/.test(text) ||
-    /transport[^a-z]{0,8}(?:sse|http|streamable)/.test(text) ||
-    /\bremote(?:ly)? (?:hosted|mcp|server)\b|\bhosted mcp\b/.test(text) ||
-    // a bare endpoint URL (non-GitHub) labelled "url:" / "endpoint:" is a remote reference
-    /\b(?:endpoint|url)\b[^\n]{1,15}https?:\/\/(?!github\.com)/.test(text);
-  // An explicit "no install / no npm / remote-only" statement is decisive: the server
-  // ships only as a URL, so it overrides any incidental stdio/command mention.
-  const isRemoteOnly =
-    /\bno install\b|\bno npm\b|\bremote[- ]only\b|no local install|installation[- ]free/.test(text);
-  // Precedence: explicit remote-only > strong install > any remote signal > lone stdio mention.
-  const delivery: Classification['delivery'] = isRemoteOnly
-    ? 'remote'
-    : hasStrongInstall
-      ? 'local'
-      : hasRemoteSignal
-        ? 'remote'
-        : hasStdioMention
-          ? 'local'
-          : 'unknown';
-
-  if (!hasMcp) return { delivery, isSubmission: false, reason: 'no "mcp" keyword', repoUrl };
-  if (!hasAddVerb)
-    return { delivery, isSubmission: false, reason: 'no add/submit intent', repoUrl };
-  if (!hasMarketContext)
-    return { delivery, isSubmission: false, reason: 'no marketplace context', repoUrl };
-  // A server reference is required, but for remote submissions the endpoint itself
-  // counts — only the local (CLI) path needs an actual repo URL (for `plugin submit`).
-  if (!repoUrl && delivery !== 'remote')
-    return {
-      delivery,
-      isSubmission: false,
-      reason: 'no server reference (repo URL or endpoint)',
-      repoUrl,
-    };
-  if (isMarketplaceBug)
-    return {
-      delivery,
-      isSubmission: false,
-      reason: 'looks like a marketplace/listing bug',
-      repoUrl,
-    };
-  if (isCliFeedback)
-    return { delivery, isSubmission: false, reason: 'looks like CLI/publishing feedback', repoUrl };
-
-  return {
-    delivery,
-    isSubmission: true,
-    reason: `new MCP server listing request (${delivery})`,
-    repoUrl,
-  };
 }
 
 function buildComment(repoUrl: string | null): string {
@@ -407,4 +239,4 @@ if (import.meta.main) {
   });
 }
 
-export { classify, extractRepoUrl };
+export { classify, extractRepoUrl } from './shared/mcp-submission-classifier';

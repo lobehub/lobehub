@@ -18,7 +18,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
+const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
 
@@ -29,8 +29,8 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
   const { isLoading } = useCreateMenuItems();
 
   const handleOpenConfigGroupModal = useCallback(() => {
-    openConfigGroupModal();
-  }, [openConfigGroupModal]);
+    openConfigGroupModal(visibility);
+  }, [openConfigGroupModal, visibility]);
 
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
@@ -38,6 +38,7 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
     isCustomGroup: true,
     name,
     openConfigGroupModal: handleOpenConfigGroupModal,
+    visibility,
   });
 
   const groupIcon = useMemo(() => {
@@ -69,7 +70,12 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
         </Flexbox>
       }
     >
-      <SessionList dataSource={items} groupId={id} itemClassName={styles.item} />
+      <SessionList
+        dataSource={items}
+        groupId={id}
+        itemClassName={styles.item}
+        visibility={visibility}
+      />
     </AccordionItem>
   );
 });

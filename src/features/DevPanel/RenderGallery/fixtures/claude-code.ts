@@ -113,6 +113,76 @@ export default defineFixtures({
     },
   ],
   fixtures: {
+    askUserQuestion: variants([
+      {
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [
+                {
+                  description:
+                    'Fastest, offline, full-coverage baseline. Scans structural issues (missing states / branches / patterns) from code alone.',
+                  label: 'L1 only (read code)',
+                },
+                {
+                  description:
+                    'Also boots the app and screenshots key surfaces to confirm visual hierarchy and rendered states. Medium cost.',
+                  label: 'L1 + L2 (screenshots)',
+                },
+                {
+                  description:
+                    'Adds a real user journey with performance traces (CLS/LCP). Needs a running environment and login. High cost.',
+                  label: 'L1 + L2 + L3',
+                },
+              ],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              multiSelect: true,
+              options: [
+                {
+                  description: 'The chat conversation pane and message renders.',
+                  label: 'Chat surface',
+                },
+                {
+                  description: 'Settings pages, providers, and model configuration.',
+                  label: 'Settings',
+                },
+                {
+                  description: 'Onboarding and first-run flows.',
+                  label: 'Onboarding',
+                },
+              ],
+              question: 'Which surfaces should the audit cover?',
+            },
+          ],
+        },
+        label: 'Multi question',
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Single question',
+      },
+    ]),
     Agent: single({
       args: {
         prompt:

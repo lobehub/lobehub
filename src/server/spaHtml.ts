@@ -2,12 +2,18 @@ import { analyticsEnv } from '@/envs/analytics';
 import { serializeForHtml } from '@/server/utils/serializeForHtml';
 import { type AnalyticsConfig } from '@/types/spaServerConfig';
 
-export const VITE_DEV_ORIGIN = 'http://localhost:9876';
+// VITE_DEV_PORT is injected by scripts/devStartupSequence.mts with the actual
+// port of the Vite dev server it spawned; 9876 matches the standalone default.
+export const resolveViteDevOrigin = () =>
+  `http://localhost:${Number(process.env.VITE_DEV_PORT) || 9876}`;
 
 const SERVER_CONFIG_PLACEHOLDER =
   /window\.__SERVER_CONFIG__\s*=\s*undefined;\s*\/\*\s*SERVER_CONFIG\s*\*\//;
 
-async function rewriteViteAssetUrls(html: string, origin = VITE_DEV_ORIGIN): Promise<string> {
+async function rewriteViteAssetUrls(
+  html: string,
+  origin = resolveViteDevOrigin(),
+): Promise<string> {
   const { parseHTML } = await import('linkedom');
   const { document } = parseHTML(html);
 
@@ -56,7 +62,7 @@ globalThis.Worker.prototype=O.prototype;
 
 export async function fetchViteDevTemplate(
   pathname = '/',
-  origin = VITE_DEV_ORIGIN,
+  origin = resolveViteDevOrigin(),
 ): Promise<string> {
   const res = await fetch(`${origin}${pathname}`);
   const html = await res.text();

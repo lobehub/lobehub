@@ -1,10 +1,11 @@
 'use client';
 
-import { Block, Modal, Text } from '@lobehub/ui';
+import { Block, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import DetailLoading from '@/features/MCP/MCPDetail/Loading';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -93,7 +94,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     };
 
     return (
-      <Modal
+      <ImperativeModal
         open
         confirmLoading={loading}
         title={t('protocolInstall.official.title')}
@@ -109,7 +110,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         onOk={handleConfirm}
       >
         {renderContent()}
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

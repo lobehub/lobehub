@@ -12,9 +12,27 @@ const pinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.pinnedAgents;
 const agentGroups = (s: HomeStore): SidebarGroup[] => s.agentGroups;
 
 /**
+ * Get private agent groups (folders) owned by the current user.
+ * Empty array in personal mode.
+ */
+const privateAgentGroups = (s: HomeStore): SidebarGroup[] => s.privateAgentGroups;
+
+/**
  * Get all ungrouped agents
  */
 const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.ungroupedAgents;
+
+/**
+ * Get ungrouped private agents owned by the current user.
+ * Empty array in personal mode.
+ */
+const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.privateUngroupedAgents;
+
+/**
+ * Whether the current user has any private content in this workspace.
+ */
+const hasPrivateAgents = (s: HomeStore): boolean =>
+  s.privateAgentGroups.length > 0 || s.privateUngroupedAgents.length > 0;
 
 /**
  * Limit ungrouped agents for sidebar display based on page size
@@ -25,9 +43,22 @@ const ungroupedAgentsLimited =
     s.ungroupedAgents.slice(0, pageSize);
 
 /**
+ * Limit private ungrouped agents for the Private sidebar bucket
+ */
+const privateUngroupedAgentsLimited =
+  (pageSize: number) =>
+  (s: HomeStore): SidebarAgentItem[] =>
+    s.privateUngroupedAgents.slice(0, pageSize);
+
+/**
  * Get ungrouped agents count
  */
 const ungroupedAgentsCount = (s: HomeStore): number => s.ungroupedAgents.length;
+
+/**
+ * Get private ungrouped agents count
+ */
+const privateUngroupedAgentsCount = (s: HomeStore): number => s.privateUngroupedAgents.length;
 
 /**
  * Check if agent list is initialized
@@ -35,11 +66,18 @@ const ungroupedAgentsCount = (s: HomeStore): number => s.ungroupedAgents.length;
 const isAgentListInit = (s: HomeStore): boolean => s.isAgentListInit;
 
 /**
- * Get all agents (pinned + grouped + ungrouped)
+ * Get all agents (pinned + grouped + ungrouped + private)
  */
 const allAgents = (s: HomeStore): SidebarAgentItem[] => {
   const groupedAgents = s.agentGroups.flatMap((g) => g.items);
-  return [...s.pinnedAgents, ...groupedAgents, ...s.ungroupedAgents];
+  const privateGroupedAgents = s.privateAgentGroups.flatMap((g) => g.items);
+  return [
+    ...s.pinnedAgents,
+    ...groupedAgents,
+    ...s.ungroupedAgents,
+    ...privateGroupedAgents,
+    ...s.privateUngroupedAgents,
+  ];
 };
 
 /**
@@ -71,8 +109,13 @@ export const homeAgentListSelectors = {
   allAgents,
   getAgentById,
   hasCustomAgents,
+  hasPrivateAgents,
   isAgentListInit,
   pinnedAgents,
+  privateAgentGroups,
+  privateUngroupedAgents,
+  privateUngroupedAgentsCount,
+  privateUngroupedAgentsLimited,
   ungroupedAgents,
   ungroupedAgentsCount,
   ungroupedAgentsLimited,

@@ -1,5 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -95,10 +97,18 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       </Block>
     ) : null;
 
+  const privacyBadge =
+    task.visibility === 'private' ? (
+      <Tooltip title={tChat('createTask.visibility.helperPrivate', { defaultValue: 'Private' })}>
+        <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={14} />
+      </Tooltip>
+    ) : null;
+
   const titleRow = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
       <TaskStatusTag status={status} taskIdentifier={task.identifier} />
+      {privacyBadge}
       {hasName ? (
         <>
           <Text style={{ flex: 'none' }} type={'secondary'}>

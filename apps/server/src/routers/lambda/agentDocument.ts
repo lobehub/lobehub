@@ -502,26 +502,33 @@ export const agentDocumentRouter = router({
         // Reveal the auto-created `.tool-results` archive. Off by default so
         // user-facing lists stay clean; the agent document-listing tool opts in.
         includeArchivedToolResults: z.boolean().optional().default(false),
+        // Restrict the listing to the direct children of this folder so the model
+        // can expand a folder collapsed in the progressive index (LOBE-11072).
+        parentId: z.string().optional(),
         scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
         sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { includeArchivedToolResults } = input;
+      const { includeArchivedToolResults, parentId } = input;
       if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
-        return ctx.agentDocumentService.listDocumentsForTopic(
+        const docs = await ctx.agentDocumentService.listDocumentsForTopic(
           input.agentId,
           input.topicId,
           input.sourceType,
           { includeArchivedToolResults },
         );
+        // Topic listing joins through topic associations rather than the agent
+        // folder tree, so the folder filter is applied in-memory here.
+        return parentId ? docs.filter((d) => d.parentId === parentId) : docs;
       }
 
       return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
         includeArchivedToolResults,
+        parentId,
       });
     }),
 

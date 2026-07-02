@@ -8,6 +8,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import { resourceKeys } from '@/libs/swr/keys';
@@ -40,7 +41,12 @@ const SearchResultsOverlay = memo(() => {
 
   const isActive = !!searchQuery && searchQuery.length > 0;
 
-  const { data: rawData, isLoading } = useClientDataSWR(
+  const {
+    data: rawData,
+    isLoading,
+    error,
+    mutate,
+  } = useClientDataSWR(
     isActive
       ? resourceKeys.search({
           category: libraryId ? undefined : category,
@@ -109,6 +115,14 @@ const SearchResultsOverlay = memo(() => {
       {isLoading ? (
         <Center height="100%">
           <NeuralNetworkLoading size={48} />
+        </Center>
+      ) : error && (!data || data.length === 0) ? (
+        // A failed search fetch used to fall through to the "no results" state, telling
+        // the user their query matched nothing when the request actually errored
+        // (Read §1.1). Branch the failure before the no-match state; the no-match
+        // variant below is untouched and still handles a genuine zero-result search.
+        <Center height="100%">
+          <AsyncError error={error} variant={'block'} onRetry={() => mutate()} />
         </Center>
       ) : !data || data.length === 0 ? (
         <Center height="100%">

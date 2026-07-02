@@ -12,6 +12,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
+import MarkdownMessage from '@/features/Conversation/Markdown';
 import { type ConversationContext } from '@/features/Conversation/types';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -162,7 +163,9 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
         {userRequest && (
           <div className={styles.userRequest}>
             <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
-            <span className={styles.userRequestText}>{userRequest}</span>
+            <div className={styles.userRequestBody}>
+              <MarkdownMessage>{userRequest}</MarkdownMessage>
+            </div>
           </div>
         )}
 
