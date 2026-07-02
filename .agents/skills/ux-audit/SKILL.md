@@ -141,6 +141,29 @@ So a variant comparison must:
 > backwards, cost footnoted, a winner declared from L1 on what is an L3/analytics metric, and the
 > flag-gated /degrades-to-Classic/desktop-excluded signals explained away.
 
+## Ground rule: a "redundant" control is a composition question before a subtraction one
+
+When L1 spots two controls that seem to do the same thing, the reflex is **subtraction** —
+delete one, hide one, merge them, differentiate the copy. Resist it. Two controls that share
+an _intent_ often differ in **scope**, and the honest fix expresses that scope difference in
+**layout** — promote the wider-scope one to a visible, titled **sibling** — not by removing
+it. Subtraction is a _behavior_-layer move; the better answer usually lives in the
+**composition** layer, which is precisely the half of the benchmark an audit drops when it
+walks the [`ux`](../ux/SKILL.md) checklists but never opens
+[`references/pattern-catalog.md`](references/pattern-catalog.md). The checklists speak states,
+momentum, and draft-safety; they carry no vocabulary for _Titled Sections / Grid of Equals /
+Center Stage_, so a checklist-only read reaches for "dedupe" every time. **Walk the
+pattern-catalog pass (L1 step 2) before writing a remedy for any "redundant / overlapping"
+finding**, and ask: _same intent, different scope?_ → the fix is a sibling, not a delete.
+
+> ❌ The CC AskUserQuestion audit flagged the per-question "write your own" box and the global
+> "Or type directly" escape as redundant and proposed hiding / merging them — a subtraction.
+> They aren't redundant: the per-question box is _question_-scoped, the escape is
+> _whole-form_-scoped. The composition-layer answer is to hide the escape when there's one
+> question and render it as a **visible peer** to the question block when there are several — a
+> _Titled Sections_ move a checklist-only read never surfaced. Skipping the catalog cost the
+> better answer.
+
 ## Ground rule: report the good, not only the gaps
 
 An audit that only lists what's broken has drifted into a bug report. The mandate is
@@ -174,7 +197,11 @@ open-redirect guard, a smart default: these are the **good cases**. Name them, c
 - 🟠 **Dead-ends or misleads** — no forward path, ambiguous state, missing in-progress
   feedback, an empty state that isn't a real page.
 - 🟡 **Friction / inconsistency / missed delight** — predictability, redundant controls,
-  progressive-disclosure gaps, CLS jank.
+  progressive-disclosure gaps, CLS jank. This tier is the **easiest to under-report**: a pass
+  hunting correctness skews 🔴/🟠 and glides past micro-consistency — sibling elements styled
+  differently (options carry a number chip, the free-text row doesn't), an affordance with no
+  label. When the surface is otherwise solid, deliberately switch into the **interface-details**
+  lens for one pass, or these never get written down.
 
 ## Output (shared)
 

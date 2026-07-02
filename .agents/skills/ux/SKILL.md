@@ -134,6 +134,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))
 
 - [ ] Advanced capability is progressively disclosed / discoverable at the moment of need.
+- [ ] A control that borrows a keyboard/CLI idiom (numbered `1`/`2`/`3` chips, `⌘K` badge, arrow-nav, keycap hint) actually wires those keys — or is restyled so it doesn't imply an absent shortcut; a keycap-looking chip with no handler is a false affordance, worst in a surface ported from a CLI. Confirm the keys fire at L3.
 - [ ] A config surface for a feature with its own data/management area links to it in-context (close the config → manage loop) — not just a promise in copy.
 - [ ] Multi-step flow (>2 steps: wizard/onboarding) shows a step/progress indicator (position + total) and keeps non-essential steps skippable with a visible escape hatch.
 

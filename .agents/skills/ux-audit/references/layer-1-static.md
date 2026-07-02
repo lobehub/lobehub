@@ -21,6 +21,13 @@ Part of the **ux-audit** skill — see [`../SKILL.md`](../SKILL.md). Benchmark:
   L1 is blind to it. Bring the expected-capability list from the surface-class / competitor
   pass _into_ L1 and check each item as present / missing, or the read only ever grades the
   paths that already exist. ❌ missed once: OAuth consent with **no switch-account** affordance.
+- **Cannot** (a stated intent is not a delivered one): a code comment or a prop _name_ that
+  declares design intent — `// reads as one more choice`, `isPrimary`, `variant="ghost"` — is a
+  **claim, not a verdict**. The mechanism that would realize it may be absent, and L1 can't see
+  the gap between the two. Treat an intent-comment as a thing to **confirm at L2**, never tick
+  it ✅ off the comment. ❌ missed once: the ask-user custom-input comment said it "reads as one
+  more choice", but the row had none of the numbered chips the real options carry — so it
+  didn't; the comment described an intent the render never delivered.
 
 ## Procedure
 

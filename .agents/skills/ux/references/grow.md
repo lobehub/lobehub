@@ -68,3 +68,30 @@ context**, at the moment the user is thinking about the feature.
 
 - [ ] A config surface for a feature with its own data / management area links to it in-context (close the config → manage loop), not just describe it in copy. _(Growth・Meaningful)_
 - [ ] The destination is named as an expected capability up front (cross-surface gap has no `file:line`); a global-nav path elsewhere doesn't excuse the missing near entry point. _(Certainty)_
+
+## 5.4 A borrowed keyboard/CLI idiom must be real, not decorative・Certainty・Natural
+
+When a control **looks like** a known keyboard idiom — numbered `1`/`2`/`3` choice chips, a
+`⌘K` badge, arrow-key list navigation, a keycap-styled shortcut hint — users who know that
+idiom **will press the key**. The look is a promise. So either **wire the key** (the digit
+selects the option, `⌘K` opens the palette, `↑/↓` moves the highlight) or **restyle it so it
+reads as a plain ordinal / label**, never a keycap. A chip that mimics a CLI keycap but has no
+handler is a false affordance — worst of all when the surface is a **port of a CLI flow**
+(Claude Code / Codex), because the user arrives already trained on those keys and the silent
+no-op reads as a bug. This is discoverability's inverse: 5.1 is about revealing a real
+capability; this is about **not advertising one that isn't there**. Whether the keys fire is a
+runtime fact — confirm it at **L3** (press the key), not from the chip's styling.
+
+> ✅ An option row rendered as a keycap (`⌘1`, or a mono `1` chip) responds to that key;
+> a purely ordinal marker is set in body text (not a bordered mono keycap) so it promises
+> nothing. ❌ The CC AskUserQuestion option cards render a mono `1`/`2`/`3` chip in
+> `fontFamilyCode` that reads as a keycap (`OptionCard.tsx` `optionIndex`), mirroring the
+> Claude Code CLI where those digits _are_ the selection keys — but **no keydown handler
+> exists** anywhere in the panel (`builtin-tool-claude-code/.../AskUserQuestion/*`; the
+> Enter/1/2 shortcuts live only in the unrelated `ApprovalActions.tsx`). Pressing 1/2/3 or
+> Enter does nothing — see the global-approval audit. Fix: wire the digit keys to toggle
+> options and Enter to submit (guarded inside the free-text boxes), or drop the keycap styling.
+
+**Checklist**
+
+- [ ] A control that borrows a keyboard/CLI idiom (numbered choices, `⌘K`, arrow-nav, keycap hints) actually wires those keys — or is restyled so it doesn't imply an absent shortcut; especially in a surface ported from a CLI, where the user already knows the keys. Confirm the keys fire at L3. _(Certainty・Natural)_
