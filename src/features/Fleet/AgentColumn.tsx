@@ -248,8 +248,8 @@ ReplyPanel.displayName = 'FleetReplyPanel';
  * area out during load.
  *
  * - Empty/new conversation → input shown directly (type immediately), no collapse.
- * - Has messages → "回复" button; expanding shows the input with a collapse button.
- * - Still loading an existing conversation → keep the "回复" button as a stable
+ * - Has messages → "Reply" button; expanding shows the input with a collapse button.
+ * - Still loading an existing conversation → keep the "Reply" button as a stable
  *   placeholder so the reply area never disappears.
  */
 const ReplyArea = memo(() => {

@@ -28,14 +28,14 @@ export class ToolLimitExceededError extends Error {
 
     const parts: string[] = [];
     if (maxToolCount !== undefined && toolCount > maxToolCount) {
-      parts.push(`工具数量 (${toolCount}) 超过 provider ${provider} 的上限 (${maxToolCount})。`);
+      parts.push(`Tool count (${toolCount}) exceeds the limit (${maxToolCount}) for provider ${provider}.`);
     }
     if (maxToolPayloadBytes !== undefined && toolPayloadBytes > maxToolPayloadBytes) {
       const kb = Math.round(toolPayloadBytes / 1024);
       const maxKb = Math.round(maxToolPayloadBytes / 1024);
-      parts.push(`工具 payload 大小 (${kb} KB) 超过 provider ${provider} 的上限 (${maxKb} KB)。`);
+      parts.push(`Tool payload size (${kb} KB) exceeds the limit (${maxKb} KB) for provider ${provider}.`);
     }
-    parts.push('请减少 MCP server 数量，或切换到无此限制的 provider。');
+    parts.push('Please reduce the number of MCP servers or switch to a provider without this restriction.');
 
     super(parts.join(' '));
     this.name = 'ToolLimitExceededError';
