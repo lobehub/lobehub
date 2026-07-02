@@ -16,13 +16,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 60%;
+    max-width: 70%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;
     border-radius: 999px;
 
-    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
@@ -33,26 +32,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 /**
- * Chip for the multi-agent `SendMessage` tool — labels the target agent so the
- * timeline reads "Send message → <recipient>" instead of the raw arg dump.
+ * Chip for the multi-agent `SendMessage` tool. Leads with the human-readable
+ * `summary` (falling back to the message body) rather than the opaque agent id
+ * from `to`/`recipient`, which means nothing to an end user.
  */
 export const SendMessageInspector = memo<BuiltinInspectorProps<SendMessageArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
     const label = t('builtins.lobe-claude-code.sendMessage.title');
     const source = args ?? partialArgs;
-    const recipient = (source?.to ?? source?.recipient)?.trim();
+    const recap = (source?.summary ?? source?.message ?? source?.content)?.trim();
 
     const isShiny = isArgumentsStreaming || isLoading;
 
-    if (isArgumentsStreaming && !recipient) {
+    if (isArgumentsStreaming && !recap) {
       return <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{label}</div>;
     }
 
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{recipient ? `${label} →` : label}</span>
-        {recipient && <span className={styles.chip}>{recipient}</span>}
+        <span>{recap ? `${label}:` : label}</span>
+        {recap && <span className={styles.chip}>{recap}</span>}
       </div>
     );
   },

@@ -36,18 +36,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 4px;
     color: ${cssVar.colorTextSecondary};
   `,
-  recipient: css`
-    flex: none;
-
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
   status: css`
     padding-inline: 4px;
   `,
@@ -56,33 +44,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }) => {
   const { t } = useTranslation('plugin');
 
-  const recipient = (args?.to ?? args?.recipient)?.trim();
   const body = args?.message ?? args?.content;
   const summary = args?.summary?.trim();
 
   const result = parseResult(content);
-  const delivered = result?.success === true ? result?.message?.trim() : undefined;
+  // The tool's own confirmation embeds the opaque recipient id ("… to <id> at
+  // its next tool round"), meaningless to a user — show a localized generic
+  // status instead of echoing that raw string.
+  const delivered = result?.success === true;
 
   return (
     <Flexbox className={styles.container} gap={8}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.header}
-        gap={8}
-        justify={'space-between'}
-      >
-        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-          <Icon icon={SendHorizontal} size={'small'} />
-          <Text ellipsis strong>
-            {summary || t('builtins.lobe-claude-code.sendMessage.title')}
-          </Text>
-        </Flexbox>
-        {recipient && (
-          <Text ellipsis className={styles.recipient}>
-            {recipient}
-          </Text>
-        )}
+      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+        <Icon icon={SendHorizontal} size={'small'} />
+        <Text ellipsis strong>
+          {summary || t('builtins.lobe-claude-code.sendMessage.title')}
+        </Text>
       </Flexbox>
 
       {body && (
@@ -96,7 +73,9 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
       {delivered && (
         <Flexbox horizontal align={'center'} className={styles.status} gap={6}>
           <Icon icon={CircleCheckBig} size={'small'} style={{ color: cssVar.colorSuccess }} />
-          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>{delivered}</Text>
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+            {t('builtins.lobe-claude-code.sendMessage.queued')}
+          </Text>
         </Flexbox>
       )}
     </Flexbox>
