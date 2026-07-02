@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
-import { type PageState } from '../../initialState';
+import { initialState, type PageState } from '../../initialState';
 import { initialListState } from './initialState';
 import { listSelectors } from './selectors';
 
@@ -37,12 +37,12 @@ const doc = (
   ...overrides,
 });
 
-const createState = (documents: LobeDocument[]): PageState =>
-  ({
-    ...initialListState,
-    documents,
-    searchKeywords: '',
-  }) as PageState;
+const createState = (documents: LobeDocument[]): PageState => ({
+  ...initialState,
+  ...initialListState,
+  documents,
+  searchKeywords: '',
+});
 
 describe('listSelectors — private/workspace buckets', () => {
   let state: PageState;

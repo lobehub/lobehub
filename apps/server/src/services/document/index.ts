@@ -130,6 +130,21 @@ export class DocumentService {
     const totalCharCount = content?.length || 0;
     const totalLineCount = content?.split('\n').length || 0;
 
+    // Resolve visibility upfront so the KB mirror file inherits the same
+    // visibility as the document. Mirrors DocumentModel.create semantics:
+    // explicit → parent inheritance → top-level sourceType:'api' default
+    // ('private'). Personal mode (no workspaceId) leaves it undefined —
+    // the ownership filter ignores the column there.
+    let resolvedVisibility: 'private' | 'public' | undefined = visibility;
+    if (!resolvedVisibility && this.workspaceId) {
+      if (parentId) {
+        const parent = await this.documentModel.findById(parentId);
+        resolvedVisibility = parent?.visibility ?? 'private';
+      } else {
+        resolvedVisibility = 'private';
+      }
+    }
+
     let fileId: string | null = null;
 
     // If creating in a knowledge base, create a corresponding file record
@@ -144,6 +159,7 @@ export class DocumentService {
           parentId,
           size: totalCharCount,
           url: `internal://document/placeholder`, // Placeholder URL
+          ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
         },
         false, // Do not insert to global files
       );
@@ -172,7 +188,7 @@ export class DocumentService {
       title,
       totalCharCount,
       totalLineCount,
-      ...(visibility ? { visibility } : {}),
+      ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
     });
 
     return document;

@@ -313,6 +313,100 @@ describe('DocumentService', () => {
         }),
       );
     });
+
+    describe('workspace visibility propagation to KB mirror file', () => {
+      const workspaceId = 'workspace-1';
+
+      beforeEach(() => {
+        service = new DocumentService(mockDb, userId, workspaceId);
+        mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+        mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+      });
+
+      it('propagates explicit private visibility to the KB mirror file', async () => {
+        await service.createDocument({
+          title: 'Private Doc',
+          editorData: {},
+          knowledgeBaseId: 'kb-1',
+          visibility: 'private',
+        });
+
+        expect(mockFileModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+          false,
+        );
+        expect(mockDocumentModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+        );
+      });
+
+      it('defaults top-level KB documents to private in workspace mode', async () => {
+        await service.createDocument({
+          title: 'Draft',
+          editorData: {},
+          knowledgeBaseId: 'kb-1',
+        });
+
+        expect(mockFileModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+          false,
+        );
+        expect(mockDocumentModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+        );
+      });
+
+      it('inherits parent visibility when parentId is set', async () => {
+        mockDocumentModel.findById.mockResolvedValue({ id: 'parent-1', visibility: 'public' });
+
+        await service.createDocument({
+          title: 'Child',
+          editorData: {},
+          knowledgeBaseId: 'kb-1',
+          parentId: 'parent-1',
+        });
+
+        expect(mockDocumentModel.findById).toHaveBeenCalledWith('parent-1');
+        expect(mockFileModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'public' }),
+          false,
+        );
+        expect(mockDocumentModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'public' }),
+        );
+      });
+
+      it('falls back to private when parent lookup returns nothing', async () => {
+        mockDocumentModel.findById.mockResolvedValue(undefined);
+
+        await service.createDocument({
+          title: 'Orphaned Child',
+          editorData: {},
+          knowledgeBaseId: 'kb-1',
+          parentId: 'missing-parent',
+        });
+
+        expect(mockFileModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+          false,
+        );
+      });
+    });
+
+    it('omits visibility on the KB mirror file in personal mode', async () => {
+      mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Personal Doc',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+      });
+
+      const fileCall = mockFileModel.create.mock.calls[0]?.[0];
+      expect(fileCall).toBeDefined();
+      expect(fileCall).not.toHaveProperty('visibility');
+    });
   });
 
   describe('createDocuments', () => {

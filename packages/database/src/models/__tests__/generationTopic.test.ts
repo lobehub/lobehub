@@ -238,7 +238,7 @@ describe('GenerationTopicModel', () => {
       // Create a test topic
       const { id } = await generationTopicModel.create('Original Title');
 
-      const updateData: Partial<ImageGenerationTopic> = {
+      const updateData: Pick<Partial<ImageGenerationTopic>, 'coverUrl' | 'title'> = {
         title: 'Updated Title',
         coverUrl: 'new-cover-key',
       };
@@ -265,7 +265,7 @@ describe('GenerationTopicModel', () => {
         .values({ id: 'other-topic', userId: otherUserId, title: 'Other User Topic' })
         .returning();
 
-      const updateData: Partial<ImageGenerationTopic> = {
+      const updateData: Pick<Partial<ImageGenerationTopic>, 'coverUrl' | 'title'> = {
         title: 'Hacked Title',
       };
 

@@ -242,6 +242,7 @@ export interface NewTask {
   status?: string;
   totalTopics?: number | null;
   updatedAt?: Date;
+  visibility?: 'private' | 'public';
   workspaceId?: string | null;
 }
 
