@@ -2,7 +2,7 @@
 
 import { type ActionType, type ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Button } from '@lobehub/ui';
+import { Button, Empty } from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
 import { Popconfirm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -189,11 +189,13 @@ const ApiKey: FC = () => {
         className={styles.table}
         columns={columns}
         headerTitle={t('apikey.list.title')}
-        locale={{ emptyText: t('apikey.list.empty.title') }}
         options={false}
         pagination={false}
         rowKey="id"
         search={false}
+        locale={{
+          emptyText: <Empty description={t('apikey.list.empty.title')} />,
+        }}
         request={async () => {
           const apiKeys = await lambdaClient.apiKey.getApiKeys.query();
 
