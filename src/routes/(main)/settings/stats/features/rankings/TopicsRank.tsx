@@ -7,6 +7,7 @@ import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
@@ -24,7 +25,7 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading } = useClientDataSWR(statsKeys.rankTopics(), async () =>
+  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.rankTopics(), async () =>
     topicService.rankTopics(),
   );
 
@@ -62,18 +63,20 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
           )
         }
       >
-        <BarList
-          data={data?.slice(0, 5).map((item) => mapData(item)) || []}
-          height={220}
-          leftLabel={t('stats.topicsRank.left')}
-          loading={isLoading || !data}
-          rightLabel={t('stats.topicsRank.right')}
-          noDataText={{
-            desc: t('stats.empty.desc'),
-            title: t('stats.empty.title'),
-          }}
-          onValueChange={(item) => navigate(item.link)}
-        />
+        <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+          <BarList
+            data={data?.slice(0, 5).map((item) => mapData(item)) || []}
+            height={220}
+            leftLabel={t('stats.topicsRank.left')}
+            loading={isLoading || !data}
+            rightLabel={t('stats.topicsRank.right')}
+            noDataText={{
+              desc: t('stats.empty.desc'),
+              title: t('stats.empty.title'),
+            }}
+            onValueChange={(item) => navigate(item.link)}
+          />
+        </AsyncBoundary>
       </StatsFormGroup>
       {showExtra && (
         <ImperativeModal

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -32,7 +33,10 @@ const LibraryList = memo(() => {
   // `fallbackData: []`, `isLoading` collapses to false immediately. Without
   // this, the sidebar flashes the empty state for the network round-trip
   // before the real list arrives.
-  const { data, isLoading, isValidating } = useFetchKnowledgeBaseList(visibility);
+  // `fallbackData: []` keeps `data` an array even on failure, so a failed KB-list
+  // fetch used to render the "create your first library" empty (Read §1.1
+  // failure-as-empty). Read `error` / `mutate` and branch the failure before empty.
+  const { data, isLoading, isValidating, error, mutate } = useFetchKnowledgeBaseList(visibility);
 
   const navigate = useWorkspaceAwareNavigate();
 
@@ -48,31 +52,41 @@ const LibraryList = memo(() => {
     });
   };
 
-  if (isLoading || (isValidating && (data?.length ?? 0) === 0))
-    return <SkeletonList paddingInline={4} rows={3} />;
-
-  if (data?.length === 0)
-    return (
-      <EmptyNavItem
-        disabled={!canCreate}
-        title={t(listVisibility === 'private' ? 'library.privateEmpty' : 'library.workspaceEmpty')}
-        onClick={handleCreate}
-      />
-    );
+  const hasData = (data?.length ?? 0) > 0;
+  const showSkeleton = isLoading || (isValidating && !hasData);
 
   return (
-    <Flexbox gap={1} paddingInline={4}>
-      {data?.map((item) => (
-        <Item
-          description={item.description}
-          id={item.id}
-          key={item.id}
-          name={item.name}
-          userId={item.userId}
-          visibility={item.visibility}
+    <AsyncBoundary
+      data={data}
+      error={error}
+      errorVariant={'inline'}
+      isEmpty={data?.length === 0}
+      isLoading={showSkeleton}
+      loading={<SkeletonList paddingInline={4} rows={3} />}
+      empty={
+        <EmptyNavItem
+          disabled={!canCreate}
+          title={t(
+            listVisibility === 'private' ? 'library.privateEmpty' : 'library.workspaceEmpty',
+          )}
+          onClick={handleCreate}
         />
-      ))}
-    </Flexbox>
+      }
+      onRetry={() => mutate()}
+    >
+      <Flexbox gap={1} paddingInline={4}>
+        {data?.map((item) => (
+          <Item
+            description={item.description}
+            id={item.id}
+            key={item.id}
+            name={item.name}
+            userId={item.userId}
+            visibility={item.visibility}
+          />
+        ))}
+      </Flexbox>
+    </AsyncBoundary>
   );
 });
 

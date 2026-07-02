@@ -34,6 +34,8 @@
   "context.description": "描述",
   "context.empty": "暂无情境记忆",
   "context.source": "来源",
+  "detail.notFound.desc": "这条记忆可能已被删除或不再可用。",
+  "detail.notFound.title": "未找到记忆",
   "empty.description": "记忆的提取是渐进式的。积累更多对话，助理会更懂你。试着聊得更深入，让助理捕捉和存储有价值的信息",
   "empty.search": "未找到匹配的记忆",
   "empty.title": "暂无记忆",

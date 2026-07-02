@@ -125,7 +125,13 @@ export class TaskDetailSliceActionImpl {
     const detail = result.data;
 
     if (!detail) {
-      throw new Error(`Task not found: ${resolvedId}`);
+      // Mark the *resolved* not-found so the read side can tell it apart from a
+      // network / 500 rejection (which propagates from `taskService.getDetail`
+      // above with an HTTP status). Without this tag both would render the same
+      // terminal 404, telling the user a merely-errored task was deleted.
+      const notFound = new Error(`Task not found: ${resolvedId}`) as Error & { code?: string };
+      notFound.code = 'TASK_NOT_FOUND';
+      throw notFound;
     }
 
     this.internal_dispatchTaskDetail({
