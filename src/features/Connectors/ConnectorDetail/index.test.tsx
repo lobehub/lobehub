@@ -10,6 +10,7 @@ import { ConnectorSourceType } from '@/database/schemas';
 import ConnectorDetail from './index';
 
 const mocks = vi.hoisted(() => ({
+  headerWidth: 1024,
   toolState: {
     connectorTools: {
       createTools: [],
@@ -39,6 +40,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('ahooks', () => ({
+  useSize: () => ({ height: 42, width: mocks.headerWidth }),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string } | string) =>
@@ -53,15 +58,19 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('antd', () => ({
   Button: ({
+    'aria-label': ariaLabel,
     children,
     disabled,
+    title,
     onClick,
   }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
+    'aria-label'?: string;
+    'children'?: ReactNode;
+    'disabled'?: boolean;
+    'title'?: string;
+    'onClick'?: () => void;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button aria-label={ariaLabel} disabled={disabled} title={title} onClick={onClick}>
       {children}
     </button>
   ),
@@ -95,6 +104,7 @@ vi.mock('./ToolPermissionGroup', () => ({
 describe('ConnectorDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.headerWidth = 1024;
     mocks.toolState.connectorTools = {
       createTools: [],
       deleteTools: [],
@@ -131,5 +141,30 @@ describe('ConnectorDetail', () => {
     render(<ConnectorDetail connectorId="connector-1" />);
 
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeInTheDocument();
+  });
+
+  it('collapses icon buttons when the header is narrow', () => {
+    mocks.headerWidth = 500;
+    mocks.toolState.connectors = [
+      {
+        id: 'connector-1',
+        identifier: 'custom-id',
+        metadata: { description: 'Workspace notes' },
+        mcpConnectionType: 'http',
+        name: 'Custom',
+        sourceType: ConnectorSourceType.custom,
+      },
+    ];
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByText('Custom')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset permissions' })).toBeInTheDocument();
+    expect(screen.queryByText('Sync')).not.toBeInTheDocument();
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 });

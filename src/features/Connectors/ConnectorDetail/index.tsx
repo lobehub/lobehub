@@ -1,9 +1,11 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { confirmModal } from '@lobehub/ui/base-ui';
+import { useSize } from 'ahooks';
 import { Button } from 'antd';
-import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
+import { createStaticStyles } from 'antd-style';
+import { PencilIcon, RefreshCwIcon, Trash2, Unplug } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
@@ -15,6 +17,56 @@ import CustomConnectorModal from '../CustomConnectorModal';
 import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
+const COMPACT_HEADER_WIDTH = 760;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  actionButton: css`
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    line-height: 1;
+  `,
+  actionLabel: css`
+    white-space: nowrap;
+  `,
+  actions: css`
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+
+    max-width: 100%;
+  `,
+  header: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    min-height: 42px;
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  headerTitle: css`
+    overflow: hidden;
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+}));
+
 interface ConnectorDetailProps {
   connectorId: string;
   lifecycleActions?: ReactNode;
@@ -25,7 +77,9 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
   ({ connectorId, lifecycleActions, onDelete }) => {
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
+    const headerRef = useRef<HTMLDivElement | null>(null);
     const [customModalOpen, setCustomModalOpen] = useState(false);
+    const headerSize = useSize(headerRef);
 
     const connector = useToolStore(connectorSelectors.connectorById(connectorId));
     const { readTools, createTools, updateTools, deleteTools } = useToolStore(
@@ -47,6 +101,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const isMcpConnector = connector?.sourceType === ConnectorSourceType.custom;
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
+    const isCompactHeader = (headerSize?.width ?? Number.POSITIVE_INFINITY) < COMPACT_HEADER_WIDTH;
 
     const handleSync = useCallback(async () => {
       if (!connector) return;
@@ -110,46 +165,61 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       await Promise.all(toolIds.map((id) => updateToolPermission(id, permission)));
     };
 
+    const renderCompactableButton = ({
+      danger,
+      disabled,
+      icon,
+      label,
+      loading,
+      onClick,
+    }: {
+      danger?: boolean;
+      disabled?: boolean;
+      icon: ReactNode;
+      label: string;
+      loading?: boolean;
+      onClick: () => void | Promise<void>;
+    }) => (
+      <Button
+        aria-label={label}
+        className={styles.actionButton}
+        danger={danger}
+        disabled={disabled}
+        icon={icon}
+        loading={loading}
+        size="small"
+        title={isCompactHeader ? label : undefined}
+        onClick={onClick}
+      >
+        {!isCompactHeader && <span className={styles.actionLabel}>{label}</span>}
+      </Button>
+    );
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header — full-bleed bar with bottom border, aligned with the left pane's header */}
-        <div
-          style={{
-            alignItems: 'center',
-            borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
-            display: 'flex',
-            flexShrink: 0,
-            gap: 8,
-            height: 42,
-            justifyContent: 'space-between',
-            paddingInline: 16,
-          }}
-        >
-          <div style={{ fontSize: 14, fontWeight: 500 }}>{connectorName}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div className={styles.header} ref={headerRef}>
+          <div className={styles.headerTitle}>{connectorName}</div>
+          <div className={styles.actions}>
             {/* Reset permissions: restore all tools to auto (fully open) */}
             <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
               {t('connector.resetPermissions', 'Reset permissions')}
             </Button>
             {/* Sync/Refresh: re-sync tool list from manifest */}
-            <Button
-              icon={<RefreshCwIcon size={14} />}
-              loading={syncing}
-              size="small"
-              onClick={handleSync}
-            >
-              {syncLabel}
-            </Button>
+            {renderCompactableButton({
+              icon: <RefreshCwIcon size={14} />,
+              label: syncLabel,
+              loading: syncing,
+              onClick: handleSync,
+            })}
             {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
-            {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-              <Button
-                icon={<PencilIcon size={14} />}
-                size="small"
-                onClick={() => setCustomModalOpen(true)}
-              >
-                {t('connector.edit', 'Edit')}
-              </Button>
-            )}
+            {isMcpConnector &&
+              connector?.mcpConnectionType === 'http' &&
+              renderCompactableButton({
+                icon: <PencilIcon size={14} />,
+                label: t('connector.edit', 'Edit'),
+                onClick: () => setCustomModalOpen(true),
+              })}
             {lifecycleActions !== undefined ? (
               lifecycleActions
             ) : (
@@ -157,14 +227,17 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 {/* Disconnect / Delete for custom MCP connectors */}
                 {isMcpConnector && (
                   <>
-                    <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
-                      {t('connector.disconnect', 'Disconnect')}
-                    </Button>
-                    <Button
-                      danger
-                      icon={<Trash2 size={14} />}
-                      size="small"
-                      onClick={() => {
+                    {renderCompactableButton({
+                      danger: true,
+                      icon: <Unplug size={14} />,
+                      label: t('connector.disconnect', 'Disconnect'),
+                      onClick: () => disconnectConnector(connectorId),
+                    })}
+                    {renderCompactableButton({
+                      danger: true,
+                      icon: <Trash2 size={14} />,
+                      label: t('connector.delete', 'Delete'),
+                      onClick: () => {
                         confirmModal({
                           okButtonProps: { danger: true },
                           onOk: async () => {
@@ -173,18 +246,18 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                           },
                           title: t('connector.deleteConfirm', 'Delete this connector?'),
                         });
-                      }}
-                    >
-                      {t('connector.delete', 'Delete')}
-                    </Button>
+                      },
+                    })}
                   </>
                 )}
                 {/* Uninstall for builtin and marketplace tools */}
-                {(isBuiltin || isMarketplace) && (
-                  <Button danger icon={<Trash2 size={14} />} size="small" onClick={handleUninstall}>
-                    {t('connector.uninstall', 'Uninstall')}
-                  </Button>
-                )}
+                {(isBuiltin || isMarketplace) &&
+                  renderCompactableButton({
+                    danger: true,
+                    icon: <Trash2 size={14} />,
+                    label: t('connector.uninstall', 'Uninstall'),
+                    onClick: handleUninstall,
+                  })}
               </>
             )}
           </div>
