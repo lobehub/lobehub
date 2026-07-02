@@ -62,12 +62,16 @@ const styles = createStaticStyles(({ css }) => ({
 
     padding-block: 2px;
     padding-inline: 4px;
+    border: 0;
     border-radius: 4px;
 
+    font: inherit;
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
     white-space: nowrap;
 
+    appearance: none;
+    background: transparent;
     transition: all 0.2s;
 
     &:hover {
@@ -309,7 +313,13 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   );
 
   const trigger = (
-    <div className={cx(styles.trigger, open && styles.triggerOpen)}>
+    <button
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      aria-label={t('heteroAgent.codexQuota.tooltip')}
+      className={cx(styles.trigger, open && styles.triggerOpen)}
+      type="button"
+    >
       <Icon icon={GaugeIcon} size={14} />
       {sessionLeftPercent !== undefined && (
         <span className={styles.value}>
@@ -317,7 +327,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
         </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />
-    </div>
+    </button>
   );
 
   return (

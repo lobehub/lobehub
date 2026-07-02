@@ -137,7 +137,8 @@ const getNextAvailableCreditExpiry = (
 const mapRpcResetCredits = (
   raw: RpcRateLimitsResponse['rateLimitResetCredits'],
 ): CodexRateLimitResetCredits | null | undefined => {
-  if (!raw) return raw;
+  if (raw === null) return null;
+  if (raw === undefined) return undefined;
   if (typeof raw.availableCount !== 'number' || !Number.isFinite(raw.availableCount)) return null;
 
   const credits = raw.credits?.map((credit) => ({
@@ -294,7 +295,10 @@ const fetchViaRpc = async (
     const settle = (result: CodexQuotaSnapshot, kill = false) => {
       if (resolved) return;
       resolved = true;
-      if (timeout) clearTimeout(timeout);
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = undefined;
+      }
       if (child) {
         cleanupRpcListeners(child, listeners);
         if (kill) child.kill();

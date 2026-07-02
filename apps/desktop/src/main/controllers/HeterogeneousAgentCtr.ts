@@ -1314,6 +1314,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const status = await detectHeterogeneousCliCommand('codex', command);
     const env = {
       ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ...params.env,
     };
 
