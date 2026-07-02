@@ -1,6 +1,8 @@
 import debug from 'debug';
+import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 
+import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
@@ -46,7 +48,15 @@ export async function onTopicComplete(c: Context) {
     );
 
     const db = await getServerDB();
-    const taskLifecycle = new TaskLifecycleService(db, userId);
+    // System-level callback: derive workspace from the task row so the
+    // lifecycle service writes briefs / status into the correct workspace.
+    const [taskRow] = await db
+      .select({ workspaceId: tasks.workspaceId })
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+      .limit(1);
+    const wsId = taskRow?.workspaceId ?? undefined;
+    const taskLifecycle = new TaskLifecycleService(db, userId, wsId);
 
     await taskLifecycle.onTopicComplete({
       errorMessage,

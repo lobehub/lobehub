@@ -34,18 +34,18 @@ export const ChatGroupConfigSchema = z.object({
 
 // Zod schema for inserting ChatGroup
 export const InsertChatGroupSchema = z.object({
-  avatar: z.string().optional().nullable(),
-  backgroundColor: z.string().optional().nullable(),
-  clientId: z.string().optional().nullable(),
-  config: ChatGroupConfigSchema.optional().nullable(),
-  content: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-  editorData: z.record(z.string(), z.any()).optional().nullable(),
-  groupId: z.string().optional().nullable(),
+  avatar: z.string().nullish(),
+  backgroundColor: z.string().nullish(),
+  clientId: z.string().nullish(),
+  config: ChatGroupConfigSchema.nullish(),
+  content: z.string().nullish(),
+  description: z.string().nullish(),
+  editorData: z.record(z.string(), z.any()).nullish(),
+  groupId: z.string().nullish(),
   id: z.string().optional(),
-  marketIdentifier: z.string().optional().nullable(),
-  pinned: z.boolean().optional().nullable(),
-  title: z.string().optional().nullable(),
+  marketIdentifier: z.string().nullish(),
+  pinned: z.boolean().nullish(),
+  title: z.string().nullish(),
 });
 
 export type InsertChatGroup = z.infer<typeof InsertChatGroupSchema>;
@@ -110,6 +110,8 @@ export interface ChatGroupItem {
   title?: string | null;
   updatedAt: Date;
   userId: string;
+  /** Owning workspace; null for personal (non-workspace) groups. */
+  workspaceId?: string | null;
 }
 
 // Agent item with group role info
@@ -140,8 +142,8 @@ export type {
   ExecGroupAgentResult,
   ExecGroupSubAgentTaskParams,
   ExecGroupSubAgentTaskResult,
-  ExecSubAgentTaskParams,
-  ExecSubAgentTaskResult,
+  ExecSubAgentParams,
+  ExecSubAgentResult,
   TaskCurrentActivity,
   TaskStatusResult,
 } from '../agentExecution';

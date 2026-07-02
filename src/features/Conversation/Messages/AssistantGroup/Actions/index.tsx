@@ -19,6 +19,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'collapse',
   'divider',
   'share',
+  'select',
   'divider',
   'regenerate',
   'del',

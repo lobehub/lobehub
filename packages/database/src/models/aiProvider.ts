@@ -5,7 +5,7 @@ import type {
   CreateAiProviderParams,
   UpdateAiProviderConfigParams,
 } from '@lobechat/types';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { isEmpty } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
@@ -152,6 +152,7 @@ export class AiProviderModel {
       .onConflictDoUpdate({
         set: commonFields,
         target: [aiProviders.id, aiProviders.userId],
+        targetWhere: isNull(aiProviders.workspaceId),
       });
   };
 
@@ -168,6 +169,7 @@ export class AiProviderModel {
       .onConflictDoUpdate({
         set: { enabled },
         target: [aiProviders.id, aiProviders.userId],
+        targetWhere: isNull(aiProviders.workspaceId),
       });
   };
 
@@ -187,6 +189,7 @@ export class AiProviderModel {
           .onConflictDoUpdate({
             set: { sort, updatedAt: new Date() },
             target: [aiProviders.id, aiProviders.userId],
+            targetWhere: isNull(aiProviders.workspaceId),
           });
       });
 

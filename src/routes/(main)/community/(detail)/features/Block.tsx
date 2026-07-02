@@ -3,7 +3,8 @@ import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   more: css`
@@ -31,12 +32,12 @@ const Block = memo<BlockProps>(({ title, more, moreLink, children, ...rest }) =>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} width={'100%'}>
         <h2 className={styles.title}>{title}</h2>
         {moreLink && (
-          <Link target={moreLink.startsWith('http') ? '_blank' : undefined} to={moreLink}>
+          <WorkspaceLink target={moreLink.startsWith('http') ? '_blank' : undefined} to={moreLink}>
             <Button className={styles.more} type={'text'}>
               <span>{more}</span>
               <Icon icon={ChevronRight} />
             </Button>
-          </Link>
+          </WorkspaceLink>
         )}
       </Flexbox>
       <Flexbox {...rest}>{children}</Flexbox>

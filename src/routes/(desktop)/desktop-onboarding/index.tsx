@@ -3,7 +3,7 @@
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { electronSystemService } from '@/services/electron/system';
@@ -13,10 +13,13 @@ import DataModeStep from './features/DataModeStep';
 import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
+import { resolveInitialScreen } from './resolveInitialScreen';
 import {
   clearDesktopOnboardingScreen,
+  getDesktopOnboardingEverCompleted,
   getDesktopOnboardingScreen,
   setDesktopOnboardingCompleted,
+  setDesktopOnboardingEverCompleted,
   setDesktopOnboardingScreen,
 } from './storage';
 import { DesktopOnboardingScreen, isDesktopOnboardingScreen } from './types';
@@ -40,11 +43,13 @@ const DesktopOnboardingPage = memo(() => {
       ];
 
   const resolveScreenForPlatform = useCallback(
-    (screen: DesktopOnboardingScreen) => {
-      if (!isMac && screen === DesktopOnboardingScreen.Permissions)
-        return DesktopOnboardingScreen.DataMode;
-      return screen;
-    },
+    (screen: DesktopOnboardingScreen) =>
+      resolveInitialScreen({
+        everCompleted: false,
+        isMac,
+        requested: screen,
+        saved: null,
+      }),
     [isMac],
   );
 
@@ -62,10 +67,12 @@ const DesktopOnboardingPage = memo(() => {
   useEffect(() => {
     if (isLoading) return;
 
-    const saved = getDesktopOnboardingScreen();
-    const requested = getRequestedScreenFromUrl();
-
-    const initial = resolveScreenForPlatform(requested ?? saved ?? DesktopOnboardingScreen.Welcome);
+    const initial = resolveInitialScreen({
+      everCompleted: getDesktopOnboardingEverCompleted(),
+      isMac,
+      requested: getRequestedScreenFromUrl(),
+      saved: getDesktopOnboardingScreen(),
+    });
 
     setCurrentScreen(initial);
 
@@ -74,13 +81,7 @@ const DesktopOnboardingPage = memo(() => {
     if (currentUrlScreen !== initial) {
       setSearchParams({ screen: initial });
     }
-  }, [
-    getRequestedScreenFromUrl,
-    isLoading,
-    resolveScreenForPlatform,
-    searchParams,
-    setSearchParams,
-  ]);
+  }, [getRequestedScreenFromUrl, isLoading, isMac, searchParams, setSearchParams]);
 
   // Persist current screen to localStorage.
   useEffect(() => {
@@ -147,6 +148,7 @@ const DesktopOnboardingPage = memo(() => {
       if (!next) {
         // Complete onboarding - mark as completed and clear persisted screen state
         setDesktopOnboardingCompleted();
+        setDesktopOnboardingEverCompleted();
         clearDesktopOnboardingScreen();
 
         // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)

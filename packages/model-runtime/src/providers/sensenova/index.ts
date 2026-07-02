@@ -1,19 +1,32 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { ModelProvider } from 'model-bank';
+import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 
 export interface SenseNovaModelCard {
+  context_length: number;
+  created: number;
+  description: string;
   id: string;
+  input_modalities: string[];
+  max_output_length: number;
+  name: string;
+  pricing: {
+    prompt: string;
+    completion: string;
+    image: string;
+    request: string;
+    input_cache_read: string;
+  };
+  supported_features: string[];
 }
 
 export const params = {
-  baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
+  baseURL: 'https://token.sensenova.cn/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { frequency_penalty, max_tokens, model, temperature, thinking, top_p, ...rest } =
-        payload;
+      const { frequency_penalty, presence_penalty, temperature, top_p, ...rest } = payload;
 
       return {
         ...rest,
@@ -21,18 +34,14 @@ export const params = {
           frequency_penalty !== undefined && frequency_penalty > 0 && frequency_penalty <= 2
             ? frequency_penalty
             : undefined,
-        max_new_tokens: max_tokens !== undefined && max_tokens > 0 ? max_tokens : undefined,
-        model,
-        stream: true,
+        presence_penalty:
+          presence_penalty !== undefined && presence_penalty > 0 && presence_penalty <= 2
+            ? presence_penalty
+            : undefined,
         temperature:
           temperature !== undefined && temperature > 0 && temperature <= 2
             ? temperature
             : undefined,
-        thinking: thinking
-          ? model && model.includes('-V6-5-') && thinking.type === 'enabled'
-            ? { enabled: true }
-            : { enabled: false }
-          : undefined,
         top_p: top_p !== undefined && top_p > 0 && top_p < 1 ? top_p : undefined,
       } as any;
     },
@@ -41,16 +50,6 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_SENSENOVA_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-
-    const functionCallKeywords = ['1202'];
-
-    const visionKeywords = ['vision', 'sensenova-v6'];
-
-    const reasoningKeywords = ['deepseek-r1', 'reasoner'];
-
-    client.baseURL = 'https://api.sensenova.cn/v1/llm';
-
     const modelsPage = (await client.models.list()) as any;
     const modelList: SenseNovaModelCard[] = modelsPage.data;
 
@@ -61,22 +60,50 @@ export const params = {
         );
 
         return {
-          contextWindowTokens: knownModel?.contextWindowTokens ?? undefined,
-          displayName: knownModel?.displayName ?? undefined,
+          contextWindowTokens: model.context_length ?? knownModel?.contextWindowTokens ?? undefined,
+          displayName: model.name ?? knownModel?.displayName ?? undefined,
           enabled: knownModel?.enabled || false,
           functionCall:
-            functionCallKeywords.some((keyword) => model.id.toLowerCase().includes(keyword)) ||
+            model.supported_features?.includes('tools') ||
             knownModel?.abilities?.functionCall ||
             false,
           id: model.id,
+          maxOutput: model.max_output_length ?? knownModel?.maxOutput ?? undefined,
+          pricing: {
+            units: [
+              {
+                name: 'textInput',
+                rate: model.pricing.prompt ? parseFloat(model.pricing.prompt) : 0,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+              {
+                name: 'textInput_cacheRead',
+                rate: model.pricing.input_cache_read
+                  ? parseFloat(model.pricing.input_cache_read)
+                  : 0,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+              {
+                name: 'textOutput',
+                rate: model.pricing.completion ? parseFloat(model.pricing.completion) : 0,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+            ],
+          },
+          releasedAt: model.created ? new Date(model.created * 1000).toISOString() : undefined,
           reasoning:
-            reasoningKeywords.some((keyword) => model.id.toLowerCase().includes(keyword)) ||
+            model.supported_features?.includes('reasoning') ||
             knownModel?.abilities?.reasoning ||
             false,
-          vision:
-            visionKeywords.some((keyword) => model.id.toLowerCase().includes(keyword)) ||
-            knownModel?.abilities?.vision ||
+          structuredOutput:
+            model.supported_features?.includes('json_mode') ||
+            knownModel?.abilities?.structuredOutput ||
             false,
+          vision:
+            model.input_modalities?.includes('image') || knownModel?.abilities?.vision || false,
         };
       })
       .filter(Boolean) as ChatModelCard[];

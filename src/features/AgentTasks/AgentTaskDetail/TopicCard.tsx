@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   Flexbox,
   stopPropagation,
+  Tag,
   Text,
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
@@ -163,6 +164,15 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             avatarNode
           )}
           <TopicStatusIcon size={16} status={activity.status} />
+          {activity.sourceTaskIdentifier && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t('taskDetail.topicSource', { identifier: activity.sourceTaskIdentifier })}
+            >
+              {activity.sourceTaskIdentifier}
+            </Tag>
+          )}
           <Text ellipsis weight={500}>
             {activity.title}
           </Text>

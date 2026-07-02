@@ -1,0 +1,621 @@
+import { TRPCError } from '@trpc/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { FileModel } from '@/database/models/file';
+import { TempFileManager } from '@/server/utils/tempFileManager';
+
+import { FileService } from '../index';
+
+vi.mock('@/config/db', () => ({
+  serverDBEnv: {
+    REMOVE_GLOBAL_FILE: false,
+  },
+}));
+
+vi.mock('@/envs/app', () => ({
+  appEnv: {
+    APP_URL: 'https://lobehub.com',
+  },
+}));
+
+vi.mock('../impls', () => ({
+  createFileServiceModule: () => ({
+    deleteFile: vi.fn(),
+    deleteFiles: vi.fn(),
+    getFileContent: vi.fn(),
+    getFileByteArray: vi.fn(),
+    getFileMetadata: vi.fn(),
+    createPreSignedUpload: vi.fn(),
+    createPreSignedUrl: vi.fn(),
+    createPreSignedUrlForPreview: vi.fn(),
+    createCachedPreSignedUrlForPreview: vi.fn(),
+    uploadContent: vi.fn(),
+    getFullFileUrl: vi.fn(),
+    getKeyFromFullUrl: vi.fn(),
+    uploadBuffer: vi.fn(),
+    uploadMedia: vi.fn(),
+  }),
+}));
+
+vi.mock('@/database/models/file');
+
+vi.mock('@/server/utils/tempFileManager');
+
+vi.mock('@/utils/uuid', () => ({
+  nanoid: () => 'test-id',
+}));
+
+vi.mock('@lobechat/utils', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return { ...actual, uuid: () => 'test-uuid' };
+});
+
+describe('FileService', () => {
+  let service: FileService;
+  const mockDb = {} as any;
+  const mockUserId = 'test-user';
+  let mockFileModel: any;
+  let mockTempManager: any;
+  let consoleErrorSpy: any;
+
+  beforeEach(() => {
+    mockFileModel = {
+      findById: vi.fn(),
+      delete: vi.fn(),
+      updateGlobalFile: vi.fn(),
+    };
+    mockTempManager = {
+      writeTempFile: vi.fn(),
+      cleanup: vi.fn(),
+    };
+    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
+    vi.mocked(TempFileManager).mockImplementation(() => mockTempManager);
+
+    // Mock console.error to test error logging
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    service = new FileService(mockDb, mockUserId);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    consoleErrorSpy?.mockRestore();
+  });
+
+  it('scopes FileModel to workspace when workspaceId is provided', () => {
+    vi.clearAllMocks();
+
+    new FileService(mockDb, mockUserId, 'workspace-1');
+
+    expect(FileModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1');
+  });
+
+  describe('downloadFileToLocal', () => {
+    const mockFile = {
+      id: 'test-file-id',
+      name: 'test.txt',
+      url: 'test-url',
+    };
+
+    it('should throw error if file not found', async () => {
+      mockFileModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.downloadFileToLocal('test-file-id')).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
+      );
+    });
+
+    it('should throw error if file content is empty', async () => {
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(undefined as any);
+
+      await expect(service.downloadFileToLocal('test-file-id')).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File content is empty' }),
+      );
+    });
+
+    it('should delete file from db and throw error if file not found in storage', async () => {
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockRejectedValue({ Code: 'NoSuchKey' });
+
+      await expect(service.downloadFileToLocal('test-file-id')).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
+      );
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', false);
+    });
+
+    it('should log error and rethrow for non-NoSuchKey errors', async () => {
+      const originalError = new Error('Network error');
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockRejectedValue(originalError);
+
+      await expect(service.downloadFileToLocal('test-file-id')).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File content is empty' }),
+      );
+
+      // 验证错误被记录到控制台
+      expect(consoleErrorSpy).toHaveBeenCalledWith(originalError);
+      // 验证没有调用删除操作（因为不是NoSuchKey错误）
+      expect(mockFileModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('should handle getFileByteArray returning null content', async () => {
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(null as any);
+
+      await expect(service.downloadFileToLocal('test-file-id')).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File content is empty' }),
+      );
+    });
+
+    it('should successfully download file to local', async () => {
+      const mockContent = new Uint8Array([1, 2, 3]);
+      const mockFilePath = '/tmp/test.txt';
+
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(mockContent);
+      mockTempManager.writeTempFile.mockResolvedValue(mockFilePath);
+
+      const result = await service.downloadFileToLocal('test-file-id');
+
+      expect(result).toEqual({
+        cleanup: expect.any(Function),
+        file: mockFile,
+        filePath: mockFilePath,
+      });
+
+      expect(mockTempManager.writeTempFile).toHaveBeenCalledWith(mockContent, mockFile.name);
+    });
+  });
+
+  it('should delegate deleteFile to implementation', async () => {
+    const testKey = 'test-key';
+    await service.deleteFile(testKey);
+
+    expect(service['impl'].deleteFile).toHaveBeenCalledWith(testKey);
+  });
+
+  it('should delegate deleteFiles to implementation', async () => {
+    const testKeys = ['key1', 'key2'];
+    await service.deleteFiles(testKeys);
+
+    expect(service['impl'].deleteFiles).toHaveBeenCalledWith(testKeys);
+  });
+
+  it('should delegate getFileContent to implementation', async () => {
+    const testKey = 'test-key';
+    const expectedContent = 'file content';
+    vi.mocked(service['impl'].getFileContent).mockResolvedValue(expectedContent);
+
+    const result = await service.getFileContent(testKey);
+
+    expect(service['impl'].getFileContent).toHaveBeenCalledWith(testKey);
+    expect(result).toBe(expectedContent);
+  });
+
+  it('should delegate getFileByteArray to implementation', async () => {
+    const testKey = 'test-key';
+    const expectedBytes = new Uint8Array([1, 2, 3]);
+    vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(expectedBytes);
+
+    const result = await service.getFileByteArray(testKey);
+
+    expect(service['impl'].getFileByteArray).toHaveBeenCalledWith(testKey);
+    expect(result).toBe(expectedBytes);
+  });
+
+  it('should delegate createPreSignedUrl to implementation', async () => {
+    const testKey = 'test-key';
+    const expectedUrl = 'https://example.com/signed-url';
+    vi.mocked(service['impl'].createPreSignedUrl).mockResolvedValue(expectedUrl);
+
+    const result = await service.createPreSignedUrl(testKey);
+
+    expect(service['impl'].createPreSignedUrl).toHaveBeenCalledWith(testKey);
+    expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate createPreSignedUpload to implementation', async () => {
+    const testKey = 'test-key';
+    const expectedUpload = {
+      headers: { 'x-amz-acl': 'public-read' },
+      url: 'https://example.com/signed-url',
+    };
+    vi.mocked(service['impl'].createPreSignedUpload).mockResolvedValue(expectedUpload);
+
+    const result = await service.createPreSignedUpload(testKey);
+
+    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey);
+    expect(result).toBe(expectedUpload);
+  });
+
+  it('should delegate createPreSignedUrlForPreview to implementation', async () => {
+    const testKey = 'test-key';
+    const expiresIn = 3600;
+    const expectedUrl = 'https://example.com/preview-url';
+    vi.mocked(service['impl'].createPreSignedUrlForPreview).mockResolvedValue(expectedUrl);
+
+    const result = await service.createPreSignedUrlForPreview(testKey, expiresIn);
+
+    expect(service['impl'].createPreSignedUrlForPreview).toHaveBeenCalledWith(testKey, expiresIn);
+    expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate createCachedPreSignedUrlForPreview to implementation', async () => {
+    const testUrl = 'https://example.com/path/to/file.jpg';
+    const expiresIn = 300;
+    const expectedUrl = 'https://example.com/presigned-preview-url';
+    vi.mocked(service['impl'].createCachedPreSignedUrlForPreview).mockResolvedValue(expectedUrl);
+
+    const result = await service.createCachedPreSignedUrlForPreview(testUrl, expiresIn);
+
+    expect(service['impl'].createCachedPreSignedUrlForPreview).toHaveBeenCalledWith(
+      testUrl,
+      expiresIn,
+    );
+    expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate uploadContent to implementation', async () => {
+    const testPath = 'test-path';
+    const testContent = 'test content';
+
+    await service.uploadContent(testPath, testContent);
+
+    expect(service['impl'].uploadContent).toHaveBeenCalledWith(testPath, testContent);
+  });
+
+  it('should delegate getFullFileUrl to implementation', async () => {
+    const testUrl = 'test-url';
+    const expiresIn = 3600;
+    const expectedUrl = 'https://example.com/full-url';
+    vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(expectedUrl);
+
+    const result = await service.getFullFileUrl(testUrl, expiresIn);
+
+    expect(service['impl'].getFullFileUrl).toHaveBeenCalledWith(testUrl, expiresIn);
+    expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate getKeyFromFullUrl to implementation', async () => {
+    const testUrl = 'https://example.com/path/to/file.jpg';
+    const expectedKey = 'path/to/file.jpg';
+    vi.mocked(service['impl'].getKeyFromFullUrl).mockResolvedValue(expectedKey);
+
+    const result = await service.getKeyFromFullUrl(testUrl);
+
+    expect(service['impl'].getKeyFromFullUrl).toHaveBeenCalledWith(testUrl);
+    expect(result).toBe(expectedKey);
+  });
+
+  it('should delegate uploadMedia to implementation', async () => {
+    const testKey = 'test-key';
+    const testBuffer = Buffer.from('test content');
+    const expectedResult = { key: testKey };
+    vi.mocked(service['impl'].uploadMedia).mockResolvedValue(expectedResult);
+
+    const result = await service.uploadMedia(testKey, testBuffer);
+
+    expect(service['impl'].uploadMedia).toHaveBeenCalledWith(testKey, testBuffer);
+    expect(result).toBe(expectedResult);
+  });
+
+  describe('uploadBase64', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });
+      mockFileModel.create = vi.fn().mockResolvedValue({ id: 'new-file-id' });
+      vi.mocked(service['impl'].uploadMedia).mockResolvedValue({
+        key: 'assets/generations/2026-06-19/generated.png',
+      });
+    });
+
+    it('should write metadata compatible with UI upload path', async () => {
+      await service.uploadBase64(
+        Buffer.from('test content').toString('base64'),
+        'assets/generations/2026-06-19/generated.png',
+      );
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            dirname: 'assets/generations/2026-06-19',
+            filename: 'generated.png',
+            path: 'assets/generations/2026-06-19/generated.png',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+  });
+
+  describe('uploadFromBuffer', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });
+      mockFileModel.create = vi.fn().mockResolvedValue({ id: 'new-file-id' });
+      vi.mocked(service['impl'].uploadBuffer).mockResolvedValue({
+        key: 'files/test-user/abc/file.pdf',
+      });
+    });
+
+    it('should upload buffer with explicit content type', async () => {
+      const content = Buffer.from('hello world');
+
+      const result = await service.uploadFromBuffer(
+        content,
+        'application/pdf',
+        'files/test-user/abc/report.pdf',
+      );
+
+      expect(result.fileId).toBe('new-file-id');
+      // Must use uploadBuffer (explicit content type), not uploadMedia (infers from extension)
+      expect(service['impl'].uploadBuffer).toHaveBeenCalledWith(
+        'files/test-user/abc/report.pdf',
+        content,
+        'application/pdf',
+      );
+    });
+
+    it('should write metadata compatible with UI upload path', async () => {
+      const content = Buffer.from('test content');
+
+      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: expect.any(String),
+          metadata: expect.objectContaining({
+            dirname: 'files/test-user/abc',
+            filename: 'test.txt',
+            path: 'files/test-user/abc/test.txt',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+
+    it('should compute hash for deduplication', async () => {
+      const content = Buffer.from('test content');
+
+      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
+
+      expect(mockFileModel.checkHash).toHaveBeenCalled();
+      const createdRecord = mockFileModel.create.mock.calls[0][0];
+      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('createFileRecord', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn();
+      mockFileModel.create = vi.fn();
+    });
+
+    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.create.mockResolvedValue({ id: 'new-file-id' });
+
+      const result = await service.createFileRecord({
+        fileHash: 'test-hash',
+        fileType: 'image/png',
+        name: 'test.png',
+        size: 1024,
+        url: 'files/test.png',
+      });
+
+      expect(result).toEqual({
+        fileId: 'new-file-id',
+        url: 'https://lobehub.com/f/new-file-id',
+      });
+    });
+
+    it('should use custom id when provided', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true });
+      mockFileModel.create.mockResolvedValue({ id: 'custom-id' });
+
+      const result = await service.createFileRecord({
+        fileHash: 'test-hash',
+        fileType: 'image/png',
+        id: 'custom-id',
+        name: 'test.png',
+        size: 1024,
+        url: 'files/test.png',
+      });
+
+      expect(result).toEqual({
+        fileId: 'custom-id',
+        url: 'https://lobehub.com/f/custom-id',
+      });
+    });
+
+    it('should insert to global files when hash does not exist', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+
+      await service.createFileRecord({
+        fileHash: 'new-hash',
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'new-hash',
+        }),
+        true, // insertToGlobalFiles = true when hash doesn't exist
+      );
+    });
+
+    it('should not insert to global files when hash already exists', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'files/test.txt' });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+
+      await service.createFileRecord({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'existing-hash',
+        }),
+        false, // insertToGlobalFiles = false when hash exists
+      );
+      expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
+    });
+
+    it('should update global file metadata when an existing hash points to a missing object', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+      vi.mocked(service['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.createFileRecord({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
+        name: 'test.txt',
+        size: 100,
+        url: 'new/path.txt',
+      });
+
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith('existing-hash', {
+        metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
+        url: 'new/path.txt',
+      });
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'existing-hash',
+          url: 'new/path.txt',
+        }),
+        false,
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should keep global file metadata when the existing hash object is still available', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+      vi.mocked(service['impl'].getFileMetadata).mockResolvedValue({
+        contentLength: 100,
+        contentType: 'text/plain',
+      });
+
+      await service.createFileRecord({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
+        name: 'test.txt',
+        size: 100,
+        url: 'new/path.txt',
+      });
+
+      expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'existing-hash',
+          url: 'new/path.txt',
+        }),
+        false,
+      );
+    });
+  });
+
+  describe('createGlobalFile', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn();
+      mockFileModel.createGlobalFile = vi.fn();
+    });
+
+    it('should create global file with metadata when hash does not exist', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.createGlobalFile.mockResolvedValue([{ hashId: 'test-hash' }]);
+
+      const result = await service.createGlobalFile({
+        fileHash: 'test-hash',
+        fileType: 'text/markdown',
+        metadata: {
+          dirname: 'skills/source_files/abc123',
+          filename: 'README.md',
+          path: 'skills/source_files/abc123/README.md',
+        },
+        size: 1024,
+        url: 'skills/source_files/abc123/README.md',
+      });
+
+      expect(result).toEqual({ fileHash: 'test-hash' });
+      expect(mockFileModel.createGlobalFile).toHaveBeenCalledWith({
+        creator: mockUserId,
+        fileType: 'text/markdown',
+        hashId: 'test-hash',
+        metadata: {
+          dirname: 'skills/source_files/abc123',
+          filename: 'README.md',
+          path: 'skills/source_files/abc123/README.md',
+        },
+        size: 1024,
+        url: 'skills/source_files/abc123/README.md',
+      });
+    });
+
+    it('should not create global file when hash already exists with same url', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'some/path.txt' });
+
+      const result = await service.createGlobalFile({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        size: 100,
+        url: 'some/path.txt',
+      });
+
+      expect(result).toEqual({ fileHash: 'existing-hash' });
+      expect(mockFileModel.createGlobalFile).not.toHaveBeenCalled();
+      expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
+    });
+
+    it('should update url when hash exists but url changed', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
+
+      const result = await service.createGlobalFile({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        metadata: { dirname: 'new', filename: 'path.txt', path: 'new/path.txt' },
+        size: 100,
+        url: 'new/path.txt',
+      });
+
+      expect(result).toEqual({ fileHash: 'existing-hash' });
+      expect(mockFileModel.createGlobalFile).not.toHaveBeenCalled();
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith('existing-hash', {
+        metadata: { dirname: 'new', filename: 'path.txt', path: 'new/path.txt' },
+        url: 'new/path.txt',
+      });
+    });
+
+    it('should work without metadata', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.createGlobalFile.mockResolvedValue([{ hashId: 'test-hash' }]);
+
+      await service.createGlobalFile({
+        fileHash: 'test-hash',
+        fileType: 'text/plain',
+        size: 100,
+        url: 'some/path.txt',
+      });
+
+      expect(mockFileModel.createGlobalFile).toHaveBeenCalledWith({
+        creator: mockUserId,
+        fileType: 'text/plain',
+        hashId: 'test-hash',
+        metadata: undefined,
+        size: 100,
+        url: 'some/path.txt',
+      });
+    });
+  });
+});

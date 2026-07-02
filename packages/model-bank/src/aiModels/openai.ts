@@ -1,10 +1,10 @@
 import { gptImage1Schema, gptImage2Schema } from '../const/imageParameters';
 import type {
+  AIASRModelCard,
   AIChatModelCard,
   AIEmbeddingModelCard,
   AIImageModelCard,
   AIRealtimeModelCard,
-  AISTTModelCard,
   AITTSModelCard,
   AIVideoModelCard,
 } from '../types/aiModel';
@@ -21,6 +21,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description: 'Latest Instant model used in ChatGPT.',
     displayName: 'Chat Latest',
     id: 'chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -47,7 +48,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description: 'GPT-5.5 is our newest frontier model for the most complex professional work.',
     displayName: 'GPT-5.5',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.5',
     id: 'gpt-5.5',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -108,7 +112,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.5 pro uses more compute to think harder and provide consistently better answers.',
     displayName: 'GPT-5.5 Pro',
+    family: 'gpt',
+    generation: 'gpt-5.5',
     id: 'gpt-5.5-pro',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -146,7 +153,10 @@ export const openaiChatModels: AIChatModelCard[] = [
       'GPT-5.4 is the frontier model for complex professional work with highest reasoning capability.',
     displayName: 'GPT-5.4',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -206,7 +216,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -256,7 +269,10 @@ export const openaiChatModels: AIChatModelCard[] = [
       "GPT-5.4 mini is OpenAI's strongest mini model for coding, computer use, and subagents.",
     displayName: 'GPT-5.4 mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -284,7 +300,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       "GPT-5.4 nano is OpenAI's cheapest GPT-5.4-class model for simple high-volume tasks.",
     displayName: 'GPT-5.4 nano',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -310,7 +329,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.3 Chat is the latest ChatGPT model used in ChatGPT with improved conversation experiences.',
     displayName: 'GPT-5.3 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.3',
     id: 'gpt-5.3-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -334,7 +356,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.3-Codex is the most capable agentic coding model to date, optimized for agentic coding tasks in Codex or similar environments.',
     displayName: 'GPT-5.3 Codex',
+    family: 'gpt',
+    generation: 'gpt-5.3',
     id: 'gpt-5.3-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -362,7 +387,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -390,7 +418,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2-Codex is an upgraded GPT-5.2 variant optimized for long-horizon, agentic coding tasks.',
     displayName: 'GPT-5.2 Codex',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -417,7 +448,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 pro: a smarter, more precise GPT-5.2 variant (Responses API only), suited for hard problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -441,7 +475,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for the latest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -464,7 +501,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 — a flagship model optimized for coding and agent tasks with configurable reasoning effort and longer context.',
     displayName: 'GPT-5.1',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -488,7 +528,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     contextWindowTokens: 128_000,
     description: 'GPT-5.1 Chat: the ChatGPT variant of GPT-5.1, built for chat scenarios.',
     displayName: 'GPT-5.1 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -511,7 +554,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       "GPT-5.1 Codex Max: OpenAI's most intelligent coding model, optimized for long-horizon agentic coding tasks, supports reasoning tokens.",
     displayName: 'GPT-5.1 Codex Max',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-max',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -538,7 +584,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 Codex: a GPT-5.1 variant optimized for agentic coding tasks, for complex code/agent workflows in the Responses API.',
     displayName: 'GPT-5.1 Codex',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -565,7 +614,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 Codex mini: a smaller, lower-cost Codex variant optimized for agentic coding tasks.',
     displayName: 'GPT-5.1 Codex mini',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-mini',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -592,7 +644,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 272_000,
     pricing: {
       units: [
@@ -618,7 +673,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5 Codex is a GPT-5 variant optimized for agentic coding tasks in Codex-like environments.',
     displayName: 'GPT-5 Codex',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -646,7 +704,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The best model for cross-domain coding and agent tasks. GPT-5 leaps in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.',
     displayName: 'GPT-5',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -674,7 +735,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'A faster, more cost-efficient GPT-5 variant for well-defined tasks, delivering quicker responses while maintaining quality.',
     displayName: 'GPT-5 mini',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -700,7 +764,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The fastest and most cost-effective GPT-5 variant, ideal for latency- and cost-sensitive applications.',
     displayName: 'GPT-5 nano',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -723,7 +790,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The GPT-5 model used in ChatGPT, combining strong understanding and generation for conversational applications.',
     displayName: 'GPT-5 Chat',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -746,7 +816,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o4-mini is the latest small o-series model, optimized for fast, effective reasoning with high efficiency in coding and vision tasks.',
     displayName: 'o4-mini',
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -773,7 +846,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o4-mini-deep-research is a faster, more affordable deep research model for complex multi-step research. It can search the web and also access your data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -800,7 +876,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o3-pro uses more compute to think deeper and consistently deliver better answers; available only via the Responses API.',
     displayName: 'o3-pro',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-pro',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -826,7 +905,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o3 is a powerful all-round model that sets a new bar for math, science, programming, and visual reasoning. It excels at technical writing and instruction following and can analyze text, code, and images for multi-step problems.',
     displayName: 'o3',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -853,7 +935,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o3-deep-research is our most advanced deep research model for complex multi-step tasks. It can search the web and access your data via MCP connectors.',
     displayName: 'o3 Deep Research',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -878,7 +963,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o3-mini is our latest small reasoning model, delivering higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -903,7 +991,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The o1 series is trained with reinforcement learning to think before answering and handle complex reasoning. o1-pro uses more compute for deeper thinking and consistently higher-quality answers.',
     displayName: 'o1-pro',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1-pro',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -927,7 +1018,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'o1 is OpenAI’s new reasoning model with text+image input and text output, suited for complex tasks requiring broad knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -952,7 +1046,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -977,7 +1074,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 mini balances intelligence, speed, and cost, making it attractive for many use cases.',
     displayName: 'GPT-4.1 mini',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1000,7 +1100,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_047_576,
     description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1022,7 +1125,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4o mini is OpenAI’s latest model after GPT-4 Omni, supporting text+image input with text output. It is their most advanced small model, far cheaper than recent frontier models and over 60% cheaper than GPT-3.5 Turbo, while maintaining top-tier intelligence (82% MMLU).',
     displayName: 'GPT-4o mini',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1045,7 +1151,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4o mini Search Preview is trained to understand and execute web search queries via the Chat Completions API. Web search is billed per tool call in addition to token costs.',
     displayName: 'GPT-4o mini Search Preview',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-mini-search-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1069,7 +1178,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -1091,7 +1203,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4o Search Preview is trained to understand and execute web search queries via the Chat Completions API. Web search is billed per tool call in addition to token costs.',
     displayName: 'GPT-4o Search Preview',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-search-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1115,7 +1230,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o 1120',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-2024-11-20',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -1139,7 +1257,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o 0513',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-2024-05-13',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1160,7 +1281,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT Audio is a general chat model for audio input/output, supported in the Chat Completions API.',
     displayName: 'GPT Audio',
+    family: 'gpt',
+    generation: 'gpt-audio',
     id: 'gpt-audio',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1177,61 +1301,16 @@ export const openaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o Audio Preview model with audio input and output.',
-    displayName: 'GPT-4o Audio Preview',
-    id: 'gpt-4o-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o mini Audio model with audio input and output.',
-    displayName: 'GPT-4o mini Audio',
-    id: 'gpt-4o-mini-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 128_000,
     description:
       'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo',
+    family: 'gpt',
+    generation: 'gpt-4',
     id: 'gpt-4-turbo',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
@@ -1249,7 +1328,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo Vision 0409',
+    family: 'gpt',
+    generation: 'gpt-4',
     id: 'gpt-4-turbo-2024-04-09',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
@@ -1267,7 +1349,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4 provides a larger context window to handle longer inputs, suitable for broad information synthesis and data analysis.',
     displayName: 'GPT-4',
+    family: 'gpt',
+    generation: 'gpt-4',
     id: 'gpt-4',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
@@ -1284,7 +1369,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-4 provides a larger context window to handle longer inputs, suitable for broad information synthesis and data analysis.',
     displayName: 'GPT-4 0613',
+    family: 'gpt',
+    generation: 'gpt-4',
     id: 'gpt-4-0613',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
@@ -1302,7 +1390,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo',
+    family: 'gpt',
+    generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1319,7 +1410,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 0125',
+    family: 'gpt',
+    generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-0125',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1337,7 +1431,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 1106',
+    family: 'gpt',
+    generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-1106',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
@@ -1352,7 +1449,10 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT 3.5 Turbo for text generation and understanding tasks, optimized for instruction following.',
     displayName: 'GPT-3.5 Turbo Instruct',
+    family: 'gpt',
+    generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-instruct',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1371,7 +1471,9 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'computer-use-preview is a specialized model for the "computer use tool," trained to understand and execute computer-related tasks.',
     displayName: 'Computer Use Preview',
+    family: 'gpt',
     id: 'computer-use-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 1024,
     pricing: {
       units: [
@@ -1453,7 +1555,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
 ];
 
 // Speech recognition models
-export const openaiSTTModels: AISTTModelCard[] = [
+export const openaiASRModels: AIASRModelCard[] = [
   {
     description:
       'A general speech recognition model supporting multilingual ASR, speech translation, and language identification.',
@@ -1469,7 +1571,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
         },
       ],
     },
-    type: 'stt',
+    type: 'asr',
   },
   {
     contextWindowTokens: 16_000,
@@ -1485,7 +1587,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
         { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    type: 'stt',
+    type: 'asr',
   },
   {
     contextWindowTokens: 16_000,
@@ -1501,7 +1603,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
         { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    type: 'stt',
+    type: 'asr',
   },
 ];
 
@@ -1583,76 +1685,6 @@ export const openaiImageModels: AIImageModelCard[] = [
       ],
     },
     releasedAt: '2025-10-06',
-    type: 'image',
-  },
-  {
-    description:
-      'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
-    displayName: 'DALL·E 3',
-    id: 'dall-e-3',
-    parameters: {
-      prompt: { default: '' },
-      quality: {
-        default: 'standard',
-        enum: ['standard', 'hd'],
-      },
-      size: {
-        default: '1024x1024',
-        enum: ['1024x1024', '1792x1024', '1024x1792'],
-      },
-    },
-    pricing: {
-      units: [
-        {
-          lookup: {
-            prices: {
-              hd_1024x1024: 0.08,
-              hd_1024x1792: 0.12,
-              hd_1792x1024: 0.12,
-              standard_1024x1024: 0.04,
-              standard_1024x1792: 0.08,
-              standard_1792x1024: 0.08,
-            },
-            pricingParams: ['quality', 'size'],
-          },
-          name: 'imageGeneration',
-          strategy: 'lookup',
-          unit: 'image',
-        },
-      ],
-    },
-    type: 'image',
-  },
-  {
-    description:
-      'Second-generation DALL·E model with more realistic, accurate image generation and 4× the resolution of the first generation.',
-    displayName: 'DALL·E 2',
-    id: 'dall-e-2',
-    parameters: {
-      imageUrl: { default: null },
-      prompt: { default: '' },
-      size: {
-        default: '1024x1024',
-        enum: ['256x256', '512x512', '1024x1024'],
-      },
-    },
-    pricing: {
-      units: [
-        {
-          lookup: {
-            prices: {
-              '1024x1024': 0.02,
-              '256x256': 0.016,
-              '512x512': 0.018,
-            },
-            pricingParams: ['size'],
-          },
-          name: 'imageGeneration',
-          strategy: 'lookup',
-          unit: 'image',
-        },
-      ],
-    },
     type: 'image',
   },
 ];
@@ -1818,7 +1850,7 @@ export const allModels = [
   ...openaiChatModels,
   ...openaiEmbeddingModels,
   ...openaiTTSModels,
-  ...openaiSTTModels,
+  ...openaiASRModels,
   ...openaiImageModels,
   ...openaiRealtimeModels,
   ...openaiVideoModels,

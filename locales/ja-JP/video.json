@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "終了フレーム",
   "config.generateAudio.label": "音声を生成",
   "config.header.title": "ビデオ",
+  "config.imageUpload.maxCountReached": "参照画像は最大{{count}}枚まで追加できます",
   "config.imageUrl.label": "開始フレーム",
   "config.prompt.placeholder": "生成したいビデオの内容を説明してください",
   "config.prompt.placeholderWithRef": "生成したい画像のシーンを説明してください",

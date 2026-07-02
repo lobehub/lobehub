@@ -62,6 +62,30 @@ describe('invoke', () => {
     expect(mockIpcRendererInvoke).toHaveBeenCalledWith('system.getAppVersion');
   });
 
+  it('should rebuild and throw a real Error (with cause) from a main-process error envelope', async () => {
+    mockIpcRendererInvoke.mockResolvedValue({
+      __lobeIpcError__: true,
+      error: {
+        cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND example.com', name: 'Error' },
+        message: 'fetch failed',
+        name: 'TypeError',
+      },
+    });
+
+    await expect(invoke('heterogeneousAgent.sendPrompt')).rejects.toMatchObject({
+      cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND example.com' },
+      message: 'fetch failed',
+      name: 'TypeError',
+    });
+  });
+
+  it('should not treat a plain object result as an error envelope', async () => {
+    const result = { __lobeIpcError__: false, data: 'ok' };
+    mockIpcRendererInvoke.mockResolvedValue(result);
+
+    await expect(invoke('someEvent')).resolves.toEqual(result);
+  });
+
   it('should handle ipcRenderer returning undefined', async () => {
     mockIpcRendererInvoke.mockResolvedValue(undefined);
 

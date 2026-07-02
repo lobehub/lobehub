@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:run-step');
 
@@ -26,6 +26,11 @@ export async function runStep(c: Context): Promise<Response> {
   const externalRetryCount = Number(c.req.header('upstash-retried') ?? 0) || 0;
 
   try {
+    // QStash nests resume/intervention fields under `body.payload` (see
+    // QStashQueueServiceImpl.scheduleMessage), while `operationId`/`stepIndex`/
+    // `context` stay at the top level. Merge so both shapes work — without this
+    // the QStash path reads `resumeAsyncTool`/`approvedToolCall`/… as undefined
+    // and never resumes a parked op. (The local queue spreads payload itself.)
     const {
       operationId,
       stepIndex = 0,
@@ -34,8 +39,13 @@ export async function runStep(c: Context): Promise<Response> {
       approvedToolCall,
       rejectionReason,
       rejectAndContinue,
+      resumeAsyncTool,
+      finishAfterAsyncTool,
+      groupMemberTimeout,
       toolMessageId,
-    } = body;
+      verifyAsyncToolBarrier,
+      asyncToolVerifyAttempt,
+    } = { ...body, ...body.payload };
 
     if (!operationId) {
       return c.json({ error: 'operationId is required' }, 400);
@@ -53,18 +63,33 @@ export async function runStep(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
-    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
+    // Step through AiAgentService so the runtime keeps its `execSubAgent`
+    // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
+    // step is a fresh HTTP request, and a bare AgentRuntimeService would lose the
+    // in-process callback → SUB_AGENT_UNAVAILABLE.
+    //
+    // Thread the operation's workspace through so the runtime's models stay
+    // workspace-scoped. Without it the worker is personal-scoped and the
+    // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
+    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+      workspaceId: metadata.workspaceId,
+    });
 
-    const result = await agentRuntimeService.executeStep({
+    const result = await aiAgentService.executeStep({
       approvedToolCall,
+      asyncToolVerifyAttempt,
       context,
       externalRetryCount,
       humanInput,
+      finishAfterAsyncTool,
+      groupMemberTimeout,
       operationId,
       rejectAndContinue,
       rejectionReason,
+      resumeAsyncTool,
       stepIndex,
       toolMessageId,
+      verifyAsyncToolBarrier,
     });
 
     // Step is currently being executed by another instance — tell QStash to retry later

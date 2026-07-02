@@ -10,6 +10,17 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
+
+/** Verify rollup states, mirrors the `verify_status` enum column. */
+export type VerifyStatus =
+  | 'unverified'
+  | 'planned'
+  | 'verifying'
+  | 'passed'
+  | 'failed'
+  | 'repairing'
+  | 'delivered';
 
 export interface RecordOperationStartParams {
   agentId?: string | null;
@@ -42,13 +53,26 @@ export interface RecordOperationCompletionParams {
     | 'interrupted'
     | 'max_steps'
     | 'cost_limit'
-    | 'waiting_for_human';
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool';
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
   llmCalls?: number | null;
+  /** Backfill the executed model when it's only known at completion (e.g. a
+   * heterogeneous run learns its real model from the CLI mid-stream). Omit to
+   * keep the value seeded at `recordStart`. */
+  model?: string | null;
   processingTimeMs?: number | null;
-  status: 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
+  provider?: string | null;
+  status:
+    | 'running'
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool'
+    | 'done'
+    | 'error'
+    | 'interrupted';
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -62,11 +86,16 @@ export interface RecordOperationCompletionParams {
 export class AgentOperationModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentOperations);
 
   /**
    * Insert the initial row when an operation is created. Idempotent via
@@ -92,6 +121,7 @@ export class AgentOperationModel {
       topicId: params.topicId ?? null,
       trigger: params.trigger,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     await this.db.insert(agentOperations).values(values).onConflictDoNothing();
@@ -124,6 +154,8 @@ export class AgentOperationModel {
       updates.totalOutputTokens = params.totalOutputTokens;
     if (params.llmCalls !== undefined) updates.llmCalls = params.llmCalls;
     if (params.toolCalls !== undefined) updates.toolCalls = params.toolCalls;
+    if (params.model !== undefined) updates.model = params.model;
+    if (params.provider !== undefined) updates.provider = params.provider;
     if (params.cost !== undefined) updates.cost = params.cost;
     if (params.usage !== undefined) updates.usage = params.usage;
     if (params.error !== undefined) updates.error = params.error;
@@ -133,14 +165,14 @@ export class AgentOperationModel {
     await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)));
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
   }
 
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
       .from(agentOperations)
-      .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)))
+      .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
   }
@@ -164,7 +196,7 @@ export class AgentOperationModel {
       .from(agentOperations)
       .where(
         and(
-          eq(agentOperations.userId, this.userId),
+          this.ownership(),
           isNotNull(agentOperations.startedAt),
           isNotNull(agentOperations.completedAt),
           gte(agentOperations.createdAt, startDate),
@@ -173,4 +205,33 @@ export class AgentOperationModel {
 
     return row?.seconds ?? 0;
   }
+
+  /**
+   * Atomically flip a parked parent op from `waiting_for_async_tool` back to
+   * `running`. Returns true only for the single winner (affected === 1) so
+   * concurrent sub-op completions that lose the race no-op instead of
+   * double-resuming the parent.
+   */
+  async tryResumeFromAsyncTool(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_async_tool'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
+  }
+
+  // ============================================
+  // Verify (delivery checker)
+  // ============================================
+  // The verify plan snapshot + rollup status moved off this table onto
+  // `verify_runs` (the session entity), addressed via `VerifyRunModel`. The
+  // `verify_plan` / `verify_status` columns here are deprecated (see schema) and
+  // no longer read or written through this model.
 }

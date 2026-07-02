@@ -296,4 +296,93 @@ describe('useTopicScrollPersist', () => {
       expect(loadScrollSnapshot('main_agt_1_tpc_a')?.offset).toBe(7777);
     });
   });
+
+  describe('leave-time re-stamp', () => {
+    it('refreshes savedAt on unmount using the last scrolled position', async () => {
+      const fixedNow = 1_000_000_000_000;
+      vi.setSystemTime(fixedNow);
+      const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
+
+      const { result, unmount } = renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      // Initial restore (no snapshot) settles, then the user scrolls up.
+      await advanceFrames(2);
+      act(() => {
+        result.current.recordScroll(2000, false);
+      });
+      await vi.advanceTimersByTimeAsync(300);
+
+      // Simulate idle reading: time passes well beyond the 5-min window with no
+      // further scrolling, then the user switches topics (unmount).
+      vi.setSystemTime(fixedNow + 10 * 60 * 1000);
+      unmount();
+
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persisted?.offset).toBe(2000);
+      // savedAt is the departure time, not the last-scroll time, so a quick
+      // return still restores the position.
+      expect(persisted?.savedAt).toBe(fixedNow + 10 * 60 * 1000);
+    });
+
+    it('refreshes savedAt on unmount even when the user never scrolled after restore', async () => {
+      const fixedNow = 1_000_000_000_000;
+      vi.setSystemTime(fixedNow);
+      // Existing snapshot restored to offset 5000; user then reads without
+      // scrolling and leaves after the window would have expired.
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 5000,
+        savedAt: fixedNow,
+      });
+      const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
+      handle.scrollTo.mockImplementation((offset: number) => {
+        handle.scrollOffset = offset;
+      });
+
+      const { unmount } = renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      // Let the restore land and seed lastKnownRef from where it landed.
+      await advanceFrames(4);
+
+      vi.setSystemTime(fixedNow + 10 * 60 * 1000);
+      unmount();
+
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persisted?.offset).toBe(5000);
+      expect(persisted?.savedAt).toBe(fixedNow + 10 * 60 * 1000);
+    });
+
+    it('does not create a snapshot on unmount when nothing was ever recorded', async () => {
+      // No prior snapshot, restore falls back to scroll-to-bottom, and the user
+      // never scrolls. scrollOffset stays 0 (bottom in the fake) so we still
+      // record an at-bottom position — which restores to the bottom anyway.
+      const handle = createFakeVList({ scrollSize: 0, viewportSize: 800 });
+      const { unmount } = renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_empty',
+          dataSourceLength: 50,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+      unmount();
+
+      // Either no snapshot, or an at-bottom one — both restore to the bottom.
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_empty');
+      expect(persisted?.atBottom ?? true).toBe(true);
+    });
+  });
 });

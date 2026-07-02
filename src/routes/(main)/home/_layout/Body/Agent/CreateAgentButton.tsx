@@ -1,12 +1,13 @@
 'use client';
 
-import { ActionIcon, Block, Center, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Center, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../hooks';
@@ -43,6 +44,7 @@ interface CreateAgentButtonProps {
 
 const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canCreate, reason } = usePermission('create_content');
   const {
     createAgent,
     createAgentMenuItem,
@@ -77,6 +79,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
   ]);
 
   const handleClick = () => {
+    if (!canCreate) return;
     if (openCreateModal) {
       openCreateModal('agent', isCustomGroup ? { groupId } : undefined);
     } else {
@@ -84,16 +87,16 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
     }
   };
 
-  return (
+  const content = (
     <Block
-      clickable
       horizontal
       align={'center'}
       className={cx(styles.container, className)}
+      clickable={canCreate}
       gap={8}
       height={36}
       paddingInline={4}
-      style={{ height: 36 }}
+      style={canCreate ? { height: 36 } : { cursor: 'not-allowed', height: 36, opacity: 0.5 }}
       variant={'borderless'}
       onClick={handleClick}
     >
@@ -107,28 +110,35 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
       <Text style={{ flex: 1 }} type={'secondary'}>
         {t('newAgent')}
       </Text>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={ACTION_CLASS_NAME}
-        flex={'none'}
-        justify={'flex-end'}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
-        <DropdownMenu items={dropdownItems} nativeButton={false}>
-          <ActionIcon
-            color={cssVar.colorTextQuaternary}
-            icon={ChevronDownIcon}
-            size={'small'}
-            style={{ flex: 'none' }}
-          />
-        </DropdownMenu>
-      </Flexbox>
+      {canCreate && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={ACTION_CLASS_NAME}
+          flex={'none'}
+          justify={'flex-end'}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <DropdownMenu items={dropdownItems} nativeButton={false}>
+            <ActionIcon
+              color={cssVar.colorTextQuaternary}
+              icon={ChevronDownIcon}
+              size={'small'}
+              style={{ flex: 'none' }}
+            />
+          </DropdownMenu>
+        </Flexbox>
+      )}
     </Block>
   );
+
+  // Wrap in Tooltip when the viewer/member lacks `create_content`. The
+  // dropdown is hidden in the disabled state (it'd let users bypass the
+  // gate); the main click target is intercepted in `handleClick`.
+  return canCreate ? content : <Tooltip title={reason}>{content}</Tooltip>;
 });
 
 export default CreateAgentButton;

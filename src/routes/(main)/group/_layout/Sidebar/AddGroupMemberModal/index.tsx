@@ -7,6 +7,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { groupKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 
 import { type AgentItemData } from './AgentItem';
@@ -48,7 +49,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
 
     // Fetch agents from the new API (non-virtual agents only)
     const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
-      open ? 'queryAgents' : null,
+      open ? groupKeys.queryAgents() : null,
       () => agentService.queryAgents(),
     );
 

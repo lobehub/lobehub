@@ -2,7 +2,6 @@ import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
-import { responsesAPIModels, systemToUserModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
@@ -10,6 +9,11 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { sanitizeError } from '../../utils/sanitizeError';
+import {
+  isResponsesAPIModel,
+  responsesAPIModels,
+  systemToUserModels,
+} from '../openai/openaiModelId';
 
 const azureImageLogger = debug('lobe-image:azure');
 const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;
@@ -66,16 +70,22 @@ const normalizeAzureBaseURL = (value?: string) => {
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
 
-  return url.replace(regex, (match, protocol, subdomain, rest) => `${protocol}***${rest}`);
+  return url.replace(regex, (_match, protocol, _subdomain, rest) => `${protocol}***${rest}`);
 };
 
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
-      const { deploymentName, enabledSearch, model, ...rest } = payload;
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        ...rest
+      } = payload;
       const requestModel = deploymentName ?? model;
 
-      if (responsesAPIModels.has(model) || enabledSearch) {
+      if (isResponsesAPIModel(model) || enabledSearch) {
         return {
           ...rest,
           apiMode: 'responses',
@@ -134,7 +144,15 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.Azure,
   responses: {
     handlePayload: (payload) => {
-      const { deploymentName, enabledSearch, model, tools, verbosity, ...rest } = payload;
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        tools,
+        verbosity,
+        ...rest
+      } = payload;
       const requestModel = deploymentName ?? model;
       const updatedMessages = transformAzureSystemMessages(payload.messages, model);
       const azureTools = appendAzureSearchTool(tools, enabledSearch);
@@ -192,7 +210,8 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
   async createImage(payload: CreateImagePayload) {
     const { model, params } = payload;
-    azureImageLogger('Creating image with model: %s and params: %O', model, params);
+    const requestModel = this.getMappedModelId(model);
+    azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
 
     try {
       const userInput: Record<string, any> = { ...params };
@@ -226,7 +245,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
 
       const azureImageOptions: Record<string, any> = {
-        model,
+        model: requestModel,
         n: 1,
         ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
         ...userInput,

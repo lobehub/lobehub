@@ -1,6 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 
+import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
@@ -12,7 +13,6 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { markdownToTxt } from '@/utils/markdownToTxt';
-import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type StarterMode } from './initialState';
@@ -90,12 +90,27 @@ export class HomeInputActionImpl {
         groupId,
       });
 
+      // Sync the editing target into the chat store BEFORE the builder message
+      // is sent. Gateway mode reads `chatStore.activeAgentId` at send time to
+      // forward `editingAgentId` (see gateway.ts executeGatewayAgent), and the
+      // AgentBuilder tool `onAfterCall` reads it to refresh the correct agent's
+      // config. Setting it here — instead of waiting for AgentBuilderProvider's
+      // mount effect — removes the create-time race where the first tool call
+      // could target / refresh the wrong agent (left profile not refreshed).
+      if (result.agentId) {
+        useChatStore.setState(
+          { activeAgentId: result.agentId },
+          false,
+          'sendAsAgent/syncEditingAgentId',
+        );
+      }
+
       if (message.trim()) {
         useGlobalStore.getState().toggleAgentBuilderPanel(true);
       }
 
       // 3. Navigate to Agent profile page
-      getStableNavigate()?.(`/agent/${result.agentId}/profile`);
+      stableWorkspaceAwareNavigate(`/agent/${result.agentId}/profile`);
 
       // 4. Refresh agent list
       this.#get().refreshAgentList();
@@ -170,7 +185,7 @@ export class HomeInputActionImpl {
       }
 
       // 5. Navigate to Group profile page
-      getStableNavigate()?.(`/group/${group.id}/profile`);
+      stableWorkspaceAwareNavigate(`/group/${group.id}/profile`);
 
       // 6. Update groupAgentBuilder's model config and send initial message.
       // Hydrate first so we don't race with the group profile page's own init.
@@ -231,7 +246,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Page
-      getStableNavigate()?.(`/page/${newDoc.id}`);
+      stableWorkspaceAwareNavigate(`/page/${newDoc.id}`);
 
       // 4. Update pageAgent's model config and send initial message. Hydrate
       // first to avoid the same race the agent/group flows hit.
@@ -245,7 +260,11 @@ export class HomeInputActionImpl {
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
-          context: { agentId: pageAgentId, scope: 'page' },
+          // Pass the freshly created document id explicitly. The new PageEditor
+          // has not mounted yet, so the page editor runtime singleton may still
+          // be bound to the previously open document — relying on its fallback
+          // here would scope server-side PageAgent tools to the wrong document.
+          context: { agentId: pageAgentId, documentId: newDoc.id, scope: 'page' },
           editorData,
           message,
         });

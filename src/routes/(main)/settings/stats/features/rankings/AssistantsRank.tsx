@@ -1,15 +1,16 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { BarList } from '@lobehub/charts';
 import { ActionIcon, Avatar, Modal } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { SESSION_CHAT_URL } from '@/const/url';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -20,9 +21,9 @@ import StatsFormGroup from '../components/StatsFormGroup';
 export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [open, setOpen] = useState(false);
   const { t } = useTranslation(['auth', 'chat']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading } = useClientDataSWR('rank-agents', async () =>
+  const { data, isLoading } = useClientDataSWR(statsKeys.rankAgents(), async () =>
     agentService.rankAgents(),
   );
 
@@ -30,7 +31,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const mapData = (item: AgentRankItem) => {
     const isInbox = item.id === inboxAgentId;
-    const path = SESSION_CHAT_URL(item.id, mobile);
+    const path = AGENT_CHAT_URL(item.id, mobile);
     const link = mobile
       ? qs.stringifyUrl({ query: { showMobileWorkspace: true }, url: path })
       : path;

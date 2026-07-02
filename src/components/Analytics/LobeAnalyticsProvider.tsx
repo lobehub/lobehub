@@ -12,7 +12,6 @@ import { memo, useRef } from 'react';
 
 import { BUSINESS_LINE } from '@/const/analytics';
 import { isDesktop } from '@/const/version';
-import { isDev } from '@/utils/env';
 
 type Props = {
   children: ReactNode;
@@ -32,7 +31,8 @@ export const LobeAnalyticsProvider = memo(
         analyticsInstance ||
         createSingletonAnalytics({
           business: BUSINESS_LINE,
-          debug: isDev,
+          // Keep the manager-level logs (`[AnalyticsManager] ...`) quiet even in dev
+          debug: false,
           providers: {
             ga4: ga4Config,
             posthog: postHogConfig,

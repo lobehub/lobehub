@@ -2,12 +2,11 @@ import { type KnowledgeItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { agentKnowledgeKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
 import { type AgentStore } from '../../store';
-
-const FETCH_AGENT_KNOWLEDGE_KEY = 'FETCH_AGENT_KNOWLEDGE';
 
 /**
  * Knowledge Slice Actions
@@ -49,7 +48,7 @@ export class KnowledgeSliceActionImpl {
   };
 
   internal_refreshAgentKnowledge = async (): Promise<void> => {
-    await mutate([FETCH_AGENT_KNOWLEDGE_KEY, this.#get().activeAgentId]);
+    await mutate(agentKnowledgeKeys.list(this.#get().activeAgentId));
   };
 
   removeFileFromAgent = async (fileId: string): Promise<void> => {
@@ -90,7 +89,7 @@ export class KnowledgeSliceActionImpl {
 
   useFetchFilesAndKnowledgeBases = (agentId?: string): SWRResponse<KnowledgeItem[]> => {
     return useClientDataSWR<KnowledgeItem[]>(
-      agentId ? [FETCH_AGENT_KNOWLEDGE_KEY, agentId] : null,
+      agentId ? agentKnowledgeKeys.list(agentId) : null,
       ([, id]: string[]) => agentService.getFilesAndKnowledgeBases(id),
       {
         fallbackData: [],

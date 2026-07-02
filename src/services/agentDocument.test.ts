@@ -52,7 +52,7 @@ describe('AgentDocumentService', () => {
       title: 'title',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
   });
 
   it('should revalidate agent documents after removeDocument', async () => {
@@ -63,13 +63,13 @@ describe('AgentDocumentService', () => {
       topicId: 'topic-1',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
-    expect(mutate).toHaveBeenCalledWith(['agent-documents-list', 'agent-1']);
-    expect(mutate).toHaveBeenCalledWith(['workspace-agent-document-editor', 'agent-1', 'doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['page-document-meta', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['pageDetail', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['pageDocuments']);
-    expect(mutate).toHaveBeenCalledWith(['SWR_USE_FETCH_NOTEBOOK_DOCUMENTS', 'topic-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documentsList', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documentEditor', 'agent-1', 'doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:meta', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:detail', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:list']);
+    expect(mutate).toHaveBeenCalledWith(['notebook:documents', 'topic-1']);
   });
 
   it('should revalidate agent documents after updateLoadRule', async () => {
@@ -79,7 +79,7 @@ describe('AgentDocumentService', () => {
       rule: {},
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
   });
 
   it('should fetch target agent documents when cache is missing', async () => {

@@ -164,17 +164,21 @@ describe('pricing utilities (new)', () => {
       expect(getOriginalUnitRateByName(pricing, 'textOutput')).toBeUndefined();
     });
 
-    it('returns undefined for non-fixed pricing units', () => {
+    it('returns tiered and lookup original prices when they are higher than current rates', () => {
       const pricing: Pricing = {
         units: [
           {
             name: 'textInput',
             strategy: 'tiered',
-            tiers: [{ rate: 0.1, upTo: 'infinity' }],
+            tiers: [{ originalRate: 0.2, rate: 0.1, upTo: 'infinity' }],
             unit: 'millionTokens',
           },
           {
-            lookup: { prices: { default: 0.2 }, pricingParams: ['quality'] },
+            lookup: {
+              originalPrices: { default: 0.4 },
+              prices: { default: 0.2 },
+              pricingParams: ['quality'],
+            },
             name: 'textOutput',
             strategy: 'lookup',
             unit: 'millionTokens',
@@ -182,8 +186,8 @@ describe('pricing utilities (new)', () => {
         ],
       };
 
-      expect(getOriginalUnitRateByName(pricing, 'textInput')).toBeUndefined();
-      expect(getOriginalUnitRateByName(pricing, 'textOutput')).toBeUndefined();
+      expect(getOriginalUnitRateByName(pricing, 'textInput')).toBe(0.2);
+      expect(getOriginalUnitRateByName(pricing, 'textOutput')).toBe(0.4);
     });
   });
 

@@ -1,14 +1,22 @@
 import { type StateCreator } from 'zustand/vanilla';
 
+import { useAgentStore } from '@/store/agent';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
 import { removeDraft } from '../draftStorage';
+import { addInputHistory } from '../inputHistoryStorage';
 import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
 
 export interface Action {
+  clearInputCompletionError: () => void;
+  dismissInputCompletionError: () => void;
   getJSONState: () => Record<string, any> | undefined;
   getMarkdownContent: () => string;
   handleSendButton: () => void;
   handleStop: () => void;
+  pauseInputCompletion: (error: State['inputCompletionError']) => void;
   setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expend: boolean) => void;
   setJSONState: (content: any) => void;
@@ -22,9 +30,23 @@ type CreateStore = (
   initState?: Partial<PublicState>,
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
+const getEffectiveAgentId = (agentId?: string): string => {
+  // Example: a ChatInput without an agentId prop reads history from activeAgentId,
+  // so sending must write history to the same scope.
+  return agentId !== undefined ? agentId : useAgentStore.getState().activeAgentId || '';
+};
+
 export const store: CreateStore = (publicState) => (set, get) => ({
   ...initialState,
   ...publicState,
+
+  clearInputCompletionError: () => {
+    set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
+  },
+
+  dismissInputCompletionError: () => {
+    set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
+  },
 
   getJSONState: () => {
     return get().editor?.getDocument('json') as Record<string, any> | undefined;
@@ -37,12 +59,27 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (!editor) return;
     if (get().sendButtonProps?.disabled) return;
 
-    get().onSend?.({
+    const onSend = get().onSend;
+    const historyEnabled = !!onSend && (get().feature?.inputHistory ?? true);
+    const historySnapshot = historyEnabled
+      ? {
+          agentId: getEffectiveAgentId(get().agentId),
+          json: get().getJSONState(),
+          markdown: get().getMarkdownContent(),
+          userId: userProfileSelectors.userId(useUserStore.getState()),
+        }
+      : undefined;
+
+    onSend?.({
       clearContent: () => editor?.cleanDocument(),
       editor: editor!,
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
     });
+
+    if (historySnapshot) {
+      addInputHistory(historySnapshot);
+    }
 
     const { draftKey } = get();
     if (draftKey) removeDraft(draftKey);
@@ -61,6 +98,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (!get().editor) return;
 
     get().sendButtonProps?.onStop?.({ editor: get().editor! });
+  },
+
+  pauseInputCompletion: (inputCompletionError) => {
+    set({ inputCompletionError, inputCompletionErrorDismissed: false });
   },
 
   setDocument: (type, content, options) => {

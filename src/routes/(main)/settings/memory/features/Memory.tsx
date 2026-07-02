@@ -2,7 +2,7 @@
 
 import { type UserMemoryEffort } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
+import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -18,6 +19,7 @@ const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'hig
 
 const MemorySetting = memo(() => {
   const { t } = useTranslation('setting');
+  const { allowed: canManageMemory, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
   const { memory } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
@@ -28,7 +30,11 @@ const MemorySetting = memo(() => {
   const memorySettings: FormGroupItemType = {
     children: [
       {
-        children: <Switch />,
+        children: (
+          <Tooltip title={reason}>
+            <Switch disabled={!canManageMemory} />
+          </Tooltip>
+        ),
         desc: t('memory.enabled.desc'),
         label: t('memory.enabled.title'),
         layout: 'horizontal',
@@ -38,22 +44,27 @@ const MemorySetting = memo(() => {
       },
       {
         children: (
-          <LevelSlider<UserMemoryEffort>
-            defaultValue="medium"
-            levels={MEMORY_EFFORT_LEVELS}
-            style={{ minWidth: 160 }}
-            value={memory?.effort ?? 'medium'}
-            marks={{
-              0: t('memory.effort.level.low'),
-              1: t('memory.effort.level.medium'),
-              2: t('memory.effort.level.high'),
-            }}
-            onChange={async (value) => {
-              setLoading(true);
-              await setSettings({ memory: { effort: value } });
-              setLoading(false);
-            }}
-          />
+          <Tooltip title={reason}>
+            <LevelSlider<UserMemoryEffort>
+              defaultValue="medium"
+              disabled={!canManageMemory}
+              levels={MEMORY_EFFORT_LEVELS}
+              style={{ minWidth: 160 }}
+              value={memory?.effort ?? 'medium'}
+              marks={{
+                0: t('memory.effort.level.low'),
+                1: t('memory.effort.level.medium'),
+                2: t('memory.effort.level.high'),
+              }}
+              onChange={async (value) => {
+                if (!canManageMemory) return;
+
+                setLoading(true);
+                await setSettings({ memory: { effort: value } });
+                setLoading(false);
+              }}
+            />
+          </Tooltip>
         ),
         desc: t('memory.effort.desc'),
         label: t('memory.effort.title'),
@@ -74,6 +85,8 @@ const MemorySetting = memo(() => {
       itemsType={'group'}
       variant={'filled'}
       onValuesChange={async (values) => {
+        if (!canManageMemory) return;
+
         setLoading(true);
         await setSettings({ memory: values });
         setLoading(false);

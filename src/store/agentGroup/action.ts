@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { groupKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
@@ -22,9 +23,6 @@ import { ChatGroupLifecycleAction } from './slices/lifecycle';
 import { ChatGroupMemberAction } from './slices/member';
 
 const n = setNamespace('chatGroup');
-
-const FETCH_GROUPS_KEY = 'fetchGroups';
-const FETCH_GROUP_DETAIL_KEY = 'fetchGroupDetail';
 
 /**
  * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array if not present
@@ -66,9 +64,19 @@ class ChatGroupInternalAction implements ResetableStore {
     );
   };
 
+  private removeStaleGroup = (groupId: string) => {
+    this.internal_dispatchChatGroup({ payload: groupId, type: 'deleteGroup' });
+  };
+
+  private isGroupNotFoundError = (error: unknown, groupId: string) =>
+    error instanceof Error && error.message === `Group ${groupId} not found`;
+
   internal_fetchGroupDetail = async (groupId: string) => {
     const groupDetail = await chatGroupService.getGroupDetail(groupId);
-    if (!groupDetail) return;
+    if (!groupDetail) {
+      this.removeStaleGroup(groupId);
+      return;
+    }
 
     // Update groupMap with full group detail including supervisorAgentId and agents
     this.internal_dispatchChatGroup({
@@ -141,11 +149,11 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   refreshGroupDetail = async (groupId: string) => {
-    await mutate([FETCH_GROUP_DETAIL_KEY, groupId]);
+    await mutate(groupKeys.detail(groupId));
   };
 
   refreshGroups = async () => {
-    await mutate([FETCH_GROUPS_KEY, true]);
+    await mutate(groupKeys.list(true));
   };
 
   toggleGroupSetting = (open: boolean) => {
@@ -158,13 +166,21 @@ class ChatGroupInternalAction implements ResetableStore {
 
   useFetchGroupDetail = (enabled: boolean, groupId: string) =>
     useClientDataSWRWithSync<AgentGroupDetail | null>(
-      enabled && groupId ? [FETCH_GROUP_DETAIL_KEY, groupId] : null,
+      enabled && groupId ? groupKeys.detail(groupId) : null,
       async () => {
         const groupDetail = await chatGroupService.getGroupDetail(groupId);
-        if (!groupDetail) throw new Error(`Group ${groupId} not found`);
+        if (!groupDetail) {
+          this.removeStaleGroup(groupId);
+          throw new Error(`Group ${groupId} not found`);
+        }
         return groupDetail;
       },
       {
+        onError: (error) => {
+          if (this.isGroupNotFoundError(error, groupId)) {
+            this.removeStaleGroup(groupId);
+          }
+        },
         onData: (groupDetail) => {
           if (!groupDetail) return;
 
@@ -220,7 +236,7 @@ class ChatGroupInternalAction implements ResetableStore {
   // This is not used for now, as we are combining group in the session lambda's response
   useFetchGroups = (enabled: boolean, isLogin: boolean) =>
     useClientDataSWRWithSync<ChatGroupItem[]>(
-      enabled ? [FETCH_GROUPS_KEY, isLogin] : null,
+      enabled ? groupKeys.list(isLogin) : null,
       async () => chatGroupService.getGroups(),
       {
         fallbackData: [],
@@ -252,7 +268,6 @@ class ChatGroupInternalAction implements ResetableStore {
             n('useFetchGroups/onData'),
           );
         },
-        suspense: true,
       },
     );
 }

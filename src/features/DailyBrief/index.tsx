@@ -2,11 +2,11 @@ import { Button, Flexbox } from '@lobehub/ui';
 import { Newspaper } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -18,7 +18,7 @@ import { BriefCardSkeleton } from './BriefCardSkeleton';
 
 const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
   useFetchBriefs(isLogin);

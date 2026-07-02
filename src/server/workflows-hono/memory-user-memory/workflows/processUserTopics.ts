@@ -59,9 +59,11 @@ export const processUserTopicsHandler = async (
         `memory:user-memory:extract:users:${userId}:cancel-check`,
         () =>
           getServerDB().then((db) =>
-            new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
-              params.asyncTaskId!,
-            ),
+            new AsyncTaskModel(
+              db,
+              userId,
+              params.workspaceId,
+            ).isUserMemoryExtractionCancellationRequested(params.asyncTaskId!),
           ),
       );
       if (cancelled) {
@@ -82,7 +84,11 @@ export const processUserTopicsHandler = async (
         ? await context.run(
             `memory:user-memory:extract:users:${userId}:filter-topic-ids`,
             async () => {
-              const filtered = await executor.filterTopicIdsForUser(userId, params.topicIds);
+              const filtered = await executor.filterTopicIdsForUser(
+                userId,
+                params.topicIds,
+                params.workspaceId,
+              );
               return filtered.length > 0 ? filtered : undefined;
             },
           )
@@ -102,6 +108,7 @@ export const processUserTopicsHandler = async (
               from: params.from,
               to: params.to,
               userId,
+              workspaceId: params.workspaceId,
             },
             TOPIC_PAGE_SIZE,
           ),

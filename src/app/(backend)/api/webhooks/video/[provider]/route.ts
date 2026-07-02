@@ -52,6 +52,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
   let asyncTaskModel: AsyncTaskModel | undefined;
   let asyncTaskId: string | undefined;
   let asyncTaskUserId: string | undefined;
+  let asyncTaskWorkspaceId: string | undefined;
   let asyncTaskMetadata: VideoGenerationTaskMetadata | undefined;
 
   try {
@@ -101,6 +102,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
 
     asyncTaskId = asyncTask.id;
     asyncTaskUserId = asyncTask.userId;
+    asyncTaskWorkspaceId = asyncTask.workspaceId ?? undefined;
     asyncTaskMetadata = metadata;
 
     log(
@@ -119,7 +121,11 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       return NextResponse.json({ success: true });
     }
 
-    const generationModel = new GenerationModel(db, asyncTask.userId);
+    const generationModel = new GenerationModel(
+      db,
+      asyncTask.userId,
+      asyncTask.workspaceId ?? undefined,
+    );
 
     // Find generation by asyncTaskId
     const generation = await generationModel.findByAsyncTaskId(asyncTask.id);
@@ -133,7 +139,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
 
     log('Found generation: %s', generation.id);
 
-    asyncTaskModel = new AsyncTaskModel(db, asyncTask.userId);
+    asyncTaskModel = new AsyncTaskModel(db, asyncTask.userId, asyncTask.workspaceId ?? undefined);
 
     // Query batch to get model info for both error and success paths
     const batch = await db.query.generationBatches.findFirst({
@@ -173,6 +179,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
           prechargeResult: metadata?.precharge as any,
           provider,
           userId: asyncTask.userId,
+          workspaceId: asyncTask.workspaceId ?? undefined,
         });
       } catch (refundError) {
         console.error('[video-webhook] Failed to refund precharge on error:', refundError);
@@ -182,7 +189,11 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
     }
 
     // Handle success result: download video → process → upload S3 → create asset and file
-    const videoService = new VideoGenerationService(db, asyncTask.userId);
+    const videoService = new VideoGenerationService(
+      db,
+      asyncTask.userId,
+      asyncTask.workspaceId ?? undefined,
+    );
     const processResult = await videoService.processVideoForGeneration(result.videoUrl);
 
     const asset: VideoGenerationAsset = {
@@ -247,6 +258,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         provider,
         usage: result.usage,
         userId: asyncTask.userId,
+        workspaceId: asyncTask.workspaceId ?? undefined,
       });
     } catch (chargeError) {
       console.error('[video-webhook] Failed to charge after generate:', chargeError);
@@ -280,6 +292,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
           prechargeResult: asyncTaskMetadata.precharge as any,
           provider,
           userId: asyncTaskUserId,
+          workspaceId: asyncTaskWorkspaceId,
         });
       } catch (refundError) {
         console.error('[video-webhook] Failed to refund precharge on failure:', refundError);

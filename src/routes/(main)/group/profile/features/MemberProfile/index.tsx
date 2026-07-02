@@ -6,10 +6,12 @@ import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { EditorCanvas } from '@/features/EditorCanvas';
 import ModelSelect from '@/features/ModelSelect';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -23,6 +25,7 @@ import AgentTool from './AgentTool';
 
 const MemberProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Get agentId from profile store (activeTabId is the selected agent ID)
   const agentId = useGroupProfileStore((s) => s.activeTabId);
@@ -35,9 +38,16 @@ const MemberProfile = memo(() => {
   const config = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId), isEqual);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
+  const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup, isEqual);
-  const currentGroupAgents = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
+  const currentGroup = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupById(gid ?? '')(s),
+    isEqual,
+  );
+  const currentGroupAgents = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s),
+    isEqual,
+  );
   const router = useQueryRoute();
 
   // Check if the current agent is the supervisor
@@ -61,25 +71,31 @@ const MemberProfile = memo(() => {
   // Wrap updateAgentConfigById for saving editor content
   const updateContent = useCallback(
     async (payload: { content: string; editorData: Record<string, any> }) => {
+      if (!canEdit) return;
+
       await updateAgentConfigById(agentId, {
         editorData: payload.editorData,
         systemRole: payload.content,
       });
     },
-    [updateAgentConfigById, agentId],
+    [canEdit, updateAgentConfigById, agentId],
   );
 
   // Handle editor content change
   const onContentChange = useCallback(() => {
+    if (!canEdit) return;
+
     handleContentChange(updateContent);
-  }, [handleContentChange, updateContent]);
+  }, [canEdit, handleContentChange, updateContent]);
 
   // Wrap updateAgentConfigById for ModelSelect
   const updateAgentConfig = useCallback(
     async (config: { model?: string; provider?: string }) => {
+      if (!canEdit) return;
+
       await updateAgentConfigById(agentId, config);
     },
-    [updateAgentConfigById, agentId],
+    [canEdit, updateAgentConfigById, agentId],
   );
 
   // Watch for agent builder content updates and apply them directly to the editor
@@ -118,7 +134,7 @@ const MemberProfile = memo(() => {
         }}
       >
         {/* Header: Avatar + Name */}
-        <AgentHeader readOnly={isSupervisor} />
+        <AgentHeader disabled={!canEdit} readOnly={isSupervisor} />
         {/* Config Bar: Model Selector */}
         <Flexbox
           horizontal
@@ -129,6 +145,7 @@ const MemberProfile = memo(() => {
         >
           <ModelSelect
             initialWidth
+            disabled={!canEdit}
             value={{
               model: config?.model,
               provider: config?.provider,
@@ -145,6 +162,7 @@ const MemberProfile = memo(() => {
           style={{ marginTop: 16 }}
         >
           <Button
+            disabled={!canEdit}
             icon={PlayIcon}
             type={'primary'}
             onClick={() => {
@@ -159,6 +177,7 @@ const MemberProfile = memo(() => {
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas
+        disabled={!canEdit}
         editor={editor}
         editorData={editorData}
         entityId={agentId}

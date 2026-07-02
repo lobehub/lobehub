@@ -72,7 +72,7 @@ function removeKeyFromObject(obj: any, keyPath: string): boolean {
  * Clean unused keys from TypeScript default locale files
  */
 function cleanDefaultLocaleFiles(unusedKeys: UnusedKey[], dryRun: boolean = true) {
-  const defaultLocalesPath = path.join(process.cwd(), 'src/locales/default');
+  const defaultLocalesPath = path.join(process.cwd(), 'packages/locales/src/default');
 
   // Get ignored namespace names from IGNORED_FILES (remove .ts extension)
   const ignoredNamespaces = new Set(IGNORED_FILES.map((f) => f.replace('.ts', '')));

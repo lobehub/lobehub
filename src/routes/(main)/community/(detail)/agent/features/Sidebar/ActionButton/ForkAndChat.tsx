@@ -1,15 +1,18 @@
 'use client';
 
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { Button } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
-import { SESSION_CHAT_URL } from '@/const/url';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
@@ -40,9 +43,11 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { isAuthenticated, signIn } = useMarketAuth();
+  const { allowed: canCreate } = usePermission('create_content');
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const meta = {
     avatar,
@@ -54,6 +59,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleForkAndChat = async () => {
+    if (!canCreate) return;
     // Check if user is authenticated
     if (!isAuthenticated) {
       try {
@@ -72,16 +78,34 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       if (existingAgentId) {
         // User has already forked this agent, navigate to existing fork
         message.info(t('fork.alreadyForked'));
-        navigate(SESSION_CHAT_URL(existingAgentId, mobile));
+        navigate(AGENT_CHAT_URL(existingAgentId, mobile));
         return;
       }
 
       // Generate a unique identifier for the forked agent
       const newIdentifier = generateMarketIdentifier();
 
+      // When forking inside a workspace, attribute the fork to the workspace's
+      // Market organization mirror so `agents.ownerId` ends up on the org
+      // account rather than the actor. Provisioning is idempotent.
+      let actAs: number | undefined;
+      if (activeWorkspaceId) {
+        try {
+          const { marketAccountId } =
+            await lambdaClient.workspace.ensureMarketOrganization.mutate();
+          actAs = marketAccountId;
+        } catch (error) {
+          console.warn(
+            'Failed to provision Market organization for workspace; falling back to personal fork:',
+            error,
+          );
+        }
+      }
+
       // Step 2: Fork the agent via Market API (single-item batch)
       const [forkOutcome] = await marketApiService.forkAgent([
         {
+          actAs,
           identifier: newIdentifier,
           name: title,
           sourceIdentifier: identifier!,
@@ -127,7 +151,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       message.success(t('fork.success'));
 
       // Step 6: Navigate to chat
-      navigate(SESSION_CHAT_URL(result!.agentId, mobile));
+      navigate(AGENT_CHAT_URL(result!.agentId, mobile));
     } catch (error: any) {
       console.error('Fork failed:', error);
       message.error(t('fork.failed'));
@@ -140,6 +164,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
     <Button
       block
       className={styles.buttonGroup}
+      disabled={!canCreate}
       loading={isLoading}
       size={'large'}
       type={'primary'}

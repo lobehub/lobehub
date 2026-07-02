@@ -186,4 +186,4 @@ QSTASH_URL=https://custom-qstash.com
 - [Upstash Workflow Documentation](https://upstash.com/docs/workflow)
 - [QStash Documentation](https://upstash.com/docs/qstash)
 - [Example Workflows in Codebase](<../../src/app/(backend)/api/workflows/>)
-- [Workflow Classes](../../src/server/workflows/)
+- [Workflow Classes](../../apps/server/src/workflows/)

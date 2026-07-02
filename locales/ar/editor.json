@@ -13,6 +13,7 @@
   "actions.expand.on": "توسيع",
   "actions.typobar.off": "إخفاء شريط تنسيق النص",
   "actions.typobar.on": "إظهار شريط تنسيق النص",
+  "actions.typobar.title": "أداة التنسيق",
   "autoSave.latest": "تم تحميل أحدث نسخة",
   "autoSave.saved": "تم الحفظ",
   "autoSave.saving": "يتم الحفظ تلقائيًا...",

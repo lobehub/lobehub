@@ -1,10 +1,11 @@
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
-import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { responsesAPIModels } from '../openai/openaiModelId';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 /**
  * Response schema for GET https://aihubmix.com/api/v1/models
@@ -68,7 +69,7 @@ const TYPE_MAP: Record<string, string> = {
   embedding: 'embedding',
   image_generation: 'image',
   llm: 'chat',
-  stt: 'stt',
+  stt: 'asr',
   tts: 'tts',
   video: 'video',
   // Legacy aliases (platform docs note automatic bidirectional mapping)
@@ -140,7 +141,15 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
   };
 };
 
-const baseURL = 'https://aihubmix.com';
+// Default AiHubMix gateway. Users can point the provider at a custom or backup
+// endpoint (e.g. a mirror domain) via the provider's "API endpoint" setting.
+const DEFAULT_BASE_URL = 'https://aihubmix.com';
+
+// Resolve the gateway for a request from the configured baseURL (default
+// DEFAULT_BASE_URL), stripping a trailing version suffix (e.g. /v1) so the
+// per-route suffixes below aren't doubled (…/v1/v1, …/v1/gemini).
+const resolveBaseURL = (options: { baseURL?: string | null }) =>
+  options.baseURL?.trim().replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
 
 export const params: CreateRouterRuntimeOptions = {
   debug: {
@@ -153,6 +162,12 @@ export const params: CreateRouterRuntimeOptions = {
   models: async ({ client }) => {
     const apiKey = (client as any).apiKey as string;
 
+    // Derive the gateway root from the configured client baseURL (stripping the
+    // trailing /v1 etc.), falling back to the default gateway. This way a user who
+    // points AiHubMix at a custom/backup endpoint fetches the model list from it too.
+    const clientBaseURL = ((client as any).baseURL as string) || urlJoin(DEFAULT_BASE_URL, '/v1');
+    const rootBaseURL = clientBaseURL.replace(/\/v\d+[a-z]*\/?$/, '') || DEFAULT_BASE_URL;
+
     // AiHubMix exposes two model list endpoints:
     // - https://aihubmix.com/v1/models     — returns per-user-group list only (~256 models)
     // - https://aihubmix.com/api/v1/models — returns the complete model catalog (800+)
@@ -161,8 +176,9 @@ export const params: CreateRouterRuntimeOptions = {
     // 'APP-Code' is an AiHubMix-required client identifier.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
     try {
-      const response = await fetch('https://aihubmix.com/api/v1/models', {
+      const response = await fetch(urlJoin(rootBaseURL, '/api/v1/models'), {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'APP-Code': 'LobeHub',
@@ -180,47 +196,49 @@ export const params: CreateRouterRuntimeOptions = {
         .filter((m: any) => !UNSUPPORTED_AIHUBMIX_TYPES.has(m.types ?? ''))
         .map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
-    } catch (error) {
-      console.warn(
-        'Failed to fetch AiHubMix models. Please ensure your AiHubMix API key is valid:',
-        error,
-      );
-      return [];
     } finally {
       clearTimeout(timeoutId);
     }
   },
-  routers: [
+  routers: (options, runtimeContext) => [
     {
       apiType: 'anthropic',
       models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
         (id) => detectModelProvider(id) === 'anthropic',
       ),
-      options: { baseURL },
+      options: { baseURL: resolveBaseURL(options) },
     },
     {
       apiType: 'google',
       models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
         (id) => detectModelProvider(id) === 'google',
       ),
-      options: { baseURL: urlJoin(baseURL, '/gemini') },
+      options: { baseURL: urlJoin(resolveBaseURL(options), '/gemini') },
     },
     {
       apiType: 'xai',
       models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
         (id) => detectModelProvider(id) === 'xai',
       ),
-      options: { baseURL: urlJoin(baseURL, '/v1') },
+      options: { baseURL: urlJoin(resolveBaseURL(options), '/v1') },
     },
     {
       apiType: 'deepseek',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
-      options: { baseURL: urlJoin(baseURL, '/v1') },
+      // Match the whole DeepSeek family (deepseek-v4*, deepseek-chat, ...), not
+      // just the two legacy ids — the deepseek runtime simulates structured
+      // output via tool calling, while the generic openai fallback sends
+      // response_format json_schema which DeepSeek upstreams reject.
+      models: resolveProviderRouteModels(
+        'deepseek',
+        LOBE_DEFAULT_MODEL_LIST,
+        runtimeContext?.model,
+      ),
+      options: { baseURL: urlJoin(resolveBaseURL(options), '/v1') },
     },
     {
       apiType: 'openai',
       options: {
-        baseURL: urlJoin(baseURL, '/v1'),
+        baseURL: urlJoin(resolveBaseURL(options), '/v1'),
         chatCompletion: {
           useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
         },

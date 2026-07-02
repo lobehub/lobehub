@@ -8,10 +8,11 @@ import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
-import { type FileMetadata, type UploadFileItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { type FileStore } from '../../store';
+import { audioMimeFromExtension } from '../chat/uploadGuard';
 
 type OnStatusUpdate = (
   data:
@@ -48,6 +49,7 @@ interface UploadWithProgressParams {
 interface UploadWithProgressResult {
   dimensions?: {
     height: number;
+    ratio: number;
     width: number;
   };
   filename?: string;
@@ -67,6 +69,15 @@ const normalizeUploadedImageFileType = async (
     lastModified: file.lastModified,
     type: detectedMimeType,
   });
+};
+
+type ExistingFileMetadata = Record<string, unknown> & { path?: string };
+
+const normalizeExistingFileMetadata = (metadata: unknown): ExistingFileMetadata => {
+  // Existing hash records can come from generated assets or older upload paths where metadata is null.
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
+
+  return metadata as ExistingFileMetadata;
 };
 
 type Setter = StoreSetter<FileStore>;
@@ -93,7 +104,7 @@ export class FileUploadActionImpl {
       const res = await fileService.createFile({
         fileType,
         hash,
-        metadata,
+        metadata: { ...metadata, ...dimensions },
         name: metadata.filename,
         size,
         url: metadata.path,
@@ -129,11 +140,11 @@ export class FileUploadActionImpl {
       const hash = sha256(fileArrayBuffer);
 
       const checkStatus = await fileService.checkFileHash(hash);
-      let metadata: FileMetadata;
+      let metadata: ExistingFileMetadata;
 
       // 3. if file exist, just skip upload
       if (checkStatus.isExist) {
-        metadata = checkStatus.metadata as FileMetadata;
+        metadata = normalizeExistingFileMetadata(checkStatus.metadata);
         onStatusUpdate?.({
           id: statusId,
           type: 'updateFile',
@@ -166,7 +177,7 @@ export class FileUploadActionImpl {
         });
         if (!success) return;
 
-        metadata = data;
+        metadata = { ...data };
       }
 
       // 4. use more powerful file type detector to get file type
@@ -179,17 +190,27 @@ export class FileUploadActionImpl {
         fileType = type?.mime || 'text/plain';
       }
 
+      // Audio containers like .m4a share the ISO-BMFF box with .mp4, so both the browser and
+      // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
+      // classified (and rendered) as audio.
+      const audioMime = audioMimeFromExtension(normalizedFile.name);
+      if (audioMime && !fileType.startsWith('audio/')) fileType = audioMime;
+
       // 5. create file to db
+      // Fall back to the global file URL when legacy/generated metadata has no `path`.
+      const fileUrl = metadata.path || checkStatus.url;
+      if (!fileUrl) throw new Error('File upload failed: missing file url');
+
       const data = await fileService.createFile(
         {
           fileType,
           hash,
-          metadata,
+          metadata: { ...metadata, ...dimensions },
           name: normalizedFile.name,
           parentId,
           size: normalizedFile.size,
           source,
-          url: metadata.path || checkStatus.url,
+          url: fileUrl,
         },
         knowledgeBaseId,
       );

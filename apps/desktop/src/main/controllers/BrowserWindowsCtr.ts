@@ -92,6 +92,13 @@ export default class BrowserWindowsCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  isWindowFullScreen() {
+    return this.withSenderIdentifier((identifier) => {
+      return this.app.browserManager.isWindowFullScreen(identifier);
+    });
+  }
+
+  @IpcMethod()
   setWindowAlwaysOnTop(flag: boolean) {
     this.withSenderIdentifier((identifier) => {
       this.app.browserManager.setWindowAlwaysOnTop(identifier, flag);

@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "結束畫面",
   "config.generateAudio.label": "產生音訊",
   "config.header.title": "影片",
+  "config.imageUpload.maxCountReached": "您最多可以新增 {{count}} 張參考圖片",
   "config.imageUrl.label": "起始畫面",
   "config.prompt.placeholder": "描述您想要產生的影片",
   "config.prompt.placeholderWithRef": "描述您想要生成圖像的場景",

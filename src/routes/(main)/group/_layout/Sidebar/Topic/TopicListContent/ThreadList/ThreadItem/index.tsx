@@ -53,10 +53,17 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active && !isInAgentSubRoute}
         contextMenuItems={dropdownMenu}
+        data-thread-id={id}
         disabled={editing}
         icon={<Icon color={cssVar.colorTextDescription} icon={CornerDownRight} size={'small'} />}
-        style={isSubagent ? { paddingInlineStart: SUBAGENT_PADDING_INLINE_START } : undefined}
+        // The capped ThreadList is a flex column, so rows shrink to fit its
+        // max-height instead of overflowing — the scroll never engages. Pin the
+        // row min-height to the NavItem height (36) to force overflow → scroll.
         title={title}
+        style={{
+          minHeight: 36,
+          ...(isSubagent && { paddingInlineStart: SUBAGENT_PADDING_INLINE_START }),
+        }}
         onClick={handleClick}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />

@@ -2,6 +2,83 @@
 
 # Changelog
 
+### [Version 2.2.8](https://github.com/lobehub/lobe-chat/compare/v2.2.7...v2.2.8)
+
+<sup>Released on **2026-06-22**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: drop legacy task template recommendations.
+- **misc**: drop legacy task template recommendations.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: drop legacy task template recommendations, closes [#16183](https://github.com/lobehub/lobe-chat/issues/16183) ([ac2e91e](https://github.com/lobehub/lobe-chat/commit/ac2e91e))
+- **misc**: drop legacy task template recommendations, closes [#16170](https://github.com/lobehub/lobe-chat/issues/16170) ([1569ab6](https://github.com/lobehub/lobe-chat/commit/1569ab6))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.2.7](https://github.com/lobehub/lobe-chat/compare/v2.2.7-canary.14...v2.2.7)
+
+<sup>Released on **2026-06-20**</sup>
+
+#### 🐛 Bug Fixes
+
+- **chat**: treat parked runs as non-terminal in client run-lifecycle.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **chat**: treat parked runs as non-terminal in client run-lifecycle, closes [#16072](https://github.com/lobehub/lobe-chat/issues/16072) ([db2a62d](https://github.com/lobehub/lobe-chat/commit/db2a62d))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.2.6](https://github.com/lobehub/lobe-chat/compare/v2.2.6-canary.8...v2.2.6)
+
+<sup>Released on **2026-06-17**</sup>
+
+#### ✨ Features
+
+- **agent**: improve connector, document, and fleet workflows.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **agent**: improve connector, document, and fleet workflows, closes [#15936](https://github.com/lobehub/lobe-chat/issues/15936) ([3f82033](https://github.com/lobehub/lobe-chat/commit/3f82033))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.2.1](https://github.com/lobehub/lobe-chat/compare/v0.0.0-nightly.pr15228.13999...v2.2.1)
 
 <sup>Released on **2026-05-29**</sup>

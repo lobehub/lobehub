@@ -267,6 +267,45 @@ describe('FileManagerActions', () => {
       expect(refreshSpy).toHaveBeenCalled();
       expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
     });
+
+    it('should use linked file id when embedding a file-backed document resource', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+
+      await act(async () => {
+        await result.current.embeddingChunks(['docs_1']);
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1');
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
   });
 
   describe('parseFilesToChunks', () => {
@@ -304,6 +343,66 @@ describe('FileManagerActions', () => {
       });
 
       expect(createTaskSpy).toHaveBeenCalledWith('file-1', true);
+    });
+
+    it('should use linked file id when parsing a file-backed document resource', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['docs_1'], { skipExist: true });
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1', true);
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
+
+    it('should resolve off-screen document ids before creating parse tasks', async () => {
+      const { result } = renderHook(() => useStore());
+
+      vi.spyOn(fileService, 'getKnowledgeItem').mockResolvedValue({
+        fileId: 'file_1',
+        id: 'docs_1',
+      } as any);
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['docs_1'], { skipExist: true });
+      });
+
+      expect(fileService.getKnowledgeItem).toHaveBeenCalledWith('docs_1');
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1', true);
+      expect(refreshSpy).toHaveBeenCalled();
     });
 
     it('should handle errors gracefully', async () => {
@@ -691,6 +790,49 @@ describe('FileManagerActions', () => {
       expect(refreshSpy).toHaveBeenCalledTimes(2);
       expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
     });
+
+    it('should use linked file id when retrying embedding for a file-backed document', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+      vi.mocked(lambdaClient.file.removeFileAsyncTask.mutate).mockResolvedValue(undefined as any);
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reEmbeddingChunks('docs_1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(lambdaClient.file.removeFileAsyncTask.mutate).toHaveBeenCalledWith({
+        id: 'file_1',
+        type: 'embedding',
+      });
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1');
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
   });
 
   describe('reParseFile', () => {
@@ -709,6 +851,42 @@ describe('FileManagerActions', () => {
       expect(retrySpy).toHaveBeenCalledWith('file-1');
       expect(refreshSpy).toHaveBeenCalled();
       expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
+    });
+
+    it('should use linked file id when retrying parse for a file-backed document', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+      const retrySpy = vi.spyOn(ragService, 'retryParseFile').mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reParseFile('docs_1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(retrySpy).toHaveBeenCalledWith('file_1');
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
     });
   });
 

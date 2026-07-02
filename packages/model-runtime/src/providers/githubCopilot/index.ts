@@ -3,7 +3,6 @@ import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { responsesAPIModels } from '../../const/models';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
@@ -20,6 +19,7 @@ import { debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { assertToolLimits } from '../../utils/validateToolLimits';
+import { isResponsesAPIModel } from '../openai/openaiModelId';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
 const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
@@ -223,7 +223,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           },
         );
 
-        const pricing = await getModelPricing(model, ModelProvider.GithubCopilot);
+        const pricing = await getModelPricing(
+          model,
+          ModelProvider.GithubCopilot,
+          options?.pricingContext,
+        );
 
         const streamResponse = response as any;
         const [prod, useForDebug] = streamResponse.tee();
@@ -260,7 +264,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       });
 
       if (
-        responsesAPIModels.has(model) ||
+        isResponsesAPIModel(model) ||
         model.toLowerCase().includes('oswe') ||
         (payload as any).apiMode === 'responses'
       ) {
@@ -271,12 +275,14 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           reasoning,
           max_tokens,
           verbosity,
+          preserveThinking: _pt,
+          frequency_penalty,
+          presence_penalty,
+          top_p,
+          temperature,
+          apiMode,
           ...responseRest
         } = rest as any;
-
-        delete responseRest.apiMode;
-        delete responseRest.frequency_penalty;
-        delete responseRest.presence_penalty;
 
         const input = await convertOpenAIResponseInputs(messages as any, {
           forceImageBase64: true,
@@ -350,7 +356,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         );
       }
 
-      const { apiMode: _, ...cleanedRest } = rest as any;
+      const { apiMode: _, preserveThinking: _pt, ...cleanedRest } = rest as any;
       const messages = await convertOpenAIMessages(cleanedRest.messages as any, {
         forceImageBase64: true,
       });
@@ -397,34 +403,45 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
   }
 
   async models(): Promise<ChatModelCard[]> {
-    return this.executeWithRetry(async () => {
-      const bearerToken = this.cachedBearerToken || (await tokenManager.getToken(this.githubToken));
+    return this.executeWithRetry(
+      async () => {
+        const bearerToken =
+          this.cachedBearerToken || (await tokenManager.getToken(this.githubToken));
 
-      const response = await fetch(`${COPILOT_BASE_URL}/models`, {
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${bearerToken}`,
-          'Copilot-Integration-Id': 'vscode-chat',
-          'Editor-Plugin-Version': 'LobeChat/1.0',
-          'Editor-Version': 'LobeChat/1.0',
-        },
-        method: 'GET',
-      });
+        const response = await fetch(`${COPILOT_BASE_URL}/models`, {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${bearerToken}`,
+            'Copilot-Integration-Id': 'vscode-chat',
+            'Editor-Plugin-Version': 'LobeChat/1.0',
+            'Editor-Version': 'LobeChat/1.0',
+          },
+          method: 'GET',
+        });
 
-      if (!response.ok) {
-        throw { status: response.status };
-      }
+        if (!response.ok) {
+          throw Object.assign(
+            new Error('GitHub Copilot models API request failed', {
+              cause: { status: response.status },
+            }),
+            {
+              status: response.status,
+            },
+          );
+        }
 
-      const data = await response.json();
+        const data = await response.json();
 
-      // Transform Copilot models to ChatModelCard format
-      return (data.models || data.data || []).map((model: any) => ({
-        displayName: model.name || model.id,
-        enabled: true,
-        id: model.id || model.name,
-        type: 'chat',
-      }));
-    });
+        // Transform Copilot models to ChatModelCard format
+        return (data.models || data.data || []).map((model: any) => ({
+          displayName: model.name || model.id,
+          enabled: true,
+          id: model.id || model.name,
+          type: 'chat',
+        }));
+      },
+      { mapError: false },
+    );
   }
 
   private handlePayload(payload: ChatStreamPayload) {
@@ -442,7 +459,10 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
     return { type: tool.type, ...tool.function } as any;
   };
 
-  private async executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  private async executeWithRetry<T>(
+    fn: () => Promise<T>,
+    options: { mapError?: boolean } = {},
+  ): Promise<T> {
     let totalAttempts = 0;
     let hasRefreshedAuth = false;
     let rateLimitAttempts = 0;
@@ -470,6 +490,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
           // If retry-after exceeds the quota exhaustion threshold, surface immediately
           if (retryAfter > QUOTA_EXHAUSTION_THRESHOLD_MS) {
+            if (options.mapError === false) throw error;
             throw this.mapError(error);
           }
 
@@ -480,8 +501,15 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         }
 
         // Map and throw
+        if (options.mapError === false) throw error;
         throw this.mapError(error);
       }
+    }
+
+    if (options.mapError === false) {
+      throw new Error('Max retry attempts exceeded', {
+        cause: { endpoint: this.baseURL },
+      });
     }
 
     throw AgentRuntimeError.chat({

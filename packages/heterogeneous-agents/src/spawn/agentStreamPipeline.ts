@@ -1,7 +1,7 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { createAdapter } from '../registry';
-import type { AgentEventAdapter } from '../types';
+import type { AgentEventAdapter, HeterogeneousAgentEvent, UsageData } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { toStreamEvent } from './streamEvent';
@@ -9,6 +9,12 @@ import { toStreamEvent } from './streamEvent';
 export interface AgentStreamPipelineOptions {
   /** Agent type key (e.g. `claude-code`, `codex`). */
   agentType: string;
+  /** Working directory used to resolve relative file paths emitted by CLI tools. */
+  cwd?: string;
+  /** Last known Codex cumulative usage before a resumed turn starts. */
+  initialCumulativeUsage?: UsageData | undefined;
+  /** Host-known model to emit before the CLI's first stdout payload. */
+  initialModel?: string | undefined;
   /** Operation id to stamp onto every emitted `AgentStreamEvent`. */
   operationId: string;
 }
@@ -22,7 +28,7 @@ export interface AgentStreamPipelineOptions {
  *
  * Both the desktop main process and the future `lh hetero exec` CLI feed
  * stdout into this pipeline so consumers (renderer / server) only ever see a
- * single, unified wire shape. Codex's file-change line-stat enrichment is
+ * single, unified wire shape. Codex's file-change diff/stat enrichment is
  * baked in here so consumers don't need to know it exists.
  */
 export class AgentStreamPipeline {
@@ -30,11 +36,22 @@ export class AgentStreamPipeline {
   private readonly adapter: AgentEventAdapter;
   private readonly operationId: string;
   private readonly codexTracker?: CodexFileChangeTracker;
+  private queuedEvents: AgentStreamEvent[] = [];
 
   constructor(options: AgentStreamPipelineOptions) {
     this.adapter = createAdapter(options.agentType);
     this.operationId = options.operationId;
-    this.codexTracker = options.agentType === 'codex' ? new CodexFileChangeTracker() : undefined;
+    this.codexTracker =
+      options.agentType === 'codex' ? new CodexFileChangeTracker(options.cwd) : undefined;
+
+    if (options.initialModel || options.initialCumulativeUsage) {
+      this.queuedEvents.push(
+        ...this.configureSession({
+          initialCumulativeUsage: options.initialCumulativeUsage,
+          model: options.initialModel,
+        }),
+      );
+    }
   }
 
   /** CC/Codex session id extracted by the underlying adapter (`adapter.sessionId`). */
@@ -45,7 +62,7 @@ export class AgentStreamPipeline {
   /**
    * Push a stdout chunk through the pipeline. Resolves with the resulting
    * `AgentStreamEvent` batch in arrival order. Async because the codex
-   * tracker reads pre-edit file snapshots from disk for diff stats.
+   * tracker reads pre-edit file snapshots from disk for diffs and line stats.
    */
   async push(chunk: Buffer | string): Promise<AgentStreamEvent[]> {
     return this.processPayloads(this.processor.push(chunk));
@@ -61,16 +78,36 @@ export class AgentStreamPipeline {
     return [...trailing, ...flushed];
   }
 
+  configureSession(data: {
+    initialCumulativeUsage?: UsageData | undefined;
+    model?: string | undefined;
+  }): AgentStreamEvent[] {
+    return this.toStreamEvents(
+      this.adapter.adapt({
+        ...data,
+        type: 'session_configured',
+      }),
+    );
+  }
+
   private async processPayloads(payloads: unknown[]): Promise<AgentStreamEvent[]> {
-    const out: AgentStreamEvent[] = [];
+    const out: AgentStreamEvent[] = this.drainQueuedEvents();
 
     for (const raw of payloads) {
       const payload = this.codexTracker ? await this.codexTracker.track(raw as any) : raw;
-      for (const event of this.adapter.adapt(payload)) {
-        out.push(toStreamEvent(event, this.operationId));
-      }
+      out.push(...this.toStreamEvents(this.adapter.adapt(payload)));
     }
 
     return out;
+  }
+
+  private drainQueuedEvents(): AgentStreamEvent[] {
+    const events = this.queuedEvents;
+    this.queuedEvents = [];
+    return events;
+  }
+
+  private toStreamEvents(events: HeterogeneousAgentEvent[]): AgentStreamEvent[] {
+    return events.map((event) => toStreamEvent(event, this.operationId));
   }
 }

@@ -32,7 +32,7 @@ const FileCopilot = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
   return (
     <RightPanel>
@@ -44,7 +44,7 @@ const FileCopilot = memo(() => {
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <ChatList />
           </Flexbox>
-          <ChatInput leftActions={actions} showRuntimeConfig={false} />
+          <ChatInput leftActions={actions} showControlBar={false} />
         </Flexbox>
       </DragUploadZone>
     </RightPanel>

@@ -15,6 +15,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        implementation. */
     content-visibility: auto;
     contain-intrinsic-size: auto 32px;
+    flex: none;
 
     /* Every row carries its own top border — separates file-from-file AND
        file-from-header without doubling up when a group is collapsed. */
@@ -55,6 +56,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileRowProps {
+  /** Target device the repo lives on — undefined for local desktop. */
+  deviceId?: string;
   entry: GitWorkingTreePatch;
   expanded: boolean;
   mode: ReviewMode;
@@ -71,6 +74,7 @@ interface FileRowProps {
 
 const FileRow = memo<FileRowProps>(
   ({
+    deviceId,
     entry,
     expanded,
     mode,
@@ -110,8 +114,10 @@ const FileRow = memo<FileRowProps>(
             additions={entry.additions}
             deletions={entry.deletions}
             filePath={entry.filePath}
-            revertContext={mode === 'unstaged' ? { workingDirectory: repoAbsolutePath } : undefined}
             status={entry.status}
+            revertContext={
+              mode === 'unstaged' ? { deviceId, workingDirectory: repoAbsolutePath } : undefined
+            }
             onReverted={onReverted}
           />
         </div>

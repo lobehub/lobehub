@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiAgentService } from '@/server/services/aiAgent';
+
 import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
@@ -12,8 +14,8 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
   })),
 }));
 
-vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
     executeStep: mockExecuteStep,
   })),
 }));
@@ -84,6 +86,36 @@ describe('runStep handler', () => {
     expect(mockExecuteStep).not.toHaveBeenCalled();
   });
 
+  it('steps through AiAgentService scoped to the operation workspace', async () => {
+    // Regression (two invariants in one path):
+    // 1. workspaceId — a workspace-scoped binding (e.g. Discord bot active agent)
+    //    runs its steps through this QStash worker. Dropping it makes the runtime
+    //    personal-scoped, so the parent-message lookup misses the workspace-scoped
+    //    row → ConversationParentMissing.
+    // 2. sub-agent forking — stepping MUST go through AiAgentService (not a bare
+    //    AgentRuntimeService), because only AiAgentService's runtime carries the
+    //    in-process `execSubAgent` fork callback. A bare runtime here makes
+    //    `lobe-agent.callSubAgent` fail with SUB_AGENT_UNAVAILABLE.
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
   it('returns 429 with Retry-After header when the step is locked', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({
@@ -119,6 +151,40 @@ describe('runStep handler', () => {
 
     expect(mockExecuteStep).toHaveBeenCalledWith(
       expect.objectContaining({ externalRetryCount: 3, operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'running', stepCount: 2 },
+      success: true,
+    });
+
+    // QStash nests these under `body.payload`, not the top level.
+    const { ctx } = buildContext({
+      body: {
+        context: { foo: 'bar' },
+        operationId: 'op-1',
+        payload: {
+          approvedToolCall: { id: 'tc1' },
+          resumeAsyncTool: true,
+          toolMessageId: 'msg-1',
+        },
+        stepIndex: 2,
+      },
+    });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedToolCall: { id: 'tc1' },
+        operationId: 'op-1',
+        resumeAsyncTool: true,
+        stepIndex: 2,
+        toolMessageId: 'msg-1',
+      }),
     );
   });
 

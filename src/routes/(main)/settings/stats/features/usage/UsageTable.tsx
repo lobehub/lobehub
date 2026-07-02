@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import InlineTable from '@/components/InlineTable';
 import { parseAsInteger, useQueryParam } from '@/hooks/useQueryParam';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { usageService } from '@/services/usage';
 import { formatDate, formatNumber } from '@/utils/format';
 
@@ -16,7 +17,7 @@ import { type UsageChartProps } from '../../types';
 const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading, mutate } = useClientDataSWR('usage-logs', async () =>
+  const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageLogs(), async () =>
     usageService.findByMonth(dateStrings),
   );
 

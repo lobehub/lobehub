@@ -14,6 +14,7 @@ import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
@@ -30,6 +31,8 @@ interface ItemProps {
 const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, title }) => {
   const { t } = useTranslation(['setting', 'plugin', 'common']);
   const styles = itemStyles;
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
     s.installBuiltinTool,
@@ -38,10 +41,12 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
   ]);
 
   const handleInstall = async () => {
+    if (!canCreate) return;
     await installBuiltinTool(identifier);
   };
 
   const handleUninstall = () => {
+    if (!canEdit) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t('store.actions.confirmUninstall', { ns: 'plugin' }),
@@ -63,6 +68,7 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
           items={[
             {
               danger: true,
+              disabled: !canEdit,
               icon: <Icon icon={Trash2} />,
               key: 'uninstall',
               label: t('store.actions.uninstall', { ns: 'plugin' }),
@@ -70,12 +76,19 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
             },
           ]}
         >
-          <ActionIcon icon={MoreVerticalIcon} />
+          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} />
         </DropdownMenu>
       );
     }
 
-    return <ActionIcon icon={Plus} title={t('tools.builtins.install')} onClick={handleInstall} />;
+    return (
+      <ActionIcon
+        disabled={!canCreate}
+        icon={Plus}
+        title={t('tools.builtins.install')}
+        onClick={handleInstall}
+      />
+    );
   };
 
   return (

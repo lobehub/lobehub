@@ -5,13 +5,16 @@
   "exports": {
     ".": "./src/index.ts",
     "./components": "./src/components/index.ts",
-    "./renders": "./src/Render/index.ts",
     "./inspectors": "./src/Inspector/index.ts",
+    "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",
     "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
+    "./renders": "./src/Render/index.ts",
     "./styles": "./src/styles.ts"
   },
   "dependencies": {
-    "@lobechat/tool-runtime": "workspace:*"
+    "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "anser": "^2.3.5"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

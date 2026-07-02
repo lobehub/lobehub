@@ -1,23 +1,21 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { useMount, usePrevious, useUnmount } from 'ahooks';
-import { useEffect, useMemo, useRef } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { usePrevious } from 'ahooks';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { createStoreUpdater } from '@/store/utils/createStoreUpdater';
 
 const BUILTIN_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 const AgentIdSync = () => {
-  const useStoreUpdater = createStoreUpdater(useAgentStore);
-  const useChatStoreUpdater = createStoreUpdater(useChatStore);
   const params = useParams<{ aid?: string; topicId?: string }>();
   const [searchParams] = useSearchParams();
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
 
   // Resolve builtin agent slug to real agent ID
@@ -43,8 +41,18 @@ const AgentIdSync = () => {
 
   const prevAgentId = usePrevious(activeId);
 
-  useStoreUpdater('activeAgentId', activeId);
-  useChatStoreUpdater('activeAgentId', activeId);
+  // Sync activeAgentId before paint (layout effect, not passive effect) so a
+  // tab/route switch back to an agent with cached `agentMap` data renders the
+  // real UI on the first frame instead of flashing a skeleton.
+  useLayoutEffect(() => {
+    if (!activeId) return;
+
+    if (useAgentStore.getState().activeAgentId !== activeId)
+      useAgentStore.setState({ activeAgentId: activeId }, false, 'AgentIdSync/syncAgentId');
+
+    if (useChatStore.getState().activeAgentId !== activeId)
+      useChatStore.setState({ activeAgentId: activeId }, false, 'AgentIdSync/syncAgentId');
+  }, [activeId]);
 
   // Reset activeTopicId when switching to a different agent
   // This prevents messages from being saved to the wrong topic bucket
@@ -64,19 +72,23 @@ const AgentIdSync = () => {
     // unread topics and is cleared per-topic when the user actually opens each one.
   }, [activeId, prevAgentId]);
 
-  useMount(() => {
-    useChatStore.setState({ activeAgentId: activeId }, false, 'AgentIdSync/mountAgentId');
-  });
-
-  // Clear activeAgentId when unmounting (leaving chat page)
-  useUnmount(() => {
-    useAgentStore.setState({ activeAgentId: undefined }, false, 'AgentIdSync/unmountAgentId');
-    useChatStore.setState(
-      { activeAgentId: undefined, activeTopicId: undefined },
-      false,
-      'AgentIdSync/unmountAgentId',
-    );
-  });
+  // Clear activeAgentId when unmounting (leaving chat page).
+  // Must be a layout-effect cleanup (not a passive `useUnmount`): in a route
+  // switch both run in one commit, and React runs all layout cleanups of the
+  // removed tree BEFORE the new tree's layout effects — so the next route's
+  // backfill above always wins over this clear. A passive cleanup would run
+  // after it and wipe the freshly synced id.
+  useLayoutEffect(
+    () => () => {
+      useAgentStore.setState({ activeAgentId: undefined }, false, 'AgentIdSync/unmountAgentId');
+      useChatStore.setState(
+        { activeAgentId: undefined, activeTopicId: undefined },
+        false,
+        'AgentIdSync/unmountAgentId',
+      );
+    },
+    [],
+  );
 
   return null;
 };

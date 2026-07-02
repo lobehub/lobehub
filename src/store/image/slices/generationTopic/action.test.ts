@@ -465,7 +465,7 @@ describe('GenerationTopicAction', () => {
         await result.current.refreshGenerationTopics();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGenerationTopics']);
+      expect(mutate).toHaveBeenCalledWith(['image:generationTopics']);
     });
   });
 

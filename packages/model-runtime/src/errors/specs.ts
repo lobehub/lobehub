@@ -418,6 +418,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description:
       'Context-engine pipeline processor crashed ("Processor [<name>] execution failed").',
   },
+  [AgentRuntimeErrorType.StateStoreReadError]: {
+    code: AgentRuntimeErrorType.StateStoreReadError,
+    numericId: 7007,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'system',
+    httpStatus: 500,
+    retryable: false,
+    countAsFailure: true,
+    description:
+      'State-store (Redis / Upstash) read failed: a blocking read (XREAD / BLPOP) aborted because the caller disconnected ("ERR caller gone"), or the operation\'s agent state could not be loaded ("Agent state not found for operation …"). System-side — counts as a failure.',
+  },
 
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {

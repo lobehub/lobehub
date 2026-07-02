@@ -7,6 +7,7 @@
   "config.header.title": "Tranh vẽ",
   "config.height.label": "Chiều cao",
   "config.imageNum.label": "Số lượng ảnh",
+  "config.imageUpload.maxCountReached": "Bạn có thể thêm tối đa {{count}} hình ảnh tham khảo",
   "config.imageUrl.label": "Ảnh tham khảo",
   "config.imageUrls.label": "Các ảnh tham khảo",
   "config.model.label": "Mô hình",

@@ -1121,6 +1121,31 @@ describe('Operation Actions', () => {
       expect(context.isNew).toBe(true);
     });
 
+    it('should preserve documentId from operation context (page scope)', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'sendMessage',
+          context: {
+            agentId: 'page-agent',
+            documentId: 'doc-1',
+            scope: 'page',
+          },
+        }).operationId;
+      });
+
+      const context = result.current.internal_getConversationContext({ operationId: operationId! });
+
+      // Dropping documentId here sinks page-scoped optimistic writes into the
+      // `page_<agent>_new` bucket while the editor reads `page_<agent>_doc-1`,
+      // leaving the copilot stuck on the loading skeleton.
+      expect(context.documentId).toBe('doc-1');
+      expect(context.scope).toBe('page');
+    });
+
     it('should fallback to global state when no operationId provided', () => {
       const { result } = renderHook(() => useChatStore());
 

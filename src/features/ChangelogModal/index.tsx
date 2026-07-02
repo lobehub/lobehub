@@ -1,8 +1,8 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useGlobalStore } from '@/store/global';
 
@@ -11,7 +11,7 @@ const ChangelogModal = memo<{ currentId?: string }>(({ currentId: propCurrentId 
     s.status.latestChangelogId,
     s.updateSystemStatus,
   ]);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [currentId, setCurrentId] = useState(propCurrentId);
 
   useEffect(() => {

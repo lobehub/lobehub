@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { topics } from '../schemas';
 import type { Transaction } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * ModelUsage numeric fields summed per (provider, model) to build the
@@ -51,21 +52,34 @@ const num = (v: unknown): number => (v == null ? 0 : Number(v));
  * usage (e.g. after deletions), the columns are reset to NULL ("not measured"),
  * so deletes / regenerations are reflected correctly.
  *
- * NOTE: this writes through drizzle, whose `topics.updatedAt` has `$onUpdate`,
- * so calling it bumps `updated_at`. That's intended for the live path (the
- * topic is active anyway). The historical backfill must NOT use this — it runs
- * its own raw-SQL aggregate that leaves `updated_at` untouched.
+ * Keep activity timestamps stable: recency is derived from `messages.updated_at`,
+ * so this projection update must not bump `topics.updated_at` / `accessed_at`.
+ * Drizzle `$onUpdate` is bypassed by explicitly assigning the columns to
+ * themselves.
+ *
+ * TODO: This still updates the `topics` row for usage/cost/token rollups. Under
+ * high-concurrency assistant finalization for the same topic, it can still
+ * serialize on the topic row lock. Consider moving this projection to a
+ * debounced/asynchronous rollup or a separate per-topic usage table.
  */
 export const recomputeTopicUsage = async (
   trx: Transaction,
   userId: string,
   topicId: string,
+  workspaceId?: string,
 ): Promise<void> => {
   // Reads prefer the dedicated `usage` column, falling back to legacy
   // `metadata->'usage'` for rows written before the migration.
   const fieldSelects = USAGE_FIELDS.map(
     (f) => `sum((COALESCE(usage, metadata->'usage')->>'${f}')::numeric) AS "${f}"`,
   ).join(',\n      ');
+
+  // Workspace-aware ownership predicate for the raw messages aggregate: in team
+  // mode rows are scoped by workspace_id (creator user_id is not part of the
+  // filter); in personal mode by user_id with workspace_id IS NULL.
+  const messageOwnership = workspaceId
+    ? sql`workspace_id = ${workspaceId}`
+    : sql`user_id = ${userId} AND workspace_id IS NULL`;
 
   const { rows } = await trx.execute(sql`
     SELECT
@@ -77,7 +91,7 @@ export const recomputeTopicUsage = async (
       ${sql.raw(fieldSelects)}
     FROM messages
     WHERE topic_id = ${topicId}
-      AND user_id = ${userId}
+      AND ${messageOwnership}
       AND role = 'assistant'
       AND (usage IS NOT NULL OR metadata ? 'usage')
     GROUP BY provider, model
@@ -90,6 +104,7 @@ export const recomputeTopicUsage = async (
     await trx
       .update(topics)
       .set({
+        accessedAt: topics.accessedAt,
         cost: null,
         model: null,
         provider: null,
@@ -97,9 +112,10 @@ export const recomputeTopicUsage = async (
         totalInputTokens: null,
         totalOutputTokens: null,
         totalTokens: null,
+        updatedAt: topics.updatedAt,
         usage: null,
       })
-      .where(and(eq(topics.id, topicId), eq(topics.userId, userId)));
+      .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
     return;
   }
 
@@ -182,6 +198,7 @@ export const recomputeTopicUsage = async (
   await trx
     .update(topics)
     .set({
+      accessedAt: topics.accessedAt,
       cost,
       model: primary?.model ?? null,
       provider: primary?.provider ?? null,
@@ -189,7 +206,8 @@ export const recomputeTopicUsage = async (
       totalInputTokens,
       totalOutputTokens,
       totalTokens,
+      updatedAt: topics.updatedAt,
       usage,
     })
-    .where(and(eq(topics.id, topicId), eq(topics.userId, userId)));
+    .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
 };

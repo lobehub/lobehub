@@ -1,35 +1,22 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
-import { memo } from 'react';
-
-import { useAgentStore } from '@/store/agent';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 
 import Content from './Content';
 
-const AgentSettings = memo(() => {
-  const showAgentSetting = useAgentStore((s) => s.showAgentSetting);
-
-  return (
-    <Modal
-      centered
-      footer={null}
-      open={showAgentSetting}
-      title={null}
-      width={960}
-      styles={{
-        body: {
-          height: '60vh',
-          overflow: 'scroll',
-          padding: 0,
-          position: 'relative',
-        },
-      }}
-      onCancel={() => useAgentStore.setState({ showAgentSetting: false })}
-    >
-      <Content />
-    </Modal>
-  );
-});
-
-export default AgentSettings;
+export const openAgentSettingsModal = (): ModalInstance =>
+  createModal({
+    content: <Content />,
+    footer: null,
+    maskClosable: true,
+    styles: {
+      content: {
+        height: '60vh',
+        overflow: 'scroll',
+        padding: 0,
+        position: 'relative',
+      },
+      header: { display: 'none' },
+    },
+    width: 960,
+  });

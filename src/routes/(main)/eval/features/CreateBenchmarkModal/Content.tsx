@@ -3,10 +3,11 @@
 import { Input, Select, TextArea } from '@lobehub/ui';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
+import { cssVar } from 'antd-style';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
 const toIdentifier = (name: string) =>
@@ -25,7 +26,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [form] = Form.useForm();
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
@@ -76,6 +77,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       >
         <Input
           placeholder={t('benchmark.create.identifier.placeholder')}
+          style={{ fontFamily: cssVar.fontFamilyCode }}
           onChange={() => setIdentifierTouched(true)}
         />
       </Form.Item>

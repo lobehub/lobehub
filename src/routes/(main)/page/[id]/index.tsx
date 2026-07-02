@@ -2,7 +2,7 @@
 
 import { useUnmount } from 'ahooks';
 import { memo, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { createStoreUpdater } from 'zustand-utils';
 
 import Loading from '@/components/Loading/BrandTextLoading';

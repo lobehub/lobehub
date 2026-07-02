@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import DataSync from './DataSync';
 import Sidebar from './Sidebar';

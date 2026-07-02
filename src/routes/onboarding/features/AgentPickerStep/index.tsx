@@ -10,7 +10,7 @@ import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
@@ -22,6 +22,7 @@ import {
 } from '@/services/onboardingMetrics';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import LobeMessage from '../../components/LobeMessage';
 import { interestsToCategoryHints } from '../../interestCategoryMap';
@@ -109,8 +110,10 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
         step: 'agentpicker',
         stepIndex: 4,
       });
-      trackOnboardingCompleted({ flow: completionFlow, targetUrl: '/' });
-      navigate('/');
+      // Restore the original signup target (threaded through onboarding), if any
+      const targetUrl = consumeOnboardingCallbackUrl() || '/';
+      trackOnboardingCompleted({ flow: completionFlow, targetUrl });
+      navigate(targetUrl);
     },
     [completionFlow, finishOnboarding, isAgentSkipEntry, navigate],
   );

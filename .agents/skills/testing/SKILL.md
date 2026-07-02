@@ -14,14 +14,20 @@ user-invocable: false
 # Run specific test file
 bunx vitest run --silent='passed-only' '[file-path]'
 
-# Database package (client)
+# Database package (client-db, PGlite — default, skips BM25/pg_search)
 cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 
-# Database package (server)
+# Database package (server-db, Postgres — BM25/pgvector parity, what CI measures coverage in)
 cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' '[file]'
 ```
 
 **Never run** `bun run test` - it runs all 3000+ tests (\~10 minutes).
+
+> **Database models/repositories:** every new file under `packages/database/src/models/**`
+> or `src/repositories/**` ships with a sibling `__tests__/<name>.test.ts` in the same PR.
+> Use the real DB via `getTestDB()` (integration style), guard BM25/full-text-search blocks
+> with `describe.skipIf(!isServerDB)`, and always test user-isolation. See
+> `references/db-model-test.md` for setup, schema gotchas, and the client-vs-server-db split.
 
 ## Test Categories
 
@@ -37,6 +43,9 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 2. **Tests must pass type check** - Run `bun run type-check` after writing tests
 3. **After 1-2 failed fix attempts, stop and ask for help**
 4. **Test behavior, not implementation details**
+5. **Regression tests for bug fixes** - After fixing a bug, add a regression test that fails before the fix and passes after, to prevent recurrence
+6. **No new component tests** - Only update existing React component tests. Complex logic should be extracted into hooks and tested there instead
+7. **All source changes before any test changes** - Complete all source file edits first, then update tests in a separate pass. Interleaving disrupts reasoning about the source changes, especially across many files
 
 ## Basic Test Structure
 

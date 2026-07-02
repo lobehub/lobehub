@@ -15,6 +15,13 @@ import { routeChunkPreload } from './routeChunkPreload';
 /** Large i18n namespaces that get their own per-locale chunk instead of merging into the locale bundle */
 const HEAVY_NS = new Set(['models', 'modelProvider']);
 
+/**
+ * Namespaces loaded by the auth SPA (see createAuthI18n). They get their own
+ * per-locale chunk so the auth page never pulls the merged locale bundle of the
+ * main app, and both SPAs share the same chunk URLs for these namespaces.
+ */
+const AUTH_NS = new Set(['auth', 'authError', 'common', 'error', 'marketAuth', 'oauth']);
+
 /** antd locale filename → app locale */
 const ANTD_LOCALE: Record<string, string> = {
   ar_EG: 'ar',
@@ -66,10 +73,25 @@ const isNodePackage = (id: string, packageName: string) => {
 };
 
 function sharedManualChunks(id: string): string | undefined {
+  // default locale sources live in packages/locales/src/default — their chunk
+  // has historically been named i18n-src by the generic locale match below
+  const defaultLocaleMatch = id.match(/\/locales\/src\/default\/([^/.]+)/);
+  if (defaultLocaleMatch) {
+    const ns = defaultLocaleMatch[1];
+    if (AUTH_NS.has(ns)) return `i18n-default-${ns}`;
+    return 'i18n-src';
+  }
+
+  // runtime helpers (resources/create/utils) in packages/locales/src must not
+  // share a chunk with the default locale data, or every consumer would
+  // statically pull the whole default bundle
+  if (id.includes('/locales/src/')) return;
+
   // i18n locale JSON/TS files
   const localeMatch = id.match(/\/locales\/([^/]+)\/([^/.]+)/);
   if (localeMatch) {
     const [, locale, ns] = localeMatch;
+    if (AUTH_NS.has(ns)) return `i18n-${locale}-${ns}`;
     if (locale === 'default') return 'i18n-default';
     if (HEAVY_NS.has(ns)) return `i18n-${locale}-${ns}`;
     return `i18n-${locale}`;
@@ -77,6 +99,10 @@ function sharedManualChunks(id: string): string | undefined {
 
   if (id.includes('/packages/model-runtime/') || isNodePackage(id, 'openai'))
     return 'vendor-ai-runtime';
+
+  // shared constants would otherwise be captured into vendor-ai-runtime,
+  // dragging the whole AI chunk into the auth SPA's static graph
+  if (id.includes('/packages/const/src/')) return 'app-const';
 
   // model-bank (monorepo package — split before node_modules guard)
   if (id.includes('model-bank')) return 'providerConfig';
@@ -101,7 +127,6 @@ function sharedManualChunks(id: string): string | undefined {
     isNodePackage(id, 'react') ||
     isNodePackage(id, 'react-dom') ||
     isNodePackage(id, 'react-router') ||
-    isNodePackage(id, 'react-router-dom') ||
     isNodePackage(id, 'scheduler')
   ) {
     return 'vendor-react';
@@ -169,7 +194,7 @@ export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions 
   },
 });
 
-type Platform = 'web' | 'mobile' | 'desktop';
+type Platform = 'web' | 'mobile' | 'desktop' | 'auth';
 
 const isDev = process.env.NODE_ENV !== 'production';
 const enableRouteChunkPreload = process.env.LOBE_ROUTE_CHUNK_PRELOAD !== 'false';
@@ -229,7 +254,8 @@ export const sharedOptimizeDeps = {
     'react',
     'react-dom',
     'react-dom/client',
-    'react-router-dom',
+    'react-router',
+    'react-router/dom',
     'antd',
     '@ant-design/icons',
     '@lobehub/ui',
@@ -241,24 +267,24 @@ export const sharedOptimizeDeps = {
     'i18next',
     'react-i18next',
     'dayjs',
-    'dayjs/esm/locale/ar',
-    'dayjs/esm/locale/bg',
-    'dayjs/esm/locale/de',
-    'dayjs/esm/locale/en',
-    'dayjs/esm/locale/es',
-    'dayjs/esm/locale/fa',
-    'dayjs/esm/locale/fr',
-    'dayjs/esm/locale/it',
-    'dayjs/esm/locale/ja',
-    'dayjs/esm/locale/ko',
-    'dayjs/esm/locale/nl',
-    'dayjs/esm/locale/pl',
-    'dayjs/esm/locale/pt-br',
-    'dayjs/esm/locale/ru',
-    'dayjs/esm/locale/tr',
-    'dayjs/esm/locale/vi',
-    'dayjs/esm/locale/zh-cn',
-    'dayjs/esm/locale/zh-tw',
+    'dayjs/locale/ar',
+    'dayjs/locale/bg',
+    'dayjs/locale/de',
+    'dayjs/locale/en',
+    'dayjs/locale/es',
+    'dayjs/locale/fa',
+    'dayjs/locale/fr',
+    'dayjs/locale/it',
+    'dayjs/locale/ja',
+    'dayjs/locale/ko',
+    'dayjs/locale/nl',
+    'dayjs/locale/pl',
+    'dayjs/locale/pt-br',
+    'dayjs/locale/ru',
+    'dayjs/locale/tr',
+    'dayjs/locale/vi',
+    'dayjs/locale/zh-cn',
+    'dayjs/locale/zh-tw',
 
     'ahooks',
     'motion/react',

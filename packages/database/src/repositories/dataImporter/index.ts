@@ -5,6 +5,7 @@ import { uuid } from '@/utils/uuid';
 
 import * as EXPORT_TABLES from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import { DeprecatedDataImporterRepos } from './deprecated';
 
 interface ImportResult {
@@ -256,15 +257,17 @@ const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
 
 export class DataImporterRepos {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
   private deprecatedDataImporterRepos: DeprecatedDataImporterRepos;
   private idMaps: Record<string, Record<string, string>> = {};
   private conflictRecords: Record<string, { field: string; value: any }[]> = {};
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
-    this.deprecatedDataImporterRepos = new DeprecatedDataImporterRepos(db, userId);
+    this.deprecatedDataImporterRepos = new DeprecatedDataImporterRepos(db, userId, workspaceId);
   }
 
   importData = async (data: ImporterEntryData): Promise<ImportResultData> => {
@@ -301,7 +304,7 @@ export class DataImporterRepos {
 
           // Use unified import method
           const result = await this.importTableData(trx, config, tableData, conflictStrategy);
-          console.log(`imported table: ${tableName}, records: ${tableData.length}`);
+          console.info(`imported table: ${tableName}, records: ${tableData.length}`);
 
           if (Object.values(result).some((value) => value > 0)) {
             results[tableName] = result;
@@ -381,8 +384,15 @@ export class DataImporterRepos {
         const clientIds = tableData.map((item) => item.clientId || item.id).filter(Boolean);
 
         if (clientIds.length > 0) {
+          const workspaceFilter =
+            'workspaceId' in table
+              ? buildWorkspaceWhere(
+                  { userId: this.userId, workspaceId: this.workspaceId },
+                  table as any,
+                )
+              : eq(table.userId, this.userId);
           existingRecords = await trx.query[tableName].findMany({
-            where: and(eq(table.userId, this.userId), inArray(table.clientId, clientIds)),
+            where: and(workspaceFilter, inArray(table.clientId, clientIds)),
           });
         }
       }
@@ -453,7 +463,7 @@ export class DataImporterRepos {
         if (item.accessedAt) dateFields.accessedAt = new Date(item.accessedAt);
 
         // Create new record object
-        let newRecord: any = {};
+        let newRecord: any;
 
         // Decide how to process based on whether it's composite key and whether to preserve ID
         if (isCompositeKey) {
@@ -465,6 +475,7 @@ export class DataImporterRepos {
             ...dateFields,
             clientId: item.clientId || item.id,
             userId: this.userId,
+            ...('workspaceId' in table ? { workspaceId: this.workspaceId ?? null } : {}),
           };
         } else {
           // Non-composite key table processing
@@ -473,6 +484,7 @@ export class DataImporterRepos {
             ...dateFields,
             clientId: item.clientId || item.id,
             userId: this.userId,
+            ...('workspaceId' in table ? { workspaceId: this.workspaceId ?? null } : {}),
           };
         }
 
@@ -526,9 +538,18 @@ export class DataImporterRepos {
             .filter((field) => record.newRecord[field] !== undefined)
             .map((field) => eq(table[field], record.newRecord[field]));
 
-          // Add userId condition (if table has userId field)
+          // Add userId/workspaceId condition (if table has these fields)
           if ('userId' in table) {
-            whereConditions.push(eq(table.userId, this.userId));
+            if ('workspaceId' in table) {
+              whereConditions.push(
+                buildWorkspaceWhere(
+                  { userId: this.userId, workspaceId: this.workspaceId },
+                  table as any,
+                ),
+              );
+            } else {
+              whereConditions.push(eq(table.userId, this.userId));
+            }
           }
 
           if (whereConditions.length > 0) {

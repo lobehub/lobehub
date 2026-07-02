@@ -243,6 +243,51 @@ describe('resolveModelExtendParams', () => {
     });
   });
 
+  describe('preserve thinking', () => {
+    beforeEach(() => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+        () => true,
+      );
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'preserveThinking',
+      ]);
+    });
+
+    it('should set preserveThinking when supported and enabled', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          preserveThinking: true,
+        } as any,
+        model: 'qwen3.6-plus',
+        provider: 'qwen',
+      });
+
+      expect(result.preserveThinking).toBe(true);
+    });
+
+    it('should set preserveThinking to false when explicitly disabled', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          preserveThinking: false,
+        } as any,
+        model: 'qwen3.6-plus',
+        provider: 'qwen',
+      });
+
+      expect(result.preserveThinking).toBe(false);
+    });
+
+    it('should not set preserveThinking when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'qwen3.6-plus',
+        provider: 'qwen',
+      });
+
+      expect(result.preserveThinking).toBeUndefined();
+    });
+  });
+
   describe('reasoning effort variants', () => {
     describe('reasoningEffort param', () => {
       beforeEach(() => {

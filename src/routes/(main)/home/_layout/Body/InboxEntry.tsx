@@ -1,13 +1,14 @@
 'use client';
 
-import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Avatar, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -42,21 +43,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const InboxEntry = memo(() => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId!));
   const isLoading = useChatStore(
-    inboxAgentId ? operationSelectors.isAgentRunning(inboxAgentId) : () => false,
+    inboxAgentId ? operationSelectors.isAgentVisiblyRunning(inboxAgentId) : () => false,
   );
 
   const title = inboxMeta.title || 'Lobe AI';
   const avatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
-  const url = SESSION_CHAT_URL(inboxAgentId, false);
+  const url = AGENT_CHAT_URL(inboxAgentId, false);
 
   const avatarNode = <Avatar emojiScaleWithBackground avatar={avatar} shape={'square'} size={24} />;
 
   return (
-    <Link
+    <WorkspaceLink
       aria-label={title}
       to={url}
       onClick={(e) => {
@@ -80,7 +81,7 @@ const InboxEntry = memo(() => {
           )
         }
       />
-    </Link>
+    </WorkspaceLink>
   );
 });
 

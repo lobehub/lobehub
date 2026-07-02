@@ -2,7 +2,7 @@ import { type ItemType } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ArrowRight, LibraryBig } from 'lucide-react';
+import { LibraryBig } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,6 +92,7 @@ export const useControls = ({
     label: (
       <CheckboxItem
         checked={item.enabled}
+        hasPadding={false}
         id={item.id}
         label={item.name}
         labelMaxWidth={labelMaxWidth}
@@ -108,6 +109,7 @@ export const useControls = ({
     label: (
       <CheckboxItem
         checked={item.enabled}
+        hasPadding={false}
         id={item.id}
         label={item.name}
         labelMaxWidth={labelMaxWidth}
@@ -136,7 +138,6 @@ export const useControls = ({
     >
       <Icon icon={LibraryBig} size={16} />
       <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
-      <Icon icon={ArrowRight} size={16} />
     </button>
   );
 

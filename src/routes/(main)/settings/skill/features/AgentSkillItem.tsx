@@ -1,25 +1,18 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Modal,
-  stopPropagation,
-  Tag,
-} from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Space } from 'antd';
+import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillSourceTag from '@/components/SkillSourceTag';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
+import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
@@ -34,16 +27,20 @@ const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSk
   !('id' in skill);
 
 interface AgentSkillItemProps {
+  isSelected?: boolean;
+  onSelect?: () => void;
   skill: BuiltinSkill | SkillListItem;
 }
 
-const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
+const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const isBuiltin = isBuiltinSkill(skill);
 
@@ -76,6 +73,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   };
 
   const handleUninstall = () => {
+    if (!canEdit) return;
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
@@ -113,6 +111,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             items={[
               {
                 danger: true,
+                disabled: !canEdit,
                 icon: <Icon icon={Trash2} />,
                 key: 'uninstall',
                 label: tp('store.actions.uninstall'),
@@ -120,12 +119,19 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               },
             ]}
           >
-            <Button icon={MoreHorizontalIcon} />
+            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
           </DropdownMenu>
         );
       }
       return (
-        <Button icon={Plus} onClick={() => installBuiltinTool(skill.identifier)}>
+        <Button
+          disabled={!canCreate}
+          icon={Plus}
+          onClick={() => {
+            if (!canCreate) return;
+            installBuiltinTool(skill.identifier);
+          }}
+        >
           {tp('store.actions.install')}
         </Button>
       );
@@ -133,7 +139,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
 
     return (
       <Space.Compact>
-        <Button onClick={() => setEditOpen(true)}>{tp('store.actions.configure')}</Button>
+        <Button disabled={!canEdit} onClick={() => setEditOpen(true)}>
+          {tp('store.actions.configure')}
+        </Button>
         <DropdownMenu
           placement="bottomRight"
           items={[
@@ -150,6 +158,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               : []),
             {
               danger: true,
+              disabled: !canEdit,
               icon: <Trash2 size={16} />,
               key: 'uninstall',
               label: tp('store.actions.uninstall'),
@@ -157,7 +166,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             },
           ]}
         >
-          <Button icon={MoreHorizontalIcon} loading={loading} />
+          <Button disabled={!canEdit} icon={MoreHorizontalIcon} loading={loading} />
         </DropdownMenu>
       </Space.Compact>
     );
@@ -199,6 +208,20 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
 
   const showDisconnected = isBuiltin && !isBuiltinInstalled;
 
+  if (onSelect) {
+    return (
+      <NavItem
+        active={isSelected}
+        title={title}
+        titleColor={showDisconnected ? cssVar.colorTextDescription : undefined}
+        icon={() =>
+          avatar ? <Avatar avatar={avatar} size={18} /> : <Icon icon={SkillsIcon} size={18} />
+        }
+        onClick={onSelect}
+      />
+    );
+  }
+
   return (
     <>
       <Flexbox
@@ -207,38 +230,37 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         className={styles.container}
         gap={16}
         justify="space-between"
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
-            gap={16}
-            style={{ cursor: 'pointer' }}
-            onClick={handleOpenDetail}
+            gap={8}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
+            onClick={onSelect ? undefined : handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-              {avatar ? <Avatar avatar={avatar} size={32} /> : <Icon icon={SkillsIcon} size={28} />}
+              {avatar ? <Avatar avatar={avatar} size={16} /> : <Icon icon={SkillsIcon} size={16} />}
             </div>
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox horizontal align="center" gap={8}>
-                <span
-                  className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
-                >
-                  {title}
-                </span>
-                {!isBuiltin && <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />}
-                <SkillSourceTag source={skill.source} />
-              </Flexbox>
-              {showDisconnected && renderStatus()}
-            </Flexbox>
+            <span className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}>
+              {title}
+            </span>
           </Flexbox>
+          {showDisconnected && renderStatus()}
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
-          {isBuiltin && isBuiltinInstalled && renderStatus()}
-          {renderActions()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
+            {isBuiltin && isBuiltinInstalled && renderStatus()}
+            {renderActions()}
+          </Flexbox>
+        )}
       </Flexbox>
-      {renderDetailModal()}
+      {!onSelect && renderDetailModal()}
     </>
   );
 });

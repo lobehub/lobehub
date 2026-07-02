@@ -3,7 +3,7 @@ import { Flexbox, TooltipGroup } from '@lobehub/ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
-import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import ToggleLeftPanelButton, { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -39,7 +39,9 @@ const NavHeader = memo<NavHeaderProps>(
 
     const noContent = !left && !right;
 
-    if (noContent && expand) return;
+    // When empty, this header only rendered to host the collapse toggle. Hide it
+    // when expanded, and also on macOS desktop where the toggle moved to the titlebar.
+    if (noContent && (expand || isMacDesktop)) return;
 
     return (
       <Flexbox

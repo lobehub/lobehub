@@ -1,6 +1,7 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { parse } from '@lobechat/conversation-flow';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
   ChatToolPayload,
@@ -68,12 +69,12 @@ import {
   messageTranslates,
   messageTTS,
   threads,
-  topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
 /**
@@ -155,7 +156,6 @@ interface CreateUserAndAssistantMessagesParams {
 
 interface CreateUserAndAssistantMessagesOptions {
   timing?: ModelTimingContext;
-  touchTopicUpdatedAt?: boolean;
 }
 
 interface CreateMessageInsertParams {
@@ -192,25 +192,136 @@ interface SplitCreateMessageParams {
   relations: CreateMessageRelationParams;
 }
 
+/**
+ * Shared, ownership-scoped filters for the analytics queries
+ * (count / countGroupByTopic / topicMessageStats). All of these are
+ * applied on top of the workspace ownership predicate, so the resulting
+ * query never leaks across `userId × workspace`.
+ */
+export interface MessageAnalyticsFilters {
+  agentId?: string;
+  endDate?: string;
+  range?: [string, string];
+  role?: string;
+  startDate?: string;
+  topicId?: string;
+}
+
+/** A single `{ topicId, count }` row from a per-topic count aggregation. */
+export interface TopicMessageCountItem {
+  count: number;
+  topicId: string;
+}
+
+/**
+ * Distribution of message counts per topic, computed server-side.
+ * Mirrors what a `SELECT count(*) ... GROUP BY topic_id` + percentile
+ * aggregation would produce, so the CLI receives only the summary instead
+ * of paginating raw rows.
+ */
+export interface TopicMessageStats {
+  /** Per distinct message-count value, how many topics have it. Ascending. */
+  histogram: { topics: number; userCount: number }[];
+  max: number;
+  mean: number;
+  median: number;
+  min: number;
+  /** Number of topics with exactly one matching message ("one-shot"). */
+  oneshot: number;
+  /** oneshot / topics, in [0, 1]. 0 when there are no topics. */
+  oneshotRatio: number;
+  p90: number;
+  p99: number;
+  /** Number of topics that have at least one matching message. */
+  topics: number;
+  /** Total matching messages across all topics. */
+  totalMessages: number;
+}
+
+/**
+ * Linear-interpolation percentile over an ascending-sorted array, matching
+ * PostgreSQL's `percentile_cont`. Returns 0 for an empty input.
+ */
+const percentileCont = (sorted: number[], q: number): number => {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  if (n === 1) return sorted[0];
+  const rank = q * (n - 1);
+  const lo = Math.floor(rank);
+  const hi = Math.ceil(rank);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (rank - lo);
+};
+
+/** Reduce a list of per-topic message counts into a {@link TopicMessageStats}. */
+const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
+  const topics = counts.length;
+  if (topics === 0) {
+    return {
+      histogram: [],
+      max: 0,
+      mean: 0,
+      median: 0,
+      min: 0,
+      oneshot: 0,
+      oneshotRatio: 0,
+      p90: 0,
+      p99: 0,
+      topics: 0,
+      totalMessages: 0,
+    };
+  }
+
+  const sorted = [...counts].sort((a, b) => a - b);
+  const totalMessages = sorted.reduce((acc, c) => acc + c, 0);
+  const oneshot = sorted.filter((c) => c === 1).length;
+
+  const bucket = new Map<number, number>();
+  for (const c of sorted) bucket.set(c, (bucket.get(c) ?? 0) + 1);
+  const histogram = [...bucket.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([userCount, topicCount]) => ({ topics: topicCount, userCount }));
+
+  return {
+    histogram,
+    max: sorted[topics - 1],
+    mean: totalMessages / topics,
+    median: percentileCont(sorted, 0.5),
+    min: sorted[0],
+    oneshot,
+    oneshotRatio: oneshot / topics,
+    p90: percentileCont(sorted, 0.9),
+    p99: percentileCont(sorted, 0.99),
+    topics,
+    totalMessages,
+  };
+};
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
 
-  /**
-   * Touch topics' updatedAt timestamp within a transaction
-   */
-  private async touchTopicUpdatedAt(trx: Transaction, topicIds: string[]) {
-    if (topicIds.length === 0) return;
-    await trx
-      .update(topics)
-      .set({ updatedAt: new Date() })
-      .where(and(inArray(topics.id, topicIds), eq(topics.userId, this.userId)));
-  }
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  private pluginsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
+
+  private translatesOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTranslates);
+
+  private ttsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTTS);
+
+  private agentsToSessionsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
 
   // **************** Query *************** //
 
@@ -335,6 +446,34 @@ export class MessageModel {
   };
 
   /**
+   * Lightweight parent/group links for the FULL message tree of a topic,
+   * INCLUDING messages hidden inside MessageGroups (compression / parallel).
+   *
+   * `query` replaces grouped messages with synthetic group nodes that expose
+   * neither their members' `parentId` nor (for compaction) the group's
+   * `parentMessageId`, so branch-ancestry can't be reconstructed from `query`
+   * output alone. This returns the raw `id → parentId` / `messageGroupId` links
+   * so callers (e.g. server-runtime regenerate pruning) can walk ancestry across
+   * a compacted range.
+   */
+  queryTopicMessageTree = async ({
+    threadId,
+    topicId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ id: string; messageGroupId: string | null; parentId: string | null }[]> => {
+    return this.db
+      .select({
+        id: messages.id,
+        messageGroupId: messages.messageGroupId,
+        parentId: messages.parentId,
+      })
+      .from(messages)
+      .where(and(this.ownership(), this.matchTopic(topicId), this.matchThread(threadId)));
+  };
+
+  /**
    * Query messages with full relations (files, plugins, translations, etc.)
    *
    * This is the low-level query method that accepts a custom where condition.
@@ -414,7 +553,7 @@ export class MessageModel {
           .from(messages)
           .where(
             and(
-              eq(messages.userId, this.userId),
+              this.ownership(),
               // Filter out messages that belong to MessageGroups
               isNull(messages.messageGroupId),
               where,
@@ -471,8 +610,12 @@ export class MessageModel {
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
     const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
     const fileList = relatedFileList.filter(
-      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+      (i) =>
+        !(i.fileType || '').startsWith('image') &&
+        !(i.fileType || '').startsWith('video') &&
+        !(i.fileType || '').startsWith('audio'),
     );
 
     const threadMap = this.createThreadMap(threadData);
@@ -539,6 +682,10 @@ export class MessageModel {
                 .filter((relation) => relation.messageId === item.id)
 
                 .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+              audioList: audioList
+                .filter((relation) => relation.messageId === item.id)
+
+                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
             } as unknown as UIChatMessage;
           },
         ),
@@ -785,7 +932,10 @@ export class MessageModel {
           })
           .from(threads)
           .where(
-            and(eq(threads.userId, this.userId), inArray(threads.sourceMessageId, taskMessageIds)),
+            and(
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+              inArray(threads.sourceMessageId, taskMessageIds),
+            ),
           ),
       { taskMessageCount: taskMessageIds.length },
     );
@@ -889,7 +1039,7 @@ export class MessageModel {
         ttsVoice: messageTTS.voice,
       })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)))
+      .where(and(this.ownership(), inArray(messages.id, messageIds)))
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
@@ -957,7 +1107,10 @@ export class MessageModel {
             .from(threads)
             .where(
               and(
-                eq(threads.userId, this.userId),
+                buildWorkspaceWhere(
+                  { userId: this.userId, workspaceId: this.workspaceId },
+                  threads,
+                ),
                 inArray(threads.sourceMessageId, taskMessageIds),
               ),
             )
@@ -1002,8 +1155,12 @@ export class MessageModel {
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
     const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
     const fileList = relatedFileList.filter(
-      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+      (i) =>
+        !(i.fileType || '').startsWith('image') &&
+        !(i.fileType || '').startsWith('video') &&
+        !(i.fileType || '').startsWith('audio'),
     );
 
     // 4. Build thread map
@@ -1080,6 +1237,9 @@ export class MessageModel {
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+          audioList: audioList
+            .filter((relation) => relation.messageId === item.id)
+            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
         } as unknown as UIChatMessage;
       },
     );
@@ -1104,7 +1264,7 @@ export class MessageModel {
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
-      eq(messageGroups.userId, this.userId),
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups),
       eq(messageGroups.topicId, topicId),
     ];
 
@@ -1145,7 +1305,7 @@ export class MessageModel {
             messageGroupId: messages.messageGroupId,
           })
           .from(messages)
-          .where(and(eq(messages.userId, this.userId), inArray(messages.messageGroupId, groupIds)))
+          .where(and(this.ownership(), inArray(messages.messageGroupId, groupIds)))
           .orderBy(asc(messages.createdAt)),
       { groupCount: groupIds.length },
     );
@@ -1247,7 +1407,10 @@ export class MessageModel {
   private buildThreadQueryCondition = async (threadId: string): Promise<SQL | undefined> => {
     // Fetch the thread info to get sourceMessageId and type
     const thread = await this.db.query.threads.findFirst({
-      where: and(eq(threads.id, threadId), eq(threads.userId, this.userId)),
+      where: and(
+        eq(threads.id, threadId),
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+      ),
     });
 
     if (!thread?.sourceMessageId || !thread?.topicId) {
@@ -1280,7 +1443,7 @@ export class MessageModel {
     const agentSession = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
+      .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()))
       .limit(1);
 
     const associatedSessionId = agentSession[0]?.sessionId;
@@ -1293,7 +1456,23 @@ export class MessageModel {
 
   findById = async (id: string) => {
     return this.db.query.messages.findFirst({
-      where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, id), this.ownership()),
+    });
+  };
+
+  /**
+   * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
+   * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
+   * persist the failure feedback onto the card it belongs to.
+   */
+  findVerifyMessageByOperationId = async (operationId: string) => {
+    return this.db.query.messages.findFirst({
+      where: and(
+        eq(messages.userId, this.userId),
+        eq(messages.role, 'verify'),
+        sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
+      ),
+      orderBy: [desc(messages.createdAt)],
     });
   };
 
@@ -1324,7 +1503,7 @@ export class MessageModel {
     // For Standalone type, only return the source message
     if (threadType === ThreadType.Standalone) {
       const sourceMessage = await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, sourceMessageId), eq(messages.userId, this.userId)),
+        where: and(eq(messages.id, sourceMessageId), this.ownership()),
       });
 
       return sourceMessage ? [sourceMessage as DBMessageItem] : [];
@@ -1332,7 +1511,7 @@ export class MessageModel {
 
     // For Continuation type, get the source message first to know its createdAt
     const sourceMessage = await this.db.query.messages.findFirst({
-      where: and(eq(messages.id, sourceMessageId), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, sourceMessageId), this.ownership()),
     });
 
     if (!sourceMessage) return [];
@@ -1345,7 +1524,7 @@ export class MessageModel {
       .from(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ownership(),
           eq(messages.topicId, topicId),
           isNull(messages.threadId), // Only main conversation messages (not in any thread)
           or(
@@ -1384,7 +1563,7 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
@@ -1395,7 +1574,7 @@ export class MessageModel {
   queryBySessionId = async (sessionId?: string | null) => {
     const result = await this.db.query.messages.findMany({
       orderBy: [asc(messages.createdAt)],
-      where: and(eq(messages.userId, this.userId), this.matchSession(sessionId)),
+      where: and(this.ownership(), this.matchSession(sessionId)),
     });
 
     return result as DBMessageItem[];
@@ -1408,45 +1587,88 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), sql`${messages.content} @@@ ${bm25Query}`))
+      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];
   };
 
-  count = async (params?: {
-    endDate?: string;
-    range?: [string, string];
-    startDate?: string;
-  }): Promise<number> => {
+  /**
+   * Ownership-scoped analytics filter conditions, shared by count /
+   * countGroupByTopic / topicMessageStats. The first entry is always the
+   * `userId × workspace` ownership predicate; later entries are optional.
+   */
+  private analyticsConditions = (params?: MessageAnalyticsFilters) => [
+    this.ownership(),
+    params?.agentId ? eq(messages.agentId, params.agentId) : undefined,
+    params?.topicId ? eq(messages.topicId, params.topicId) : undefined,
+    params?.role ? eq(messages.role, params.role) : undefined,
+    params?.range
+      ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
+      : undefined,
+    params?.endDate
+      ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
+      : undefined,
+    params?.startDate
+      ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
+      : undefined,
+  ];
+
+  count = async (params?: MessageAnalyticsFilters): Promise<number> => {
     const result = await this.db
       .select({
         count: count(messages.id),
       })
       .from(messages)
-      .where(
-        genWhere([
-          eq(messages.userId, this.userId),
-          params?.range
-            ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
-            : undefined,
-          params?.endDate
-            ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
-            : undefined,
-          params?.startDate
-            ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
-            : undefined,
-        ]),
-      );
+      .where(genWhere(this.analyticsConditions(params)));
 
     return result[0].count;
+  };
+
+  /**
+   * Count matching messages grouped by topic, sorted by count desc.
+   * Topics without a `topicId` are excluded. Pushes the GROUP BY to the DB
+   * so callers don't have to paginate raw rows and count client-side.
+   */
+  countGroupByTopic = async (
+    params?: MessageAnalyticsFilters,
+  ): Promise<TopicMessageCountItem[]> => {
+    const rows = await this.db
+      .select({
+        count: count(messages.id),
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
+      .groupBy(messages.topicId)
+      .orderBy(desc(sql`count`), asc(messages.topicId));
+
+    return rows.map((r) => ({ count: r.count, topicId: r.topicId! }));
+  };
+
+  /**
+   * Distribution of message counts per topic (topics / mean / median /
+   * p90 / p99 / min / max / one-shot ratio + histogram). The per-topic
+   * counts are aggregated in the DB; only the final summary is returned.
+   */
+  topicMessageStats = async (params?: MessageAnalyticsFilters): Promise<TopicMessageStats> => {
+    const rows = await this.db
+      .select({
+        count: count(messages.id),
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
+      .groupBy(messages.topicId);
+
+    return computeTopicMessageStats(rows.map((r) => r.count));
   };
 
   hasTopicMessages = async (topicId: string): Promise<boolean> => {
     const rows = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), eq(messages.topicId, topicId)))
+      .where(and(eq(messages.topicId, topicId), this.ownership()))
       .limit(1);
 
     return rows.length > 0;
@@ -1456,13 +1678,7 @@ export class MessageModel {
     const rows = (await this.db
       .select()
       .from(messages)
-      .where(
-        and(
-          eq(messages.userId, this.userId),
-          eq(messages.topicId, topicId),
-          eq(messages.role, 'assistant'),
-        ),
-      )
+      .where(and(eq(messages.topicId, topicId), eq(messages.role, 'assistant'), this.ownership()))
       .orderBy(asc(messages.createdAt))
       .limit(1)) as DBMessageItem[];
 
@@ -1481,7 +1697,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           params?.range
             ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
             : undefined,
@@ -1504,7 +1720,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), isNotNull(messages.model)))
+      .where(and(this.ownership(), isNotNull(messages.model)))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -1523,7 +1739,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -1590,7 +1806,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           eq(messages.role, 'assistant'),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
@@ -1642,7 +1858,7 @@ export class MessageModel {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .limit(n + 1);
 
     return result.length > n;
@@ -1655,7 +1871,7 @@ export class MessageModel {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .limit(n);
 
     return result.length;
@@ -1700,23 +1916,25 @@ export class MessageModel {
     // Ensure group message does not populate sessionId
     const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
 
-    return {
-      ...normalizedMessage,
-      // Sanitize content to strip null bytes that PostgreSQL rejects
-      content: sanitizeNullBytes(normalizedMessage.content),
-      // TODO: remove this when the client is updated
-      createdAt: createdAt ? new Date(createdAt) : undefined,
-      id,
-      model: fromModel,
-      provider: fromProvider,
-      updatedAt: updatedAt ? new Date(updatedAt) : undefined,
-      // Promote token usage into the dedicated `usage` column, preferring a
-      // top-level `usage` over the legacy `metadata.usage`.
-      usage:
-        normalizedMessage.usage ??
-        (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
-      userId: this.userId,
-    };
+    return buildWorkspacePayload(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        ...normalizedMessage,
+        // Sanitize content to strip null bytes that PostgreSQL rejects
+        content: sanitizeNullBytes(normalizedMessage.content),
+        // TODO: remove this when the client is updated
+        createdAt: createdAt ? new Date(createdAt) : undefined,
+        id,
+        model: fromModel,
+        provider: fromProvider,
+        updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+        // Promote token usage into the dedicated `usage` column, preferring a
+        // top-level `usage` over the legacy `metadata.usage`.
+        usage:
+          normalizedMessage.usage ??
+          (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
+      },
+    );
   };
 
   private insertMessageRelationsInTransaction = async (
@@ -1747,6 +1965,7 @@ export class MessageModel {
           toolCallId: message.tool_call_id,
           type: plugin?.type,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         }),
       );
     }
@@ -1756,9 +1975,14 @@ export class MessageModel {
         timing,
         `${timingPrefix}.files.insert`,
         () =>
-          trx
-            .insert(messagesFiles)
-            .values(files.map((file) => ({ fileId: file, messageId: id, userId: this.userId }))),
+          trx.insert(messagesFiles).values(
+            files.map((file) => ({
+              fileId: file,
+              messageId: id,
+              userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
+            })),
+          ),
         { fileCount: files.length },
       );
     }
@@ -1775,6 +1999,7 @@ export class MessageModel {
               queryId: ragQueryId,
               similarity: chunk.similarity?.toString(),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           ),
         { chunkCount: fileChunks.length },
@@ -1826,16 +2051,6 @@ export class MessageModel {
         this.db.transaction(async (trx) => {
           const item = await this.createInTransaction(trx, params, id, timing);
 
-          // Touch topic's updatedAt when creating a message in a topic
-          if (params.topicId) {
-            await runTimedStage(
-              timing,
-              'db.message.create.topic.touchUpdatedAt',
-              () => this.touchTopicUpdatedAt(trx, [params.topicId!]),
-              { topicCount: 1 },
-            );
-          }
-
           return item;
         }),
       {
@@ -1849,7 +2064,7 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    { timing, touchTopicUpdatedAt = true }: CreateUserAndAssistantMessagesOptions = {},
+    { timing }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
     const userMessageId = this.genId();
     const assistantMessageId = this.genId();
@@ -1913,15 +2128,6 @@ export class MessageModel {
             'db.message.createUserAndAssistant.assistant',
           );
 
-          if (touchTopicUpdatedAt && topicIds.length > 0) {
-            await runTimedStage(
-              timing,
-              'db.message.createUserAndAssistant.topic.touchUpdatedAt',
-              () => this.touchTopicUpdatedAt(trx, topicIds),
-              { topicCount: topicIds.length },
-            );
-          }
-
           const userMessageItem = messageMap.get(userMessageId);
           const assistantMessageItem = messageMap.get(assistantMessageId);
 
@@ -1940,17 +2146,16 @@ export class MessageModel {
   };
 
   batchCreate = async (newMessages: DBMessageItem[]) => {
-    const messagesToInsert = newMessages.map((m) => {
-      // TODO: need a better way to handle this
-      return { ...m, role: m.role as any, userId: this.userId };
-    });
-
-    const topicIds = [...new Set(newMessages.map((m) => m.topicId).filter(Boolean))] as string[];
+    const messagesToInsert = newMessages.map((m) =>
+      buildWorkspacePayload(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        // TODO: need a better way to handle this
+        { ...m, role: m.role as any },
+      ),
+    );
 
     return this.db.transaction(async (trx) => {
       const result = await trx.insert(messages).values(messagesToInsert);
-
-      await this.touchTopicUpdatedAt(trx, topicIds);
 
       return result;
     });
@@ -1959,7 +2164,7 @@ export class MessageModel {
   createMessageQuery = async (params: NewMessageQueryParams) => {
     const result = await this.db
       .insert(messageQueries)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .returning();
 
     return result[0];
@@ -2001,6 +2206,7 @@ export class MessageModel {
                       fileId: file.id,
                       messageId: id,
                       userId: this.userId,
+                      workspaceId: this.workspaceId ?? null,
                     })),
                   ),
                 { imageCount: imageList.length },
@@ -2018,7 +2224,7 @@ export class MessageModel {
                   trx
                     .select({ metadata: messages.metadata })
                     .from(messages)
-                    .where(and(eq(messages.id, id), eq(messages.userId, this.userId))),
+                    .where(and(eq(messages.id, id), this.ownership())),
               );
               mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
             }
@@ -2034,32 +2240,24 @@ export class MessageModel {
                     ...(mergedMetadata && { metadata: mergedMetadata }),
                     ...(usageToWrite && { usage: usageToWrite }),
                   })
-                  .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+                  .where(and(eq(messages.id, id), this.ownership()))
                   .returning({ topicId: messages.topicId }),
               { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
-            // Touch topic's updatedAt when updating a message
-            if (updated?.topicId) {
-              await runTimedStage(
-                timing,
-                'db.message.update.topic.touchUpdatedAt',
-                () => this.touchTopicUpdatedAt(trx, [updated.topicId!]),
-                { topicCount: 1 },
-              );
-
-              // When this write carries token usage (assistant finalize / hetero
+            if (
+              updated?.topicId && // When this write carries token usage (assistant finalize / hetero
               // step), recompute the topic's denormalized usage rollup from its
               // messages. Gated on the *incoming* payload so streaming
               // content-only updates don't trigger needless recomputes.
-              if (usageToWrite) {
-                await runTimedStage(
-                  timing,
-                  'db.message.update.topic.recomputeUsage',
-                  () => recomputeTopicUsage(trx, this.userId, updated.topicId!),
-                  { topicCount: 1 },
-                );
-              }
+              usageToWrite
+            ) {
+              await runTimedStage(
+                timing,
+                'db.message.update.topic.recomputeUsage',
+                () => recomputeTopicUsage(trx, this.userId, updated.topicId!, this.workspaceId),
+                { topicCount: 1 },
+              );
             }
           }),
         {
@@ -2078,7 +2276,7 @@ export class MessageModel {
 
   updateMetadata = async (id: string, metadata: Record<string, any>) => {
     const item = await this.db.query.messages.findFirst({
-      where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, id), this.ownership()),
     });
 
     if (!item) return;
@@ -2091,28 +2289,31 @@ export class MessageModel {
     return this.db
       .update(messages)
       .set({ metadata: mergedMetadata, ...(usageToWrite && { usage: usageToWrite }) })
-      .where(and(eq(messages.userId, this.userId), eq(messages.id, id)));
+      .where(and(eq(messages.id, id), this.ownership()));
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
     const item = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, id),
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
     });
     if (!item) throw new Error('Plugin not found');
 
     await this.db
       .update(messagePlugins)
       .set({ state: merge(item.state || {}, state) })
-      .where(eq(messagePlugins.id, id));
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
     const item = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, id),
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
     });
     if (!item) throw new Error('Plugin not found');
 
-    return this.db.update(messagePlugins).set(value).where(eq(messagePlugins.id, id));
+    return this.db
+      .update(messagePlugins)
+      .set(value)
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
   };
 
   /**
@@ -2128,7 +2329,7 @@ export class MessageModel {
    */
   findMessagePlugin = async (messageId: string): Promise<MessagePluginItem | undefined> => {
     const row = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, messageId),
+      where: and(eq(messagePlugins.id, messageId), this.pluginsOwnership()),
     });
     if (!row) return undefined;
     return {
@@ -2169,7 +2370,7 @@ export class MessageModel {
       })
       .from(messagePlugins)
       .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+      .where(and(eq(messages.topicId, topicId), this.ownership(), this.pluginsOwnership()))
       .orderBy(asc(messages.createdAt), asc(messages.id));
 
     return rows.map((row) => ({
@@ -2215,7 +2416,7 @@ export class MessageModel {
           if (metadata !== undefined) {
             // Need to merge with existing metadata
             const existingMessage = await trx.query.messages.findFirst({
-              where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+              where: and(eq(messages.id, id), this.ownership()),
             });
             messageUpdateData.metadata = merge(existingMessage?.metadata || {}, metadata);
           }
@@ -2224,14 +2425,14 @@ export class MessageModel {
             await trx
               .update(messages)
               .set(messageUpdateData)
-              .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
+              .where(and(eq(messages.id, id), this.ownership()));
           }
         }
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
           const pluginItem = await trx.query.messagePlugins.findFirst({
-            where: eq(messagePlugins.id, id),
+            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
           });
 
           if (pluginItem) {
@@ -2249,7 +2450,7 @@ export class MessageModel {
               await trx
                 .update(messagePlugins)
                 .set(pluginUpdateData)
-                .where(eq(messagePlugins.id, id));
+                .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
             }
           }
         }
@@ -2284,7 +2485,7 @@ export class MessageModel {
           })
           .from(messagePlugins)
           .innerJoin(messages, eq(messages.id, messagePlugins.id))
-          .where(and(eq(messagePlugins.toolCallId, toolCallId), eq(messages.userId, this.userId)))
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.ownership()))
           .limit(1);
 
         if (!toolResult?.parentId) {
@@ -2295,7 +2496,7 @@ export class MessageModel {
         const [parentMessage] = await trx
           .select({ id: messages.id, tools: messages.tools })
           .from(messages)
-          .where(eq(messages.id, toolResult.parentId))
+          .where(and(eq(messages.id, toolResult.parentId), this.ownership()))
           .limit(1);
 
         if (!parentMessage?.tools) {
@@ -2318,12 +2519,12 @@ export class MessageModel {
           trx
             .update(messagePlugins)
             .set({ arguments: args })
-            .where(eq(messagePlugins.id, toolResult.toolPluginId)),
+            .where(and(eq(messagePlugins.id, toolResult.toolPluginId), this.pluginsOwnership())),
           // Update parent assistant message's tools
           trx
             .update(messages)
             .set({ tools: updatedTools })
-            .where(eq(messages.id, parentMessage.id)),
+            .where(and(eq(messages.id, parentMessage.id), this.ownership())),
         ]);
       });
 
@@ -2334,23 +2535,98 @@ export class MessageModel {
     }
   };
 
+  /**
+   * Id of the latest main-thread (`threadId IS NULL`) "spine" message in a
+   * topic: the most recent message that is NOT a tool and NOT a signal-tagged
+   * reactive turn (Monitor stdout callbacks etc.). This is the chain anchor for
+   * the heterogeneous-agent write side: the next normal
+   * turn parents off it, producing a `user → asst → asst …` spine with tools as
+   * inline children.
+   *
+   * Read straight from the DB and ordered by `createdAt`, it is independent of
+   * the in-memory current-assistant pointer — which can regress to the run's
+   * seed placeholder on a cold / non-sticky serverless replica. Anchoring here
+   * instead keeps consecutive cold-replica steps chained linearly rather than
+   * forking onto a stale node (the remote "断链" bug). No `createdAt` floor is
+   * needed: a topic runs at most one operation at a time, so the latest spine
+   * message IS this run's continuation point.
+   *
+   * Excludes `role:'tool'` (inline children) and signal-tagged assistants
+   * (`metadata->'signal'`), which are tool-child callbacks — anchoring a normal
+   * turn onto a callback would orphan it under the read side's tool-only signal
+   * collection.
+   */
+  getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> =>
+    this.getLatestSpineMessageId({ topicId, threadId: null });
+
+  /**
+   * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
+   * the latest "spine" message (the most recent message that is NOT a tool and
+   * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
+   * (`threadId IS NULL`) or to a specific thread.
+   *
+   * Like the main-thread query it EXCLUDES `role:'tool'` and signal-tagged
+   * assistants: tools are inline children of their assistant turn, so the
+   * conversation head a new turn parents off is the assistant, never the tool
+   * result that landed under it.
+   *
+   * Used by `sendMessageInServer` to make `parentId` server-authoritative and
+   * close the concurrent-append race: the client computes `parentId` from a
+   * local snapshot whose spine tail may already have advanced (e.g. another
+   * assistant turn was written while the user was composing), so trusting it
+   * would fork the new turn off a stale node. Ordering by `createdAt` is safe
+   * because a topic runs at most one operation at a time.
+   */
+  getLatestSpineMessageId = async ({
+    topicId,
+    threadId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<string | undefined> => {
+    const [row] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, topicId),
+          not(eq(messages.role, 'tool')),
+          threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
+          sql`${messages.metadata} -> 'signal' IS NULL`,
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return row?.id;
+  };
+
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
     const result = await this.db.query.messageTranslates.findFirst({
-      where: and(eq(messageTranslates.id, id)),
+      where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
     });
 
     // If the message does not exist in the translate table, insert it
     if (!result) {
-      return this.db.insert(messageTranslates).values({ ...translate, id, userId: this.userId });
+      return this.db.insert(messageTranslates).values({
+        ...translate,
+        id,
+        userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
+      });
     }
 
     // or just update the existing one
-    return this.db.update(messageTranslates).set(translate).where(eq(messageTranslates.id, id));
+    return this.db
+      .update(messageTranslates)
+      .set(translate)
+      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()));
   };
 
   updateTTS = async (id: string, tts: Partial<ChatTTS>) => {
     const result = await this.db.query.messageTTS.findFirst({
-      where: and(eq(messageTTS.id, id)),
+      where: and(eq(messageTTS.id, id), this.ttsOwnership()),
     });
 
     // If the message does not exist in the translate table, insert it
@@ -2361,6 +2637,7 @@ export class MessageModel {
         id,
         userId: this.userId,
         voice: tts.voice,
+        workspaceId: this.workspaceId ?? null,
       });
     }
 
@@ -2368,7 +2645,7 @@ export class MessageModel {
     return this.db
       .update(messageTTS)
       .set({ contentMd5: tts.contentMd5, fileId: tts.file, voice: tts.voice })
-      .where(eq(messageTTS.id, id));
+      .where(and(eq(messageTTS.id, id), this.ttsOwnership()));
   };
 
   async updateMessageRAG(id: string, { ragQueryId, fileChunks }: UpdateMessageRAGParams) {
@@ -2379,6 +2656,7 @@ export class MessageModel {
         queryId: ragQueryId,
         similarity: chunk.similarity?.toString(),
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       })),
     );
   }
@@ -2391,7 +2669,7 @@ export class MessageModel {
       const message = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+        .where(and(eq(messages.id, id), this.ownership()))
         .limit(1);
 
       // If the message to be deleted is not found, return directly
@@ -2402,7 +2680,7 @@ export class MessageModel {
       await tx
         .update(messages)
         .set({ parentId: message[0].parentId })
-        .where(and(eq(messages.parentId, id), eq(messages.userId, this.userId)));
+        .where(and(eq(messages.parentId, id), this.ownership()));
 
       // 3. Check if the message contains tools
       const toolCallIds = (message[0].tools as ChatToolPayload[])
@@ -2427,12 +2705,12 @@ export class MessageModel {
       // 6. Delete all related messages
       await tx
         .delete(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIdsToDelete)));
+        .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
 
       // 7. Keep the topic's usage rollup in sync (pure derived — a removed
       // assistant message must drop out of the topic totals).
       if (message[0].topicId) {
-        await recomputeTopicUsage(tx, this.userId, message[0].topicId);
+        await recomputeTopicUsage(tx, this.userId, message[0].topicId, this.workspaceId);
       }
     });
   };
@@ -2445,7 +2723,7 @@ export class MessageModel {
       const toDelete = await tx
         .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
         .from(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
+        .where(and(this.ownership(), inArray(messages.id, ids)));
 
       if (toDelete.length === 0) return;
 
@@ -2490,30 +2768,27 @@ export class MessageModel {
         .select({ id: messages.id, parentId: messages.parentId })
         .from(messages)
         .where(
-          and(
-            eq(messages.userId, this.userId),
-            inArray(messages.parentId, ids),
-            not(inArray(messages.id, ids)),
-          ),
+          and(this.ownership(), inArray(messages.parentId, ids), not(inArray(messages.id, ids))),
         );
 
       // 5. Update each child's parentId to the final ancestor
       for (const child of children) {
         const newParentId = finalAncestorMap.get(child.parentId!) ?? null;
-        await tx.update(messages).set({ parentId: newParentId }).where(eq(messages.id, child.id));
+        await tx
+          .update(messages)
+          .set({ parentId: newParentId })
+          .where(and(eq(messages.id, child.id), this.ownership()));
       }
 
       // 6. Delete the messages
-      await tx
-        .delete(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
+      await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
 
       // 7. Recompute the usage rollup for every affected topic (pure derived).
       const affectedTopicIds = [
         ...new Set(toDelete.map((m) => m.topicId).filter(Boolean) as string[]),
       ];
       for (const topicId of affectedTopicIds) {
-        await recomputeTopicUsage(tx, this.userId, topicId);
+        await recomputeTopicUsage(tx, this.userId, topicId, this.workspaceId);
       }
     });
   };
@@ -2531,6 +2806,7 @@ export class MessageModel {
           fileId,
           messageId,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         })),
       );
       return { success: true };
@@ -2543,17 +2819,23 @@ export class MessageModel {
   deleteMessageTranslate = async (id: string) =>
     this.db
       .delete(messageTranslates)
-      .where(and(eq(messageTranslates.id, id), eq(messageTranslates.userId, this.userId)));
+      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()));
 
   deleteMessageTTS = async (id: string) =>
-    this.db
-      .delete(messageTTS)
-      .where(and(eq(messageTTS.id, id), eq(messageTTS.userId, this.userId)));
+    this.db.delete(messageTTS).where(and(eq(messageTTS.id, id), this.ttsOwnership()));
 
   deleteMessageQuery = async (id: string) =>
     this.db
       .delete(messageQueries)
-      .where(and(eq(messageQueries.id, id), eq(messageQueries.userId, this.userId)));
+      .where(
+        and(
+          eq(messageQueries.id, id),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            messageQueries,
+          ),
+        ),
+      );
 
   deleteMessagesBySession = async (
     sessionId?: string | null,
@@ -2564,7 +2846,7 @@ export class MessageModel {
       .delete(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ownership(),
           this.matchSession(sessionId),
           this.matchTopic(topicId),
           this.matchGroup(groupId),
@@ -2572,7 +2854,7 @@ export class MessageModel {
       );
 
   deleteAllMessages = async () => {
-    return this.db.delete(messages).where(eq(messages.userId, this.userId));
+    return this.db.delete(messages).where(and(this.ownership()));
   };
 
   /**
@@ -2586,7 +2868,7 @@ export class MessageModel {
     const agentSession = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
+      .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()))
       .limit(1);
 
     const associatedSessionId = agentSession[0]?.sessionId;
@@ -2596,12 +2878,15 @@ export class MessageModel {
       ? or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId))
       : eq(messages.agentId, agentId);
 
-    return this.db.delete(messages).where(and(eq(messages.userId, this.userId), agentCondition));
+    return this.db.delete(messages).where(and(this.ownership(), agentCondition));
   };
 
   // **************** Helper *************** //
 
-  private genId = () => idGenerator('messages', 14);
+  // 18-char hash (was 14): widen the message id space — the coordinator-driven
+  // hetero subagent flow allocates many ids per run, and a few extra chars keep
+  // collision odds negligible at that volume.
+  private genId = () => idGenerator('messages', 18);
 
   private matchSession = (sessionId?: string | null) => {
     if (sessionId === INBOX_SESSION_ID) return isNull(messages.sessionId);

@@ -1,13 +1,12 @@
 import { isDesktop } from '@lobechat/const';
-import type { ToolStatus } from '@lobechat/electron-client-ipc';
+import type { BinaryStatus } from '@lobechat/electron-client-ipc';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import useSWR from 'swr';
 
-import { toolDetectorService } from '@/services/electron/toolDetector';
+import { recommendationsKeys } from '@/libs/swr/keys';
+import { binaryService } from '@/services/electron/binary';
 
 import type { HeteroDetectionMap } from '../actions/types';
-
-const SWR_KEY = 'recommendations.heteroDetections';
 
 /**
  * Probe local Claude Code / Codex CLIs in parallel and cache the result.
@@ -18,19 +17,19 @@ const SWR_KEY = 'recommendations.heteroDetections';
  */
 export const useHeteroDetections = (): HeteroDetectionMap => {
   const { data } = useSWR(
-    isDesktop ? SWR_KEY : null,
+    isDesktop ? recommendationsKeys.heteroDetections() : null,
     async () => {
       const entries = await Promise.all(
         HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(async (config) => {
           try {
-            const status = await toolDetectorService.detectHeterogeneousAgentCommand({
+            const status = await binaryService.detectHeterogeneousAgentCommand({
               agentType: config.type,
               command: config.command,
             });
             return [config.type, status] as const;
           } catch (error) {
             console.error(`[recommendations] hetero detection failed for ${config.type}:`, error);
-            const fallback: ToolStatus = { available: false, error: String(error) };
+            const fallback: BinaryStatus = { available: false, error: String(error) };
             return [config.type, fallback] as const;
           }
         }),

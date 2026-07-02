@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 
 import StatsFormGroup from '../components/StatsFormGroup';
@@ -14,7 +15,7 @@ import StatsFormGroup from '../components/StatsFormGroup';
 export const TopicsRank = memo(() => {
   const [open, setOpen] = useState(false);
   const { t } = useTranslation('auth');
-  const { data, isLoading } = useClientDataSWR('rank-models', async () =>
+  const { data, isLoading } = useClientDataSWR(statsKeys.rankModels(), async () =>
     messageService.rankModels(),
   );
 

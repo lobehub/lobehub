@@ -1,6 +1,10 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { ConversationContext, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ChatImageItem,
+  ConversationContext,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
@@ -11,21 +15,23 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
-} from '@/store/chat/slices/aiChat/actions/commandBus';
-import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
+} from '@/store/chat/slices/agentRun/actions/entries/commandBus';
+import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
 } from '@/store/chat/utils/activeTopicDocumentContext';
+import { getElectronStoreState } from '@/store/electron';
 
 import { type Store as ConversationStore } from '../../action';
+import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
 
 const buildRetryInitialContext = (editorData: Record<string, any> | null | undefined) => {
   const normalizedEditorData = editorData ?? undefined;
@@ -57,6 +63,28 @@ const buildRetryInitialContext = (editorData: Record<string, any> | null | undef
 };
 
 /**
+ * Settle a regenerate / continue entry's OUTER tracking operation and fire its
+ * thin UI completion hook (`onRegenerateComplete` / `onContinueComplete`).
+ *
+ * Each of these entries owns an outer tracking op distinct from the executor's
+ * run op (`${messageKey}/${parentMessageId}`). The unified run lifecycle
+ * (`buildRunLifecycle`, inside the executor) already drove the run-level terminal
+ * side effects — title / queue drain / notification / complete signal — so the
+ * entry only retires its own tracking op and broadcasts the UI hook. Five runtime
+ * branches (regenerate × client/gateway/hetero, continue × client/gateway) shared
+ * this identical two-line tail; centralized here so they converge on one adapter
+ * instead of hand-rolling completion at each call site.
+ */
+const settleGenerationEntry = (
+  chatStore: ReturnType<typeof useChatStore.getState>,
+  operationId: string,
+  notify?: () => void,
+) => {
+  chatStore.completeOperation(operationId);
+  notify?.();
+};
+
+/**
  * Branch a hetero (Claude Code / Codex) turn off an existing user message.
  *
  * Used by regenerate (parent = user msg, prompt = original user content).
@@ -70,12 +98,15 @@ const runHeterogeneousFromExistingMessage = async (
   params: {
     context: ConversationContext;
     heterogeneousProvider: HeterogeneousProviderConfig;
+    /** Image attachments from the original user message — forwarded to the CLI for vision support */
+    imageList?: ChatImageItem[];
     parentMessageId: string;
     parentOperationId: string;
     prompt: string;
   },
 ): Promise<string> => {
-  const { context, heterogeneousProvider, parentMessageId, parentOperationId, prompt } = params;
+  const { context, heterogeneousProvider, imageList, parentMessageId, parentOperationId, prompt } =
+    params;
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
@@ -85,8 +116,11 @@ const runHeterogeneousFromExistingMessage = async (
   const topic = context.topicId
     ? topicSelectors.getTopicById(context.topicId)(chatStore)
     : undefined;
-  const agentWorkingDirectory =
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+    agentId,
+    currentDeviceId,
+  )(getAgentStoreState());
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
@@ -123,11 +157,12 @@ const runHeterogeneousFromExistingMessage = async (
 
   try {
     const { executeHeterogeneousAgent } =
-      await import('@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor');
+      await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
     await executeHeterogeneousAgent(() => useChatStore.getState(), {
       assistantMessageId: assistantMsg.id,
       context,
       heterogeneousProvider,
+      imageList: imageList?.length ? imageList : undefined,
       message: prompt,
       operationId: heteroOpId,
       resumeSessionId,
@@ -190,10 +225,42 @@ export interface GenerationAction {
   delAndResendThreadMessage: (messageId: string) => Promise<void>;
 
   /**
+   * Start (or reuse) the long-lived `autoRetryPending` operation for a turn so
+   * the input/turn stays in its loading state during the auto-retry countdown.
+   * Idempotent: reuses an existing still-running wait op for the scope.
+   */
+  internal_beginHeteroOverloadWait: (scopeId: string) => void;
+
+  /**
+   * End the `autoRetryPending` operation for a turn (the countdown handed off to
+   * a real retry attempt, or the sequence ended).
+   */
+  internal_endHeteroOverloadWait: (scopeId: string) => void;
+
+  /**
+   * Whether the turn's `autoRetryPending` operation was cancelled out from under
+   * us (e.g. the global Stop button) — the scheduled retry must then abort.
+   */
+  isHeteroOverloadWaitAborted: (scopeId: string) => boolean;
+
+  /**
+   * Pin the heterogeneous "overloaded" auto-retry counter past the cap so
+   * scheduling stops and the guide falls back to manual retry (used by the
+   * user's "cancel auto-retry" action).
+   */
+  markHeteroOverloadRetryExhausted: (scopeId: string) => void;
+
+  /**
    * Open thread creator
    * @deprecated Temporary bridge to ChatStore
    */
   openThreadCreator: (messageId: string) => void;
+
+  /**
+   * Increment the heterogeneous "overloaded" auto-retry counter for a turn,
+   * keyed by its parent user message id.
+   */
+  recordHeteroOverloadRetry: (scopeId: string) => void;
 
   /**
    * Regenerate an assistant message
@@ -215,6 +282,12 @@ export interface GenerationAction {
    * Resend a thread message
    */
   resendThreadMessage: (messageId: string) => Promise<void>;
+
+  /**
+   * Clear the heterogeneous "overloaded" auto-retry counter for a turn so a
+   * fresh auto-retry budget is granted (used when a human retries manually).
+   */
+  resetHeteroOverloadRetry: (scopeId: string) => void;
 
   /**
    * Stop current generation
@@ -311,9 +384,10 @@ export const generationSlice: StateCreator<
 
     const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
     const runtimeType = selectRuntimeType({
+      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
-      isGatewayMode: chatStore.isGatewayModeEnabled(),
+      isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -337,10 +411,10 @@ export const generationSlice: StateCreator<
         await chatStore.executeGatewayAgent({
           context,
           message: '',
-          onComplete: () => {
-            chatStore.completeOperation(operationId);
-            if (hooks.onContinueComplete) hooks.onContinueComplete(displayMessageId);
-          },
+          onComplete: () =>
+            settleGenerationEntry(chatStore, operationId, () =>
+              hooks.onContinueComplete?.(displayMessageId),
+            ),
           parentMessageId: dbMessageId,
         });
         return;
@@ -355,12 +429,9 @@ export const generationSlice: StateCreator<
         parentOperationId: operationId,
       });
 
-      chatStore.completeOperation(operationId);
-
-      // ===== Hook: onContinueComplete =====
-      if (hooks.onContinueComplete) {
-        hooks.onContinueComplete(displayMessageId);
-      }
+      settleGenerationEntry(chatStore, operationId, () =>
+        hooks.onContinueComplete?.(displayMessageId),
+      );
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),
@@ -421,6 +492,84 @@ export const generationSlice: StateCreator<
   reInvokeToolMessage: async (messageId: string) => {
     const chatStore = useChatStore.getState();
     await chatStore.reInvokeToolMessage(messageId);
+  },
+
+  internal_beginHeteroOverloadWait: (scopeId: string) => {
+    const chatStore = useChatStore.getState();
+    const existingId = get().heteroOverloadWaitOpIds[scopeId];
+    // Reuse an existing wait op that's still running (effect re-runs / remounts).
+    if (existingId && chatStore.operations[existingId]?.status === 'running') return;
+
+    const { context } = get();
+    const { operationId } = chatStore.startOperation({
+      context: {
+        agentId: context.agentId,
+        messageId: scopeId,
+        threadId: context.threadId ?? undefined,
+        topicId: context.topicId ?? undefined,
+      },
+      label: 'Auto-retry pending',
+      type: 'autoRetryPending',
+    });
+    set(
+      { heteroOverloadWaitOpIds: { ...get().heteroOverloadWaitOpIds, [scopeId]: operationId } },
+      false,
+      'internal_beginHeteroOverloadWait',
+    );
+  },
+
+  internal_endHeteroOverloadWait: (scopeId: string) => {
+    const opId = get().heteroOverloadWaitOpIds[scopeId];
+    if (!opId) return;
+    const chatStore = useChatStore.getState();
+    // Only complete a still-running op; if it was already cancelled (Stop), leave
+    // its terminal state intact.
+    if (chatStore.operations[opId]?.status === 'running') chatStore.completeOperation(opId);
+    const next = { ...get().heteroOverloadWaitOpIds };
+    delete next[scopeId];
+    set({ heteroOverloadWaitOpIds: next }, false, 'internal_endHeteroOverloadWait');
+  },
+
+  isHeteroOverloadWaitAborted: (scopeId: string) => {
+    const opId = get().heteroOverloadWaitOpIds[scopeId];
+    // A missing id means the wait was already torn down (cancel/Stop cleanup
+    // can race the timer near the deadline) — treat that as aborted so a stale
+    // queued retry doesn't run after the user asked to stop.
+    if (!opId) return true;
+    const op = useChatStore.getState().operations[opId];
+    return !op || op.status !== 'running';
+  },
+
+  markHeteroOverloadRetryExhausted: (scopeId: string) => {
+    set(
+      {
+        heteroOverloadRetryAttempts: {
+          ...get().heteroOverloadRetryAttempts,
+          [scopeId]: MAX_HETERO_AUTO_RETRIES,
+        },
+      },
+      false,
+      'markHeteroOverloadRetryExhausted',
+    );
+  },
+
+  recordHeteroOverloadRetry: (scopeId: string) => {
+    const current = get().heteroOverloadRetryAttempts;
+    set(
+      {
+        heteroOverloadRetryAttempts: { ...current, [scopeId]: (current[scopeId] ?? 0) + 1 },
+      },
+      false,
+      'recordHeteroOverloadRetry',
+    );
+  },
+
+  resetHeteroOverloadRetry: (scopeId: string) => {
+    const current = get().heteroOverloadRetryAttempts;
+    if (!(scopeId in current)) return;
+    const next = { ...current };
+    delete next[scopeId];
+    set({ heteroOverloadRetryAttempts: next }, false, 'resetHeteroOverloadRetry');
   },
 
   regenerateAssistantMessage: async (messageId: string) => {
@@ -489,9 +638,10 @@ export const generationSlice: StateCreator<
       const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
       const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
+        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
         executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider,
-        isGatewayMode: chatStore.isGatewayModeEnabled(),
+        isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       });
 
       // ── Gateway mode: trigger server-side regeneration ──
@@ -501,12 +651,10 @@ export const generationSlice: StateCreator<
         await chatStore.executeGatewayAgent({
           context,
           message: item.content,
-          onComplete: () => {
-            chatStore.completeOperation(operationId);
-            if (hooks.onRegenerateComplete) {
-              hooks.onRegenerateComplete(messageId);
-            }
-          },
+          onComplete: () =>
+            settleGenerationEntry(chatStore, operationId, () =>
+              hooks.onRegenerateComplete?.(messageId),
+            ),
           parentMessageId: messageId,
         });
 
@@ -522,12 +670,18 @@ export const generationSlice: StateCreator<
         await runHeterogeneousFromExistingMessage(chatStore, {
           context,
           heterogeneousProvider,
+          // Forward the original user message's images so regenerate re-runs
+          // the CLI with the same vision input as the first attempt. Without
+          // this, regenerate silently drops attachments (the send path reads
+          // imageList off the persisted user message; this path must too).
+          imageList: item.imageList,
           parentMessageId: messageId,
           parentOperationId: operationId,
           prompt: item.content,
         });
-        chatStore.completeOperation(operationId);
-        if (hooks.onRegenerateComplete) hooks.onRegenerateComplete(messageId);
+        settleGenerationEntry(chatStore, operationId, () =>
+          hooks.onRegenerateComplete?.(messageId),
+        );
         return;
       }
 
@@ -542,12 +696,7 @@ export const generationSlice: StateCreator<
         parentOperationId: operationId,
       });
 
-      chatStore.completeOperation(operationId);
-
-      // ===== Hook: onRegenerateComplete =====
-      if (hooks.onRegenerateComplete) {
-        hooks.onRegenerateComplete(messageId);
-      }
+      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),

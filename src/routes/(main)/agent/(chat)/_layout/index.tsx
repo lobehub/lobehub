@@ -2,19 +2,15 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
 import AgentWorkingSidebar from '@/routes/(main)/agent/features/Conversation/WorkingSidebar';
 import Portal from '@/routes/(main)/agent/features/Portal';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 
 import HeaderSlot from './HeaderSlot';
 
 const ChatLayout = memo(() => {
-  const showHeader = useGlobalStore(systemStatusSelectors.showChatHeader);
-
   return (
     <HeaderSlot.Provider>
       <Flexbox
@@ -25,7 +21,7 @@ const ChatLayout = memo(() => {
         width={'100%'}
       >
         <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
-          {showHeader && <ChatHeader />}
+          <ChatHeader />
           <Flexbox flex={1} style={{ minHeight: 0, position: 'relative' }}>
             <Outlet />
           </Flexbox>

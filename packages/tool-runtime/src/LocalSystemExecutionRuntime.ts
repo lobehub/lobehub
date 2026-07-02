@@ -132,8 +132,18 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'globLocalFiles': {
         return {
+          limit: params.limit,
           pattern: params.pattern,
           scope: params.directory,
+        };
+      }
+
+      case 'grepContent': {
+        return {
+          cwd: params.directory ?? params.path ?? params.scope ?? params.cwd,
+          filePattern: params.filePattern ?? params.glob,
+          output_mode: params.output_mode,
+          pattern: params.pattern,
         };
       }
 
@@ -175,6 +185,8 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             exitCode: raw.exit_code,
             output: raw.output,
             commandId: raw.shell_id,
+            durationMs: raw.duration_ms,
+            outputFiles: raw.output_files,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,
@@ -186,9 +198,12 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'getCommandOutput': {
         return {
           result: {
+            durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
             error: raw.error,
-            newOutput: raw.output,
+            outputFiles: raw.output_files,
+            stderr: raw.stderr,
+            stdout: raw.stdout,
             success: raw.success,
           },
           success: raw.success,
@@ -263,6 +278,13 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'editLocalFile': {
         return {
+          // Surface raw.error at the top level so ComputerRuntime.errorOutput has
+          // a real message to render. Without this, a failed edit (e.g. old_string
+          // not found — common on Windows when CRLF/LF differ) left result.error
+          // undefined and the tool message collapsed to the generic
+          // "[UNKNOWN_EXEC_ERROR] Tool execution failed", hiding the real reason
+          // and blocking the model from self-correcting. Mirrors grep/glob above.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             diffText: raw.diffText,
             error: raw.error,

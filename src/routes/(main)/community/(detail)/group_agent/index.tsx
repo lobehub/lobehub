@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
@@ -75,6 +75,9 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     likeCount: (data as any)?.group?.likeCount,
     locale: (data as any)?.locale,
     memberAgents: (data as any)?.memberAgents || [],
+    ownerType: ((data as any)?.author?.type === 'organization' ? 'organization' : 'user') as
+      | 'organization'
+      | 'user',
     status: (data as any)?.group?.status,
     summary: (data as any)?.summary,
     tags: (data as any)?.currentVersion?.tags,

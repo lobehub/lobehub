@@ -63,10 +63,10 @@ export const agentCronJobs = pgTable(
     index('agent_cron_jobs_agent_id_idx').on(t.agentId),
     index('agent_cron_jobs_group_id_idx').on(t.groupId),
     index('agent_cron_jobs_user_id_idx').on(t.userId),
+    index('agent_cron_jobs_workspace_id_idx').on(t.workspaceId),
     index('agent_cron_jobs_enabled_idx').on(t.enabled),
     index('agent_cron_jobs_remaining_executions_idx').on(t.remainingExecutions),
     index('agent_cron_jobs_last_executed_at_idx').on(t.lastExecutedAt),
-    index('agent_cron_jobs_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Button, Switch } from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { getPlatformIcon } from '../const';
 
 interface HeaderProps {
   currentConfig?: { enabled: boolean };
+  disabled?: boolean;
   enabledValue?: boolean;
   onRefreshStatus?: () => void;
   onToggleEnable: (enabled: boolean) => void;
@@ -35,6 +36,7 @@ const Header = memo<HeaderProps>(
   ({
     platformDef,
     currentConfig,
+    disabled,
     enabledValue,
     onRefreshStatus,
     onToggleEnable,
@@ -97,6 +99,7 @@ const Header = memo<HeaderProps>(
           )}
           {onRefreshStatus && currentConfig?.enabled && (
             <ActionIcon
+              disabled={disabled}
               icon={RefreshCw}
               loading={refreshingStatus}
               size={'small'}
@@ -123,16 +126,12 @@ const Header = memo<HeaderProps>(
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
           {currentConfig && (
-            <>
-              <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 14 }}>
-                {effectiveEnabled ? t('channel.enabled') : t('channel.disabled')}
-              </span>
-              <Switch
-                checked={effectiveEnabled}
-                loading={toggleLoading}
-                onChange={onToggleEnable}
-              />
-            </>
+            <Switch
+              checked={effectiveEnabled}
+              disabled={disabled}
+              loading={toggleLoading}
+              onChange={onToggleEnable}
+            />
           )}
         </Flexbox>
       </Flexbox>

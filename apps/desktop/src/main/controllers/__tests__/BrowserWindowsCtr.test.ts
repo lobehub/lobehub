@@ -29,6 +29,7 @@ const mockCloseWindow = vi.fn();
 const mockMinimizeWindow = vi.fn();
 const mockMaximizeWindow = vi.fn();
 const mockIsWindowMaximized = vi.fn();
+const mockIsWindowFullScreen = vi.fn();
 const mockRetrieveByIdentifier = vi.fn();
 const mockStartSession = vi.fn();
 const testSenderIdentifierString: string = 'test-window-event-id';
@@ -58,6 +59,7 @@ const mockApp = {
     minimizeWindow: mockMinimizeWindow,
     maximizeWindow: mockMaximizeWindow,
     isWindowMaximized: mockIsWindowMaximized,
+    isWindowFullScreen: mockIsWindowFullScreen,
     retrieveByIdentifier: mockRetrieveByIdentifier.mockImplementation(
       (identifier: AppBrowsersIdentifiers | string) => {
         if (identifier === 'some-other-window') {
@@ -162,6 +164,20 @@ describe('BrowserWindowsCtr', () => {
 
       expect(mockGetIdentifierByWebContents).toHaveBeenCalledWith(context.sender);
       expect(mockIsWindowMaximized).toHaveBeenCalledWith(testSenderIdentifierString);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('isWindowFullScreen', () => {
+    it('should return fullscreen state for the sender window', () => {
+      mockIsWindowFullScreen.mockReturnValueOnce(true);
+
+      const sender = {} as any;
+      const context = { sender, event: { sender } as any } as IpcContext;
+      const result = runWithIpcContext(context, () => browserWindowsCtr.isWindowFullScreen());
+
+      expect(mockGetIdentifierByWebContents).toHaveBeenCalledWith(context.sender);
+      expect(mockIsWindowFullScreen).toHaveBeenCalledWith(testSenderIdentifierString);
       expect(result).toBe(true);
     });
   });

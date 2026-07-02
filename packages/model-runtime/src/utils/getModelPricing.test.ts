@@ -69,4 +69,12 @@ describe('getModelPricing', () => {
       units: [{ name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' }],
     });
   });
+
+  it('should pass explicit pricing context to loadModels', async () => {
+    await getModelPricing('gpt-4o', 'openai', { plan: 'premium', scope: 'personal' });
+
+    expect(loadModelsMock).toHaveBeenCalledWith({
+      pricingContext: { plan: 'premium', scope: 'personal' },
+    });
+  });
 });

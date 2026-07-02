@@ -1,6 +1,8 @@
 import { type SWRResponse } from 'swr';
-import useSWR, { mutate } from 'swr';
+import useSWR from 'swr';
 
+import { mutate } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import {
   type FavoriteAgentItem,
   type FavoritePluginItem,
@@ -18,6 +20,42 @@ type Setter = StoreSetter<DiscoverStore>;
 export const createSocialSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
   new SocialActionImpl(set, get, _api);
 
+const optimisticFollowCounts =
+  (isFollowing: boolean) =>
+  (current?: FollowCounts): FollowCounts => {
+    const followersCount = current?.followersCount ?? 0;
+
+    return {
+      followersCount: isFollowing ? followersCount + 1 : Math.max(0, followersCount - 1),
+      followingCount: current?.followingCount ?? 0,
+    };
+  };
+
+const updateFollowCaches = async (followingId: number, isFollowing: boolean) => {
+  await Promise.all([
+    mutate(
+      discoverKeys.followStatus(followingId),
+      {
+        isFollowing,
+        isMutual: false,
+      } satisfies FollowStatus,
+      { revalidate: false },
+    ),
+    mutate(discoverKeys.followCounts(followingId), optimisticFollowCounts(isFollowing), {
+      revalidate: false,
+    }),
+    mutate(
+      (key) =>
+        Array.isArray(key) &&
+        (key[0] === discoverKeys.followers.root || key[0] === discoverKeys.following.root),
+      undefined,
+      {
+        revalidate: true,
+      },
+    ),
+  ]);
+};
+
 export class SocialActionImpl {
   constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
     void _api;
@@ -28,25 +66,36 @@ export class SocialActionImpl {
   addFavorite = async (targetType: SocialTargetType, targetId: number): Promise<void> => {
     await socialService.addFavorite(targetType, targetId);
     // Invalidate favorite-related caches
-    await mutate((key) => typeof key === 'string' && key.startsWith('favorite-'), undefined, {
-      revalidate: true,
-    });
+    await mutate(
+      (key) =>
+        Array.isArray(key) &&
+        (key[0] === discoverKeys.favoriteAgents.root ||
+          key[0] === discoverKeys.favoritePlugins.root),
+      undefined,
+      {
+        revalidate: true,
+      },
+    );
   };
 
   follow = async (followingId: number): Promise<void> => {
     await socialService.follow(followingId);
-    // Invalidate follow-related caches
-    await mutate((key) => typeof key === 'string' && key.startsWith('follow-'), undefined, {
-      revalidate: true,
-    });
+    await updateFollowCaches(followingId, true);
   };
 
   removeFavorite = async (targetType: SocialTargetType, targetId: number): Promise<void> => {
     await socialService.removeFavorite(targetType, targetId);
     // Invalidate favorite-related caches
-    await mutate((key) => typeof key === 'string' && key.startsWith('favorite-'), undefined, {
-      revalidate: true,
-    });
+    await mutate(
+      (key) =>
+        Array.isArray(key) &&
+        (key[0] === discoverKeys.favoriteAgents.root ||
+          key[0] === discoverKeys.favoritePlugins.root),
+      undefined,
+      {
+        revalidate: true,
+      },
+    );
   };
 
   toggleLike = async (
@@ -63,10 +112,7 @@ export class SocialActionImpl {
 
   unfollow = async (followingId: number): Promise<void> => {
     await socialService.unfollow(followingId);
-    // Invalidate follow-related caches
-    await mutate((key) => typeof key === 'string' && key.startsWith('follow-'), undefined, {
-      revalidate: true,
-    });
+    await updateFollowCaches(followingId, false);
   };
 
   useFavoriteAgents = (
@@ -74,7 +120,7 @@ export class SocialActionImpl {
     params?: { page?: number; pageSize?: number },
   ): SWRResponse<PaginatedResponse<FavoriteAgentItem>> => {
     return useSWR(
-      userId ? ['favorite-agents', userId, params?.page, params?.pageSize].join('-') : null,
+      userId ? discoverKeys.favoriteAgents(userId, params) : null,
       async () => socialService.getUserFavoriteAgents(userId!, params),
       { revalidateOnFocus: false },
     );
@@ -85,7 +131,7 @@ export class SocialActionImpl {
     params?: { page?: number; pageSize?: number },
   ): SWRResponse<PaginatedResponse<FavoritePluginItem>> => {
     return useSWR(
-      userId ? ['favorite-plugins', userId, params?.page, params?.pageSize].join('-') : null,
+      userId ? discoverKeys.favoritePlugins(userId, params) : null,
       async () => socialService.getUserFavoritePlugins(userId!, params),
       { revalidateOnFocus: false },
     );
@@ -93,7 +139,7 @@ export class SocialActionImpl {
 
   useFollowCounts = (userId: number | undefined): SWRResponse<FollowCounts> => {
     return useSWR(
-      userId ? ['follow-counts', userId].join('-') : null,
+      userId ? discoverKeys.followCounts(userId) : null,
       async () => socialService.getFollowCounts(userId!),
       { revalidateOnFocus: false },
     );
@@ -101,7 +147,7 @@ export class SocialActionImpl {
 
   useFollowStatus = (userId: number | undefined): SWRResponse<FollowStatus> => {
     return useSWR(
-      userId ? ['follow-status', userId].join('-') : null,
+      userId ? discoverKeys.followStatus(userId) : null,
       async () => socialService.checkFollowStatus(userId!),
       { revalidateOnFocus: false },
     );
@@ -112,7 +158,7 @@ export class SocialActionImpl {
     params?: { page?: number; pageSize?: number },
   ): SWRResponse<PaginatedResponse<FollowUserItem>> => {
     return useSWR(
-      userId ? ['followers', userId, params?.page, params?.pageSize].join('-') : null,
+      userId ? discoverKeys.followers(userId, params) : null,
       async () => socialService.getFollowers(userId!, params),
       { revalidateOnFocus: false },
     );
@@ -123,7 +169,7 @@ export class SocialActionImpl {
     params?: { page?: number; pageSize?: number },
   ): SWRResponse<PaginatedResponse<FollowUserItem>> => {
     return useSWR(
-      userId ? ['following', userId, params?.page, params?.pageSize].join('-') : null,
+      userId ? discoverKeys.following(userId, params) : null,
       async () => socialService.getFollowing(userId!, params),
       { revalidateOnFocus: false },
     );

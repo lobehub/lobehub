@@ -47,7 +47,7 @@ export function registerSkillCommand(program: Command) {
       if (options.source) input.source = options.source as 'builtin' | 'market' | 'user';
 
       const result = await client.agentSkills.list.query(input);
-      const items = Array.isArray(result) ? result : [];
+      const items = result?.data ?? [];
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -206,7 +206,7 @@ export function registerSkillCommand(program: Command) {
     .action(async (query: string, options: { json?: string | boolean }) => {
       const client = await getTrpcClient();
       const result = await client.agentSkills.search.query({ query });
-      const items = Array.isArray(result) ? result : [];
+      const items = result?.data ?? [];
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;

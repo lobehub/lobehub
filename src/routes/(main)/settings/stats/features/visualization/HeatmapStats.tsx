@@ -5,6 +5,7 @@ import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { formatShortenNumber } from '@/utils/format';
@@ -35,13 +36,12 @@ const formatDuration = (seconds?: number) => {
 const HeatmapStats = memo(() => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading } = useClientDataSWR(
-    ['stats-heatmaps', HeatmapType.Tokens].join('-'),
-    () => messageService.getTokenHeatmaps(),
+  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
+    messageService.getTokenHeatmaps(),
   );
   const loading = isLoading || !data;
 
-  const { data: maxTaskDuration } = useClientDataSWR('stats-max-task-duration', () =>
+  const { data: maxTaskDuration } = useClientDataSWR(statsKeys.maxTaskDuration(), () =>
     topicService.getMaxTaskDuration(),
   );
 

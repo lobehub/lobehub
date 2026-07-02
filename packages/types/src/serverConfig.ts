@@ -62,12 +62,16 @@ export interface GlobalServerConfig {
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
+  enableComposio?: boolean;
   /**
    * @deprecated
    */
   enabledOAuthSSO?: boolean;
   enableEmailVerification?: boolean;
-  enableKlavis?: boolean;
+  /**
+   * Whether Gateway mode is available for app-level agent execution.
+   */
+  enableGatewayMode?: boolean;
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;

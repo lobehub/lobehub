@@ -4,9 +4,11 @@ import { Accordion, Flexbox } from '@lobehub/ui';
 import { LayoutDashboard } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePathname } from '@/libs/router/navigation';
 import { useEvalStore } from '@/store/eval';
 
@@ -32,7 +34,7 @@ const useActiveKey = () => {
 const Body = memo(() => {
   const { t } = useTranslation('eval');
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
 
@@ -44,7 +46,7 @@ const Body = memo(() => {
   return (
     <Flexbox gap={8} paddingInline={4}>
       <Flexbox paddingInline={4}>
-        <Link
+        <WorkspaceLink
           to={`/eval/bench/${benchmarkId}`}
           onClick={(e) => {
             e.preventDefault();
@@ -57,7 +59,7 @@ const Body = memo(() => {
             iconSize={16}
             title={t('sidebar.dashboard')}
           />
-        </Link>
+        </WorkspaceLink>
       </Flexbox>
       <Accordion defaultExpandedKeys={['datasets', 'runs']} gap={8}>
         <DatasetList activeKey={activeKey} benchmarkId={benchmarkId || ''} itemKey="datasets" />

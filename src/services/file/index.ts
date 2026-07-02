@@ -92,6 +92,7 @@ export class FileService {
         editorData: doc.editorData,
         embeddingError: null,
         embeddingStatus: null,
+        fileId: doc.fileId,
         fileType: doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
         finishEmbedding: false,
         id: doc.id,
@@ -139,6 +140,22 @@ export class FileService {
 
   getRecentPages = async (limit?: number) => {
     return lambdaClient.file.recentPages.query({ limit });
+  };
+
+  transferEntity = async (
+    id: string,
+    entityType: 'document' | 'file' | 'folder',
+    targetWorkspaceId: string | null,
+  ) => {
+    return lambdaClient.file.transferEntity.mutate({ entityType, id, targetWorkspaceId });
+  };
+
+  copyEntityToWorkspace = async (
+    id: string,
+    entityType: 'document' | 'file' | 'folder',
+    targetWorkspaceId: string | null,
+  ) => {
+    return lambdaClient.file.copyEntityToWorkspace.mutate({ entityType, id, targetWorkspaceId });
   };
 }
 

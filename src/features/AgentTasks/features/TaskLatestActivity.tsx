@@ -12,9 +12,16 @@ const getActivityText = (activity: TaskDetailActivity | undefined, t: TFunction<
   if (activity.type === 'comment') return activity.content || undefined;
   if (activity.type === 'topic') {
     const title = activity.title || t('taskDetail.latestActivity.untitledTopic');
-    return activity.seq
+    const topicText = activity.seq
       ? t('taskDetail.latestActivity.topicWithSeq', { seq: activity.seq, title })
       : t('taskDetail.latestActivity.topic', { title });
+
+    return activity.sourceTaskIdentifier
+      ? t('taskDetail.latestActivity.topicFromSubtask', {
+          identifier: activity.sourceTaskIdentifier,
+          topic: topicText,
+        })
+      : topicText;
   }
 
   const briefTitle = activity.title || activity.summary;

@@ -246,7 +246,7 @@ export interface UserMemorySearchAggregatedResult {
   preferences: UserMemoryPreferenceWithoutVectors[];
 }
 
-const pickSingleSearchType = (types?: string[]) => (types?.length === 1 ? types[0] : undefined);
+const _pickSingleSearchType = (types?: string[]) => (types?.length === 1 ? types[0] : undefined);
 
 export interface UpdateUserMemoryVectorsParams {
   detailsVector1024?: number[] | null;
@@ -555,6 +555,10 @@ export class UserMemoryModel {
     this.topicModel = new TopicModel(db, userId);
   }
 
+  private memoryWhere(table: { userId: any }) {
+    return eq(table.userId, this.userId);
+  }
+
   private extractSourceMetadata(metadata?: Record<string, unknown> | null): {
     sourceId?: string;
     sourceType?: MemorySourceType;
@@ -830,7 +834,7 @@ export class UserMemoryModel {
     const { layers, page = 1, size = 10 } = params;
     const offset = (page - 1) * size;
 
-    const conditions = [eq(userMemories.userId, this.userId)];
+    const conditions = [this.memoryWhere(userMemories)];
     if (layers && layers.length > 0) {
       conditions.push(inArray(userMemories.memoryLayer, layers));
     }
@@ -867,7 +871,7 @@ export class UserMemoryModel {
     const offset = (page - 1) * size;
 
     const identityConditions = [
-      eq(userMemoriesIdentities.userId, this.userId),
+      this.memoryWhere(userMemoriesIdentities),
       eq(userMemoriesIdentities.relationship, RelationshipEnum.Self),
     ];
 
@@ -976,7 +980,7 @@ export class UserMemoryModel {
     const supportsBm25 = !isPGliteDatabase(this.db);
 
     const conditions: Array<SQL | undefined> = [
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
       categories && categories.length > 0
         ? inArray(userMemories.memoryCategory, categories)
         : undefined,
@@ -1142,7 +1146,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesActivities.userMemoryId),
-          eq(userMemoriesActivities.userId, this.userId),
+          this.memoryWhere(userMemoriesActivities),
         );
 
         const activityFilters: Array<SQL | undefined> = [
@@ -1257,7 +1261,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesExperiences.userMemoryId),
-          eq(userMemoriesExperiences.userId, this.userId),
+          this.memoryWhere(userMemoriesExperiences),
         );
 
         const experienceFilters: Array<SQL | undefined> = [
@@ -1352,7 +1356,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesIdentities.userMemoryId),
-          eq(userMemoriesIdentities.userId, this.userId),
+          this.memoryWhere(userMemoriesIdentities),
         );
 
         const identityFilters: Array<SQL | undefined> = [
@@ -1450,7 +1454,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesPreferences.userMemoryId),
-          eq(userMemoriesPreferences.userId, this.userId),
+          this.memoryWhere(userMemoriesPreferences),
         );
 
         const preferenceFilters: Array<SQL | undefined> = [
@@ -1585,7 +1589,7 @@ export class UserMemoryModel {
     const activitySelection = selectNonVectorColumns(userMemoriesActivities);
 
     const baseConditions: Array<SQL | undefined> = [
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
       eq(userMemories.memoryLayer, layer),
     ];
     const baseWhere = baseConditions.filter(Boolean) as SQL[];
@@ -1638,7 +1642,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesExperiences.userMemoryId),
-          eq(userMemoriesExperiences.userId, this.userId),
+          this.memoryWhere(userMemoriesExperiences),
         );
 
         const experienceFilters: Array<SQL | undefined> = [
@@ -1671,7 +1675,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesIdentities.userMemoryId),
-          eq(userMemoriesIdentities.userId, this.userId),
+          this.memoryWhere(userMemoriesIdentities),
         );
 
         const identityFilters: Array<SQL | undefined> = [
@@ -1704,7 +1708,7 @@ export class UserMemoryModel {
         );
         const joinCondition = and(
           eq(userMemories.id, userMemoriesPreferences.userMemoryId),
-          eq(userMemoriesPreferences.userId, this.userId),
+          this.memoryWhere(userMemoriesPreferences),
         );
 
         const preferenceFilters: Array<SQL | undefined> = [
@@ -1763,7 +1767,7 @@ export class UserMemoryModel {
             userMemoryIds: userMemoriesContexts.userMemoryIds,
           })
           .from(userMemoriesContexts)
-          .where(and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)))
+          .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)))
           .limit(1);
         if (!context) {
           return undefined;
@@ -1822,9 +1826,7 @@ export class UserMemoryModel {
             userMemoryId: userMemoriesActivities.userMemoryId,
           })
           .from(userMemoriesActivities)
-          .where(
-            and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
-          )
+          .where(and(eq(userMemoriesActivities.id, id), this.memoryWhere(userMemoriesActivities)))
           .limit(1);
         if (!activity?.userMemoryId) {
           return undefined;
@@ -1869,12 +1871,7 @@ export class UserMemoryModel {
             userMemoryId: userMemoriesExperiences.userMemoryId,
           })
           .from(userMemoriesExperiences)
-          .where(
-            and(
-              eq(userMemoriesExperiences.id, id),
-              eq(userMemoriesExperiences.userId, this.userId),
-            ),
-          )
+          .where(and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)))
           .limit(1);
         if (!experience?.userMemoryId) {
           return undefined;
@@ -1918,9 +1915,7 @@ export class UserMemoryModel {
             userMemoryId: userMemoriesIdentities.userMemoryId,
           })
           .from(userMemoriesIdentities)
-          .where(
-            and(eq(userMemoriesIdentities.id, id), eq(userMemoriesIdentities.userId, this.userId)),
-          )
+          .where(and(eq(userMemoriesIdentities.id, id), this.memoryWhere(userMemoriesIdentities)))
           .limit(1);
         if (!identity?.userMemoryId) {
           return undefined;
@@ -1963,12 +1958,7 @@ export class UserMemoryModel {
             userMemoryId: userMemoriesPreferences.userMemoryId,
           })
           .from(userMemoriesPreferences)
-          .where(
-            and(
-              eq(userMemoriesPreferences.id, id),
-              eq(userMemoriesPreferences.userId, this.userId),
-            ),
-          )
+          .where(and(eq(userMemoriesPreferences.id, id), this.memoryWhere(userMemoriesPreferences)))
           .limit(1);
         if (!preference?.userMemoryId) {
           return undefined;
@@ -2020,7 +2010,7 @@ export class UserMemoryModel {
         userId: userMemories.userId,
       })
       .from(userMemories)
-      .where(and(eq(userMemories.id, memoryId), eq(userMemories.userId, this.userId)))
+      .where(and(eq(userMemories.id, memoryId), this.memoryWhere(userMemories)))
       .limit(1);
     if (!memory) {
       return undefined;
@@ -2031,7 +2021,7 @@ export class UserMemoryModel {
 
   findById = async (id: string): Promise<UserMemoryItem | undefined> => {
     const result = await this.db.query.userMemories.findFirst({
-      where: and(eq(userMemories.id, id), eq(userMemories.userId, this.userId)),
+      where: and(eq(userMemories.id, id), this.memoryWhere(userMemories)),
     });
 
     if (result) {
@@ -2045,7 +2035,7 @@ export class UserMemoryModel {
     await this.db
       .update(userMemories)
       .set({ ...params, updatedAt: new Date() })
-      .where(and(eq(userMemories.id, id), eq(userMemories.userId, this.userId)));
+      .where(and(eq(userMemories.id, id), this.memoryWhere(userMemories)));
   };
 
   updateUserMemoryVectors = async (
@@ -2070,7 +2060,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(and(eq(userMemories.id, id), eq(userMemories.userId, this.userId)));
+      .where(and(eq(userMemories.id, id), this.memoryWhere(userMemories)));
   };
 
   updateContextVectors = async (id: string, vectors: UpdateContextVectorsParams): Promise<void> => {
@@ -2088,7 +2078,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)));
+      .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
   };
 
   updatePreferenceVectors = async (
@@ -2110,9 +2100,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(userMemoriesPreferences.id, id), eq(userMemoriesPreferences.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesPreferences.id, id), this.memoryWhere(userMemoriesPreferences)));
   };
 
   updateIdentityVectors = async (
@@ -2134,9 +2122,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(userMemoriesIdentities.id, id), eq(userMemoriesIdentities.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesIdentities.id, id), this.memoryWhere(userMemoriesIdentities)));
   };
 
   updateExperienceVectors = async (
@@ -2164,9 +2150,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(userMemoriesExperiences.id, id), eq(userMemoriesExperiences.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)));
   };
 
   updateActivityVectors = async (
@@ -2191,9 +2175,7 @@ export class UserMemoryModel {
         ...vectorUpdates,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesActivities.id, id), this.memoryWhere(userMemoriesActivities)));
   };
 
   addIdentityEntry = async (params: AddIdentityEntryParams): Promise<AddIdentityEntryResult> => {
@@ -2269,7 +2251,7 @@ export class UserMemoryModel {
       const identity = await tx.query.userMemoriesIdentities.findFirst({
         where: and(
           eq(userMemoriesIdentities.id, params.identityId),
-          eq(userMemoriesIdentities.userId, this.userId),
+          this.memoryWhere(userMemoriesIdentities),
         ),
       });
       if (!identity || !identity.userMemoryId) {
@@ -2290,9 +2272,7 @@ export class UserMemoryModel {
           await tx
             .update(userMemories)
             .set(baseUpdate)
-            .where(
-              and(eq(userMemories.id, identity.userMemoryId), eq(userMemories.userId, this.userId)),
-            );
+            .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)));
         }
       }
 
@@ -2356,7 +2336,7 @@ export class UserMemoryModel {
             .where(
               and(
                 eq(userMemoriesIdentities.id, params.identityId),
-                eq(userMemoriesIdentities.userId, this.userId),
+                this.memoryWhere(userMemoriesIdentities),
               ),
             );
         }
@@ -2371,7 +2351,7 @@ export class UserMemoryModel {
       const identity = await tx.query.userMemoriesIdentities.findFirst({
         where: and(
           eq(userMemoriesIdentities.id, identityId),
-          eq(userMemoriesIdentities.userId, this.userId),
+          this.memoryWhere(userMemoriesIdentities),
         ),
       });
 
@@ -2381,9 +2361,7 @@ export class UserMemoryModel {
 
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, identity.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)));
 
       return true;
     });
@@ -2392,10 +2370,7 @@ export class UserMemoryModel {
   removeContextEntry = async (contextId: string): Promise<boolean> => {
     return this.db.transaction(async (tx) => {
       const context = await tx.query.userMemoriesContexts.findFirst({
-        where: and(
-          eq(userMemoriesContexts.id, contextId),
-          eq(userMemoriesContexts.userId, this.userId),
-        ),
+        where: and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)),
       });
 
       if (!context) {
@@ -2409,15 +2384,13 @@ export class UserMemoryModel {
       if (memoryIds.length > 0) {
         await tx
           .delete(userMemories)
-          .where(and(inArray(userMemories.id, memoryIds), eq(userMemories.userId, this.userId)));
+          .where(and(inArray(userMemories.id, memoryIds), this.memoryWhere(userMemories)));
       }
 
       // Delete the context entry
       await tx
         .delete(userMemoriesContexts)
-        .where(
-          and(eq(userMemoriesContexts.id, contextId), eq(userMemoriesContexts.userId, this.userId)),
-        );
+        .where(and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)));
 
       return true;
     });
@@ -2428,7 +2401,7 @@ export class UserMemoryModel {
       const experience = await tx.query.userMemoriesExperiences.findFirst({
         where: and(
           eq(userMemoriesExperiences.id, experienceId),
-          eq(userMemoriesExperiences.userId, this.userId),
+          this.memoryWhere(userMemoriesExperiences),
         ),
       });
 
@@ -2439,9 +2412,7 @@ export class UserMemoryModel {
       // Delete the base user memory (cascade will handle the experience)
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, experience.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, experience.userMemoryId), this.memoryWhere(userMemories)));
 
       return true;
     });
@@ -2452,7 +2423,7 @@ export class UserMemoryModel {
       const preference = await tx.query.userMemoriesPreferences.findFirst({
         where: and(
           eq(userMemoriesPreferences.id, preferenceId),
-          eq(userMemoriesPreferences.userId, this.userId),
+          this.memoryWhere(userMemoriesPreferences),
         ),
       });
 
@@ -2463,9 +2434,7 @@ export class UserMemoryModel {
       // Delete the base user memory (cascade will handle the preference)
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, preference.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, preference.userMemoryId), this.memoryWhere(userMemories)));
 
       return true;
     });
@@ -2474,11 +2443,11 @@ export class UserMemoryModel {
   delete = async (id: string): Promise<void> => {
     await this.db
       .delete(userMemories)
-      .where(and(eq(userMemories.id, id), eq(userMemories.userId, this.userId)));
+      .where(and(eq(userMemories.id, id), this.memoryWhere(userMemories)));
   };
 
   deleteAll = async (): Promise<void> => {
-    await this.db.delete(userMemories).where(eq(userMemories.userId, this.userId));
+    await this.db.delete(userMemories).where(this.memoryWhere(userMemories));
   };
 
   searchActivities = async (params: {
@@ -2520,7 +2489,7 @@ export class UserMemoryModel {
       .from(userMemoriesActivities)
       .$dynamic();
 
-    const conditions = [eq(userMemoriesActivities.userId, this.userId)];
+    const conditions = [this.memoryWhere(userMemoriesActivities)];
     if (type) {
       conditions.push(eq(userMemoriesActivities.type, type));
     }
@@ -2571,7 +2540,7 @@ export class UserMemoryModel {
       .from(userMemoriesContexts)
       .$dynamic();
 
-    const conditions = [eq(userMemoriesContexts.userId, this.userId)];
+    const conditions = [this.memoryWhere(userMemoriesContexts)];
     if (type) {
       conditions.push(eq(userMemoriesContexts.type, type));
     }
@@ -2622,7 +2591,7 @@ export class UserMemoryModel {
       .from(userMemoriesExperiences)
       .$dynamic();
 
-    const conditions = [eq(userMemoriesExperiences.userId, this.userId)];
+    const conditions = [this.memoryWhere(userMemoriesExperiences)];
     if (type) {
       conditions.push(eq(userMemoriesExperiences.type, type));
     }
@@ -2669,7 +2638,7 @@ export class UserMemoryModel {
       .from(userMemoriesPreferences)
       .$dynamic();
 
-    const conditions = [eq(userMemoriesPreferences.userId, this.userId)];
+    const conditions = [this.memoryWhere(userMemoriesPreferences)];
     if (type) {
       conditions.push(eq(userMemoriesPreferences.type, type));
     }
@@ -2688,7 +2657,7 @@ export class UserMemoryModel {
     const res = await this.db
       .select(selectNonVectorColumns(userMemoriesIdentities))
       .from(userMemoriesIdentities)
-      .where(eq(userMemoriesIdentities.userId, this.userId))
+      .where(this.memoryWhere(userMemoriesIdentities))
       .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
@@ -2702,7 +2671,7 @@ export class UserMemoryModel {
       })
       .from(userMemoriesIdentities)
       .innerJoin(userMemories, eq(userMemories.id, userMemoriesIdentities.userMemoryId))
-      .where(eq(userMemoriesIdentities.userId, this.userId))
+      .where(this.memoryWhere(userMemoriesIdentities))
       .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
@@ -2712,9 +2681,7 @@ export class UserMemoryModel {
     const res = await this.db
       .select(selectNonVectorColumns(userMemoriesIdentities))
       .from(userMemoriesIdentities)
-      .where(
-        and(eq(userMemoriesIdentities.userId, this.userId), eq(userMemoriesIdentities.type, type)),
-      )
+      .where(and(this.memoryWhere(userMemoriesIdentities), eq(userMemoriesIdentities.type, type)))
       .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt));
 
     return res;
@@ -2744,7 +2711,7 @@ export class UserMemoryModel {
               accessedCount: sql`${userMemories.accessedCount} + 1`,
               lastAccessedAt: now,
             })
-            .where(and(eq(userMemories.userId, this.userId), eq(userMemories.id, memoryId)));
+            .where(and(this.memoryWhere(userMemories), eq(userMemories.id, memoryId)));
         }
 
         const memories = await tx
@@ -2753,9 +2720,7 @@ export class UserMemoryModel {
             layer: userMemories.memoryLayer,
           })
           .from(userMemories)
-          .where(
-            and(eq(userMemories.userId, this.userId), inArray(userMemories.id, orderedMemoryIds)),
-          );
+          .where(and(this.memoryWhere(userMemories), inArray(userMemories.id, orderedMemoryIds)));
 
         const experienceIds = memories
           .filter((memory) => memory.layer === 'experience')
@@ -2766,7 +2731,7 @@ export class UserMemoryModel {
             .set({ accessedAt: now })
             .where(
               and(
-                eq(userMemoriesExperiences.userId, this.userId),
+                this.memoryWhere(userMemoriesExperiences),
                 inArray(userMemoriesExperiences.userMemoryId, experienceIds),
               ),
             );
@@ -2781,7 +2746,7 @@ export class UserMemoryModel {
             .set({ accessedAt: now })
             .where(
               and(
-                eq(userMemoriesIdentities.userId, this.userId),
+                this.memoryWhere(userMemoriesIdentities),
                 inArray(userMemoriesIdentities.userMemoryId, identityIds),
               ),
             );
@@ -2796,7 +2761,7 @@ export class UserMemoryModel {
             .set({ accessedAt: now })
             .where(
               and(
-                eq(userMemoriesPreferences.userId, this.userId),
+                this.memoryWhere(userMemoriesPreferences),
                 inArray(userMemoriesPreferences.userMemoryId, preferenceIds),
               ),
             );
@@ -2809,7 +2774,7 @@ export class UserMemoryModel {
           .set({ accessedAt: now })
           .where(
             and(
-              eq(userMemoriesContexts.userId, this.userId),
+              this.memoryWhere(userMemoriesContexts),
               inArray(userMemoriesContexts.id, orderedContextIds),
             ),
           );

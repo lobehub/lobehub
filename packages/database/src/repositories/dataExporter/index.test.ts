@@ -16,6 +16,7 @@ import {
   topics,
   users,
   userSettings,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DATA_EXPORT_CONFIG, DataExporterRepos } from './index';
@@ -360,6 +361,141 @@ describe('DataExporterRepos', () => {
       expect(result.sessions).toHaveLength(1);
       expect(result.sessions[0]).not.toHaveProperty('userId', anotherUserId);
       expect(result.sessions[0]).toHaveProperty('id', 'another-session-id');
+    });
+
+    it('should not include workspace-scoped rows in personal export', async () => {
+      const workspaceId = 'workspace-export-filter';
+
+      await db.transaction(async (trx) => {
+        await trx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Workspace Export Filter',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await trx.insert(agents).values({
+          id: 'workspace-agent-id',
+          title: 'Workspace Agent',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(sessions).values({
+          id: 'workspace-session-id',
+          slug: 'workspace-session',
+          title: 'Workspace Session',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(topics).values({
+          id: 'workspace-topic-id',
+          sessionId: 'workspace-session-id',
+          title: 'Workspace Topic',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(messages).values({
+          content: 'Workspace message',
+          id: 'workspace-message-id',
+          role: 'user',
+          sessionId: 'workspace-session-id',
+          topicId: 'workspace-topic-id',
+          userId,
+          workspaceId,
+        });
+      });
+
+      const result = await new DataExporterRepos(db, userId).export();
+
+      expect(result.agents.map((agent) => agent.id)).toEqual([testIds.agentId]);
+      expect(result.sessions.map((session) => session.id)).toEqual([testIds.sessionId]);
+      expect(result.topics.map((topic) => topic.id)).toEqual([testIds.topicId]);
+      expect(result.messages.map((message) => message.id)).toEqual([testIds.messageId]);
+    });
+
+    it('should export only the selected workspace scope when workspaceId is provided', async () => {
+      const workspaceId = 'workspace-export-scope';
+      const otherWorkspaceId = 'workspace-export-other';
+
+      await db.transaction(async (trx) => {
+        await trx.insert(workspaces).values([
+          {
+            id: workspaceId,
+            name: 'Workspace Export Scope',
+            primaryOwnerId: userId,
+            slug: workspaceId,
+          },
+          {
+            id: otherWorkspaceId,
+            name: 'Other Workspace Export Scope',
+            primaryOwnerId: userId,
+            slug: otherWorkspaceId,
+          },
+        ]);
+        await trx.insert(agents).values([
+          {
+            id: 'workspace-agent-id',
+            title: 'Workspace Agent',
+            userId,
+            workspaceId,
+          },
+          {
+            id: 'other-workspace-agent-id',
+            title: 'Other Workspace Agent',
+            userId,
+            workspaceId: otherWorkspaceId,
+          },
+        ]);
+        await trx.insert(sessions).values([
+          {
+            id: 'workspace-session-id',
+            slug: 'workspace-session',
+            title: 'Workspace Session',
+            userId,
+            workspaceId,
+          },
+          {
+            id: 'other-workspace-session-id',
+            slug: 'other-workspace-session',
+            title: 'Other Workspace Session',
+            userId,
+            workspaceId: otherWorkspaceId,
+          },
+        ]);
+        await trx.insert(agentsToSessions).values({
+          agentId: 'workspace-agent-id',
+          sessionId: 'workspace-session-id',
+          userId,
+        });
+        await trx.insert(topics).values({
+          id: 'workspace-topic-id',
+          sessionId: 'workspace-session-id',
+          title: 'Workspace Topic',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(messages).values({
+          content: 'Workspace message',
+          id: 'workspace-message-id',
+          role: 'user',
+          sessionId: 'workspace-session-id',
+          topicId: 'workspace-topic-id',
+          userId,
+          workspaceId,
+        });
+      });
+
+      const result = await new DataExporterRepos(db, userId, workspaceId).export();
+
+      expect(result.userSettings).toEqual([]);
+      expect(result.agents.map((agent) => agent.id)).toEqual(['workspace-agent-id']);
+      expect(result.sessions.map((session) => session.id)).toEqual(['workspace-session-id']);
+      expect(result.topics.map((topic) => topic.id)).toEqual(['workspace-topic-id']);
+      expect(result.messages.map((message) => message.id)).toEqual(['workspace-message-id']);
+      expect(result.agentsToSessions).toHaveLength(1);
+      expect(result.agentsToSessions[0]).toMatchObject({
+        agentId: 'workspace-agent-id',
+        sessionId: 'workspace-session-id',
+      });
     });
   });
 });

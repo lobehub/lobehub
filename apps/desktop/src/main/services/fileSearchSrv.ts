@@ -21,8 +21,8 @@ export default class FileSearchService extends ServiceModule {
     query: string,
     options: Omit<SearchOptions, 'keywords'> = {},
   ): Promise<FileResult[]> {
-    if (this.app?.toolDetectorManager) {
-      this.impl.setToolDetector(this.app.toolDetectorManager);
+    if (this.app?.binaryManager) {
+      this.impl.setToolDetector(this.app.binaryManager);
     }
     return this.impl.search({ ...options, keywords: query });
   }
@@ -36,8 +36,8 @@ export default class FileSearchService extends ServiceModule {
   }
 
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    if (this.app?.toolDetectorManager) {
-      this.impl.setToolDetector(this.app.toolDetectorManager);
+    if (this.app?.binaryManager) {
+      this.impl.setToolDetector(this.app.binaryManager);
     }
     return this.impl.glob(params);
   }

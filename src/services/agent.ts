@@ -231,9 +231,15 @@ class AgentService {
   };
 
   /**
-   * Count non-virtual agents with optional keyword filter, matching queryAgents conditions.
+   * Count non-virtual agents with optional keyword and date filters,
+   * matching queryAgents conditions.
    */
-  countAgents = async (params?: { keyword?: string }) => {
+  countAgents = async (params?: {
+    endDate?: string;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }) => {
     return lambdaClient.agent.countAgents.query(params);
   };
 
@@ -260,6 +266,13 @@ class AgentService {
    */
   rankAgents = async (limit?: number): Promise<AgentRankItem[]> => {
     return lambdaClient.agent.rankAgents.query(limit);
+  };
+
+  transferAgent = async (
+    agentId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ agentId: string; slug: string | null }> => {
+    return lambdaClient.agent.transferAgent.mutate({ agentId, targetWorkspaceId });
   };
 }
 

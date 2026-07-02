@@ -6,8 +6,8 @@ import { Breadcrumb as AntdBreadcrumb } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { DiscoverTab } from '@/types/discover';
 
 const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identifier }) => {
@@ -24,7 +24,7 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
     if (tab === DiscoverTab.User) {
       return [
         {
-          title: <Link to="/community">Community</Link>,
+          title: <WorkspaceLink to="/community">Community</WorkspaceLink>,
         },
         {
           title: (
@@ -45,10 +45,10 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
 
     return [
       {
-        title: <Link to="/community">Community</Link>,
+        title: <WorkspaceLink to="/community">Community</WorkspaceLink>,
       },
       {
-        title: <Link to={`/community/${tab}`}>{tabLabel}</Link>,
+        title: <WorkspaceLink to={`/community/${tab}`}>{tabLabel}</WorkspaceLink>,
       },
       {
         title: (

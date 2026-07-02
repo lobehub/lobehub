@@ -44,7 +44,7 @@ interface MentionProps {
   name: string;
 }
 const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => {
-  const { id: mentionId } = node?.properties || {};
+  const { id: mentionId, name } = node?.properties || {};
   const { t } = useTranslation('chat');
 
   const currentGroupMembers = useSessionStore(sessionSelectors.currentGroupAgents, isEqual);
@@ -67,7 +67,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
     return (
       <span className={styles.mention}>
         {'@'}
-        {children || 'unknown'}
+        {name || children || 'unknown'}
       </span>
     );
   }
@@ -95,7 +95,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
     >
       <span className={styles.mention}>
         {'@'}
-        {member.title || children}
+        {member.title || name || children}
       </span>
     </Popover>
   );

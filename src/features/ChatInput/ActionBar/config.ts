@@ -10,7 +10,6 @@ import Plus from './Plus';
 import PromptTransform from './PromptTransform';
 import SaveTopic from './SaveTopic';
 import Search from './Search';
-import STT from './STT';
 import ContextWindow from './Token';
 import Tools from './Tools';
 import Typo from './Typo';
@@ -31,7 +30,6 @@ export const actionMap = {
   promptTransform: PromptTransform,
   saveTopic: SaveTopic,
   search: Search,
-  stt: STT,
   temperature: Params,
   tools: Tools,
   typo: Typo,

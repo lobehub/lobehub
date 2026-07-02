@@ -36,6 +36,10 @@ class ElectronSystemService {
     return this.ipc.windows.isWindowMaximized();
   }
 
+  async isWindowFullScreen(): Promise<boolean> {
+    return this.ipc.windows.isWindowFullScreen();
+  }
+
   async minimizeWindow(): Promise<void> {
     return this.ipc.windows.minimizeWindow();
   }

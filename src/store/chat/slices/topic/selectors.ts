@@ -152,6 +152,9 @@ const buildGroupedTopics = (
   const favTopics = topics.filter((topic) => topic.favorite);
   const unfavTopics = topics.filter((topic) => !topic.favorite);
 
+  // Favorites stay pinned at the very top. The "needs attention" bucket
+  // (byStatus mode only) follows right below, ahead of the remaining status
+  // groups, since groupTopicsByStatus emits `pending` first (STATUS_GROUP_ORDER).
   return favTopics.length > 0
     ? [
         {
@@ -178,7 +181,9 @@ const groupedTopicsForSidebar =
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
     if (!limitedTopics) return [];
     // Topics actively streaming on this client surface under "running" even
-    // though their persisted status is still active — see resolveStatusBucket.
+    // though their persisted status says otherwise — that's the one client-only
+    // overlay (see resolveStatusBucket). Unread is now a persisted status, so it
+    // buckets straight from `topic.status`.
     const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
     return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
   };

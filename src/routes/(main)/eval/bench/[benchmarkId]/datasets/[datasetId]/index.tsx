@@ -1,18 +1,22 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Typography } from 'antd';
+import { App } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
 import { createDatasetImportModal } from '../../../../features/DatasetImportModal';
+import SegmentBar from '../../../../features/SegmentBar';
 import { createTestCaseCreateModal } from '../../../../features/TestCaseCreateModal';
 import { createTestCaseEditModal } from '../../../../features/TestCaseEditModal';
 import TestCasePreviewPanel from '../../features/DatasetsTab/TestCasePreviewPanel';
@@ -21,10 +25,76 @@ import { createRunCreateModal } from '../../features/RunCreateModal';
 import EmptyState from '../../features/RunsTab/EmptyState';
 import RunCard from '../../features/RunsTab/RunCard';
 
+const styles = createStaticStyles(({ css }) => ({
+  backLink: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    width: fit-content;
+
+    font-size: ${cssVar.fontSize};
+    color: ${cssVar.colorTextTertiary};
+    text-decoration: none;
+
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  header: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorPrimaryBg};
+  `,
+  // Summary hero — leads the dataset detail with its headline case count as a
+  // large mono figure, mirroring the benchmark/run result heroes.
+  heroBand: css`
+    padding: 20px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  heroValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading2};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
+  summaryDot: css`
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+  `,
+  tableWrapper: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+  `,
+}));
+
 const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
   const { benchmarkId, datasetId } = useParams<{ benchmarkId: string; datasetId: string }>();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { message } = App.useApp();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
@@ -64,6 +134,24 @@ const DatasetDetail = memo(() => {
     if (search && !c.content?.input?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  // Difficulty mix across the loaded cases — feeds the summary hero's bar.
+  const difficulty = useMemo(() => {
+    const counts = { easy: 0, hard: 0, medium: 0 };
+    for (const c of testCases as any[]) {
+      const d = c?.metadata?.difficulty as 'easy' | 'hard' | 'medium' | undefined;
+      if (d === 'easy' || d === 'medium' || d === 'hard') counts[d] += 1;
+    }
+    return {
+      counts,
+      segments: [
+        { color: cssVar.colorSuccess, value: counts.easy },
+        { color: cssVar.colorWarning, value: counts.medium },
+        { color: cssVar.colorError, value: counts.hard },
+      ],
+      tagged: counts.easy + counts.medium + counts.hard,
+    };
+  }, [testCases]);
 
   const handleRefresh = useCallback(async () => {
     if (datasetId) {
@@ -122,53 +210,22 @@ const DatasetDetail = memo(() => {
           style={{ minWidth: 0, overflow: 'auto', paddingBlock: 24, paddingInline: 32 }}
         >
           {/* Back link */}
-          <Link
-            to={`/eval/bench/${benchmarkId}`}
-            style={{
-              alignItems: 'center',
-              color: 'var(--ant-color-text-tertiary)',
-              display: 'inline-flex',
-              fontSize: 14,
-              gap: 4,
-              textDecoration: 'none',
-              transition: 'color 0.2s',
-              width: 'fit-content',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--ant-color-text)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--ant-color-text-tertiary)';
-            }}
-          >
+          <WorkspaceLink className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
             <ArrowLeft size={16} />
             {t('dataset.detail.backToBenchmark')}
-          </Link>
+          </WorkspaceLink>
 
           {/* Header */}
           <Flexbox horizontal align="start" justify="space-between">
             <Flexbox horizontal align="start" gap={12}>
-              <div
-                style={{
-                  alignItems: 'center',
-                  background: 'var(--ant-color-primary-bg)',
-                  borderRadius: 10,
-                  display: 'flex',
-                  flexShrink: 0,
-                  height: 40,
-                  justifyContent: 'center',
-                  width: 40,
-                }}
-              >
-                <Database size={20} style={{ color: 'var(--ant-color-primary)' }} />
+              <div className={styles.header}>
+                <Database size={20} style={{ color: cssVar.colorPrimary }} />
               </div>
               <Flexbox gap={4}>
-                <Typography.Title level={4} style={{ margin: 0 }}>
+                <Text as="h4" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
                   {dataset.name}
-                </Typography.Title>
-                {dataset.description && (
-                  <Typography.Text type="secondary">{dataset.description}</Typography.Text>
-                )}
+                </Text>
+                {dataset.description && <Text type="secondary">{dataset.description}</Text>}
               </Flexbox>
             </Flexbox>
 
@@ -187,22 +244,55 @@ const DatasetDetail = memo(() => {
             </Flexbox>
           </Flexbox>
 
+          {/* Summary hero — headline case count + difficulty mix */}
+          <Flexbox
+            horizontal
+            align="center"
+            className={styles.heroBand}
+            gap={16}
+            justify="space-between"
+          >
+            <Flexbox gap={6}>
+              <span className={styles.heroValue}>{total}</span>
+              <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                {t('dataset.detail.testCases')}
+              </Text>
+            </Flexbox>
+            {difficulty.tagged > 0 && (
+              <Flexbox gap={8} style={{ maxWidth: 280, minWidth: 0, width: '100%' }}>
+                <SegmentBar segments={difficulty.segments} />
+                <Flexbox horizontal gap={12} justify="flex-end" style={{ flexWrap: 'wrap' }}>
+                  {(['easy', 'medium', 'hard'] as const).map((d) => (
+                    <Flexbox horizontal align="center" gap={6} key={d}>
+                      <span
+                        className={styles.summaryDot}
+                        style={{
+                          background:
+                            d === 'easy'
+                              ? cssVar.colorSuccess
+                              : d === 'medium'
+                                ? cssVar.colorWarning
+                                : cssVar.colorError,
+                        }}
+                      />
+                      <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                        {t(`difficulty.${d}`)} {difficulty.counts[d]}
+                      </Text>
+                    </Flexbox>
+                  ))}
+                </Flexbox>
+              </Flexbox>
+            )}
+          </Flexbox>
+
           {/* Test Cases */}
           <Flexbox gap={12}>
             <Flexbox horizontal align="center" justify="space-between">
-              <Typography.Text strong>{t('dataset.detail.testCases')}</Typography.Text>
-              <Typography.Text type="secondary">
-                {t('dataset.detail.caseCount', { count: total })}
-              </Typography.Text>
+              <Text weight={600}>{t('dataset.detail.testCases')}</Text>
+              <Text type="secondary">{t('dataset.detail.caseCount', { count: total })}</Text>
             </Flexbox>
 
-            <div
-              style={{
-                border: '1px solid var(--ant-color-border-secondary)',
-                borderRadius: 8,
-                overflow: 'hidden',
-              }}
-            >
+            <div className={styles.tableWrapper}>
               <TestCaseTable
                 datasetEvalMode={dataset?.evalMode}
                 diffFilter={diffFilter}
@@ -238,9 +328,9 @@ const DatasetDetail = memo(() => {
           {/* Related Runs */}
           <Flexbox gap={12}>
             <Flexbox horizontal align="center" justify="space-between">
-              <Typography.Text strong>
+              <Text weight={600}>
                 {t('dataset.detail.relatedRuns', { count: sortedRuns.length })}
-              </Typography.Text>
+              </Text>
               <Button
                 icon={Plus}
                 size="small"

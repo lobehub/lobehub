@@ -8,7 +8,7 @@ import { ChevronDown } from 'lucide-react';
 import qs from 'query-string';
 import { type Key, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import Title from '../../../../components/Title';
 import { useDetailContext } from '../DetailProvider';

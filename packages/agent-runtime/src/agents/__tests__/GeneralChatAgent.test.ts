@@ -2948,7 +2948,7 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('headless mode (for async tasks)', () => {
-    it('should resolve tool-level required tools in headless mode', async () => {
+    it('should execute tool-level required tools in headless mode', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
         operationId: 'test-session',
@@ -2983,14 +2983,58 @@ describe('GeneralChatAgent', () => {
 
       const result = await agent.runner(context, state);
 
-      // Headless/CLI cannot request tool-level approval, so return a blocked tool result for replan.
       expect(result).toEqual([
         {
-          payload: {
-            parentMessageId: 'msg-1',
-            toolsCalling: [toolCall],
+          type: 'call_tool',
+          payload: { parentMessageId: 'msg-1', toolCalling: toolCall },
+        },
+      ]);
+    });
+
+    it('should execute API-level required runCommand in headless mode', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'lobe-local-system',
+        apiName: 'runCommand',
+        arguments: '{"command":"which R","description":"Locate the R executable"}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'lobe-local-system': {
+            identifier: 'lobe-local-system',
+            api: [
+              {
+                name: 'runCommand',
+                humanIntervention: 'required',
+              },
+            ],
           },
-          type: 'resolve_blocked_tools',
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: { parentMessageId: 'msg-1', toolCalling: toolCall },
         },
       ]);
     });
@@ -3158,12 +3202,16 @@ describe('GeneralChatAgent', () => {
 
       const result = await agent.runner(context, state);
 
-      // Headless/CLI batches all tools that need intervention into blocked results for replan.
+      // Headless/CLI auto-runs required tools and returns blocked results for non-bypassable tools.
       expect(result).toEqual([
+        {
+          payload: { parentMessageId: 'msg-1', toolCalling: requiredTool },
+          type: 'call_tool',
+        },
         {
           payload: {
             parentMessageId: 'msg-1',
-            toolsCalling: [requiredTool, blacklistedTool, alwaysTool],
+            toolsCalling: [blacklistedTool, alwaysTool],
           },
           type: 'resolve_blocked_tools',
         },
@@ -3211,14 +3259,70 @@ describe('GeneralChatAgent', () => {
 
       const result = await agent.runner(context, state);
 
-      // Headless/CLI returns blocked results for every tool that would otherwise need approval.
+      // Headless/CLI auto-runs required tools and returns blocked results for non-bypassable tools.
+      expect(result).toEqual([
+        {
+          payload: { parentMessageId: 'msg-1', toolCalling: tool1 },
+          type: 'call_tool',
+        },
+        {
+          payload: {
+            parentMessageId: 'msg-1',
+            toolsCalling: [tool2],
+          },
+          type: 'resolve_blocked_tools',
+        },
+      ]);
+    });
+
+    it('should batch multiple tool-level required tools in headless mode', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const tool1: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'search',
+        apiName: 'search',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const tool2: ChatToolPayload = {
+        id: 'call-2',
+        identifier: 'crawl',
+        apiName: 'crawl',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          search: { identifier: 'search', humanIntervention: 'required' },
+          crawl: { identifier: 'crawl', humanIntervention: 'required' },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [tool1, tool2],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
       expect(result).toEqual([
         {
           payload: {
             parentMessageId: 'msg-1',
             toolsCalling: [tool1, tool2],
           },
-          type: 'resolve_blocked_tools',
+          type: 'call_tools_batch',
         },
       ]);
     });

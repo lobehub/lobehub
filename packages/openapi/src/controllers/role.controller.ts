@@ -26,7 +26,7 @@ export class RoleController extends BaseController {
       const request = this.getQuery<RolesListQuery>(c);
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const roles = await roleService.getRoles(request);
 
       return this.success(c, roles, 'Get roles list successfully');
@@ -47,7 +47,7 @@ export class RoleController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const createdRole = await roleService.createRole(body);
 
       return this.success(c, createdRole, 'Role created successfully');
@@ -66,7 +66,7 @@ export class RoleController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
       const roleId = id;
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const role = await roleService.getRoleById(roleId);
 
       if (!role) {
@@ -90,7 +90,7 @@ export class RoleController extends BaseController {
       const request = this.getQuery<RolePermissionsListQuery>(c);
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const permissions = await roleService.getRolePermissions({ roleId: id, ...request });
 
@@ -113,7 +113,7 @@ export class RoleController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.updateRolePermissions(id, body);
 
       return this.success(c, result, 'Role permissions updated successfully');
@@ -131,7 +131,7 @@ export class RoleController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
       const roleId = id;
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.clearRolePermissions(roleId);
 
       return this.success(c, result, 'Role permissions cleared');
@@ -156,7 +156,7 @@ export class RoleController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updatedRole = await roleService.updateRole(id, body);
 
       return this.success(c, updatedRole, 'Role updated successfully');
@@ -172,7 +172,7 @@ export class RoleController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.deleteRole(id);
 
       return this.success(c, result, 'Role deleted successfully');

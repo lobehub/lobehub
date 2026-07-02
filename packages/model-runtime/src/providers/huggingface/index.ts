@@ -8,7 +8,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { convertIterableToStream } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { processMultiProviderModelList } from '../../utils/modelParse';
-import type { HuggingFaceRouterModelCard, HuggingFaceRouterResponse } from './type';
+import type { HuggingFaceRouterResponse } from './type';
 
 export const params = {
   chatCompletion: {
@@ -54,18 +54,13 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_HUGGINGFACE_CHAT_COMPLETION === '1',
   },
   models: async () => {
-    let modelList: HuggingFaceRouterModelCard[] = [];
-
-    try {
-      const response = await fetch('https://router.huggingface.co/v1/models');
-      if (response.ok) {
-        const data: HuggingFaceRouterResponse = await response.json();
-        modelList = data.data;
-      }
-    } catch (error) {
-      console.error('Failed to fetch HuggingFace router models:', error);
-      return [];
+    const response = await fetch('https://router.huggingface.co/v1/models');
+    if (!response.ok) {
+      throw new Error(`HuggingFace models API request failed with status ${response.status}`);
     }
+
+    const data: HuggingFaceRouterResponse = await response.json();
+    const modelList = data.data;
 
     const formattedModels = modelList
       .map((model) => {

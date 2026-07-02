@@ -11,6 +11,7 @@ import { type SWRResponse } from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { fileKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
@@ -26,7 +27,6 @@ import { type FileStore } from '../../store';
 import { fileManagerSelectors } from './selectors';
 
 const serverFileService = new FileService();
-const FETCH_ALL_KNOWLEDGE_KEY = 'useFetchKnowledgeItems';
 
 export interface FolderCrumb {
   id: string;
@@ -51,6 +51,24 @@ export class FileManageActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  #resolveChunkTargetId = async (id: string): Promise<string> => {
+    // Reuse the selector so local resolution consults every store list
+    // (fileList → resourceMap → resourceMap-by-fileId → resourceList).
+    const localResource = fileManagerSelectors.getFileByChunkTargetId(id)(this.#get());
+    if (localResource?.fileId) return localResource.fileId;
+    if (!id.startsWith('docs_')) return id;
+
+    try {
+      const resource = await fileService.getKnowledgeItem(id);
+      return resource?.fileId ?? id;
+    } catch {
+      return id;
+    }
+  };
+
+  #resolveChunkTargetIds = async (ids: string[]): Promise<string[]> =>
+    Promise.all(ids.map((id) => this.#resolveChunkTargetId(id)));
 
   #buildOptimisticUploadResource = (
     file: File,
@@ -146,11 +164,12 @@ export class FileManageActionImpl {
   };
 
   embeddingChunks = async (fileIds: string[]): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(fileIds);
     // toggle file ids
-    this.#get().toggleEmbeddingIds(fileIds);
+    this.#get().toggleEmbeddingIds(chunkTargetIds);
 
     // parse files
-    const pools = fileIds.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createEmbeddingChunksTask(id);
       } catch (e) {
@@ -160,7 +179,7 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleEmbeddingIds(fileIds, false);
+    this.#get().toggleEmbeddingIds(chunkTargetIds, false);
   };
 
   loadMoreKnowledgeItems = async (): Promise<void> => {
@@ -189,7 +208,7 @@ export class FileManageActionImpl {
       });
 
       // Update SWR cache so the component sees the new items
-      await mutate([FETCH_ALL_KNOWLEDGE_KEY, queryListParams], updatedFileList, {
+      await mutate(fileKeys.knowledgeItems(queryListParams), updatedFileList, {
         revalidate: false,
       });
     } catch (error) {
@@ -200,7 +219,7 @@ export class FileManageActionImpl {
   moveFileToFolder = async (fileId: string, parentId: string | null): Promise<void> => {
     // Optimistically update all file list caches
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData: FileListItem[] | undefined) => {
         if (!currentData) return currentData;
         // Update the moved file's parentId in the cache
@@ -219,11 +238,12 @@ export class FileManageActionImpl {
   };
 
   parseFilesToChunks = async (ids: string[], params?: { skipExist?: boolean }): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(ids);
     // toggle file ids
-    this.#get().toggleParsingIds(ids);
+    this.#get().toggleParsingIds(chunkTargetIds);
 
     // parse files
-    const pools = ids.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createParseFileTask(id, params?.skipExist);
       } catch (e) {
@@ -233,7 +253,7 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleParsingIds(ids, false);
+    this.#get().toggleParsingIds(chunkTargetIds, false);
   };
 
   pushDockFileList = async (
@@ -339,40 +359,42 @@ export class FileManageActionImpl {
   };
 
   reEmbeddingChunks = async (id: string): Promise<void> => {
-    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(id)(this.#get())) return;
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
+    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(chunkTargetId)(this.#get())) return;
 
     // toggle file ids
-    this.#get().toggleEmbeddingIds([id]);
+    this.#get().toggleEmbeddingIds([chunkTargetId]);
 
-    await serverFileService.removeFileAsyncTask(id, 'embedding');
-
-    await this.#get().refreshFileList();
-
-    await ragService.createEmbeddingChunksTask(id);
+    await serverFileService.removeFileAsyncTask(chunkTargetId, 'embedding');
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleEmbeddingIds([id], false);
+    await ragService.createEmbeddingChunksTask(chunkTargetId);
+
+    await this.#get().refreshFileList();
+
+    this.#get().toggleEmbeddingIds([chunkTargetId], false);
   };
 
   reParseFile = async (id: string): Promise<void> => {
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
     // toggle file ids
-    this.#get().toggleParsingIds([id]);
+    this.#get().toggleParsingIds([chunkTargetId]);
 
-    await ragService.retryParseFile(id);
+    await ragService.retryParseFile(chunkTargetId);
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleParsingIds([id], false);
+    this.#get().toggleParsingIds([chunkTargetId], false);
   };
 
   #refreshKnowledgeListCaches = async (): Promise<void> => {
-    // Invalidate all queries that start with FETCH_ALL_KNOWLEDGE_KEY
+    // Invalidate all queries under the file:knowledgeItems namespace
     // This ensures all file lists (explorer, tree, etc.) are refreshed
     // Note: We don't pass data as undefined to avoid clearing the cache,
     // which would cause isLoading to become true and show skeleton screen
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData) => currentData,
       {
         revalidate: true,
@@ -406,7 +428,7 @@ export class FileManageActionImpl {
   renameFolder = async (folderId: string, newName: string): Promise<void> => {
     // Optimistically update all file list caches
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData: FileListItem[] | undefined) => {
         if (!currentData) return currentData;
         // Update the folder's name in the cache
@@ -681,7 +703,7 @@ export class FileManageActionImpl {
   };
 
   useFetchKnowledgeItems = (params: QueryFileListParams): SWRResponse<FileListItem[]> => {
-    return useClientDataSWR<FileListItem[]>([FETCH_ALL_KNOWLEDGE_KEY, params], async () => {
+    return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
       const response = await serverFileService.getKnowledgeItems({
         ...params,
         limit: params.limit ?? 50,

@@ -104,25 +104,25 @@ export type LobeAgentConfigKeys =
  */
 export const CreateAgentSchema = z.object({
   agencyConfig: z.custom<LobeAgentAgencyConfig>().optional(),
-  avatar: z.string().nullable().optional(),
-  backgroundColor: z.string().nullable().optional(),
+  avatar: z.string().nullish(),
+  backgroundColor: z.string().nullish(),
   chatConfig: AgentChatConfigSchema.optional(),
-  description: z.string().nullable().optional(),
+  description: z.string().nullish(),
   editorData: z.unknown().optional(),
   fewShots: z.unknown().optional(),
-  marketIdentifier: z.string().nullable().optional(),
-  model: z.string().nullable().optional(),
-  openingMessage: z.string().nullable().optional(),
+  marketIdentifier: z.string().nullish(),
+  model: z.string().nullish(),
+  openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
   params: z.record(z.unknown()).optional(),
   plugins: z.array(z.string()).optional(),
-  provider: z.string().nullable().optional(),
-  sessionGroupId: z.string().nullable().optional(),
-  systemRole: z.string().nullable().optional(),
+  provider: z.string().nullish(),
+  sessionGroupId: z.string().nullish(),
+  systemRole: z.string().nullish(),
   tags: z.array(z.string()).optional(),
-  title: z.string().nullable().optional(),
+  title: z.string().nullish(),
   tts: z.custom<LobeAgentTTSConfig>().optional(),
-  virtual: z.boolean().nullable().optional(),
+  virtual: z.boolean().nullish(),
 });
 
 export type CreateAgentConfig = z.infer<typeof CreateAgentSchema>;
@@ -157,4 +157,6 @@ export interface AgentItem {
   updatedAt: Date;
   userId: string;
   virtual?: boolean | null;
+  /** Owning workspace; null for personal (non-workspace) agents. */
+  workspaceId?: string | null;
 }

@@ -1,10 +1,11 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider, Switch } from 'antd';
 import { Images } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
@@ -13,6 +14,7 @@ import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
 import { useIsDark } from '@/hooks/useIsDark';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
@@ -29,7 +31,6 @@ import {
   SeedNumberInput,
   SizeSelect,
   StepsSliderInput,
-  useAutoDimensions,
 } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import ImageModelItem from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/ImageModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -43,6 +44,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import PromptTitle from './Title';
+import { useImageReferenceUpload } from './useImageReferenceUpload';
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -57,33 +59,53 @@ interface SwitchItemProps {
 }
 
 const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useGenerationConfigParam(paramName);
 
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{label}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
 
 const PromptExtendItem = memo(() => {
   const { t } = useTranslation('image');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useGenerationConfigParam('promptExtend');
 
   if (enumValues && enumValues.length > 0) {
-    const options = enumValues.map((item) => ({ label: item, value: item }));
+    const options = enumValues.map((item) => ({
+      disabled: !canCreate,
+      key: item,
+      label: item,
+    }));
 
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => setValue(String(next) as any)}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
+            if (!canCreate) return;
+
+            setValue(key as any);
+          }}
         />
       </Flexbox>
     );
@@ -92,7 +114,15 @@ const PromptExtendItem = memo(() => {
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{t('config.promptExtend.label')}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
@@ -100,23 +130,24 @@ const PromptExtendItem = memo(() => {
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('image');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useGenerationConfigParam('prompt');
-  const { value: imageUrl, setValue: setImageUrl } = useGenerationConfigParam('imageUrl');
   const {
-    value: imageUrls,
-    setValue: setImageUrls,
-    maxCount: imageUrlsMaxCount,
-    maxFileSize: imageUrlsMaxFileSize,
-  } = useGenerationConfigParam('imageUrls');
-  const { maxFileSize: imageUrlMaxFileSize } = useGenerationConfigParam('imageUrl');
+    canDropImage,
+    handleAddImage,
+    handleRemoveImage,
+    handleUploadFiles,
+    imagePreviewUrls,
+    maxCount,
+    maxFileSize,
+    uploadingPreviews,
+  } = useImageReferenceUpload();
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const currentProvider = useImageStore(imageGenerationConfigSelectors.provider);
   const isInit = useImageStore((s) => s.isInit);
-  const isSupportImageUrl = useImageStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useImageStore(isSupportedParamSelector('imageUrls'));
   const isSupportQuality = useImageStore(isSupportedParamSelector('quality'));
   const isSupportResolution = useImageStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useImageStore(isSupportedParamSelector('size'));
@@ -129,7 +160,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
   const { showDimensionControl } = useDimensionControl();
-  const { autoSetDimensions, extractUrlAndDimensions } = useAutoDimensions();
 
   useFetchAiImageConfig();
 
@@ -139,6 +169,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
+    if (!canCreate) return;
+
     if (!isLogin) {
       loginRequired.redirect({ timeout: 2000 });
       return;
@@ -165,7 +197,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   }, [modelParam, isInit, enabledImageModelList, setModelAndProviderOnSelect, setModelParam]);
 
   useEffect(() => {
-    if (promptParam && !hasProcessedPrompt.current && isLogin) {
+    if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
       const decodedPrompt = decodeURIComponent(promptParam);
       setValue(decodedPrompt);
       hasProcessedPrompt.current = true;
@@ -179,68 +211,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, setValue, setPromptParam, createImage]);
+  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createImage]);
 
-  const imagePreviewUrls = useMemo(
-    () => [imageUrl, ...(imageUrls ?? [])].filter(Boolean) as string[],
-    [imageUrl, imageUrls],
-  );
-
-  const handleAddImage = useCallback(
-    (data: string | { dimensions?: { height: number; width: number }; url: string }) => {
-      const { url, dimensions } = extractUrlAndDimensions(data);
-      if (!url) return;
-
-      if (dimensions) {
-        autoSetDimensions(dimensions);
-      }
-
-      if (isSupportImageUrl && !imageUrl) {
-        setImageUrl(url);
-      } else if (isSupportImageUrls) {
-        setImageUrls([...(imageUrls ?? []), url] as any);
-      } else if (isSupportImageUrl) {
-        setImageUrl(url);
-      }
-    },
-    [
-      isSupportImageUrl,
-      isSupportImageUrls,
-      imageUrl,
-      imageUrls,
-      setImageUrl,
-      setImageUrls,
-      autoSetDimensions,
-      extractUrlAndDimensions,
-    ],
-  );
-
-  const handleRemoveImage = useCallback(
-    (url: string) => {
-      if (url === imageUrl) {
-        setImageUrl(null);
-      } else {
-        setImageUrls((imageUrls ?? []).filter((item) => item !== url) as any);
-      }
-    },
-    [imageUrl, imageUrls, setImageUrl, setImageUrls],
-  );
-
-  const showInlineRef = isSupportImageUrl || isSupportImageUrls;
+  const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
-
-  const maxCount = useMemo(() => {
-    let count = 0;
-    if (isSupportImageUrl) count += 1;
-    if (isSupportImageUrls) count += imageUrlsMaxCount ?? 4;
-    return count;
-  }, [isSupportImageUrl, isSupportImageUrls, imageUrlsMaxCount]);
 
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
       <GenerationPromptInput
         disableGenerate={!isInit}
+        disabled={!canCreate}
         generateLabel={t('generation.actions.generate')}
         generatingLabel={t('generation.status.generating')}
         isCreating={isCreating}
@@ -251,14 +232,21 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             <InlineImageReference
               images={imagePreviewUrls}
               maxCount={maxCount}
-              maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+              maxFileSize={maxFileSize}
+              uploadingPreviews={uploadingPreviews}
               onAdd={handleAddImage}
               onRemove={handleRemoveImage}
+              onUploadFiles={handleUploadFiles}
             />
           ) : undefined
         }
         leftActions={
-          <Flexbox horizontal align={'center'} gap={4}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={4}
+            style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
+          >
             <GenerationMediaModeSegment mode={'image'} />
             <ModelSwitchPanel
               ModelItemComponent={ImageModelItem}
@@ -269,6 +257,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               pricingMode="image"
               provider={currentProvider ?? undefined}
               onModelChange={async ({ model, provider }) => {
+                if (!canCreate) return;
+
                 setModelAndProviderOnSelect(model, provider);
               }}
             >
@@ -350,7 +340,15 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
         }
         rightActions={
-          <PromptTransformAction mode={'image'} prompt={value} onPromptChange={setValue as any} />
+          <PromptTransformAction
+            mode={'image'}
+            prompt={value}
+            onPromptChange={(next) => {
+              if (!canCreate) return;
+
+              setValue(next as any);
+            }}
+          />
         }
         onGenerate={handleGenerate}
         onValueChange={setValue}

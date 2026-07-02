@@ -27,6 +27,7 @@ export async function execAgent(c: Context): Promise<Response> {
     appContext,
     autoStart = true,
     existingMessageIds,
+    workspaceId,
   } = body as Record<string, unknown> & { autoStart?: boolean };
 
   if (!userId) return c.json({ error: 'userId is required' }, 400);
@@ -39,7 +40,9 @@ export async function execAgent(c: Context): Promise<Response> {
 
   try {
     const serverDB = await getServerDB();
-    const aiAgentService = new AiAgentService(serverDB, userId as string);
+    const aiAgentService = new AiAgentService(serverDB, userId as string, {
+      workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
+    });
 
     const result = await aiAgentService.execAgent({
       agentId: agentId as string | undefined,

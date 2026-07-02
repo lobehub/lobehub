@@ -181,7 +181,7 @@ describe('LobeCloudflareAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
-    it('should call Cloudflare API with supported opions', async () => {
+    it('should call Cloudflare API with supported options', async () => {
       // Arrange
       const mockResponse = new Response(
         new ReadableStream<Uint8Array>({
@@ -557,6 +557,33 @@ describe('LobeCloudflareAI', () => {
       );
 
       expect(result).toHaveLength(2);
+    });
+
+    it('should throw regular Error when API returns null result', async () => {
+      const instance = new LobeCloudflareAI({
+        apiKey: 'test_api_key',
+        baseURLOrAccountID: accountID,
+      });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            errors: [{ code: 10000, message: 'Authentication error' }],
+            result: null,
+            success: false,
+          }),
+          { status: 401 },
+        ),
+      );
+
+      await expect(instance.models()).rejects.toMatchObject({
+        cause: {
+          errors: [{ code: 10000, message: 'Authentication error' }],
+          result: null,
+          success: false,
+        },
+        message: 'Cloudflare models API returned an invalid response',
+      });
     });
   });
 });

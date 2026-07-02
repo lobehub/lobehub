@@ -23,16 +23,38 @@ export const normalizeTabUrl = (url: string): string => {
 export interface AgentTabContext {
   agentId: string;
   topicId: string | null;
+  workspaceSlug?: string;
 }
 
+const WORKSPACE_AGENT_TOPIC_PATH = /^\/([^/]+)\/agent\/([^/]+)\/(tpc_[^/]+)(?:\/|$)/;
+const WORKSPACE_AGENT_PATH = /^\/([^/]+)\/agent\/([^/]+)(?:\/|$)/;
 const AGENT_TOPIC_PATH = /^\/agent\/([^/]+)\/(tpc_[^/]+)(?:\/|$)/;
 const AGENT_PATH = /^\/agent\/([^/]+)(?:\/|$)/;
 
 export const parseAgentTabContext = (url: string): AgentTabContext | null => {
   const [rawPath = '', rawQuery = ''] = url.split('?');
 
+  const workspaceTopicMatch = rawPath.match(WORKSPACE_AGENT_TOPIC_PATH);
+  if (workspaceTopicMatch) {
+    return {
+      agentId: workspaceTopicMatch[2],
+      topicId: workspaceTopicMatch[3],
+      workspaceSlug: workspaceTopicMatch[1],
+    };
+  }
+
   const topicMatch = rawPath.match(AGENT_TOPIC_PATH);
   if (topicMatch) return { agentId: topicMatch[1], topicId: topicMatch[2] };
+
+  const workspaceAgentMatch = rawPath.match(WORKSPACE_AGENT_PATH);
+  if (workspaceAgentMatch) {
+    const queryTopic = new URLSearchParams(rawQuery.split('#')[0] ?? '').get('topic');
+    return {
+      agentId: workspaceAgentMatch[2],
+      topicId: queryTopic || null,
+      workspaceSlug: workspaceAgentMatch[1],
+    };
+  }
 
   const agentMatch = rawPath.match(AGENT_PATH);
   if (!agentMatch) return null;

@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import { ipcMain } from 'electron';
 
+import { toIpcErrorEnvelope } from '~common/ipcError';
+
 // Base context for IPC methods
 export interface IpcContext {
   event: IpcMainInvokeEvent;
@@ -63,7 +65,11 @@ export class IpcHandler {
           return await handler(...typedArgs);
         } catch (error) {
           console.error(`Error in IPC method ${channel}:`, error);
-          throw error;
+          // Return a clone-safe envelope rather than throwing: Electron rebuilds
+          // a thrown handler error from its string form, dropping `cause` and
+          // other structured fields. The preload `invoke` wrapper rebuilds a
+          // real Error from the envelope and re-throws it. See `~common/ipcError`.
+          return toIpcErrorEnvelope(error);
         }
       });
     });

@@ -1,15 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 
-import { readdir } from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { detectRepoType } from '../git';
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
-}));
-
-vi.mock('fs-extra', () => ({
   readdir: vi.fn(),
 }));
 

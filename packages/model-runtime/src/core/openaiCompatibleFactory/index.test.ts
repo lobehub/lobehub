@@ -24,6 +24,9 @@ const invalidErrorType = 'InvalidProviderAPIKey';
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
 
 let instance: LobeOpenAICompatibleRuntime;
 
@@ -53,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe('LobeOpenAICompatibleFactory', () => {
@@ -127,6 +131,79 @@ describe('LobeOpenAICompatibleFactory', () => {
         { headers: { Accept: '*/*' } },
       );
       expect(result).toBeInstanceOf(Response);
+    });
+
+    // MCP tool schemas with `items: true` or array props missing
+    // `type` must be normalized before reaching the upstream validator.
+    it('should normalize tool parameter schemas before sending to upstream', async () => {
+      (instance['client'].chat.completions.create as Mock).mockResolvedValue(
+        Promise.resolve(new ReadableStream()),
+      );
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'mistralai/mistral-7b-instruct:free',
+        temperature: 0.7,
+        tools: [
+          {
+            function: {
+              name: 'mcp_tool',
+              parameters: {
+                properties: {
+                  ids: { items: true, type: 'array' },
+                  sourceIds: { items: { type: 'string' } },
+                },
+                type: 'object',
+              },
+            },
+            type: 'function',
+          },
+        ],
+      });
+
+      const callArgs = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const params = callArgs.tools[0].function.parameters;
+      // `items: true` collapsed to `{}`
+      expect(params.properties.ids.items).toEqual({});
+      // array prop missing `type` gets backfilled
+      expect(params.properties.sourceIds.type).toBe('array');
+    });
+
+    it('should keep logical model for provider payload handling while sending mapped model id', async () => {
+      const handlePayload = vi.fn(
+        (payload: ChatStreamPayload): OpenAI.ChatCompletionCreateParamsStreaming => ({
+          messages: payload.messages as OpenAI.ChatCompletionCreateParamsStreaming['messages'],
+          model: payload.model,
+          stream: true,
+        }),
+      );
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        chatCompletion: { handlePayload },
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-model': 'upstream-model' },
+      });
+      vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await runtime.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'logical-model',
+        temperature: 0,
+      });
+
+      expect(handlePayload).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'logical-model' }),
+        expect.anything(),
+      );
+      expect(runtime['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'upstream-model' }),
+        expect.anything(),
+      );
     });
 
     describe('streaming response', () => {
@@ -424,7 +501,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: "Hello"\n\n',
           'id: a\n',
           'event: usage\n',
-          'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10,"cost":0.000005}\n\n',
+          'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
           expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
@@ -886,7 +963,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -927,7 +1004,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             message: 'api is undefined',
           },
         };
-        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
 
@@ -956,7 +1033,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         const errorInfo = {
           cause: { message: 'api is undefined' },
         };
-        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
         instance = new LobeMockProvider({
           apiKey: 'test',
@@ -1040,7 +1117,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -1076,7 +1153,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -1104,7 +1181,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         }
       });
 
-      it('should detect QuotaLimitReached from error message text', async () => {
+      it('should detect RateLimitExceeded from error message text', async () => {
         const apiError = new OpenAI.APIError(
           429,
           {
@@ -1114,7 +1191,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 429,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -1134,7 +1211,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               },
               status: 429,
             },
-            errorType: AgentRuntimeErrorType.QuotaLimitReached,
+            errorType: AgentRuntimeErrorType.RateLimitExceeded,
             message: expect.any(String),
             provider,
           });
@@ -1452,6 +1529,47 @@ describe('LobeOpenAICompatibleFactory', () => {
         );
       });
 
+      it('should keep OpenRouter OpenAI slugs on chat completions for provider payload normalization', async () => {
+        const LobeMockOpenRouter = createOpenAICompatibleRuntime({
+          baseURL: 'https://openrouter.ai/api/v1',
+          chatCompletion: {
+            handlePayload: (payload) => {
+              const { reasoning: _reasoning, thinking, ...rest } = payload;
+
+              return {
+                ...rest,
+                ...(thinking?.type === 'disabled' && { reasoning: { enabled: false } }),
+                stream: payload.stream ?? true,
+              } as any;
+            },
+          },
+          provider: ModelProvider.OpenRouter,
+        });
+
+        const inst = new LobeMockOpenRouter({ apiKey: 'test' });
+        const chatSpy = vi
+          .spyOn(inst['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+        const responsesSpy = vi.spyOn(inst['client'].responses, 'create');
+
+        await inst.chat({
+          messages: [{ content: 'hi', role: 'user' }],
+          model: 'openai/gpt-5.2',
+          thinking: { type: 'disabled' },
+        });
+
+        expect(responsesSpy).not.toHaveBeenCalled();
+        expect(chatSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: 'openai/gpt-5.2',
+            reasoning: { enabled: false },
+            stream: true,
+          }),
+          expect.anything(),
+        );
+        expect(chatSpy.mock.calls[0][0]).not.toHaveProperty('thinking');
+      });
+
       it(
         'should route to Responses API when model matches useResponseModels',
         async () => {
@@ -1612,6 +1730,42 @@ describe('LobeOpenAICompatibleFactory', () => {
           imageUrl:
             'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
         });
+      });
+
+      it('should route mapped logical image-chat models through chat completions', async () => {
+        const mappedInstance = new LobeMockProvider({
+          apiKey: 'test',
+          modelIdMapping: { 'logical-image-model:image': 'upstream-image-model' },
+        });
+        vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue({
+          choices: [
+            {
+              message: {
+                images: [
+                  {
+                    image_url: {
+                      url: 'data:image/png;base64,mapped-chat-image',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        } as any);
+        vi.spyOn(mappedInstance['client'].images, 'generate').mockResolvedValue({} as any);
+
+        const result = await (mappedInstance as any).createImage({
+          model: 'logical-image-model:image',
+          params: {
+            prompt: 'A beautiful sunset',
+          },
+        });
+
+        expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({ model: 'upstream-image-model' }),
+        );
+        expect(mappedInstance['client'].images.generate).not.toHaveBeenCalled();
+        expect(result).toEqual({ imageUrl: 'data:image/png;base64,mapped-chat-image' });
       });
 
       it('should handle size auto parameter correctly', async () => {
@@ -2034,6 +2188,43 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should choose generateObject API by logical model while sending mapped model id', async () => {
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        generateObject: {
+          useResponseModels: ['logical-response-model'],
+        },
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-response-model': 'upstream-response-model' },
+      });
+      vi.spyOn(runtime['client'].responses, 'create').mockResolvedValue({
+        output_text: '{"ok":true}',
+      } as any);
+      vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue({} as any);
+
+      const result = await runtime.generateObject({
+        messages: [{ content: 'Generate JSON', role: 'user' }],
+        model: 'logical-response-model',
+        schema: {
+          name: 'result',
+          schema: {
+            properties: { ok: { type: 'boolean' } },
+            type: 'object',
+          },
+        },
+      });
+
+      expect(runtime['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'upstream-response-model' }),
+        expect.anything(),
+      );
+      expect(runtime['client'].chat.completions.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: true });
+    });
+
     it('should map disabled thinking to no reasoning effort for GPT-5.4 Responses generateObject', async () => {
       const mockResponse = {
         output_text: '{"name": "John", "age": 30}',
@@ -2304,7 +2495,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           status: 400,
         },
         'Error message',
-        {},
+        new Headers(),
       );
 
       vi.spyOn(instance['client'].responses, 'create').mockRejectedValue(apiError);
@@ -3173,9 +3364,9 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: undefined, signal: undefined },
         );
 
-        expect(result).toEqual([
-          { arguments: { age: 28, name: 'Alice' }, name: 'person_extractor' },
-        ]);
+        // The fallback returns the parsed schema object, same shape as the
+        // json_schema path
+        expect(result).toEqual({ age: 28, name: 'Alice' });
       });
 
       it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
@@ -3255,7 +3446,10 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         const result = await instanceWithToolCalling.generateObject(payload);
 
-        expect(consoleSpy).toHaveBeenCalledWith('parse tool call arguments error:', undefined);
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'no tool call found in structured output response:',
+          mockResponse.choices[0].message,
+        );
         expect(result).toBeUndefined();
 
         consoleSpy.mockRestore();
@@ -3298,7 +3492,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(consoleSpy).toHaveBeenCalledWith(
           'parse tool call arguments error:',
-          mockResponse.choices[0].message.tool_calls,
+          mockResponse.choices[0].message.tool_calls[0],
         );
         expect(result).toBeUndefined();
 
@@ -3350,7 +3544,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: options.headers, signal: options.signal },
         );
 
-        expect(result).toEqual([{ arguments: { data: 'test' }, name: 'data_extractor' }]);
+        expect(result).toEqual({ data: 'test' });
       });
     });
   });
@@ -3382,7 +3576,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
           displayName: 'GPT-4o',
           enabled: true,
+          family: 'gpt',
+          generation: 'gpt-4o',
           id: 'gpt-4o',
+          knowledgeCutoff: '2023-10',
           maxOutput: 4096,
           pricing: {
             units: [
@@ -3423,7 +3620,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             "Claude 3.7 Sonnet is Anthropic's fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous flagship Claude 3 Opus on many intelligence benchmarks.",
           displayName: 'Claude 3.7 Sonnet',
           enabled: false,
+          family: 'claude-sonnet',
+          generation: 'claude-3.7',
           id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+          knowledgeCutoff: '2024-10',
           maxOutput: 64_000,
           pricing: {
             units: [
@@ -3462,7 +3662,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
           displayName: 'GPT 4o Mini',
           enabled: false,
+          family: 'gpt',
+          generation: 'gpt-4o',
           id: 'gpt-4o-mini',
+          knowledgeCutoff: '2023-10',
           maxOutput: 4096,
           pricing: {
             units: [
@@ -3497,6 +3700,78 @@ describe('LobeOpenAICompatibleFactory', () => {
           type: 'chat',
         },
       ]);
+    });
+  });
+
+  describe('transcribe', () => {
+    it('should transcribe audio and return the text', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: 'hello world' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.mp3', { type: 'audio/mpeg' });
+
+      const result = await instance.transcribe!({ file, model: 'whisper-1' });
+
+      expect(result).toEqual({ text: 'hello world' });
+      expect(transcribeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ file, model: 'whisper-1' }),
+        expect.anything(),
+      );
+    });
+
+    it('should forward language, prompt and responseFormat to the provider', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: '你好' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      await instance.transcribe!(
+        {
+          file,
+          language: 'zh',
+          model: 'whisper-1',
+          prompt: 'hint',
+          responseFormat: 'verbose_json',
+        },
+        { signal: new AbortController().signal },
+      );
+
+      expect(transcribeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          file,
+          language: 'zh',
+          model: 'whisper-1',
+          prompt: 'hint',
+          response_format: 'verbose_json',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should wrap a bare Blob into a File using fileName', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: 'ok' } as any);
+
+      const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/wav' });
+
+      await instance.transcribe!({ file: blob, fileName: 'remote.wav', model: 'whisper-1' });
+
+      const passedFile = (transcribeMock.mock.calls[0][0] as any).file as File;
+      expect(passedFile).toBeInstanceOf(File);
+      expect(passedFile.name).toBe('remote.wav');
+    });
+
+    it('should throw an error when transcription fails', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockRejectedValue(
+        new Error('boom'),
+      );
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.mp3', { type: 'audio/mpeg' });
+
+      await expect(instance.transcribe!({ file, model: 'whisper-1' })).rejects.toBeDefined();
     });
   });
 });

@@ -44,6 +44,8 @@ class TaskService {
 
   getReview = async (id: string) => lambdaClient.task.getReview.query({ id });
 
+  getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
+
   // ── Mutations ──
 
   create = async (params: {
@@ -145,6 +147,10 @@ class TaskService {
   updateReview = async (...args: Parameters<typeof lambdaClient.task.updateReview.mutate>) =>
     lambdaClient.task.updateReview.mutate(...args);
 
+  updateVerifyConfig = async (
+    ...args: Parameters<typeof lambdaClient.task.updateVerifyConfig.mutate>
+  ) => lambdaClient.task.updateVerifyConfig.mutate(...args);
+
   runReview = async (id: string, params?: { content?: string; topicId?: string }) =>
     lambdaClient.task.runReview.mutate({ id, ...params });
 
@@ -160,6 +166,14 @@ class TaskService {
     lambdaClient.brief.resolve.mutate({ id, ...opts });
 
   markBriefRead = async (id: string) => lambdaClient.brief.markRead.mutate({ id });
+
+  // ── Transfer / Copy ──
+
+  transferTask = async (taskId: string, targetWorkspaceId: string | null) =>
+    lambdaClient.task.transferTask.mutate({ targetWorkspaceId, taskId });
+
+  copyTaskToWorkspace = async (taskId: string, targetWorkspaceId: string | null) =>
+    lambdaClient.task.copyTaskToWorkspace.mutate({ targetWorkspaceId, taskId });
 }
 
 export const taskService = new TaskService();

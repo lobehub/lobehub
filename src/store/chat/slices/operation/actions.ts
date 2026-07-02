@@ -5,10 +5,11 @@ import { produce } from 'immer';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { DEFAULT_TOPIC_UNREAD_KEY } from './initialState';
 import {
   type AfterCompletionCallback,
   AI_RUNTIME_OPERATION_TYPES,
@@ -65,17 +66,23 @@ export class OperationActionsImpl {
           context.operationId,
         );
       } else {
-        const { agentId, topicId, threadId, scope, isNew, groupId } = operation.context;
+        const { agentId, topicId, threadId, scope, isNew, groupId, documentId } = operation.context;
         log(
-          '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s',
+          '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s, documentId=%s',
           context.operationId,
           agentId,
           topicId,
           threadId,
           scope,
           groupId,
+          documentId,
         );
-        return { agentId: agentId!, topicId, threadId, scope, isNew, groupId };
+        // Spread the whole operation context so every bucket-key field carries
+        // through — notably `documentId` (page-scoped optimistic writes resolve
+        // to the same `page_<agent>_<documentId>` bucket the editor reads from,
+        // not `page_<agent>_new`) and `subAgentId` (group_agent scope's
+        // subTopicId). Only agentId needs the non-null assertion.
+        return { ...operation.context, agentId: agentId! };
       }
     }
 
@@ -655,82 +662,74 @@ export class OperationActionsImpl {
     );
   };
 
-  markUnreadCompleted = (agentId: string, topicId?: string | null): void => {
-    const { activeAgentId, activeTopicId } = this.#get();
+  /**
+   * Mark a topic as having an unread completed generation by persisting
+   * `status: 'unread'`. Skipped when the user is already viewing the topic, or
+   * for the default (no-topic) conversation which has no persisted row.
+   *
+   * The write goes through `updateTopicStatus`, which optimistically patches the
+   * in-memory topic map (so the sidebar dot lights up instantly for the active
+   * agent) and persists fire-and-forget. After it persists we refresh the home
+   * sidebar list so the cross-agent unread badge updates even for agents whose
+   * topics aren't loaded on this client.
+   */
+  markTopicUnread = ({
+    agentId,
+    groupId,
+    topicId,
+  }: {
+    agentId?: string;
+    groupId?: string | null;
+    topicId?: string | null;
+  }): void => {
+    if (!topicId) return;
+    if (this.#get().activeTopicId === topicId) return;
 
-    // Only mark when user is NOT currently viewing this exact (agent, topic) pair.
-    // The default (no-topic) conversation is represented by DEFAULT_TOPIC_UNREAD_KEY.
-    const isViewingTopic =
-      activeAgentId === agentId && (activeTopicId ?? null) === (topicId ?? null);
-    if (isViewingTopic) return;
-
-    const key = topicId ?? DEFAULT_TOPIC_UNREAD_KEY;
-    this.#set(
-      produce((state: ChatStore) => {
-        const existing = state.unreadCompletedTopicsByAgent[agentId];
-        if (existing) {
-          existing.add(key);
-        } else {
-          state.unreadCompletedTopicsByAgent[agentId] = new Set([key]);
-        }
-      }),
-      false,
-      n(`markUnreadCompleted/${agentId}/${key || 'default'}`),
-    );
-  };
-
-  clearUnreadCompletedAgent = (agentId: string): void => {
-    if (!this.#get().unreadCompletedTopicsByAgent[agentId]) return;
-    this.#set(
-      produce((state: ChatStore) => {
-        delete state.unreadCompletedTopicsByAgent[agentId];
-      }),
-      false,
-      n(`clearUnreadCompleted/agent/${agentId}`),
-    );
+    void this.#get()
+      .updateTopicStatus?.({
+        agentId,
+        groupId: groupId ?? undefined,
+        status: 'unread',
+        topicId,
+      })
+      ?.then(() => {
+        void getHomeStoreState().refreshAgentList?.();
+      });
   };
 
   /**
-   * Remove the given topicIds from every agent's unread set.
-   * Used when topics are deleted and we don't know which agents marked them unread
-   * (e.g. group conversations where the bot's agentId — not activeAgentId — owns the entry).
+   * Clear a topic's unread mark by flipping `status: 'unread'` back to 'active'.
+   * Only touches topics currently in the unread state — never stomps a
+   * running / paused / completed status. Invoked when the user opens the topic.
    */
-  purgeUnreadTopics = (topicIds: string[]): void => {
-    if (topicIds.length === 0) return;
-    const map = this.#get().unreadCompletedTopicsByAgent;
-    const keys = new Set(topicIds);
-    const affected = Object.entries(map).some(([, set]) => {
-      for (const id of keys) if (set.has(id)) return true;
-      return false;
+  markTopicRead = ({
+    agentId,
+    groupId,
+    topicId,
+  }: {
+    agentId?: string;
+    groupId?: string | null;
+    topicId?: string | null;
+  }): void => {
+    if (!topicId) return;
+
+    const key = topicMapKey({
+      agentId: agentId ?? this.#get().activeAgentId,
+      groupId: groupId ?? this.#get().activeGroupId,
     });
-    if (!affected) return;
+    const topic = this.#get().topicDataMap[key]?.items?.find((t) => t.id === topicId);
+    if (topic?.status !== 'unread') return;
 
-    this.#set(
-      produce((state: ChatStore) => {
-        for (const [agentId, set] of Object.entries(state.unreadCompletedTopicsByAgent)) {
-          for (const id of keys) set.delete(id);
-          if (set.size === 0) delete state.unreadCompletedTopicsByAgent[agentId];
-        }
-      }),
-      false,
-      n(`purgeUnreadTopics/count=${topicIds.length}`),
-    );
-  };
-
-  clearUnreadCompletedTopic = (agentId: string, topicId?: string | null): void => {
-    const key = topicId ?? DEFAULT_TOPIC_UNREAD_KEY;
-    const set = this.#get().unreadCompletedTopicsByAgent[agentId];
-    if (!set?.has(key)) return;
-    this.#set(
-      produce((state: ChatStore) => {
-        const target = state.unreadCompletedTopicsByAgent[agentId];
-        if (!target) return;
-        target.delete(key);
-        if (target.size === 0) delete state.unreadCompletedTopicsByAgent[agentId];
-      }),
-      false,
-      n(`clearUnreadCompleted/${agentId}/${key || 'default'}`),
-    );
+    void this.#get()
+      .updateTopicStatus?.({
+        agentId,
+        groupId: groupId ?? undefined,
+        status: 'active',
+        topicId,
+      })
+      ?.then(() => {
+        void getHomeStoreState().refreshAgentList?.();
+      });
   };
   // ━━━ Message Queue Actions ━━━
 
@@ -789,6 +788,33 @@ export class OperationActionsImpl {
 
     log('[drainQueuedMessages] contextKey=%s, drained %d', contextKey, messages.length);
     return messages;
+  };
+
+  moveQueuedMessages = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    const queue = this.#get().queuedMessages[fromContextKey];
+    if (!queue || queue.length === 0) return;
+
+    this.#set(
+      produce((state: ChatStore) => {
+        const fromQueue = state.queuedMessages[fromContextKey];
+        if (!fromQueue || fromQueue.length === 0) return;
+
+        const toQueue = state.queuedMessages[toContextKey] ?? [];
+        state.queuedMessages[toContextKey] = [...toQueue, ...fromQueue];
+        state.queuedMessages[fromContextKey] = [];
+      }),
+      false,
+      n(`moveQueuedMessages/${fromContextKey}/${toContextKey}`),
+    );
+
+    log(
+      '[moveQueuedMessages] fromContextKey=%s, toContextKey=%s, moved %d',
+      fromContextKey,
+      toContextKey,
+      queue.length,
+    );
   };
 
   removeQueuedMessage = (contextKey: string, messageId: string): void => {

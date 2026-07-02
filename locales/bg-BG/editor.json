@@ -13,6 +13,7 @@
   "actions.expand.on": "Разгъни",
   "actions.typobar.off": "Скрий лентата с форматиране",
   "actions.typobar.on": "Покажи лентата с форматиране",
+  "actions.typobar.title": "Инструмент за форматиране",
   "autoSave.latest": "Заредена е последната версия",
   "autoSave.saved": "Запазено",
   "autoSave.saving": "Автоматично запазване...",

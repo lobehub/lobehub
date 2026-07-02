@@ -16,7 +16,7 @@ export const AiModelTypeSchema = z.enum([
   'chat',
   'embedding',
   'tts',
-  'stt',
+  'asr',
   'image',
   'video',
   'text2music',
@@ -25,7 +25,20 @@ export const AiModelTypeSchema = z.enum([
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
 
+/**
+ * The speech-to-text model type was renamed from the legacy `stt` to the
+ * standard `asr`. Instead of a bulk DB data migration, persisted rows and
+ * external API inputs are normalized at the read/write boundary — only data
+ * that is actually touched gets converted, old untouched rows stay valid.
+ */
+export const normalizeAiModelType = <T extends string | null | undefined>(type: T): T =>
+  (type === 'stt' ? 'asr' : type) as T;
+
 export interface ModelAbilities {
+  /**
+   * whether model supports audio input understanding
+   */
+  audio?: boolean;
   /**
    * whether model supports file upload
    */
@@ -61,6 +74,7 @@ export interface ModelAbilities {
 }
 
 const AiModelAbilitiesSchema = z.object({
+  audio: z.boolean().optional(),
   // files: z.boolean().optional(),
   functionCall: z.boolean().optional(),
   imageOutput: z.boolean().optional(),
@@ -178,6 +192,10 @@ export interface FixedPricingUnit extends PricingUnitBase {
 export interface TieredPricingUnit extends PricingUnitBase {
   strategy: 'tiered';
   tiers: Array<{
+    /**
+     * Original display price before discounts. Billing and cost calculation use `rate`.
+     */
+    originalRate?: number;
     rate: number;
     upTo: number | 'infinity';
   }>;
@@ -185,6 +203,10 @@ export interface TieredPricingUnit extends PricingUnitBase {
 
 export interface LookupPricingUnit extends PricingUnitBase {
   lookup: {
+    /**
+     * Original display prices before discounts. Billing and cost calculation use `prices`.
+     */
+    originalPrices?: Record<string, number>;
     prices: Record<string, number>;
     pricingParams: string[];
   };
@@ -217,7 +239,23 @@ export interface AIBaseModelCard {
    */
   displayName?: string;
   enabled?: boolean;
+  /**
+   * product-line lineage, finer than `organization` (e.g. 'claude-opus',
+   * 'claude-mythos', 'gpt', 'o-series', 'qwen'). Families contain generations;
+   * lets the UI group models and match the same model across aggregator providers.
+   */
+  family?: string;
+  /**
+   * model generation within the family (e.g. 'claude-4.6', 'gpt-5.2', 'qwen3.5').
+   * Only set when confidently derivable from the model line's naming.
+   */
+  generation?: string;
   id: string;
+  /**
+   * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
+   * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
+   */
+  knowledgeCutoff?: string;
   /**
    * whether model is legacy (deprecated but not removed yet)
    */
@@ -257,6 +295,7 @@ export type ExtendParamsType =
   | 'reasoningBudgetToken32k'
   | 'reasoningBudgetToken80k'
   | 'enableReasoning'
+  | 'preserveThinking'
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
   | 'effort'
@@ -266,9 +305,11 @@ export type ExtendParamsType =
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'glm5_2ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
   | 'hy3ReasoningEffort'
+  | 'ring2_6ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
   | 'step3_5ReasoningEffort'
@@ -307,6 +348,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'reasoningBudgetToken32k',
   'reasoningBudgetToken80k',
   'enableReasoning',
+  'preserveThinking',
   'enableAdaptiveThinking',
   'disableContextCaching',
   'effort',
@@ -316,9 +358,11 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
+  'glm5_2ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
   'hy3ReasoningEffort',
+  'ring2_6ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',
   'step3_5ReasoningEffort',
@@ -385,9 +429,9 @@ export interface AITTSModelCard extends AIBaseModelCard {
   type: 'tts';
 }
 
-export interface AISTTModelCard extends AIBaseModelCard {
+export interface AIASRModelCard extends AIBaseModelCard {
   pricing?: Pricing;
-  type: 'stt';
+  type: 'asr';
 }
 
 export interface AIRealtimeModelCard extends AIBaseModelCard {
@@ -462,7 +506,10 @@ export interface AiProviderModelListItem {
   contextWindowTokens?: number;
   displayName?: string;
   enabled: boolean;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   releasedAt?: string;
@@ -480,8 +527,8 @@ export const UpdateAiModelSchema = z.object({
       deploymentName: z.string().optional(),
     })
     .optional(),
-  contextWindowTokens: z.number().nullable().optional(),
-  displayName: z.string().nullable().optional(),
+  contextWindowTokens: z.number().nullish(),
+  displayName: z.string().nullish(),
   settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });
@@ -517,7 +564,10 @@ export interface AiModelForSelect {
   contextWindowTokens?: number;
   description?: string;
   displayName?: string;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   /**
    * Exact per-image price (USD) calculated from pricing units
@@ -537,8 +587,12 @@ export interface EnabledAiModel {
   contextWindowTokens?: number;
   displayName?: string;
   enabled?: boolean;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
+  pricing?: Pricing;
   providerId: string;
   releasedAt?: string;
   settings?: AiModelSettings;

@@ -73,33 +73,37 @@ const coerceInspectorContent = (value: unknown): string | null => {
 interface ToolInspectorSlotProps {
   api: ApiEntry;
   derived: DerivedFixtureProps;
+  toolCallId?: string;
   variant: ToolRenderFixtureVariant;
 }
 
 /** Renders the API's Inspector with the lifecycle-derived props, or a Missing hint. */
-export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(({ api, derived, variant }) => {
-  const Inspector = api.inspector;
-  if (!Inspector) return <Missing kind={'inspector'} />;
+export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(
+  ({ api, derived, toolCallId, variant }) => {
+    const Inspector = api.inspector;
+    if (!Inspector) return <Missing kind={'inspector'} />;
 
-  return (
-    <RenderBoundary label={'Inspector'}>
-      <Inspector
-        apiName={api.apiName}
-        args={derived.args}
-        identifier={api.identifier}
-        isArgumentsStreaming={derived.isArgumentsStreaming}
-        isLoading={derived.isLoading}
-        partialArgs={derived.partialArgs}
-        pluginState={derived.pluginState}
-        result={{
-          content: coerceInspectorContent(variant.content),
-          error: derived.pluginError,
-          state: derived.pluginState,
-        }}
-      />
-    </RenderBoundary>
-  );
-});
+    return (
+      <RenderBoundary label={'Inspector'}>
+        <Inspector
+          apiName={api.apiName}
+          args={derived.args}
+          identifier={api.identifier}
+          isArgumentsStreaming={derived.isArgumentsStreaming}
+          isLoading={derived.isLoading}
+          partialArgs={derived.partialArgs}
+          pluginState={derived.pluginState}
+          toolCallId={toolCallId}
+          result={{
+            content: coerceInspectorContent(variant.content),
+            error: derived.pluginError,
+            state: derived.pluginState,
+          }}
+        />
+      </RenderBoundary>
+    );
+  },
+);
 
 ToolInspectorSlot.displayName = 'ToolInspectorSlot';
 

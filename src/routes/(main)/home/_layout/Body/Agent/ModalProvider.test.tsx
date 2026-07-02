@@ -12,8 +12,12 @@ const mocks = vi.hoisted(() => ({
   toggleAgentBuilderPanel: vi.fn(),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/components/ChatGroupWizard', () => ({
@@ -36,14 +40,21 @@ vi.mock('@/routes/(main)/home/_layout/hooks/useCreateModal', () => ({
   CreateAgentModal: ({
     open,
     onCreateBlank,
+    onOpenSkills,
   }: {
     onCreateBlank: () => Promise<void> | void;
+    onOpenSkills?: (identifier: string) => void;
     open: boolean;
   }) =>
     open ? (
-      <button type="button" onClick={() => void onCreateBlank()}>
-        Create Blank
-      </button>
+      <>
+        <button type="button" onClick={() => void onCreateBlank()}>
+          Start Blank
+        </button>
+        <button type="button" onClick={() => onOpenSkills?.('product-requirements-writer')}>
+          View in Skills
+        </button>
+      </>
     ) : null,
 }));
 
@@ -125,7 +136,7 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(screen.getByText('Create Blank'));
+    fireEvent.click(screen.getByText('Start Blank'));
 
     await waitFor(() => {
       expect(mocks.createAgent).toHaveBeenCalledWith({ groupId: undefined });
@@ -133,5 +144,16 @@ describe('AgentModalProvider', () => {
       expect(mocks.navigate).toHaveBeenCalledWith('/agent/agent-new/profile');
       expect(mocks.refreshAgentList).toHaveBeenCalled();
     });
+  });
+
+  it('opens the Skills tab from the create modal skill completion state', async () => {
+    renderProvider();
+
+    fireEvent.click(screen.getByText('Open create agent modal'));
+    fireEvent.click(screen.getByText('View in Skills'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      '/settings/skill?tab=skill&skill=product-requirements-writer',
+    );
   });
 });

@@ -111,7 +111,7 @@ Generate video from text prompt. This is an async operation.
 **Source**: `apps/cli/src/commands/generate/video.ts`
 
 ```bash
-lh gen video "A cat playing piano" -m <model> -p <provider> [options]
+lh gen video "A cat playing piano" -m < model > -p < provider > [options]
 ```
 
 | Option                      | Description              | Required |
@@ -259,13 +259,13 @@ Image and video generation use an async task pattern:
      UUID from the `async_tasks` table, not `gen_xxx`
    - Returns `{ status, error, generation }` (generation includes asset URLs on success)
    - Before querying, calls `checkTimeoutTasks` which marks tasks as `error` if they have been
-     `pending` or `processing` for more than ~5 minutes (`ASYNC_TASK_TIMEOUT = 298s`)
+     `pending` or `processing` for more than \~5 minutes (`ASYNC_TASK_TIMEOUT = 298s`)
 
 **Server routes**:
 
-- `src/server/routers/lambda/image/index.ts` — image creation (uses `authedProcedure` + `serverDatabase`)
-- `src/server/routers/lambda/video/index.ts` — video creation (uses `authedProcedure` + `serverDatabase`)
-- `src/server/routers/lambda/generation.ts` — status checking
+- `apps/server/src/routers/lambda/image/index.ts` — image creation (uses `authedProcedure` + `serverDatabase`)
+- `apps/server/src/routers/lambda/video/index.ts` — video creation (uses `authedProcedure` + `serverDatabase`)
+- `apps/server/src/routers/lambda/generation.ts` — status checking
 - `packages/database/src/models/asyncTask.ts` — `AsyncTaskModel` including `checkTimeoutTasks`
 
 **Note**: Image/video routes do NOT use the `keyVaults` middleware — they read API keys from the database via `initModelRuntimeFromDB` or `createAsyncCaller`.

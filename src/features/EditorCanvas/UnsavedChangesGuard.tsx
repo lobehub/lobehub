@@ -3,7 +3,7 @@
 import { App } from 'antd';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker } from 'react-router';
 
 interface UnsavedChangesGuardProps {
   isDirty: boolean;

@@ -15,7 +15,8 @@ import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
@@ -28,6 +29,7 @@ import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
+import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
@@ -55,8 +57,20 @@ export const defaultToolIds = [
 /**
  * Tool IDs that are always enabled regardless of user selection.
  * These are core system tools that the agent needs to function properly.
+ *
+ * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
+ * sub-agent dispatch, visual-media fallback) should be available on every agent-mode turn,
+ * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
+ * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
+ * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
+ * from the defaults before the enable checker runs, so they end up disabled there.
+ *
+ * This list is also the source for the chat-input Tools popover's read-only "Pinned"
+ * section (`builtinToolSelectors.fixedDisplayMetaList`), so users can see what the app
+ * keeps active — that selector applies the same manual-mode exclusion to stay truthful.
  */
 export const alwaysOnToolIds = [
+  LobeAgentManifest.identifier,
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
@@ -91,6 +105,27 @@ export const chatModeAllowedToolIds = [
 ];
 
 /**
+ * Tool IDs that make up the group supervisor's orchestration toolset:
+ * dispatching members (speak / broadcast / delegate / executeAgentTask).
+ *
+ * These ship only with the builtin `group-supervisor` agent, but a group can
+ * run a user's own agent as supervisor (`execGroupAgent` passes the configured
+ * supervisor agentId, not the builtin slug). Such a run is verified as the
+ * group's supervisor, and the tools engine uses this list — the single source
+ * of truth — to both add these tools to the agent-mode candidate set and enable
+ * them. Without it the supervisor has no way to dispatch members and degrades
+ * to a single-agent monologue.
+ *
+ * NOTE: `lobe-group-agent-builder` (member CRUD: searchAgent / inviteAgent /
+ * createAgent) is deliberately excluded — it has no server runtime registered
+ * (`apps/server/.../serverRuntimes`), so advertising it on a server-side
+ * supervisor run would throw `Builtin tool "lobe-group-agent-builder" is not
+ * implemented` the moment the model called it. Add it back here once a server
+ * runtime exists.
+ */
+export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
+
+/**
  * Tool IDs whose enabled state is decided by runtime / system conditions
  * (e.g. cloud runtime, agent has documents attached, knowledge base configured,
  * desktop gateway available), NOT by the user's plugin selection.
@@ -114,7 +149,14 @@ export const runtimeManagedToolIds = [
   WebBrowsingManifest.identifier,
 ];
 
-export const builtinTools: LobeBuiltinTool[] = [
+const builtinToolRegistry: LobeBuiltinTool[] = [
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: VerifyToolManifest.identifier,
+    manifest: VerifyToolManifest,
+    type: 'builtin',
+  },
   {
     discoverable: false,
     hidden: true,
@@ -305,9 +347,35 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
+    // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.
+    resolveManifest: resolveLobeAgentManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: LobeDeliveryCheckerManifest.identifier,
+    manifest: LobeDeliveryCheckerManifest,
     type: 'builtin',
   },
 ];
+
+/**
+ * Hoist each tool's `manifest.meta` identity (title / avatar / description / tags)
+ * onto the top level, so context-free consumers (UI lists, discovery, settings,
+ * token estimation) read `tool.title` / `tool.avatar` directly instead of reaching
+ * into `manifest.meta`. This keeps identity stable and decoupled from `manifest`,
+ * which may be produced per-turn by a context-aware `resolveManifest`.
+ *
+ * Optional chaining is defensive: this runs at module load, and tests routinely
+ * mock individual builtin-tool packages (a stubbed manifest may lack `meta`). In
+ * production every builtin manifest has a `meta`, so the hoisted fields are real.
+ */
+export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) => ({
+  ...tool,
+  avatar: tool.manifest?.meta?.avatar,
+  description: tool.manifest?.meta?.description,
+  tags: tool.manifest?.meta?.tags,
+  title: tool.manifest?.meta?.title,
+}));
 
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),

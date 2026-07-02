@@ -1,3 +1,12 @@
+import {
+  formatCopyDocumentResult,
+  formatCreateDocumentResult,
+  formatModifyDocumentResult,
+  formatRemoveDocumentResult,
+  formatRenameDocumentResult,
+  formatReplaceDocumentResult,
+  formatUpdateLoadRuleResult,
+} from '@lobechat/prompts';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -70,6 +79,8 @@ interface AgentDocumentToolTriggerInput {
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
+type MaybePromise<T> = T | Promise<T>;
+
 export interface AgentDocumentsRuntimeService {
   copyDocument: (
     params: CopyDocumentArgs & {
@@ -130,12 +141,38 @@ export interface AgentDocumentsRuntimeService {
   ) => Promise<AgentDocumentRecord | undefined>;
 }
 
+export interface AgentDocumentsRuntimeOptions {
+  /**
+   * Build a shareable URL that opens a document in the standalone document
+   * route. When provided and it returns a URL, the create result surfaces the
+   * link so the agent can relay it to the user (e.g. in an IM channel).
+   */
+  getDocumentUrl?: (params: {
+    agentId: string;
+    documentId: string;
+  }) => MaybePromise<string | undefined>;
+}
+
 export class AgentDocumentsExecutionRuntime {
-  constructor(private service: AgentDocumentsRuntimeService) {}
+  constructor(
+    private service: AgentDocumentsRuntimeService,
+    private options: AgentDocumentsRuntimeOptions = {},
+  ) {}
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
     if (!context?.agentId) return;
     return context.agentId;
+  }
+
+  /**
+   * Resolve a shareable document url so every document-referencing result can
+   * hand the user a clickable link instead of a raw internal id. Returns
+   * undefined when no url builder is configured or the `documents` row id is
+   * unknown — callers fall back to the id-only result wording in that case.
+   */
+  private buildDocumentUrl(agentId: string, documentId?: string): MaybePromise<string | undefined> {
+    if (!documentId) return undefined;
+    return this.options.getDocumentUrl?.({ agentId, documentId });
   }
 
   private getCurrentDocumentId(context?: AgentDocumentOperationContext) {
@@ -235,12 +272,20 @@ export class AgentDocumentsExecutionRuntime {
       scope === 'currentTopic'
         ? await this.service.listTopicDocuments({ agentId, scope, sourceType, topicId: topicId! })
         : await this.service.listDocuments({ agentId, scope, sourceType });
-    const list = docs.map((d) => ({
-      ...(d.documentId ? { documentId: d.documentId } : {}),
-      filename: d.filename ?? d.title ?? '',
-      id: d.id,
-      title: d.title,
-    }));
+    const list = await Promise.all(
+      docs.map(async (d) => {
+        const url = await this.buildDocumentUrl(agentId, d.documentId);
+        return {
+          ...(d.documentId ? { documentId: d.documentId } : {}),
+          filename: d.filename ?? d.title ?? '',
+          id: d.id,
+          title: d.title,
+          // The clickable link lets the agent reference any listed document to
+          // the user; omitted when no url builder is configured.
+          ...(url ? { url } : {}),
+        };
+      }),
+    );
 
     return {
       content: JSON.stringify(list),
@@ -282,8 +327,14 @@ export class AgentDocumentsExecutionRuntime {
         : await this.service.createDocument({ ...args, ...toolTriggerInput, agentId });
     if (!created) return { content: 'Failed to create agent document.', success: false };
 
+    const title = created.title || args.title;
+    // The document route is keyed by the `documents` id; the URL lets the agent
+    // hand the user a clickable link. `created.id` (the agentDocuments row id)
+    // is kept separately because subsequent edit/read/remove calls key off it.
+    const url = await this.buildDocumentUrl(agentId, created.documentId);
+
     return {
-      content: `Created document "${created.title || args.title}" (${created.id}).`,
+      content: formatCreateDocumentResult({ id: created.id, title, url }),
       state: { agentDocumentId: created.id, documentId: created.documentId },
       success: true,
     };
@@ -335,8 +386,14 @@ export class AgentDocumentsExecutionRuntime {
     const doc = await this.service.replaceDocumentContent({ ...args, agentId });
     if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
 
+    const url = await this.buildDocumentUrl(agentId, doc.documentId ?? existing.documentId);
+
     return {
-      content: `Updated document ${args.id}.`,
+      content: formatReplaceDocumentResult({
+        id: args.id,
+        title: doc.title ?? existing.title,
+        url,
+      }),
       state: { id: args.id, updated: true },
       success: true,
     };
@@ -374,8 +431,15 @@ export class AgentDocumentsExecutionRuntime {
       success: true,
     }));
 
+    const url = await this.buildDocumentUrl(agentId, updated.documentId ?? existing.documentId);
+
     return {
-      content: `Modified document ${args.id}. Applied ${results.length} operation(s).`,
+      content: formatModifyDocumentResult({
+        id: args.id,
+        operationCount: results.length,
+        title: updated.title ?? existing.title,
+        url,
+      }),
       state: {
         id: args.id,
         results,
@@ -402,7 +466,7 @@ export class AgentDocumentsExecutionRuntime {
     if (!deleted) return { content: `Document not found: ${args.id}`, success: false };
 
     return {
-      content: `Removed document ${args.id}.`,
+      content: formatRemoveDocumentResult({ id: args.id }),
       state: { deleted: true, id: args.id },
       success: true,
     };
@@ -430,8 +494,10 @@ export class AgentDocumentsExecutionRuntime {
     const doc = await this.service.renameDocument({ ...args, agentId });
     if (!doc) return { content: `Failed to rename document ${args.id}.`, success: false };
 
+    const url = await this.buildDocumentUrl(agentId, doc.documentId ?? existing.documentId);
+
     return {
-      content: `Renamed document ${args.id} to "${args.newTitle}".`,
+      content: formatRenameDocumentResult({ id: args.id, title: args.newTitle, url }),
       state: { id: args.id, newTitle: args.newTitle, renamed: true },
       success: true,
     };
@@ -452,8 +518,15 @@ export class AgentDocumentsExecutionRuntime {
     const copied = await this.service.copyDocument({ ...args, agentId });
     if (!copied) return { content: `Document not found: ${args.id}`, success: false };
 
+    const url = await this.buildDocumentUrl(agentId, copied.documentId);
+
     return {
-      content: `Copied document ${args.id} to ${copied.id}.`,
+      content: formatCopyDocumentResult({
+        fromId: args.id,
+        id: copied.id,
+        title: copied.title,
+        url,
+      }),
       state: { copiedFromId: args.id, newDocumentId: copied.id },
       success: true,
     };
@@ -474,8 +547,10 @@ export class AgentDocumentsExecutionRuntime {
     const updated = await this.service.updateLoadRule({ ...args, agentId });
     if (!updated) return { content: `Document not found: ${args.id}`, success: false };
 
+    const url = await this.buildDocumentUrl(agentId, updated.documentId);
+
     return {
-      content: `Updated load rule for document ${args.id}.`,
+      content: formatUpdateLoadRuleResult({ id: args.id, title: updated.title, url }),
       state: { applied: true, rule: args.rule },
       success: true,
     };

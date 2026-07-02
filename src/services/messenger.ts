@@ -11,8 +11,12 @@ class MessengerService {
     return lambdaClient.messenger.peekLinkToken.query({ randomId });
   };
 
-  listAgentsForBinding = async () => {
-    return lambdaClient.messenger.listAgentsForBinding.query();
+  listAgentsForBinding = async (workspaceId?: string | null) => {
+    return lambdaClient.messenger.listAgentsForBinding.query({ workspaceId: workspaceId ?? null });
+  };
+
+  listBindingScopes = async () => {
+    return lambdaClient.messenger.listBindingScopes.query();
   };
 
   confirmLink = async (params: { initialAgentId: string; randomId: string }) => {

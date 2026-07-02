@@ -10,6 +10,8 @@ import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import AuthCard from '@/features/AuthCard';
 import { useIsDark } from '@/hooks/useIsDark';
 
+import type { MarketAuthScene } from './scenes';
+
 const styles = createStaticStyles(({ css }) => ({
   container: css`
     padding-block-start: 32px;
@@ -30,12 +32,27 @@ interface MarketAuthConfirmModalProps {
   onCancel: () => void;
   onConfirm: () => void;
   open: boolean;
+  scene?: MarketAuthScene;
 }
 
 const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
-  ({ open, onConfirm, onCancel }) => {
+  ({ open, onConfirm, onCancel, scene = 'default' }) => {
     const { t } = useTranslation('marketAuth');
     const isDarkMode = useIsDark();
+
+    // Resolve scene-specific copy, falling back to the generic community-profile
+    // wording when a scene has no dedicated key.
+    const ts = (key: string, options?: Record<string, unknown>): string => {
+      const fallback = t(`authorize.${key}` as any, options as any) as string;
+      if (scene === 'default') return fallback;
+      return t(
+        `authorize.scenes.${scene}.${key}` as any,
+        {
+          ...options,
+          defaultValue: fallback,
+        } as any,
+      ) as string;
+    };
 
     const footer = (
       <Text align={'center'} as={'div'} fontSize={13} type={'secondary'}>
@@ -66,8 +83,8 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
     return (
       <Modal
         centered
-        cancelText={t('authorize.cancel')}
-        okText={t('authorize.confirm')}
+        cancelText={ts('cancel')}
+        okText={ts('confirm')}
         open={open}
         title={null}
         width={440}
@@ -83,12 +100,12 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
         <AuthCard
           footer={footer}
           paddingBlock={'40px 20px'}
-          subtitle={t('authorize.subtitle')}
-          title={t('authorize.title')}
+          subtitle={ts('subtitle')}
+          title={ts('title')}
           width={'100%'}
         >
           <Block padding={16} variant={'filled'}>
-            <Text align={'center'}>{t('authorize.description', { appName: BRANDING_NAME })}</Text>
+            <Text align={'center'}>{ts('description', { appName: BRANDING_NAME })}</Text>
           </Block>
         </AuthCard>
       </Modal>

@@ -151,6 +151,13 @@ class ChatGroupService {
   ): Promise<{ groupId: string; supervisorAgentId: string } | null> => {
     return lambdaClient.group.duplicateGroup.mutate({ groupId, newTitle });
   };
+
+  transferGroup = (
+    groupId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ groupId: string } | null> => {
+    return lambdaClient.group.transferGroup.mutate({ groupId, targetWorkspaceId });
+  };
 }
 
 export const chatGroupService = new ChatGroupService();

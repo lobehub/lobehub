@@ -27,7 +27,9 @@ const totalAiProviderModelList = (s: AIProviderStoreState) => s.aiProviderModelL
 const isEmptyAiProviderModelList = (s: AIProviderStoreState) => totalAiProviderModelList(s) === 0;
 
 const getModelCard = (model: string, provider: string) => (s: AIProviderStoreState) =>
-  s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
+  s.enabledAiModels?.find(
+    (item) => item.id === model && (provider ? item.providerId === provider : true),
+  ) || s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
 
 const hasRemoteModels = (s: AIProviderStoreState) =>
   s.aiProviderModelList.some((m) => m.source === AiModelSourceEnum.Remote);
@@ -66,6 +68,12 @@ const isModelSupportVideo = (id: string, provider: string) => (s: AIProviderStor
   const model = getEnabledModelById(id, provider)(s);
 
   return model?.abilities?.video;
+};
+
+const isModelSupportAudio = (id: string, provider: string) => (s: AIProviderStoreState) => {
+  const model = getEnabledModelById(id, provider)(s);
+
+  return model?.abilities?.audio || false;
 };
 
 const isModelSupportImageOutput = (id: string, provider: string) => (s: AIProviderStoreState) => {
@@ -160,6 +168,7 @@ export const aiModelSelectors = {
   isModelHasContextWindowToken,
   isModelHasExtendParams,
   isModelLoading,
+  isModelSupportAudio,
   isModelSupportFiles,
   isModelSupportImageOutput,
   isModelSupportReasoning,

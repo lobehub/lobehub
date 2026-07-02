@@ -7,6 +7,7 @@
   "config.header.title": "絵画",
   "config.height.label": "高さ",
   "config.imageNum.label": "画像数",
+  "config.imageUpload.maxCountReached": "参照画像は最大{{count}}枚まで追加できます",
   "config.imageUrl.label": "参考画像",
   "config.imageUrls.label": "参考画像",
   "config.model.label": "モデル",

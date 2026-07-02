@@ -5,7 +5,7 @@ import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
@@ -15,12 +15,12 @@ import type { ActionTagData } from './types';
 /**
  * Collects all installed skills and tools, returning them as ActionTagData[].
  * Skills: builtinSkills, lobehubSkillServers, marketAgentSkills, userAgentSkills
- * Tools:  installedPlugins (excluding skill-type entries), klavisServers
+ * Tools:  installedPlugins (excluding skill-type entries), composioServers
  */
 export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   const builtinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
   const installedPlugins = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
+  const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   const lobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
@@ -29,10 +29,14 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
     const items: ActionTagData[] = [];
 
     // --- Build skill set (identifier → { label, icon }) ---
-    const skillMap = new Map<string, { icon?: string; label: string }>();
+    const skillMap = new Map<string, { description?: string; icon?: string; label: string }>();
 
     for (const item of builtinSkills) {
-      skillMap.set(item.identifier, { icon: item.avatar, label: item.name || item.identifier });
+      skillMap.set(item.identifier, {
+        description: item.description,
+        icon: item.avatar,
+        label: item.title || item.name || item.identifier,
+      });
     }
     for (const item of lobehubSkillServers) {
       if (!skillMap.has(item.identifier)) {
@@ -41,12 +45,18 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
     }
     for (const item of marketAgentSkills) {
       if (!skillMap.has(item.identifier)) {
-        skillMap.set(item.identifier, { label: item.name || item.identifier });
+        skillMap.set(item.identifier, {
+          description: item.description || item.manifest?.description,
+          label: item.name || item.identifier,
+        });
       }
     }
     for (const item of userAgentSkills) {
       if (!skillMap.has(item.identifier)) {
-        skillMap.set(item.identifier, { label: item.name || item.identifier });
+        skillMap.set(item.identifier, {
+          description: item.description || item.manifest?.description,
+          label: item.name || item.identifier,
+        });
       }
     }
 
@@ -60,19 +70,19 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
         toolMap.set(item.identifier, { icon: item.avatar, label: item.title || item.identifier });
       }
     }
-    for (const item of klavisServers) {
+    for (const item of composioServers) {
       if (skillMap.has(item.identifier)) continue;
       if (!toolMap.has(item.identifier)) {
         toolMap.set(item.identifier, {
           icon: item.icon,
-          label: item.serverName || item.identifier,
+          label: item.label || item.identifier,
         });
       }
     }
 
     // --- Merge into output ---
-    for (const [id, { icon, label }] of skillMap) {
-      items.push({ category: 'skill', icon, label, type: id });
+    for (const [id, { description, icon, label }] of skillMap) {
+      items.push({ category: 'skill', description, icon, label, type: id });
     }
     for (const [id, { icon, label }] of toolMap) {
       items.push({ category: 'tool', icon, label, type: id });
@@ -82,7 +92,7 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   }, [
     builtinSkills,
     installedPlugins,
-    klavisServers,
+    composioServers,
     lobehubSkillServers,
     marketAgentSkills,
     userAgentSkills,

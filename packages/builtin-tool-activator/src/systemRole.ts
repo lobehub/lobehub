@@ -74,9 +74,9 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
 4. If credential doesn't exist:
    - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
-   - For Klavis-managed services (Slack, Google Drive, Airtable, Jira, etc.)
-     → use \`connectKlavisService\` after activating \`lobe-creds\`. The full list of
-     available Klavis services is shown in \`<klavis_integrations>\` inside the
+   - For Composio-managed services (Slack, Google Drive, Airtable, Jira, etc.)
+     → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
+     available Composio services is shown in \`<composio_integrations>\` inside the
      lobe-creds system prompt.
    - For API keys/tokens → guide user to save with \`saveCreds\`
 5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables

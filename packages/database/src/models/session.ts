@@ -16,15 +16,27 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, sessions);
+
+  private agentsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents);
+
+  private agentsToSessionsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
   // **************** Query *************** //
 
   query = async ({ current = 0, pageSize = 9999 } = {}) => {
@@ -44,7 +56,7 @@ export class SessionModel {
       .leftJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
       .leftJoin(agents, eq(agentsToSessions.agentId, agents.id))
       .leftJoin(sessionGroups, eq(sessions.groupId, sessionGroups.id))
-      .where(and(eq(sessions.userId, this.userId), not(eq(sessions.slug, INBOX_SESSION_ID))))
+      .where(and(this.ownership(), not(eq(sessions.slug, INBOX_SESSION_ID))))
       .orderBy(desc(sessions.updatedAt))
       .limit(pageSize)
       .offset(offset);
@@ -76,7 +88,7 @@ export class SessionModel {
 
     const groups = await this.db.query.sessionGroups.findMany({
       orderBy: [asc(sessionGroups.sort), desc(sessionGroups.createdAt)],
-      where: eq(sessions.userId, this.userId),
+      where: and(this.ownership()),
     });
 
     const mappedSessions = result.map((item) => this.mapSessionItem(item as any));
@@ -108,12 +120,7 @@ export class SessionModel {
         session: sessions,
       })
       .from(sessions)
-      .where(
-        and(
-          or(eq(sessions.id, idOrSlug), eq(sessions.slug, idOrSlug)),
-          eq(sessions.userId, this.userId),
-        ),
-      )
+      .where(and(or(eq(sessions.id, idOrSlug), eq(sessions.slug, idOrSlug)), this.ownership()))
       .leftJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
       .leftJoin(agents, eq(agentsToSessions.agentId, agents.id))
       .leftJoin(sessionGroups, eq(sessions.groupId, sessionGroups.id))
@@ -136,7 +143,7 @@ export class SessionModel {
       .from(sessions)
       .where(
         genWhere([
-          eq(sessions.userId, this.userId),
+          this.ownership(),
           params?.range
             ? genRangeWhere(params.range, sessions.createdAt, (date) => date.toDate())
             : undefined,
@@ -156,7 +163,7 @@ export class SessionModel {
     const result = await this.db
       .select({ id: sessions.id })
       .from(sessions)
-      .where(eq(sessions.userId, this.userId))
+      .where(and(this.ownership()))
       .limit(n + 1);
 
     return result.length > n;
@@ -184,7 +191,7 @@ export class SessionModel {
     return this.db.transaction(async (trx) => {
       if (slug) {
         const existResult = await trx.query.sessions.findFirst({
-          where: and(eq(sessions.slug, slug), eq(sessions.userId, this.userId)),
+          where: and(eq(sessions.slug, slug), this.ownership()),
         });
 
         if (existResult) return existResult;
@@ -220,15 +227,19 @@ export class SessionModel {
       if (type === 'group') {
         const result = await trx
           .insert(sessions)
-          .values({
-            ...session,
-            createdAt: new Date(),
-            id,
-            slug,
-            type,
-            updatedAt: new Date(),
-            userId: this.userId,
-          })
+          .values(
+            buildWorkspacePayload(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                ...session,
+                createdAt: new Date(),
+                id,
+                slug,
+                type,
+                updatedAt: new Date(),
+              },
+            ),
+          )
           .returning();
 
         return result[0];
@@ -236,48 +247,57 @@ export class SessionModel {
 
       const newAgents = await trx
         .insert(agents)
-        .values({
-          avatar,
-          backgroundColor,
-          chatConfig: chatConfig || {},
-          createdAt: new Date(),
-          description,
-          editorData: editorData || null,
-          fewShots: examples || null, // Map examples to fewShots field
-          id: idGenerator('agents'),
-          marketIdentifier: identifier || marketIdentifier,
-          model: typeof model === 'string' ? model : null,
-          openingMessage,
-          openingQuestions,
-          params: params || {},
-          plugins,
-          provider,
-          systemRole,
-          tags,
-          title,
-          tts: tts || {},
-          updatedAt: new Date(),
-          userId: this.userId,
-        })
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              avatar,
+              backgroundColor,
+              chatConfig: chatConfig || {},
+              createdAt: new Date(),
+              description,
+              editorData: editorData || null,
+              fewShots: examples || null, // Map examples to fewShots field
+              id: idGenerator('agents'),
+              marketIdentifier: identifier || marketIdentifier,
+              model: typeof model === 'string' ? model : null,
+              openingMessage,
+              openingQuestions,
+              params: params || {},
+              plugins,
+              provider,
+              systemRole,
+              tags,
+              title,
+              tts: tts || {},
+              updatedAt: new Date(),
+            },
+          ),
+        )
         .returning();
 
       const result = await trx
         .insert(sessions)
-        .values({
-          ...session,
-          createdAt: new Date(),
-          id,
-          slug,
-          type,
-          updatedAt: new Date(),
-          userId: this.userId,
-        })
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              ...session,
+              createdAt: new Date(),
+              id,
+              slug,
+              type,
+              updatedAt: new Date(),
+            },
+          ),
+        )
         .returning();
 
       await trx.insert(agentsToSessions).values({
         agentId: newAgents[0].id,
         sessionId: id,
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       });
 
       return result[0];
@@ -286,7 +306,7 @@ export class SessionModel {
 
   createInbox = async (defaultAgentConfig: PartialDeep<LobeAgentConfig>) => {
     const item = await this.db.query.sessions.findFirst({
-      where: and(eq(sessions.userId, this.userId), eq(sessions.slug, INBOX_SESSION_ID)),
+      where: and(this.ownership(), eq(sessions.slug, INBOX_SESSION_ID)),
     });
 
     if (item) return;
@@ -299,13 +319,15 @@ export class SessionModel {
   };
 
   batchCreate = async (newSessions: NewSession[]) => {
-    const sessionsToInsert = newSessions.map((s) => {
-      return {
-        ...s,
-        id: this.genId(),
-        userId: this.userId,
-      };
-    });
+    const sessionsToInsert = newSessions.map((s) =>
+      buildWorkspacePayload(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        {
+          ...s,
+          id: this.genId(),
+        },
+      ),
+    );
 
     return this.db.insert(sessions).values(sessionsToInsert);
   };
@@ -343,19 +365,17 @@ export class SessionModel {
       const links = await trx
         .select({ agentId: agentsToSessions.agentId })
         .from(agentsToSessions)
-        .where(and(eq(agentsToSessions.sessionId, id), eq(agentsToSessions.userId, this.userId)));
+        .where(and(eq(agentsToSessions.sessionId, id), this.agentsToSessionsOwnership()));
 
       const agentIds = links.map((link) => link.agentId);
 
       // Delete links in agentsToSessions
       await trx
         .delete(agentsToSessions)
-        .where(and(eq(agentsToSessions.sessionId, id), eq(agentsToSessions.userId, this.userId)));
+        .where(and(eq(agentsToSessions.sessionId, id), this.agentsToSessionsOwnership()));
 
       // Delete the session (this will cascade delete messages, topics, etc.)
-      const result = await trx
-        .delete(sessions)
-        .where(and(eq(sessions.id, id), eq(sessions.userId, this.userId)));
+      const result = await trx.delete(sessions).where(and(eq(sessions.id, id), this.ownership()));
 
       // Delete orphaned agents
       await this.clearOrphanAgent(agentIds, trx);
@@ -375,23 +395,19 @@ export class SessionModel {
       const links = await trx
         .select({ agentId: agentsToSessions.agentId })
         .from(agentsToSessions)
-        .where(
-          and(inArray(agentsToSessions.sessionId, ids), eq(agentsToSessions.userId, this.userId)),
-        );
+        .where(and(inArray(agentsToSessions.sessionId, ids), this.agentsToSessionsOwnership()));
 
       const agentIds = [...new Set(links.map((link) => link.agentId))];
 
       // Delete links in agentsToSessions
       await trx
         .delete(agentsToSessions)
-        .where(
-          and(inArray(agentsToSessions.sessionId, ids), eq(agentsToSessions.userId, this.userId)),
-        );
+        .where(and(inArray(agentsToSessions.sessionId, ids), this.agentsToSessionsOwnership()));
 
       // Delete the sessions
       const result = await trx
         .delete(sessions)
-        .where(and(inArray(sessions.id, ids), eq(sessions.userId, this.userId)));
+        .where(and(inArray(sessions.id, ids), this.ownership()));
 
       // Delete orphaned agents
       await this.clearOrphanAgent(agentIds, trx);
@@ -405,14 +421,9 @@ export class SessionModel {
    */
   deleteAll = async () => {
     return this.db.transaction(async (trx) => {
-      // Delete all agentsToSessions for this user
-      await trx.delete(agentsToSessions).where(eq(agentsToSessions.userId, this.userId));
-
-      // Delete all agents that were only used by this user's sessions
-      await trx.delete(agents).where(eq(agents.userId, this.userId));
-
-      // Delete all sessions for this user
-      return trx.delete(sessions).where(eq(sessions.userId, this.userId));
+      await trx.delete(agentsToSessions).where(this.agentsToSessionsOwnership());
+      await trx.delete(agents).where(this.agentsOwnership());
+      return trx.delete(sessions).where(this.ownership());
     });
   };
 
@@ -435,7 +446,7 @@ export class SessionModel {
     if (orphanedAgentIds.length > 0) {
       await trx
         .delete(agents)
-        .where(and(inArray(agents.id, orphanedAgentIds), eq(agents.userId, this.userId)));
+        .where(and(inArray(agents.id, orphanedAgentIds), this.agentsOwnership()));
     }
   };
 
@@ -445,7 +456,7 @@ export class SessionModel {
     return this.db
       .update(sessions)
       .set(data)
-      .where(and(eq(sessions.id, id), eq(sessions.userId, this.userId)))
+      .where(and(eq(sessions.id, id), this.ownership()))
       .returning();
   };
 
@@ -505,7 +516,7 @@ export class SessionModel {
     return this.db
       .update(agents)
       .set(mergedValue)
-      .where(and(eq(agents.id, session.agent.id), eq(agents.userId, this.userId)));
+      .where(and(eq(agents.id, session.agent.id), this.agentsOwnership()));
   };
 
   // **************** Helper *************** //
@@ -598,7 +609,7 @@ export class SessionModel {
         // Keep deterministic ordering for keyword search results
         orderBy: [asc(agents.id)],
         where: and(
-          eq(agents.userId, this.userId),
+          this.agentsOwnership(),
           sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
         ),
         with: { agentsToSessions: { columns: {}, with: { session: true } } },

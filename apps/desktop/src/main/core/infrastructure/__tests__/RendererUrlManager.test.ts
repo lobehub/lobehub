@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockPathExistsSync = vi.fn();
+const mockProtocolHandle = vi.fn();
 
 vi.mock('electron', () => ({
   app: {
     isReady: vi.fn(() => true),
     whenReady: vi.fn(() => Promise.resolve()),
   },
+  net: {
+    fetch: vi.fn(),
+  },
   protocol: {
-    handle: vi.fn(),
+    handle: mockProtocolHandle,
   },
 }));
 
@@ -45,6 +49,7 @@ describe('RendererUrlManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathExistsSync.mockReset();
+    mockProtocolHandle.mockReset();
     mockIsDev = false;
     delete process.env['ELECTRON_RENDERER_URL'];
   });
@@ -79,8 +84,39 @@ describe('RendererUrlManager', () => {
     });
   });
 
-  describe('configureRendererLoader (dev mode)', () => {
-    it('should use ELECTRON_RENDERER_URL when available in dev mode', async () => {
+  describe('buildRendererUrl', () => {
+    it('always returns app://renderer regardless of dev/prod', async () => {
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const prodManager = new RendererUrlManager();
+      expect(prodManager.buildRendererUrl('/')).toBe('app://renderer/');
+      expect(prodManager.buildRendererUrl('/settings')).toBe('app://renderer/settings');
+
+      mockIsDev = true;
+      process.env['ELECTRON_RENDERER_URL'] = 'http://localhost:5173';
+      const devManager = new RendererUrlManager();
+      expect(devManager.buildRendererUrl('/')).toBe('app://renderer/');
+      expect(devManager.buildRendererUrl('/settings')).toBe('app://renderer/settings');
+    });
+
+    it('prefixes a slash when the input lacks one', async () => {
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      expect(manager.buildRendererUrl('settings')).toBe('app://renderer/settings');
+    });
+  });
+
+  describe('configureRendererLoader', () => {
+    it('registers the app:// protocol handler in prod', async () => {
+      mockIsDev = false;
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      manager.configureRendererLoader();
+
+      expect(mockProtocolHandle).toHaveBeenCalledTimes(1);
+      expect(mockProtocolHandle.mock.calls[0][0]).toBe('app');
+    });
+
+    it('registers the app:// protocol handler in dev (Vite fallback)', async () => {
       mockIsDev = true;
       process.env['ELECTRON_RENDERER_URL'] = 'http://localhost:5173';
 
@@ -88,34 +124,20 @@ describe('RendererUrlManager', () => {
       const manager = new RendererUrlManager();
       manager.configureRendererLoader();
 
-      expect(manager.buildRendererUrl('/')).toBe('http://localhost:5173/');
-      expect(manager.buildRendererUrl('/settings')).toBe('http://localhost:5173/settings');
+      expect(mockProtocolHandle).toHaveBeenCalledTimes(1);
+      expect(mockProtocolHandle.mock.calls[0][0]).toBe('app');
     });
 
-    it('should normalize trailing slashes from ELECTRON_RENDERER_URL', async () => {
+    it('still registers in dev when ELECTRON_RENDERER_URL is missing (static fallback)', async () => {
       mockIsDev = true;
-      process.env['ELECTRON_RENDERER_URL'] = 'http://localhost:5173/';
-
       const { RendererUrlManager } = await import('../RendererUrlManager');
       const manager = new RendererUrlManager();
       manager.configureRendererLoader();
 
-      expect(manager.buildRendererUrl('/')).toBe('http://localhost:5173/');
-      expect(manager.buildRendererUrl('/overlay')).toBe('http://localhost:5173/overlay');
+      expect(mockProtocolHandle).toHaveBeenCalledTimes(1);
     });
 
-    it('should fall back to protocol handler when ELECTRON_RENDERER_URL is not set', async () => {
-      mockIsDev = true;
-
-      const { RendererUrlManager } = await import('../RendererUrlManager');
-      const manager = new RendererUrlManager();
-      mockPathExistsSync.mockReturnValue(true);
-      manager.configureRendererLoader();
-
-      expect(manager.buildRendererUrl('/')).toBe('app://renderer/');
-    });
-
-    it('should use protocol handler when DESKTOP_RENDERER_STATIC is enabled regardless of ELECTRON_RENDERER_URL', async () => {
+    it('uses static fallback when DESKTOP_RENDERER_STATIC overrides ELECTRON_RENDERER_URL', async () => {
       mockIsDev = true;
       process.env['ELECTRON_RENDERER_URL'] = 'http://localhost:5173';
 
@@ -124,10 +146,10 @@ describe('RendererUrlManager', () => {
 
       const { RendererUrlManager } = await import('../RendererUrlManager');
       const manager = new RendererUrlManager();
-      mockPathExistsSync.mockReturnValue(true);
       manager.configureRendererLoader();
 
       expect(manager.buildRendererUrl('/')).toBe('app://renderer/');
+      expect(mockProtocolHandle).toHaveBeenCalledTimes(1);
     });
   });
 });

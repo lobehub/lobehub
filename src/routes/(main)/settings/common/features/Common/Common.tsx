@@ -2,8 +2,7 @@
 
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Segmented } from 'antd';
+import { Select, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -95,22 +94,22 @@ const Common = memo(() => {
       },
       {
         children: (
-          <Segmented
-            options={[
+          <Tabs
+            items={[
               {
                 icon: <Icon icon={Ban} size={16} />,
+                key: 'disabled',
                 label: t('settingAppearance.animationMode.disabled'),
-                value: 'disabled',
               },
               {
                 icon: <Icon icon={Gauge} size={16} />,
+                key: 'agile',
                 label: t('settingAppearance.animationMode.agile'),
-                value: 'agile',
               },
               {
                 icon: <Icon icon={Waves} size={16} />,
+                key: 'elegant',
                 label: t('settingAppearance.animationMode.elegant'),
-                value: 'elegant',
               },
             ]}
           />
@@ -119,20 +118,21 @@ const Common = memo(() => {
         label: t('settingAppearance.animationMode.title'),
         minWidth: undefined,
         name: 'animationMode',
+        valuePropName: 'activeKey',
       },
       {
         children: (
-          <Segmented
-            options={[
+          <Tabs
+            items={[
               {
                 icon: <Icon icon={Ban} size={16} />,
+                key: 'disabled',
                 label: t('settingAppearance.contextMenuMode.disabled'),
-                value: 'disabled',
               },
               {
                 icon: <Icon icon={Mouse} size={16} />,
+                key: 'default',
                 label: t('settingAppearance.contextMenuMode.default'),
-                value: 'default',
               },
             ]}
           />
@@ -141,6 +141,7 @@ const Common = memo(() => {
         label: t('settingAppearance.contextMenuMode.title'),
         minWidth: undefined,
         name: 'contextMenuMode',
+        valuePropName: 'activeKey',
       },
 
       {

@@ -1,23 +1,37 @@
 'use client';
 
-import { type KlavisServerType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
-import { Alert, Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type ComposioAppType } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
+import { ActionIcon, Alert, Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { createStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus, klavisStoreSelectors } from '@/store/tool/slices/klavisStore';
+import { type ComposioServer } from '@/store/tool/slices/composioStore';
+import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+const useStyles = createStyles(({ css }) => ({
+  // Reveal the remove icon only when the row is hovered.
+  row: css`
+    &:hover .tool-auth-remove {
+      opacity: 1;
+    }
+  `,
+  removeIcon: css`
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  `,
+}));
 
 // Tools that require Market authentication
 const MARKET_AUTH_TOOLS = [
@@ -31,9 +45,9 @@ const MARKET_AUTH_TOOLS = [
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
-interface PendingKlavisTool extends KlavisServerType {
-  authType: 'klavis';
-  server?: KlavisServer;
+interface PendingComposioTool extends ComposioAppType {
+  authType: 'composio';
+  server?: ComposioServer;
 }
 
 interface PendingMarketTool {
@@ -43,15 +57,16 @@ interface PendingMarketTool {
   label: string;
 }
 
-type PendingAuthTool = PendingKlavisTool | PendingMarketTool;
+type PendingAuthTool = PendingComposioTool | PendingMarketTool;
 
-interface KlavisToolAuthItemProps {
+interface ComposioToolAuthItemProps {
   onAuthComplete: () => void;
-  tool: PendingKlavisTool;
+  tool: PendingComposioTool;
 }
 
-const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete }) => {
+const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComplete }) => {
   const { t } = useTranslation('chat');
+  const { styles, cx } = useStyles();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -61,8 +76,10 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const userId = useUserStore(userProfileSelectors.userId);
-  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+  const createComposioConnection = useToolStore((s) => s.createComposioConnection);
+  const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+  const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
+  const removePlugin = useAgentStore((s) => s.removePlugin);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -88,7 +105,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
   }, [cleanup]);
 
   useEffect(() => {
-    if (tool.server?.status === KlavisServerStatus.CONNECTED && isWaitingAuth) {
+    if (tool.server?.status === ComposioServerStatus.ACTIVE && isWaitingAuth) {
       cleanup();
       onAuthComplete();
     }
@@ -100,9 +117,9 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
 
       pollIntervalRef.current = setInterval(async () => {
         try {
-          await refreshKlavisServerTools(identifier);
+          await refreshComposioConnectionStatus(identifier);
         } catch (error) {
-          console.info('[Klavis] Polling check (expected during auth):', error);
+          console.info('[Composio] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -114,7 +131,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
         setIsWaitingAuth(false);
       }, POLL_TIMEOUT_MS);
     },
-    [refreshKlavisServerTools],
+    [refreshComposioConnectionStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -139,15 +156,15 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
         }
       }, 500);
     },
-    [refreshKlavisServerTools, startFallbackPolling],
+    [refreshComposioConnectionStatus, startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
-    (oauthUrl: string, identifier: string) => {
+    (redirectUrl: string, identifier: string) => {
       cleanup();
       setIsWaitingAuth(true);
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
       if (oauthWindow) {
         oauthWindowRef.current = oauthWindow;
         startWindowMonitor(oauthWindow, identifier);
@@ -161,31 +178,42 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
   const handleAuthorize = async () => {
     if (!userId) return;
 
-    if (tool.server?.status === KlavisServerStatus.PENDING_AUTH && tool.server.oauthUrl) {
-      openOAuthWindow(tool.server.oauthUrl, tool.server.identifier);
+    if (tool.server?.status === ComposioServerStatus.PENDING_AUTH && tool.server.redirectUrl) {
+      openOAuthWindow(tool.server.redirectUrl, tool.server.identifier);
       return;
     }
 
     setIsConnecting(true);
     try {
-      const newServer = await createKlavisServer({
+      const newServer = await createComposioConnection({
+        appSlug: tool.appSlug,
         identifier: tool.identifier,
-        serverName: tool.serverName,
-        userId,
+        label: tool.label,
       });
 
       if (newServer) {
-        if (newServer.isAuthenticated) {
-          await refreshKlavisServerTools(newServer.identifier);
+        if (newServer.status === ComposioServerStatus.ACTIVE) {
+          await refreshComposioConnectionStatus(newServer.identifier);
           onAuthComplete();
-        } else if (newServer.oauthUrl) {
-          openOAuthWindow(newServer.oauthUrl, newServer.identifier);
+        } else if (newServer.redirectUrl) {
+          openOAuthWindow(newServer.redirectUrl, newServer.identifier);
         }
       }
     } catch (error) {
       console.error('[ToolAuthAlert] Failed to create server:', error);
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  // Remove this connector from the agent. It's not authorized yet, so also drop
+  // any pending connection (best-effort) so a later reconnect starts clean.
+  const handleRemove = async () => {
+    if (tool.server) await removeComposioConnection(tool.server.identifier);
+    try {
+      await removePlugin(tool.identifier);
+    } catch (error) {
+      console.error('[ToolAuthAlert] Failed to remove plugin:', error);
     }
   };
 
@@ -202,6 +230,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
     <Flexbox
       horizontal
       align="center"
+      className={cx(styles.row)}
       gap={12}
       justify="space-between"
       style={{
@@ -212,6 +241,16 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
       <Flexbox horizontal align="center" gap={8}>
         {renderIcon()}
         <Text>{tool.label}</Text>
+        <ActionIcon
+          className={cx('tool-auth-remove', styles.removeIcon)}
+          icon={XIcon}
+          size="small"
+          title={t('toolAuth.remove')}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemove();
+          }}
+        />
       </Flexbox>
       <Button
         disabled={isLoading}
@@ -227,7 +266,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
   );
 });
 
-KlavisToolAuthItem.displayName = 'KlavisToolAuthItem';
+ComposioToolAuthItem.displayName = 'ComposioToolAuthItem';
 
 interface MarketToolAuthItemProps {
   tool: PendingMarketTool;
@@ -235,13 +274,23 @@ interface MarketToolAuthItemProps {
 
 const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
   const { t } = useTranslation('chat');
+  const { styles, cx } = useStyles();
   const { signIn, isLoading } = useMarketAuth();
+  const removePlugin = useAgentStore((s) => s.removePlugin);
 
   const handleSignIn = async () => {
     try {
-      await signIn();
+      await signIn('sandbox');
     } catch (error) {
       console.error('[ToolAuthAlert] Market sign in failed:', error);
+    }
+  };
+
+  const handleRemove = async () => {
+    try {
+      await removePlugin(tool.identifier);
+    } catch (error) {
+      console.error('[ToolAuthAlert] Failed to remove plugin:', error);
     }
   };
 
@@ -249,6 +298,7 @@ const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
     <Flexbox
       horizontal
       align="center"
+      className={cx(styles.row)}
       gap={12}
       justify="space-between"
       style={{
@@ -259,6 +309,16 @@ const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
       <Flexbox horizontal align="center" gap={8}>
         <Avatar alt={tool.label} avatar={tool.avatar} size={20} style={{ flex: 'none' }} />
         <Text>{tool.label}</Text>
+        <ActionIcon
+          className={cx('tool-auth-remove', styles.removeIcon)}
+          icon={XIcon}
+          size="small"
+          title={t('toolAuth.remove')}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemove();
+          }}
+        />
       </Flexbox>
       <Button
         disabled={isLoading}
@@ -279,8 +339,14 @@ MarketToolAuthItem.displayName = 'MarketToolAuthItem';
 const ToolAuthAlert = memo(() => {
   const { t } = useTranslation('chat');
 
-  const plugins = useAgentStore(agentSelectors.currentAgentPlugins, isEqual);
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
+  const agentId = useConversationStore(contextSelectors.agentId);
+  const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
+  const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  // Connections load asynchronously via `useFetchUserComposioConnections` (fired by
+  // ChatInput on the same page). Until they arrive, `composioServers` is the empty
+  // fallback — don't treat a missing server as "needs auth" or the card flashes a
+  // false unauthorized state on refresh before the real status loads.
+  const isComposioServersInit = useToolStore((s) => s.isComposioServersInit);
   const { isAuthenticated: isMarketAuthenticated } = useMarketAuth();
 
   // Filter out tools that need authorization
@@ -288,13 +354,21 @@ const ToolAuthAlert = memo(() => {
     const result: PendingAuthTool[] = [];
 
     for (const pluginId of plugins) {
-      // Check if this is a Klavis tool
-      const klavisType = KLAVIS_SERVER_TYPES.find((t) => t.identifier === pluginId);
-      if (klavisType) {
-        const server = klavisServers.find((s) => s.identifier === pluginId);
-        // Not installed or pending auth
-        if (!server || server.status === KlavisServerStatus.PENDING_AUTH) {
-          result.push({ ...klavisType, authType: 'klavis', server });
+      // Check if this is a Composio tool
+      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === pluginId);
+      if (composioType) {
+        const server = composioServers.find((s) => s.identifier === pluginId);
+        // A missing server only means "not installed" once connections have loaded;
+        // before that, skip it to avoid flashing a false unauthorized state.
+        if (!server) {
+          if (isComposioServersInit) {
+            result.push({ ...composioType, authType: 'composio', server });
+          }
+          continue;
+        }
+        // Pending auth
+        if (server.status === ComposioServerStatus.PENDING_AUTH) {
+          result.push({ ...composioType, authType: 'composio', server });
         }
         continue;
       }
@@ -307,7 +381,7 @@ const ToolAuthAlert = memo(() => {
     }
 
     return result;
-  }, [plugins, klavisServers, isMarketAuthenticated]);
+  }, [plugins, composioServers, isComposioServersInit, isMarketAuthenticated]);
 
   // Don't render if no pending auth tools
   if (pendingAuthTools.length === 0) {
@@ -325,8 +399,8 @@ const ToolAuthAlert = memo(() => {
           <Divider dashed style={{ marginBlock: 12 }} />
           <Flexbox gap={12} style={{ marginTop: 8 }}>
             {pendingAuthTools.map((tool) =>
-              tool.authType === 'klavis' ? (
-                <KlavisToolAuthItem
+              tool.authType === 'composio' ? (
+                <ComposioToolAuthItem
                   key={tool.identifier}
                   tool={tool}
                   onAuthComplete={() => {

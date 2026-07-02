@@ -94,7 +94,11 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 翻译     | `translation`     | 文本翻译使用的助手             |
 | 元数据生成  | `agentMeta`       | 为助手生成描述性信息和元数据        |
 | 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理 |
-| 分支对话   | `thread`          | 自定生成分支对话的标题           |
+| 分支对话   | `thread`          | 自动生成分支对话的标题           |
+| 图片生成命名   | `generationTopic`          | AI 图片自动命名话题         |
+| 输入自动补全  | `inputCompletion`       | 输入自动补全建议（类似 GitHub Copilot 幽灵文本）        |
+| 提示词重写   | `promptRewrite`          | 生成前优化提示词   |
+| 图片生成命名   | `generationTopic`          | AI 图片自动命名话题         |
 
 ### `FEATURE_FLAGS`
 
@@ -104,6 +108,29 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 示例：`"-welcome_suggest"`
 
 具体的内容可以参见 [特性标志](/zh/docs/self-hosting/advanced/feature-flags) 中的说明。
+
+### `ENABLE_AGENT_GATEWAY`
+
+- 类型：可选
+- 描述：为自托管部署启用 Gateway Mode。仅在同时配置 `AGENT_GATEWAY_URL` 时生效。
+- 默认值：`0`
+- 示例：`1`
+
+商业版本会自动启用 Gateway Mode。自托管部署可以同时设置 `ENABLE_AGENT_GATEWAY=1` 和 `AGENT_GATEWAY_URL`，让客户端显示 Gateway Mode。
+
+### `AGENT_GATEWAY_URL`
+
+- 类型：可选
+- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。
+- 默认值：-
+- 示例：`https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_SERVICE_TOKEN`
+
+- 类型：可选
+- 描述：Agent Gateway 验证Token，用于 Gateway Mode 与自部署 Agent Gateway 的鉴权
+- 默认值：-
+- 示例：`dev-secret`
 
 ### `PROXY_URL`
 
@@ -133,7 +160,8 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 示例：`1` 或 `0`
 
 <Callout type="warning">
-  **安全提示**：启用此选项将关闭 SSRF 防护，允许连接私有 IP 地址段（127.0.0.0/8、10.0.0.0/8、172.16.0.0/12、192.168.0.0/16
+  **安全提示**：启用此选项将关闭 SSRF 防护，允许连接私有 IP
+  地址段（127.0.0.0/8、10.0.0.0/8、172.16.0.0/12、192.168.0.0/16
   等）。仅在需要访问内网资源的可信环境中启用。
 </Callout>
 

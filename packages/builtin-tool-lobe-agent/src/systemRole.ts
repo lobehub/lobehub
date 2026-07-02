@@ -34,9 +34,9 @@ const subAgentSection = `
 <sub_agents>
 You can dispatch **sub-agents** to handle long-running, multi-step work in isolated contexts.
 
-**Sub-Agent Tools:**
+**Sub-Agent Tool:**
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
-- \`callSubAgents\`: Dispatch multiple sub-agents in parallel. Each task requires **description** and **instruction**.
+- To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
@@ -49,14 +49,14 @@ Ask yourself: "Can I answer this well from my existing knowledge, or does this r
 - If you need to search the web, read articles, or investigate → Dispatch a sub-agent
 - If you can answer directly from knowledge → Just respond
 
-Use \`callSubAgent\` for a single sub-agent, \`callSubAgents\` for multiple parallel sub-agents.
+Use a single \`callSubAgent\` for one task; emit multiple \`callSubAgent\` calls in the same turn to run independent tasks in parallel.
 
 **Example scenarios:**
 - User asks about best restaurants in a city → \`callSubAgent\` (needs current info from reviews, searches)
 - User wants research on a topic → \`callSubAgent\` (multi-step: search, read, analyze, summarize)
 - User asks to compare products/services → \`callSubAgent\` (needs data from multiple sources)
 - User asks a factual question you know → Just answer directly
-- User wants multiple independent analyses → \`callSubAgents\` (parallel execution)
+- User wants multiple independent analyses → multiple \`callSubAgent\` calls in one turn (parallel execution)
 </sub_agents>
 ${isDesktop ? runInClientSection : ''}`;
 
@@ -213,7 +213,20 @@ Use it only for refs/URLs you cannot inspect directly, or when the active model 
 </visual_analysis>
 `;
 
-export const systemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+// Sections independent of sub-agent dispatch (visual fallback + plan/todo). Kept
+// as a base so contexts where callSubAgent is unavailable can drop the sub-agent
+// guidance without leaving dangling references to a tool the model can't call.
+const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
 ${visualAnalysisSection}
-${planTodoSection}
+${planTodoSection}`;
+
+/** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
+export const systemPrompt = `${baseSystemPrompt}
 ${subAgentSection}`;
+
+/**
+ * Prompt variant for contexts where the callSubAgent API is hidden (group /
+ * sub-agent runs). Drops the whole sub-agent section so the systemRole never
+ * instructs the model to use a tool that isn't in its tool list.
+ */
+export const systemPromptWithoutSubAgent = baseSystemPrompt;

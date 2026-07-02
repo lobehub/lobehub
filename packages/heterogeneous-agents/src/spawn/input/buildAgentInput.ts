@@ -1,9 +1,14 @@
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type {
+  AgentContentBlock,
+  AgentImageBlock,
+  AgentPromptInput,
+  AgentTextBlock,
+} from '../../protocol';
 import type { NormalizedImage, NormalizeImageOptions } from './normalizeImage';
 import { materializeImageToPath, normalizeImage } from './normalizeImage';
-import type { AgentContentBlock, AgentImageBlock, AgentPromptInput, AgentTextBlock } from './types';
 
 export interface BuildAgentInputOptions extends NormalizeImageOptions {
   /**

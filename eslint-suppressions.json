@@ -1,0 +1,1702 @@
+{
+  "src/components/404/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/ChatGroupWizard/ChatGroupWizard.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/components/DataStyleModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/Error/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/FeedbackModal/FeedbackContent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/FileParsingStatus/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/HighlightNotification/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/HtmlPreview/PreviewDrawer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/InvalidAPIKey/Bedrock.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/components/InvalidAPIKey/ComfyUIForm.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/components/InvalidAPIKey/ProviderApiKeyForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/InvalidAPIKey/__tests__/ComfyUIForm.test.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/InvalidAPIKey/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/JSONSchemaConfig/ItemRender.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/KeyValueEditor/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/components/MemberSelectionModal/MemberSelectionModal.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/components/RenameModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentDocumentsExplorer/ConvertToSkillModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentMockDevtools/Popover.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentMockDevtools/views/FixtureView.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentMeta/AutoGenerateSelect.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentMeta/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentOpening/OpeningMessage.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentOpening/OpeningQuestions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentPlugin/AddPluginButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentPlugin/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentPrompt/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSetting/AgentTTS/SelectWithTTSPreview.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/AgentSetting/AgentTTS/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentSkillEdit/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/CommentCard.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TaskDetailPage.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TaskDetailRunPauseAction.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TaskParentBar.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TaskScheduleConfig.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TaskVerifyConfig.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/FeedbackInput.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskDetail/VerifyCriterionModal/VerifyCriterionForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/AgentTaskList/TasksGroupConfig.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTasks/features/TaskListHeader.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTopicManager/EmptyState.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AgentTopicManager/MoveTopicsModal/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/AlertBanner/CloudBanner.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/AuthError/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/MarketAuthCallback/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/OAuthCallback/Error.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/OAuthConsent/Consent/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/OAuthConsent/Login.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/OAuthDevice/DeviceCodeConfirm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/OAuthDevice/DeviceCodeInput.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/ResetPassword/ResetPasswordContent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/ResetPassword/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/SignIn/SignInEmailStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/SignIn/SignInPasswordStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/SignUp/BetterAuthSignUpForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/VerifyEmail/VerifyEmailContent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Auth/VerifyEmail/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Billboard/Carousel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ChatInput/ActionBar/Params/Controls.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ChatInput/ControlBar/ApprovalMode.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ChatInput/ControlBar/CreateBranchModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ChatInput/ControlBar/RenameBranchModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ChatInput/Desktop/ContextContainer/ContextItem/FilePreviewModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/CommunityWorkspaceSettings/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/ChatInput/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/ChatInvalidApiKey.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/OllamaBizError/InvalidOllamaModel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/OllamaSetupGuide/Desktop.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/PlanLimitCard/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/index.test.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AgentCouncil/components/ScrollShadowWithButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AssistantGroup/Tool/Debug/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/ApprovalActions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/KeyValueEditor.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AssistantGroup/Tool/Detail/PluginSettings.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/AssistantGroup/components/CollapsedMessage.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/TaskCallback/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/Conversation/Messages/Tool/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/User/components/ContentPreview.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/Verify/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/components/Extras/TTS/Player.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/components/ShareMessageModal/ShareImage/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/components/ShareMessageModal/ShareText/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/components/ShareMessageModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/CreatePlatformAgent/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DailyBrief/BriefCardActions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DailyBrief/BriefCardSummary.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DailyBrief/CommentInput.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DailyBrief/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DataImporter/Error.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DataImporter/ImportDetail.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/DataImporter/SuccessResult.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DevFeatureFlagPanel/Panel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DeviceManager/DeviceConnectModal.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/DeviceManager/DeviceDetailPanel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DeviceManager/DeviceManager.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/DocumentModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/EditorCanvas/LinearFilePlugin.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Electron/AuthRequiredModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Electron/HeterogeneousAgent/StatusGuide/GuideActions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Electron/HeterogeneousAgent/StatusGuide/states/OverloadedState.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Electron/connection/ConnectionMode.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Electron/connection/Waiting.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/FileViewer/NotSupport/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Fleet/AgentColumn.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Fleet/RunningTaskSidebar.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/HotkeyHelperPanel/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/LibraryModal/AssignKnowledgeBase/Item/Action.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/LibraryModal/CreateNew/CreateForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/LocalFile/LocalFile.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCP/MCPInstallProgress/InstallError/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCP/MCPInstallProgress/MCPConfigForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCP/MCPInstallProgress/MCPDependenciesGuide.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCP/MCPSettings/McpSettingsModal.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/MCP/MCPSettings/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCPPluginDetail/Header.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/MCPPluginDetail/Score/GithubBadge/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/IntegrationDetail/Discord.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/IntegrationDetail/Slack.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/IntegrationDetail/Telegram.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/IntegrationDetail/shared.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/LinkModal/Discord.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/LinkModal/Slack.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/LinkModal/Telegram.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/Verify/Body/shared.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/Verify/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Messenger/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/NavPanel/components/BackNav.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/OllamaModelDownloader/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/CompletionPanel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/DebugExportButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/FeedbackPanel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/HistoryPanel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/MessengerIntegrations.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/WrapUpHint.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Onboarding/Agent/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PageEditor/History/CompareModal/CompareContent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PageEditor/History/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PageEditor/PageEditor.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PageEditor/TitleSection.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDetailModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDevModal/MCPManifestForm/ArgsInput.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDevModal/MCPManifestForm/QuickImportSection.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDevModal/MCPManifestForm/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDevModal/PluginPreview/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginDevModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/PluginTag/PluginStatus.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Portal/Artifacts/Body/Renderer/SVG.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Portal/Document/Body.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Portal/VerifyResult/Body.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/Portal/VerifyResult/Title.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ProfileEditor/AgentTool.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ProtocolUrlHandler/InstallPlugin/CustomPluginInstallModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ProtocolUrlHandler/InstallPlugin/OfficialPluginInstallModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/RecommendTaskTemplates/ConnectorAuthRow.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/RecommendTaskTemplates/TaskTemplateCard.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/RecommendTaskTemplates/TaskTemplateDetailModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Recommendations/RecommendationCard.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Recommendations/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/ListView/ListItem/FileListItemActions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/ListView/ListViewSelectAllHint.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/DefaultFileItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/ImageFileItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/MarkdownFileItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/NoteFileItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MoveToFolderModal.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/ToolBar/ActionIconWithChevron.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/ToolBar/MultiSelectActions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Header/AddButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/ShareImage/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/ShareJSON/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/SharePdf/PdfPreview.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/SharePdf/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/ShareText/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SharePopover/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SkillStore/SkillList/AddSkillButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SkillStore/SkillList/AgentSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SkillStore/SkillList/Community/Item.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SkillStore/SkillList/Community/MarketSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/SkillsList/RenameSkillModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/TopicPopupGuard/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/User/UserLoginOrSignup/Community.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Verify/CheckerDock.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/features/Verify/ReportViewer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Verify/RunResult.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/WorkingDirectory/AddWorkingDirModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/Workspace/WorkspaceSlugBoundary.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/features/WorkspaceSetting/Storage/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/layout/AuthProvider/MarketAuth/ClaimResourcesModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/layout/AuthProvider/MarketAuth/MarketAuthConfirmModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/layout/GlobalProvider/ServerVersionOutdatedAlert.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(desktop)/desktop-onboarding/features/DataModeStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(desktop)/desktop-onboarding/features/LoginStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(desktop)/desktop-onboarding/features/PermissionsStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(desktop)/desktop-onboarding/features/WelcomeStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/features/GenerationInput/GenerationInvalidAPIKey.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/image/features/ConfigPanel/components/InputNumber/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/image/features/ConfigPanel/components/MultiImagesUpload/ImageManageModal.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/(create)/image/features/ConfigPanel/components/QualitySelect.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/image/features/ConfigPanel/components/Select/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/(create)/video/features/ConfigPanel/components/ModelSelect/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/[workspaceSlug]/settings/devices/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/Conversation/AgentWelcome/ToolAuthAlert.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/agent/features/Conversation/HeterogeneousChatInput/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/Conversation/MainChatInput/AgentConfigError.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/Conversation/WorkingSidebar/AgentSummary.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/Conversation/WorkingSidebar/ResourcesSection/UserLevelSkills.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/Portal/_layout/Mobile.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/agent/features/TelemetryNotification.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/agent/features/Header.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/agent/features/Sidebar/ActionButton/AddAgent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/agent/features/Sidebar/ActionButton/ForkAndChat.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/agent/features/StatusPage/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/features/Block.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/features/FollowButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/features/ShareButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/group_agent/features/Header.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/group_agent/features/Sidebar/ActionButton/AddGroupAgent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/group_agent/features/Sidebar/ActionButton/ForkGroupAndChat.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/group_agent/features/StatusPage/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/mcp/features/Sidebar/ActionButton/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/model/features/Sidebar/ActionButton/ChatWithModel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/provider/features/Sidebar/ActionButton/ProviderConfig.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/skill/features/Header.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/skill/features/Sidebar/Platform.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/community/(detail)/user/features/Header/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/user/features/SubmitRepoModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/workspace/features/Header/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/workspace/features/WorkspaceContent.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(detail)/workspace/features/WorkspaceProfileModal/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(list)/(home)/features/CreatorRewardBanner.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(list)/_layout/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(list)/agent/features/MarketSourceSwitch.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/(list)/features/SortButton/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/components/Title.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/features/CreateButton/Inner.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/features/CreateButton/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/community/features/LikeButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/community/features/UserAvatar/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/BenchmarkHeader/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/DatasetCard.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/EmptyState.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/TestCaseEmptyState.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/TestCaseTable.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/EmptyState.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/BatchResumeModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/IdleState/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/RunInfo/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/BenchmarkCard/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/BenchmarkEditModal/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/BenchmarkEditModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/CreateBenchmarkModal/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/CreateBenchmarkModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/DatasetCreateModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/DatasetEditModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/DatasetImportModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/TestCaseCreateModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/features/TestCaseEditModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/eval/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/group/_layout/Sidebar/AddGroupMemberModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/group/features/Portal/_layout/Mobile.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/group/features/TelemetryNotification.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/group/profile/features/GroupProfile/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/group/profile/features/MemberProfile/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/home/_layout/Body/Agent/Modals/ConfigGroupModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/home/_layout/Body/Agent/Modals/CreateGroupModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/home/_layout/CreateGroupModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/home/_layout/hooks/useCreateModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/home/features/InputArea/StarterList.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/home/features/components/ScrollShadowWithButton/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/memory/features/ActionBar/PurgeButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/memory/features/FilterBar.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/memory/features/MemoryAnalysis/AnalysisTrigger.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/memory/features/SourceLink.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/resource/features/modal/FullscreenModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/about/features/Version.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/agent/features/SystemAgentForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/apikey/features/ApiKey.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/apikey/features/ApiKeyDisplay/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/apikey/features/ApiKeyModal/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/CreateCredModal/FileCredForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/CreateCredModal/KVCredForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/CreateCredModal/OAuthCredForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/CredItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/CredsList.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/EditCredModal/EditKVForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/features/EditCredModal/EditMetaForm.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/creds/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/devices/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/features/UpgradeAlert.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/profile/features/EmailRow.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/profile/features/PasswordRow.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/profile/features/UsernameRow.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/ProviderMenu/SortProviderModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/settings/provider/detail/bedrock/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/detail/comfyui/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/detail/vertexai/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/CreateNewProvider/Content.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ModelList/CreateNewModelModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ModelList/EmptyModels.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ModelList/ModelConfigModal/Footer.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ModelList/ModelTitle/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ModelList/SortModelModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ProviderConfig/Checker.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/provider/features/ProviderConfig/UpdateProviderInfo/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/Actions.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/AgentSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(main)/settings/skill/features/BuiltinSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/ComposioSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/LeftPanel.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/LobehubSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/skill/features/McpSkillItem.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/stats/features/rankings/AssistantsRank.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/stats/features/rankings/ModelsRank.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/stats/features/rankings/TopicsRank.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/stats/features/usage/UsageCards/ActiveModels/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/storage/features/Advanced.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/system-tools/features/CliTestSection.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(main)/settings/system-tools/features/ToolDetectorSection.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(mobile)/(home)/features/SessionListContent/List/AddButton.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(mobile)/(home)/features/SessionListContent/Modals/ConfigGroupModal/index.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/(mobile)/(home)/features/SessionListContent/Modals/CreateGroupModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(mobile)/(home)/features/SessionListContent/Modals/RenameGroupModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/(mobile)/chat/features/Topic/features/TopicModal.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/AgentPickerStep/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/FullNameStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/InterestsStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/ModeSelectionStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/ProSettingsStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/onboarding/features/ResponseLanguageStep.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/routes/onboarding/features/TelemetryStep.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/share/t/[id]/features/ActionBar.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/routes/share/t/[id]/index.tsx": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/message/action.test.ts": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  }
+}

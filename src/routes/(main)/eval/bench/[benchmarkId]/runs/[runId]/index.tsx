@@ -1,12 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button, Card, Progress, Typography } from 'antd';
+import { Button, Progress } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -21,6 +22,46 @@ import RunningState from './features/RunningState';
 import StatsCards from './features/StatsCards';
 
 const POLLING_INTERVAL = 3000;
+
+const styles = createStaticStyles(({ css }) => ({
+  panel: css`
+    overflow: hidden;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  panelBody: css`
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  `,
+  panelHeader: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 12px;
+    padding-inline: 20px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  panelLabel: css`
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  stateBody: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 430px;
+    padding: 20px;
+  `,
+}));
 
 const RunDetail = memo(() => {
   const { t } = useTranslation('eval');
@@ -70,73 +111,54 @@ const RunDetail = memo(() => {
         run={runDetail}
       />
 
-      {/* Report Card (when finished) or State Animation Card (when not finished) */}
+      {/* Report panel (when finished) or state panel (when not finished) */}
       {isFinished ? (
-        <Card
-          styles={{
-            body: { display: 'flex', flexDirection: 'column', gap: 20, padding: 20 },
-            header: { minHeight: 'auto', padding: '12px 20px' },
-          }}
-          title={
-            <Typography.Text strong style={{ fontSize: 14 }}>
-              {t('run.detail.report')}
-            </Typography.Text>
-          }
-        >
-          <StatsCards metrics={runDetail.metrics ?? undefined} />
-          {hasResults && (
-            <BenchmarkCharts
-              benchmarkId={benchmarkId!}
-              results={runResults.results}
-              runId={runId!}
-            />
-          )}
-        </Card>
+        <section className={styles.panel}>
+          <header className={styles.panelHeader}>
+            <span className={styles.panelLabel}>{t('run.detail.report')}</span>
+          </header>
+          <div className={styles.panelBody}>
+            <StatsCards metrics={runDetail.metrics ?? undefined} />
+            {hasResults && (
+              <BenchmarkCharts
+                benchmarkId={benchmarkId!}
+                results={runResults.results}
+                runId={runId!}
+              />
+            )}
+          </div>
+        </section>
       ) : (
-        <Card
-          styles={{
-            body: {
-              alignItems: 'center',
-              display: 'flex',
-              justifyContent: 'center',
-              minHeight: 430,
-              padding: 20,
-            },
-            header: { minHeight: 'auto', padding: '12px 20px' },
-          }}
-          title={
-            <Typography.Text strong style={{ fontSize: 14 }}>
-              {t('run.detail.report')}
-            </Typography.Text>
-          }
-        >
-          {runDetail.status === 'running' ? (
-            <RunningState />
-          ) : runDetail.status === 'pending' ? (
-            <PendingState hint={t('run.pending.hint')} />
-          ) : runDetail.status === 'external' ? (
-            <PendingState hint={t('run.external.hint')} />
-          ) : (
-            <IdleState run={runDetail} />
-          )}
-        </Card>
+        <section className={styles.panel}>
+          <header className={styles.panelHeader}>
+            <span className={styles.panelLabel}>{t('run.detail.report')}</span>
+          </header>
+          <div className={styles.stateBody}>
+            {runDetail.status === 'running' ? (
+              <RunningState />
+            ) : runDetail.status === 'pending' ? (
+              <PendingState hint={t('run.pending.hint')} />
+            ) : runDetail.status === 'external' ? (
+              <PendingState hint={t('run.external.hint')} />
+            ) : (
+              <IdleState run={runDetail} />
+            )}
+          </div>
+        </section>
       )}
 
       {/* Case Results (always shown when results exist) */}
       {hasResults && (
-        <Card
-          styles={{ body: { padding: 0 }, header: { padding: '12px 20px' } }}
-          extra={
-            showProgress || canRetry || canBatchResume ? (
+        <section className={styles.panel}>
+          <header className={styles.panelHeader}>
+            <span className={styles.panelLabel}>{t('run.detail.caseResults')}</span>
+            {(showProgress || canRetry || canBatchResume) && (
               <Flexbox horizontal align="center" gap={8}>
                 {showProgress && (
                   <>
-                    <Typography.Text
-                      style={{ fontSize: 12, whiteSpace: 'nowrap' }}
-                      type="secondary"
-                    >
+                    <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
                       {completedCases}/{totalCases} {t('run.detail.progressCases')}
-                    </Typography.Text>
+                    </Text>
                     <Progress
                       percent={progress}
                       showInfo={false}
@@ -144,9 +166,9 @@ const RunDetail = memo(() => {
                       status={isActive ? 'active' : undefined}
                       style={{ margin: 0, width: 120 }}
                     />
-                    <Typography.Text style={{ fontSize: 12 }} type="secondary">
+                    <Text fontSize={12} type={'secondary'}>
                       {progress}%
-                    </Typography.Text>
+                    </Text>
                   </>
                 )}
                 {canBatchResume && (
@@ -187,14 +209,8 @@ const RunDetail = memo(() => {
                   </Button>
                 )}
               </Flexbox>
-            ) : undefined
-          }
-          title={
-            <Typography.Text strong style={{ fontSize: 14 }}>
-              {t('run.detail.caseResults')}
-            </Typography.Text>
-          }
-        >
+            )}
+          </header>
           <CaseResultsTable
             benchmarkId={benchmarkId!}
             k={k}
@@ -204,7 +220,7 @@ const RunDetail = memo(() => {
             onResumeCase={(testCaseId, threadId) => resumeRunCase(runId!, testCaseId, threadId)}
             onRetryCase={(testCaseId) => retryRunCase(runId!, testCaseId)}
           />
-        </Card>
+        </section>
       )}
     </Flexbox>
   );

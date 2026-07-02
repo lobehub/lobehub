@@ -1,4 +1,5 @@
 export * from './agentBuilder';
+export * from './agentDocuments';
 export * from './agentGroup';
 export * from './agentSignal';
 export * from './agentSkillManager';

@@ -48,6 +48,45 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
   });
 
+  it('awaits an async document URL builder', async () => {
+    const createDocument = vi.fn().mockResolvedValue({
+      documentId: 'docs_backing-doc-1',
+      id: 'agent-doc-1',
+      title: 'Research Notes',
+    });
+    const runtime = new AgentDocumentsExecutionRuntime(
+      {
+        copyDocument: vi.fn(),
+        createDocument,
+        createTopicDocument: vi.fn(),
+        listDocuments: vi.fn(),
+        listTopicDocuments: vi.fn(),
+        modifyNodes: vi.fn(),
+        readDocument: vi.fn(),
+        removeDocument: vi.fn(),
+        renameDocument: vi.fn(),
+        replaceDocumentContent: vi.fn(),
+        updateLoadRule: vi.fn(),
+      },
+      {
+        getDocumentUrl: async ({ agentId, documentId }) =>
+          `https://app.example.com/acme/agent/${agentId}/docs/${documentId}`,
+      },
+    );
+
+    const result = await runtime.createDocument(
+      {
+        content: 'notes',
+        title: 'Research Notes',
+      },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.content).toContain(
+      'https://app.example.com/acme/agent/agent-1/docs/docs_backing-doc-1',
+    );
+  });
+
   it('forwards tool trigger metadata when creating documents with same-turn tool context', async () => {
     const createDocument = vi.fn().mockResolvedValue({
       documentId: 'backing-doc-1',

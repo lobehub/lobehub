@@ -1,9 +1,10 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -30,8 +31,16 @@ export interface TaskUpdatePayload {
   priority?: number;
 }
 
-const FETCH_TASK_DETAIL_KEY = 'fetchTaskDetail';
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
+
+const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean =>
+  subtasks?.some(
+    (subtask) =>
+      Boolean(subtask.runningTopic) ||
+      subtask.status === 'running' ||
+      subtask.status === 'pending' ||
+      hasInFlightSubtask(subtask.children),
+  ) ?? false;
 
 // Poll while the task itself or any topic activity is still in flight, so the
 // UI picks up status transitions (running → completed/failed) without needing
@@ -39,6 +48,7 @@ const TASK_DETAIL_POLL_INTERVAL = 10_000;
 const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
   if (!detail) return false;
   if (detail.status === 'running' || detail.status === 'pending') return true;
+  if (hasInFlightSubtask(detail.subtasks)) return true;
   return (
     detail.activities?.some(
       (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
@@ -298,7 +308,7 @@ export class TaskDetailSliceActionImpl {
     });
 
     return useClientDataSWR(
-      taskId ? [FETCH_TASK_DETAIL_KEY, taskId] : null,
+      taskId ? taskKeys.detail(taskId) : null,
       async ([, id]: [string, string]) => this.fetchTaskDetail(id),
       { refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0 },
     );
@@ -316,7 +326,7 @@ export class TaskDetailSliceActionImpl {
   };
 
   internal_refreshTaskDetail = async (id: string): Promise<void> => {
-    await mutate([FETCH_TASK_DETAIL_KEY, id]);
+    await mutate(taskKeys.detail(id));
   };
 }
 

@@ -44,11 +44,21 @@ export const useTopicScrollPersist = ({
 }: UseTopicScrollPersistOptions) => {
   const pendingWriteRef = useRef<PendingWrite | null>(null);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The most recent known scroll position for the active topic, kept in sync on
+  // every user scroll and seeded once a restore lands. Unlike `pendingWriteRef`
+  // (cleared after each throttled flush), this survives idle reading so a
+  // leave-time re-stamp can refresh `savedAt` even when the user hasn't
+  // scrolled — see `persistFresh`.
+  const lastKnownRef = useRef<{ atBottom: boolean; offset: number } | null>(null);
   // Initial mount counts as a "key change" so the first restore attempt fires.
   const needsRestoreRef = useRef(true);
   const prevContextKeyRef = useRef(contextKey);
   const dataSourceLengthRef = useRef(dataSourceLength);
   dataSourceLengthRef.current = dataSourceLength;
+  // Mirror the active key so unmount / beforeunload handlers (bound once) can
+  // re-stamp the topic the user is actually leaving.
+  const contextKeyRef = useRef(contextKey);
+  contextKeyRef.current = contextKey;
   // True from the moment a restore starts until the resulting onScroll has
   // settled. Without this guard, the programmatic scroll would feed back into
   // recordScroll and overwrite the snapshot — typically with offset 0 when
@@ -73,6 +83,7 @@ export const useTopicScrollPersist = ({
   const recordScroll = useCallback(
     (offset: number, atBottom: boolean) => {
       if (restoringRef.current) return;
+      lastKnownRef.current = { atBottom, offset };
       pendingWriteRef.current = { atBottom, key: contextKey, offset };
       if (flushTimerRef.current) return;
       flushTimerRef.current = setTimeout(() => {
@@ -83,7 +94,24 @@ export const useTopicScrollPersist = ({
     [contextKey, flushNow],
   );
 
-  // On contextKey change: flush any pending writes against the previous key,
+  // Re-stamp the last known position for `key` with a fresh `savedAt`. Called
+  // when the user leaves a topic (switch, unmount, or tab close) so the 5-min
+  // restore window is measured from *departure*, not from the last scroll —
+  // otherwise idle-reading a topic for over 5 min would expire its snapshot
+  // before the user even leaves. No-op until a position is known (the user
+  // never scrolled and no restore has landed).
+  const persistFresh = useCallback((key: string) => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    pendingWriteRef.current = null;
+    const last = lastKnownRef.current;
+    if (!last) return;
+    saveScrollSnapshot(key, { atBottom: last.atBottom, offset: last.offset, savedAt: Date.now() });
+  }, []);
+
+  // On contextKey change: re-stamp the previous key with the latest position,
   // then either preserve scroll (draft → real-id promotion of the same
   // conversation) or arm a restore (real topic switch).
   useEffect(() => {
@@ -91,7 +119,9 @@ export const useTopicScrollPersist = ({
     if (prevKey === contextKey) return;
     prevContextKeyRef.current = contextKey;
 
-    flushNow();
+    // Re-stamp the topic we're leaving so its snapshot stays within the restore
+    // window if the user comes back soon.
+    persistFresh(prevKey);
 
     if (isDraftPromotionKey(prevKey, contextKey)) {
       // `onTopicCreated` mutates context mid-stream: same conversation, new
@@ -108,7 +138,7 @@ export const useTopicScrollPersist = ({
     }
 
     needsRestoreRef.current = true;
-  }, [contextKey, flushNow]);
+  }, [contextKey, persistFresh]);
 
   // Restore (or fall back to scroll-to-bottom) once data is available for
   // the active contextKey. Re-runs on contextKey or data length change.
@@ -119,18 +149,23 @@ export const useTopicScrollPersist = ({
     needsRestoreRef.current = false;
     restoringRef.current = true;
 
-    // After two rAFs the programmatic scroll's onScroll volley has flushed,
-    // so we can re-enable recording. When `convergeSnapshot` is set, the
-    // target was unreachable — persist the actual landing position so the
-    // snapshot self-heals and future revisits don't burn the polling budget.
+    // After two rAFs the programmatic scroll's onScroll volley has flushed, so
+    // we can re-enable recording and record where the restore landed.
     const finalize = (convergeSnapshot: boolean) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (convergeSnapshot) {
-            const ref = virtuaRef.current;
-            if (ref) {
-              const isAtBottom =
-                ref.scrollSize - ref.scrollOffset - ref.viewportSize <= AT_BOTTOM_THRESHOLD;
+          const ref = virtuaRef.current;
+          if (ref) {
+            const isAtBottom =
+              ref.scrollSize - ref.scrollOffset - ref.viewportSize <= AT_BOTTOM_THRESHOLD;
+            // Seed the last-known position from where the restore actually
+            // landed so a later leave-time re-stamp (persistFresh) has a
+            // position to refresh even if the user reads without scrolling.
+            lastKnownRef.current = { atBottom: isAtBottom, offset: ref.scrollOffset };
+            if (convergeSnapshot) {
+              // Target was unreachable — persist the actual landing position so
+              // the snapshot self-heals and future revisits don't burn the
+              // polling budget.
               pendingWriteRef.current = {
                 atBottom: isAtBottom,
                 key: contextKey,
@@ -183,15 +218,18 @@ export const useTopicScrollPersist = ({
     pruneScrollSnapshots();
   }, []);
 
-  // Flush on unmount and on tab close so the most recent offset survives.
+  // Re-stamp on unmount (topic switch remounts this list) and on tab close so
+  // the latest position survives with a fresh `savedAt`. Reading virtuaRef here
+  // is unreliable — VList's imperative handle is detached before this cleanup
+  // runs — so we rely on the continuously-tracked lastKnownRef instead.
   useEffect(() => {
-    const handleBeforeUnload = () => flushNow();
+    const handleBeforeUnload = () => persistFresh(contextKeyRef.current);
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      flushNow();
+      persistFresh(contextKeyRef.current);
     };
-  }, [flushNow]);
+  }, [persistFresh]);
 
   return { recordScroll };
 };

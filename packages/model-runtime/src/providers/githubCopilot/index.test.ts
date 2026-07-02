@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { responsesAPIModels } from '../../const/models';
 import * as openAIContextBuilders from '../../core/contextBuilders/openai';
+import { isResponsesAPIModel } from '../openai/openaiModelId';
 import { LobeGithubCopilotAI } from './index';
 
 // Mock console.error to avoid polluting test output
@@ -216,19 +216,61 @@ describe('LobeGithubCopilotAI', () => {
 
       expect(models).toEqual([]);
     });
+
+    it('should throw regular Error when models request fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({ error: { message: 'Copilot access denied' } }),
+        ok: false,
+        status: 403,
+      });
+
+      const instance = new LobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: Date.now() + 60 * 60 * 1000,
+      });
+
+      try {
+        await instance.models();
+        expect.fail('Expected models() to reject');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe('GitHub Copilot models API request failed');
+        expect((error as Error).cause).toEqual({ status: 403 });
+        expect((error as Error & { errorType?: string }).errorType).toBeUndefined();
+      }
+    });
+
+    it('should throw runtime payload when token exchange fails before models request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({}),
+        ok: false,
+        status: 403,
+      });
+
+      const instance = new LobeGithubCopilotAI({ apiKey: 'ghp_models_denied' });
+
+      try {
+        await instance.models();
+        expect.fail('Expected models() to reject');
+      } catch (error) {
+        expect(error).toEqual({
+          error: { message: 'No GitHub Copilot subscription or access denied' },
+          errorType: 'PermissionDenied',
+        });
+      }
+    });
   });
 
   describe('error handling in constructor', () => {
-    it('should throw InvalidGithubCopilotToken when no credentials provided', () => {
-      expect(() => new LobeGithubCopilotAI({})).toThrow();
-    });
-
-    it('should throw with descriptive message', () => {
+    it('should throw runtime payload when no credentials provided', () => {
       try {
         new LobeGithubCopilotAI({});
         expect.fail('Should have thrown');
       } catch (error: any) {
-        expect(error.errorType).toBe('InvalidGithubCopilotToken');
+        expect(error).toEqual({
+          error: { message: 'GitHub Personal Access Token or OAuth token is required' },
+          errorType: 'InvalidGithubCopilotToken',
+        });
       }
     });
   });
@@ -240,13 +282,13 @@ describe('LobeGithubCopilotAI', () => {
     });
   });
 
-  describe('responses api routing helpers', () => {
-    it('should contain codex mini model in responses api model list', () => {
-      expect(responsesAPIModels.has('gpt-5.1-codex-mini')).toBe(true);
+  describe('responses api routing', () => {
+    it('should detect parsed codex mini models as responses api models', () => {
+      expect(isResponsesAPIModel('gpt-5.1-codex-mini')).toBe(true);
     });
 
     it('should not treat gpt-4o as responses-only model', () => {
-      expect(responsesAPIModels.has('gpt-4o')).toBe(false);
+      expect(isResponsesAPIModel('gpt-4o')).toBe(false);
     });
 
     it('should convert chat completion tool to responses tool', () => {

@@ -72,6 +72,75 @@ describe('topicReducer', () => {
     });
   });
 
+  describe('replaceTopicId', () => {
+    it('should keep the optimistic topic row while replacing its id', () => {
+      state.push(
+        {
+          createdAt: 1,
+          id: 'tmp-topic',
+          title: 'User input',
+          updatedAt: 1,
+        },
+        {
+          createdAt: 2,
+          id: 'older-topic',
+          title: 'Older',
+          updatedAt: 2,
+        },
+      );
+
+      const payload: ChatTopicDispatch = {
+        id: 'tmp-topic',
+        nextId: 'real-topic',
+        type: 'replaceTopicId',
+        value: { sessionId: 'agent-1' },
+      };
+
+      const newState = topicReducer(state, payload);
+
+      expect(newState).toHaveLength(2);
+      expect(newState[0]).toEqual(
+        expect.objectContaining({
+          id: 'real-topic',
+          sessionId: 'agent-1',
+          title: 'User input',
+        }),
+      );
+      expect(newState[1].id).toBe('older-topic');
+    });
+
+    it('should merge and remove an existing real topic row', () => {
+      state.push(
+        {
+          createdAt: 1,
+          id: 'tmp-topic',
+          title: 'User input',
+          updatedAt: 1,
+        },
+        {
+          createdAt: 2,
+          id: 'real-topic',
+          title: 'Server title',
+          updatedAt: 2,
+        },
+      );
+
+      const newState = topicReducer(state, {
+        id: 'tmp-topic',
+        nextId: 'real-topic',
+        type: 'replaceTopicId',
+      });
+
+      expect(newState).toHaveLength(1);
+      expect(newState[0]).toEqual(
+        expect.objectContaining({
+          id: 'real-topic',
+          title: 'Server title',
+        }),
+      );
+    });
+  });
+
   describe('deleteTopic', () => {
     it('should delete the specified ChatTopic object from state', () => {
       const topic: ChatTopic = {

@@ -6,9 +6,10 @@ import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-re
 import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import type { NavItem as NavItemType } from '@/hooks/useNavLayout';
 import { useNavLayout } from '@/hooks/useNavLayout';
@@ -60,7 +61,7 @@ const mergeSidebarExpandedKeys = (
 const Body = memo(() => {
   const { t } = useTranslation('common');
   const tab = useActiveTabKey();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems);
   const sidebarExpandedKeys = useGlobalStore(systemStatusSelectors.sidebarExpandedKeys);
@@ -117,7 +118,7 @@ const Body = memo(() => {
       const navItem = navLinkItems.get(key);
       if (!navItem || navItem.hidden) return null;
       return (
-        <Link
+        <WorkspaceLink
           key={key}
           to={navItem.url!}
           onClick={(e) => {
@@ -137,7 +138,7 @@ const Body = memo(() => {
               </DropdownMenu>
             }
           />
-        </Link>
+        </WorkspaceLink>
       );
     },
     [navLinkItems, tab, getContextMenuItems, navigate],

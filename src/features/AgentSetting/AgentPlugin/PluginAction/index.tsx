@@ -9,15 +9,17 @@ import { useStore } from '../../store';
 
 const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
   const pluginManifestLoading = useToolStore((s) => s.pluginInstallLoading, isEqual);
-  const [userEnabledPlugins, hasPlugin, toggleAgentPlugin] = useStore((s) => [
+  const [userEnabledPlugins, hasPlugin, disabled, toggleAgentPlugin] = useStore((s) => [
     s.config.plugins || [],
     !!s.config.plugins,
+    s.disabled,
     s.toggleAgentPlugin,
   ]);
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>
       <Switch
+        disabled={disabled}
         loading={pluginManifestLoading[identifier]}
         checked={
           // If loading, it means it's activated
@@ -26,6 +28,8 @@ const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
             : userEnabledPlugins.includes(identifier)
         }
         onChange={() => {
+          if (disabled) return;
+
           toggleAgentPlugin(identifier);
         }}
       />

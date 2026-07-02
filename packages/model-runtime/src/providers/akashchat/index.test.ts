@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeAkashChatAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const provider = ModelProvider.AkashChat;
 const defaultBaseURL = 'https://chatapi.akash.network/api/v1';
 
@@ -313,8 +319,7 @@ describe('LobeAkashChatAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
-    it('should handle API errors gracefully and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when model API fails', async () => {
       const mockClient = {
         apiKey: 'test',
         baseURL: 'https://chatapi.akash.network/api/v1',
@@ -323,19 +328,10 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch AkashChat models. Please ensure your AkashChat API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
     });
 
     it('should handle network timeout errors', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mockClient = {
         apiKey: 'test',
         baseURL: 'https://chatapi.akash.network/api/v1',
@@ -344,16 +340,10 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network timeout');
     });
 
     it('should handle invalid API key errors', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mockClient = {
         apiKey: 'invalid',
         baseURL: 'https://chatapi.akash.network/api/v1',
@@ -362,18 +352,10 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch AkashChat models. Please ensure your AkashChat API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Unauthorized');
     });
 
-    it('should handle malformed response data', async () => {
+    it('should throw on malformed response data', async () => {
       const mockClient = {
         apiKey: 'test',
         baseURL: 'https://chatapi.akash.network/api/v1',
@@ -384,10 +366,9 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
+        /Cannot destructure property 'created'/,
+      );
     });
   });
 

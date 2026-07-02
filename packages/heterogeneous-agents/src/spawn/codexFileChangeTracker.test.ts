@@ -1,4 +1,4 @@
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -14,7 +14,7 @@ describe('CodexFileChangeTracker', () => {
     tempDirs.length = 0;
   });
 
-  it('enriches completed file_change payloads with per-file and total line stats', async () => {
+  it('enriches completed file_change payloads with per-file diffs and total line stats', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
     tempDirs.push(dir);
 
@@ -55,12 +55,14 @@ describe('CodexFileChangeTracker', () => {
     expect(enriched.item).toMatchObject({
       changes: [
         {
+          diffText: expect.stringContaining('+appended line'),
           kind: 'update',
           linesAdded: 1,
           linesDeleted: 0,
           path: updatePath,
         },
         {
+          diffText: expect.stringContaining('+line two'),
           kind: 'add',
           linesAdded: 2,
           linesDeleted: 0,
@@ -70,6 +72,8 @@ describe('CodexFileChangeTracker', () => {
       linesAdded: 3,
       linesDeleted: 0,
     });
+    expect((enriched.item as any).diffText).toContain(`diff --git a${updatePath} b${updatePath}`);
+    expect((enriched.item as any).diffText).toContain(`diff --git a${addPath} b${addPath}`);
   });
 
   it('treats rename changes as metadata-only and keeps line stats at zero', async () => {
@@ -108,6 +112,53 @@ describe('CodexFileChangeTracker', () => {
       linesAdded: 0,
       linesDeleted: 0,
     });
+    expect(enriched.item).not.toHaveProperty('diffText');
+  });
+
+  it('resolves relative file_change paths from the configured cwd', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const relativePath = 'nested/relative.txt';
+    const absolutePath = path.join(dir, relativePath);
+
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, 'before\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker(dir);
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: relativePath }],
+        id: 'item_relative',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(absolutePath, 'before\nafter\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: relativePath }],
+        id: 'item_relative',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [
+        {
+          diffText: expect.stringContaining(`diff --git a/${relativePath} b/${relativePath}`),
+          linesAdded: 1,
+          linesDeleted: 0,
+          path: relativePath,
+        },
+      ],
+      linesAdded: 1,
+      linesDeleted: 0,
+    });
   });
 
   it('counts added lines even when file content begins with repeated plus markers', async () => {
@@ -138,7 +189,15 @@ describe('CodexFileChangeTracker', () => {
     });
 
     expect(enriched.item).toMatchObject({
-      changes: [{ kind: 'add', linesAdded: 2, linesDeleted: 0, path: addPath }],
+      changes: [
+        {
+          diffText: expect.stringContaining('++++header lookalike'),
+          kind: 'add',
+          linesAdded: 2,
+          linesDeleted: 0,
+          path: addPath,
+        },
+      ],
       linesAdded: 2,
       linesDeleted: 0,
     });

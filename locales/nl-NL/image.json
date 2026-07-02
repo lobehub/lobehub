@@ -7,6 +7,7 @@
   "config.header.title": "Schilderij",
   "config.height.label": "Hoogte",
   "config.imageNum.label": "Aantal afbeeldingen",
+  "config.imageUpload.maxCountReached": "Je kunt maximaal {{count}} referentieafbeeldingen toevoegen",
   "config.imageUrl.label": "Referentieafbeelding",
   "config.imageUrls.label": "Referentieafbeeldingen",
   "config.model.label": "Model",

@@ -104,6 +104,7 @@ export const llmGenerationTracing = pgTable(
     index('llm_generation_tracing_user_id_idx').on(t.userId),
     index('llm_generation_tracing_agent_id_idx').on(t.agentId),
     index('llm_generation_tracing_topic_id_idx').on(t.topicId),
+    index('llm_generation_tracing_workspace_id_idx').on(t.workspaceId),
     index('llm_generation_tracing_provider_idx').on(t.provider),
     index('llm_generation_tracing_model_idx').on(t.model),
     index('llm_generation_tracing_success_idx').on(t.success),
@@ -111,7 +112,6 @@ export const llmGenerationTracing = pgTable(
     index('llm_generation_tracing_validation_failed_idx').on(t.validationFailed),
     index('llm_generation_tracing_feedback_signal_idx').on(t.feedbackSignal),
     index('llm_generation_tracing_created_at_idx').on(t.createdAt),
-    index('llm_generation_tracing_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

@@ -124,10 +124,10 @@ async function scrollBy(world: CustomWorld, deltaY: number): Promise<void> {
 
 async function setAutoScrollEnabled(world: CustomWorld, desired: boolean): Promise<void> {
   await world.page.goto('/settings/chat-appearance');
-  // `networkidle` can take a while on the very first compile in dev mode
+  // The first local dev compile can take a while, so keep an explicit timeout.
   // (Next.js builds the settings route on demand); a generous timeout avoids
   // flakes when the test suite warms up a cold server.
-  await world.page.waitForLoadState('networkidle', { timeout: 60_000 });
+  await world.page.waitForLoadState('domcontentloaded', { timeout: 60_000 });
 
   // Match both EN ("Auto-scroll During AI Response") and zh-CN ("AI 回复时自动滚动").
   const title = world.page.getByText(/Auto-scroll During AI Response|AI 回复时自动滚动/);

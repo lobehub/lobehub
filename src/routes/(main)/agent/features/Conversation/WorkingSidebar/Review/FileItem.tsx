@@ -2,15 +2,15 @@
 
 import type { GitFileDiffStatus } from '@lobechat/electron-client-ipc';
 import { ActionIcon, copyToClipboard, Flexbox, PatchDiff } from '@lobehub/ui';
-import { Popconfirm } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { CopyIcon, LocateFixedIcon, Undo2Icon } from 'lucide-react';
 import path from 'path-browserify-esm';
-import { memo, type MouseEvent, useCallback, useState } from 'react';
+import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
 import { useGlobalStore } from '@/store/global';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -20,9 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // Hover-revealed row actions, anchored to the right edge with a gradient
   // mask that fades in from transparent → row hover-bg so any path/stats
   // text behind the icons softly disappears instead of being abruptly
-  // overlapped. `:has(data-force-visible='true')` keeps the actions
-  // up while a revert Popconfirm is open — otherwise the trigger would
-  // collapse as soon as the cursor entered the popover.
+  // overlapped.
   actions: css`
     pointer-events: none;
 
@@ -41,7 +39,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     transition: opacity 0.15s;
 
-    &:has([data-force-visible='true']),
     [data-review-row]:hover & {
       pointer-events: auto;
       opacity: 1;
@@ -122,7 +119,7 @@ interface FileItemHeaderProps {
   /** Called after a successful revert so the parent can refresh the patch list. */
   onReverted?: () => void;
   /** When provided, enables the per-file revert button (unstaged mode only). */
-  revertContext?: { workingDirectory: string };
+  revertContext?: { deviceId?: string; workingDirectory: string };
   // Status reserved for future use (e.g. dim deleted entries) — keep on the
   // shape so the parent doesn't need to re-derive it later.
   status: GitFileDiffStatus;
@@ -155,38 +152,45 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
       [filePath, revealInFilesTab],
     );
 
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [reverting, setReverting] = useState(false);
-
-    const handleConfirmRevert = useCallback(async () => {
-      if (!revertContext) return;
-      setReverting(true);
-      try {
-        const result = await electronGitService.revertGitFile({
-          filePath,
-          path: revertContext.workingDirectory,
+    const handleRevert = useCallback(
+      (event: MouseEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+        if (!revertContext) return;
+        confirmModal({
+          cancelText: t('workingPanel.review.revert.confirm.cancel'),
+          content: t('workingPanel.review.revert.confirm.description'),
+          okButtonProps: { danger: true },
+          okText: t('workingPanel.review.revert.confirm.ok'),
+          onOk: async () => {
+            try {
+              const result = await gitService.revertGitFile({
+                deviceId: revertContext.deviceId,
+                filePath,
+                path: revertContext.workingDirectory,
+              });
+              if (result.success) {
+                message.success(t('workingPanel.review.revert.success', { fileName }));
+                onReverted?.();
+              } else {
+                message.error(
+                  t('workingPanel.review.revert.failed', {
+                    error: result.error || 'unknown error',
+                  }),
+                );
+              }
+            } catch (error: any) {
+              message.error(
+                t('workingPanel.review.revert.failed', {
+                  error: error?.message || String(error),
+                }),
+              );
+            }
+          },
+          title: t('workingPanel.review.revert.confirm.title'),
         });
-        if (result.success) {
-          message.success(t('workingPanel.review.revert.success', { filePath }));
-          onReverted?.();
-        } else {
-          message.error(
-            t('workingPanel.review.revert.failed', {
-              error: result.error || 'unknown error',
-            }),
-          );
-        }
-      } catch (error: any) {
-        message.error(
-          t('workingPanel.review.revert.failed', {
-            error: error?.message || String(error),
-          }),
-        );
-      } finally {
-        setReverting(false);
-        setConfirmOpen(false);
-      }
-    }, [filePath, onReverted, revertContext, t]);
+      },
+      [fileName, filePath, onReverted, revertContext, t],
+    );
 
     return (
       <div className={styles.header}>
@@ -222,29 +226,13 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
             onClick={handleReveal}
           />
           {revertContext && (
-            <Popconfirm
-              arrow={false}
-              cancelText={t('workingPanel.review.revert.confirm.cancel')}
-              description={t('workingPanel.review.revert.confirm.description', { filePath })}
-              okButtonProps={{ danger: true, loading: reverting, type: 'primary' }}
-              okText={t('workingPanel.review.revert.confirm.ok')}
-              open={confirmOpen}
-              placement={'bottomRight'}
-              title={t('workingPanel.review.revert.confirm.title')}
-              onCancel={() => setConfirmOpen(false)}
-              onConfirm={handleConfirmRevert}
-              onOpenChange={setConfirmOpen}
-            >
-              <span onClick={(event) => event.stopPropagation()}>
-                <ActionIcon
-                  className={`${styles.rowAction} ${styles.revertDanger}`}
-                  data-force-visible={confirmOpen}
-                  icon={Undo2Icon}
-                  size={'small'}
-                  title={t('workingPanel.review.revert')}
-                />
-              </span>
-            </Popconfirm>
+            <ActionIcon
+              className={`${styles.rowAction} ${styles.revertDanger}`}
+              icon={Undo2Icon}
+              size={'small'}
+              title={t('workingPanel.review.revert')}
+              onClick={handleRevert}
+            />
           )}
         </Flexbox>
       </div>

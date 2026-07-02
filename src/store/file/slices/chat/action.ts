@@ -9,6 +9,8 @@ import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
+import { getAgentStoreState } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { type UploadFileListDispatch } from '@/store/file/reducers/uploadFileList';
 import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
@@ -26,6 +28,37 @@ const n = setNamespace('chat');
 type Setter = StoreSetter<FileStore>;
 export const createFileSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
   new FileActionImpl(set, get, _api);
+
+const getTrpcErrorCode = (error: unknown): string | undefined => {
+  if (typeof error !== 'object' || error === null || !('data' in error)) return;
+
+  const data = (error as { data?: { code?: unknown } }).data;
+  return typeof data?.code === 'string' ? data.code : undefined;
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+
+  return String(error);
+};
+
+const getUploadErrorDescription = (error: unknown): string => {
+  if (error === UPLOAD_NETWORK_ERROR) return t('upload.networkError', { ns: 'error' });
+
+  if (getTrpcErrorCode(error) === 'FORBIDDEN') {
+    return t('upload.permissionDenied', { ns: 'error' });
+  }
+
+  return typeof error === 'string'
+    ? error
+    : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
+};
 
 export class FileActionImpl {
   readonly #get: () => FileStore;
@@ -109,11 +142,25 @@ export class FileActionImpl {
     }
   };
 
-  uploadChatFiles = async (rawFiles: File[]): Promise<void> => {
+  uploadChatFiles = async (rawFiles: File[], agentId: string): Promise<void> => {
     const { dispatchChatUploadFileList } = this.#get();
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
-    const { supportedFiles, unsupportedFiles } = filterSupportedChatUploadFiles(filteredFiles);
+
+    // The file-type whitelist only makes sense in plain chat mode, where files are fed
+    // directly to the model. In agent mode (tool calls) or heterogeneous agents (Claude
+    // Code / Codex, etc.) the agent can parse any file via scripts/terminal, so the
+    // whitelist must not apply there. We key off the conversation's own agent id rather
+    // than the global current agent, because the chat input can be scoped to a different
+    // agent than activeAgentId (e.g. another desktop tab). See lobehub/lobehub#15770.
+    const agentState = getAgentStoreState();
+    const enforceFileTypeWhitelist =
+      !agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
+      !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState);
+
+    const { supportedFiles, unsupportedFiles } = enforceFileTypeWhitelist
+      ? filterSupportedChatUploadFiles(filteredFiles)
+      : { supportedFiles: filteredFiles, unsupportedFiles: [] as File[] };
 
     if (unsupportedFiles.length > 0) {
       toast.error(
@@ -165,16 +212,9 @@ export class FileActionImpl {
         });
       } catch (error) {
         // skip `UNAUTHORIZED` error
-        if ((error as any)?.message !== 'UNAUTHORIZED')
+        if (getErrorMessage(error) !== 'UNAUTHORIZED')
           notification.error({
-            description:
-              // it may be a network error or the cors error
-              error === UPLOAD_NETWORK_ERROR
-                ? t('upload.networkError', { ns: 'error' })
-                : // or the error from the server
-                  typeof error === 'string'
-                  ? error
-                  : t('upload.unknownError', { ns: 'error', reason: (error as Error).message }),
+            description: getUploadErrorDescription(error),
             message: t('upload.uploadFailed', { ns: 'error' }),
           });
 

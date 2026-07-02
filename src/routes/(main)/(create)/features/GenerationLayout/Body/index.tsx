@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Segmented, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { LayoutGrid, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,21 +40,22 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
           paddingInline={'8px 4px'}
           action={
             <Flexbox horizontal gap={2}>
-              <Segmented
+              <Tabs
+                activeKey={viewMode}
                 size={'small'}
-                value={viewMode}
-                variant={'borderless'}
-                options={[
+                items={[
                   {
                     icon: <Icon icon={ListIcon} />,
-                    value: 'list',
+                    key: 'list',
+                    label: null,
                   },
                   {
                     icon: <Icon icon={LayoutGrid} />,
-                    value: 'grid',
+                    key: 'grid',
+                    label: null,
                   },
                 ]}
-                onChange={(v) => updateSystemStatus({ [viewModeStatusKey]: v })}
+                onChange={(key) => updateSystemStatus({ [viewModeStatusKey]: key })}
               />
             </Flexbox>
           }

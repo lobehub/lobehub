@@ -162,10 +162,53 @@ export interface SystemInfoResponseMessage {
   type: 'system_info_response';
 }
 
+// ─── Generic device RPC (server-internal method forwarding) ───
+// Unlike tool calls, RPCs are server-initiated operations the LLM never sees
+// (e.g. workspace-init scans). The gateway relays them opaquely, correlating by
+// `requestId`, so new device methods need no per-method gateway route — only a
+// new entry in the device-side RPC dispatcher.
+
+// Server → Client
+export interface RpcRequestMessage {
+  /** Name of the device-side method to invoke (e.g. `initWorkspace`). */
+  method: string;
+  /** JSON-serializable arguments for the method. */
+  params?: unknown;
+  requestId: string;
+  /** Per-call timeout (ms) the gateway forwards; clients pass it through. */
+  timeout?: number;
+  type: 'rpc_request';
+}
+
+// Client → Server
+export interface RpcResponseMessage {
+  requestId: string;
+  result: {
+    /** Method return value, present when `success`. */
+    data?: unknown;
+    error?: string;
+    success: boolean;
+  };
+  type: 'rpc_response';
+}
+
 /** Server → Client: request the desktop to spawn `lh hetero exec`. */
 export interface AgentRunRequestMessage {
   agentType: string;
+  /**
+   * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.
+   * Optional for protocol
+   * compatibility with older servers.
+   */
+  args?: string[];
   cwd?: string;
+  /**
+   * Image attachments from the user message, as URLs the device can fetch
+   * (signed S3 URLs). Appended as image content blocks after the prompt so
+   * the CLI gets vision input — mirrors the desktop local-mode
+   * `sendPrompt(imageList)` path. Optional — omitted for older servers.
+   */
+  imageList?: Array<{ id?: string; url: string }>;
   jwt: string;
   operationId: string;
   prompt: string;
@@ -194,6 +237,7 @@ export type ClientMessage =
   | AuthMessage
   | HeartbeatMessage
   | MessageApiResponseMessage
+  | RpcResponseMessage
   | SystemInfoResponseMessage
   | ToolCallResponseMessage;
 export type ServerMessage =
@@ -203,6 +247,7 @@ export type ServerMessage =
   | AuthSuccessMessage
   | HeartbeatAckMessage
   | MessageApiRequestMessage
+  | RpcRequestMessage
   | SystemInfoRequestMessage
   | ToolCallRequestMessage;
 
@@ -225,6 +270,7 @@ export interface GatewayClientEvents {
   heartbeat_ack: () => void;
   message_api_request: (request: MessageApiRequestMessage) => void;
   reconnecting: (delay: number) => void;
+  rpc_request: (request: RpcRequestMessage) => void;
   status_changed: (status: ConnectionStatus) => void;
   system_info_request: (request: SystemInfoRequestMessage) => void;
   tool_call_request: (request: ToolCallRequestMessage) => void;

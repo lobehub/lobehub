@@ -88,6 +88,14 @@ export interface LobeDocument {
    * File last modified timestamp
    */
   updatedAt: Date;
+
+  userId?: string;
+
+  /**
+   * Owning workspace id (null for personal documents). Used client-side to gate
+   * workspace-only behaviour such as the collaborative edit lock.
+   */
+  workspaceId?: string | null;
 }
 
 /**

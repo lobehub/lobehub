@@ -1,4 +1,5 @@
-import type { LobeAgentConfig, MetaData } from '@lobechat/types';
+import type { HeteroAgentRuntimeDescriptor } from '@lobechat/agent-manager-runtime';
+import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 /**
@@ -102,10 +103,6 @@ export interface CreateAgentState {
    * Error message if creation failed
    */
   error?: string;
-  /**
-   * The associated session ID
-   */
-  sessionId?: string;
   /**
    * Whether the creation was successful
    */
@@ -217,6 +214,12 @@ export interface AgentSearchItem {
    */
   description?: string;
   /**
+   * Heterogeneous agent runtime type (e.g. `claude-code`, `codex`), set only when
+   * the agent delegates execution to an external CLI/device runtime. Absent for
+   * normal model-runtime agents.
+   */
+  heteroType?: HeterogeneousProviderConfig['type'];
+  /**
    * Agent ID (for user agents) or identifier (for market agents)
    */
   id: string;
@@ -323,6 +326,12 @@ export interface GetAgentDetailState {
     openingQuestions?: string[];
     plugins?: string[];
     provider?: string;
+    /**
+     * Present only for heterogeneous agents (external CLI/runtime such as Claude
+     * Code or Codex). Describes what the external runtime is and what it can do;
+     * such agents ignore the `model`/`plugins` fields above.
+     */
+    runtime?: HeteroAgentRuntimeDescriptor;
     systemRole?: string;
   };
   /**
@@ -383,7 +392,7 @@ export interface InstallPluginParams {
    */
   identifier: string;
   /**
-   * Plugin source: 'official' (builtin/klavis/lobehub-skill) or 'market' (MCP marketplace)
+   * Plugin source: 'official' (builtin/composio/lobehub-skill) or 'market' (MCP marketplace)
    */
   source: InstallPluginSource;
 }

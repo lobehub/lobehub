@@ -1,11 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
-import { Link } from 'react-router-dom';
 
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
+import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanelWorkspaceSection';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
 import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -53,10 +54,11 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       {isDesktop || isLoginWithAuth ? (
         <>
           <UserInfo avatarProps={{ clickable: false }} />
-          <Link style={{ color: 'inherit' }} to={'/settings/stats'}>
+          <WorkspaceLink style={{ color: 'inherit' }} to={'/settings/stats'}>
             <DataStatistics />
-          </Link>
+          </WorkspaceLink>
           {enableBusinessFeatures && <BusinessPanelContent />}
+          <UserPanelWorkspaceSection onSwitch={closePopover} />
         </>
       ) : (
         <UserLoginOrSignup onClick={handleSignIn} />

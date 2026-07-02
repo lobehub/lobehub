@@ -5,6 +5,7 @@
   "actionTag.category.skill": "技能",
   "actionTag.category.tool": "工具",
   "actionTag.tooltip.agentSkill": "为本次请求加载该助理文档库中的技能包。",
+  "actionTag.tooltip.clickToView": "点击查看详情",
   "actionTag.tooltip.command": "发送前会先在客户端执行这条 slash 指令。",
   "actionTag.tooltip.projectSkill": "以 slash 形式发送，由 Agent CLI 自行识别并执行项目内的对应技能。",
   "actionTag.tooltip.skill": "表示这是一条可为本次请求加载的技能包。",

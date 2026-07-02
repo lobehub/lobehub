@@ -1,53 +1,21 @@
-import {
-  AgentBuilderInterventions,
-  AgentBuilderManifest,
-} from '@lobechat/builtin-tool-agent-builder/client';
-import {
-  ClaudeCodeIdentifier,
-  ClaudeCodeInterventions,
-} from '@lobechat/builtin-tool-claude-code/client';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { CloudSandboxInterventions } from '@lobechat/builtin-tool-cloud-sandbox/client';
-import {
-  GroupManagementInterventions,
-  GroupManagementManifest,
-} from '@lobechat/builtin-tool-group-management/client';
-import {
-  LobeAgentInterventions,
-  LobeAgentManifest,
-} from '@lobechat/builtin-tool-lobe-agent/client';
-import {
-  LocalSystemIdentifier,
-  LocalSystemInterventions,
-} from '@lobechat/builtin-tool-local-system/client';
-import { MemoryInterventions, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
-import { MessageInterventions, MessageManifest } from '@lobechat/builtin-tool-message/client';
-import {
-  UserInteractionIdentifier,
-  UserInteractionInterventions,
-} from '@lobechat/builtin-tool-user-interaction/client';
-import {
-  WebOnboardingInterventions,
-  WebOnboardingManifest,
-} from '@lobechat/builtin-tool-web-onboarding/client';
-import { type BuiltinIntervention } from '@lobechat/types';
+import type { BuiltinIntervention } from '@lobechat/types';
 
 /**
  * Builtin tools interventions registry
  * Organized by toolset (identifier) -> API name
  * Only register APIs that have custom intervention UI
  */
-export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
-  [AgentBuilderManifest.identifier]: AgentBuilderInterventions,
-  [ClaudeCodeIdentifier]: ClaudeCodeInterventions,
-  [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
-  [GroupManagementManifest.identifier]: GroupManagementInterventions,
-  [LobeAgentManifest.identifier]: LobeAgentInterventions,
-  [LocalSystemIdentifier]: LocalSystemInterventions,
-  [MemoryManifest.identifier]: MemoryInterventions,
-  [MessageManifest.identifier]: MessageInterventions,
-  [UserInteractionIdentifier]: UserInteractionInterventions,
-  [WebOnboardingManifest.identifier]: WebOnboardingInterventions,
+const builtinToolInterventions: Record<string, Record<string, BuiltinIntervention>> = {};
+
+export const registerBuiltinInterventions = (
+  entries: Record<string, Record<string, BuiltinIntervention>>,
+): void => {
+  for (const [identifier, interventions] of Object.entries(entries)) {
+    const current = builtinToolInterventions[identifier];
+    builtinToolInterventions[identifier] = current
+      ? Object.assign(current, interventions)
+      : interventions;
+  }
 };
 
 export interface BuiltinInterventionRegistryEntry {
@@ -57,7 +25,7 @@ export interface BuiltinInterventionRegistryEntry {
 }
 
 export const listBuiltinInterventionEntries = (): BuiltinInterventionRegistryEntry[] =>
-  Object.entries(BuiltinToolInterventions).flatMap(([identifier, toolset]) =>
+  Object.entries(builtinToolInterventions).flatMap(([identifier, toolset]) =>
     Object.entries(toolset)
       .filter((entry): entry is [string, BuiltinIntervention] => !!entry[1])
       .map(([apiName, intervention]) => ({
@@ -78,7 +46,7 @@ export const getBuiltinIntervention = (
 ): BuiltinIntervention | undefined => {
   if (!identifier || !apiName) return undefined;
 
-  const toolset = BuiltinToolInterventions[identifier];
+  const toolset = builtinToolInterventions[identifier];
   if (!toolset) return undefined;
 
   return toolset[apiName];

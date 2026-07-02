@@ -5,6 +5,7 @@ import { AgentEvalRunModel, AgentEvalTestCaseModel } from '@/database/models/age
 import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunWorkflow, type RunBenchmarkPayload } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:run-benchmark');
 
@@ -28,7 +29,8 @@ export const { POST } = serve<RunBenchmarkPayload>(
     }
 
     const db = await getServerDB();
-    const runModel = new AgentEvalRunModel(db, userId);
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+    const runModel = new AgentEvalRunModel(db, userId, wsId);
 
     // Get run info
     const run = await context.run('agent-eval-run:get-run', () => runModel.findById(runId));
@@ -43,7 +45,7 @@ export const { POST } = serve<RunBenchmarkPayload>(
     }
 
     // Get all test cases
-    const testCaseModel = new AgentEvalTestCaseModel(db, userId);
+    const testCaseModel = new AgentEvalTestCaseModel(db, userId, wsId);
     const allTestCases = await context.run('agent-eval-run:get-test-cases', () =>
       testCaseModel.findByDatasetId(run.datasetId),
     );
@@ -66,6 +68,7 @@ export const { POST } = serve<RunBenchmarkPayload>(
         runId,
         testCaseIds: allTestCaseIds,
         userId,
+        workspaceId: wsId,
       }),
     );
 

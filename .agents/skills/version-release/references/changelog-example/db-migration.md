@@ -49,4 +49,4 @@ Migration owner: @{pr-author}
 
 The migration owner is responsible for rollout follow-up and incident handling for this schema change.
 
-> **Note for Claude**: Replace `{pr-author}` with the actual PR author. Retrieve via `gh pr view <number> --json author --jq '.author.login'` or from commit metadata. Do not hardcode a username.
+> \[!NOTE]: Replace `{pr-author}` with the actual PR author. Retrieve via `gh pr view <number> --json author --jq '.author.login'` or from commit metadata. Do not hardcode a username.

@@ -17,18 +17,10 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_MODELSCOPE_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    try {
-      const modelsPage = (await client.models.list()) as any;
-      const modelList: ModelScopeModelCard[] = modelsPage.data || [];
+    const modelsPage = (await client.models.list()) as any;
+    const modelList: ModelScopeModelCard[] = modelsPage.data || [];
 
-      return await processMultiProviderModelList(modelList, 'modelscope');
-    } catch (error) {
-      console.warn(
-        'Failed to fetch ModelScope models. Please ensure your ModelScope API key is valid and your Alibaba Cloud account is properly bound:',
-        error,
-      );
-      return [];
-    }
+    return await processMultiProviderModelList(modelList, 'modelscope');
   },
   provider: ModelProvider.ModelScope,
 } satisfies OpenAICompatibleFactoryOptions;

@@ -5,7 +5,8 @@ import { Avatar, Button, Flexbox } from '@lobehub/ui';
 import { Descriptions, Tag, Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 interface RunInfoProps {
   benchmarkId: string;
@@ -58,9 +59,12 @@ const RunInfo = memo<RunInfoProps>(({ benchmarkId, run }) => {
       items={[
         {
           children: run.dataset ? (
-            <Link target="_blank" to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}>
+            <WorkspaceLink
+              target="_blank"
+              to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
+            >
               <Tag style={{ cursor: 'pointer' }}>{run.dataset.name}</Tag>
-            </Link>
+            </WorkspaceLink>
           ) : (
             <Typography.Text type="secondary">-</Typography.Text>
           ),

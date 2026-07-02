@@ -664,6 +664,10 @@ export class UserMemoryQueryModel {
     private readonly userId: string,
   ) {}
 
+  private memoryWhere(table: { userId: any }) {
+    return eq(table.userId, this.userId);
+  }
+
   /**
    * Hybrid memory retrieval pipeline for the five heterogeneous memory layers.
    *
@@ -1118,7 +1122,7 @@ export class UserMemoryQueryModel {
         updatedAt: userMemories.updatedAt,
       })
       .from(userMemories)
-      .where(and(eq(userMemories.userId, this.userId), inArray(userMemories.id, memoryIds)));
+      .where(and(this.memoryWhere(userMemories), inArray(userMemories.id, memoryIds)));
 
     const baseMemoryMap = new Map(
       baseMemories.map((memory) => [
@@ -1215,7 +1219,7 @@ export class UserMemoryQueryModel {
   }): Promise<QueryTaxonomyOptionsResult['categories']> {
     const { column, layers, limit, q, timeRange } = params;
     const conditions = [
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
       layers?.length ? inArray(userMemories.memoryLayer, layers) : undefined,
       this.buildTimeRangeCondition(
         {
@@ -1255,7 +1259,7 @@ export class UserMemoryQueryModel {
   }): Promise<QueryTaxonomyOptionsResult['tags']> {
     const { column, layers, limit, q, timeRange } = params;
     const conditions = [
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
       layers?.length ? inArray(userMemories.memoryLayer, layers) : undefined,
       this.buildTimeRangeCondition(
         {
@@ -1557,7 +1561,7 @@ export class UserMemoryQueryModel {
       .from(userMemoriesIdentities)
       .where(
         and(
-          eq(userMemoriesIdentities.userId, this.userId),
+          this.memoryWhere(userMemoriesIdentities),
           this.buildTimeRangeCondition(
             {
               capturedAt: userMemoriesIdentities.capturedAt,
@@ -1765,8 +1769,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const conditions = [
-      eq(userMemoriesActivities.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesActivities),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -1825,8 +1829,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const conditions = [
-      eq(userMemoriesContexts.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesContexts),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -1925,8 +1929,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const conditions = [
-      eq(userMemoriesExperiences.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesExperiences),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -1978,8 +1982,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const conditions = [
-      eq(userMemoriesPreferences.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesPreferences),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2030,8 +2034,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ): Promise<UserMemoryIdentitiesWithoutVectors[]> {
     const conditions = [
-      eq(userMemoriesIdentities.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesIdentities),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2086,8 +2090,8 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const conditions = [
-      eq(userMemoriesActivities.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesActivities),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2154,8 +2158,8 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const conditions = [
-      eq(userMemoriesContexts.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesContexts),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2258,8 +2262,8 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const conditions = [
-      eq(userMemoriesExperiences.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesExperiences),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2319,8 +2323,8 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const conditions = [
-      eq(userMemoriesPreferences.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesPreferences),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,
@@ -2377,8 +2381,8 @@ export class UserMemoryQueryModel {
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
     const conditions = [
-      eq(userMemoriesIdentities.userId, this.userId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemoriesIdentities),
+      this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
         : undefined,

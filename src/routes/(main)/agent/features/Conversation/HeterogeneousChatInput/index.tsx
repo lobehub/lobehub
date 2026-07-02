@@ -4,28 +4,66 @@ import {
   HETEROGENEOUS_TYPE_LABELS,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
+import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Button, Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
+import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
+import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
+import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
-import WorkingDirectoryBar from './WorkingDirectoryBar';
+import HeteroControlBar from './HeteroControlBar';
+import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
-// Heterogeneous agents (e.g. Claude Code) bring their own toolchain, memory,
-// and model, so LobeHub-side pickers don't apply. Typo is kept so the user
-// can still toggle the rich-text formatting bar.
+// Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
+// so most LobeHub-side pickers don't apply. Typo is kept so the user can still
+// toggle the rich-text formatting bar. The CLI model + thinking-effort selector
+// is injected right after it via `extraActionItems`, so it sits in the input's
+// bottom-left corner (consistent with where the model picker lives in a normal
+// agent chat), rather than off in the control-bar strip below the box.
 const leftActions: ActionKeys[] = ['typo'];
-const rightActions: ActionKeys[] = [];
+
+/**
+ * GuardBanner
+ *
+ * A deliberately thin, single-line warning that sits just above the input. We
+ * fold the headline and the hint onto one line (no separate `description`
+ * block, no oversized 24px icon) so the guard stays a compact strip instead of
+ * eating a chunk of the conversation area.
+ */
+const GuardBanner = memo<{ action: ReactNode; hint?: string; title: string }>(
+  ({ title, hint, action }) => (
+    <WideScreenContainer>
+      <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
+        <Alert
+          action={action}
+          style={{ maxWidth: 880, width: '100%' }}
+          type={'warning'}
+          title={
+            <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
+              <span>{title}</span>
+              {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
+            </Flexbox>
+          }
+        />
+      </Flexbox>
+    </WideScreenContainer>
+  ),
+);
+
+GuardBanner.displayName = 'GuardBanner';
 
 /**
  * HeterogeneousChatInput
@@ -39,21 +77,55 @@ const rightActions: ActionKeys[] = [];
  */
 const HeterogeneousChatInput = memo(() => {
   const { t } = useTranslation('chat');
-  const { isConfigured, goToConfig } = useHeteroAgentCloudConfig();
+  // Scope every hetero check to the conversation's agent. Passing `agentId`
+  // into the cloud-credential and device guards keeps them validating the same
+  // agent that `agencyConfig`/`isDeviceExecution` are computed from, instead of
+  // the global (hijack-prone) active agent.
+  const agentId = useConversationStore(contextSelectors.agentId);
+  const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
   const params = useParams<{ aid: string }>();
   const navigate = useNavigate();
 
-  const providerType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
-  const executionTarget = useAgentStore(agentSelectors.currentAgentExecutionTarget);
+  const agencyConfig = useAgentStore(
+    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig,
+  );
+  const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    isHetero: !!providerType,
+    clientExecutionAvailable: isDesktop,
+  });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
 
-  // A run goes to an `lh connect` device when the provider is a remote-only type
-  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) explicitly
-  // targeted at a device. Either way the bound device must be online before we
-  // let the user send — guard it here instead of failing at dispatch time.
-  const isDeviceExecution = isRemoteAgent || executionTarget === 'device';
+  // The model + thinking-effort selector only applies to local-CLI providers
+  // (claude-code / codex) and only when this surface actually dispatches the run.
+  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
+  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
+  // gate the control bar applied before the selector moved into the input.
+  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  const showHeteroModel =
+    isSelectableHeteroProvider &&
+    shouldShowHeteroModelSelector({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      isDesktopClient: isDesktop,
+    });
+  const extraActionItems = useMemo<ChatInputActionsProps['items']>(
+    () =>
+      showHeteroModel
+        ? [{ alwaysDisplay: true, children: <HeteroModel />, key: 'heteroModel' }]
+        : [],
+    [showHeteroModel],
+  );
 
-  const { status, refresh } = useRemoteAgentDeviceGuard({ enabled: isDeviceExecution });
+  // A run goes to an `lh connect` device when the provider is a remote-only type
+  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
+  // bound device (including desktop "local" opened from web). Either way the
+  // bound device must be online before we let the user send — guard it here
+  // instead of failing at dispatch time.
+  const isDeviceExecution =
+    isRemoteAgent || (executionTarget === 'device' && !!agencyConfig?.boundDeviceId);
+
+  const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 
   const goToAgentProfile = () => {
     if (params.aid) navigate(urlJoin('/agent', params.aid, 'profile'));
@@ -84,59 +156,54 @@ const HeterogeneousChatInput = memo(() => {
     }
 
     return (
-      <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-        <Alert
-          title={title}
-          type={'warning'}
-          description={
-            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <span>{desc}</span>
-              <Flexbox horizontal gap={6}>
-                <Button size={'small'} onClick={refresh}>
-                  {t('platformAgent.deviceGuard.refresh')}
-                </Button>
-                <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
-                  {t('platformAgent.deviceGuard.configure')}
-                </Button>
-              </Flexbox>
-            </Flexbox>
-          }
-        />
-      </Flexbox>
+      <GuardBanner
+        hint={desc}
+        title={title}
+        action={
+          <Flexbox horizontal gap={4}>
+            <Button size={'small'} variant={'filled'} onClick={refresh}>
+              {t('platformAgent.deviceGuard.refresh')}
+            </Button>
+            <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>
+              {t('platformAgent.deviceGuard.configure')}
+            </Button>
+          </Flexbox>
+        }
+      />
+    );
+  };
+
+  const renderCloudConfigGuard = () => {
+    if (isDeviceExecution || isConfigured) return null;
+
+    return (
+      <GuardBanner
+        hint={t('heteroAgent.cloudNotConfigured.desc')}
+        title={t('heteroAgent.cloudNotConfigured.title')}
+        action={
+          <Button size={'small'} type={'primary'} onClick={goToConfig}>
+            {t('heteroAgent.cloudNotConfigured.action')}
+          </Button>
+        }
+      />
     );
   };
 
   // Device execution doesn't use the cloud sandbox, so it doesn't need cloud
   // credentials — only the sandbox path gates on `isConfigured`.
   const inputDisabled = (!isConfigured && !isDeviceExecution) || deviceBlocked;
+  const hasGuard = deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
-      {!isDeviceExecution && !isConfigured && (
-        <WideScreenContainer>
-          <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-            <Alert
-              title={t('heteroAgent.cloudNotConfigured.title')}
-              type={'warning'}
-              description={
-                <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-                  <span>{t('heteroAgent.cloudNotConfigured.desc')}</span>
-                  <Button size={'small'} type={'primary'} onClick={goToConfig}>
-                    {t('heteroAgent.cloudNotConfigured.action')}
-                  </Button>
-                </Flexbox>
-              }
-            />
-          </Flexbox>
-        </WideScreenContainer>
-      )}
+      {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput
-        skipScrollMarginWithList
+        controlBarSlot={<HeteroControlBar />}
+        extraActionItems={extraActionItems}
         leftActions={leftActions}
-        rightActions={rightActions}
-        runtimeConfigSlot={<WorkingDirectoryBar />}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
+        skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });

@@ -1,4 +1,5 @@
 export { createEditLocalFileInspector } from './EditLocalFile';
+export { GITHUB_TOOL_NAMES, GitHubInspector } from './GitHub';
 export { createGlobLocalFilesInspector } from './GlobLocalFiles';
 export { createGrepContentInspector } from './GrepContent';
 export { LINEAR_TOOL_NAMES, LinearInspector } from './Linear';

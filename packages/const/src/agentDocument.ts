@@ -9,6 +9,8 @@ export const WEB_DOCUMENT_SOURCE_TYPE = 'web';
 
 export const AGENT_DOCUMENT_FILE_TYPE = 'agent/document';
 export const AGENT_PLAN_FILE_TYPE = 'agent/plan';
+/** A verify criterion's detailed judging instruction / rule body. */
+export const VERIFY_INSTRUCTION_FILE_TYPE = 'verify/instruction';
 export const CUSTOM_DOCUMENT_FILE_TYPE = 'custom/document';
 export const CUSTOM_FOLDER_FILE_TYPE = 'custom/folder';
 

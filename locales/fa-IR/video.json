@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "فریم پایانی",
   "config.generateAudio.label": "تولید صدا",
   "config.header.title": "ویدیو",
+  "config.imageUpload.maxCountReached": "شما می‌توانید تا {{count}} تصویر مرجع اضافه کنید",
   "config.imageUrl.label": "فریم آغازین",
   "config.prompt.placeholder": "ویدیویی که می‌خواهید تولید شود را توصیف کنید",
   "config.prompt.placeholderWithRef": "صحنه‌ای که می‌خواهید با تصویر ایجاد کنید را توصیف کنید",

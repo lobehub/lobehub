@@ -1,9 +1,11 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { memo, useLayoutEffect, useRef } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
+import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 
@@ -16,12 +18,16 @@ const getSearchSuffix = (searchParams: URLSearchParams) => {
 // sync outside state to useChatStore
 const ChatHydration = memo(() => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const [searchParams] = useSearchParams();
 
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
   const routeTopicId = params.topicId;
+
+  // Route hydration sets activeTopicId directly (below) instead of going through
+  // switchTopic, so clear any lingering persisted unread once the topic loads.
+  useClearActiveTopicUnread();
 
   useLayoutEffect(() => {
     const target = routeTopicId ?? null;
@@ -56,7 +62,7 @@ const ChatHydration = memo(() => {
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
 
-        const nextPath = state ? SESSION_CHAT_TOPIC_URL(aid, state) : SESSION_CHAT_URL(aid);
+        const nextPath = state ? AGENT_CHAT_TOPIC_URL(aid, state) : AGENT_CHAT_URL(aid);
         const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${locationRef.current.hash}`;
         const currentUrl = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
 

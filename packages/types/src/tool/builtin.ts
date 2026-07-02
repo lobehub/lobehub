@@ -236,11 +236,62 @@ export const BuiltinToolManifestSchema = z.object({
   type: z.literal('builtin').optional(),
 });
 
+/**
+ * Runtime context handed to a builtin tool's manifest resolver so the tool can
+ * self-trim per conversation context instead of relying on scattered, hard-coded
+ * filters in the consuming layers (agentConfigResolver / toolSetComposer).
+ *
+ * Mirror of the builtin-agent `runtime: (ctx) => config` pattern, but for tools.
+ * Extend this with new signals (e.g. isDesktop, isPageEditorReady, groupId) as
+ * more tools migrate their context-based trimming here.
+ */
+export interface BuiltinToolResolveContext {
+  /**
+   * True when running inside a sub-agent execution. A nested sub-agent must not
+   * be able to dispatch further sub-agents.
+   */
+  isSubAgent?: boolean;
+  /**
+   * Conversation scope, e.g. 'main' | 'page' | 'task' | 'group' | 'group_agent'
+   * | 'thread' | 'sub_agent'. Kept as a string to avoid coupling the tool layer
+   * to the operation/message scope unions.
+   */
+  scope?: string;
+}
+
+/**
+ * Context-aware manifest factory for a builtin tool. Return a trimmed manifest
+ * (e.g. with certain APIs filtered out) for the given context, or `null` to make
+ * the tool unavailable entirely in that context.
+ */
+export type BuiltinManifestResolver = (
+  context: BuiltinToolResolveContext,
+) => BuiltinToolManifest | null;
+
 export interface LobeBuiltinTool {
+  /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */
+  avatar?: string;
+  /** Identity (hoisted from `manifest.meta`): short description shown in UI. */
+  description?: string;
   discoverable?: boolean;
   hidden?: boolean;
   identifier: string;
   manifest: BuiltinToolManifest;
+  /**
+   * Optional context-aware override for `manifest`. When present AND a resolve
+   * context is supplied (the agent runtime / tools-engine path), the resolver's
+   * result replaces the static `manifest` for that turn, letting the tool gate
+   * its own availability or hide specific APIs based on context.
+   *
+   * The static `manifest` stays the full-capability set used by context-free
+   * consumers (UI tool lists, discovery, settings, token estimation), so adding
+   * a resolver never breaks those synchronous reads.
+   */
+  resolveManifest?: BuiltinManifestResolver;
+  /** Identity (hoisted from `manifest.meta`): tags shown in UI / discovery. */
+  tags?: string[];
+  /** Identity (hoisted from `manifest.meta`): display name. Falls back to `identifier`. */
+  title?: string;
   type: 'builtin';
 }
 
@@ -275,10 +326,30 @@ export interface BuiltinPortalProps<Arguments = Record<string, any>, State = any
   arguments: Arguments;
   identifier: string;
   messageId: string;
+  /**
+   * Extra params the opener passed to `openToolUI` — e.g. which list item the
+   * user clicked. Optional; portals that don't need a focused target ignore it.
+   */
+  params?: Record<string, any>;
   state: State;
 }
 
 export type BuiltinPortal = <T = any>(props: BuiltinPortalProps<T>) => ReactNode;
+
+/**
+ * Props for a tool's optional portal header content. The framework owns the
+ * back/close chrome and renders this in the title slot, so a tool can name and
+ * decorate its own portal without the framework hard-coding tool knowledge.
+ */
+export interface BuiltinPortalTitleProps {
+  apiName?: string;
+  identifier: string;
+  messageId: string;
+  /** Extra params the opener passed to `openToolUI` (e.g. focused item index). */
+  params?: Record<string, any>;
+}
+
+export type BuiltinPortalTitle = (props: BuiltinPortalTitleProps) => ReactNode;
 
 export interface BuiltinPlaceholderProps<T extends Record<string, any> = any> {
   apiName: string;
@@ -303,6 +374,12 @@ export interface BuiltinInspectorProps<Arguments = any, State = any> {
   partialArgs?: Arguments;
   pluginState?: State;
   result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Stable id of this tool call. Required for inspectors that need to correlate
+   * with side data — e.g. CC's `Agent` inspector joining to the subagent Thread
+   * via `metadata.sourceToolCallId`.
+   */
+  toolCallId?: string;
 }
 
 export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;
@@ -326,12 +403,27 @@ export type BuiltinStreaming = <A = any>(props: BuiltinStreamingProps<A>) => Rea
 
 export interface BuiltinServerRuntimeOutput {
   content: string;
+  /**
+   * When true, the tool executed a side-effect but its result is delivered
+   * out-of-band later (e.g. an async sub-agent). The agent runtime parks the
+   * operation instead of writing a tool_result, mirroring the client-tool
+   * pause path. The deferred result is filled in by a completion bridge.
+   */
+  deferred?: boolean;
   error?: any;
   state?: any;
   success: boolean;
 }
 
 export interface BuiltinInterventionProps<Arguments = any> {
+  /**
+   * When present, a custom intervention should portal its action footer
+   * (submit / skip + status) into this node so it stays pinned below the
+   * scrollable content instead of scrolling with it. Hosts that render a fixed
+   * footer (e.g. the global approval card) supply this; when absent the
+   * component renders its footer inline.
+   */
+  actionsPortalTarget?: HTMLElement | null;
   apiName?: string;
   args: Arguments;
   identifier?: string;
@@ -433,6 +525,12 @@ export interface BuiltinToolContext {
    * Used by group management tools to trigger the next orchestration phase
    */
   groupOrchestration?: GroupOrchestrationCallbacks;
+
+  /**
+   * Whether the current tool is executing inside a sub-agent. Sub-agents must
+   * not spawn additional sub-agents.
+   */
+  isSubAgent?: boolean;
 
   /**
    * The tool message ID

@@ -60,7 +60,7 @@ describe('TaskListSliceAction', () => {
 
       await useTaskStore.getState().refreshTaskList();
 
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskList', 'agt_1']);
+      expect(mutate).toHaveBeenCalledWith(['task:list', 'agt_1']);
     });
   });
 });

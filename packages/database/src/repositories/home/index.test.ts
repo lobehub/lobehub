@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -80,6 +81,41 @@ describe('HomeRepository', () => {
         sessionId: session.id,
         title: 'Test Agent',
         type: 'agent',
+      });
+    });
+
+    it('should fallback inbox agent meta by slug', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: null,
+          slug: INBOX_SESSION_ID,
+          title: null,
+          userId,
+          virtual: false,
+        })
+        .returning();
+
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({
+          userId,
+        })
+        .returning();
+
+      await serverDB.insert(agentsToSessions).values({
+        agentId: agent.id,
+        sessionId: session.id,
+        userId,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped[0]).toMatchObject({
+        avatar: DEFAULT_INBOX_AVATAR,
+        id: agent.id,
+        sessionId: session.id,
+        title: DEFAULT_INBOX_TITLE,
       });
     });
 
@@ -718,7 +754,9 @@ describe('HomeRepository', () => {
     });
   });
 
-  describe('searchAgents', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('searchAgents', () => {
     it('should return empty array for empty keyword', async () => {
       const result = await homeRepo.searchAgents('');
       expect(result).toEqual([]);

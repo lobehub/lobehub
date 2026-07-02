@@ -8,10 +8,10 @@ import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   getTransparentDragImage,
   useDragActive,
@@ -37,7 +37,7 @@ interface HierarchyNodeProps {
 
 export const HierarchyNode = memo<HierarchyNodeProps>(
   ({ item, level = 0, isExpanded, isLoading, onToggle, selectedKey, parentKey }) => {
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { message } = App.useApp();
 
     const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);

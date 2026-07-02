@@ -4,11 +4,10 @@ import { EditorProvider } from '@lobehub/editor/react';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
-import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useResolvedDocumentId } from './documentViewContext';
 
 const Wrapper = memo<PropsWithChildren>(({ children }) => {
-  const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
+  const documentId = useResolvedDocumentId();
 
   if (!documentId) return null;
 

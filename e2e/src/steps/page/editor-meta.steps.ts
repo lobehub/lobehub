@@ -84,7 +84,7 @@ Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
 
   // Navigate to page module
   await this.page.goto('/page');
-  await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
   await waitForPageWorkspaceReady(this);
 
   // Create a new page via UI
@@ -93,7 +93,7 @@ Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
 
   // Wait for navigation to page editor
   await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
-  await this.page.waitForLoadState('networkidle');
+  await this.page.waitForLoadState('domcontentloaded');
   await this.page.waitForTimeout(500);
 
   console.log('   ✅ 已打开文稿编辑器');
@@ -104,14 +104,14 @@ Given('用户打开一个带有 Emoji 的文稿', async function (this: CustomWo
 
   // First create and open a page
   await this.page.goto('/page');
-  await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
   await waitForPageWorkspaceReady(this);
 
   await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
   await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
-  await this.page.waitForLoadState('networkidle');
+  await this.page.waitForLoadState('domcontentloaded');
   await this.page.waitForTimeout(500);
 
   // Add emoji by clicking the "Choose Icon" button

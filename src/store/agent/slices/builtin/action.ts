@@ -3,6 +3,7 @@ import { type SWRResponse } from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { builtinAgentKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
@@ -55,7 +56,7 @@ export class BuiltinAgentSliceActionImpl {
     context?: UseInitBuiltinAgentContext,
   ): SWRResponse<AgentItem | null> => {
     return useOnlyFetchOnceSWR(
-      context?.isLogin === false ? null : `initBuiltinAgent:${slug}`,
+      context?.isLogin === false ? null : builtinAgentKeys.init(slug),
       async () => {
         const data = await agentService.getBuiltinAgent(slug);
 

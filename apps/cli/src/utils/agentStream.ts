@@ -296,7 +296,11 @@ export async function streamAgentEventsViaWebSocket(
         console.log(JSON.stringify(jsonEvents, null, 2));
       }
       isSettled = true;
-      reject(new Error(`Agent gateway WebSocket closed before completion: ${String(event)}`));
+      // Surface the close code + reason — `String(event)` is just "[object CloseEvent]".
+      const reason = event.reason ? `: ${event.reason}` : '';
+      reject(
+        new Error(`Agent gateway WebSocket closed before completion (code ${event.code}${reason})`),
+      );
     };
   });
 }

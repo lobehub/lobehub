@@ -1,7 +1,8 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,31 @@ import { createRunCreateModal } from '../RunCreateModal';
 import { createRunEditModal } from '../RunEditModal';
 import EmptyState from './EmptyState';
 import RunCard from './RunCard';
+
+const styles = createStaticStyles(({ css }) => ({
+  // Results-led run cards sit on a responsive grid; they collapse to a single
+  // column on narrow viewports.
+  grid: css`
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  filterEmpty: css`
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 48px;
+    padding-inline: 24px;
+    border: 1px dashed ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+}));
 
 interface RunsTabProps {
   benchmarkId: string;
@@ -51,54 +77,52 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   ];
 
   return (
-    <>
-      <Flexbox gap={16}>
-        {sortedRuns.length > 0 && (
-          <Flexbox horizontal align="center" justify="space-between">
-            <Flexbox horizontal align="center" gap={8}>
-              <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, margin: 0 }}>
-                {t('benchmark.detail.runCount', { count: filteredRuns.length })}
-              </p>
-              <Select
-                options={statusOptions}
-                size="small"
-                style={{ width: 128 }}
-                value={statusFilter}
-                onChange={setStatusFilter}
-              />
-            </Flexbox>
-            <Button
-              icon={Plus}
+    <Flexbox gap={16}>
+      {sortedRuns.length > 0 && (
+        <Flexbox horizontal align="center" justify="space-between">
+          <Flexbox horizontal align="center" gap={8}>
+            <Text color={cssVar.colorTextTertiary}>
+              {t('benchmark.detail.runCount', { count: filteredRuns.length })}
+            </Text>
+            <Select
+              options={statusOptions}
               size="small"
-              type="primary"
-              onClick={() => createRunCreateModal({ benchmarkId })}
-            >
-              {t('run.actions.create')}
-            </Button>
+              style={{ width: 128 }}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
           </Flexbox>
-        )}
+          <Button
+            icon={Plus}
+            size="small"
+            type="primary"
+            onClick={() => createRunCreateModal({ benchmarkId })}
+          >
+            {t('run.actions.create')}
+          </Button>
+        </Flexbox>
+      )}
 
-        {sortedRuns.length === 0 ? (
-          <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
-        ) : filteredRuns.length === 0 ? (
-          <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, textAlign: 'center' }}>
-            {t('run.filter.empty')}
-          </p>
-        ) : (
-          <Flexbox gap={12}>
-            {filteredRuns.map((run) => (
-              <RunCard
-                benchmarkId={benchmarkId}
-                key={run.id}
-                run={run}
-                onEdit={(editingRun) => createRunEditModal({ run: editingRun })}
-                onRefresh={refreshRuns}
-              />
-            ))}
-          </Flexbox>
-        )}
-      </Flexbox>
-    </>
+      {sortedRuns.length === 0 ? (
+        <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
+      ) : filteredRuns.length === 0 ? (
+        <Flexbox className={styles.filterEmpty}>
+          <Text color={cssVar.colorTextTertiary}>{t('run.filter.empty')}</Text>
+        </Flexbox>
+      ) : (
+        <div className={styles.grid}>
+          {filteredRuns.map((run) => (
+            <RunCard
+              benchmarkId={benchmarkId}
+              key={run.id}
+              run={run}
+              onEdit={(editingRun) => createRunEditModal({ run: editingRun })}
+              onRefresh={refreshRuns}
+            />
+          ))}
+        </div>
+      )}
+    </Flexbox>
   );
 });
 

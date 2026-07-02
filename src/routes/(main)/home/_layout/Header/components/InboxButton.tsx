@@ -7,23 +7,14 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { useClientDataSWR } from '@/libs/swr';
-import { notificationService } from '@/services/notification';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import InboxDrawer from './InboxDrawer';
-import { UNREAD_COUNT_KEY } from './InboxDrawer/constants';
+import { useInboxUnreadCount } from './useInboxUnreadCount';
 
 const InboxButton = memo(() => {
   const { t } = useTranslation('notification');
   const [open, setOpen] = useState(false);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-
-  const { data: unreadCount = 0 } = useClientDataSWR<number>(
-    enableBusinessFeatures ? UNREAD_COUNT_KEY : null,
-    () => notificationService.getUnreadCount(),
-    { refreshInterval: 10_000 },
-  );
+  const { enabled, unreadCount } = useInboxUnreadCount();
 
   const handleToggle = useCallback(() => {
     setOpen((prev) => !prev);
@@ -33,7 +24,7 @@ const InboxButton = memo(() => {
     setOpen(false);
   }, []);
 
-  if (!enableBusinessFeatures) return null;
+  if (!enabled) return null;
 
   return (
     <>

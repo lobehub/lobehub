@@ -41,8 +41,8 @@ const installedPluginManifestList = (s: ToolStoreState) =>
 
 const installedPluginMetaList = (s: ToolStoreState) =>
   installedPlugins(s)
-    // Filter out Klavis plugins (they have their own display location)
-    .filter((p) => !p.customParams?.klavis)
+    // Filter out Composio plugins (they have their own display location)
+    .filter((p) => !p.customParams?.composio)
     .filter((plugin) => isInstalledPluginAvailableInCurrentEnv(plugin))
     .map<InstallPluginMeta>((p) => ({
       author: p.manifest?.author,

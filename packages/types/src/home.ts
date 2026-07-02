@@ -44,6 +44,13 @@ export interface SidebarAgentItem {
   sessionId?: string | null;
   title: string | null;
   type: SidebarItemType;
+  /**
+   * Number of topics with an unread completed generation under this agent/group.
+   * Derived server-side from `topics.status === 'unread'` so the sidebar badge
+   * stays accurate across agents the client hasn't loaded topics for. Absent /
+   * 0 means no unread.
+   */
+  unreadCount?: number;
   updatedAt: Date;
 }
 

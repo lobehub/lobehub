@@ -3,7 +3,7 @@
  *
  * Creates and exports the ActivatorExecutor instance for registration.
  * Resolves tool manifests from the tool store (installedPlugins + builtinTools +
- * lobehubSkillServers + klavis servers).
+ * lobehubSkillServers + composio servers).
  *
  * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
  * because the activated state is persisted in message pluginState and accumulated
@@ -58,9 +58,9 @@ const service: ActivatorRuntimeService = {
             description: a.description,
             name: a.name,
           })),
-          avatar: builtin.manifest.meta?.avatar,
+          avatar: builtin.avatar,
           identifier: builtin.identifier,
-          name: builtin.manifest.meta?.title ?? builtin.identifier,
+          name: builtin.title ?? builtin.identifier,
           systemRole: builtin.manifest.systemRole,
         });
         continue;

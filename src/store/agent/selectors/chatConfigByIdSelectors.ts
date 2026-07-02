@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
+import { resolveRuntimeMode, resolveToolMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { agentSelectors } from './selectors';
@@ -14,14 +15,18 @@ import { agentSelectors } from './selectors';
  * Used in ChatInput components where agentId is passed as prop.
  */
 
-const getChatConfigById =
+const getStoredChatConfigById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentChatConfig =>
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig || {};
 
-// Return raw chatConfig value without business logic overrides
+const getChatConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentChatConfig =>
+    getStoredChatConfigById(agentId)(s);
+
 const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).enableHistoryCount;
+  getStoredChatConfigById(agentId)(s).enableHistoryCount;
 
 const getHistoryCountById =
   (agentId: string) =>
@@ -59,22 +64,34 @@ const isLocalSystemEnabledById = (agentId: string) => (s: AgentStoreState) =>
   getRuntimeModeById(agentId)(s) === 'local';
 
 /**
- * Get runtime environment mode by agent ID.
- * Reads from `runtimeMode[platform]`, defaults to 'local' on desktop, 'none' on web.
+ * Get the agent's runtime mode, derived from the unified
+ * `agencyConfig.executionTarget` (sandbox → cloud, local → local, device →
+ * none).
  */
 const getRuntimeModeById =
   (agentId: string) =>
   (s: AgentStoreState): RuntimeEnvMode => {
-    const runtimeEnv = getChatConfigById(agentId)(s).runtimeEnv;
-    const platform = isDesktop ? 'desktop' : 'web';
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
 
-    return runtimeEnv?.runtimeMode?.[platform] ?? (isDesktop ? 'local' : 'none');
+    return resolveRuntimeMode(config?.agencyConfig, isDesktop);
   };
 
 const getSkillActivateModeById =
   (agentId: string) =>
   (s: AgentStoreState): 'auto' | 'manual' =>
     getChatConfigById(agentId)(s).skillActivateMode ?? 'auto';
+
+/**
+ * Resolve the agent's tool mode via the shared `resolveToolMode` helper, so
+ * client and server agree on what counts as chat mode.
+ */
+const getToolModeById =
+  (agentId: string) =>
+  (s: AgentStoreState): 'agent' | 'chat' | 'custom' =>
+    resolveToolMode(getChatConfigById(agentId)(s));
+
+const isChatModeById = (agentId: string) => (s: AgentStoreState) =>
+  getToolModeById(agentId)(s) === 'chat';
 
 export const chatConfigByIdSelectors = {
   getChatConfigById,
@@ -87,7 +104,9 @@ export const chatConfigByIdSelectors = {
   getSearchFCModelById,
   getSearchModeById,
   getSkillActivateModeById,
+  getToolModeById,
   getUseModelBuiltinSearchById,
+  isChatModeById,
   isEnableSearchById,
   isLocalSystemEnabledById,
   isMemoryToolEnabledById,

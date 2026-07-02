@@ -1,3 +1,6 @@
+import { z } from 'zod';
+
+import type { SerializedAgentHook } from '../agentHook';
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
@@ -156,16 +159,20 @@ export interface ChatTopicMetadata {
   runningOperation?: {
     assistantMessageId: string;
     /**
-     * Webhook to fire when the operation completes.
-     * Populated by the IM bot path so heterogeneous agents (Claude Code / Codex)
-     * can call back to the bot-callback endpoint even though they bypass the
-     * normal hook registration flow.
+     * Serialized lifecycle hooks (onComplete / onError) registered for this run.
+     *
+     * Persisted so the heterogeneous-agent terminal path can fire them through
+     * the same `hookDispatcher` the normal LLM runtime uses, instead of a
+     * bespoke single-webhook callback. Read by every hetero terminal site —
+     * the CLI exit (`aiAgent.heteroFinish`), the remote-agent `agentNotify`
+     * done signal, and a synchronous dispatch failure — so the task lifecycle
+     * (`onTopicComplete`) and IM bot completion callbacks fire uniformly.
+     *
+     * Only hooks carrying a webhook config are serializable (handler closures
+     * can't cross a process boundary); queue mode delivers these webhooks while
+     * local mode dispatches the in-memory handlers registered at dispatch time.
      */
-    completionWebhook?: {
-      body?: Record<string, unknown>;
-      delivery?: 'fetch' | 'qstash';
-      url: string;
-    };
+    hooks?: SerializedAgentHook[];
     operationId: string;
     scope?: string;
     threadId?: string | null;
@@ -190,14 +197,30 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
-export type ChatTopicStatus =
-  | 'active'
-  | 'running'
-  | 'paused'
-  | 'waitingForHuman'
-  | 'failed'
-  | 'completed'
-  | 'archived';
+/**
+ * Canonical, ordered list of topic statuses. Single source of truth for both
+ * the {@link ChatTopicStatus} type and the {@link chatTopicStatusSchema} zod
+ * validator (consumed by the topic TRPC router). Add new statuses here.
+ *
+ * - `unread`: a completed generation the user hasn't read yet. Persisted so the
+ *   unread indicator survives reload and syncs across devices; cleared back to
+ *   `active` when the user opens the topic. See operation slice unread actions.
+ */
+export const TOPIC_STATUSES = [
+  'active',
+  'running',
+  'paused',
+  'waitingForHuman',
+  'failed',
+  'completed',
+  'archived',
+  'unread',
+] as const;
+
+/** Zod validator for {@link ChatTopicStatus}, derived from {@link TOPIC_STATUSES}. */
+export const chatTopicStatusSchema = z.enum(TOPIC_STATUSES);
+
+export type ChatTopicStatus = z.infer<typeof chatTopicStatusSchema>;
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
@@ -217,6 +240,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   /** Server-side mock until real token aggregation lands. */
   tokenUsage?: number | null;
   trigger?: string | null;
+  userId?: string;
 }
 
 export type ChatTopicMap = Record<string, ChatTopic>;

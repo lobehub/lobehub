@@ -122,15 +122,25 @@ const hasHiddenSegment = (rel: string): boolean =>
   rel.split('/').some((seg) => seg.startsWith('.'));
 
 /**
+ * Case-insensitive lookup by `name`. The model frequently emits a different
+ * casing than what's registered (e.g. `Agent-Browser` for `agent-browser`,
+ * `lobehub` for `LobeHub`); normalize both sides before comparing.
+ */
+const findByNameCI = <T extends { name: string }>(items: T[], target: string): T | undefined => {
+  const lower = target.toLowerCase();
+  return items.find((s) => s.name.toLowerCase() === lower);
+};
+
+/**
  * Hint appended to activated project-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
- * the tree here — the model has `local-system.listFiles` available and can
+ * the tree here — the model has `local-system.globFiles` available and can
  * call it on demand, which keeps the op-param payload small.
  */
 const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
   `## Skill resources
 
-This project skill lives in \`${skillDir}\`. Use \`local-system.listFiles\` on that path to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
+This project skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
   private builtinSkills: BuiltinSkill[];
@@ -250,7 +260,7 @@ export class SkillsExecutionRuntime {
     try {
       // Project skills resolve references relative to the SKILL.md directory,
       // read through the device file access (local-system over the gateway).
-      const projectSkill = this.projectSkills.find((s) => s.name === id);
+      const projectSkill = findByNameCI(this.projectSkills, id);
       if (projectSkill) {
         if (!this.deviceFileAccess) {
           return {
@@ -328,7 +338,7 @@ export class SkillsExecutionRuntime {
 
       // Fall back to builtin skills (includes agent-document skill bundles
       // via the `agent-skills:` identifier prefix).
-      const builtinSkill = this.builtinSkills.find((s) => s.name === id);
+      const builtinSkill = findByNameCI(this.builtinSkills, id);
       if (builtinSkill?.resources) {
         const meta = builtinSkill.resources[path];
         if (meta?.content !== undefined) {
@@ -365,7 +375,7 @@ export class SkillsExecutionRuntime {
     const { name } = args;
 
     // Project skills (filesystem SKILL.md) take precedence over db/builtin.
-    const projectSkill = this.projectSkills.find((s) => s.name === name);
+    const projectSkill = findByNameCI(this.projectSkills, name);
     if (projectSkill) {
       if (!this.deviceFileAccess) {
         return {
@@ -378,9 +388,9 @@ export class SkillsExecutionRuntime {
         let content = await this.deviceFileAccess.readFile(projectSkill.location);
 
         // Don't enumerate the directory here — let the model do it on demand
-        // via `local-system.listFiles`. Just point at the skill's directory so
+        // via `local-system.globFiles`. Just point at the skill's directory so
         // it knows where to look. Keeps the op-param payload small and avoids
-        // a second deviceProxy round-trip at activation time.
+        // a second deviceGateway round-trip at activation time.
         const skillDir = getDirname(projectSkill.location);
         if (skillDir) {
           content += '\n\n' + buildProjectDirectoryHint(name, skillDir);
@@ -433,7 +443,7 @@ export class SkillsExecutionRuntime {
 
     // Fall back to builtin skills (includes agent-document skill bundles via
     // the `agent-skills:` identifier prefix).
-    const builtinSkill = this.builtinSkills.find((s) => s.name === name);
+    const builtinSkill = findByNameCI(this.builtinSkills, name);
     if (builtinSkill) {
       let content = builtinSkill.content;
       const hasResources = !!(

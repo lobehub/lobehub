@@ -8,6 +8,18 @@ const SUPPORTED_CHAT_IMAGE_TYPES = new Set([
 
 const SUPPORTED_CHAT_IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'webp']);
 
+const SUPPORTED_CHAT_AUDIO_EXTENSIONS = new Set([
+  'aac',
+  'flac',
+  'm4a',
+  'mp3',
+  'oga',
+  'ogg',
+  'opus',
+  'wav',
+  'weba',
+]);
+
 const SUPPORTED_CHAT_DOCUMENT_EXTENSIONS = new Set([
   'bat',
   'bash',
@@ -91,6 +103,31 @@ const SUPPORTED_CHAT_DOCUMENT_MIME_TYPES = new Set([
 
 const getExtension = (filename: string) => filename.split('.').pop()?.toLowerCase() || '';
 
+// Canonical audio mime for each supported extension. Audio containers like .m4a share the
+// ISO-BMFF box layout with .mp4, so the browser often reports an empty mime and byte-sniffing
+// (file-type) can report `video/mp4`. We trust the extension for these to keep them classified
+// and rendered as audio.
+const AUDIO_EXTENSION_MIME_TYPES: Record<string, string> = {
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  m4b: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+};
+
+/**
+ * Returns the canonical audio mime for a filename whose extension is a known audio container,
+ * or `undefined` otherwise. Use this to backfill/override an empty or mis-detected mime so the
+ * file is classified and rendered as audio. See lobehub/lobehub#15988.
+ */
+export const audioMimeFromExtension = (filename: string): string | undefined =>
+  AUDIO_EXTENSION_MIME_TYPES[getExtension(filename)];
+
 export const isSupportedChatUploadFile = (file: File) => {
   const fileType = file.type.toLowerCase();
   const extension = getExtension(file.name);
@@ -103,7 +140,11 @@ export const isSupportedChatUploadFile = (file: File) => {
 
   if (fileType.startsWith('video/')) return true;
 
-  if (fileType.startsWith('audio/')) return false;
+  if (fileType.startsWith('audio/')) return true;
+
+  // Some audio containers (e.g. .m4a) report an empty or non-audio mime in the
+  // browser, so fall back to the extension before the document checks below.
+  if (SUPPORTED_CHAT_AUDIO_EXTENSIONS.has(extension)) return true;
 
   if (extension) return SUPPORTED_CHAT_DOCUMENT_EXTENSIONS.has(extension);
 

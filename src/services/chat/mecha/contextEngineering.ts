@@ -1,12 +1,13 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { formatUploadedFilesPrompt } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
+  type ComposioServiceSummary,
   CredsIdentifier,
   type CredSummary,
+  generateComposioServicesList,
   generateCredsList,
-  generateKlavisServicesList,
-  type KlavisServiceSummary,
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
@@ -14,7 +15,8 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import {
   AGENT_PLAN_FILE_TYPE,
-  KLAVIS_SERVER_TYPES,
+  COMPOSIO_APP_TYPES,
+  isDesktop,
   LOBEHUB_SKILL_PROVIDERS,
 } from '@lobechat/const';
 import type {
@@ -27,6 +29,7 @@ import type {
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  OperationSkillSet,
   PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
@@ -56,17 +59,23 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   toolSelectors,
 } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
-import { isCanUseVideo, isCanUseVision } from '../helper';
+import {
+  getRuntimeModelDisplayName,
+  getRuntimeModelKnowledgeCutoff,
+  isCanUseAudio,
+  isCanUseVideo,
+  isCanUseVision,
+} from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
 
@@ -78,6 +87,11 @@ interface ContextEngineeringContext {
   agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
+  /**
+   * Runtime-resolved agent mode. Callers may force chat mode for models without
+   * function calling while keeping the stored chatConfig unchanged.
+   */
+  enableAgentMode?: boolean;
   enableHistoryCount?: boolean;
   enableUserMemories?: boolean;
   /** Group ID for multi-agent scenarios */
@@ -127,6 +141,7 @@ export const contextEngineering = async ({
   agentBuilderContext,
   agentDocuments,
   agentId,
+  enableAgentMode,
   groupId,
   initialContext,
   plugins,
@@ -191,6 +206,10 @@ export const contextEngineering = async ({
 
   // Get agent store state (used for both group agent builder context and file/knowledge base)
   const agentStoreState = getAgentStoreState();
+  // Example: preset-task calls omit `enableAgentMode`; preserve explicit chat mode
+  // from stored config instead of letting MessagesEngine treat `undefined` as agent mode.
+  const effectiveEnableAgentMode =
+    enableAgentMode ?? agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode;
 
   // Build group agent builder context if Group Agent Builder is enabled
   // Note: Uses activeGroupId from chatStore to get the group being edited
@@ -217,17 +236,17 @@ export const contextEngineering = async ({
           enabledPlugins = supervisorAgentConfig.plugins || [];
         }
 
-        // Build official tools list (builtin tools + Klavis tools)
+        // Build official tools list (builtin tools + Composio tools)
         const toolState = getToolStoreState();
         const officialTools: GroupOfficialToolItem[] = [];
 
-        // Get builtin tools (excluding Klavis tools)
+        // Get builtin tools (excluding Composio tools)
         const builtinTools = builtinToolSelectors.metaList(toolState);
-        const klavisIdentifiers = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+        const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
         for (const tool of builtinTools) {
-          // Skip Klavis tools in builtin list (they'll be shown separately)
-          if (klavisIdentifiers.has(tool.identifier)) continue;
+          // Skip Composio tools in builtin list (they'll be shown separately)
+          if (composioIdentifiers.has(tool.identifier)) continue;
 
           officialTools.push({
             description: tool.meta?.description,
@@ -239,24 +258,24 @@ export const contextEngineering = async ({
           });
         }
 
-        // Get Klavis tools (if enabled)
-        const isKlavisEnabled =
+        // Get Composio tools (if enabled)
+        const isComposioEnabled =
           typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-        if (isKlavisEnabled) {
-          const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+        if (isComposioEnabled) {
+          const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-          for (const klavisType of KLAVIS_SERVER_TYPES) {
-            const server = allKlavisServers.find((s) => s.identifier === klavisType.identifier);
+          for (const composioType of COMPOSIO_APP_TYPES) {
+            const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
 
             officialTools.push({
-              description: `LobeHub Mcp Server: ${klavisType.label}`,
-              enabled: enabledPlugins.includes(klavisType.identifier),
-              identifier: klavisType.identifier,
+              description: `LobeHub Mcp Server: ${composioType.label}`,
+              enabled: enabledPlugins.includes(composioType.identifier),
+              identifier: composioType.identifier,
               installed: !!server,
-              name: klavisType.label,
-              type: 'klavis',
+              name: composioType.label,
+              type: 'composio',
             });
           }
         }
@@ -394,36 +413,36 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Klavis services list for creds context
-  // Shows which Klavis services are connected (authorized) and which are available to connect
-  let klavisServicesList = '';
+  // Build Composio services list for creds context
+  // Shows which Composio services are connected (authorized) and which are available to connect
+  let composioServicesList = '';
 
-  const isKlavisEnabled =
+  const isComposioEnabled =
     typeof window !== 'undefined' &&
-    window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+    window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-  if (isCredsEnabled && isKlavisEnabled) {
+  if (isCredsEnabled && isComposioEnabled) {
     try {
       const toolState = getToolStoreState();
-      const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+      const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-      const connected: KlavisServiceSummary[] = allKlavisServers
-        .filter((s) => s.status === KlavisServerStatus.CONNECTED)
-        .map((s) => ({ identifier: s.identifier, name: s.serverName }));
+      const connected: ComposioServiceSummary[] = allComposioServers
+        .filter((s) => s.status === ComposioServerStatus.ACTIVE)
+        .map((s) => ({ identifier: s.identifier, name: s.label }));
 
       const connectedIds = new Set(connected.map((s) => s.identifier));
-      const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+      const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
         (t) => !connectedIds.has(t.identifier),
       ).map((t) => ({ identifier: t.identifier, name: t.label }));
 
-      klavisServicesList = generateKlavisServicesList(connected, available);
+      composioServicesList = generateComposioServicesList(connected, available);
       log(
-        'Klavis services context resolved: connected=%d, available=%d',
+        'Composio services context resolved: connected=%d, available=%d',
         connected.length,
         available.length,
       );
     } catch (error) {
-      log('Failed to resolve Klavis services context:', error);
+      log('Failed to resolve Composio services context:', error);
     }
   }
 
@@ -527,7 +546,7 @@ export const contextEngineering = async ({
     // Builtin tools (use allMetaList to include hidden tools like web-browsing, cloud-sandbox, etc.)
     // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
     const allBuiltinTools = builtinToolSelectors.allMetaList(toolState);
-    const klavisIdentifiers = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+    const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
     const INTERNAL_TOOLS = new Set([
       'lobe-agent-management', // Don't show agent-management in its own context
       'lobe-agent-builder', // Used for editing current agent, not for creating new agents
@@ -536,8 +555,8 @@ export const contextEngineering = async ({
     ]);
 
     for (const tool of allBuiltinTools) {
-      // Skip Klavis tools in builtin list (they'll be shown separately)
-      if (klavisIdentifiers.has(tool.identifier)) continue;
+      // Skip Composio tools in builtin list (they'll be shown separately)
+      if (composioIdentifiers.has(tool.identifier)) continue;
       // Skip internal tools
       if (INTERNAL_TOOLS.has(tool.identifier)) continue;
 
@@ -549,18 +568,18 @@ export const contextEngineering = async ({
       });
     }
 
-    // Klavis tools (if enabled)
-    const isKlavisEnabled =
+    // Composio tools (if enabled)
+    const isComposioEnabled =
       typeof window !== 'undefined' &&
-      window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+      window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-    if (isKlavisEnabled) {
-      for (const klavisType of KLAVIS_SERVER_TYPES) {
+    if (isComposioEnabled) {
+      for (const composioType of COMPOSIO_APP_TYPES) {
         availablePlugins.push({
-          description: klavisType.description,
-          identifier: klavisType.identifier,
-          name: klavisType.label,
-          type: 'klavis' as const,
+          description: composioType.description,
+          identifier: composioType.identifier,
+          name: composioType.label,
+          type: 'composio' as const,
         });
       }
     }
@@ -641,6 +660,20 @@ export const contextEngineering = async ({
     }
   }
 
+  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
+  // In auto mode: expose all installed skills so the AI can discover and activate them.
+  // In manual mode: only expose user-selected skills (filtered by pluginIds).
+  let enabledSkills: OperationSkillSet['skills'] | undefined;
+  if (plugins) {
+    const skillSet = await resolveClientSkills(plugins);
+    if (isInAutoSkillMode) {
+      enabledSkills = skillSet.skills;
+    } else {
+      const selectedIds = new Set(plugins);
+      enabledSkills = skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -653,13 +686,14 @@ export const contextEngineering = async ({
 
     // Capability injection
     capabilities: {
+      isCanUseAudio,
       isCanUseFC,
       isCanUseVideo,
       isCanUseVision,
     },
 
-    // File context configuration
-    fileContext: { enabled: true, includeFileUrl: false },
+    // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
+    fileContext: { enabled: true, includeFileUrl: !isDesktop },
 
     // Knowledge injection
     knowledge: {
@@ -673,6 +707,8 @@ export const contextEngineering = async ({
 
     // Model info
     model,
+    modelDisplayName: getRuntimeModelDisplayName(model, provider),
+    modelKnowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
     provider,
 
     // runtime context
@@ -683,24 +719,14 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
-    // Pass enableAgentMode through; MessagesEngine force-disables skills /
-    // agent-document injectors when this is `false` (chat mode).
-    enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
+    // MessagesEngine force-disables skills / agent-document injectors when this
+    // is `false` (chat mode). ChatService resolves it from stored user intent
+    // plus the selected model's function-call ability.
+    enableAgentMode: effectiveEnableAgentMode,
 
-    // Skills configuration
-    // In auto mode: expose all installed skills so the AI can discover and activate them
-    // In manual mode: only expose user-selected skills (filtered by pluginIds)
+    // Skills configuration (resolved above)
     skillsConfig: {
-      enabledSkills: plugins
-        ? (() => {
-            const skillSet = resolveClientSkills(plugins);
-            if (!isInAutoSkillMode) {
-              const selectedIds = new Set(plugins);
-              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
-            }
-            return skillSet.skills;
-          })()
-        : undefined,
+      enabledSkills,
     },
 
     // Tool Discovery configuration
@@ -723,8 +749,8 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
-      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
-      KLAVIS_SERVICES_LIST: () => klavisServicesList,
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Composio integrations)
+      COMPOSIO_SERVICES_LIST: () => composioServicesList,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts (session_context)
       session_date: () =>
         new Intl.DateTimeFormat('en-US', {
@@ -734,6 +760,13 @@ export const contextEngineering = async ({
           year: 'numeric',
         }).format(new Date()),
       sandbox_enabled: () => String(tools?.includes('lobe-cloud-sandbox') ?? false),
+      // NOTICE: required by builtin-tool-cloud-sandbox/src/systemRole.ts —
+      // lists the topic files synced into the sandbox upload dir. Read lazily
+      // from the chat store so we only pay the cost when the placeholder renders.
+      sandbox_uploaded_files: () =>
+        tools?.includes('lobe-cloud-sandbox')
+          ? formatUploadedFilesPrompt(chatSelectors.currentUserFiles(getChatStoreState()))
+          : '',
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

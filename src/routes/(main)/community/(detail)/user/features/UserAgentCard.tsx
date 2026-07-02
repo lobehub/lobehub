@@ -20,8 +20,6 @@ import {
   ClockIcon,
   CoinsIcon,
   ExternalLink,
-  Eye,
-  EyeOff,
   GitForkIcon,
   MoreVerticalIcon,
   Pencil,
@@ -29,10 +27,12 @@ import {
 import qs from 'query-string';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
@@ -134,9 +134,11 @@ const UserAgentCard = memo<UserAgentCardProps>(
     isValidated,
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { message } = App.useApp();
     const { isOwner, onStatusChange } = useUserDetailContext();
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const [, setIsEditLoading] = useState(false);
     const createAgent = useAgentStore((s) => s.createAgent);
@@ -150,13 +152,15 @@ const UserAgentCard = memo<UserAgentCardProps>(
       { skipNull: true },
     );
 
-    const isPublished = status === 'published';
+    // Under-review agents stay view-only until the agent has been validated.
+    const isUnderReview = isValidated === false;
 
     const handleViewDetail = useCallback(() => {
       window.open(urlJoin('/community/agent', identifier), '_blank');
     }, [identifier]);
 
     const handleEdit = useCallback(async () => {
+      if (!canEdit || !canCreate) return;
       setIsEditLoading(true);
       try {
         // First, try to find the local agent by market identifier
@@ -203,13 +207,14 @@ const UserAgentCard = memo<UserAgentCardProps>(
       } finally {
         setIsEditLoading(false);
       }
-    }, [identifier, navigate, createAgent, refreshAgentList, message, t]);
+    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, message, t]);
 
     const handleStatusAction = useCallback(
-      (action: 'publish' | 'unpublish' | 'deprecate') => {
+      (action: 'deprecate') => {
+        if (!canEdit) return;
         onStatusChange?.(identifier, action);
       },
-      [identifier, onStatusChange],
+      [canEdit, identifier, onStatusChange],
     );
 
     const menuItems = isOwner
@@ -221,6 +226,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
             onClick: handleViewDetail,
           },
           {
+            disabled: !canEdit || !canCreate,
             icon: <Icon icon={Pencil} />,
             key: 'edit',
             label: t('setting:myAgents.actions.edit'),
@@ -230,15 +236,8 @@ const UserAgentCard = memo<UserAgentCardProps>(
             type: 'divider' as const,
           },
           {
-            icon: <Icon icon={isPublished ? EyeOff : Eye} />,
-            key: 'togglePublish',
-            label: isPublished
-              ? t('setting:myAgents.actions.unpublish')
-              : t('setting:myAgents.actions.publish'),
-            onClick: () => handleStatusAction(isPublished ? 'unpublish' : 'publish'),
-          },
-          {
             danger: true,
+            disabled: !canEdit,
             icon: <Icon icon={AlertTriangle} />,
             key: 'deprecate',
             label: t('setting:myAgents.actions.deprecate'),
@@ -261,7 +260,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
         }}
         onClick={() => navigate(link)}
       >
-        {isOwner && (
+        {isOwner && !isUnderReview && (
           <div onClick={stopPropagation}>
             <DropdownMenu items={menuItems as any}>
               <div className={cx('more-button', styles.moreButton)}>
@@ -300,7 +299,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
               }}
             >
               <Flexbox horizontal align={'center'} gap={8}>
-                <Link
+                <WorkspaceLink
                   style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
                   to={link}
                   onClick={(e) => e.stopPropagation()}
@@ -308,7 +307,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
                   <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
                     {title}
                   </Text>
-                </Link>
+                </WorkspaceLink>
                 {isValidated === false ? (
                   <AntTag color="orange" style={{ flexShrink: 0, margin: 0 }}>
                     {t('assistant.underReview', { defaultValue: 'Under Review' })}

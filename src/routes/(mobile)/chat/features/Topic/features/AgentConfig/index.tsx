@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -40,11 +41,12 @@ const AgentConfig = memo(() => {
   });
 
   const { t } = useTranslation('common');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const isLoading = !init || isAgentConfigLoading;
 
   const handleOpenWithEdit = (e: MouseEvent) => {
-    if (isLoading) return;
+    if (!canEdit || isLoading) return;
 
     e.stopPropagation();
     setEditing(true);
@@ -58,7 +60,13 @@ const AgentConfig = memo(() => {
       sessionId={sessionId}
       title={<Header />}
       actions={
-        <ActionIcon icon={Edit} size={'small'} title={t('edit')} onClick={handleOpenWithEdit} />
+        <ActionIcon
+          disabled={!canEdit}
+          icon={Edit}
+          size={'small'}
+          title={t('edit')}
+          onClick={handleOpenWithEdit}
+        />
       }
     >
       <SystemRole

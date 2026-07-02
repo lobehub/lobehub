@@ -86,23 +86,23 @@ export const injectCredsContext = (content: string, context: UserCredsContext): 
     .replaceAll('{{SETTINGS_URL}}', context.settingsUrl);
 };
 
-// ==================== Klavis Services ====================
+// ==================== Composio Services ====================
 
 /**
- * Summary of a Klavis service for display in the tool prompt
+ * Summary of a Composio service for display in the tool prompt
  */
-export interface KlavisServiceSummary {
+export interface ComposioServiceSummary {
   description?: string;
   identifier: string;
   name: string;
 }
 
 /**
- * Generate the Klavis services list string for injection into the prompt
+ * Generate the Composio services list string for injection into the prompt
  */
-export const generateKlavisServicesList = (
-  connected: KlavisServiceSummary[],
-  available: KlavisServiceSummary[],
+export const generateComposioServicesList = (
+  connected: ComposioServiceSummary[],
+  available: ComposioServiceSummary[],
 ): string => {
   if (connected.length === 0 && available.length === 0) {
     return '';
@@ -114,20 +114,20 @@ export const generateKlavisServicesList = (
     const items = connected
       .map(
         (s) =>
-          `  - ${s.name} (identifier: ${s.identifier}) — Authorized via Klavis OAuth. Use ${s.identifier} tools directly.`,
+          `  - ${s.name} (identifier: ${s.identifier}) — Authorized via Composio OAuth. Use ${s.identifier} tools directly.`,
       )
       .join('\n');
-    sections.push(`**Connected Klavis Services (authorized, use tools directly):**\n${items}`);
+    sections.push(`**Connected Composio Services (authorized, use tools directly):**\n${items}`);
   }
 
   if (available.length > 0) {
     const items = available
       .map(
         (s) =>
-          `  - ${s.name} (identifier: ${s.identifier}) — Use \`connectKlavisService\` to connect.`,
+          `  - ${s.name} (identifier: ${s.identifier}) — Use \`connectComposioService\` to connect.`,
       )
       .join('\n');
-    sections.push(`**Available Klavis Services (not yet connected):**\n${items}`);
+    sections.push(`**Available Composio Services (not yet connected):**\n${items}`);
   }
 
   return sections.join('\n\n');

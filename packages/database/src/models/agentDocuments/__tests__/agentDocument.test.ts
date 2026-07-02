@@ -361,6 +361,32 @@ describe('AgentDocumentModel', () => {
 
       expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
     });
+
+    it('should list current-agent document summaries by underlying document ids', async () => {
+      const ownDoc = await agentDocumentModel.create(agentId, 'own.md', 'own content', {
+        sourceType: 'file',
+      });
+      const webDoc = await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+      const secondAgentDoc = await agentDocumentModel.create(
+        secondAgentId,
+        'second.md',
+        'second content',
+        { sourceType: 'file' },
+      );
+
+      const result = await agentDocumentModel.listByDocumentIds(
+        agentId,
+        [ownDoc.documentId, webDoc.documentId, secondAgentDoc.documentId],
+        { sourceType: 'file' },
+      );
+
+      expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
+      expect(result[0]).not.toHaveProperty('content');
+      expect(result[0]).not.toHaveProperty('editorData');
+    });
   });
 
   describe('update and upsert', () => {
@@ -731,6 +757,48 @@ describe('AgentDocumentModel', () => {
       const byTemplate = await agentDocumentModel.findByTemplate(agentId, 'claw');
       expect(byTemplate).toHaveLength(2);
       expect(byTemplate.every((item) => item.templateId === 'claw')).toBe(true);
+    });
+
+    it('should list document summaries without content or editor data', async () => {
+      const fileDoc = await agentDocumentModel.create(agentId, 'file.md', 'file content', {
+        editorData: { root: { children: [{ text: 'file content' }] } },
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        sourceType: 'file',
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+        updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+      });
+      await agentDocumentModel.create(secondAgentId, 'other-agent.md', 'other content', {
+        sourceType: 'file',
+      });
+
+      const all = await agentDocumentModel.listByAgent(agentId);
+
+      expect(all.map((item) => item.filename)).toEqual(['web-page', 'file.md']);
+      for (const item of all) {
+        expect(item).not.toHaveProperty('content');
+        expect(item).not.toHaveProperty('editorData');
+      }
+
+      const fileSummary = all.find((item) => item.id === fileDoc.id);
+      expect(fileSummary).toMatchObject({
+        category: 'document',
+        documentId: fileDoc.documentId,
+        filename: 'file.md',
+        id: fileDoc.id,
+        isFolder: false,
+        isSkillBundle: false,
+        isSkillIndex: false,
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        sourceType: 'file',
+        title: 'file',
+      });
+
+      const webOnly = await agentDocumentModel.listByAgent(agentId, { sourceType: 'web' });
+      expect(webOnly.map((item) => item.filename)).toEqual(['web-page']);
     });
 
     it('should return only skill-managed docs for skill registry assembly', async () => {

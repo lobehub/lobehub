@@ -10,15 +10,15 @@ import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useToolStore } from '@/store/tool';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import AvatarRow from './features/AvatarRow';
+import ComposioAuthorizationList from './features/ComposioAuthorizationList';
 import EmailRow from './features/EmailRow';
 import FullNameRow from './features/FullNameRow';
 import InterestsRow from './features/InterestsRow';
-import KlavisAuthorizationList from './features/KlavisAuthorizationList';
 import PasswordRow from './features/PasswordRow';
 import ProfileRow from './features/ProfileRow';
 import SSOProvidersList from './features/SSOProvidersList';
@@ -41,20 +41,20 @@ const ProfileSetting = () => {
   ]);
   const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
   const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
-  const [servers, isServersInit, useFetchUserKlavisServers] = useToolStore((s) => [
-    s.servers,
-    s.isServersInit,
-    s.useFetchUserKlavisServers,
+  const [servers, isServersInit, useFetchUserComposioConnections] = useToolStore((s) => [
+    s.composioServers,
+    s.isComposioServersInit,
+    s.useFetchUserComposioConnections,
   ]);
-  const connectedServers = servers.filter((s) => s.status === KlavisServerStatus.CONNECTED);
+  const connectedServers = servers.filter((s) => s.status === ComposioServerStatus.ACTIVE);
 
-  // Fetch Klavis servers
-  useFetchUserKlavisServers(enableKlavis);
+  // Fetch Composio servers
+  useFetchUserComposioConnections(enableComposio);
 
   const isLoading =
-    !isUserLoaded || (isLogin && !isLoadedAuthProviders) || (enableKlavis && !isServersInit);
+    !isUserLoaded || (isLogin && !isLoadedAuthProviders) || (enableComposio && !isServersInit);
 
   useEffect(() => {
     if (isLogin) {
@@ -115,11 +115,11 @@ const ProfileSetting = () => {
             </>
           )}
 
-          {enableKlavis && connectedServers.length > 0 && (
+          {enableComposio && connectedServers.length > 0 && (
             <>
               <Divider style={{ margin: 0 }} />
               <ProfileRow label={t('profile.authorizations.title')}>
-                <KlavisAuthorizationList servers={connectedServers} />
+                <ComposioAuthorizationList servers={connectedServers} />
               </ProfileRow>
             </>
           )}

@@ -1,15 +1,13 @@
 import React, { memo } from 'react';
 
 import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
-import Body from './Body';
-import Header from './Header';
+import GroupSidebarContent from './Content';
 
 const Sidebar = memo(() => {
   return (
     <NavPanelPortal navKey="group">
-      <SideBarLayout body={<Body />} header={<Header />} />
+      <GroupSidebarContent />
     </NavPanelPortal>
   );
 });

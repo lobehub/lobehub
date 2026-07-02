@@ -5,7 +5,10 @@ import { memo, Suspense, useMemo } from 'react';
 
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
-import ZenModeToast from '@/features/ZenModeToast';
+import {
+  ForwardMessageDispatcher,
+  MessageForwardFooter,
+} from '@/features/Conversation/MessageForward';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -56,7 +59,6 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
         replaceMessages(messages, { context: ctx });
       }}
     >
-      <ZenModeToast />
       <Flexbox
         flex={1}
         width={'100%'}
@@ -68,9 +70,12 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
       >
         <ChatList welcome={<WelcomeChatItem />} />
       </Flexbox>
-      <MainChatInput />
+      <MessageForwardFooter>
+        <MainChatInput />
+      </MessageForwardFooter>
       <ChatHydration />
       <ThreadHydration />
+      <ForwardMessageDispatcher />
       {!mobile && (
         <>
           <ChatMiniMap />

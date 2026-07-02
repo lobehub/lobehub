@@ -1,0 +1,429 @@
+import { type AgentStreamEventType } from '@lobechat/agent-gateway-client';
+import { type ChatToolPayload } from '@lobechat/types';
+import debug from 'debug';
+import { type Redis } from 'ioredis';
+
+import { getAgentRuntimeRedisClient } from './redis';
+import { type PublishAgentRuntimeEndParams } from './types';
+
+const log = debug('lobe-server:agent-runtime:stream-event-manager');
+const timing = debug('lobe-server:agent-runtime:timing');
+
+const extractReasonFromError = (error: any): string | undefined => {
+  if (!error) return undefined;
+
+  // ChatMessageError format: { body: { error: { message } }, message, type }
+  if (error.body?.error?.message) return error.body.error.message;
+  if (error.body?.message) return error.body.message;
+
+  // ChatCompletionErrorPayload format: { error: { message }, errorType }
+  if (error.error?.error?.message) return error.error.error.message;
+  if (error.error?.message) return error.error.message;
+
+  // Direct message (skip "[object Object]")
+  if (error.message && error.message !== '[object Object]' && error.message !== 'error') {
+    return error.message;
+  }
+
+  return error.type || error.errorType || undefined;
+};
+
+export const getDefaultReasonDetail = (finalState: any, reason?: string): string => {
+  if (reason === 'error') {
+    return extractReasonFromError(finalState?.error) || 'Agent runtime failed';
+  }
+
+  if (reason === 'interrupted') {
+    return extractReasonFromError(finalState?.error) || 'Agent runtime interrupted';
+  }
+
+  return 'Agent runtime completed successfully';
+};
+
+/**
+ * Drop reconstructible / heavy fields from an `AgentState` before
+ * serializing it into a Redis stream event. `messages` is the size
+ * driver — long topics with `compressedGroup` envelopes can push a
+ * single `xadd` past Upstash's 10 MB request limit, manifesting on
+ * the gateway as a misleading watchdog "Operation idle" timeout.
+ *
+ * The dropped fields are all reconstructible:
+ *
+ * - `messages` — canonical copy lives in the DB (UIChatMessage rows)
+ *   and the runtime in-memory state; in-process consumers that need
+ *   it (e.g. `execSubAgent.onComplete`) receive the full state
+ *   via the local `HookContext` channel, not via the stream.
+ * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
+ *   — operation-level snapshot; back-compat copies of one struct.
+ *
+ * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
+ * keep the two lists in sync if either set changes.
+ */
+const stripStateForStream = <T extends Record<string, any>>(
+  state: T | undefined,
+): T | undefined => {
+  if (!state) return state;
+  const {
+    messages: _messages,
+    operationToolSet: _operationToolSet,
+    toolManifestMap: _toolManifestMap,
+    toolSourceMap: _toolSourceMap,
+    tools: _tools,
+    ...rest
+  } = state;
+  return rest as T;
+};
+
+/**
+ * Chokepoint helper applied inside every stream-event publish site.
+ * If the event `data` carries a `finalState`, strip `messages` + the
+ * tool-set group off it (see `stripStateForStream` for the rationale).
+ *
+ * Centralizing the strip here means new callers — including direct
+ * `publishStreamEvent` users (e.g. `RuntimeExecutors`, the per-step
+ * publish in `AgentRuntimeService.executeStep`) — get the size
+ * protection automatically, with no per-site bookkeeping.
+ *
+ * Returns the original reference when no stripping is needed so the
+ * common path stays allocation-free.
+ */
+export const stripFinalStateInEventData = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object') return data;
+  const record = data as Record<string, unknown>;
+  const finalState = record.finalState;
+  if (!finalState || typeof finalState !== 'object') return data;
+  return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
+};
+
+/**
+ * Server-side stream event shape. Wire-compatible with `AgentStreamEvent` in
+ * `@lobechat/agent-gateway-client` (the type union is the single source of
+ * truth) — heterogeneous CLI agents that ingest via `aiAgent.heteroIngest`
+ * republish their events through this same manager unchanged.
+ */
+export interface StreamEvent {
+  data: any;
+  id?: string; // Redis Stream event ID
+  operationId: string;
+  stepIndex: number;
+  timestamp: number;
+  type: AgentStreamEventType;
+}
+
+export interface StreamChunkData {
+  chunkType:
+    | 'text'
+    | 'reasoning'
+    | 'tools_calling'
+    | 'image'
+    | 'grounding'
+    | 'base64_image'
+    | 'content_part'
+    | 'reasoning_part';
+  content?: string;
+  /** Multimodal content parts (text + images) */
+  contentParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /** Grounding/search data */
+  grounding?: any;
+  /** Image list for base64_image chunks */
+  imageList?: any[];
+  images?: any[];
+  reasoning?: string;
+  /** Multimodal reasoning parts (text + images) */
+  reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  toolsCalling?: ChatToolPayload[];
+}
+
+export class StreamEventManager {
+  private redis: Redis;
+  private readonly STREAM_PREFIX = 'agent_runtime_stream';
+  private readonly STREAM_RETENTION = 2 * 3600; // 2 hours
+
+  constructor() {
+    const redisClient = getAgentRuntimeRedisClient();
+    if (!redisClient) {
+      throw new Error('Redis is not available. Please configure REDIS_URL environment variable.');
+    }
+    this.redis = redisClient;
+  }
+
+  /**
+   * Publish stream event to Redis Stream
+   */
+  async publishStreamEvent(
+    operationId: string,
+    event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
+  ): Promise<string> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    const eventData: StreamEvent = {
+      ...event,
+      // Chokepoint strip — every event passing through here gets its
+      // `data.finalState` trimmed (messages + tool-set fields) before
+      // serialization so a single xadd can't blow past Upstash's 10 MB
+      // request limit on long topics.
+      data: stripFinalStateInEventData(event.data),
+      operationId,
+      timestamp: Date.now(),
+    };
+
+    try {
+      const xaddStart = Date.now();
+      const eventId = await this.redis.xadd(
+        streamKey,
+        'MAXLEN',
+        '~',
+        '1000', // Limit stream length to prevent memory overflow
+        '*', // Auto-generate ID
+        'type',
+        eventData.type,
+        'stepIndex',
+        eventData.stepIndex.toString(),
+        'operationId',
+        eventData.operationId,
+        'data',
+        JSON.stringify(eventData.data),
+        'timestamp',
+        eventData.timestamp.toString(),
+      );
+      const xaddEnd = Date.now();
+
+      // Set expiration time
+      await this.redis.expire(streamKey, this.STREAM_RETENTION);
+
+      log(
+        'Published event %s for operation %s:%d',
+        eventData.type,
+        operationId,
+        eventData.stepIndex,
+      );
+
+      timing(
+        '[%s:%d] Redis XADD %s at %d, took %dms',
+        operationId,
+        eventData.stepIndex,
+        eventData.type,
+        xaddStart,
+        xaddEnd - xaddStart,
+      );
+
+      return eventId as string;
+    } catch (error) {
+      console.error('[StreamEventManager] Failed to publish stream event:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Publish stream content chunk
+   */
+  async publishStreamChunk(
+    operationId: string,
+    stepIndex: number,
+    chunkData: StreamChunkData,
+  ): Promise<string> {
+    return this.publishStreamEvent(operationId, {
+      data: chunkData,
+      stepIndex,
+      type: 'stream_chunk',
+    });
+  }
+
+  /**
+   * Publish Agent runtime initialization event
+   */
+  async publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string> {
+    return this.publishStreamEvent(operationId, {
+      data: initialState,
+      stepIndex: 0,
+      type: 'agent_runtime_init',
+    });
+  }
+
+  /**
+   * Publish Agent runtime end event
+   */
+  async publishAgentRuntimeEnd({
+    operationId,
+    stepIndex,
+    finalState,
+    reason,
+    reasonDetail,
+    uiMessages,
+  }: PublishAgentRuntimeEndParams): Promise<string> {
+    // `finalState.messages` + tool-set fields are stripped centrally
+    // inside `publishStreamEvent`; callers stay dumb. `reasonDetail`
+    // derivation below uses the un-stripped in-process `finalState`
+    // so the error message remains available.
+    return this.publishStreamEvent(operationId, {
+      data: {
+        finalState,
+        operationId,
+        phase: 'execution_complete',
+        reason: reason || 'completed',
+        reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
+        ...(uiMessages !== undefined && { uiMessages }),
+      },
+      stepIndex,
+      type: 'agent_runtime_end',
+    });
+  }
+
+  /**
+   * Subscribe to stream events (for WebSocket/SSE)
+   */
+  async subscribeStreamEvents(
+    operationId: string,
+    lastEventId: string = '0',
+    onEvents: (events: StreamEvent[]) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+    let currentLastId = lastEventId;
+
+    log('Starting subscription for operation %s from %s', operationId, lastEventId);
+
+    while (!signal?.aborted) {
+      try {
+        const xreadStart = Date.now();
+        const results = await this.redis.xread(
+          'BLOCK',
+          1000, // 1 second timeout
+          'STREAMS',
+          streamKey,
+          currentLastId,
+        );
+        const xreadEnd = Date.now();
+
+        if (results && results.length > 0) {
+          const [, messages] = results[0];
+          const events: StreamEvent[] = [];
+
+          for (const [id, fields] of messages) {
+            const eventData: any = {};
+
+            // Parse Redis Stream fields
+            for (let i = 0; i < fields.length; i += 2) {
+              const key = fields[i];
+              const value = fields[i + 1];
+
+              if (key === 'data') {
+                eventData[key] = JSON.parse(value);
+              } else if (key === 'stepIndex' || key === 'timestamp') {
+                eventData[key] = parseInt(value);
+              } else {
+                eventData[key] = value;
+              }
+            }
+
+            events.push({
+              ...eventData,
+              id, // Redis Stream event ID
+            } as StreamEvent);
+
+            currentLastId = id;
+          }
+
+          if (events.length > 0) {
+            const now = Date.now();
+            // Calculate latency from event publication to read
+            for (const event of events) {
+              const latency = now - event.timestamp;
+              timing(
+                '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
+                operationId,
+                event.stepIndex,
+                event.type,
+                event.timestamp,
+                now,
+                latency,
+                xreadEnd - xreadStart,
+              );
+            }
+            onEvents(events);
+          }
+        }
+      } catch (error) {
+        if (signal?.aborted) {
+          break;
+        }
+
+        console.error('[StreamEventManager] Stream subscription error:', error);
+        // Retry after brief delay
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1000);
+        });
+      }
+    }
+
+    log('Subscription ended for operation %s', operationId);
+  }
+
+  /**
+   * Get stream event history
+   */
+  async getStreamHistory(operationId: string, count: number = 100): Promise<StreamEvent[]> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    try {
+      const results = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', count);
+
+      return results.map(([id, fields]) => {
+        const eventData: any = { id };
+
+        for (let i = 0; i < fields.length; i += 2) {
+          const key = fields[i];
+          const value = fields[i + 1];
+
+          if (key === 'data') {
+            eventData[key] = JSON.parse(value);
+          } else if (key === 'stepIndex' || key === 'timestamp') {
+            eventData[key] = parseInt(value);
+          } else {
+            eventData[key] = value;
+          }
+        }
+
+        return eventData as StreamEvent;
+      });
+    } catch (error) {
+      console.error('[StreamEventManager] Failed to get stream history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Clean up stream data for operation
+   */
+  async cleanupOperation(operationId: string): Promise<void> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    try {
+      await this.redis.del(streamKey);
+      log('Cleaned up operation %s', operationId);
+    } catch (error) {
+      console.error('[StreamEventManager] Failed to cleanup operation:', error);
+    }
+  }
+
+  /**
+   * Get count of active operations
+   */
+  async getActiveOperationsCount(): Promise<number> {
+    try {
+      const pattern = `${this.STREAM_PREFIX}:*`;
+      const keys = await this.redis.keys(pattern);
+      return keys.length;
+    } catch (error) {
+      console.error('[StreamEventManager] Failed to get active operations count:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Close Redis connection
+   */
+  async disconnect(): Promise<void> {
+    await this.redis.quit();
+  }
+}

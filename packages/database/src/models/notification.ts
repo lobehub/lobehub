@@ -13,12 +13,14 @@ export class NotificationModel {
     this.userId = userId;
   }
 
+  private ownership = () => eq(notifications.userId, this.userId);
+
   async list(
     opts: { category?: string; cursor?: string; limit?: number; unreadOnly?: boolean } = {},
   ) {
     const { cursor, limit = 20, category, unreadOnly } = opts;
 
-    const conditions = [eq(notifications.userId, this.userId), eq(notifications.isArchived, false)];
+    const conditions = [this.ownership(), eq(notifications.isArchived, false)];
 
     if (unreadOnly) {
       conditions.push(eq(notifications.isRead, false));
@@ -32,7 +34,7 @@ export class NotificationModel {
       const cursorRow = await this.db
         .select({ createdAt: notifications.createdAt, id: notifications.id })
         .from(notifications)
-        .where(and(eq(notifications.id, cursor), eq(notifications.userId, this.userId)))
+        .where(and(eq(notifications.id, cursor), this.ownership()))
         .limit(1);
 
       if (cursorRow[0]) {
@@ -60,11 +62,7 @@ export class NotificationModel {
       .select({ count: count() })
       .from(notifications)
       .where(
-        and(
-          eq(notifications.userId, this.userId),
-          eq(notifications.isRead, false),
-          eq(notifications.isArchived, false),
-        ),
+        and(this.ownership(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
       );
 
     return result?.count ?? 0;
@@ -76,7 +74,7 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isRead: true, updatedAt: new Date() })
-      .where(and(eq(notifications.userId, this.userId), inArray(notifications.id, ids)));
+      .where(and(this.ownership(), inArray(notifications.id, ids)));
   }
 
   async markAllAsRead() {
@@ -84,11 +82,7 @@ export class NotificationModel {
       .update(notifications)
       .set({ isRead: true, updatedAt: new Date() })
       .where(
-        and(
-          eq(notifications.userId, this.userId),
-          eq(notifications.isRead, false),
-          eq(notifications.isArchived, false),
-        ),
+        and(this.ownership(), eq(notifications.isRead, false), eq(notifications.isArchived, false)),
       );
   }
 
@@ -96,14 +90,14 @@ export class NotificationModel {
     return this.db
       .update(notifications)
       .set({ isArchived: true, updatedAt: new Date() })
-      .where(and(eq(notifications.id, id), eq(notifications.userId, this.userId)));
+      .where(and(eq(notifications.id, id), this.ownership()));
   }
 
   async archiveAll() {
     return this.db
       .update(notifications)
       .set({ isArchived: true, updatedAt: new Date() })
-      .where(and(eq(notifications.userId, this.userId), eq(notifications.isArchived, false)));
+      .where(and(this.ownership(), eq(notifications.isArchived, false)));
   }
 
   // ─── Write-side (used by NotificationService in cloud) ─────────

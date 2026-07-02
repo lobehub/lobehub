@@ -1,12 +1,10 @@
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
 import type { TaskGroupItem, TaskListItem, TaskViewMode } from './initialState';
-
-const FETCH_TASK_LIST_KEY = 'fetchTaskList';
-const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
 
 /**
  * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
@@ -29,6 +27,20 @@ const DEFAULT_KANBAN_GROUPS = [
   { key: 'canceled', statuses: ['canceled'] },
 ];
 
+/**
+ * Cleared whenever the list scope changes (all-agents <-> a specific agent).
+ * The list and group datasets are shared store fields, so without this reset
+ * the previous scope's tasks would render until the new fetch resolves — e.g.
+ * the `/tasks` page briefly showing only the last-visited agent's tasks.
+ */
+const scopeChangeResetState = {
+  isTaskGroupListInit: false,
+  isTaskListInit: false,
+  taskGroups: [] as TaskGroupItem[],
+  tasks: [] as TaskListItem[],
+  tasksTotal: 0,
+};
+
 type Setter = StoreSetter<TaskStore>;
 
 export const createTaskListSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
@@ -46,7 +58,7 @@ export class TaskListSliceActionImpl {
 
   refreshTaskGroupList = async (): Promise<void> => {
     const { listAgentId } = this.#get();
-    await mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]);
+    await mutate(taskKeys.groupList(listAgentId));
   };
 
   fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
@@ -55,8 +67,8 @@ export class TaskListSliceActionImpl {
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId } = this.#get();
     await Promise.all([
-      mutate([FETCH_TASK_LIST_KEY, listAgentId]),
-      mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]),
+      mutate(taskKeys.list(listAgentId)),
+      mutate(taskKeys.groupList(listAgentId)),
     ]);
   };
 
@@ -78,11 +90,15 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskGroupList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskGroupList/syncAgentId',
+      );
     }
 
     return useClientDataSWR(
-      enabled && effectiveKey ? [FETCH_TASK_GROUP_LIST_KEY, effectiveKey] : null,
+      enabled && effectiveKey ? taskKeys.groupList(effectiveKey) : null,
       async () => {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
@@ -113,11 +129,15 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskList/syncAgentId',
+      );
     }
 
     return useClientDataSWR(
-      enabled && effectiveKey ? [FETCH_TASK_LIST_KEY, effectiveKey] : null,
+      enabled && effectiveKey ? taskKeys.list(effectiveKey) : null,
       async ([, id]: [string, string]) => {
         return this.fetchTaskList(allAgents ? {} : { assigneeAgentId: id });
       },

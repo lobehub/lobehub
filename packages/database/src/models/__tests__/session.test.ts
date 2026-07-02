@@ -283,7 +283,9 @@ describe('SessionModel', () => {
     });
   });
 
-  describe('queryByKeyword', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyword', () => {
     it('should return an empty array if keyword is empty', async () => {
       const result = await sessionModel.queryByKeyword('');
       expect(result).toEqual([]);

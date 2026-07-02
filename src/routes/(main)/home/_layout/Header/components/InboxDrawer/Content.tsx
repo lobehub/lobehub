@@ -9,9 +9,9 @@ import useSWRInfinite from 'swr/infinite';
 import { VList, type VListHandle } from 'virtua';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
 
-import { FETCH_KEY } from './constants';
 import NotificationItem from './NotificationItem';
 
 const PAGE_SIZE = 20;
@@ -32,10 +32,10 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
       if (!open) return null;
       if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
 
-      if (pageIndex === 0) return [FETCH_KEY, undefined, unreadOnly] as const;
+      if (pageIndex === 0) return inboxKeys.notifications(undefined, unreadOnly);
 
       const lastItem = previousPageData?.at(-1);
-      return [FETCH_KEY, lastItem?.id, unreadOnly] as const;
+      return inboxKeys.notifications(lastItem?.id, unreadOnly);
     },
     [open, unreadOnly],
   );
@@ -49,7 +49,7 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
     return notificationService.list({
       cursor: cursor as string | undefined,
       limit: PAGE_SIZE,
-      unreadOnly: filterUnread,
+      unreadOnly: filterUnread as boolean | undefined,
     });
   });
 

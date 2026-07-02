@@ -2,7 +2,7 @@
 
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { useDetailContext } from '../DetailProvider';
 import Sidebar from '../Sidebar';

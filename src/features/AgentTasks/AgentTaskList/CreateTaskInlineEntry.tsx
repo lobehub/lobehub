@@ -14,6 +14,7 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 
@@ -25,6 +26,11 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 interface CreateTaskInlineEntryProps {
   agentId?: string;
   autoFocus?: boolean;
+  /**
+   * Locks the assignee to `agentId` and hides the agent picker. Used on the
+   * agent-scoped task list where every task belongs to that agent.
+   */
+  lockAssignee?: boolean;
   onCollapse?: () => void;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
@@ -40,6 +46,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const {
     agentId,
     autoFocus,
+    lockAssignee,
     onCollapse,
     onCreated,
     parentTaskId,
@@ -48,6 +55,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   } = props;
   const isHero = variant === 'hero';
   const { t } = useTranslation('chat');
+  const { allowed: canCreateTask, reason } = usePermission('create_content');
 
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
@@ -62,9 +70,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
+  // When the assignee is locked to a scoped agent, keep it in sync with the
+  // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
+  // /agent/B/tasks, so without this the hidden assignee would stay on A.
   useEffect(() => {
+    if (lockAssignee) setAssigneeAgentId(agentId);
+  }, [agentId, lockAssignee]);
+
+  useEffect(() => {
+    if (!canCreateTask) return;
     if (autoFocus || isHero) editor?.focus?.();
-  }, [autoFocus, editor, isHero]);
+  }, [autoFocus, canCreateTask, editor, isHero]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -75,19 +91,21 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, [onCollapse, updateSystemStatus]);
 
   const handleContentChange = useCallback(() => {
+    if (!canCreateTask) return;
     const lexicalEditor = editor?.getLexicalEditor?.();
     if (!lexicalEditor) return;
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
     setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
-  }, [editor]);
+  }, [canCreateTask, editor]);
 
   const handleAttach = useCallback(() => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
   const handleSubmit = useCallback(async () => {
+    if (!canCreateTask) return;
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const trimmedText = instruction.trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
@@ -133,6 +151,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     onCreated,
     parentTaskId,
     priority,
+    canCreateTask,
   ]);
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -170,6 +189,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         }}
       >
         <EditorCanvas
+          disabled={!canCreateTask}
           editor={editor}
           floatingToolbar={false}
           placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
@@ -213,31 +233,41 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             </Block>
           </TaskPriorityTag>
 
-          <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
-            <Block
-              clickable
-              horizontal
-              align="center"
-              gap={6}
-              paddingBlock={4}
-              paddingInline={8}
-              variant={'borderless'}
-            >
-              {assigneeAgentId ? (
-                <>
-                  <AssigneeAvatar agentId={assigneeAgentId} size={18} />
-                  <Text fontSize={12}>{assigneeMeta?.title}</Text>
-                </>
-              ) : (
-                <>
-                  <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
-                  <Text color={cssVar.colorTextDescription} fontSize={12}>
-                    {t('createTask.assignee')}
-                  </Text>
-                </>
-              )}
-            </Block>
-          </AssigneeAgentSelector>
+          {(() => {
+            const assigneeChip = (
+              <Block
+                horizontal
+                align="center"
+                clickable={!lockAssignee}
+                gap={6}
+                paddingBlock={4}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {assigneeAgentId ? (
+                  <>
+                    <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                    <Text fontSize={12}>{assigneeMeta?.title}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                    <Text color={cssVar.colorTextDescription} fontSize={12}>
+                      {t('createTask.assignee')}
+                    </Text>
+                  </>
+                )}
+              </Block>
+            );
+
+            return lockAssignee ? (
+              assigneeChip
+            ) : (
+              <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
+                {assigneeChip}
+              </AssigneeAgentSelector>
+            );
+          })()}
 
           <ActionIcon
             icon={Paperclip}
@@ -248,10 +278,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         </Flexbox>
 
         <Button
-          disabled={isCreating || (!instruction.trim() && !hasAttachments)}
+          disabled={!canCreateTask || isCreating || (!instruction.trim() && !hasAttachments)}
           loading={isCreating}
           shape={'round'}
           size={'small'}
+          title={canCreateTask ? undefined : reason}
           type={'primary'}
           onClick={handleSubmit}
         >
