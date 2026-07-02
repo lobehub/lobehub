@@ -4,7 +4,8 @@ import type { AgentEvent, AgentInstruction, InstructionExecutor } from '../types
 /**
  * `finish` executor — terminates the operation.
  *
- * First executor hosted in the package (LOBE-10949 Tier A): it depends only on
+ * First executor migrated from the server into this package as part of the
+ * agent-runtime IO transport port abstraction: it depends only on
  * the `StreamSink` + `OperationStore` transports and the operation context, so
  * the server just provides those adapters. Behavior mirrors the previous
  * server-local implementation exactly.
