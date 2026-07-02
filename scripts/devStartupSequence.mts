@@ -17,17 +17,55 @@ const isWindows = process.platform === 'win32';
 
 const NEXT_HOST = 'localhost';
 
+const MAX_PORT_SCAN_ATTEMPTS = 100;
+
+const isPortFree = (port: number) =>
+  new Promise<boolean>((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', () => resolve(false));
+    server.listen(port, () => {
+      server.close(() => resolve(true));
+    });
+  });
+
+const findFreePort = async (startPort: number): Promise<number> => {
+  for (let port = startPort; port < startPort + MAX_PORT_SCAN_ATTEMPTS; port++) {
+    if (await isPortFree(port)) return port;
+  }
+  throw new Error(`No free port found in range ${startPort}-${startPort + MAX_PORT_SCAN_ATTEMPTS - 1}`);
+};
+
 /**
  * Resolve the Next.js dev port.
- * Priority: -p CLI flag > PORT env var > 3010.
+ * Priority: -p CLI flag > PORT env var > first free port from 3010.
+ * An explicitly requested port is used verbatim so conflicts fail loudly.
  */
-const resolveNextPort = (): number => {
+const resolveNextPort = async (): Promise<number> => {
   const pIndex = process.argv.indexOf('-p');
   if (pIndex !== -1 && process.argv[pIndex + 1]) {
     return Number(process.argv[pIndex + 1]);
   }
   if (process.env.PORT) return Number(process.env.PORT);
-  return 3010;
+  return findFreePort(3010);
+};
+
+/**
+ * Resolve the port for the Vite dev server this orchestrator spawns and expose
+ * it to children via env: the mode-specific listen var consumed by
+ * vite.config.ts, plus VITE_DEV_PORT — the single contract the Next side reads
+ * to locate the Vite dev server (no fs port file involved).
+ */
+const resolveVitePortEnv = async (): Promise<number> => {
+  const isMobile = process.env.MOBILE === 'true';
+  const envName = isMobile ? 'MOBILE_SPA_PORT' : 'SPA_PORT';
+  const explicit = Number(process.env[envName]);
+  const port = explicit || (await findFreePort(isMobile ? 3012 : 9876));
+
+  process.env[envName] = String(port);
+  process.env.VITE_DEV_PORT = String(port);
+
+  return port;
 };
 
 const NEXT_READY_TIMEOUT_MS = 180_000;
@@ -238,8 +276,11 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
 
 const main = async () => {
   loadEnv();
-  nextPort = resolveNextPort();
+  nextPort = await resolveNextPort();
+  process.env.PORT = String(nextPort);
   nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;
+  const vitePort = await resolveVitePortEnv();
+  console.log(`🔌 dev ports — next: ${nextPort}, vite: ${vitePort}`);
 
   const forwardedSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
   for (const sig of forwardedSignals) {
@@ -288,6 +329,9 @@ const isMainModule = () => {
 export const __testing = {
   createPackageScriptProcessConfig,
   createDevProcessHandle,
+  findFreePort,
+  resolveNextPort,
+  resolveVitePortEnv,
   sendSignalToDevProcess,
 };
 
