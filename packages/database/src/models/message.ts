@@ -390,6 +390,44 @@ export class MessageModel {
   // **************** Query *************** //
 
   /**
+   * The last N user messages across a set of topics, oldest-first. Used to
+   * pre-inject recent same-channel history for IM platforms that can't read
+   * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
+   * non-empty text are returned; ordering spans all topics by `createdAt` so
+   * the newest turns win regardless of which topic they landed in.
+   */
+  queryRecentUserMessagesByTopics = async (
+    topicIds: string[],
+    limit = 4,
+  ): Promise<{ content: string; createdAt: Date; topicId: string | null }[]> => {
+    if (topicIds.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        content: messages.content,
+        createdAt: messages.createdAt,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'user'),
+          isNotNull(messages.content),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+
+    // Fetched newest-first for the LIMIT; hand back oldest-first for prompting.
+    return rows
+      .filter((r) => (r.content ?? '').trim().length > 0)
+      .map((r) => ({ content: r.content as string, createdAt: r.createdAt, topicId: r.topicId }))
+      .reverse();
+  };
+
+  /**
    * Query messages by params (high-level API)
    *
    * This is the main query method that handles common query patterns.

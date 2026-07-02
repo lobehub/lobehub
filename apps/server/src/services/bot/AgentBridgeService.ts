@@ -1,3 +1,5 @@
+import { MessageApiName } from '@lobechat/builtin-tool-message';
+import type { BotPlatformContext } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, ExecAgentResult } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
@@ -26,6 +28,7 @@ import {
   THINKING_REACTION_EMOJI,
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
+import { buildRecentChannelHistory } from './recentChannelHistory';
 import {
   renderAgentError,
   renderError,
@@ -703,14 +706,20 @@ export class AgentBridgeService {
     const platformDef = opts.botContext?.platform
       ? platformRegistry.getPlatform(opts.botContext.platform)
       : undefined;
-    const botPlatformContext:
-      { platformName: string; supportsMarkdown: boolean; warnings?: string[] } | undefined =
-      platformDef
-        ? {
-            platformName: platformDef.name,
-            supportsMarkdown: platformDef.supportsMarkdown !== false,
-          }
-        : undefined;
+    // Platforms whose runtime rejects `readMessages` (e.g. WeChat) can't fetch
+    // history on demand. We flag that so the prompt stops telling the model to
+    // call `readMessages`, and instead pre-inject recent same-channel history
+    // below (see `buildRecentChannelHistory`).
+    const canReadHistory = !platformDef?.unsupportedMessageApis?.includes(
+      MessageApiName.readMessages,
+    );
+    const botPlatformContext: BotPlatformContext | undefined = platformDef
+      ? {
+          canReadHistory,
+          platformName: platformDef.name,
+          supportsMarkdown: platformDef.supportsMarkdown !== false,
+        }
+      : undefined;
     // Whether we can edit a previously-posted message in place. When false
     // (QQ/WeChat today), the chat-adapter falls editMessage back to postMessage,
     // so each step/completion edit surfaces as a NEW message — leaving the
@@ -731,6 +740,23 @@ export class AgentBridgeService {
       topicId,
       trigger,
     } = opts;
+
+    // For platforms that can't read history at runtime, surface a compact
+    // cross-session summary of this channel (recent topics + last few user
+    // messages) so a fresh topic still knows what was just discussed. Scoped to
+    // the channel via `platformThreadId`; best-effort — never block the reply.
+    if (botPlatformContext && !canReadHistory && botContext?.platformThreadId) {
+      try {
+        botPlatformContext.recentChannelHistory = await buildRecentChannelHistory(
+          this.db,
+          this.userId,
+          this.workspaceId,
+          { excludeTopicId: topicId, platformThreadId: botContext.platformThreadId },
+        );
+      } catch (error) {
+        log('executeWithWebhooks: buildRecentChannelHistory failed (non-fatal): %O', error);
+      }
+    }
 
     const queueMode = isQueueAgentRuntimeEnabled();
     const aiAgentService = new AiAgentService(this.db, this.userId, {
@@ -934,7 +960,7 @@ export class AgentBridgeService {
     opts: {
       agentId: string;
       botContext?: ChatTopicBotContext;
-      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
+      botPlatformContext?: BotPlatformContext;
       callbackUrl: string;
       channelContext?: DiscordChannelContext;
       client?: PlatformClient;
@@ -1088,7 +1114,7 @@ export class AgentBridgeService {
     opts: {
       agentId: string;
       botContext?: ChatTopicBotContext;
-      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
+      botPlatformContext?: BotPlatformContext;
       callbackUrl: string;
       charLimit?: number;
       channelContext?: DiscordChannelContext;

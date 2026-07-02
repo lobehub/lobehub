@@ -519,6 +519,16 @@ export interface PlatformDefinition {
    * Defaults to true.
    */
   supportsMessageEdit?: boolean;
+
+  /**
+   * `lobe-message` API names this platform's runtime does NOT implement (its
+   * service throws `PlatformUnsupportedError`). Surfaced into the agent runtime's
+   * manifest resolve context so `resolveMessageManifest` removes them from the
+   * tool list — otherwise the model calls an operation that can only fail (the
+   * WeChat `readMessages` "刚刚聊了啥" case). Keep this in sync with the platform's
+   * service stubs. Omit when the platform implements the full surface.
+   */
+  unsupportedMessageApis?: string[];
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
