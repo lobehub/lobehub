@@ -26,6 +26,7 @@ export default {
   'apikey.list.columns.lastUsedAt': 'Last Used',
   'apikey.list.columns.name': 'Name',
   'apikey.list.columns.status': 'Enabled Status',
+  'apikey.list.empty.title': 'No Data',
   'apikey.list.title': 'API Key List',
   'apikey.validation.required': 'This field cannot be empty',
   'authModal.description':

@@ -189,6 +189,7 @@ const ApiKey: FC = () => {
         className={styles.table}
         columns={columns}
         headerTitle={t('apikey.list.title')}
+        locale={{ emptyText: t('apikey.list.empty.title') }}
         options={false}
         pagination={false}
         rowKey="id"
