@@ -16,7 +16,7 @@ const AiHubMix: ModelProviderCard = {
     showModelFetcher: true,
     supportResponsesApi: true,
   },
-  url: 'https://api.inferera.com?utm_source=lobehub',
+  url: 'https://inferera.com?utm_source=lobehub',
 };
 
 export default AiHubMix;
