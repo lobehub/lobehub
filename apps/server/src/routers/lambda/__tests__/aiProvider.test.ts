@@ -58,6 +58,7 @@ describe('aiProviderRouter', () => {
     enabledChatAiProviders: [],
     enabledImageAiProviders: [],
     enabledVideoAiProviders: [],
+    enabledEmbeddingAiProviders: [],
     runtimeConfig: {},
   };
 

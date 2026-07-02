@@ -1494,6 +1494,7 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
     contextWindowTokens: 8192,
     description: 'The most capable embedding model for English and non-English tasks.',
     displayName: 'Text Embedding 3 Large',
+    enabled: true,
     id: 'text-embedding-3-large',
     maxDimension: 3072,
     pricing: {
@@ -1508,6 +1509,7 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'An efficient, cost-effective next-generation embedding model for retrieval and RAG scenarios.',
     displayName: 'Text Embedding 3 Small',
+    enabled: true,
     id: 'text-embedding-3-small',
     maxDimension: 1536,
     pricing: {

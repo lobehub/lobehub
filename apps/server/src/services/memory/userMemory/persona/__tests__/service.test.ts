@@ -90,6 +90,7 @@ beforeEach(async () => {
     enabledAiProviders: [],
     enabledChatAiProviders: [],
     enabledImageAiProviders: [],
+    enabledEmbeddingAiProviders: [],
     runtimeConfig: {
       openai: { keyVaults: { apiKey: 'vault-key', baseURL: 'https://vault.example.com' } },
     },
@@ -153,6 +154,7 @@ describe('UserPersonaService', () => {
       ],
       enabledAiProviders: [],
       enabledChatAiProviders: [],
+      enabledEmbeddingAiProviders: [],
       enabledImageAiProviders: [],
       runtimeConfig: {},
     });

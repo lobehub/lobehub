@@ -91,6 +91,7 @@ describe('AiInfraRepos', () => {
         ],
         enabledImageAiProviders: [],
         enabledVideoAiProviders: [],
+        enabledEmbeddingAiProviders: [],
         runtimeConfig: {
           openai: {
             apiKey: 'test-key',
@@ -175,6 +176,7 @@ describe('AiInfraRepos', () => {
         enabledChatAiProviders: [
           { id: 'openai', logo: 'openai-logo', name: 'OpenAI', source: 'builtin' },
         ],
+        enabledEmbeddingAiProviders: [],
         enabledImageAiProviders: [
           expect.objectContaining({
             id: 'fal',

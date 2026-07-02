@@ -1,10 +1,7 @@
-import isEqual from 'fast-deep-equal';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { useAiInfraStore } from '@/store/aiInfra';
-import { type EnabledProviderWithModels } from '@/types/aiProvider';
+import { useEnabledModels } from './useEnabledModels';
 
 export const useEnabledChatModels = (): EnabledProviderWithModels[] => {
-  const enabledChatModelList = useAiInfraStore((s) => s.enabledChatModelList, isEqual);
-
-  return enabledChatModelList || [];
+  return useEnabledModels('chat');
 };

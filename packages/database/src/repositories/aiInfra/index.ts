@@ -283,6 +283,11 @@ export class AiInfraRepos {
     const enabledVideoAiProviders = enabledAiProviders.filter((provider) => {
       return allModels.some((model) => model.providerId === provider.id && model.type === 'video');
     });
+    const enabledEmbeddingAiProviders = enabledAiProviders.filter((provider) => {
+      return allModels.some(
+        (model) => model.providerId === provider.id && model.type === 'embedding',
+      );
+    });
 
     return {
       enabledAiModels,
@@ -290,6 +295,7 @@ export class AiInfraRepos {
       enabledChatAiProviders,
       enabledImageAiProviders,
       enabledVideoAiProviders,
+      enabledEmbeddingAiProviders,
       runtimeConfig,
     };
   };

@@ -15,9 +15,13 @@ const disabledAiProviderList = (s: AIProviderStoreState) =>
 const disabledCustomAiProviderList = (s: AIProviderStoreState) =>
   s.aiProviderList.filter((item) => !item.enabled && item.source === AiProviderSourceEnum.Custom);
 
+const enabledChatModelList = (s: AIProviderStoreState) => s.enabledChatModelList || [];
+
 const enabledImageModelList = (s: AIProviderStoreState) => s.enabledImageModelList || [];
 
 const enabledVideoModelList = (s: AIProviderStoreState) => s.enabledVideoModelList || [];
+
+const enabledEmbeddingModelList = (s: AIProviderStoreState) => s.enabledEmbeddingModelList || [];
 
 const isProviderEnabled = (id: string) => (s: AIProviderStoreState) =>
   enabledAiProviderList(s).some((i) => i.id === id);
@@ -137,8 +141,10 @@ export const aiProviderSelectors = {
   disabledAiProviderList,
   disabledCustomAiProviderList,
   enabledAiProviderList,
+  enabledChatModelList,
   enabledImageModelList,
   enabledVideoModelList,
+  enabledEmbeddingModelList,
   isActiveProviderApiKeyNotEmpty,
   isActiveProviderEndpointNotEmpty,
   isAiProviderConfigLoading,

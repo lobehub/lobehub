@@ -99,6 +99,27 @@ export const normalizeChatModel = async (model: EnabledAiModel): Promise<Provide
   };
 };
 
+export const normalizeEmbeddingModel = async (
+  model: EnabledAiModel,
+): Promise<ProviderModelListItem> => {
+  const [description, knowledgeCutoff, pricing] = await Promise.all([
+    getModelProperty<string>(model, 'description'),
+    getModelProperty<string>(model, 'knowledgeCutoff'),
+    getModelProperty<Pricing>(model, 'pricing'),
+  ]);
+
+  return {
+    abilities: (model.abilities || {}) as ModelAbilities,
+    contextWindowTokens: model.contextWindowTokens,
+    displayName: model.displayName ?? '',
+    id: model.id,
+    releasedAt: model.releasedAt,
+    ...(description && { description }),
+    ...(knowledgeCutoff && { knowledgeCutoff }),
+    ...(pricing && { pricing }),
+  };
+};
+
 export const normalizeImageModel = async (
   model: EnabledAiModel,
 ): Promise<ProviderModelListItem> => {
@@ -180,6 +201,10 @@ export const getChatModelList = createProviderModelCollector('chat', async (mode
   normalizeChatModel(model),
 );
 
+export const getEmbeddingModelList = createProviderModelCollector('embedding', async (model) =>
+  normalizeEmbeddingModel(model),
+);
+
 export const getImageModelList = createProviderModelCollector('image', normalizeImageModel);
 
 export const getVideoModelList = createProviderModelCollector('video', normalizeVideoModel);
@@ -225,6 +250,14 @@ const buildVideoProviderModelLists = async (
   enabledAiModels: EnabledAiModel[],
 ) => buildProviderModelLists(providers, enabledAiModels, getVideoModelList);
 
+/**
+ * Build embedding provider model lists with proper async handling
+ */
+const buildEmbeddingProviderModelLists = async (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+) => buildProviderModelLists(providers, enabledAiModels, getEmbeddingModelList);
+
 enum AiProviderSwrKey {
   fetchAiProviderItem = 'FETCH_AI_PROVIDER_ITEM',
   fetchAiProviderList = 'FETCH_AI_PROVIDER',
@@ -236,6 +269,7 @@ type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];
+  enabledEmbeddingModelList?: EnabledProviderWithModels[];
 };
 
 type Setter = StoreSetter<AiInfraStore>;
@@ -502,12 +536,20 @@ export class AiProviderActionImpl {
           const data = await aiProviderService.getAiProviderRuntimeState();
 
           // Build model lists with proper async handling
-          const [enabledChatModelList, enabledImageModelList, enabledVideoModelList] =
-            await Promise.all([
-              buildChatProviderModelLists(data.enabledChatAiProviders, data.enabledAiModels),
-              buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
-              buildVideoProviderModelLists(data.enabledVideoAiProviders, data.enabledAiModels),
-            ]);
+          const [
+            enabledChatModelList,
+            enabledImageModelList,
+            enabledVideoModelList,
+            enabledEmbeddingModelList,
+          ] = await Promise.all([
+            buildChatProviderModelLists(data.enabledChatAiProviders, data.enabledAiModels),
+            buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
+            buildVideoProviderModelLists(data.enabledVideoAiProviders, data.enabledAiModels),
+            buildEmbeddingProviderModelLists(
+              data.enabledEmbeddingAiProviders,
+              data.enabledAiModels,
+            ),
+          ]);
 
           return {
             ...data,
@@ -515,6 +557,7 @@ export class AiProviderActionImpl {
             enabledChatModelList,
             enabledImageModelList,
             enabledVideoModelList,
+            enabledEmbeddingModelList,
           };
         }
 
@@ -544,14 +587,25 @@ export class AiProviderActionImpl {
           })
           .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
 
+        const enabledEmbeddingAiProviders = enabledAiProviders.filter((provider) => {
+          return builtinAiModelList.some(
+            (model) => model.providerId === provider.id && model.type === 'embedding',
+          );
+        });
+
         // Build model lists for non-login state as well
         const enabledAiModels = builtinAiModelList.filter((m) => m.enabled);
-        const [enabledChatModelList, enabledImageModelList, enabledVideoModelList] =
-          await Promise.all([
-            buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
-            buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
-            buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
-          ]);
+        const [
+          enabledChatModelList,
+          enabledImageModelList,
+          enabledVideoModelList,
+          enabledEmbeddingModelList,
+        ] = await Promise.all([
+          buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
+          buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
+          buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+          buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+        ]);
 
         return {
           builtinAiModelList,
@@ -563,6 +617,8 @@ export class AiProviderActionImpl {
           enabledImageModelList,
           enabledVideoAiProviders,
           enabledVideoModelList,
+          enabledEmbeddingAiProviders,
+          enabledEmbeddingModelList,
           runtimeConfig: {},
         };
       },
@@ -579,6 +635,7 @@ export class AiProviderActionImpl {
               enabledChatModelList: data.enabledChatModelList || [],
               enabledImageModelList: data.enabledImageModelList || [],
               enabledVideoModelList: data.enabledVideoModelList || [],
+              enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
               isInitAiProviderRuntimeState: true,
             },
             false,

@@ -1,12 +1,13 @@
 import { TooltipGroup } from '@lobehub/ui';
 import { Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import { type EnabledProviderWithModels } from '@/types/aiProvider';
+import type { EnabledModelListType } from '@/hooks/useEnabledModels';
+import { useEnabledModels } from '@/hooks/useEnabledModels';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 const prefixCls = 'ant';
 
@@ -41,6 +42,7 @@ interface ModelSelectProps extends Pick<
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
+  modelType?: EnabledModelListType;
   onChange?: (props: { model: string; provider: string }) => void;
   popupWidth?: number;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
@@ -60,9 +62,10 @@ const ModelSelect = memo<ModelSelectProps>(
     style,
     variant,
     initialWidth = false,
+    modelType,
     popupWidth,
   }) => {
-    const enabledList = useEnabledChatModels();
+    const enabledList = useEnabledModels(modelType ?? 'chat');
 
     const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {

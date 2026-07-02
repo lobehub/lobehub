@@ -84,6 +84,20 @@ describe('knowledgeCutoff backfill', () => {
     expect(vertexGemini3Pro?.knowledgeCutoff).toBe('2025-01');
   });
 
+  it('keeps builtin embedding models enabled', () => {
+    const openaiEmbeddingModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (m) => m.providerId === ModelProvider.OpenAI && m.type === 'embedding',
+    );
+    expect(openaiEmbeddingModels.length).toBeGreaterThan(0);
+    expect(openaiEmbeddingModels.every((m) => m.enabled)).toBe(true);
+
+    const vercelEmbeddingModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (m) => m.providerId === ModelProvider.VercelAIGateway && m.type === 'embedding',
+    );
+    expect(vercelEmbeddingModels.length).toBeGreaterThan(0);
+    expect(vercelEmbeddingModels.every((m) => m.enabled)).toBe(true);
+  });
+
   it('keeps an explicit knowledgeCutoff over the map value', async () => {
     const loader = vi.fn().mockResolvedValue([
       { enabled: true, id: 'gpt-5', knowledgeCutoff: '2020-01', type: 'chat' },

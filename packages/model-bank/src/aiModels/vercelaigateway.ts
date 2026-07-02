@@ -1682,6 +1682,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'Amazon Titan Text Embeddings V2 is a lightweight, efficient multilingual embedding model supporting 1024, 512, and 256 dimensions.',
     displayName: 'Titan Text Embeddings V2',
+    enabled: true,
     id: 'amazon/titan-embed-text-v2',
     maxDimension: 1024,
     pricing: {
@@ -1693,6 +1694,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'A state-of-the-art embedding model with strong performance in English, multilingual, and code tasks.',
     displayName: 'Gemini Embedding 001',
+    enabled: true,
     id: 'google/gemini-embedding-001',
     maxDimension: 768,
     pricing: {
@@ -1704,6 +1706,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'An English-focused text embedding model optimized for code and English language tasks.',
     displayName: 'Text Embedding 005',
+    enabled: true,
     id: 'google/text-embedding-005',
     maxDimension: 768,
     pricing: {
@@ -1715,6 +1718,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'A multilingual text embedding model optimized for cross-lingual tasks across many languages.',
     displayName: 'Text Multilingual Embedding 002',
+    enabled: true,
     id: 'google/text-multilingual-embedding-002',
     maxDimension: 768,
     pricing: {
@@ -1726,6 +1730,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'A model that classifies or converts text, images, or mixed content into embeddings.',
     displayName: 'Embed v4.0',
+    enabled: true,
     id: 'cohere/embed-v4.0',
     maxDimension: 1024,
     pricing: {
@@ -1737,6 +1742,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'A code embedding model for embedding codebases and repositories to support coding assistants.',
     displayName: 'Codestral Embed',
+    enabled: true,
     id: 'mistral/codestral-embed',
     maxDimension: 1024,
     pricing: {
@@ -1748,6 +1754,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     description:
       'A general text embedding model for semantic search, similarity, clustering, and RAG workflows.',
     displayName: 'Mistral Embed',
+    enabled: true,
     id: 'mistral/mistral-embed',
     maxDimension: 1024,
     pricing: {
@@ -1758,6 +1765,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
   {
     description: 'OpenAI’s most capable embedding model for English and non-English tasks.',
     displayName: 'text-embedding-3-large',
+    enabled: true,
     id: 'openai/text-embedding-3-large',
     maxDimension: 3072,
     pricing: {
@@ -1768,6 +1776,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
   {
     description: 'OpenAI’s improved, higher-performance ada embedding model variant.',
     displayName: 'text-embedding-3-small',
+    enabled: true,
     id: 'openai/text-embedding-3-small',
     maxDimension: 1536,
     pricing: {
@@ -1778,6 +1787,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
   {
     description: 'OpenAI’s legacy text embedding model.',
     displayName: 'text-embedding-ada-002',
+    enabled: true,
     id: 'openai/text-embedding-ada-002',
     maxDimension: 1536,
     pricing: {

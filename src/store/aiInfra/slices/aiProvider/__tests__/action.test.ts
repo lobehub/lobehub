@@ -1,11 +1,19 @@
 import * as runtimeModule from '@lobechat/model-runtime';
-import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema, Pricing } from 'model-bank';
+import type {
+  AIEmbeddingModelCard,
+  AIImageModelCard,
+  EnabledAiModel,
+  ModelParamsSchema,
+  Pricing,
+} from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getChatModelList,
+  getEmbeddingModelList,
   getImageModelList,
   normalizeChatModel,
+  normalizeEmbeddingModel,
   normalizeImageModel,
 } from '../action';
 
@@ -30,6 +38,22 @@ const createImageModel = (overrides: Partial<ImageEnabledModel> = {}): ImageEnab
   id: overrides.id ?? 'image-model',
   providerId: overrides.providerId ?? 'openai',
   type: 'image',
+  ...overrides,
+});
+
+type EmbeddingEnabledModel = EnabledAiModel & AIEmbeddingModelCard;
+
+const createEmbeddingModel = (
+  overrides: Partial<EmbeddingEnabledModel> = {},
+): EmbeddingEnabledModel => ({
+  abilities: overrides.abilities ?? {},
+  contextWindowTokens: overrides.contextWindowTokens ?? 8192,
+  displayName: overrides.displayName ?? 'Embedding Model',
+  enabled: overrides.enabled ?? true,
+  id: overrides.id ?? 'embedding-model',
+  maxDimension: overrides.maxDimension ?? 1536,
+  providerId: overrides.providerId ?? 'openai',
+  type: 'embedding',
   ...overrides,
 });
 
@@ -162,6 +186,61 @@ describe('aiProvider action helpers', () => {
     });
   });
 
+  describe('normalizeEmbeddingModel', () => {
+    it('preserves inline metadata without fallback lookup', async () => {
+      const fallbackSpy = vi.spyOn(runtimeModule, 'getModelPropertyWithFallback');
+      const model = createEmbeddingModel({
+        description: 'Inline embedding',
+        knowledgeCutoff: '2024-06',
+        pricing: {
+          units: [{ name: 'textInput', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' }],
+        },
+      });
+
+      const result = await normalizeEmbeddingModel(model);
+
+      expect(result).toMatchObject({
+        description: 'Inline embedding',
+        knowledgeCutoff: '2024-06',
+        pricing: {
+          units: [{ name: 'textInput', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' }],
+        },
+      });
+      expect(fallbackSpy).not.toHaveBeenCalled();
+    });
+
+    it('fetches fallback description/knowledge cutoff/pricing when missing', async () => {
+      const fallbackSpy = vi
+        .mocked(runtimeModule.getModelPropertyWithFallback)
+        .mockImplementation(async (_id, key) => {
+          if (key === 'description') return 'Fallback embedding description';
+          if (key === 'knowledgeCutoff') return '2024-01';
+          if (key === 'pricing')
+            return {
+              units: [{ name: 'textInput', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' }],
+            };
+          return undefined;
+        });
+
+      const result = await normalizeEmbeddingModel(
+        createEmbeddingModel({
+          description: undefined,
+          knowledgeCutoff: undefined,
+          pricing: undefined,
+        }),
+      );
+
+      expect(result.description).toBe('Fallback embedding description');
+      expect(result.knowledgeCutoff).toBe('2024-01');
+      expect(result.pricing).toEqual({
+        units: [{ name: 'textInput', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' }],
+      });
+      expect(fallbackSpy).toHaveBeenCalledWith('embedding-model', 'description', 'openai');
+      expect(fallbackSpy).toHaveBeenCalledWith('embedding-model', 'knowledgeCutoff', 'openai');
+      expect(fallbackSpy).toHaveBeenCalledWith('embedding-model', 'pricing', 'openai');
+    });
+  });
+
   describe('getChatModelList', () => {
     const chatModels = [
       createChatModel({ id: 'gpt-4', providerId: 'openai', displayName: 'GPT-4' }),
@@ -225,6 +304,26 @@ describe('aiProvider action helpers', () => {
 
     it('returns empty array when provider has no image models', async () => {
       const result = await getImageModelList(imageModels, 'unknown');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getEmbeddingModelList', () => {
+    const embeddingModels = [
+      createEmbeddingModel({ id: 'text-embedding-3-small', providerId: 'openai' }),
+      createEmbeddingModel({ id: 'text-embedding-3-large', providerId: 'openai' }),
+      createEmbeddingModel({ id: 'voyage-3', providerId: 'voyage' }),
+    ];
+
+    it('collects normalized embedding models for a provider', async () => {
+      const result = await getEmbeddingModelList(embeddingModels, 'openai');
+
+      expect(result).toHaveLength(2);
+      expect(result.map((m) => m.id)).toEqual(['text-embedding-3-small', 'text-embedding-3-large']);
+    });
+
+    it('returns empty array when provider has no embedding models', async () => {
+      const result = await getEmbeddingModelList(embeddingModels, 'unknown');
       expect(result).toEqual([]);
     });
   });

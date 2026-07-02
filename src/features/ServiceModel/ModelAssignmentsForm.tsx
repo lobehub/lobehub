@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
+import type { EnabledModelListType } from '@/hooks/useEnabledModels';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -43,6 +44,10 @@ const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
   { contextLimit: true, key: 'userMemoryPersonaWriter' },
   { contextLimit: true, key: 'userMemoryEmbedding' },
 ];
+
+const MEMORY_MODEL_TYPE_MAP: Partial<Record<UserServiceModelConfigKey, EnabledModelListType>> = {
+  userMemoryEmbedding: 'embedding',
+};
 
 const ModelAssignmentsForm = memo(() => {
   const { t } = useTranslation('setting');
@@ -172,6 +177,7 @@ const ModelAssignmentsForm = memo(() => {
       children: (
         <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
           <ModelSelect
+            modelType={MEMORY_MODEL_TYPE_MAP[key]}
             showAbility={false}
             style={{ minWidth: 0, width: '100%' }}
             value={value}
