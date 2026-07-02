@@ -43,6 +43,30 @@ describe('getCodexLinearMcpApiName', () => {
     expect(getCodexLinearMcpApiName({ toolName: 'server_linear_get_issue' })).toBe('get_issue');
   });
 
+  it('normalizes Codex Apps dotted Linear tool names', () => {
+    expect(
+      getCodexLinearMcpApiName({
+        input: { id: 'LOBE-11078' },
+        server: 'codex_apps',
+        toolName: 'linear.get_issue',
+      }),
+    ).toBe('get_issue');
+    expect(
+      getCodexLinearMcpApiName({
+        input: { id: 'issue:TEST-0000' },
+        server: 'codex_apps',
+        toolName: 'linear.fetch',
+      }),
+    ).toBe('get_issue');
+    expect(
+      getCodexLinearMcpApiName({
+        input: { query: 'agent runtime' },
+        server: 'codex_apps',
+        toolName: 'linear.search',
+      }),
+    ).toBe('search');
+  });
+
   it('treats bare issue identifiers as issue fetch calls', () => {
     expect(getCodexLinearMcpApiName({ input: { id: 'TEST-0000' }, toolName: 'linear_fetch' })).toBe(
       'get_issue',
