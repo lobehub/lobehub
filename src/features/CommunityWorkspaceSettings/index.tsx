@@ -14,7 +14,7 @@ import {
   TextArea,
   Tooltip,
 } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Switch, Tabs } from '@lobehub/ui/base-ui';
 import type { TableColumnsType, UploadProps } from 'antd';
 import { App, Input as AntInput, Table, Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -247,6 +247,7 @@ const CommunityWorkspaceSettings = memo(() => {
     canEdit: canEditCommunityProfile,
     description: remoteDescription,
     displayName: remoteDisplayName,
+    isDiscoverable: remoteIsDiscoverable,
     isLoading,
     profile,
     refresh,
@@ -264,6 +265,7 @@ const CommunityWorkspaceSettings = memo(() => {
   const [websiteUrl, setWebsiteUrl] = useState(profile?.websiteUrl ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(remoteAvatarUrl ?? null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(remoteBannerUrl ?? null);
+  const [isDiscoverable, setIsDiscoverable] = useState(remoteIsDiscoverable);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
@@ -295,6 +297,7 @@ const CommunityWorkspaceSettings = memo(() => {
     setWebsiteUrl(profile?.websiteUrl ?? '');
     setAvatarUrl(remoteAvatarUrl ?? null);
     setBannerUrl(remoteBannerUrl ?? null);
+    setIsDiscoverable(remoteIsDiscoverable);
     setNamespaceError(undefined);
     setWebsiteError(undefined);
   }, [
@@ -304,6 +307,7 @@ const CommunityWorkspaceSettings = memo(() => {
     remoteBannerUrl,
     remoteDescription,
     remoteDisplayName,
+    remoteIsDiscoverable,
     username,
   ]);
 
@@ -521,6 +525,28 @@ const CommunityWorkspaceSettings = memo(() => {
               onChange={(e) => setDescription(e.target.value)}
             />
           </SettingCard>
+
+          <SettingCard
+            description={t('user.workspaceProfile.settings.discoverable.description')}
+            hint={t('user.workspaceProfile.settings.discoverable.hint')}
+            title={t('user.workspaceProfile.settings.discoverable.title')}
+            action={
+              <Tooltip title={canEdit ? undefined : disabledReason}>
+                <span>
+                  <Switch
+                    aria-label={t('user.workspaceProfile.settings.discoverable.title')}
+                    checked={isDiscoverable}
+                    disabled={!canEdit || savingField === 'isDiscoverable'}
+                    loading={savingField === 'isDiscoverable'}
+                    onChange={(next) => {
+                      setIsDiscoverable(next);
+                      updateProfile('isDiscoverable', { isDiscoverable: next });
+                    }}
+                  />
+                </span>
+              </Tooltip>
+            }
+          />
 
           <SettingCard
             description={t('user.workspaceProfile.settings.website.description')}

@@ -2244,6 +2244,8 @@
   "workspace.onboarding.step3.subtitle": "选择几个开始——随时发现更多。",
   "workspace.onboarding.step4.cta": "进入工作区",
   "workspace.onboarding.step4.heading": "{{name}} 准备就绪！",
+  "workspace.onboarding.step4.marketProfileAdjust": "你的工作区已有社区档案。<cta>前往 Community 调整</cta>。",
+  "workspace.onboarding.step4.marketProfileCreate": "我们没能自动为你创建社区档案。<cta>前往 Community 创建</cta>，工作区代理才能被分享。",
   "workspace.onboarding.step4.marketProfileNudge": "已为 <strong>{{name}}</strong> 自动创建社区档案，工作区代理才能正常安装。<cta>前往 Community 自定义</cta>。",
   "workspace.onboarding.step4.subtitle": "工作区已经搭建完成，立刻进入和团队一起开始协作吧。",
   "workspace.onboarding.step4.subtitleWithAgents": "已有 {{count}} 位智能体准备就绪，立刻进入和团队一起开始协作吧。",

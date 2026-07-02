@@ -6,6 +6,7 @@ export interface CommunityWorkspaceMarketOrganizationProfile {
   bannerUrl: string | null;
   description: string | null;
   displayName: string | null;
+  isDiscoverable: boolean;
   namespace: string;
   websiteUrl: string | null;
 }
@@ -16,6 +17,7 @@ export interface CommunityWorkspaceProfileState {
   canEdit: boolean;
   description?: string | null;
   displayName?: string | null;
+  isDiscoverable: boolean;
   isLoading: boolean;
   isWorkspaceScope: boolean;
   profile: CommunityWorkspaceMarketOrganizationProfile | null;
@@ -29,6 +31,7 @@ export const useCommunityWorkspaceProfile = (): CommunityWorkspaceProfileState =
   canEdit: false,
   description: null,
   displayName: null,
+  isDiscoverable: false,
   isLoading: false,
   isWorkspaceScope: false,
   profile: null,
