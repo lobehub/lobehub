@@ -186,6 +186,37 @@ describe('OperationTraceRecorder', () => {
       const step = store.savePartial.mock.calls[0][1].steps[0];
       expect(step.activatedStepToolsDelta).toEqual([{ id: 'b' }, { id: 'c' }]);
     });
+
+    it('stores per-step usage on each step instead of cumulative operation totals', async () => {
+      store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [] });
+
+      await recorder.appendStep('op-usage', {
+        afterStepSignalEvents: [],
+        agentState: { messages: [] },
+        beforeStepSignalEvents: [],
+        currentContext: { phase: 'user_input' },
+        externalRetryCount: 0,
+        presentation: buildPresentation({
+          stepCost: 0.02,
+          stepInputTokens: 30,
+          stepOutputTokens: 20,
+          stepTotalTokens: 50,
+          totalCost: 0.12,
+          totalInputTokens: 300,
+          totalOutputTokens: 200,
+          totalTokens: 500,
+        }),
+        startedAt: 500,
+        stepIndex: 3,
+        stepResult: { events: [], newState: { activatedStepTools: [], messages: [] } },
+      });
+
+      const step = store.savePartial.mock.calls[0][1].steps[0];
+      expect(step.inputTokens).toBe(30);
+      expect(step.outputTokens).toBe(20);
+      expect(step.totalCost).toBe(0.02);
+      expect(step.totalTokens).toBe(50);
+    });
   });
 
   describe('finalize', () => {
