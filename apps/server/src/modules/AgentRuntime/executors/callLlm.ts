@@ -64,6 +64,7 @@ import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { AiModelModel } from '@/database/models/aiModel';
 import { FileModel } from '@/database/models/file';
 import { MessageModel as MessageModelClass } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -124,7 +125,8 @@ export const callLlm =
     // was populated by a bug or a mid-run side effect. Plans absent on old /
     // resumed operations fall back to the policy-only gate.
     const devicePolicy = state.metadata?.deviceAccessPolicy as
-      { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
+      | { canUseDevice: boolean; reason: DeviceAccessReason }
+      | undefined;
     const executionPlan = state.metadata?.executionPlan as ExecutionPlan | undefined;
     const planAllowsDevice = !executionPlan || isDeviceCapablePlan(executionPlan);
     const activeDeviceId =
@@ -289,6 +291,22 @@ export const callLlm =
         const modelKnowledgeCutoff =
           modelCard?.knowledgeCutoff ??
           (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
+        let modelDisplayName =
+          modelCard?.displayName ??
+          (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
+
+        // Custom/remote user models aren't in the bundled model bank, so both cards
+        // miss. Fall back to the user's own AI model record so server-side runs still
+        // surface identity (the inbox `{{model}}` fallback no longer exists).
+        if (!modelDisplayName && ctx.serverDB && ctx.userId) {
+          try {
+            const aiModelModel = new AiModelModel(ctx.serverDB, ctx.userId);
+            const userModel = await aiModelModel.findByIdAndProvider(model, provider);
+            modelDisplayName = userModel?.displayName ?? undefined;
+          } catch (error) {
+            log('Failed to resolve user model display name for %s: %O', model, error);
+          }
+        }
 
         let modelExtendParams = readExtendParams(modelCard);
 
@@ -491,7 +509,8 @@ export const callLlm =
         const lobehubSkillAgentId = state.metadata?.agentId;
         const lobehubSkillTopicId = state.metadata?.topicId;
         const lobehubSkillAgentMeta = state.metadata?.agentConfig as
-          { description?: string | null; title?: string | null } | undefined;
+          | { description?: string | null; title?: string | null }
+          | undefined;
 
         let lobehubSkillTopicTitle = '';
         if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
@@ -574,12 +593,14 @@ export const callLlm =
             const credsResult = await marketService.market.creds.list();
             const userCreds = (credsResult as any)?.data ?? [];
             credsListStr = generateCredsList(
-              userCreds.map((cred: any): CredSummary => ({
-                description: cred.description,
-                key: cred.key,
-                name: cred.name,
-                type: cred.type,
-              })),
+              userCreds.map(
+                (cred: any): CredSummary => ({
+                  description: cred.description,
+                  key: cred.key,
+                  name: cred.name,
+                  type: cred.type,
+                }),
+              ),
             );
             log('Fetched %d creds for {{CREDS_LIST}} substitution', userCreds.length);
           } catch (error) {
@@ -803,6 +824,7 @@ export const callLlm =
           },
           messages: messagesForContext,
           model,
+          modelDisplayName,
           modelKnowledgeCutoff,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,

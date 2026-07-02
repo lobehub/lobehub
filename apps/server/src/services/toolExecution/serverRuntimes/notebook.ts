@@ -16,6 +16,7 @@ export const notebookRuntime: ServerRuntimeRegistration = {
     }
 
     const notebookService = new NotebookRuntimeService({
+      callerAgentVisibility: context.agentVisibility,
       serverDB: context.serverDB,
       userId: context.userId,
       workspaceId: context.workspaceId,

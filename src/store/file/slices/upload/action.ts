@@ -44,6 +44,13 @@ interface UploadWithProgressParams {
    */
   source?: string;
   uploadId?: string;
+  /**
+   * Optional workspace visibility override sent to `file.createFile`. Only
+   * meaningful in workspace mode; personal mode ignores it server-side. When
+   * omitted the server picks its default (top-level uploads default to
+   * `'private'`, children inherit their parent document's visibility).
+   */
+  visibility?: 'private' | 'public';
 }
 
 interface UploadWithProgressResult {
@@ -126,6 +133,7 @@ export class FileUploadActionImpl {
     source,
     uploadId,
     abortController,
+    visibility,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
 
@@ -211,6 +219,7 @@ export class FileUploadActionImpl {
           size: normalizedFile.size,
           source,
           url: fileUrl,
+          visibility,
         },
         knowledgeBaseId,
       );

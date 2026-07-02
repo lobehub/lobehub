@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Habilidade",
   "actionTag.category.tool": "Ferramenta",
   "actionTag.tooltip.agentSkill": "Carrega um pacote de habilidades dos documentos deste agente para a solicitação.",
+  "actionTag.tooltip.clickToView": "Clique para ver os detalhes",
   "actionTag.tooltip.command": "Executa um comando slash no cliente antes do envio.",
   "actionTag.tooltip.projectSkill": "Enviado como uma invocação de barra para que o CLI do agente execute a habilidade correspondente do projeto.",
   "actionTag.tooltip.skill": "Carrega um pacote de habilidades reutilizável para esta solicitação.",

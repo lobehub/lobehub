@@ -18,6 +18,9 @@ const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
 
+const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
+  activeTaskDetail(s)?.visibility ?? 'public';
+
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
@@ -122,6 +125,7 @@ export const taskDetailSelectors = {
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskVerifyConfig,
+  activeTaskVisibility,
   activeTaskWorkspace,
   activeTaskWorkspaceId,
   activeTopicDrawerTopicId,

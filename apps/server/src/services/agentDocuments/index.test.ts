@@ -305,7 +305,10 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.listDocuments('agent-1');
 
-      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1');
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', {
+        parentId: undefined,
+        sourceType: undefined,
+      });
       expect(mockModel.findByAgent).not.toHaveBeenCalled();
       expect(result).toEqual([
         {
@@ -331,8 +334,23 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       await service.listDocuments('agent-1', 'web');
 
-      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', { sourceType: 'web' });
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', {
+        parentId: undefined,
+        sourceType: 'web',
+      });
       expect(mockModel.findByAgent).not.toHaveBeenCalled();
+    });
+
+    it('should pass the parentId folder filter to the model', async () => {
+      mockModel.listByAgent.mockResolvedValue([]);
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.listDocuments('agent-1', undefined, { parentId: 'folder-1' });
+
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', {
+        parentId: 'folder-1',
+        sourceType: undefined,
+      });
     });
 
     it('should hide the .tool-results archive folder and its children by default', async () => {

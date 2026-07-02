@@ -18,9 +18,16 @@ export class SessionGroupModel {
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, sessionGroups);
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: sessionGroups.userId,
+        workspaceId: sessionGroups.workspaceId,
+        visibility: sessionGroups.visibility,
+      },
+    );
 
-  create = async (params: { name: string; sort?: number }) => {
+  create = async (params: { name: string; sort?: number; visibility?: 'private' | 'public' }) => {
     const [result] = await this.db
       .insert(sessionGroups)
       .values(
@@ -60,6 +67,26 @@ export class SessionGroupModel {
       .update(sessionGroups)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(sessionGroups.id, id), this.ownership()));
+  };
+
+  /**
+   * Publish a private session group (folder) into the workspace. One-way:
+   * mirrors the rule applied to agents and chat groups — a shared folder
+   * can't be re-privatized because other members may already be relying on
+   * it as a container for their bookmarks.
+   */
+  publishToWorkspace = async (id: string) => {
+    return this.db
+      .update(sessionGroups)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(sessionGroups.id, id),
+          this.ownership(),
+          eq(sessionGroups.userId, this.userId),
+          eq(sessionGroups.visibility, 'private'),
+        ),
+      );
   };
 
   updateOrder = async (sortMap: { id: string; sort: number }[]) => {

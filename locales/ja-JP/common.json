@@ -1,5 +1,6 @@
 {
   "about": "情報",
+  "addNew": "新規追加",
   "advanceSettings": "詳細設定",
   "agentOnboardingPromo.actionLabel": "今すぐ試す",
   "agentOnboardingPromo.description": "Lobe AI と短く会話するだけで、エージェントチームを設定できます。既存のエージェントは変更されません。",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "コンテンツポリシーのチェックに失敗しました。プロンプトを修正してください。",
   "getDesktopApp": "デスクトップアプリを入手",
   "goToTarget": "ターゲットに移動",
+  "gotIt": "了解しました",
   "historyRange": "履歴範囲",
   "home.suggestQuestions": "次の例をお試しください",
   "import": "インポート",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "下へ移動",
   "navPanel.moveUp": "上へ移動",
   "navPanel.pinned": "固定",
+  "navPanel.privateAgents": "プライベート",
+  "navPanel.publicAgents": "ワークスペース",
   "navPanel.resetDefault": "デフォルトにリセット",
   "navPanel.searchAgent": "アシスタントを検索…",
   "navPanel.searchRecent": "最近の検索...",

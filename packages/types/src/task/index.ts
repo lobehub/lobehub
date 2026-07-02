@@ -4,13 +4,7 @@ import type { ChatFileItem } from '../message/ui/chat';
 // ── Task type aliases ──
 
 export type TaskStatus =
-  | 'backlog'
-  | 'canceled'
-  | 'completed'
-  | 'failed'
-  | 'paused'
-  | 'running'
-  | 'scheduled';
+  'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
@@ -204,6 +198,10 @@ export interface TaskItem {
   status: string;
   totalTopics: number | null;
   updatedAt: Date;
+  // 'private' tasks are only visible to their creator in workspace mode.
+  // 'public' (default) tasks are visible to every workspace member.
+  // The column is ignored in personal mode (no workspace).
+  visibility: 'private' | 'public';
   workspaceId: string | null;
 }
 
@@ -244,6 +242,7 @@ export interface NewTask {
   status?: string;
   totalTopics?: number | null;
   updatedAt?: Date;
+  visibility?: 'private' | 'public';
   workspaceId?: string | null;
 }
 
@@ -399,6 +398,9 @@ export interface TaskDetailData {
   userId?: string | null;
   /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
   verify?: TaskVerifyConfig | null;
+  /** Visibility within a workspace. 'public' is workspace-shared (default);
+   *  'private' is only visible to the creator. Ignored in personal mode. */
+  visibility?: 'private' | 'public';
   workspace?: TaskDetailWorkspaceNode[];
   /** Owning workspace; null for personal (non-workspace) tasks. */
   workspaceId?: string | null;

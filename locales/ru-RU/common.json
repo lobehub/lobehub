@@ -1,5 +1,6 @@
 {
   "about": "О проекте",
+  "addNew": "Добавить новый",
   "advanceSettings": "Расширенные настройки",
   "agentOnboardingPromo.actionLabel": "Попробовать",
   "agentOnboardingPromo.description": "Настройте свои команды агентов в коротком чате с Lobe AI. Ваши существующие агенты останутся без изменений.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Проверка политики контента не пройдена. Пожалуйста, измените ваш запрос.",
   "getDesktopApp": "Скачать приложение для компьютера",
   "goToTarget": "Перейти к цели",
+  "gotIt": "Понял",
   "historyRange": "Диапазон истории",
   "home.suggestQuestions": "Попробуйте эти примеры",
   "import": "Импорт",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Переместить вниз",
   "navPanel.moveUp": "Переместить вверх",
   "navPanel.pinned": "Закреплено",
+  "navPanel.privateAgents": "Личное",
+  "navPanel.publicAgents": "Рабочая область",
   "navPanel.resetDefault": "Сбросить по умолчанию",
   "navPanel.searchAgent": "Поиск агента...",
   "navPanel.searchRecent": "Поиск недавних...",

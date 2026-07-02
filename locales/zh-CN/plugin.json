@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "问题",
   "builtins.lobe-claude-code.askUserQuestion.reply": "回复",
   "builtins.lobe-claude-code.askUserQuestion.selected": "已选择",
+  "builtins.lobe-claude-code.sendMessage.queued": "已加入投递队列",
+  "builtins.lobe-claude-code.sendMessage.title": "发送消息",
   "builtins.lobe-claude-code.task.create.completed": "已创建任务：",
   "builtins.lobe-claude-code.task.create.loading": "正在创建任务：",
   "builtins.lobe-claude-code.task.getLabel": "查看任务 #{{taskId}}",

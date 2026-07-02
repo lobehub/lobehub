@@ -168,6 +168,8 @@
   "sidebar.expandAll": "Espandi tutti i gruppi",
   "sidebar.title": "Argomenti",
   "taskManager.agent": "Agente di attività",
+  "taskManager.agentSelector.privateGroup": "Privato",
+  "taskManager.agentSelector.workspaceGroup": "Spazio di lavoro",
   "taskManager.welcome": "Chiedimi dei tuoi compiti",
   "temp": "Temporaneo",
   "title": "Argomento"

@@ -1,5 +1,6 @@
 {
   "about": "درباره",
+  "addNew": "افزودن جدید",
   "advanceSettings": "تنظیمات پیشرفته",
   "agentOnboardingPromo.actionLabel": "همین حالا امتحان کنید",
   "agentOnboardingPromo.description": "تیم‌های عامل خود را با یک گفت‌وگوی کوتاه با Lobe AI تنظیم کنید. عامل‌های فعلی شما بدون تغییر باقی می‌مانند.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "بررسی خط‌مشی محتوا ناموفق بود. لطفاً درخواست خود را بازبینی کنید.",
   "getDesktopApp": "دریافت برنامه دسکتاپ",
   "goToTarget": "رفتن به هدف",
+  "gotIt": "متوجه شدم",
   "historyRange": "محدوده تاریخچه",
   "home.suggestQuestions": "این نمونه‌ها را امتحان کنید",
   "import": "وارد کردن",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "انتقال به پایین",
   "navPanel.moveUp": "انتقال به بالا",
   "navPanel.pinned": "سن‌شده",
+  "navPanel.privateAgents": "خصوصی",
+  "navPanel.publicAgents": "فضای کاری",
   "navPanel.resetDefault": "بازنشانی به حالت پیش‌فرض",
   "navPanel.searchAgent": "جستجوی نماینده...",
   "navPanel.searchRecent": "جست‌وجوی موارد اخیر...",

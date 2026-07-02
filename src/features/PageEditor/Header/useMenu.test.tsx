@@ -26,6 +26,10 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: vi.fn(),
+}));
+
 vi.mock('antd', () => ({
   App: {
     useApp: () => ({
@@ -41,9 +45,12 @@ vi.mock('antd', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  createStaticStyles: () => ({}),
   cssVar: {
     colorTextTertiary: 'colorTextTertiary',
   },
+  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
+  keyframes: () => '',
   useResponsive: () => ({ lg: true }),
 }));
 

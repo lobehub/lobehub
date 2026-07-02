@@ -5,6 +5,7 @@
   "actionTag.category.skill": "技能",
   "actionTag.category.tool": "工具",
   "actionTag.tooltip.agentSkill": "從此代理的文件中為請求加載技能組合。",
+  "actionTag.tooltip.clickToView": "點擊以查看詳細資訊",
   "actionTag.tooltip.command": "在發送前執行客戶端斜線命令。",
   "actionTag.tooltip.projectSkill": "以斜線調用的方式發送，讓代理的 CLI 執行匹配的專案技能。",
   "actionTag.tooltip.skill": "為此次請求載入可重用的技能包。",

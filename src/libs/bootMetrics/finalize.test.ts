@@ -4,7 +4,12 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  bootTimingSnapshot: vi.fn(() => ({ marks: {}, spans: [] })),
+  bootTimingSnapshot: vi.fn<
+    () => {
+      marks: Record<string, number>;
+      spans: { durMs: number; name: string; startMs: number }[];
+    }
+  >(() => ({ marks: { 'first-paint': 1000 }, spans: [] })),
   getServerConfigStoreState: vi.fn(() => ({ serverConfig: { bootstrapMetricsSampleRate: 1 } })),
   getUserStoreState: vi.fn(() => ({ user: null })),
   isLogin: vi.fn(() => false),
@@ -52,6 +57,13 @@ describe('startBootMetricsFinalize', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
+    localStorage.clear();
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+
     sendBeaconSpy = vi.spyOn(navigator, 'sendBeacon').mockReturnValue(true);
 
     Object.defineProperty(window, 'requestAnimationFrame', {
@@ -81,7 +93,7 @@ describe('startBootMetricsFinalize', () => {
     vi.spyOn(performance, 'getEntriesByType').mockReturnValue([]);
     vi.spyOn(performance, 'getEntriesByName').mockReturnValue([]);
 
-    mocks.bootTimingSnapshot.mockReturnValue({ marks: {}, spans: [] });
+    mocks.bootTimingSnapshot.mockReturnValue({ marks: { 'first-paint': 1000 }, spans: [] });
     mocks.getServerConfigStoreState.mockReturnValue({
       serverConfig: { bootstrapMetricsSampleRate: 1 },
     });
@@ -168,5 +180,108 @@ describe('startBootMetricsFinalize', () => {
     await vi.runAllTimersAsync();
 
     expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips sending entirely when the page was hidden at module evaluation', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+
+    const { startBootMetricsFinalize } = await import('./finalize');
+    startBootMetricsFinalize();
+    await vi.runAllTimersAsync();
+
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips sending after a visibilitychange to hidden', async () => {
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+
+    const { startBootMetricsFinalize } = await import('./finalize');
+    startBootMetricsFinalize();
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
+  });
+
+  it('marks the device as seen before the sampling gate, even when sampled out', async () => {
+    mocks.getServerConfigStoreState.mockReturnValue({
+      serverConfig: { bootstrapMetricsSampleRate: 0 },
+    });
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    expect(localStorage.getItem('lobe:boot:seen')).toBeNull();
+
+    const { startBootMetricsFinalize } = await import('./finalize');
+    startBootMetricsFinalize();
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
+    expect(localStorage.getItem('lobe:boot:seen')).toBe('1');
+  });
+
+  it('reports cold=true on first boot and cold=false on the next boot', async () => {
+    const { startBootMetricsFinalize: first } = await import('./finalize');
+    first();
+    await vi.runAllTimersAsync();
+
+    const firstPayload = JSON.parse(await (sendBeaconSpy.mock.calls[0][1] as Blob).text());
+    expect(firstPayload.cold).toBe(true);
+
+    vi.resetModules();
+    sendBeaconSpy.mockClear();
+
+    const { startBootMetricsFinalize: second } = await import('./finalize');
+    second();
+    await vi.runAllTimersAsync();
+
+    const secondPayload = JSON.parse(await (sendBeaconSpy.mock.calls[0][1] as Blob).text());
+    expect(secondPayload.cold).toBe(false);
+  });
+
+  it('leaves sent false when sendBeacon returns false, so pagehide retries', async () => {
+    sendBeaconSpy.mockReturnValue(false);
+
+    const { startBootMetricsFinalize } = await import('./finalize');
+    startBootMetricsFinalize();
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not send when payload build returns null (no first-paint and no fcp)', async () => {
+    mocks.bootTimingSnapshot.mockReturnValue({ marks: {}, spans: [] });
+
+    const { startBootMetricsFinalize } = await import('./finalize');
+    startBootMetricsFinalize();
+    await vi.runAllTimersAsync();
+
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
   });
 });

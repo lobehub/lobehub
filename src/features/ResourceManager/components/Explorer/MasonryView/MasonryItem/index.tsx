@@ -206,6 +206,8 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     metadata,
     sourceType,
     slug,
+    userId,
+    visibility,
   }) => {
     const chunkTargetId = getChunkTargetId({ fileId, id });
     const [markdownContent, setMarkdownContent] = useState<string>('');
@@ -378,6 +380,8 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       libraryId: knowledgeBaseId,
       sourceType,
       url,
+      userId,
+      visibility,
     });
 
     return (

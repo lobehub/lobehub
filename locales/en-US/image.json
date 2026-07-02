@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Delete Generation Topic",
   "topic.deleteConfirmDesc": "You are about to delete this generation topic. This action cannot be undone, please proceed with caution.",
   "topic.empty": "No generation topics",
+  "topic.privateTitle": "Private",
   "topic.title": "Image Topic",
-  "topic.untitled": "Default Topic"
+  "topic.untitled": "Default Topic",
+  "topic.visibility.existingLocked": "Visibility is fixed for the current topic. Create a new topic to choose a different space.",
+  "topic.workspaceTitle": "Workspace"
 }

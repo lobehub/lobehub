@@ -272,6 +272,23 @@ describe('contextEngineering', () => {
     });
   });
 
+  it('should inject runtime model name and id', async () => {
+    vi.spyOn(helpers, 'getRuntimeModelDisplayName').mockReturnValue('Fable 5');
+
+    const output = await contextEngineering({
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'claude-fable-5',
+      provider: 'lobehub',
+      systemRole: 'You are a helpful assistant',
+    });
+
+    expect(helpers.getRuntimeModelDisplayName).toHaveBeenCalledWith('claude-fable-5', 'lobehub');
+    expect(output[0]).toEqual({
+      content: expect.stringContaining('Current model: Fable 5 (claude-fable-5)'),
+      role: 'system',
+    });
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
       runtimeFlags.isServerMode = true;

@@ -551,6 +551,132 @@ describe('ChatGroupModel', () => {
         chatGroupModel.addAgentsToGroup('non-existent-group', ['agent-1']),
       ).rejects.toThrow('Group not found');
     });
+
+    describe('private/public visibility composite rule', () => {
+      // Caller is `otherUserId` operating inside `workspaceId`. The owner of
+      // `workspaceId` is `userId`, so we exercise both "my own group" and
+      // "another member's group" within the same workspace.
+      it("allows the caller's own private agent in their own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        const result = await workspaceChatGroupModel.addAgentsToGroup('mine-private-group', [
+          'agt-mine-private',
+        ]);
+
+        expect(result.added).toHaveLength(1);
+      });
+
+      it("allows a workspace public agent in the caller's own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group-pub',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-ws-public',
+            title: 'Workspace public agent',
+            userId, // owned by the workspace owner — visible to all members
+            workspaceId,
+            visibility: 'public',
+          });
+        });
+
+        const result = await workspaceChatGroupModel.addAgentsToGroup('mine-private-group-pub', [
+          'agt-ws-public',
+        ]);
+
+        expect(result.added).toHaveLength(1);
+      });
+
+      it("rejects another member's private agent even in the caller's own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group-foreign',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-other-private',
+            title: 'Other private agent',
+            userId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('mine-private-group-foreign', [
+            'agt-other-private',
+          ]),
+        ).rejects.toThrow('Agent not found');
+      });
+
+      it("rejects the caller's own private agent in their own public group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-public-group',
+            title: 'Mine — public',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'public',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private-2',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('mine-public-group', ['agt-mine-private-2']),
+        ).rejects.toThrow('Agent not found');
+      });
+
+      it("rejects a private agent in another member's group (group is public)", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'others-public-group',
+            title: 'Others — public',
+            userId, // group owner is the workspace owner, not the caller
+            workspaceId,
+            visibility: 'public',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private-3',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('others-public-group', ['agt-mine-private-3']),
+        ).rejects.toThrow('Agent not found');
+      });
+    });
   });
 
   describe('removeAgentFromGroup', () => {

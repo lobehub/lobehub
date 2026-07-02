@@ -66,6 +66,8 @@ export default {
   'builtins.lobe-claude-code.askUserQuestion.question': 'Question',
   'builtins.lobe-claude-code.askUserQuestion.reply': 'Reply',
   'builtins.lobe-claude-code.askUserQuestion.selected': 'Selected',
+  'builtins.lobe-claude-code.sendMessage.queued': 'Queued for delivery',
+  'builtins.lobe-claude-code.sendMessage.title': 'Send message',
   'builtins.lobe-claude-code.task.create.completed': 'Task created: ',
   'builtins.lobe-claude-code.task.create.loading': 'Creating task: ',
   'builtins.lobe-claude-code.task.getLabel': 'View task #{{taskId}}',

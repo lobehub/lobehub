@@ -32,6 +32,7 @@
   "builtins.github.render.error": "오류",
   "builtins.github.render.rawResult": "원시 결과",
   "builtins.github.render.updatedAt": "{{time}}에 업데이트됨",
+  "builtins.linear.render.empty": "{{collection}}을(를) 찾을 수 없습니다",
   "builtins.linear.render.updatedAt": "{{time}}에 업데이트됨",
   "builtins.lobe-activator.apiName.activateTools": "도구 활성화",
   "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}}개를 찾을 수 없음",

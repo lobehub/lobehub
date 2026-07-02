@@ -233,6 +233,40 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('getAgentSnapshotForTaskCreate', () => {
+    it('returns model/provider snapshot + visibility in one call', async () => {
+      const agentId = 'snap-task-create-1';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+        userId,
+        visibility: 'private',
+      });
+
+      const result = await agentModel.getAgentSnapshotForTaskCreate(agentId);
+
+      expect(result).toEqual({
+        snapshot: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        visibility: 'private',
+      });
+    });
+
+    it('returns null when the agent is not visible to the current caller', async () => {
+      const agentId = 'snap-task-create-other-user';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        model: 'gpt-4o',
+        provider: 'openai',
+        userId: userId2,
+      });
+
+      const result = await agentModel.getAgentSnapshotForTaskCreate(agentId);
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';

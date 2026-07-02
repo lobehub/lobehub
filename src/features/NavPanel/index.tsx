@@ -5,11 +5,15 @@ import { memo, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import PageSidebarContent from '@/features/Pages/PageLayout/SidebarContent';
 import WorkspaceSettingsSideBarContent from '@/features/WorkspaceSetting/SideBar/Content';
 import AgentSidebarContent from '@/routes/(main)/agent/_layout/Sidebar/Content';
 import CommunitySidebarContent from '@/routes/(main)/community/_layout/Sidebar/Content';
+import EvalSidebarContent from '@/routes/(main)/eval/_layout/Sidebar/Content';
 import GroupSidebarContent from '@/routes/(main)/group/_layout/Sidebar/Content';
 import SidebarContent from '@/routes/(main)/home/_layout/SidebarContent';
+import MemorySidebarContent from '@/routes/(main)/memory/_layout/Sidebar/Content';
+import ResourceSidebarContent from '@/routes/(main)/resource/(home)/_layout/SidebarContent';
 import SettingsSidebarContent from '@/routes/(main)/settings/_layout/SidebarContent';
 
 import { NavPanelDraggable } from './components/NavPanelDraggable';
@@ -48,6 +52,10 @@ const COMMUNITY_NAV_KEY = 'discover';
 const EMPTY_NAV_KEY = 'empty';
 const SETTINGS_NAV_KEY = 'settings';
 const WORKSPACE_SETTINGS_NAV_KEY = 'workspace-settings';
+const RESOURCE_NAV_KEY = 'resource';
+const MEMORY_NAV_KEY = 'memory';
+const EVAL_NAV_KEY = 'eval';
+const PAGE_NAV_KEY = 'page';
 
 const DEDICATED_ROUTE_NAV_SEGMENTS = new Set([
   'community',
@@ -133,12 +141,44 @@ const NavPanel = memo(() => {
           node: <CommunitySidebarContent />,
         }
       : null;
+  const resourceFallback =
+    mainRouteSegment === 'resource'
+      ? {
+          key: RESOURCE_NAV_KEY,
+          node: <ResourceSidebarContent />,
+        }
+      : null;
+  const memoryFallback =
+    mainRouteSegment === 'memory'
+      ? {
+          key: MEMORY_NAV_KEY,
+          node: <MemorySidebarContent />,
+        }
+      : null;
+  const evalFallback =
+    mainRouteSegment === 'eval'
+      ? {
+          key: EVAL_NAV_KEY,
+          node: <EvalSidebarContent />,
+        }
+      : null;
+  const pageFallback =
+    mainRouteSegment === 'page'
+      ? {
+          key: PAGE_NAV_KEY,
+          node: <PageSidebarContent />,
+        }
+      : null;
   const routeFallback =
     agentFallback ||
     groupFallback ||
     workspaceSettingsFallback ||
     personalSettingsFallback ||
-    communityFallback;
+    communityFallback ||
+    resourceFallback ||
+    memoryFallback ||
+    evalFallback ||
+    pageFallback;
   const hasDedicatedRouteNavPanel = DEDICATED_ROUTE_NAV_SEGMENTS.has(mainRouteSegment ?? '');
   const isStaleHomeSnapshot =
     panelContent?.key === FALLBACK_NAV_KEY && hasDedicatedRouteNavPanel && !isHomeRoute;

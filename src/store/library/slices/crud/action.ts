@@ -44,11 +44,23 @@ export class KnowledgeBaseCrudActionImpl {
 
   refreshKnowledgeBaseList = async (): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
-    await mutate(knowledgeBaseKeys.list(workspaceId));
+    // The KB list is keyed by (workspaceId, visibility?), so we invalidate the
+    // three surfaces that can be currently rendered — unscoped, private-only,
+    // workspace-only — to keep both modes in sync after a mutation.
+    await Promise.all([
+      mutate(knowledgeBaseKeys.list(workspaceId)),
+      mutate(knowledgeBaseKeys.list(workspaceId, 'private')),
+      mutate(knowledgeBaseKeys.list(workspaceId, 'public')),
+    ]);
   };
 
   removeKnowledgeBase = async (id: string): Promise<void> => {
     await knowledgeBaseService.deleteKnowledgeBase(id);
+    await this.#get().refreshKnowledgeBaseList();
+  };
+
+  publishKnowledgeBaseToWorkspace = async (id: string): Promise<void> => {
+    await knowledgeBaseService.publishKnowledgeBaseToWorkspace(id);
     await this.#get().refreshKnowledgeBaseList();
   };
 
@@ -80,10 +92,13 @@ export class KnowledgeBaseCrudActionImpl {
     );
   };
 
-  useFetchKnowledgeBaseList = (): SWRResponse<KnowledgeBaseItem[]> => {
+  useFetchKnowledgeBaseList = (
+    visibility?: 'private' | 'public',
+  ): SWRResponse<KnowledgeBaseItem[]> => {
+    const workspaceId = getActiveWorkspaceId();
     return useClientDataSWR<KnowledgeBaseItem[]>(
-      knowledgeBaseKeys.list(),
-      () => knowledgeBaseService.getKnowledgeBaseList(),
+      knowledgeBaseKeys.list(workspaceId, visibility),
+      () => knowledgeBaseService.getKnowledgeBaseList(visibility),
       {
         fallbackData: [],
         onSuccess: () => {

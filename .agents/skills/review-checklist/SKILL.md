@@ -35,6 +35,7 @@ user-invocable: false
 ## SPA / routing
 
 - **`desktopRouter` pair:** If the diff touches `src/spa/router/desktopRouter.config.tsx`, does it also update `src/spa/router/desktopRouter.config.desktop.tsx` with the same route paths and nesting? Single-file edits often cause drift and blank screens.
+- **Single-source the nav/tab catalog:** A menu/tab list defined in more than one hand-maintained copy drifts. The settings catalog is duplicated across `settings/hooks/useCategory.tsx`, `WorkspaceSetting/hooks/useCategory.tsx`, and `(mobile)/me/settings/features/useCategory.tsx` — the mobile copy has already lost Devices / Messenger / Notification. Adding/removing a tab must touch every copy (or, better, derive them from one source). Flag new parallel catalogs.
 
 ## Reuse
 

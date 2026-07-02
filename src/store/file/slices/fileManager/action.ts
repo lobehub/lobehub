@@ -75,6 +75,7 @@ export class FileManageActionImpl {
     result: { id: string; url: string },
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): ResourceItem => {
     const existing = this.#get().resourceMap.get(result.id);
 
@@ -94,6 +95,10 @@ export class FileManageActionImpl {
       size: file.size,
       updatedAt: new Date(),
       url: result.url,
+      // Server persists the final visibility, but the row can be listed before
+      // the refetch lands. Carry the user's picker choice so the lock badge is
+      // consistent while the request is in flight.
+      ...(visibility !== undefined ? { visibility } : {}),
     };
   };
 
@@ -102,6 +107,7 @@ export class FileManageActionImpl {
     file: File,
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ) => {
     this.#get().insertLocalResource(
       {
@@ -112,6 +118,7 @@ export class FileManageActionImpl {
         size: file.size,
         sourceType: 'file',
         url: '',
+        ...(visibility !== undefined ? { visibility } : {}),
       },
       id,
     );
@@ -260,6 +267,7 @@ export class FileManageActionImpl {
     rawFiles: File[],
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): Promise<void> => {
     const { dispatchDockFileList } = this.#get();
     const generateUploadId = createNanoId(12);
@@ -296,7 +304,13 @@ export class FileManageActionImpl {
     });
 
     for (const uploadFile of uploadFiles) {
-      this.#insertOptimisticUpload(uploadFile.id, uploadFile.file, knowledgeBaseId, parentId);
+      this.#insertOptimisticUpload(
+        uploadFile.id,
+        uploadFile.file,
+        knowledgeBaseId,
+        parentId,
+        visibility,
+      );
     }
 
     // 3. Add all files to dock
@@ -317,6 +331,7 @@ export class FileManageActionImpl {
           onStatusUpdate: dispatchDockFileList,
           parentId,
           uploadId: uploadFileItem.id,
+          visibility,
         });
 
         if (!result) {
@@ -329,6 +344,7 @@ export class FileManageActionImpl {
               result,
               knowledgeBaseId,
               parentId,
+              visibility,
             ),
           );
         }
@@ -409,6 +425,11 @@ export class FileManageActionImpl {
 
     const { revalidateResources } = await import('../resource/hooks');
     await revalidateResources();
+  };
+
+  publishFileToWorkspace = async (id: string): Promise<void> => {
+    await fileService.publishFileToWorkspace(id);
+    await this.#get().refreshFileList();
   };
 
   removeAllFiles = async (): Promise<void> => {

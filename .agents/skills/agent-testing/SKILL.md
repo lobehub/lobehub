@@ -162,7 +162,29 @@ Useful subcommands:
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate   # migrations only
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user # seed user + CLI API key
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # local QStash for workflow paths
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # gate agent-runtime tests (QStash up in queue mode)
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db  # remove managed DB container
+```
+
+#### Agent-runtime prerequisite: QStash MUST be up (queue mode)
+
+Any test that runs an **agent** (`lh agent run`, durable ops, `/api/agent/run`,
+the server agent runtime) goes through `AGENT_RUNTIME_MODE=queue` — the default
+here and in production. Creating an agent operation **POSTs to local QStash
+(`127.0.0.1:8080`)**, so if QStash is not running the run dies at operation
+creation with `TypeError: fetch failed` / `ECONNREFUSED 127.0.0.1:8080`
+**before any LLM call** — no trace is recorded and the failure reads as
+unrelated to the env. `FEATURE_FLAGS=-agent_self_iteration` only drops the
+self-iteration workflow; it does **not** remove this dispatch dependency. Treat
+QStash as a hard prerequisite for agent-runtime tests, not an "only when
+workflow" nicety.
+
+So before the first `agent run`, start QStash in a separate terminal and gate on
+the preflight:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash      # terminal B — keep running
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight    # exits non-zero if QStash (or Redis) is down
 ```
 
 Default script env:
@@ -173,10 +195,13 @@ Default script env:
 - `AGENT_RUNTIME_MODE=queue` so backend-only agent runtime checks use the
   same queued execution path as production
 - `REDIS_URL=redis://localhost:6380` for queue-mode agent runtime state
-- `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
-- Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported;
-  run `init-dev-env.sh qstash` in a separate terminal when the path under test
-  triggers QStash/Workflow.
+- `FEATURE_FLAGS=-agent_self_iteration` drops the self-iteration workflow (so a
+  simple chat doesn't fan out), but this does **not** remove QStash from the
+  agent-runtime path — queue-mode operation creation still POSTs to QStash.
+- Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported,
+  but the QStash server itself is not auto-started. Run `init-dev-env.sh qstash`
+  in a separate terminal for **any agent-runtime test** (see the agent-runtime
+  prerequisite above), not only workflow paths.
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
 - S3 mock vars
 - Managed DB container: `lobehub-agent-testing-postgres`

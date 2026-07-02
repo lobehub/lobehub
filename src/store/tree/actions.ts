@@ -23,6 +23,8 @@ export const toTreeItem = (item: {
   slug?: string | null;
   sourceType?: string;
   url?: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }): TreeItem => ({
   fileType: item.fileType,
   id: item.id,
@@ -32,6 +34,8 @@ export const toTreeItem = (item: {
   slug: item.slug,
   sourceType: item.sourceType,
   url: item.url ?? '',
+  userId: item.userId,
+  visibility: item.visibility,
 });
 
 type Setter = StoreSetter<TreeState>;

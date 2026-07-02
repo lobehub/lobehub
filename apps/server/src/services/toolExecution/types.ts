@@ -127,6 +127,15 @@ export interface ToolExecutionContext {
    */
   agentMember?: ServerAgentMemberRunner;
   /**
+   * Visibility of the agent executing this tool call. Resolved once per tool
+   * call in the runtime executor. Tool runtimes that persist agent side-effects
+   * (documents, tasks, etc.) forward this so private-agent output inherits
+   * private visibility and public-agent reads are gated away from private data
+   * — mirroring the `assertAgentVisibilityCompat` invariant on tasks.
+   * `null` when the agent is missing or not visible to the caller.
+   */
+  agentVisibility?: 'private' | 'public' | null;
+  /**
    * The assistant message that carries this tool call (the runtime's
    * `payload.parentMessageId`). Distinct from `messageId`, which is the source
    * *user* message. Tools that need to anchor back to the exact tool-call turn

@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { generationBatches, generations, generationTopics, users } from '../../schemas';
+import { generationBatches, generations, generationTopics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GenerationTopicModel } from '../generationTopic';
 
@@ -20,11 +20,18 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'generation-topic-test-user';
 const otherUserId = 'other-user';
+const workspaceId = 'generation-topic-workspace';
 const generationTopicModel = new GenerationTopicModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Generation Topic Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 
   // Reset mocks before each test
   vi.clearAllMocks();
@@ -62,6 +69,20 @@ describe('GenerationTopicModel', () => {
       expect(result.id).toBeDefined();
       expect(result.title).toBe('');
       expect(result.userId).toBe(userId);
+    });
+
+    it('should create workspace topics as private by default', async () => {
+      const workspaceModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+
+      const result = await workspaceModel.create('Workspace Private Topic');
+
+      expect(result.workspaceId).toBe(workspaceId);
+      expect(result.visibility).toBe('private');
+
+      const topic = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, result.id),
+      });
+      expect(topic?.visibility).toBe('private');
     });
   });
 
@@ -173,6 +194,43 @@ describe('GenerationTopicModel', () => {
       const result = await generationTopicModel.queryAll();
       expect(result).toHaveLength(0);
     });
+
+    it('should hide other members private workspace topics while keeping public topics visible', async () => {
+      await serverDB.insert(generationTopics).values([
+        {
+          id: 'own-private-topic',
+          title: 'Own Private Topic',
+          type: 'image',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'other-private-topic',
+          title: 'Other Private Topic',
+          type: 'image',
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'workspace-public-topic',
+          title: 'Workspace Public Topic',
+          type: 'image',
+          userId: otherUserId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+
+      const workspaceModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+      const result = await workspaceModel.queryAll('image');
+
+      expect(result.map((topic) => topic.id).toSorted()).toEqual([
+        'own-private-topic',
+        'workspace-public-topic',
+      ]);
+    });
   });
 
   describe('update', () => {
@@ -180,7 +238,7 @@ describe('GenerationTopicModel', () => {
       // Create a test topic
       const { id } = await generationTopicModel.create('Original Title');
 
-      const updateData: Partial<ImageGenerationTopic> = {
+      const updateData: Pick<Partial<ImageGenerationTopic>, 'coverUrl' | 'title'> = {
         title: 'Updated Title',
         coverUrl: 'new-cover-key',
       };
@@ -207,7 +265,7 @@ describe('GenerationTopicModel', () => {
         .values({ id: 'other-topic', userId: otherUserId, title: 'Other User Topic' })
         .returning();
 
-      const updateData: Partial<ImageGenerationTopic> = {
+      const updateData: Pick<Partial<ImageGenerationTopic>, 'coverUrl' | 'title'> = {
         title: 'Hacked Title',
       };
 

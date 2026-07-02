@@ -15,6 +15,7 @@ import { LinearMcpInspectors } from './LinearMcp';
 import { MonitorInspector } from './Monitor';
 import { ReadInspector } from './Read';
 import { ScheduleWakeupInspector } from './ScheduleWakeup';
+import { SendMessageInspector } from './SendMessage';
 import { SkillInspector } from './Skill';
 import { TaskInspector } from './Task';
 import { TaskGetInspector } from './TaskGet';
@@ -50,6 +51,7 @@ const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.Monitor]: MonitorInspector,
   [ClaudeCodeApiName.Read]: ReadInspector,
   [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
+  [ClaudeCodeApiName.SendMessage]: SendMessageInspector,
   [ClaudeCodeApiName.Skill]: SkillInspector,
   // CC 2.1.143+ task tools — TaskCreate / TaskUpdate / TaskList share the
   // same inspector because they're driven by the adapter-synthesized

@@ -2,6 +2,7 @@ import { type SidebarGroup } from '@lobechat/types';
 import { Accordion } from '@lobehub/ui';
 import React, { memo } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -12,10 +13,11 @@ interface GroupProps {
 }
 
 const Group = memo<GroupProps>(({ dataSource }) => {
-  const [sessionGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.sessionGroupKeys(s),
-    s.updateSystemStatus,
-  ]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const sessionGroupKeys = useGlobalStore(
+    systemStatusSelectors.sessionGroupKeys(activeWorkspaceId),
+  );
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   return (
     <Accordion

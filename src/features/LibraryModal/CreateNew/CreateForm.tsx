@@ -2,6 +2,7 @@ import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useKnowledgeBaseStore } from '@/store/library';
 
 interface CreateFormProps {
@@ -18,6 +19,12 @@ const CreateForm = memo<CreateFormProps>(({ id, initialValues, onClose, onSucces
   const [description, setDescription] = useState(initialValues?.description || '');
   const createNewKnowledgeBase = useKnowledgeBaseStore((s) => s.createNewKnowledgeBase);
   const updateKnowledgeBase = useKnowledgeBaseStore((s) => s.updateKnowledgeBase);
+  // Derive KB visibility from the current sidebar mode: "private space" →
+  // private KB, "workspace space" → public KB. Personal-mode users have the
+  // toggle hidden and `listVisibility` stays at its default 'workspace', so
+  // personal-mode create still resolves to 'public' — matching the pre-column
+  // default and giving `buildWorkspaceWhere` nothing to filter on.
+  const listVisibility = useResourceManagerStore((s) => s.listVisibility);
 
   const isEditMode = !!id;
 
@@ -25,7 +32,11 @@ const CreateForm = memo<CreateFormProps>(({ id, initialValues, onClose, onSucces
     if (!name.trim()) return;
 
     setLoading(true);
-    const values = { name: name.trim(), description: description.trim() };
+    const values = {
+      description: description.trim(),
+      name: name.trim(),
+      visibility: listVisibility === 'private' ? ('private' as const) : ('public' as const),
+    };
 
     try {
       if (isEditMode) {

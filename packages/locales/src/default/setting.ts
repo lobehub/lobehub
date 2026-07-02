@@ -1303,12 +1303,20 @@ When I am ___, I need ___
     'Are you sure you want to downgrade your plan?',
   'workspace.billingPage.billing.cancelSuccess': 'Cancellation scheduled.',
   'workspace.billingPage.billing.cancelTitle': 'Cancel subscription?',
+  'workspace.billingPage.billing.billingPeriodModal.adjustmentLine': 'Prorated adjustment',
   'workspace.billingPage.billing.billingPeriodModal.body':
     "Your workspace's billing period will be changed from {{current}} to {{target}}.",
   'workspace.billingPage.billing.billingPeriodModal.cancelCta': 'Cancel',
   'workspace.billingPage.billing.billingPeriodModal.confirmCta': 'Change billing period',
+  'workspace.billingPage.billing.billingPeriodModal.creditsSubtitle':
+    'Prorated credit for unused time on the current period',
+  'workspace.billingPage.billing.billingPeriodModal.previewFailed':
+    "Couldn't load the price preview. Please try again.",
+  'workspace.billingPage.billing.billingPeriodModal.previewRetryCta': 'Retry',
   'workspace.billingPage.billing.billingPeriodModal.scheduledChange':
     'The change will take effect after the current period ends.',
+  'workspace.billingPage.billing.billingPeriodModal.seatsLine': 'Workspace seats',
+  'workspace.billingPage.billing.billingPeriodModal.unitYearly': 'year',
   'workspace.billingPage.billing.billingPeriodModal.scheduledChangeWithDate':
     'The change will take effect after the current period ends on {{date}}.',
   'workspace.billingPage.billing.billingPeriodModal.title': 'Change the billing period?',
@@ -1336,6 +1344,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.change.title': 'Adjust plan',
   'workspace.billingPage.billing.changeFailed': 'Failed to update subscription.',
   'workspace.billingPage.billing.changeSuccess': 'Subscription update saved.',
+  'workspace.billingPage.billing.upgradePlanModal.calculating': 'Calculating…',
   'workspace.billingPage.billing.upgradePlanModal.cancelCta': 'Cancel',
   'workspace.billingPage.billing.upgradePlanModal.checkoutCharge':
     'You will be redirected to checkout to complete payment.',
@@ -1365,9 +1374,18 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.resultViewMembersCta': 'View members',
   'workspace.billingPage.billing.upgradePlanModal.resultPaymentCharged':
     'Prorated charge · Amount in billing',
+  'workspace.billingPage.billing.upgradePlanModal.resultPaymentChargedAmount':
+    '{{amount}} charged · Amount in billing',
   'workspace.billingPage.billing.upgradePlanModal.resultPaymentLabel': 'Payment',
   'workspace.billingPage.billing.upgradePlanModal.resultPaymentScheduled':
     'No charge now · Effective next cycle',
+  'workspace.billingPage.billing.upgradePlanModal.resultFailedDesc':
+    "We couldn't complete this update. {{reason}}",
+  'workspace.billingPage.billing.upgradePlanModal.resultFailedRetryCta': 'Try again',
+  'workspace.billingPage.billing.upgradePlanModal.resultFailedTitle': 'Update failed',
+  'workspace.billingPage.billing.upgradePlanModal.resultPlanChangedDesc':
+    'Upgraded to {{plan}} · {{interval}}.',
+  'workspace.billingPage.billing.upgradePlanModal.resultPlanChangedTitle': 'Plan upgraded',
   'workspace.billingPage.billing.upgradePlanModal.resultSeatsExpanded':
     'Purchased: {{changedSeats}} seats · Total: {{seats}} seats',
   'workspace.billingPage.billing.upgradePlanModal.resultSeatsLabel': 'Seats',
@@ -1433,6 +1451,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.pending.cancelCta': 'Cancel',
   'workspace.billingPage.billing.pending.cancelSuccess': 'Subscription change canceled.',
   'workspace.billingPage.billing.pending.keepPlanCta': 'Keep {{plan}}',
+  'workspace.billingPage.billing.pending.keepPlanCtaWithInterval': 'Keep {{plan}} {{interval}}',
   'workspace.billingPage.billing.pending.desc':
     'Switches to {{plan}} {{interval}} on {{date}}. Keep your account balance sufficient.',
   'workspace.billingPage.billing.pending.descWithSeats':
@@ -1699,6 +1718,9 @@ When I am ___, I need ___
   'workspace.billingPage.usage.model.showLess': 'Show less',
   'workspace.billingPage.usage.model.unknown': 'Unknown model',
   'workspace.billingPage.usage.ops': 'Operations',
+  'workspace.billingPage.usage.privateAgents': 'Private agents',
+  'workspace.billingPage.usage.privateAgentsTooltip':
+    'Number of private agents owned by this member. Owners can see the count for accounting, but not the agent content.',
   'workspace.billingPage.usage.range.30d': 'Last 30 days',
   'workspace.billingPage.usage.range.all': 'All time',
   'workspace.billingPage.usage.range.cycle': 'This cycle',
@@ -2246,6 +2268,9 @@ When I am ___, I need ___
   'workspace.invitePage.switchAccountToAccept': 'Sign in as {{email}} to accept',
   'workspace.invitePage.signUpToJoin': 'Create account & join',
   'workspace.invitePage.title': 'Workspace Invitation',
+  'workspace.invitePage.viewerLimitSubtitle':
+    'This workspace has reached its viewer limit. Ask an owner to free a viewer seat or upgrade the plan before joining.',
+  'workspace.invitePage.viewerLimitTitle': 'Viewer Limit Reached',
   'workspace.invitePage.workspaceLimitSubtitle':
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
@@ -2257,8 +2282,17 @@ When I am ___, I need ___
   'workspace.members.invite.errors.alreadyMember':
     '{{email}} is already a member of this workspace.',
   'workspace.members.invite.failed': 'Failed to send invitation',
+  'workspace.members.invite.invitationLimitReached':
+    'This workspace has reached its pending-invitation limit of {{limit}}. Revoke or wait for unused invitations to expire before sending new ones.',
   'workspace.members.invite.limitReached':
     'This workspace can have up to {{limit}} members. Remove a member before inviting more.',
+  'workspace.members.invite.askOwnerToBuySeats':
+    'Ask the workspace owner to purchase more seats before inviting new members.',
+  'workspace.members.invite.buySeatsCta': 'Buy seats',
+  'workspace.members.invite.seatInsufficient':
+    'Only {{remaining}} seat(s) remaining. Buy more seats to invite {{required}} new member(s).',
+  'workspace.members.invite.seatInsufficientNoBuy':
+    'Only {{remaining}} seat(s) remaining. Ask the workspace owner to purchase more seats.',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
   'workspace.members.invite.subtitle':
@@ -2329,12 +2363,7 @@ When I am ___, I need ___
   'workspace.upgradeModal.successPage.amountLabel': 'Total paid',
   'workspace.upgradeModal.successPage.activating':
     'Activating your subscription — this usually takes a few seconds…',
-  'workspace.upgradeModal.successPage.continueCta': 'Invite & continue',
-  'workspace.upgradeModal.successPage.desc':
-    '{{name}} is now on Pro. Invite teammates to start collaborating.',
-  'workspace.upgradeModal.successPage.inviteDesc':
-    'Send invites by email. They will receive a link to join the workspace.',
-  'workspace.upgradeModal.successPage.inviteTitle': 'Invite teammates to {{name}}',
+  'workspace.upgradeModal.successPage.desc': '{{name}} is now on Pro.',
   'workspace.upgradeModal.successPage.paidAtLabel': 'Paid at',
   'workspace.upgradeModal.successPage.planTag': 'Workspace Pro',
   'workspace.upgradeModal.successPage.processingDesc':
@@ -2345,7 +2374,6 @@ When I am ___, I need ___
   'workspace.upgradeModal.successPage.recurringLabel': 'Billing cycle',
   'workspace.upgradeModal.successPage.seatsSummary': '{{count}} included seat',
   'workspace.upgradeModal.successPage.seatsSummary_other': '{{count}} included seats',
-  'workspace.upgradeModal.successPage.skipCta': 'Skip for now',
   'workspace.upgradeModal.successPage.title': 'Upgrade complete',
   'workspace.upgradeModal.successToast': 'Upgrade complete — refreshing your plan…',
   'workspace.upgradeModal.title': 'Upgrade workspace',
@@ -2506,6 +2534,8 @@ When I am ___, I need ___
   'workspace.onboarding.skipConfirm.cancel': 'Continue setup',
   'workspace.onboarding.toast.saved': 'Saved',
   'workspace.onboarding.toast.failed': 'Could not save. Please try again.',
+  'workspace.onboarding.toast.installAgentsFailed':
+    "Couldn't add the selected agents. You can install them later from the marketplace.",
   'workspace.onboarding.step1.heading': 'Personalize LobeAI',
   'workspace.onboarding.step1.subtitle':
     'Give your workspace assistant an identity your team will recognize.',
@@ -2565,6 +2595,8 @@ When I am ___, I need ___
   'workspace.onboarding.step4Invite.finish': 'Finish',
   'workspace.onboarding.step4Invite.heading': 'Invite your team',
   'workspace.onboarding.step4Invite.invitedCount': 'Invited {{count}} member(s)',
+  'workspace.onboarding.step4Invite.seatLimitReached':
+    'You can invite up to {{max}} teammate(s) with your current seats.',
   'workspace.onboarding.step4Invite.subtitle':
     'Bring teammates into this workspace now, or invite them later from member settings.',
   'workspace.onboarding.step4Invite.subtitleWithExtraSeats':
@@ -2576,6 +2608,8 @@ When I am ___, I need ___
     'Your workspace is set up. Jump in and start collaborating with your team.',
   'workspace.onboarding.step4.subtitleWithAgents':
     '{{count}} agent(s) ready to help. Jump in and start collaborating with your team.',
+  'workspace.onboarding.step4.marketProfileNudge':
+    "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in Community</cta>.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
   'workspaceSetting.breadcrumb.settings': 'Settings',
   'workspaceSetting.devices.desc':

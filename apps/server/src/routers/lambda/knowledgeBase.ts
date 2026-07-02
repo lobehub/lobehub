@@ -55,6 +55,7 @@ export const knowledgeBaseRouter = router({
         avatar: z.string().optional(),
         description: z.string().optional(),
         name: z.string(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -62,6 +63,7 @@ export const knowledgeBaseRouter = router({
         avatar: input.avatar,
         description: input.description,
         name: input.name,
+        visibility: input.visibility,
       });
 
       return data?.id;
@@ -122,9 +124,44 @@ export const knowledgeBaseRouter = router({
       return ctx.knowledgeBaseModel.findById(input.id);
     }),
 
-  getKnowledgeBases: knowledgeBaseProcedure.query(async ({ ctx }): Promise<KnowledgeBaseItem[]> => {
-    return ctx.knowledgeBaseModel.query();
-  }),
+  getKnowledgeBases: knowledgeBaseProcedure
+    .input(
+      z
+        .object({
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
+      return ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+    }),
+
+  publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
+    .use(withScopedPermission('knowledge_base:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot publish a knowledge base outside of a workspace',
+        });
+      }
+
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+
+      if (kb.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can publish a private knowledge base to the workspace',
+        });
+      }
+
+      if (kb.visibility === 'public') return { success: true };
+
+      await ctx.knowledgeBaseModel.publishToWorkspace(input.id);
+      return { success: true };
+    }),
 
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))

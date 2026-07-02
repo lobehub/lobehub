@@ -30,8 +30,8 @@ export const createRuntimeExecutors = (
     compress_context: compressContext(ctx),
     exec_sub_agent: execSubAgent(ctx),
     exec_sub_agents: execSubAgents(ctx),
-    // Migrated into @lobechat/agent-runtime (LOBE-10949 Tier A) — server only
-    // registers the adapters via buildHost.
+    // Migrated into @lobechat/agent-runtime as part of the IO transport port
+    // abstraction — the server now only registers adapters via buildHost.
     finish: createFinishExecutor(host),
     request_human_approve: requestHumanApprove(ctx),
     resolve_aborted_tools: resolveAbortedTools(ctx),

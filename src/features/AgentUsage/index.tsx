@@ -5,6 +5,7 @@ import { Segmented } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
@@ -49,10 +50,11 @@ const AgentUsage = memo(() => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
+        styles={{ left: { paddingInlineStart: 24 } }}
         left={
-          <Text fontSize={16} weight={600}>
-            {t('usageStats.title')}
-          </Text>
+          activeAgentId ? (
+            <AgentBreadcrumb agentId={activeAgentId} title={t('usageStats.title')} />
+          ) : null
         }
       />
       <Flexbox flex={1} style={styles.body} width={'100%'}>

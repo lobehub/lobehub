@@ -64,6 +64,7 @@ describe('agentRouter', () => {
       deleteAgentKnowledgeBase: vi.fn(),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
+      getAgentVisibility: vi.fn().mockResolvedValue(null),
       toggleFile: vi.fn(),
       toggleKnowledgeBase: vi.fn(),
       update: vi.fn(),
@@ -171,14 +172,18 @@ describe('agentRouter', () => {
           fileType: 'text',
           id: 'file1',
           name: 'File 1',
+          ownerUserId: undefined,
           type: KnowledgeType.File,
+          visibility: undefined,
         },
         {
           enabled: false,
           fileType: 'pdf',
           id: 'file2',
           name: 'File 2',
+          ownerUserId: undefined,
           type: KnowledgeType.File,
+          visibility: undefined,
         },
         {
           avatar: 'avatar1',
@@ -186,7 +191,9 @@ describe('agentRouter', () => {
           enabled: true,
           id: 'kb1',
           name: 'KB 1',
+          ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,
+          visibility: undefined,
         },
         {
           avatar: 'avatar2',
@@ -194,7 +201,9 @@ describe('agentRouter', () => {
           enabled: false,
           id: 'kb2',
           name: 'KB 2',
+          ownerUserId: undefined,
           type: KnowledgeType.KnowledgeBase,
+          visibility: undefined,
         },
       ]);
     });

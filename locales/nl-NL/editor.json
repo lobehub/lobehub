@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Vaardigheid",
   "actionTag.category.tool": "Hulpmiddel",
   "actionTag.tooltip.agentSkill": "Laadt een vaardigheidspakket uit de documenten van deze agent voor het verzoek.",
+  "actionTag.tooltip.clickToView": "Klik om details te bekijken",
   "actionTag.tooltip.command": "Voert vóór het verzenden een slash-commando aan de clientzijde uit.",
   "actionTag.tooltip.projectSkill": "Verzonden als een schuine streep-aanroep zodat de CLI van de agent de bijpassende projectvaardigheid uitvoert.",
   "actionTag.tooltip.skill": "Laadt voor dit verzoek een herbruikbaar vaardigheidspakket.",

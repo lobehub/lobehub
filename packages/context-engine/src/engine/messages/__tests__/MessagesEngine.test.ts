@@ -127,7 +127,7 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant\n\nModel knowledge cutoff: 2024-06',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBe(true);
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should skip model knowledge cutoff injection when unknown', async () => {
@@ -140,7 +140,26 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBeUndefined();
+      expect(result.metadata.modelInfoInjected).toBeUndefined();
+    });
+
+    it('should inject model name and id when displayName is provided', async () => {
+      const params = createBasicParams({
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        systemRole: 'You are a helpful assistant',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0]).toEqual({
+        content:
+          'You are a helpful assistant\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+        role: 'system',
+      });
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should inject history summary when provided', async () => {

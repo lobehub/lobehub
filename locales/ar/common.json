@@ -1,5 +1,6 @@
 {
   "about": "حول",
+  "addNew": "إضافة جديد",
   "advanceSettings": "الإعدادات المتقدمة",
   "agentOnboardingPromo.actionLabel": "جرّب الآن",
   "agentOnboardingPromo.description": "قم بإعداد فرق الوكلاء لديك عبر محادثة سريعة مع Lobe AI. ستبقى وكلاؤك الحاليون دون تغيير.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "فشل فحص سياسة المحتوى. يرجى تعديل طلبك.",
   "getDesktopApp": "احصل على تطبيق سطح المكتب",
   "goToTarget": "اذهب إلى الهدف",
+  "gotIt": "فهمت",
   "historyRange": "نطاق السجل",
   "home.suggestQuestions": "جرّب هذه الأمثلة",
   "import": "استيراد",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "نقل لأسفل",
   "navPanel.moveUp": "نقل لأعلى",
   "navPanel.pinned": "مثبّت",
+  "navPanel.privateAgents": "خاص",
+  "navPanel.publicAgents": "مساحة العمل",
   "navPanel.resetDefault": "إعادة التعيين إلى الإعدادات الافتراضية",
   "navPanel.searchAgent": "بحث عن وكيل...",
   "navPanel.searchRecent": "البحث في الأخير...",

@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "حذف موضوع الإنشاء",
   "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الإنشاء هذا. لا يمكن التراجع عن هذا الإجراء، يرجى المتابعة بحذر.",
   "topic.empty": "لا توجد مواضيع إنشاء",
+  "topic.privateTitle": "خاص",
   "topic.title": "موضوع الرسم",
-  "topic.untitled": "موضوع افتراضي"
+  "topic.untitled": "موضوع افتراضي",
+  "topic.visibility.existingLocked": "تم تثبيت الرؤية للموضوع الحالي. قم بإنشاء موضوع جديد لاختيار مساحة مختلفة.",
+  "topic.workspaceTitle": "مساحة العمل"
 }

@@ -168,6 +168,8 @@
   "sidebar.expandAll": "すべてのグループを展開する",
   "sidebar.title": "トピック",
   "taskManager.agent": "タスクエージェント",
+  "taskManager.agentSelector.privateGroup": "プライベート",
+  "taskManager.agentSelector.workspaceGroup": "ワークスペース",
   "taskManager.welcome": "タスクについて聞いてください",
   "temp": "一時的",
   "title": "トピック"

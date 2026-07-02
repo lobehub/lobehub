@@ -212,6 +212,26 @@ describe('Task Router Integration', () => {
       expect(topLevel.data.parentTaskId).toBeNull();
     });
 
+    it('should reject reparenting a public task under a private parent', async () => {
+      const privateParent = await caller.create({
+        instruction: 'Private parent',
+        name: 'Private Parent',
+        visibility: 'private',
+      });
+      const publicChild = await caller.create({
+        instruction: 'Public child',
+        name: 'Public Child',
+        visibility: 'public',
+      });
+
+      await expect(
+        caller.update({
+          id: publicChild.data.identifier,
+          parentTaskId: privateParent.data.identifier,
+        }),
+      ).rejects.toThrow('subtask cannot be more public than its parent');
+    });
+
     it('should reject reparenting a task to itself or its descendant', async () => {
       const parent = await caller.create({ instruction: 'Parent', name: 'Parent' });
       const child = await caller.create({

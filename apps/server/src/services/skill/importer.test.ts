@@ -53,8 +53,16 @@ vi.mock('./parser', () => ({
   SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
 }));
 
-// Mock global fetch for URL imports
-const mockFetch = vi.fn();
+// User-supplied URLs must be fetched through ssrfSafeFetch (SSRF guard), never raw global
+// fetch. Configure URL-import responses on mockSsrfSafeFetch. The raw global fetch is stubbed
+// to throw, so any regression back to `fetch(userUrl)` fails loudly instead of silently
+// re-opening the SSRF hole (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+const mockFetch = vi.fn(() => {
+  throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
+});
 vi.stubGlobal('fetch', mockFetch);
 
 // Mock S3 operations in FileService implementation
@@ -816,11 +824,11 @@ describe('SkillImporter', () => {
 
   describe('importFromUrl', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
     });
 
     it('should import skill from URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -859,7 +867,7 @@ This is the skill content.`,
     });
 
     it('should handle URL with path', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -883,7 +891,7 @@ description: A nested skill
     });
 
     it('should update existing skill when re-importing from same URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -921,7 +929,7 @@ description: A nested skill
     });
 
     it('should return unchanged when content is the same', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -961,7 +969,7 @@ description: A nested skill
     });
 
     it('should throw NOT_FOUND error when URL returns 404', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -979,7 +987,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -997,7 +1005,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when network error occurs', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockSsrfSafeFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(
         importer.importFromUrl({ url: 'https://example.com/network-error.md' }),
@@ -1008,6 +1016,51 @@ description: A nested skill
       } catch (e) {
         expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
       }
+    });
+
+    // Regression: the imported body is stored and returned to the caller, so a raw fetch here
+    // is a full-read SSRF. The fetch must go through the SSRF guard. See GHSA-53h9-fmjf-frwr / #16536.
+    describe('SSRF protection (#16536)', () => {
+      it('should fetch the user URL through ssrfSafeFetch, not raw global fetch', async () => {
+        mockSsrfSafeFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'text/markdown' },
+          text: async () => 'internal-response-body',
+        });
+        mockParserInstance.parseSkillMd.mockReturnValue({
+          content: '# x',
+          manifest: { name: 'x', description: 'x' },
+          raw: 'raw',
+        });
+
+        await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+
+        // The SSRF guard is the sink; the raw global fetch (stubbed to throw) is never touched.
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/', {
+          signal: expect.anything(),
+        });
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should surface DOWNLOAD_FAILED when ssrfSafeFetch blocks an internal host', async () => {
+        // ssrfSafeFetch rejects when the target resolves to a private/link-local address.
+        mockSsrfSafeFetch.mockRejectedValue(
+          new Error('SSRF blocked: DNS lookup 169.254.169.254 is not allowed.'),
+        );
+
+        await expect(
+          importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' }),
+        ).rejects.toThrow(SkillImportError);
+
+        try {
+          await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+        } catch (e) {
+          expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
+          expect((e as SkillImportError).message).toContain('SSRF blocked');
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
     });
   });
 

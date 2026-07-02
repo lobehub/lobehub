@@ -5,6 +5,7 @@
   "actionTag.category.skill": "مهارة",
   "actionTag.category.tool": "أداة",
   "actionTag.tooltip.agentSkill": "يحمّل حزمة مهارات من مستندات هذا الوكيل للطلب.",
+  "actionTag.tooltip.clickToView": "انقر لعرض التفاصيل",
   "actionTag.tooltip.command": "يشغّل أمر الشرطة المائلة على جانب العميل قبل الإرسال.",
   "actionTag.tooltip.projectSkill": "يتم إرسالها كاستدعاء شرطة مائلة بحيث يقوم CLI الخاص بالوكيل بتشغيل مهارة المشروع المطابقة.",
   "actionTag.tooltip.skill": "يحمّل حزمة مهارات قابلة لإعادة الاستخدام لهذا الطلب.",

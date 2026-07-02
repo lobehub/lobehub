@@ -29,6 +29,9 @@
   "topic.createNew": "Crea Nuovo Argomento",
   "topic.deleteConfirm": "Elimina Argomento Video",
   "topic.deleteConfirmDesc": "Stai per eliminare questo argomento video. Questa azione non può essere annullata.",
+  "topic.privateTitle": "Privato",
   "topic.title": "Argomenti Video",
-  "topic.untitled": "Argomento Predefinito"
+  "topic.untitled": "Argomento Predefinito",
+  "topic.visibility.existingLocked": "La visibilità è fissata per l'argomento attuale. Crea un nuovo argomento per scegliere uno spazio diverso.",
+  "topic.workspaceTitle": "Spazio di lavoro"
 }

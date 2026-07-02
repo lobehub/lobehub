@@ -159,6 +159,7 @@ export class TaskDetailSliceActionImpl {
     priority?: number;
     schedulePattern?: string;
     scheduleTimezone?: string;
+    visibility?: 'private' | 'public';
   }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {
@@ -247,6 +248,33 @@ export class TaskDetailSliceActionImpl {
     const activeTaskId = this.#get().activeTaskId;
     if (activeTaskId && activeTaskId !== taskId) {
       await this.internal_refreshTaskDetail(activeTaskId);
+    }
+  };
+
+  updateTaskVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    try {
+      await taskService.updateVisibility(id, visibility);
+      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
+    } catch (error) {
+      // LOBE-10961 surfaces a specific actionable error when the task's assignee
+      // is a private agent. The generic "failed" toast hides what the user must
+      // do next; substitute a targeted one so they know to either reassign or
+      // publish the agent first.
+      const raw = (error as { message?: string })?.message ?? '';
+      const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
+      message.error(
+        isPrivateAgentBlock
+          ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
+              defaultValue:
+                'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
+              ns: 'chat',
+            })
+          : t('createTask.visibility.changeFailed', {
+              defaultValue: 'Failed to change task visibility',
+              ns: 'chat',
+            }),
+      );
+      throw error;
     }
   };
 

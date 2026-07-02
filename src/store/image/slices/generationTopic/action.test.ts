@@ -58,6 +58,7 @@ beforeEach(() => {
     generationTopics: [],
     activeGenerationTopicId: null,
     loadingGenerationTopicIds: [],
+    newGenerationTopicVisibility: 'private',
   });
 });
 
@@ -66,6 +67,24 @@ afterEach(() => {
 });
 
 describe('GenerationTopicAction', () => {
+  describe('setNewGenerationTopicVisibility', () => {
+    it('should default new generation topics to private visibility', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      expect(result.current.newGenerationTopicVisibility).toBe('private');
+    });
+
+    it('should update new generation topic visibility', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        result.current.setNewGenerationTopicVisibility('public');
+      });
+
+      expect(result.current.newGenerationTopicVisibility).toBe('public');
+    });
+  });
+
   describe('createGenerationTopic', () => {
     it('should create a new topic and auto-generate title from prompts', async () => {
       const { result } = renderHook(() => useImageStore());
@@ -90,7 +109,7 @@ describe('GenerationTopicAction', () => {
       });
 
       expect(createdTopicId).toBe(newTopicId);
-      expect(generationTopicService.createTopic).toHaveBeenCalled();
+      expect(generationTopicService.createTopic).toHaveBeenCalledWith('image', 'private');
       expect(summaryTopicTitleSpy).toHaveBeenCalledWith(newTopicId, prompts);
     });
 
@@ -409,10 +428,8 @@ describe('GenerationTopicAction', () => {
 
       vi.mocked(generationTopicService.getAllGenerationTopics).mockResolvedValue(topics);
 
-      let hookResult: any;
-
       await act(async () => {
-        const { result } = renderHook(() => {
+        renderHook(() => {
           const store = useImageStore();
           // Actually call the SWR hook to trigger the service call
           const swrResult = store.useFetchGenerationTopics(true);
@@ -424,8 +441,6 @@ describe('GenerationTopicAction', () => {
 
           return swrResult;
         });
-
-        hookResult = result;
       });
 
       // Wait for service to be called and state to be updated
@@ -609,7 +624,25 @@ describe('GenerationTopicAction', () => {
       expect(dispatchSpy).toHaveBeenCalled();
       expect(loadingSpy).toHaveBeenCalledWith(expect.any(String), true);
       expect(loadingSpy).toHaveBeenCalledWith(newTopicId, false);
-      expect(generationTopicService.createTopic).toHaveBeenCalled();
+      expect(generationTopicService.createTopic).toHaveBeenCalledWith('image', 'private');
+    });
+
+    it('should create topic with selected public visibility', async () => {
+      const { result } = renderHook(() => useImageStore());
+      const newTopicId = 'gt_public_topic';
+
+      vi.mocked(generationTopicService.createTopic).mockResolvedValue(newTopicId);
+
+      act(() => {
+        result.current.setNewGenerationTopicVisibility('public');
+      });
+
+      await act(async () => {
+        const topicId = await result.current.internal_createGenerationTopic();
+        expect(topicId).toBe(newTopicId);
+      });
+
+      expect(generationTopicService.createTopic).toHaveBeenCalledWith('image', 'public');
     });
   });
 

@@ -3,7 +3,6 @@
 import { memo, useMemo } from 'react';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/index';
@@ -17,12 +16,18 @@ interface AgentListContentProps {
   onMoreClick?: () => void;
 }
 
-// Keep this drawer-free so compact switchers can reuse the list without coupling to Home drawer state.
+// Keep this drawer-free so compact switchers can reuse the list without
+// coupling to Home drawer state. Renders only workspace-public content;
+// private items live in the sibling `Private` accordion section so
+// workspace-shared and personal agents stay visually distinct.
+//
+// SWR subscription is owned by the enclosing accordion (Body/Agent/index.tsx)
+// or by a standalone caller (e.g. SwitchPanel). Subscribing here too would
+// re-fetch the list every time the accordion is expanded, animating the
+// spinner on both Public and Private headers for no good reason.
 const AgentListContent = memo<AgentListContentProps>(({ onMoreClick }) => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const { customList, pinnedList, defaultList } = useAgentList();
-
-  useFetchAgentList();
 
   // Memoize computed visibility flags to prevent unnecessary recalculations
   const { showPinned, showCustom } = useMemo(() => {

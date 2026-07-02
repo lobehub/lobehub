@@ -168,6 +168,8 @@
   "sidebar.expandAll": "باز کردن همه گروه‌ها",
   "sidebar.title": "موضوعات",
   "taskManager.agent": "عامل وظایف",
+  "taskManager.agentSelector.privateGroup": "خصوصی",
+  "taskManager.agentSelector.workspaceGroup": "فضای کاری",
   "taskManager.welcome": "در مورد کارهایت از من بپرس",
   "temp": "موقت",
   "title": "گفت‌وگو"

@@ -260,6 +260,7 @@ export class AgentDocumentsExecutionRuntime {
 
     const scope = args.scope ?? 'agent';
     const sourceType = args.sourceType ?? 'all';
+    const parentId = args.parentId;
     const topicId = this.resolveTopicId(context);
     if (scope === 'currentTopic' && !topicId) {
       return {
@@ -270,8 +271,14 @@ export class AgentDocumentsExecutionRuntime {
 
     const docs =
       scope === 'currentTopic'
-        ? await this.service.listTopicDocuments({ agentId, scope, sourceType, topicId: topicId! })
-        : await this.service.listDocuments({ agentId, scope, sourceType });
+        ? await this.service.listTopicDocuments({
+            agentId,
+            parentId,
+            scope,
+            sourceType,
+            topicId: topicId!,
+          })
+        : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
     const list = await Promise.all(
       docs.map(async (d) => {
         const url = await this.buildDocumentUrl(agentId, d.documentId);

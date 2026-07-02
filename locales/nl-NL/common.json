@@ -1,5 +1,6 @@
 {
   "about": "Over",
+  "addNew": "Nieuw toevoegen",
   "advanceSettings": "Geavanceerde instellingen",
   "agentOnboardingPromo.actionLabel": "Nu proberen",
   "agentOnboardingPromo.description": "Stel je agentteams in via een korte chat met Lobe AI. Je bestaande agenten blijven ongewijzigd.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "Controle van inhoudsbeleid mislukt. Pas je prompt aan.",
   "getDesktopApp": "Download Desktop-app",
   "goToTarget": "Ga naar doel",
+  "gotIt": "Begrepen",
   "historyRange": "Geschiedenisbereik",
   "home.suggestQuestions": "Probeer deze voorbeelden",
   "import": "Importeren",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Omlaag verplaatsen",
   "navPanel.moveUp": "Omhoog verplaatsen",
   "navPanel.pinned": "Vastgemaakt",
+  "navPanel.privateAgents": "Privé",
+  "navPanel.publicAgents": "Werkruimte",
   "navPanel.resetDefault": "Herstellen naar standaardinstellingen",
   "navPanel.searchAgent": "Zoek agent...",
   "navPanel.searchRecent": "Recente items zoeken...",

@@ -289,7 +289,7 @@ describe('KnowledgeSlice Actions', () => {
 
       await waitFor(() => expect(result.current.data).toEqual(mockData));
 
-      expect(agentService.getFilesAndKnowledgeBases).toHaveBeenCalledWith('agent-1');
+      expect(agentService.getFilesAndKnowledgeBases).toHaveBeenCalledWith('agent-1', undefined);
     });
 
     it('should return empty array as fallback', async () => {

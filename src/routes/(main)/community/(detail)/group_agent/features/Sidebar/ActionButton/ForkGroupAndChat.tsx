@@ -1,6 +1,7 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { customAlphabet } from 'nanoid/non-secure';
@@ -8,6 +9,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -18,11 +20,52 @@ import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
+import {
+  isMarketOrgSetupRequiredError,
+  promptMarketOrgSetup,
+} from '../../../../../utils/marketOrgSetup';
 import { useDetailContext } from '../../DetailProvider';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   buttonGroup: css`
     width: 100%;
+  `,
+  forkButton: css`
+    flex: 1;
+    width: unset;
+    border-start-start-radius: 0 !important;
+    border-end-start-radius: 0 !important;
+  `,
+  // Match Button type="primary" on the right so the two halves read as one
+  // pill. (colorPrimary bg + colorBgLayout text) auto-flips with the theme:
+  // dark bg + near-white text in light theme, white bg + near-black text
+  // in dark theme. We use colorBgLayout directly instead of the
+  // semantically-named colorTextLightSolid because the cssVar proxy doesn't
+  // pick up LobeHub's JS-level override of that token.
+  visibilitySelect: css`
+    width: 130px;
+    border-color: ${cssVar.colorPrimary} !important;
+    border-inline-end-width: 0 !important;
+    border-start-end-radius: 0 !important;
+    border-end-end-radius: 0 !important;
+
+    color: ${cssVar.colorBgLayout} !important;
+
+    background: ${cssVar.colorPrimary} !important;
+
+    & svg {
+      color: ${cssVar.colorBgLayout};
+    }
+
+    &:hover:not([data-disabled]) {
+      border-color: ${cssVar.colorPrimaryHover} !important;
+      background: ${cssVar.colorPrimaryHover} !important;
+    }
+
+    &:active:not([data-disabled]) {
+      border-color: ${cssVar.colorPrimaryActive} !important;
+      background: ${cssVar.colorPrimaryActive} !important;
+    }
   `,
 }));
 
@@ -34,6 +77,8 @@ const generateMarketIdentifier = () => {
   const generate = customAlphabet(alphabet, 8);
   return generate();
 };
+
+type ForkTarget = 'private' | 'public';
 
 const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
   const {
@@ -54,6 +99,9 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
   const { isAuthenticated, signIn } = useMarketAuth();
   const { allowed: canCreate } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspace = useActiveWorkspace();
+  const isWorkspaceOwner = activeWorkspace?.role === 'owner';
+  const [visibility, setVisibility] = useState<ForkTarget>('private');
 
   const meta = {
     avatar,
@@ -63,8 +111,8 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
     title,
   };
 
-  const handleForkAndChat = async () => {
-    if (!canCreate) return;
+  const handleForkAndChat = async (target: ForkTarget = 'private') => {
+    if (!canCreate || isLoading) return;
     // Check if user is authenticated
     if (!isAuthenticated) {
       try {
@@ -97,6 +145,11 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       // Generate a unique identifier for the forked group
       const newIdentifier = generateMarketIdentifier();
 
+      // Same rationale as ForkAndChat.tsx — workspace forks must carry an
+      // org `actAs` so Market accepts the request; the local chat group
+      // still lands in the user's Private bucket via `visibility: 'private'`
+      // on the groupConfig below. When the workspace has no Community
+      // profile yet we prompt the user (role-aware) and abort the fork.
       let actAs: number | undefined;
       if (activeWorkspaceId) {
         try {
@@ -104,10 +157,14 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
             await lambdaClient.workspace.ensureMarketOrganization.mutate();
           actAs = marketAccountId;
         } catch (error) {
-          console.warn(
-            'Failed to resolve Market organization for workspace; falling back to personal group fork:',
-            error,
-          );
+          if (isMarketOrgSetupRequiredError(error)) {
+            promptMarketOrgSetup({
+              isOwner: isWorkspaceOwner,
+              onSetup: () => navigate('/community/workspace'),
+            });
+            return;
+          }
+          throw error;
         }
       }
 
@@ -156,7 +213,10 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         );
       }
 
-      // Step 4: Prepare group config
+      // Step 4: Prepare group config. `target` decides where the chat
+      // group lands in the sidebar: Private (only the creator sees it) or
+      // workspace-shared. In personal mode visibility is left unset so the
+      // column default (`public`) applies harmlessly.
       const groupConfig = {
         config: {
           ...config,
@@ -167,6 +227,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         ...meta,
         // Store marketIdentifier at top-level (same as agents)
         marketIdentifier: forkResult.group.identifier,
+        ...(activeWorkspaceId ? { visibility: target } : {}),
       };
 
       // Step 5: Prepare member agents from market data
@@ -227,18 +288,53 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
     }
   };
 
+  // Personal mode: plain primary button, no Private/Public choice to make.
+  if (!activeWorkspaceId) {
+    return (
+      <Button
+        block
+        className={styles.buttonGroup}
+        disabled={!canCreate}
+        loading={isLoading}
+        size={'large'}
+        type={'primary'}
+        onClick={() => handleForkAndChat('private')}
+      >
+        {t('fork.forkAndChat')}
+      </Button>
+    );
+  }
+
+  // Workspace mode: Select on the left chooses Private (default) vs Public,
+  // primary button on the right runs the fork. Mirrors ForkAndChat.tsx so
+  // both flows look and behave the same way.
+  const visibilityOptions = [
+    { label: t('fork.visibilityPrivate'), value: 'private' },
+    { label: t('fork.visibilityPublic'), value: 'public' },
+  ];
+
   return (
-    <Button
-      block
-      className={styles.buttonGroup}
-      disabled={!canCreate}
-      loading={isLoading}
-      size={'large'}
-      type={'primary'}
-      onClick={handleForkAndChat}
-    >
-      {t('fork.forkAndChat')}
-    </Button>
+    <Flexbox horizontal className={styles.buttonGroup} gap={0}>
+      <Select
+        className={styles.visibilitySelect}
+        disabled={!canCreate || isLoading}
+        options={visibilityOptions}
+        size={'large'}
+        value={visibility}
+        onChange={(v) => setVisibility(v as ForkTarget)}
+      />
+      <Button
+        block
+        className={styles.forkButton}
+        disabled={!canCreate}
+        loading={isLoading}
+        size={'large'}
+        type={'primary'}
+        onClick={() => handleForkAndChat(visibility)}
+      >
+        {t('fork.forkAndChat')}
+      </Button>
+    </Flexbox>
   );
 });
 
