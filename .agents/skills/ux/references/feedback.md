@@ -83,6 +83,27 @@ as "is the data here yet". A failed fetch leaves the entry `undefined` → `load
 false → permanent skeleton. Don't read "present in a success-populated map" as "loaded";
 branch the fetch's real `error`.
 
+A subtler shape: the error state and retry action **exist in the store but are wired to
+nothing**. The slice records an `errorMap`, exposes `isXError` / `currentXError` selectors,
+even ships a `retryX` action — the data layer is exactly right — but **no surface consumes
+any of it**: the component still branches only on the success-only loading flag, so a failed
+fetch is a permanent skeleton and the retry the store built is dead code. A built-but-orphaned
+error path is **indistinguishable from a missing one** at the pixel; the store having the
+right shape does not discharge the obligation — a surface must actually read the error and
+render the failed state. When you find an `errorMap` / `isXError` selector, **grep its
+consumers** (`rg isXError`): zero call sites is the tell.
+
+> ❌ **Agent profile** (`/agent/:aid/profile`) branches only on `isAgentConfigLoading =
+!activeAgentId || !agentMap[id]` (`store/agent/selectors/selectors.ts`), the data-presence
+> disguise, and renders a full-page `<Loading/>` — so a failed / 404 `getAgentConfigById` (a bad
+> or deleted `:aid`) spins **forever** with no retry. The kicker: `onError` **does** populate
+> `agentConfigErrorMap`, and `currentAgentConfigError` / `isAgentConfigError` **and**
+> `retryFetchAgentConfig` all exist with a doc comment promising "a retry UI instead of an
+> endless skeleton" — but `rg` finds **zero** consumers anywhere (`ProfileArea` in
+> `routes/(main)/agent/profile/index.tsx` reads none of them). The error+retry machinery is
+> fully built and reaches no pixel. ✅ Branch `isAgentConfigError` before the loading gate → a
+> failed state (reason + Reload calling the existing `retryFetchAgentConfig`).
+
 The mirror-image trap on a **compound** gate — one that holds the skeleton until a **secondary /
 dependent** fetch resolves (a detail that waits on the assignee's config, a row that waits on its
 owner) — is gating on that dependency being **present** in the map. When the dependency
@@ -190,6 +211,7 @@ xSearchLoading || !xInit` flips only on success, so a failed load hangs a **perm
 
 - [ ] Every loading state has a terminal failure path — on error or after a bounded timeout, not an infinite spinner. _(Certainty)_
 - [ ] An init/ready flag isn't gated on success only — the error path resolves the loading state too, no permanent skeleton. _(Certainty)_
+- [ ] The error state is actually **consumed by a surface**, not just modeled in the store — an `errorMap` / `isXError` selector / `retryX` action with **zero call sites** (`rg` the consumers) is a permanent skeleton wearing a built-but-orphaned error path; the store having the right shape doesn't discharge the obligation. _(Certainty)_
 - [ ] A compound gate waiting on a **secondary/dependent** fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error), never on the dependency being **present** in a map — a legitimately absent dependency (deleted / out-of-scope) must not hang the gate. _(Certainty)_
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
@@ -284,6 +306,12 @@ just moves it onto the button.
 > `PageEditor/store/action.ts`). A network / 500 save failure is then indistinguishable from
 > a success (only a lock `CONFLICT` is surfaced); the state machine literally can't
 > _represent_ failure, so it can never show it — the silent-write trap baked into the type.
+> ❌ **Agent profile** shares the identical type-level trap: `AutoSaveHint`'s enum is
+> `'idle' | 'saving' | 'saved'` (`components/Editor/AutoSaveHint.tsx`) — **no `failed`** — so
+> the header can't show a failed write, and every writer on the surface swallows it: the prompt
+> save and `finishStreaming` `catch → console.error` (`routes/(main)/agent/profile/features/store/action.ts`),
+> while title / avatar / model / tool / advanced-settings saves surface nothing. A prompt edit
+> that failed to persist reads identical to a saved one, with a "saved" tag over it.
 > ❌ **Task detail** config autosave is the same trap twice over: `updateVerifyConfig` /
 > `updateTaskModelConfig` / `updatePeriodicInterval` / `setAutomationMode` / `updateSchedule` all
 > catch-and-`console.error` (`store/task/slices/config/action.ts:121-132,151-167,224-229,279-284`)

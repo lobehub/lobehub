@@ -125,7 +125,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
-- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry.
+- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry. An error state / retry action that's **modeled in the store but consumed by no surface** (`isXError` selector / `retryX` action with zero `rg` call sites) is still a missing error state — a built-but-orphaned path is a permanent skeleton at the pixel.
 - [ ] A compound gate waiting on a secondary/dependent fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error) — never on the dependency being present in a map, or an absent-by-design dependency hangs it forever.
 - [ ] An awaited write that gates navigation/advance resets its busy flag in `finally` + offers retry — a failed write never permanently disables the forward/Back control.
 - [ ] Autosave surfaces a save-state (saving → saved → failed with retry), never a silent write; the save-state enum actually includes a `failed` variant (a catch that resets to `idle` is a silent write); one save-feedback convention across a multi-field surface, ideally in the shared form wrapper.
