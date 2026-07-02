@@ -32,4 +32,56 @@ describe('resolveEffectiveAgentMode', () => {
       supportToolUse: true,
     });
   });
+
+  describe('when the model list is not ready yet', () => {
+    it('honours stored agent mode instead of downgrading on the transient unknown', () => {
+      // supportToolUse is `false` only because the model has not hydrated yet.
+      // We must NOT flash to chat mode / mark agent mode unavailable.
+      expect(
+        resolveEffectiveAgentMode({
+          enableAgentMode: true,
+          isModelListReady: false,
+          supportToolUse: false,
+        }),
+      ).toEqual({
+        canSelectAgentMode: true,
+        currentMode: 'agent',
+        isAgentModeUnavailable: false,
+        isAgentRuntimeMode: true,
+        supportToolUse: true,
+      });
+    });
+
+    it('still respects an explicit chat-mode choice while not ready', () => {
+      expect(
+        resolveEffectiveAgentMode({
+          enableAgentMode: false,
+          isModelListReady: false,
+          supportToolUse: false,
+        }),
+      ).toEqual({
+        canSelectAgentMode: true,
+        currentMode: 'chat',
+        isAgentModeUnavailable: false,
+        isAgentRuntimeMode: false,
+        supportToolUse: true,
+      });
+    });
+
+    it('applies the real capability once the list becomes ready', () => {
+      expect(
+        resolveEffectiveAgentMode({
+          enableAgentMode: true,
+          isModelListReady: true,
+          supportToolUse: false,
+        }),
+      ).toEqual({
+        canSelectAgentMode: false,
+        currentMode: 'chat',
+        isAgentModeUnavailable: true,
+        isAgentRuntimeMode: false,
+        supportToolUse: false,
+      });
+    });
+  });
 });
