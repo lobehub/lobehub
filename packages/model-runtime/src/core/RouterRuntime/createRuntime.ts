@@ -247,6 +247,7 @@ export const createRouterRuntime = ({
       const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : undefined;
 
       if (this._id !== 'lobehub' || (effectiveUserId && trigger)) return effectiveUserId;
+      if (process.env.NODE_ENV !== 'development') return effectiveUserId;
 
       const diagnostic = {
         apiType,
@@ -266,13 +267,7 @@ export const createRouterRuntime = ({
       };
 
       // Example bug: modelRuntime.chat(payload) without metadata would record trigger=null.
-      if (process.env.NODE_ENV === 'development') {
-        throw new Error(`[RouteAttemptMissingContext] ${JSON.stringify(diagnostic)}`);
-      }
-
-      console.error('[RouteAttemptMissingContext]', JSON.stringify(diagnostic));
-
-      return effectiveUserId;
+      throw new Error(`[RouteAttemptMissingContext] ${JSON.stringify(diagnostic)}`);
     }
 
     constructor(options: LobeClientOptions & Record<string, any> = {}) {
