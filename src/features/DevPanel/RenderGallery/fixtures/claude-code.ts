@@ -56,6 +56,10 @@ export default defineFixtures({
       name: 'ScheduleWakeup',
     },
     {
+      description: 'Send a message to a peer agent.',
+      name: 'SendMessage',
+    },
+    {
       description: 'Run a Claude Code skill.',
       name: 'Skill',
     },
@@ -196,6 +200,33 @@ export default defineFixtures({
         reason: 'Recheck the failing build once dependencies finish installing.',
       },
     }),
+    SendMessage: variants([
+      {
+        args: {
+          content:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          message:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          recipient: 'a48b23013d11aacd4',
+          summary: 'Retrieve context engine findings',
+          to: 'a48b23013d11aacd4',
+          type: 'message',
+        },
+        content: JSON.stringify({
+          message: 'Message queued for delivery to a48b23013d11aacd4 at its next tool round.',
+          success: true,
+        }),
+        label: 'Queued for delivery',
+      },
+      {
+        args: {
+          message: 'Wrap up when you can — no rush, just checking in on the migration status.',
+          to: 'context-engine',
+        },
+        content: '',
+        label: 'No summary, no result yet',
+      },
+    ]),
     Skill: single({
       args: { skill: 'codebase-search' },
       content: 'Use ripgrep first, then open only the relevant files to keep context sharp.',
