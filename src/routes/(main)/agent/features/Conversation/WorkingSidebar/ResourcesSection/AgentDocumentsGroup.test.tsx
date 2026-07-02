@@ -67,6 +67,14 @@ vi.mock('@/components/NeuralNetworkLoading', () => ({
   default: () => <div data-testid="neural-network-loading" />,
 }));
 
+vi.mock('@/components/AsyncError', () => ({
+  default: ({ onRetry }: { onRetry?: () => void }) => (
+    <button data-testid="async-error" onClick={onRetry}>
+      async-error
+    </button>
+  ),
+}));
+
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: (...args: unknown[]) => useClientDataSWR(...args),
 }));
@@ -580,16 +588,18 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('renders error state when SWR returns an error', () => {
+    const mutate = vi.fn();
     useClientDataSWR.mockReturnValue({
       data: [],
       error: new Error('oops'),
       isLoading: false,
-      mutate: vi.fn(),
+      mutate,
     });
 
     render(<AgentDocumentsGroup />);
 
-    expect(screen.getByText('Failed to load resources')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('async-error'));
+    expect(mutate).toHaveBeenCalled();
   });
 
   it('renders the loading spinner while data is being fetched', () => {
