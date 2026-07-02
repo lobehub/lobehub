@@ -198,7 +198,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
               title={t('devices.connectWizard.desktop.step1')}
             >
               <a href={DOWNLOAD_URL.default} rel="noreferrer" target="_blank">
-                <Button icon={<Icon icon={DownloadIcon} />} size={'small'} type={'primary'}>
+                <Button icon={<Icon icon={DownloadIcon} />} type={'primary'}>
                   {t('devices.connectWizard.desktop.downloadLink')}
                 </Button>
               </a>
