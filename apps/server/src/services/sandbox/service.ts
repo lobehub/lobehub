@@ -5,6 +5,7 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
 import { FileModel } from '@/database/models/file';
 
@@ -73,13 +74,15 @@ export class SandboxMiddlewareService implements SandboxService {
       if (files.length === 0) return;
 
       const downloads = (
-        await Promise.all(
-          files.map(async (file): Promise<SandboxInitDownload | null> => {
+        await pMap(
+          files,
+          async (file): Promise<SandboxInitDownload | null> => {
             const url = await fileService
               .createCachedPreSignedUrlForPreview(file.url)
               .catch(() => '');
             return url ? { name: file.name, url } : null;
-          }),
+          },
+          { concurrency: 5 },
         )
       ).filter((item): item is SandboxInitDownload => item !== null);
 

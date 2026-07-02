@@ -6,6 +6,7 @@ import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import {
   getEnabledMessengerPlatforms,
@@ -238,8 +239,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
         }
         const providers = await providerModel.findByAgentId(context.agentId);
 
-        const statuses = await Promise.all(
-          providers.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
+        const statuses = await pMap(
+          providers,
+          (p) => getBotRuntimeStatus(p.platform, p.applicationId),
+          { concurrency: 5 },
         );
         return providers.map((p, i) => ({
           applicationId: p.applicationId,
@@ -331,9 +334,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             applicationId: row.applicationId,
             enterpriseId:
               ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-                | string
-                | null
-                | undefined) ?? null,
+                string | null | undefined) ?? null,
             id: row.id,
             installedAt:
               row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
@@ -383,9 +384,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: row.applicationId,
           enterpriseId:
             ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-              | string
-              | null
-              | undefined) ?? null,
+              string | null | undefined) ?? null,
           id: row.id,
           installedAt:
             row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),

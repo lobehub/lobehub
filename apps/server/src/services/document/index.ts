@@ -9,6 +9,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
+import pMap from 'p-map';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -231,7 +232,9 @@ export class DocumentService {
     }>,
   ): Promise<DocumentItem[]> {
     // Create all documents in parallel for better performance
-    const results = await Promise.all(documents.map((params) => this.createDocument(params)));
+    const results = await pMap(documents, (params) => this.createDocument(params), {
+      concurrency: 5,
+    });
 
     return results;
   }
@@ -544,7 +547,7 @@ export class DocumentService {
    */
   async deleteDocuments(ids: string[]) {
     // Delete each document (which handles recursive deletion for folders)
-    await Promise.all(ids.map((id) => this.deleteDocument(id)));
+    await pMap(ids, (id) => this.deleteDocument(id), { concurrency: 5 });
   }
 
   /**

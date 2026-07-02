@@ -8,6 +8,7 @@ import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
+import pMap from 'p-map';
 
 import type {
   AgentDocument,
@@ -190,11 +191,13 @@ export class AgentDocumentsService {
   private async projectDocuments<T extends AgentDocument | AgentDocumentWithRules>(
     docs: T[],
   ): Promise<T[]> {
-    return Promise.all(
-      docs.map(async (doc) => {
+    return pMap(
+      docs,
+      async (doc) => {
         const projected = await this.projectDocumentContent(doc);
         return { ...projected, ...deriveAgentDocumentFields(projected) };
-      }),
+      },
+      { concurrency: 5 },
     );
   }
 
@@ -328,13 +331,15 @@ export class AgentDocumentsService {
       await this.agentDocumentModel.findContextByAgent(agentId),
     );
 
-    const projectedDocs = await Promise.all(
-      docs.map(async (doc) => {
+    const projectedDocs = await pMap(
+      docs,
+      async (doc) => {
         if (doc.policyLoad !== PolicyLoad.ALWAYS) return doc;
 
         const projected = await this.projectDocumentContent(doc);
         return { ...projected, ...deriveAgentDocumentFields(projected) };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return projectedDocs.map(toAgentDocumentContextPayload);

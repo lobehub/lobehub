@@ -2,6 +2,7 @@ import { VerifySkill } from '@lobechat/builtin-skills';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -610,8 +611,9 @@ export const verifyRouter = router({
       });
 
       const evidence = input.evidence?.length
-        ? await Promise.all(
-            input.evidence.map((e) =>
+        ? await pMap(
+            input.evidence,
+            (e) =>
               ctx.evidenceModel.create({
                 capturedAt: new Date(),
                 capturedBy: e.capturedBy ?? null,
@@ -621,7 +623,7 @@ export const verifyRouter = router({
                 fileId: e.fileId ?? null,
                 type: e.type,
               }),
-            ),
+            { concurrency: 5 },
           )
         : [];
 
@@ -761,8 +763,9 @@ export const verifyRouter = router({
         }
       };
 
-      const resultsWithEvidence = await Promise.all(
-        results.map(async (r) => {
+      const resultsWithEvidence = await pMap(
+        results,
+        async (r) => {
           const evidence = await ctx.serverDB
             .select()
             .from(verifyEvidence)
@@ -770,11 +773,14 @@ export const verifyRouter = router({
             .orderBy(asc(verifyEvidence.createdAt));
           return {
             ...r,
-            evidence: await Promise.all(
-              evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
+            evidence: await pMap(
+              evidence,
+              async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) }),
+              { concurrency: 5 },
             ),
           };
-        }),
+        },
+        { concurrency: 5 },
       );
       return { report: report ?? null, results: resultsWithEvidence, run };
     }),

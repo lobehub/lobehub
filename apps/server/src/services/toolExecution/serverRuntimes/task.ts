@@ -14,6 +14,7 @@ import {
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
@@ -323,17 +324,18 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         apply: (depId: string) => Promise<unknown>,
         onChange: (depIdentifier: string) => void,
       ): Promise<string | undefined> => {
-        const resolved = await Promise.all(
-          ids.map((id) =>
+        const resolved = await pMap(
+          ids,
+          (id) =>
             taskModel()
               .resolve(id)
               .then((r) => ({ id, resolved: r })),
-          ),
+          { concurrency: 5 },
         );
         const missing = resolved.find((r) => !r.resolved);
         if (missing) return `Dependency task not found: ${missing.id}`;
 
-        await Promise.all(resolved.map(({ resolved: dep }) => apply(dep!.id)));
+        await pMap(resolved, ({ resolved: dep }) => apply(dep!.id), { concurrency: 5 });
         resolved.forEach(({ resolved: dep }) => onChange(dep!.identifier));
       };
 

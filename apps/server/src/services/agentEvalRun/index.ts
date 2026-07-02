@@ -13,6 +13,7 @@ import type {
 } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import {
   AgentEvalBenchmarkModel,
@@ -359,8 +360,9 @@ export class AgentEvalRunService {
       .map((topic) => this.getResumableCaseTarget(topic, k))
       .filter((topic): topic is ResumableCaseTarget => !!topic);
 
-    const results = await Promise.all(
-      candidates.map(async (candidate) => {
+    const results = await pMap(
+      candidates,
+      async (candidate) => {
         const check = await this.canResumeTrajectory({
           runId,
           testCaseId: candidate.testCaseId,
@@ -376,7 +378,8 @@ export class AgentEvalRunService {
           testCaseId: candidate.testCaseId,
           threadId: candidate.threadId,
         };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return results;
@@ -1088,8 +1091,9 @@ export class AgentEvalRunService {
     });
 
     // Trigger K run-thread-trajectory workflows in parallel
-    await Promise.all(
-      threadIds.map((threadId) =>
+    await pMap(
+      threadIds,
+      (threadId) =>
         AgentEvalRunWorkflow.triggerRunThreadTrajectory({
           runId,
           testCaseId,
@@ -1097,7 +1101,7 @@ export class AgentEvalRunService {
           topicId,
           userId: this.userId,
         }),
-      ),
+      { concurrency: 5 },
     );
 
     return { threadIds, topicId };
@@ -1529,13 +1533,7 @@ export class AgentEvalRunService {
         rubricScores: meta.rubricScores as any,
         score: meta.score as number | undefined,
         status: meta.status as
-          | 'error'
-          | 'external'
-          | 'failed'
-          | 'passed'
-          | 'running'
-          | 'timeout'
-          | undefined,
+          'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | undefined,
         steps: meta.steps as number | undefined,
         threadId: t.id,
         tokens: meta.tokens as number | undefined,

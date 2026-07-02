@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import pMap from 'p-map';
 
 import type { AgentDocument } from '@/database/models/agentDocuments';
 import {
@@ -513,15 +514,17 @@ export class AgentDocumentVfsService {
    */
   async listTrash(ctx: AgentDocumentVfsContext, path?: string): Promise<AgentDocumentTrashEntry[]> {
     const deletedDocs = await this.agentDocumentModel.listDeletedByAgent(ctx.agentId);
-    const entries = await Promise.all(
-      deletedDocs.map(async (doc) => {
+    const entries = await pMap(
+      deletedDocs,
+      async (doc) => {
         const path = await this.buildOrdinaryPathFromNode(doc, ctx.agentId);
         return {
           ...this.toOrdinaryStats(doc, path),
           deleteReason: doc.deleteReason,
           deletedAt: doc.deletedAt ?? new Date(0),
         } satisfies AgentDocumentTrashEntry;
-      }),
+      },
+      { concurrency: 5 },
     );
 
     if (!path) return entries;

@@ -2,6 +2,7 @@ import type { AgentSignalRuntimeService } from '@lobechat/builtin-tool-agent-sig
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { pickTrimmedString, toRecord } from '@lobechat/utils';
+import pMap from 'p-map';
 
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
@@ -193,8 +194,9 @@ const withCompleteProposalSnapshots = async ({
     throw new Error('Self-review proposal requires at least one action.');
   }
 
-  const actions = await Promise.all(
-    input.actions.map(async (rawAction) => {
+  const actions = await pMap(
+    input.actions,
+    async (rawAction) => {
       const action = toRecordOrEmpty(rawAction);
       const actionType = action.actionType;
 
@@ -203,15 +205,16 @@ const withCompleteProposalSnapshots = async ({
         const operationInput = toRecordOrEmpty(operation.input);
         const canonicalSkillDocumentId = pickTrimmedString(operationInput.canonicalSkillDocumentId);
         const sourceSkillIds = getStringArray(operationInput.sourceSkillIds);
-        const sourceSnapshots = await Promise.all(
-          sourceSkillIds.map((skillDocumentId) =>
+        const sourceSnapshots = await pMap(
+          sourceSkillIds,
+          (skillDocumentId) =>
             snapshotService.captureActionSnapshot({
               actionType: 'refine_skill',
               agentId,
               input: { skillDocumentId },
               userId,
             }),
-          ),
+          { concurrency: 5 },
         );
 
         return {
@@ -247,7 +250,8 @@ const withCompleteProposalSnapshots = async ({
           userId,
         }),
       };
-    }),
+    },
+    { concurrency: 5 },
   );
 
   return { ...input, actions };

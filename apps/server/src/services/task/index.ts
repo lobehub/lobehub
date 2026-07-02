@@ -11,6 +11,7 @@ import type {
   WorkspaceData,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
@@ -554,9 +555,11 @@ export class TaskService {
 
     // Derive fileIds from persisted editor_data (single source of truth).
     const extractCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
-    const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+    const [taskFileIds, commentFileIdLists] = await Promise.all([
       extractFileIdsFromEditorData(task.editorData, extractCtx),
-      ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+      pMap(comments, (c) => extractFileIdsFromEditorData(c.editorData, extractCtx), {
+        concurrency: 5,
+      }),
     ]);
     const commentFileIdsMap: Record<string, string[]> = {};
     comments.forEach((c, i) => {

@@ -1,5 +1,6 @@
 import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { KnowledgeBaseExecutionRuntime } from '@lobechat/builtin-tool-knowledge-base/executionRuntime';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
@@ -178,8 +179,9 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
           const slice = hasMore ? items.slice(0, limit) : items;
           return {
             hasMore,
-            items: await Promise.all(
-              slice.map(async (item) => ({
+            items: await pMap(
+              slice,
+              async (item) => ({
                 createdAt: item.createdAt,
                 fileType: item.fileType,
                 id: item.id,
@@ -192,7 +194,8 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
                   item.sourceType === 'file'
                     ? await fileService.getFileAccessUrl(item)
                     : item.url || '',
-              })),
+              }),
+              { concurrency: 5 },
             ),
           };
         },

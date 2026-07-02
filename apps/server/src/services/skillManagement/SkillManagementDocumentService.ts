@@ -1,5 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
 import { AgentDocumentModel, PolicyLoad } from '@/database/models/agentDocuments';
 
@@ -256,11 +257,13 @@ export class SkillManagementDocumentService {
       );
     }
 
-    const summaries = await Promise.all(
-      bundles.map(async (bundle) => {
+    const summaries = await pMap(
+      bundles,
+      async (bundle) => {
         const index = await this.getSingleIndex(input.agentId, bundle);
         return this.toSkillSummary(bundle, index);
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return summaries.sort((a, b) => a.name.localeCompare(b.name));

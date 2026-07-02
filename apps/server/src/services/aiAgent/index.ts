@@ -48,6 +48,7 @@ import { buildHeteroExecArgs, RequestTrigger, ThreadStatus, ThreadType } from '@
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -2186,12 +2187,14 @@ export class AiAgentService {
           if (connectorEntries.length > 0) {
             const toolModel = new ConnectorToolModel(this.db, this.userId, this.workspaceId);
             const connectorToolsMap = new Map<string, Map<string, string>>();
-            await Promise.all(
-              connectorEntries.map(async (c) => {
+            await pMap(
+              connectorEntries,
+              async (c) => {
                 const tools = await toolModel.queryByConnector(c.id);
                 const perms = new Map(tools.map((t) => [t.toolName, t.permission]));
                 connectorToolsMap.set(c.identifier, perms);
-              }),
+              },
+              { concurrency: 5 },
             );
 
             lobehubSkillManifests = lobehubSkillManifests.map((m) => {

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { customAlphabet } from 'nanoid/non-secure';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -476,7 +477,7 @@ export const agentRouter = router({
 
       const headers = buildMarketAuthHeaders(ctx);
 
-      return Promise.all(input.items.map((item) => forkOneAgent(item, headers)));
+      return pMap(input.items, (item) => forkOneAgent(item, headers), { concurrency: 5 });
     }),
 
   /**

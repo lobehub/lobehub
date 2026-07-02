@@ -38,6 +38,7 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import pMap from 'p-map';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 
@@ -173,8 +174,9 @@ export class DiscordMessageService implements MessageRuntimeService {
       return { messageId: params.messageId, reactions: [] };
     }
 
-    const reactions = await Promise.all(
-      ((msg as any).reactions as any[]).map(async (r: any) => {
+    const reactions = await pMap(
+      (msg as any).reactions as any[],
+      async (r: any) => {
         const emoji = r.emoji.id ? `${r.emoji.name}:${r.emoji.id}` : r.emoji.name;
         const users = await this.api.getReactions(params.channelId, params.messageId, emoji);
         return {
@@ -182,7 +184,8 @@ export class DiscordMessageService implements MessageRuntimeService {
           emoji,
           users: users.map((u: any) => u.username ?? u.id),
         };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return { messageId: params.messageId, reactions };

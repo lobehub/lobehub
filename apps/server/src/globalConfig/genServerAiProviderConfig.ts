@@ -1,6 +1,7 @@
 import { type ProviderConfig } from '@lobechat/types';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem, ModelProvider } from 'model-bank';
 import * as AiModels from 'model-bank';
+import pMap from 'p-map';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getLLMConfig } from '@/envs/llm';
@@ -30,8 +31,9 @@ export const genServerAiProvidersConfig = async (
   const staticModels = AiModels as unknown as Record<string, AiFullModelCard[] | undefined>;
 
   // Process all providers concurrently
-  const providerConfigs = await Promise.all(
-    Object.values(ModelProvider).map(async (provider) => {
+  const providerConfigs = await pMap(
+    Object.values(ModelProvider),
+    async (provider) => {
       const providerUpperCase = provider.toUpperCase();
       const hasStaticModels = Object.hasOwn(staticModels, provider);
       const staticProviderModels = hasStaticModels ? staticModels[provider] : undefined;
@@ -71,7 +73,8 @@ export const genServerAiProvidersConfig = async (
         },
         provider,
       };
-    }),
+    },
+    { concurrency: 5 },
   );
 
   // Convert the results to an object

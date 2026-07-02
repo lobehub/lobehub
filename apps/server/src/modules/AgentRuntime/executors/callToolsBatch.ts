@@ -13,6 +13,7 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
+import pMap from 'p-map';
 
 import {
   type DeviceAccessReason,
@@ -113,8 +114,9 @@ export const callToolsBatch =
 
     // Execute server tools concurrently (skip client tools in mixed batch)
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
-    await Promise.all(
-      toolsToExecute.map(async (chatToolPayload: ChatToolPayload) => {
+    await pMap(
+      toolsToExecute,
+      async (chatToolPayload: ChatToolPayload) => {
         const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
 
         // Publish tool execution start event
@@ -204,8 +206,7 @@ export const callToolsBatch =
 
             if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
               const policy = state.metadata?.deviceAccessPolicy as
-                | { canUseDevice: boolean; reason: DeviceAccessReason }
-                | undefined;
+                { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
               logDeviceToolAudit({
                 apiName: chatToolPayload.apiName,
                 botContext: state.metadata?.botContext,
@@ -488,7 +489,8 @@ export const callToolsBatch =
         } finally {
           batchExecuteToolSpan.end();
         }
-      }),
+      },
+      { concurrency: 5 },
     );
 
     log(
@@ -521,8 +523,7 @@ export const callToolsBatch =
     );
     for (const result of toolResults) {
       const discovered = result.data?.state?.activatedTools as
-        | Array<{ identifier: string }>
-        | undefined;
+        Array<{ identifier: string }> | undefined;
       if (discovered?.length) {
         const newActivations = discovered
           .filter((t) => !existingActivationIds.has(t.identifier))

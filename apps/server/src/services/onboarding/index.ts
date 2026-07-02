@@ -21,6 +21,7 @@ import {
 } from '@lobechat/types';
 import { isRecord, merge, pickTrimmedString } from '@lobechat/utils';
 import { and, count, eq, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
@@ -164,8 +165,9 @@ export class OnboardingService {
       (template) => !existingFilenames.has(template.filename),
     );
 
-    await Promise.all(
-      missingTemplates.map((template) =>
+    await pMap(
+      missingTemplates,
+      (template) =>
         this.agentDocumentsService.upsertDocument({
           agentId: inboxAgentId,
           content: template.content,
@@ -181,7 +183,7 @@ export class OnboardingService {
             : undefined,
           templateId: templateSet.id,
         }),
-      ),
+      { concurrency: 5 },
     );
 
     this.inboxDocumentsInitialized = true;
@@ -519,8 +521,7 @@ export class OnboardingService {
       };
     } else {
       let discoveryContext:
-        | { currentUserMessageCount: number; startUserMessageCount: number }
-        | undefined;
+        { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
       if (topicId) {
         const pastPreDiscovery =
@@ -653,8 +654,7 @@ export class OnboardingService {
 
     let currentUserMessageCount: number | undefined;
     let discoveryContext:
-      | { currentUserMessageCount: number; startUserMessageCount: number }
-      | undefined;
+      { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
     // Build discovery context if we have a topic and are past agent_identity + user_identity
     if (topicId) {

@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { type HealthCheckResult, type QueueMessage, type QueueStats } from '../types';
 import { type QueueServiceImpl } from './type';
@@ -75,9 +76,9 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
   async scheduleBatchMessages(messages: QueueMessage[]): Promise<string[]> {
     try {
       // Use Promise.all for concurrent execution
-      const messageIds = await Promise.all(
-        messages.map((message) => this.scheduleMessage(message)),
-      );
+      const messageIds = await pMap(messages, (message) => this.scheduleMessage(message), {
+        concurrency: 5,
+      });
 
       log('Scheduled %d batch messages', messages.length);
       return messageIds;

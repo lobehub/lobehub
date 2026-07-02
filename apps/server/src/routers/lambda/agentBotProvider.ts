@@ -1,6 +1,7 @@
 import { LineApiClient } from '@lobechat/chat-adapter-line';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -111,8 +112,10 @@ export const agentBotProviderRouter = router({
     .query(async ({ input, ctx }) => {
       const providers = await ctx.agentBotProviderModel.findByAgentId(input.agentId);
 
-      const statuses = await Promise.all(
-        providers.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
+      const statuses = await pMap(
+        providers,
+        (p) => getBotRuntimeStatus(p.platform, p.applicationId),
+        { concurrency: 5 },
       );
 
       return providers.map((p, i) => ({
@@ -154,8 +157,10 @@ export const agentBotProviderRouter = router({
     .query(async ({ input, ctx }) => {
       const providers = await ctx.agentBotProviderModel.query(input);
 
-      const statuses = await Promise.all(
-        providers.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
+      const statuses = await pMap(
+        providers,
+        (p) => getBotRuntimeStatus(p.platform, p.applicationId),
+        { concurrency: 5 },
       );
 
       return providers.map((p, i) => ({

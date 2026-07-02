@@ -4,6 +4,7 @@ import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -429,8 +430,9 @@ export class VerifyPlanGeneratorService {
 
     // Like the agent-authored path, the detailed instruction lives in a document
     // (the single source of truth) referenced by documentId — never inline.
-    return Promise.all(
-      parsed.data.criteria.slice(0, params.maxCriteria).map(async (c) => {
+    return pMap(
+      parsed.data.criteria.slice(0, params.maxCriteria),
+      async (c) => {
         let documentId: string | null = null;
         if (c.instruction) {
           const doc = await this.documentModel.create({
@@ -458,7 +460,8 @@ export class VerifyPlanGeneratorService {
           verifierConfig: {},
           verifierType: c.verifierType,
         };
-      }),
+      },
+      { concurrency: 5 },
     );
   }
 }

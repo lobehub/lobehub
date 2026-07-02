@@ -6,6 +6,7 @@ import { ModelEmptyError } from '@lobechat/model-runtime';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
@@ -174,8 +175,7 @@ export const buildServerVirtualSubAgentRunner = (
         title: description,
         topicId,
       })) as
-        | { error?: string; operationId?: string; success?: boolean; threadId?: string }
-        | undefined;
+        { error?: string; operationId?: string; success?: boolean; threadId?: string } | undefined;
 
       // 3. If the child op never started, no completion bridge will fire — parking
       //    the parent on it would hang forever. Drop the placeholder and signal
@@ -300,8 +300,9 @@ export const buildServerAgentMemberRunner = (
 
       // 3. Fork members.
       let startedCount = 0;
-      await Promise.all(
-        members.map(async (member, i) => {
+      await pMap(
+        members,
+        async (member, i) => {
           const anchorMessageId = anchorIds[i];
           try {
             const result = await execGroupMember({
@@ -346,7 +347,8 @@ export const buildServerAgentMemberRunner = (
               error,
             );
           }
-        }),
+        },
+        { concurrency: 5 },
       );
 
       // None started — no bridge will ever fire, so tear down the placeholders

@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -561,7 +562,7 @@ export const messengerRouter = router({
       gateKeeper,
     );
     const activeRows = (
-      await Promise.all(rows.map((row) => reconcileSlackInstallation(ctx.serverDB, row)))
+      await pMap(rows, (row) => reconcileSlackInstallation(ctx.serverDB, row), { concurrency: 5 })
     ).filter((row): row is DecryptedMessengerInstallation => row !== null);
 
     return activeRows.map((row) => ({

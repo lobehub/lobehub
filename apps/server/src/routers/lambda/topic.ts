@@ -8,6 +8,7 @@ import {
 import { cleanObject } from '@lobechat/utils';
 import { inArray } from 'drizzle-orm';
 import { after } from 'next/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -117,8 +118,9 @@ export const topicRouter = router({
     )
     .mutation(async ({ input, ctx }): Promise<BatchTaskResult> => {
       // Resolve sessionId for each topic
-      const resolvedTopics = await Promise.all(
-        input.map(async (item) => {
+      const resolvedTopics = await pMap(
+        input,
+        async (item) => {
           const { agentId, ...rest } = item;
           const resolved = await resolveContext(
             { agentId, sessionId: rest.sessionId },
@@ -127,7 +129,8 @@ export const topicRouter = router({
             ctx.workspaceId ?? undefined,
           );
           return { ...rest, sessionId: resolved.sessionId };
-        }),
+        },
+        { concurrency: 5 },
       );
 
       const data = await ctx.topicModel.batchCreate(resolvedTopics as any);

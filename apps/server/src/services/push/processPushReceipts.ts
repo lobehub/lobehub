@@ -1,6 +1,7 @@
 import debug from 'debug';
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { Expo } from 'expo-server-sdk';
+import pMap from 'p-map';
 
 import { deletePushTokensByExpoTokens } from '@/database/models/pushToken';
 import { notificationDeliveries } from '@/database/schemas/notification';
@@ -132,8 +133,10 @@ export async function processPushReceipts(
   const ticketIds = [...ticketLookup.keys()];
   const chunks = expo.chunkPushNotificationReceiptIds(ticketIds);
 
-  const receiptChunks = await Promise.all(
-    chunks.map((chunk) => expo.getPushNotificationReceiptsAsync(chunk)),
+  const receiptChunks = await pMap(
+    chunks,
+    (chunk) => expo.getPushNotificationReceiptsAsync(chunk),
+    { concurrency: 5 },
   );
   for (const receipts of receiptChunks) {
     for (const [ticketId, receipt] of Object.entries(receipts)) {
@@ -186,7 +189,7 @@ export async function processPushReceipts(
     }
   }
 
-  await Promise.all(updateTasks);
+  await pMap(updateTasks, (task) => task, { concurrency: 5 });
   const deliveriesUpdated = updateTasks.length;
 
   await deletePushTokensByExpoTokens(db, [...invalidTokens]);

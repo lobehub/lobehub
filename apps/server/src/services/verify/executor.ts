@@ -9,6 +9,7 @@ import type {
   VerifyVerdict,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -153,8 +154,10 @@ export class VerifyExecutorService {
     await Promise.all([
       this.runProgramItems(verifyRunId, programItems),
       this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem),
-      ...agentItems.map((item) =>
-        this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
+      pMap(
+        agentItems,
+        (item) => this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
+        { concurrency: 5 },
       ),
     ]);
 
@@ -319,13 +322,15 @@ export class VerifyExecutorService {
   ): Promise<void> {
     // Batch: N verdicts share ONE tracing row (N:1).
     const tracingId = randomUUID();
-    const promptItems = await Promise.all(
-      items.map(async (i) => ({
+    const promptItems = await pMap(
+      items,
+      async (i) => ({
         evidence: evidenceByItem.get(i.id),
         id: i.id,
         instruction: await this.resolveInstruction(i),
         title: i.title,
-      })),
+      }),
+      { concurrency: 5 },
     );
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,

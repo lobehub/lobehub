@@ -5,6 +5,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
@@ -99,8 +100,9 @@ export const imageRouter = router({
       if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
         log('Converting imageUrls to S3 keys for database storage: %O', params.imageUrls);
         try {
-          const imageKeysWithNull = await Promise.all(
-            params.imageUrls.map(async (url) => {
+          const imageKeysWithNull = await pMap(
+            params.imageUrls,
+            async (url) => {
               const key = await fileService.getKeyFromFullUrl(url);
               if (key) {
                 log('Converted URL %s to key %s', url, key);
@@ -108,7 +110,8 @@ export const imageRouter = router({
                 log('Failed to extract key from URL: %s', url);
               }
               return key;
-            }),
+            },
+            { concurrency: 5 },
           );
           const imageKeys = imageKeysWithNull.filter((key): key is string => key !== null);
 
@@ -154,8 +157,10 @@ export const imageRouter = router({
 
         // Handle multiple imageUrls
         if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
-          const s3Urls = await Promise.all(
-            (configForDatabase.imageUrls as string[]).map((key) => fileService.getFullFileUrl(key)),
+          const s3Urls = await pMap(
+            configForDatabase.imageUrls as string[],
+            (key) => fileService.getFullFileUrl(key),
+            { concurrency: 5 },
           );
           log('Dev: converted proxy URLs to S3 URLs: %O', s3Urls);
           updates.imageUrls = s3Urls;
@@ -236,8 +241,9 @@ export const imageRouter = router({
 
           // 3. Concurrently create asyncTask for each generation (within transaction)
           log('Creating async tasks for generations');
-          const generationsWithTasks = await Promise.all(
-            createdGenerations.map(async (generation) => {
+          const generationsWithTasks = await pMap(
+            createdGenerations,
+            async (generation) => {
               // Create asyncTask directly in transaction
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
@@ -259,7 +265,8 @@ export const imageRouter = router({
                 .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
 
               return { asyncTaskId, generation };
-            }),
+            },
+            { concurrency: 5 },
           );
           log('All async tasks created in transaction');
 

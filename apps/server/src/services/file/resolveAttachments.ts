@@ -1,6 +1,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { FileModel } from '@/database/models/file';
 import { DocumentService } from '@/server/services/document';
@@ -70,8 +71,9 @@ export const resolveAttachmentsByFileIds = async ({
   // Resolve every file in parallel — URL signing + PDF parsing can both be
   // I/O-bound, and a serial loop made every extra attachment add latency
   // before the agent could start running.
-  const resolved = await Promise.all(
-    dedupedFileIds.map(async (id) => {
+  const resolved = await pMap(
+    dedupedFileIds,
+    async (id) => {
       const file = recordById.get(id);
       if (!file) {
         return { id, missing: true as const };
@@ -94,7 +96,8 @@ export const resolveAttachmentsByFileIds = async ({
         parseError = error;
       }
       return { content, file, fileType, id, parseError, resolvedUrl };
-    }),
+    },
+    { concurrency: 5 },
   );
 
   for (const entry of resolved) {
@@ -172,8 +175,9 @@ export const resolveAttachmentMetadata = async ({
 
   const fileService = signUrls ? new FileService(db, userId, workspaceId) : null;
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
-  const items = await Promise.all(
-    dedupedFileIds.map(async (id) => {
+  const items = await pMap(
+    dedupedFileIds,
+    async (id) => {
       const file = recordById.get(id);
       if (!file) return undefined;
       const url = fileService ? (await fileService.getFullFileUrl(file.url)) || file.url : file.url;
@@ -184,7 +188,8 @@ export const resolveAttachmentMetadata = async ({
         size: file.size ?? 0,
         url,
       } satisfies ChatFileItem;
-    }),
+    },
+    { concurrency: 5 },
   );
   return items.filter((it): it is ChatFileItem => !!it);
 };

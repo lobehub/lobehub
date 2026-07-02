@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, isNull } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
@@ -104,8 +105,9 @@ export const documentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Process each document: resolve parentId and parse editorData
-      const processedDocuments = await Promise.all(
-        input.documents.map(async (doc) => {
+      const processedDocuments = await pMap(
+        input.documents,
+        async (doc) => {
           // Resolve parentId if it's a slug
           let resolvedParentId = doc.parentId;
           if (doc.parentId) {
@@ -123,7 +125,8 @@ export const documentRouter = router({
             editorData,
             parentId: resolvedParentId,
           };
-        }),
+        },
+        { concurrency: 5 },
       );
 
       return ctx.documentService.createDocuments(processedDocuments);

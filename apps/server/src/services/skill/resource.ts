@@ -7,6 +7,7 @@ import {
 import { getMimeType } from '@lobechat/utils';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
 import { FileService } from '@/server/services/file';
 
@@ -155,8 +156,9 @@ export class SkillResourceService {
     };
     collectFiles(nodes);
 
-    await Promise.all(
-      fileNodes.map(async (node) => {
+    await pMap(
+      fileNodes,
+      async (node) => {
         const meta = resources[node.path];
         if (!meta) return;
 
@@ -168,7 +170,8 @@ export class SkillResourceService {
         } catch (error) {
           log('populateContent: failed to read content for %s: %o', node.path, error);
         }
-      }),
+      },
+      { concurrency: 5 },
     );
   }
 

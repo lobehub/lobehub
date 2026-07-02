@@ -7,6 +7,7 @@ import {
 } from '@lobechat/chat-adapter-line';
 import type { Message } from 'chat';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
@@ -232,8 +233,9 @@ class LineWebhookClient implements PlatformClient {
       candidates.map((c) => c.messageId),
     );
 
-    const results = await Promise.all(
-      candidates.map(async ({ messageId, raw }): Promise<AttachmentSource | undefined> => {
+    const results = await pMap(
+      candidates,
+      async ({ messageId, raw }): Promise<AttachmentSource | undefined> => {
         try {
           const buffer = await this.api.downloadContent(messageId);
           const meta = getMediaFileNameAndType(raw);
@@ -247,7 +249,8 @@ class LineWebhookClient implements PlatformClient {
           log('extractFiles: downloadContent failed for messageId=%s: %O', messageId, err);
           return undefined;
         }
-      }),
+      },
+      { concurrency: 5 },
     );
 
     const sources = results.filter((source): source is AttachmentSource => Boolean(source));

@@ -7,6 +7,7 @@ import {
 } from '@lobechat/chat-adapter-imessage';
 import type { Message } from 'chat';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
@@ -185,8 +186,9 @@ class ImessageWebhookClient implements PlatformClient {
 
     if (candidates.length === 0) return undefined;
 
-    const results = await Promise.all(
-      candidates.map(async ({ guid, raw }): Promise<AttachmentSource | undefined> => {
+    const results = await pMap(
+      candidates,
+      async ({ guid, raw }): Promise<AttachmentSource | undefined> => {
         try {
           const downloaded = await this.bridge.downloadAttachment(guid);
           return {
@@ -199,7 +201,8 @@ class ImessageWebhookClient implements PlatformClient {
           log('extractFiles: downloadAttachment failed for guid=%s: %O', guid, error);
           return undefined;
         }
-      }),
+      },
+      { concurrency: 5 },
     );
 
     const sources = results.filter((source): source is AttachmentSource => Boolean(source));

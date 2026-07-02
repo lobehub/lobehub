@@ -1,3 +1,4 @@
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -63,11 +64,13 @@ export const generationBatchRouter = router({
       const uniqueModels = [...new Set(batches.map((b) => b.model))];
       const latencyMap = new Map<string, number | null>();
 
-      await Promise.all(
-        uniqueModels.map(async (model) => {
+      await pMap(
+        uniqueModels,
+        async (model) => {
           const latency = await getVideoAvgLatency(model).catch(() => null);
           latencyMap.set(model, latency);
-        }),
+        },
+        { concurrency: 5 },
       );
 
       return batches.map((b) => ({ ...b, avgLatencyMs: latencyMap.get(b.model) ?? null }));

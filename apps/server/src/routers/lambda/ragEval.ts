@@ -149,8 +149,9 @@ export const ragEvalRouter = router({
 
       insertEvalDatasetRecordSchema.array().parse(items);
 
-      const data = await Promise.all(
-        items.map(async ({ referenceFiles, question, ideal }) => {
+      const data = await pMap(
+        items,
+        async ({ referenceFiles, question, ideal }) => {
           const files = typeof referenceFiles === 'string' ? [referenceFiles] : referenceFiles;
 
           let fileIds: string[] | undefined = undefined;
@@ -167,7 +168,8 @@ export const ragEvalRouter = router({
             referenceFiles: fileIds,
             datasetId: input.datasetId,
           };
-        }),
+        },
+        { concurrency: 5 },
       );
 
       return ctx.datasetRecordModel.batchCreate(data);

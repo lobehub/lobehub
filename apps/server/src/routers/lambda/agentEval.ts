@@ -1,6 +1,7 @@
 import { parseDataset } from '@lobechat/eval-dataset-parser';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -658,8 +659,8 @@ export const agentEvalRouter = router({
       const agentIds = [...new Set(data.map((r) => r.targetAgentId).filter(Boolean))] as string[];
 
       const [datasets, agents] = await Promise.all([
-        Promise.all(datasetIds.map((id) => ctx.datasetModel.findById(id))),
-        Promise.all(agentIds.map((id) => ctx.runService.getAgentDisplayInfo(id))),
+        pMap(datasetIds, (id) => ctx.datasetModel.findById(id), { concurrency: 5 }),
+        pMap(agentIds, (id) => ctx.runService.getAgentDisplayInfo(id), { concurrency: 5 }),
       ]);
 
       const datasetMap = Object.fromEntries(datasets.filter(Boolean).map((d) => [d!.id, d!.name]));

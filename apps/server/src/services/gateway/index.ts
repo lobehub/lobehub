@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import type { MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -315,8 +316,9 @@ export class GatewayService {
     const providers = await AgentBotProviderModel.findByAgentId(serverDB, agentId, gateKeeper);
     const client = getMessageGatewayClient();
 
-    await Promise.all(
-      providers.map(async (provider) => {
+    await pMap(
+      providers,
+      async (provider) => {
         if (!provider.enabled) return;
 
         const definition = platformRegistry.getPlatform(provider.platform);
@@ -339,7 +341,8 @@ export class GatewayService {
             err,
           );
         }
-      }),
+      },
+      { concurrency: 5 },
     );
   }
 

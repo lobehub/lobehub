@@ -1,4 +1,5 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
+import pMap from 'p-map';
 
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -130,8 +131,9 @@ export const createFeedbackDomainJudgeSignalHandler = (
       const enrichSkillTargets = async (
         targets: FeedbackDomainJudgeAgentResult['targets'],
       ): Promise<FeedbackDomainJudgeAgentResult['targets']> => {
-        return Promise.all(
-          targets.map(async (target) => {
+        return pMap(
+          targets,
+          async (target) => {
             if (target.target !== 'skill') return target;
 
             const classification = await classifySkillIntent(
@@ -156,7 +158,8 @@ export const createFeedbackDomainJudgeSignalHandler = (
               skillIntentReason: classification.reason,
               skillRoute: classification.route,
             };
-          }),
+          },
+          { concurrency: 5 },
         );
       };
       const classifier: DomainClassifierService | undefined = resolveDomains

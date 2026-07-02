@@ -1,5 +1,6 @@
 import { buildTaskRunPrompt } from '@lobechat/prompts';
 import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+import pMap from 'p-map';
 
 import type { BriefModel } from '@/database/models/brief';
 import type { TaskModel } from '@/database/models/task';
@@ -57,9 +58,11 @@ export async function buildTaskPrompt(
   // single source of truth — fileId is recovered from the URL in each node
   // (proxy URL form via regex; pre-signed dev URLs via files.url lookup).
   const extractCtx = { db, userId, workspaceId };
-  const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+  const [taskFileIds, commentFileIdLists] = await Promise.all([
     extractFileIdsFromEditorData(task.editorData, extractCtx),
-    ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+    pMap(comments, (c) => extractFileIdsFromEditorData(c.editorData, extractCtx), {
+      concurrency: 5,
+    }),
   ]);
   const commentFileIdsMap: Record<string, string[]> = {};
   comments.forEach((c, i) => {
