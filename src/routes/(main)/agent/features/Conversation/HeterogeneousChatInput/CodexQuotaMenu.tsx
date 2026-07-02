@@ -1,8 +1,7 @@
 'use client';
 
 import type { CodexQuotaSnapshot, CodexQuotaWindow } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Popover } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox, Icon, Popover, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, GaugeIcon, RefreshCwIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,7 +29,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     padding-block-end: 8px;
-    border-bottom: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   popover: css`
     width: 292px;
@@ -51,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   resetCredits: css`
     padding-block-start: 8px;
-    border-top: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   trigger: css`
     cursor: pointer;
@@ -73,6 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     appearance: none;
     background: transparent;
+
     transition: all 0.2s;
 
     &:hover {
@@ -273,9 +273,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
           <Skeleton.Button active block size="small" style={{ height: 18 }} />
         </Flexbox>
       ) : quota?.status === 'error' || quota?.status === 'unavailable' ? (
-        <div className={styles.error}>
-          {quota.error || t('heteroAgent.codexQuota.unavailable')}
-        </div>
+        <div className={styles.error}>{quota.error || t('heteroAgent.codexQuota.unavailable')}</div>
       ) : hasQuotaData ? (
         <>
           <Flexbox gap={10}>
@@ -347,11 +345,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       onOpenChange={handleOpenChange}
     >
       <div>
-        {open ? (
-          trigger
-        ) : (
-          <Tooltip title={t('heteroAgent.codexQuota.tooltip')}>{trigger}</Tooltip>
-        )}
+        {open ? trigger : <Tooltip title={t('heteroAgent.codexQuota.tooltip')}>{trigger}</Tooltip>}
       </div>
     </Popover>
   );
