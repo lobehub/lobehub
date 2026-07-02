@@ -4,6 +4,7 @@ import {
   Button,
   createModal,
   type ImperativeModalProps as BaseImperativeModalProps,
+  ModalFooter,
   type ModalInstance,
 } from '@lobehub/ui/base-ui';
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef } from 'react';
@@ -103,7 +104,7 @@ const ImperativeModal = ({
     if (!onOk && !onCancel) return null;
 
     return (
-      <>
+      <ModalFooter>
         <Button disabled={cancelButtonProps?.disabled || confirmLoading} onClick={onCancel}>
           {cancelText ?? t('cancel')}
         </Button>
@@ -116,7 +117,7 @@ const ImperativeModal = ({
         >
           {okText ?? t('ok', { defaultValue: 'OK' })}
         </Button>
-      </>
+      </ModalFooter>
     );
   }, [
     cancelButtonProps?.disabled,
