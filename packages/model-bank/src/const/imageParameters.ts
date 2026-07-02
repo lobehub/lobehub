@@ -85,3 +85,14 @@ export const nanoBanana2Parameters: ModelParamsSchema = {
     enum: ['512', '1K', '2K', '4K'],
   },
 };
+
+export const nanoBananaLiteParameters: ModelParamsSchema = {
+  aspectRatio: {
+    default: 'auto',
+    enum: NANO_BANANA_2_ASPECT_RATIOS,
+  },
+  imageUrls: {
+    default: [],
+  },
+  prompt: { default: '' },
+};
