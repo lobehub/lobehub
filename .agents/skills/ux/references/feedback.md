@@ -69,6 +69,22 @@ state hands control back and restores certainty. Retry re-runs the _same_ fetch 
 `mutate` / query refetch), shows loading again while it re-runs, and stays available if it
 fails again; keep any already-loaded context rather than blowing the surface away.
 
+**But not every failure should offer Retry — gate it on whether a retry could plausibly
+succeed.** A `401` (auth expired / invalid) or `403` (no permission) wall will just fail
+again the same way, so a **Reload** button there is a false promise: it invites the user to
+mash a control that can't work. The failed state still renders (reason + status-specific copy
+— "please sign in", "you don't have access"), it just **omits Retry**; `5xx` / timeout /
+network stay retryable. Derive this from the normalized error status, don't hand-code it per
+surface — `normalizeAsyncError` marks `401` / `403` (and anything flagged
+`meta.shouldRetry === false`) non-retryable, and `AsyncError` hides the button accordingly.
+
+> **Decision (2026-07-02): the component-level failed state does _not_ itself redirect on
+> `401`.** We assume session-expiry is caught **globally** (an app-level interceptor routes an
+> expired session to sign-in), so a surface only needs the honest no-retry failure state as a
+> backstop — it should not add a second redirect layer. Revisit only if a future surface turns
+> up where the global redirect doesn't fire and a `401` genuinely strands the user; then wire
+> per-surface handling. Don't pre-build it.
+
 > **We under-build this today** — most surfaces only draw loading + success and let a slow
 > or failed request spin forever. Treat the failure path as required, not optional: it's a
 > large part of what makes the experience feel trustworthy.
@@ -261,6 +277,7 @@ tail, kept distinct from the genuine end-of-list.
 - [ ] An error branch isn't **ordered after** a data-presence loading gate — `{error && …}` placed below `if (isLoading) return <Skeleton/>` where `isLoading = !map[id]` is **unreachable on first-load failure** (a failed / not-found fetch never populates the map, so the skeleton short-circuits; it paints only on a **revalidation** failure over already-loaded data), and a resolved-`null` not-found hangs the same permanent skeleton. Check `error` / not-found **before** the loading gate, or flip the gate on settled. _(Certainty)_
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
+- [ ] Retry is **gated on retryability**, not shown unconditionally — a `401` / `403` (or `meta.shouldRetry === false`) failure renders the reason but **omits Retry** (a retry there just fails again); derive it from the normalized error status, not per-surface. `401` session-expiry is assumed handled by a **global** redirect to sign-in, so a surface does not add its own redirect layer. _(Certainty・Meaningful)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
 - [ ] Already-loaded context is preserved on failure — don't wipe the surface. _(Meaningful)_
 - [ ] In an auto-dismissing surface (upload dock / progress toast), auto-dismiss fires on **success only** — a failed item persists with a Retry, never cleared by the countdown. _(Certainty・Meaningful)_
