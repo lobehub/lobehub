@@ -70,7 +70,7 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   return { cleanedText, urls };
 };
 
-const transformOpenAIStream = (
+export const transformOpenAIStream = (
   chunk: OpenAI.ChatCompletionChunk,
   streamContext: StreamContext,
   payload?: ChatPayloadForTransformStream,

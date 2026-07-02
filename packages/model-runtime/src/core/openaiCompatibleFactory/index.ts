@@ -214,6 +214,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     handleStream?: (
       stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
       options: {
+        bizErrorTypeTransformer?: OpenAIStreamOptions['bizErrorTypeTransformer'];
         callbacks?: ChatStreamCallbacks;
         inputStartAt?: number;
         payload?: ChatPayloadForTransformStream;
@@ -732,6 +733,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           return StreamingResponse(
             chatCompletion?.handleStream
               ? chatCompletion.handleStream(prod, {
+                  bizErrorTypeTransformer: streamOptions.bizErrorTypeTransformer,
                   callbacks: streamOptions.callbacks,
                   inputStartAt,
                   payload: streamOptions.payload,
@@ -763,6 +765,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
+                bizErrorTypeTransformer: streamOptions.bizErrorTypeTransformer,
                 callbacks: streamOptions.callbacks,
                 inputStartAt,
                 payload: streamOptions.payload,
