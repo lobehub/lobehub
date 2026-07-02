@@ -206,7 +206,7 @@ const ReportRow = memo<{ item: VerifyReportSummary }>(({ item }) => {
       <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
         <Flexbox gap={6} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-            <Text className={styles.title} fontSize={15} strong>
+            <Text strong className={styles.title} fontSize={15}>
               {title}
             </Text>
             <ReportVerdict verdict={item.report?.verdict} />
@@ -309,7 +309,7 @@ const VerifyReportsPage = memo(() => {
   return (
     <div className={styles.container}>
       <Flexbox className={styles.content} gap={20}>
-        <Flexbox horizontal align={'flex-start'} justify={'space-between'} gap={16} wrap={'wrap'}>
+        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'} wrap={'wrap'}>
           <Flexbox gap={6}>
             <Text as={'h2'}>{t('reports.title')}</Text>
             <Text type={'secondary'}>{t('reports.subtitle')}</Text>

@@ -414,14 +414,14 @@ const ReportViewer = memo(() => {
   if (error) {
     return (
       <ReportPageState
+        description={t('report.error.description')}
+        icon={X}
+        title={t('report.error.title')}
         action={
           <Button icon={RefreshCw} onClick={() => void mutate()}>
             {t('report.actions.retry')}
           </Button>
         }
-        description={t('report.error.description')}
-        icon={X}
-        title={t('report.error.title')}
       />
     );
   }
