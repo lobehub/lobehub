@@ -521,12 +521,15 @@ export interface PlatformDefinition {
   supportsMessageEdit?: boolean;
 
   /**
-   * `lobe-message` API names this platform's runtime does NOT implement (its
-   * service throws `PlatformUnsupportedError`). Surfaced into the agent runtime's
-   * manifest resolve context so `resolveMessageManifest` removes them from the
-   * tool list — otherwise the model calls an operation that can only fail (the
-   * WeChat `readMessages` "刚刚聊了啥" case). Keep this in sync with the platform's
-   * service stubs. Omit when the platform implements the full surface.
+   * `lobe-message` channel API names this platform does NOT support — either the
+   * service throws `PlatformUnsupportedError`, or the optional method is absent
+   * and the execution runtime rejects it generically (e.g. `sendDirectMessage`).
+   * Sourced from `PLATFORM_UNSUPPORTED_MESSAGE_APIS` and surfaced into the agent
+   * runtime's manifest resolve context so `resolveMessageManifest` removes them
+   * from the tool list — otherwise the model calls an operation that can only
+   * fail (the WeChat `readMessages` "刚刚聊了啥" case). A missing/empty value means
+   * "fully supported", so a limited platform MUST populate this. See
+   * `messageCapabilities.ts` (kept honest against the services by its test).
    */
   unsupportedMessageApis?: string[];
 }
