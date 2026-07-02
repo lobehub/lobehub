@@ -256,7 +256,7 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
       log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
     }
 
-    const importer = new SkillImporter(context.serverDB, context.userId);
+    const importer = new SkillImporter(context.serverDB, context.userId, context.workspaceId);
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: { userId: context.userId },
