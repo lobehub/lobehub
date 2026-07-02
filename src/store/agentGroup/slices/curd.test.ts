@@ -60,6 +60,7 @@ const createMockChatGroup = (overrides: Partial<ChatGroupItem> = {}): ChatGroupI
   title: 'Test Group',
   updatedAt: new Date(),
   userId: 'user-1',
+  visibility: 'public',
   workspaceId: null,
   ...overrides,
 });
