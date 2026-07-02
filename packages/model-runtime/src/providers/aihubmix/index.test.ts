@@ -74,7 +74,7 @@ describe('LobeAiHubMixAI', () => {
       expect(deepseekRouter?.models).toContain('deepseek-v4-flash-free');
     });
 
-    it('should thread a custom baseURL through all routes, defaulting to aihubmix.com', () => {
+    it('should thread a custom baseURL through all routes, defaulting to api.inferera.com', () => {
       const custom = (params.routers as any)(
         { apiKey: 'test', baseURL: 'https://my-aihubmix-mirror.com' },
         {},
