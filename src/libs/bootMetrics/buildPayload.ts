@@ -31,20 +31,39 @@ interface BuildPayloadInput {
   snapshot: { marks: Record<string, number>; spans: BootMetricSpan[] };
 }
 
+const SPAN_TIME_CAP_MS = 120_000;
+
+export const BOOT_SPAN_NAMES: ReadonlySet<string> = new Set([
+  'import-settings',
+  'tool-surfaces',
+  'core-init',
+  'cache-hydration',
+  'ttfb',
+  'doc',
+  'bundle',
+  'store-gate',
+  'fcp',
+]);
+
 const isFinitePositive = (n: number) => Number.isFinite(n) && n >= 0;
 
-export const buildBootMetricsPayload = (input: BuildPayloadInput): BootMetricPayload => {
+const isAllowedSpan = (s: BootMetricSpan) =>
+  BOOT_SPAN_NAMES.has(s.name) && s.durMs <= SPAN_TIME_CAP_MS && s.startMs <= SPAN_TIME_CAP_MS;
+
+export const buildBootMetricsPayload = (input: BuildPayloadInput): BootMetricPayload | null => {
   const { snapshot, htmlMarkMs, navResponseStartMs, fcpMs, resourceTimings, dimensions } = input;
   const { marks, spans: snapshotSpans } = snapshot;
-
-  const existingNames = new Set(snapshotSpans.map((s) => s.name));
 
   const totalMs = (() => {
     const fp = marks['first-paint'];
     if (typeof fp === 'number' && Number.isFinite(fp)) return fp;
-    if (snapshotSpans.length === 0) return 0;
-    return Math.max(...snapshotSpans.map((s) => s.startMs + s.durMs));
+    if (typeof fcpMs === 'number' && isFinitePositive(fcpMs)) return fcpMs;
+    return null;
   })();
+
+  if (totalMs === null || totalMs > SPAN_TIME_CAP_MS) return null;
+
+  const existingNames = new Set(snapshotSpans.map((s) => s.name));
 
   const derived: BootMetricSpan[] = [];
 
@@ -87,6 +106,7 @@ export const buildBootMetricsPayload = (input: BuildPayloadInput): BootMetricPay
 
   // performance.now() yields sub-millisecond floats; the metrics columns are integer, so round.
   const spans = [...snapshotSpans, ...derived]
+    .filter(isAllowedSpan)
     .slice(0, 64)
     .map((s) => ({ durMs: Math.round(s.durMs), name: s.name, startMs: Math.round(s.startMs) }));
 
