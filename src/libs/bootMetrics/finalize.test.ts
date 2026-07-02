@@ -4,7 +4,12 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  bootTimingSnapshot: vi.fn(() => ({ marks: { 'first-paint': 1000 }, spans: [] })),
+  bootTimingSnapshot: vi.fn<
+    () => {
+      marks: Record<string, number>;
+      spans: { durMs: number; name: string; startMs: number }[];
+    }
+  >(() => ({ marks: { 'first-paint': 1000 }, spans: [] })),
   getServerConfigStoreState: vi.fn(() => ({ serverConfig: { bootstrapMetricsSampleRate: 1 } })),
   getUserStoreState: vi.fn(() => ({ user: null })),
   isLogin: vi.fn(() => false),
