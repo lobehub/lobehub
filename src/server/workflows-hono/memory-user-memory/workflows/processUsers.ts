@@ -12,6 +12,8 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
+import { serializeWorkflowCursor } from './utils';
+
 const USER_PAGE_SIZE = 50;
 const USER_BATCH_SIZE = 10;
 
@@ -86,7 +88,10 @@ export const processUsersHandler = async (
         {
           ...buildWorkflowPayloadInput({
             ...params,
-            userCursor: { createdAt: cursor.createdAt.toISOString(), id: cursor.id },
+            userCursor: serializeWorkflowCursor(
+              cursor,
+              'Invalid cursor date when scheduling next user page',
+            ),
           }),
         },
         { extraHeaders: upstashWorkflowExtraHeaders },

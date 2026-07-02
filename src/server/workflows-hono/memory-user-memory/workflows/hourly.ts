@@ -12,6 +12,8 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
+import { serializeWorkflowCursor } from './utils';
+
 const USER_PAGE_SIZE = 200;
 const USER_BATCH_SIZE = 20;
 
@@ -48,10 +50,10 @@ export const hourlyWorkflowHandler = async (
   }
 
   const nextCursor = userBatch.cursor
-    ? {
-        createdAt: userBatch.cursor.createdAt.toISOString(),
-        id: userBatch.cursor.id,
-      }
+    ? serializeWorkflowCursor(
+        userBatch.cursor,
+        'Invalid cursor date for hourly memory extraction workflow',
+      )
     : undefined;
 
   if (!dryRun) {
