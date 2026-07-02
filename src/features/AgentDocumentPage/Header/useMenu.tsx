@@ -1,6 +1,5 @@
 import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { isDesktop } from '@lobechat/const';
-import { useEditor } from '@lobehub/editor/react';
 import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
@@ -12,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
+import { useStoreApi } from '@/features/PageEditor/store';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -42,7 +42,7 @@ export const useMenu = ({
   const { i18n, t } = useTranslation(['file', 'common', 'chat']);
   const { message } = App.useApp();
   const { lg = true } = useResponsive();
-  const editor = useEditor();
+  const storeApi = useStoreApi();
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
@@ -63,6 +63,7 @@ export const useMenu = ({
     };
 
     const handleExportMarkdown = async () => {
+      const { editor } = storeApi.getState();
       if (!editor) return;
       const markdown = (editor.getDocument('markdown') as unknown as string) || '';
       const fileName = `${title || 'Untitled'}.md`;
@@ -177,9 +178,9 @@ export const useMenu = ({
     agentId,
     appOrigin,
     documentId,
-    editor,
     lg,
-    dateLocale,
+dateLocale,
+    storeApi,
     message,
     onDeleted,
     t,
