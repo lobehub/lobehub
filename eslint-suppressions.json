@@ -824,11 +824,6 @@
       "count": 2
     }
   },
-  "src/features/Verify/ReportViewer.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/Verify/RunResult.tsx": {
     "no-restricted-imports": {
       "count": 1
