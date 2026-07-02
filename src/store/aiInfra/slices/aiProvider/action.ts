@@ -546,7 +546,8 @@ export class AiProviderActionImpl {
             buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
             buildVideoProviderModelLists(data.enabledVideoAiProviders, data.enabledAiModels),
             buildEmbeddingProviderModelLists(
-              data.enabledEmbeddingAiProviders,
+              // Older server/runtime payloads may not include the new embedding provider bucket yet.
+              data.enabledEmbeddingAiProviders ?? [],
               data.enabledAiModels,
             ),
           ]);
