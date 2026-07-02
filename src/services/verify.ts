@@ -82,6 +82,25 @@ export interface VerifyReportBundle {
   run: VerifyRunItem;
 }
 
+export interface VerifyReportSummary {
+  report: Pick<
+    VerifyReport,
+    | 'createdAt'
+    | 'failedChecks'
+    | 'generatedAt'
+    | 'id'
+    | 'overallConfidence'
+    | 'passedChecks'
+    | 'reviewedByUser'
+    | 'summary'
+    | 'totalChecks'
+    | 'uncertainChecks'
+    | 'verdict'
+    | 'verifyRunId'
+  > | null;
+  run: VerifyRunItem;
+}
+
 export interface GenerateDraftPlanInput {
   context?: string;
   enableAiGeneration?: boolean;
@@ -139,6 +158,10 @@ export class VerifyService {
     lambdaClient.verify.getReportBundle.query({
       verifyRunId,
     }) as Promise<VerifyReportBundle | null>;
+
+  /** Current user's recent verification sessions with report rollup fields. */
+  listReportSummaries = (): Promise<VerifyReportSummary[]> =>
+    lambdaClient.verify.listReportSummaries.query() as Promise<VerifyReportSummary[]>;
 
   executeVerify = (input: {
     batchLlm?: boolean;

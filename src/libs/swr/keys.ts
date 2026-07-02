@@ -658,6 +658,7 @@ export const verifyKeys = {
     'verify:reportBundle',
     verifyRunId,
   ]),
+  reportSummaries: def('verify:reportSummaries', () => ['verify:reportSummaries']),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [

@@ -477,6 +477,35 @@ export const verifyRouter = router({
 
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
+  listReportSummaries: verifyProcedure.query(async ({ ctx }) => {
+    const runs = await ctx.runModel.query();
+    const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
+
+    return runs.map((run, index) => {
+      const report = reports[index];
+
+      return {
+        report: report
+          ? {
+              createdAt: report.createdAt,
+              failedChecks: report.failedChecks,
+              generatedAt: report.generatedAt,
+              id: report.id,
+              overallConfidence: report.overallConfidence,
+              passedChecks: report.passedChecks,
+              reviewedByUser: report.reviewedByUser,
+              summary: report.summary,
+              totalChecks: report.totalChecks,
+              uncertainChecks: report.uncertainChecks,
+              verdict: report.verdict,
+              verifyRunId: report.verifyRunId,
+            }
+          : null,
+        run,
+      };
+    });
+  }),
+
   listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
     return ctx.resultModel.listByRun(run.id);

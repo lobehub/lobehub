@@ -3,8 +3,10 @@
 import type { VerifyRunContext } from '@lobechat/types';
 import {
   Block,
+  Button,
   Center,
   Drawer,
+  Empty,
   Flexbox,
   Highlighter,
   Icon,
@@ -14,8 +16,9 @@ import {
   Text,
 } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { Check, CircleHelp, FileText, X } from 'lucide-react';
-import { memo, useState } from 'react';
+import { AlertTriangle, Check, CircleHelp, Clock3, FileText, RefreshCw, X } from 'lucide-react';
+import { memo, type ReactNode, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -121,6 +124,15 @@ const useStyles = createStyles(({ css, token }) => ({
 
     background: ${token.colorBgContainer};
   `,
+  stateBanner: css`
+    padding-block: 10px;
+    padding-inline: 14px;
+    border: 1px solid ${token.colorInfoBorder};
+    border-radius: ${token.borderRadiusLG}px;
+
+    color: ${token.colorInfoText};
+    background: ${token.colorInfoBg};
+  `,
   scopeBlock: css`
     padding-block: 10px;
     padding-inline: 14px;
@@ -153,19 +165,29 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const VERDICT_META = {
-  failed: { color: 'error', icon: X, label: 'Failed' },
-  passed: { color: 'success', icon: Check, label: 'Passed' },
-  uncertain: { color: 'warning', icon: CircleHelp, label: 'Uncertain' },
+  failed: { color: 'error', icon: X, labelKey: 'report.verdict.failed' },
+  passed: { color: 'success', icon: Check, labelKey: 'report.verdict.passed' },
+  uncertain: { color: 'warning', icon: CircleHelp, labelKey: 'report.verdict.uncertain' },
 } as const;
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
+const terminalRunStatuses = new Set(['delivered', 'failed', 'passed']);
+const liveStatusLabelKey = {
+  planned: 'report.status.planned',
+  repairing: 'report.status.repairing',
+  unverified: 'report.status.unverified',
+  verifying: 'report.status.verifying',
+} as const;
 
 const VerdictTag = memo<{ verdict?: string | null }>(({ verdict }) => {
-  const meta = VERDICT_META[(verdict ?? 'uncertain') as keyof typeof VERDICT_META];
+  const { t } = useTranslation('verify');
+  if (!verdict) return null;
+
+  const meta = VERDICT_META[verdict as keyof typeof VERDICT_META];
   if (!meta) return null;
   return (
     <Tag color={meta.color} icon={<Icon icon={meta.icon} />}>
-      {meta.label}
+      {t(meta.labelKey)}
     </Tag>
   );
 });
@@ -190,6 +212,7 @@ const ScopeRow = memo<{ label: string; value?: string | null }>(({ label, value 
 const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string | null }>(
   ({ context, scenario }) => {
     const { styles } = useStyles();
+    const { t } = useTranslation('verify');
     if (scenario !== 'coding' || !context) return null;
 
     const { branch, commit, surfaces, entry, focus, testedAt } = context;
@@ -199,12 +222,12 @@ const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string |
 
     return (
       <Block className={styles.scopeBlock} gap={2}>
-        <ScopeRow label="Focus" value={focus} />
-        <ScopeRow label="Branch" value={branch} />
-        <ScopeRow label="Surface" value={surface} />
-        <ScopeRow label="Date" value={date} />
-        <ScopeRow label="Commit" value={commit} />
-        <ScopeRow label="Entry" value={entry} />
+        <ScopeRow label={t('report.scope.focus')} value={focus} />
+        <ScopeRow label={t('report.scope.branch')} value={branch} />
+        <ScopeRow label={t('report.scope.surface')} value={surface} />
+        <ScopeRow label={t('report.scope.date')} value={date} />
+        <ScopeRow label={t('report.scope.commit')} value={commit} />
+        <ScopeRow label={t('report.scope.entry')} value={entry} />
       </Block>
     );
   },
@@ -214,6 +237,7 @@ const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string |
  *  download's mojibake) with syntax highlighting. */
 const DocumentViewer = memo<{ url: string }>(({ url }) => {
   const { styles } = useStyles();
+  const { t } = useTranslation('verify');
   const { fileData, loading, error } = useTextFileLoader(url);
 
   if (loading)
@@ -226,9 +250,9 @@ const DocumentViewer = memo<{ url: string }>(({ url }) => {
   if (error || fileData === null)
     return (
       <Center flex={1} gap={8} height={'100%'}>
-        <Text type="secondary">Failed to load document.</Text>
+        <Text type="secondary">{t('report.document.failed')}</Text>
         <a href={url} rel="noreferrer" target="_blank">
-          Open original
+          {t('report.document.openOriginal')}
         </a>
       </Center>
     );
@@ -251,6 +275,7 @@ const DocumentViewer = memo<{ url: string }>(({ url }) => {
  *  detail drawer instead of navigating to the raw file. */
 const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }) => {
   const { styles } = useStyles();
+  const { t } = useTranslation('verify');
   const [open, setOpen] = useState(false);
   const title = evidence.description || filenameFromUrl(evidence.fileUrl!);
 
@@ -258,7 +283,7 @@ const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }
     <>
       <button className={styles.docTrigger} type={'button'} onClick={() => setOpen(true)}>
         <Icon icon={FileText} />
-        <span>View document</span>
+        <span>{t('report.document.view')}</span>
       </button>
       <Drawer
         open={open}
@@ -322,12 +347,13 @@ const EvidenceList = memo<{
 /** A single check — a stacked card with its title, verdict, reasoning and evidence. */
 const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   const { styles } = useStyles();
+  const { t } = useTranslation('verify');
   return (
     <Block className={styles.resultCard} gap={6}>
       <Flexbox horizontal align="center" gap={8} justify="space-between">
         <Text strong>{result.checkItemTitle || result.checkItemId}</Text>
         <Flexbox horizontal align="center" gap={8}>
-          {!result.required && <Tag>soft</Tag>}
+          {!result.required && <Tag>{t('report.check.optional')}</Tag>}
           <VerdictTag verdict={result.verdict ?? result.status} />
         </Flexbox>
       </Flexbox>
@@ -346,6 +372,18 @@ const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   );
 });
 
+const ReportPageState = memo<{
+  action?: ReactNode;
+  description: string;
+  icon: typeof AlertTriangle;
+  title: string;
+}>(({ action, description, icon, title }) => (
+  <Center gap={16} height={'100%'} style={{ minHeight: '70vh' }} width={'100%'}>
+    <Empty description={description} icon={icon} title={title} />
+    {action}
+  </Center>
+));
+
 /**
  * Standalone viewer for a verification session's report, addressed purely by
  * `?id=<verifyRunId>` — no Agent Run / chat context required. Renders the report
@@ -356,24 +394,77 @@ const ResultCard = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
  */
 const ReportViewer = memo(() => {
   const { styles, cx } = useStyles();
+  const { t } = useTranslation('verify');
   const isMobile = useIsMobile();
   const { runId } = useParams<{ runId: string }>();
   const verifyRunId = runId ?? null;
-  const { data, isLoading } = useVerifyReportBundle(verifyRunId);
+  const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
 
-  if (!verifyRunId)
-    return <Text type="danger">Missing report id (/verify/&lt;verifyRunId&gt;).</Text>;
+  useEffect(() => {
+    const status = data?.run.status;
+    if (!status || terminalRunStatuses.has(status)) return;
+
+    const timer = window.setInterval(() => void mutate(), 5000);
+    return () => window.clearInterval(timer);
+  }, [data?.run.status, mutate]);
+
+  if (!verifyRunId) {
+    return (
+      <ReportPageState
+        description={t('report.missing.description')}
+        icon={AlertTriangle}
+        title={t('report.missing.title')}
+      />
+    );
+  }
   if (isLoading) return <Loading debugId="verify-report-viewer" />;
-  if (!data) return <Text type="danger">Report not found.</Text>;
+  if (error) {
+    return (
+      <ReportPageState
+        action={
+          <Button icon={RefreshCw} onClick={() => void mutate()}>
+            {t('report.actions.retry')}
+          </Button>
+        }
+        description={t('report.error.description')}
+        icon={X}
+        title={t('report.error.title')}
+      />
+    );
+  }
+  if (!data) {
+    return (
+      <ReportPageState
+        description={t('report.notFound.description')}
+        icon={FileText}
+        title={t('report.notFound.title')}
+      />
+    );
+  }
 
   const { run, report, results } = data;
+  const liveStatus =
+    run.status && !terminalRunStatuses.has(run.status)
+      ? (run.status as keyof typeof liveStatusLabelKey)
+      : null;
+  const passedChecks = report?.passedChecks ?? results.filter((r) => r.verdict === 'passed').length;
+  const failedChecks = report?.failedChecks ?? results.filter((r) => r.verdict === 'failed').length;
+  const totalChecks = report?.totalChecks ?? results.length;
+  const uncertainChecks =
+    report?.uncertainChecks ?? Math.max(totalChecks - passedChecks - failedChecks, 0);
 
   return (
     <Flexbox className={cx(isMobile ? styles.containerMobile : styles.container)} gap={24}>
       <Flexbox gap={12}>
-        <Text as="h2">{run.title || 'Verification report'}</Text>
+        <Text as="h2">{run.title || t('report.titleFallback')}</Text>
         {run.scenario !== 'coding' && run.goal && <Text type="secondary">{run.goal}</Text>}
         <ScopeBlock context={run.context} scenario={run.scenario} />
+        {liveStatus && (
+          <Flexbox horizontal align={'center'} className={styles.stateBanner} gap={8}>
+            <Icon icon={Clock3} size={16} />
+            <Text>{t(liveStatusLabelKey[liveStatus])}</Text>
+          </Flexbox>
+        )}
         {report?.summary && <Text type="secondary">{report.summary}</Text>}
         <Flexbox
           horizontal
@@ -383,32 +474,38 @@ const ReportViewer = memo(() => {
         >
           <VerdictTag verdict={report?.verdict} />
           <Flexbox>
-            <span className={styles.stat}>{report?.totalChecks ?? results.length}</span>
+            <span className={styles.stat}>{totalChecks}</span>
             <Text fontSize={12} type="secondary">
-              total
+              {t('report.stats.total')}
             </Text>
           </Flexbox>
           <Flexbox>
             <Text className={styles.stat} type="success">
-              {report?.passedChecks ?? results.filter((r) => r.verdict === 'passed').length}
+              {passedChecks}
             </Text>
             <Text fontSize={12} type="secondary">
-              passed
+              {t('report.stats.passed')}
             </Text>
           </Flexbox>
           <Flexbox>
             <Text className={styles.stat} type="danger">
-              {report?.failedChecks ?? results.filter((r) => r.verdict === 'failed').length}
+              {failedChecks}
             </Text>
             <Text fontSize={12} type="secondary">
-              failed
+              {t('report.stats.failed')}
+            </Text>
+          </Flexbox>
+          <Flexbox>
+            <span className={styles.stat}>{uncertainChecks}</span>
+            <Text fontSize={12} type="secondary">
+              {t('report.stats.uncertain')}
             </Text>
           </Flexbox>
           {typeof report?.overallConfidence === 'number' && (
             <Flexbox>
               <span className={styles.stat}>{Math.round(report.overallConfidence * 100)}</span>
               <Text fontSize={12} type="secondary">
-                score
+                {t('report.stats.confidence')}
               </Text>
             </Flexbox>
           )}
@@ -416,7 +513,7 @@ const ReportViewer = memo(() => {
       </Flexbox>
 
       <Flexbox gap={8}>
-        <Text as="h3">Checks</Text>
+        <Text as="h3">{t('report.sections.checks')}</Text>
         {results.map((r) => (
           <ResultCard key={r.id} result={r} />
         ))}
@@ -427,7 +524,7 @@ const ReportViewer = memo(() => {
           body carries only the non-duplicate prose. */}
       {report?.content && (
         <Flexbox gap={8}>
-          <Text as="h3">Details</Text>
+          <Text as="h3">{t('report.sections.details')}</Text>
           <Markdown>{report.content}</Markdown>
         </Flexbox>
       )}

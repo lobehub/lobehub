@@ -19,7 +19,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -122,6 +122,7 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import VerifyReportsPage from '@/routes/(main)/verify';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
@@ -503,6 +504,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
   },
 
   ...BusinessDesktopRoutesWithMainLayout,
+
+  // Verify report library
+  {
+    element: <VerifyReportsPage />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyReportsRouteMeta },
+    path: 'verify',
+  },
 
   // Eval routes
   {

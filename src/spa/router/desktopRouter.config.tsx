@@ -19,7 +19,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
@@ -560,6 +560,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
   },
 
   ...BusinessDesktopRoutesWithMainLayout,
+
+  // Verify report library
+  {
+    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify Reports'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyReportsRouteMeta },
+    path: 'verify',
+  },
 
   // Eval routes
   {
