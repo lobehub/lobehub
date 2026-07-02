@@ -15,28 +15,39 @@ import AsyncError, { type AsyncErrorVariant } from '../AsyncError';
  * confident `$0`. `AsyncBoundary` reads `error` **before** the empty branch and
  * renders the right state, once, so no call site hand-rolls the precedence.
  *
- * The error is already in hand at the call site — SWR returns it. Migrating a
- * surface is two mechanical steps: capture `{ error, mutate }` from the hook and
- * wrap the render in `<AsyncBoundary error={error} onRetry={mutate} …>`.
+ * Everything the boundary needs is already in hand at the call site — SWR
+ * returns it. Migrating a surface is mechanical pass-through: capture
+ * `{ data, error, isLoading, mutate }` from the hook and wrap the render in
+ * `<AsyncBoundary data={data} error={error} isLoading={isLoading} onRetry={mutate} …>`.
  *
- * Precedence (only when nothing has successfully loaded, so a background
- * revalidate that errors doesn't blow away already-shown content):
- *   error → loading → empty → children
+ * Precedence (only before the fetch has ever settled — `data !== undefined` —
+ * so a background revalidate that errors doesn't blow away settled content,
+ * including a settled *empty* list):
+ *   loading → error → empty → children
+ *
+ * Loading is read before error so a Retry in flight (SWR keeps the previous
+ * error until the revalidation settles) shows the skeleton instead of a frozen
+ * error block with a still-clickable Retry.
  */
 export interface AsyncBoundaryProps {
   children: ReactNode;
+  /**
+   * The fetch result, passed through untouched (SWR's `data`). `undefined`
+   * means the fetch has never settled successfully — the boundary's "nothing
+   * worth keeping on screen" signal. Deliberately not derived from `isEmpty`
+   * (a settled empty list HAS loaded) nor from `isLoading` (a failed first
+   * load is neither loading nor settled). For a merged fetched + static
+   * surface, pass the fetched slice. Required (though `undefined` is a valid
+   * value) so no call site forgets the settled signal and silently regresses
+   * into error-blows-away-content.
+   */
+  data: unknown;
   /** Node for the empty state (onboarding CTA / no-match). Required to show empty. */
   empty?: ReactNode;
   /** The thrown error from SWR / the query. Read before the empty branch. */
   error?: unknown;
   /** The `AsyncError` variant to render on failure. Default `block`. */
   errorVariant?: AsyncErrorVariant;
-  /**
-   * Whether any usable data is already loaded. Defaults to `!isEmpty`. Pass
-   * explicitly when "empty" and "has data" aren't strict opposites (e.g. a
-   * merged fetched + static list, where `length > 0` isn't proof of success).
-   */
-  hasData?: boolean;
   /** No records to show (`length === 0`). Gate it on `!error` at the call site. */
   isEmpty?: boolean;
   /** First-load in flight. */
@@ -50,26 +61,25 @@ export interface AsyncBoundaryProps {
 const AsyncBoundary = memo<AsyncBoundaryProps>(
   ({
     children,
+    data,
     error,
     errorVariant = 'block',
     empty,
-    hasData,
     isEmpty = false,
     isLoading = false,
     loading,
     onRetry,
   }) => {
-    // Do we already have content worth keeping on screen? A background refresh
-    // that errors should not replace loaded data with a full-surface error.
-    const dataPresent = hasData ?? !isEmpty;
+    // Has the fetch ever settled successfully? A settled result — even an
+    // empty list — is content worth keeping: a background refresh that errors
+    // must not replace it with a full-surface error.
+    const hasSettled = data !== undefined;
 
-    // 1. Failure with nothing to show → the error state (reason + Retry).
-    if (error && !dataPresent) {
-      return <AsyncError error={error} variant={errorVariant} onRetry={onRetry} />;
-    }
-
-    // 2. First load in flight → loading (caller's skeleton, else a centered loader).
-    if (isLoading && !dataPresent) {
+    // 1. Request in flight with nothing to show → loading (caller's skeleton,
+    //    else a centered loader). Checked before error: after a failed first
+    //    load SWR keeps `error` set while a Retry revalidates, and the user
+    //    needs in-progress feedback, not the stale error block.
+    if (isLoading && !hasSettled) {
       return (
         loading ?? (
           <Center flex={1} padding={48} width={'100%'}>
@@ -77,6 +87,11 @@ const AsyncBoundary = memo<AsyncBoundaryProps>(
           </Center>
         )
       );
+    }
+
+    // 2. Failure with nothing to show → the error state (reason + Retry).
+    if (error && !hasSettled) {
+      return <AsyncError error={error} variant={errorVariant} onRetry={onRetry} />;
     }
 
     // 3. Genuinely empty (only reached when !error) → the purpose-built empty page.

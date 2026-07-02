@@ -18,7 +18,7 @@ const LOADING = <div>LOADING_SKELETON</div>;
 describe('AsyncBoundary', () => {
   it('renders children when data is present', () => {
     render(
-      <AsyncBoundary empty={EMPTY} isEmpty={false}>
+      <AsyncBoundary data={[1]} empty={EMPTY} isEmpty={false}>
         {DATA}
       </AsyncBoundary>,
     );
@@ -28,7 +28,7 @@ describe('AsyncBoundary', () => {
 
   it('renders the empty state only when there is no error', () => {
     render(
-      <AsyncBoundary isEmpty empty={EMPTY}>
+      <AsyncBoundary isEmpty data={[]} empty={EMPTY}>
         {DATA}
       </AsyncBoundary>,
     );
@@ -38,7 +38,7 @@ describe('AsyncBoundary', () => {
 
   it('shows the loading node on first load', () => {
     render(
-      <AsyncBoundary isEmpty isLoading empty={EMPTY} loading={LOADING}>
+      <AsyncBoundary isEmpty isLoading data={undefined} empty={EMPTY} loading={LOADING}>
         {DATA}
       </AsyncBoundary>,
     );
@@ -53,6 +53,7 @@ describe('AsyncBoundary', () => {
     render(
       <AsyncBoundary
         isEmpty
+        data={undefined}
         empty={EMPTY}
         error={new Error('boom')}
         loading={LOADING}
@@ -67,9 +68,44 @@ describe('AsyncBoundary', () => {
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
-  it('keeps already-loaded content when a background refresh errors (hasData)', () => {
+  // After a failed first load the user clicks Retry: SWR keeps the previous
+  // error until the revalidation settles, but isLoading is true again. The
+  // boundary must show in-progress feedback, not the stale error + Retry.
+  it('shows loading while a retry is in flight (error still set, isLoading)', () => {
     render(
-      <AsyncBoundary hasData empty={EMPTY} error={new Error('refresh failed')} isEmpty={false}>
+      <AsyncBoundary
+        isEmpty
+        isLoading
+        data={undefined}
+        empty={EMPTY}
+        error={new Error('boom')}
+        loading={LOADING}
+        onRetry={vi.fn()}
+      >
+        {DATA}
+      </AsyncBoundary>,
+    );
+    expect(screen.getByText('LOADING_SKELETON')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  // A surface that successfully loaded an empty list has settled; a later
+  // focus/reconnect revalidation failure (stale data=[] + error) must not
+  // replace the onboarding empty with the error block. `data={[]}` is the
+  // settled signal — `undefined` means never loaded.
+  it('preserves a loaded empty state when a background revalidation errors', () => {
+    render(
+      <AsyncBoundary isEmpty data={[]} empty={EMPTY} error={new Error('revalidate failed')}>
+        {DATA}
+      </AsyncBoundary>,
+    );
+    expect(screen.getByText('EMPTY_ONBOARDING')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('keeps already-loaded content when a background refresh errors', () => {
+    render(
+      <AsyncBoundary data={[1]} empty={EMPTY} error={new Error('refresh failed')} isEmpty={false}>
         {DATA}
       </AsyncBoundary>,
     );
@@ -78,7 +114,13 @@ describe('AsyncBoundary', () => {
 
   it('does not offer Retry for a non-retryable (401) error', () => {
     render(
-      <AsyncBoundary isEmpty empty={EMPTY} error={{ data: { httpStatus: 401 } }} onRetry={vi.fn()}>
+      <AsyncBoundary
+        isEmpty
+        data={undefined}
+        empty={EMPTY}
+        error={{ data: { httpStatus: 401 } }}
+        onRetry={vi.fn()}
+      >
         {DATA}
       </AsyncBoundary>,
     );

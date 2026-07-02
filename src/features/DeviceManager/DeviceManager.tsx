@@ -412,6 +412,7 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
 
   return (
     <AsyncBoundary
+      data={data}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
