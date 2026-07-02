@@ -1,3 +1,5 @@
+import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
@@ -38,6 +40,13 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  async getCodexQuota(params?: {
+    command?: string;
+    env?: Record<string, string>;
+  }): Promise<CodexQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getCodexQuota(params);
   }
 
   /**

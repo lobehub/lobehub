@@ -35,6 +35,33 @@ export interface HeterogeneousAgentRateLimitInfo {
   status?: string;
 }
 
+export interface CodexQuotaWindow {
+  resetsAt: number | null;
+  usedPercent: number;
+  windowMinutes: number;
+}
+
+export interface CodexRateLimitResetCredits {
+  availableCount: number;
+  credits?: {
+    expiresAt: number | null;
+    grantedAt: number | null;
+    status: string;
+  }[];
+  nextExpiresAt?: number | null;
+  totalEarnedCount?: number;
+}
+
+export interface CodexQuotaSnapshot {
+  error: string | null;
+  provider: 'codex';
+  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  session: CodexQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  weekly: CodexQuotaWindow | null;
+}
+
 export interface HeterogeneousAgentSessionError {
   agentType?: string;
   code?: HeterogeneousAgentSessionErrorCode | string;
