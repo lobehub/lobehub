@@ -99,6 +99,27 @@ export const resolveActionTagFromMatch = (
   return reader(parseAttributeSource(attributeString));
 };
 
+// @lobehub/editor code node types: 'code' (CodeMirror block), 'codeInline'
+// (inline-code element wrapping text), 'code-highlight' (highlighted token
+// text nodes inside a fenced block).
+const CODE_CONTEXT_NODE_TYPES = new Set(['code', 'codeInline', 'code-highlight', 'codemirror']);
+
+/**
+ * True when a text node is part of a code snippet — inline code (a `code`
+ * format flag or a `codeInline` wrapper), a highlighted token, or inside a code
+ * block. A literal `<skill … />` a user writes/pastes in code is content, not a
+ * chip, so the tag transform must leave it alone.
+ */
+export const isInCodeContext = (node: TextNode): boolean => {
+  if (node.hasFormat('code')) return true;
+  let current: LexicalNode | null = node;
+  while (current) {
+    if (CODE_CONTEXT_NODE_TYPES.has(current.getType())) return true;
+    current = current.getParent();
+  }
+  return false;
+};
+
 export interface ActionTagPluginOptions {
   decorator: (node: ActionTagNode, editor: LexicalEditor) => any;
   theme?: { actionTag?: string };
@@ -148,6 +169,9 @@ export class ActionTagPlugin {
    */
   private registerTextTagTransform(editor: LexicalEditor): () => void {
     return editor.registerNodeTransform(TextNode, (node) => {
+      // A literal tag written/pasted inside code is content, not a chip.
+      if (isInCodeContext(node)) return;
+
       const text = node.getTextContent();
       const match = INLINE_ACTION_TAG_REGEX.exec(text);
       if (!match) return;

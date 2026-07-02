@@ -1,7 +1,19 @@
 import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { INLINE_ACTION_TAG_REGEX, resolveActionTagFromMatch } from './ActionTagPlugin';
+import {
+  INLINE_ACTION_TAG_REGEX,
+  isInCodeContext,
+  resolveActionTagFromMatch,
+} from './ActionTagPlugin';
+
+// Minimal Lexical-node stand-in for isInCodeContext, which only reads
+// hasFormat / getType / getParent.
+const makeNode = (opts: { format?: boolean; parent?: any; type?: string }): any => ({
+  getParent: () => opts.parent ?? null,
+  getType: () => opts.type ?? 'text',
+  hasFormat: (f: string) => f === 'code' && !!opts.format,
+});
 
 describe('INLINE_ACTION_TAG_REGEX', () => {
   it('matches the tag a user typed, with trailing text (the regression case)', () => {
@@ -79,5 +91,29 @@ describe('resolveActionTagFromMatch', () => {
       actionType: 'a',
       actionLabel: 'B',
     });
+  });
+});
+
+describe('isInCodeContext', () => {
+  it('is false for a plain text node in a paragraph', () => {
+    expect(isInCodeContext(makeNode({ parent: makeNode({ type: 'paragraph' }) }))).toBe(false);
+  });
+
+  it('is true for an inline-code formatted text node', () => {
+    expect(isInCodeContext(makeNode({ format: true }))).toBe(true);
+  });
+
+  it('is true for a highlighted code token node', () => {
+    expect(isInCodeContext(makeNode({ type: 'code-highlight' }))).toBe(true);
+  });
+
+  it('is true for text wrapped in an inline-code (codeInline) element', () => {
+    expect(isInCodeContext(makeNode({ parent: makeNode({ type: 'codeInline' }) }))).toBe(true);
+  });
+
+  it('is true for text nested inside a code block', () => {
+    const codeBlock = makeNode({ type: 'code' });
+    const inner = makeNode({ parent: codeBlock, type: 'paragraph' });
+    expect(isInCodeContext(makeNode({ parent: inner }))).toBe(true);
   });
 });
