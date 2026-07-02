@@ -8,7 +8,7 @@ before citing).
 
 **Surface class:** document editor — benchmark against Notion / Google Docs / Craft.
 **Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic + CLS)
-⏳ not yet run — see §4. Verdicts about the render are L1 inferences here, pending L2.
+⏳ not yet run — see §5. Verdicts about the render are L1 inferences here, pending L2.
 
 **Load-bearing files:** `routes/(main)/page/{index,_layout,[id]}`,
 `features/Pages/PageLayout/*` (sidebar list), `features/PageExplorer/*`,
@@ -42,7 +42,29 @@ weakness clusters hard in **Feedback (failure states absent, save swallowed to `
 **Read (failed load masquerading as empty; search over a partial list)** — the same
 soft-spots every audit so far has hit.
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The editor is strong where it counts — these are the ✅ half of the 回灌 loop and the "don't
+regress" list for the next refactor. One lands as a **✅ example in the `ux` checklists** (the
+Header duplicate, see §4):
+
+- **✅ 亮点 — Three-way collaborative lock.** `EditingIndicator` / `LockedAlert` /
+  `LockStatusBanner` — a mature, legible presence / lock model that makes "someone else is
+  editing" visible at three altitudes rather than a single opaque flag; the one place cancelability
+  / concurrency is surfaced end-to-end, so a refactor must keep all three in sync.
+- **✅ 亮点 — Command History surfaces failure end-to-end.** `History/*` — list + Compare +
+  Restore with confirm + in-progress + error toast; the single flow in the module that carries a
+  failure state all the way to the user (the ✅ counterpoint to the swallowed save/meta/history
+  failures in gaps ②③④), which is exactly why it's load-bearing as a reference.
+- **✅ 亮点 — Header entity lifecycle does it right (→ landed as ux Act §3.1 ✅).** the editor
+  **Header** delete / rename / duplicate / export / restore where duplicate does try/catch +
+  success/error `message` (`Header/useMenu.tsx:60-70`) — the ✅ contrast to the silent sidebar ops
+  in gap ⑤; same intent, but here the mutation surfaces its own failure.
+- **✅ 亮点 — Main-stage empty-state as onboarding.** `PageExplorerPlaceholder` (new / upload /
+  Notion cards) turns the no-doc state into a rich CTA rather than dead space — the growth-side
+  "empty is a starting point" pattern done to spec (the sidebar empty in gap ⑦ is the ⚠️ foil).
+
+## 3 — Experience gaps (ranked)
 
 **① Sidebar list fetch failure → permanent skeleton — Feedback §4.2** 🔴
 `useFetchDocuments` writes `documents` only in its success `onData`
@@ -97,7 +119,7 @@ null}</PublishedShell>`; the OSS `PublishedShell` ignores `data`/`error` and ret
 `{children}`, so a failed/absent share renders **blank**. Real behavior is in the business
 package → confirm on the cloud build (L2/L3).
 
-## 3 — Skill feedback
+## 4 — Skill feedback
 
 - **Landed as strengthened `ux` items** from this audit:
   - Feedback **§4.4** — new checklist line + a PageEditor ❌ example: the save-state enum
@@ -111,7 +133,7 @@ package → confirm on the cloud build (L2/L3).
 - **Validated existing rules** (good ❌ examples to cite): §4.2 permanent-skeleton (gap ①),
   Read §1.1 empty-vs-failed (gap ④), Read §1.1 empty-needs-CTA (gap ⑦).
 
-## 4 — Pending: L2 visual + L3 dynamic
+## 5 — Pending: L2 visual + L3 dynamic
 
 L1-only; a later pass should confirm / quantify:
 

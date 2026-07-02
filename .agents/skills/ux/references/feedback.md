@@ -23,15 +23,22 @@ modal "in progress" states). Minimise layout shift (CLS): the strongest loading 
 changes as little of the final layout as possible. When a surface already knows its shape
 (card, row, list item), keep the layout elements — container, border, radius, padding,
 icon — and replace only the text/data with a skeleton sized like the text it stands in
-for. A generic full-block / full-card skeleton (or a centred spinner the real content
-later pushes aside) is heavier and shifts the layout; an in-place text→skeleton swap is
-optimal.
+for — matching both its **height** and its **typical width proportion**, so a two-line row
+keeps a long title line over a shorter subtitle line rather than two equal full-width bars
+(which mis-signal the shape and shift as the real, narrower text lands). A generic
+full-block / full-card skeleton (or a centred spinner the real content later pushes aside)
+is heavier and shifts the layout; an in-place text→skeleton swap is optimal.
+
+> ✅ The **Fleet** sidebar's `SidebarTaskSkeleton` mirrors the real `SidebarTaskItem` row exactly
+> — same 28 px square avatar, two stacked text lines sized like the title/subtitle (70 % / 45 %
+> width), same padding (`RunningTaskSidebar.tsx`) — so the load→content swap is in-place with no
+> relayout. ❌ A bare full-row block or a centred spinner the real rows later push aside.
 
 **Checklist**
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders. _(Natural)_
 - [ ] Skeleton reuses the loaded component's chrome — content swap, not relayout. _(Certainty・Natural)_
-- [ ] Skeleton lines sized like the text they replace (height ≈ real). _(Certainty)_
+- [ ] Skeleton lines match the real text's **height and typical width proportion** (long title line over a shorter subtitle, not equal full-width bars). _(Certainty)_
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
 
 ## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
@@ -54,6 +61,11 @@ A common shape of this bug: the surface gates its "ready" render on an **init fl
 set only on a successful fetch** (`if (!isInit) return <Skeleton/>`). On error the flag
 never flips, so the skeleton is **permanent** — an infinite spinner wearing a skeleton's
 clothes. The error path must drive the flag / a separate `error` state, not be forgotten.
+The flag is often **disguised as data-presence** — `loaded = Array.isArray(map[id])`, where
+`map[id]` is written only in the SWR `onSuccess`: same success-only init flag, just spelled
+as "is the data here yet". A failed fetch leaves the entry `undefined` → `loaded` stays
+false → permanent skeleton. Don't read "present in a success-populated map" as "loaded";
+branch the fetch's real `error`.
 
 A third shape, in a **transient / auto-dismissing** surface (an upload dock, a progress toast,
 a status snackbar that clears itself after N seconds): auto-dismiss is a **success** affordance,
@@ -95,6 +107,53 @@ permanently disable the only way forward.
 > on success, so one root cause hangs a **permanent skeleton** on the sidebar + bench detail,
 > a false-empty on the overview, and a blank on run / case / dataset detail — five surfaces,
 > zero error paths.
+> ❌ The **Memory** (记忆) area repeats it: every `userMemory` fetch registers an `onSuccess`
+> only, no `onError` (`store/userMemory/slices/{context,activity,identity,preference,experience}/action.ts`,
+> `home/action.ts`, `base/action.ts` `useFetchMemoryDetail`); each list gate `showLoading =
+xSearchLoading || !xInit` flips only on success, so a failed load hangs a **permanent skeleton**
+> on all five list tabs, a **false-empty** on home, and a **blank panel** on all five detail
+> panels — no `*Error` field even exists to branch on. ❌ Its edit modal is the write-side twin:
+> `EditorModal onOk` does `setConfirmLoading(true) → await onConfirm → setConfirmLoading(false)`
+> with **no try/catch/finally** (`src/features/EditorModal/index.tsx`), so a failed save spins the
+> OK button forever and the edit is lost on close. ✅ The same area's `DateRangeModal` submit is the
+> model to copy: a `submitting` guard against double-submit + **try/catch/finally** (resets the flag,
+> toasts on failure) + success toast then close (`memory/features/MemoryAnalysis/DateRangeModal.tsx`).
+> ❌ The **Task list / kanban** repeats the read-side trap: `isTaskListInit` / `isTaskGroupListInit`
+> flip true **only** in the SWR `onSuccess` (`store/task/slices/list/action.ts:146-155,110-116`) —
+> no `onError`, and the hook's `error` / `isLoading` are **discarded at the call site**
+> (`AgentTasksPage.tsx:63`), so a failed `taskService.list()` leaves `!isInit` → the skeleton
+> (`TaskList.tsx:203`) spins forever with no retry.
+> ❌ The **create / generation** surfaces (视频 / 图像) hit the data-presence-disguised variant:
+> `useFetchGenerationBatches` registers **`onSuccess` only, no `onError`**
+> (`store/{video,image}/slices/generationBatch/action.ts`), the "loaded" gate is
+> `isCurrentGenerationTopicLoaded = Array.isArray(generationBatchesMap[topicId])`
+> (`…/selectors.ts:23-27`), and the **shared** shell renders `!loaded` → `<SkeletonList/>` /
+> `!hasGenerations` → `<EmptyState/>` / feed with **no error branch**
+> (`routes/(main)/(create)/features/GenerationWorkspace/Content.tsx:39-45`). A failed batch
+> fetch never populates the map, so the skeleton is permanent with no retry on **both surfaces
+> and any future one built on the shell** (the sidebar `useFetchGenerationTopics` is the same
+> success-only shape).
+> ❌ The **Discover / Community** lists are the trap in its **purest** form — no init flag even
+> needed. All 8 list slices register `useSWR(key, fetcher, { revalidateOnFocus: false })` with
+> **no `onError`** (`store/discover/slices/*/action.ts`), every call site destructures
+> `{ data, isLoading }` and **discards `error`**, then gates `if (isLoading || !data) return <Loading/>` (`community/(list)/agent/index.tsx:18,29` + 7 twins) — so `!data` **is** the
+> success-only gate. Worse, the fetcher **suppresses even the fallback toast**
+> (`services/discover.ts:117` `{ context: { showNotification: false } }`). A failed market
+> fetch → permanent skeleton on the primary content of every Discover tab, no error, no retry,
+> no toast (the `mutate` needed to retry is already returned, unused). ✅ Read `error` at the
+> call site (or a shared list-shell) and render a failed state with Reload before the `!data`
+> branch.
+> ❌ The **chat message stream** — the product's highest-traffic surface — has the same trap:
+> `useFetchMessages` registers **`onData` only, no `onError`**
+> (`store/chat/slices/message/actions/query.ts:216-232`,
+> `features/Conversation/store/slices/data/action.ts:211-266`); `messagesInit` flips true only
+> in the success `onData` (or via `hasInitMessages = !!dbMessagesMap[key]`,
+> `ConversationArea.tsx:95` → `StoreUpdater.tsx:73`), and `ChatList` **discards the SWR
+> `error`** (keeps `messagesSWR` but reads only `.isValidating`, `ChatList/index.tsx:97,157`),
+> rendering `!messagesInit → <SkeletonList/>` with **no error branch**
+> (`ChatList/index.tsx:174`). A failed `getMessages` for a selected topic hangs a **permanent
+> skeleton** on the core chat — no reason, no Reload. ✅ Branch the fetch's `error` to a failed
+> state with Retry (see the topic audit).
 
 **Checklist**
 
@@ -145,8 +204,24 @@ setting here confirms one way, changing a setting there must confirm the same wa
 form wrapper is the natural home for this — bake the save-state affordance into the wrapper
 so tabs can't each re-invent (or forget) it.
 
+**The rule is about surfacing the save-state, not about autosave specifically.** Autosave is
+one convention; an **explicit per-field / per-section `Save` button** is another equally
+valid one — and sometimes the better fit (a namespace/handle edit that must validate
+uniqueness, a field where a mid-typing autosave would thrash). What §4.4 demands holds either
+way: whichever you pick, the write must show **saving → saved → failed** (a `Save` button owes
+a loading spinner + a success tick + an on-failure inline error that **keeps the edited
+value**), and you must pick **one** convention for the surface, not mix autosave-here /
+explicit-Save-there. Choosing explicit Save doesn't exempt you from the failure signal — it
+just moves it onto the button.
+
 > ✅ An autosave field shows a subtle "saved" tick on success and, on failure, an inline
-> "保存失败" with a **Retry** that re-runs the write and keeps the edited value. ❌ The
+> "保存失败" with a **Retry** that re-runs the write and keeps the edited value.
+> ✅ **Community workspace settings** takes the explicit-Save route and does it right: each
+> field has its own `Save` button driving a `savingField` loading state, a success toast, and
+> an on-failure `message.error` (plus an inline field error for the namespace-taken case) that
+> **keeps the edited value** rather than snapping it back — one convention applied across every
+> field of the surface (`CommunityWorkspaceSettings.tsx:310-352`). Explicit Save, full
+> save-state, no silent write — the discipline the same area's read side lacks (see Read §1.1). ❌ The
 > Appearance / Advanced / hotkey-essential forms call `setSettings` from `onValuesChange`
 > with **no success and no failure feedback** — a failed save is indistinguishable from a
 > successful one (`settings/appearance`, `settings/advanced`). ❌ The same settings area
@@ -158,10 +233,17 @@ so tabs can't each re-invent (or forget) it.
 > `PageEditor/store/action.ts`). A network / 500 save failure is then indistinguishable from
 > a success (only a lock `CONFLICT` is surfaced); the state machine literally can't
 > _represent_ failure, so it can never show it — the silent-write trap baked into the type.
+> ❌ **Task detail** config autosave is the same trap twice over: `updateVerifyConfig` /
+> `updateTaskModelConfig` / `updatePeriodicInterval` / `setAutomationMode` / `updateSchedule` all
+> catch-and-`console.error` (`store/task/slices/config/action.ts:121-132,151-167,224-229,279-284`)
+> — the optimistic engine reverts the value with **no toast** — and `taskSaveStatus` is
+> `saving | saved | idle` with **no `failed`**, reset to `idle` on error (`detail/action.ts:284`),
+> while the header renders `AutoSaveHint` only while `saving` (`TaskDetailPage.tsx:68`). A failed
+> schedule / verify / model edit looks identical to a saved one.
 
 **Checklist**
 
-- [ ] Autosave surfaces a save-state (saving → saved → failed), never a silent write. _(Certainty)_
+- [ ] Save-state surfaced (saving → saved → failed), never a silent write — whether autosave **or** an explicit per-field/section `Save` button (explicit Save still owes the failure signal). _(Certainty)_
 - [ ] The save-state enum can **represent** failure — a `failed` variant exists and the write's `catch` drives it, not a reset to `idle` / neutral. _(Certainty)_
 - [ ] A failed autosave shows an inline error **with retry** and keeps the edited value. _(Meaningful)_
 - [ ] One save-feedback convention across a multi-field surface — ideally baked into the shared form wrapper, not re-invented per tab. _(Certainty)_

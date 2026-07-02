@@ -52,7 +52,41 @@ threading, Agent bootstrap→classic fallback) is mature. Weakness clusters in *
 (failure/retry on the web write-steps)** and one **Navigation** class-norm gap (no progress /
 weak escape hatch).
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The module is strongest exactly where gap-hunting can miss it — the state-machine and
+resume plumbing. These are the ✅ half of the 回灌 loop and the "don't regress" list for the
+next onboarding change; one is strong enough to land as a **✅ example in `ux`** (see §4).
+
+- **✅ 亮点 — Desktop `LoginStep` state machine (→ ✅ exemplar for Feedback / Failure+Retry).** Full
+  idle / loading / success / error with **retry + cancel + an auth countdown**, driven by main-process
+  broadcasts (`authorizationSuccessful` / `Failed` / `Progress`) and reconciled against real
+  remote config (`routes/(desktop)/desktop-onboarding/features/LoginStep.tsx`). This is the
+  exemplary Failure+Retry pattern the web write-steps (gaps ①②④⑥) should copy.
+- **✅ 亮点 — Resume /persistence.** Classic step is server-persisted (`onboarding.currentStep`
+  - `finishedAt`) behind an optimistic `localOnboardingStep` and a **coalescing update queue**
+    that survives rapid clicks (`store/user/slices/onboarding/action.ts:57-123`); desktop resumes
+    via `resolveInitialScreen` (URL → saved → everCompleted → Welcome,
+    `resolveInitialScreen.ts:28`); returning users skip entirely via `needsOnboarding`
+    (`selectors.ts:26`). An interrupted onboarding reopens at the right step.
+- **✅ 亮点 — Agent bootstrap error degrades to Classic, not a blank.** A failed bootstrap query
+  redirects into the deterministic classic flow rather than stranding the user in a broken
+  conversation (`features/Onboarding/Agent/index.tsx:330-335`) — graceful degradation to the
+  reliable baseline. (Its sibling `ErrorBoundary fallbackRender={() => null}` at `:372` is the
+  one weak spot — see the note under §3.)
+- **✅ 亮点 — WrapUp is a proper confirm → in-progress → done with `finally`.** `WrapUpHint`
+  runs `confirmModal` before finishing and resets `loading` in a `finally`
+  (`features/Onboarding/Agent/WrapUpHint.tsx:35-52`) — the exact shape the language-gate write
+  (gap ①) is missing.
+- **✅ 亮点 — Callback-URL threading.** The signup target is stashed, survives the whole
+  multi-step flow, is consumed on finish, and passes a safe-redirect guard
+  (`utils/onboardingRedirect`, `AgentPickerStep/index.tsx:114`) — a first-run detour that
+  returns the user to where they were headed.
+- **AgentPicker empty-vs-error distinction.** Renders `failedToLoad` vs `empty` distinctly
+  (`AgentPickerStep/index.tsx:162-167`) — error ≠ empty done right (the missing retry is gap ④,
+  not a knock on the distinction). Resumable, canonicalized deep-links (`?step` / `?screen`).
+
+## 3 — Experience gaps (ranked)
 
 **① ResponseLanguage — the shared-prefix gate write has no failure path → permanent stuck
 step — ux Feedback §4.2** 🔴 `handleNext` sets `isNavigating=true`, then
@@ -113,23 +147,36 @@ renders the static `COMPOSIO_APP_TYPES` (`ComposioServerList/index.tsx:14-37`); 
 connections fetch silently shows every integration as unconnected — "load failed" reads as
 "nothing connected." Not a dead-end (optional step). (pending L2 for per-item render.)
 
-## 3 — Skill feedback
+**⑩ Agent conversation subtree fails to a blank — ux Feedback §4.2** 🟡 The conversation is
+wrapped in `<ErrorBoundary fallbackRender={() => null}>` (`Agent/index.tsx:372`), so a throw in
+the chat subtree renders **nothing** — no error, no retry. The larger per-turn failure surface
+is the cost the Agent flow pays for its richness; it deserves a visible error + recovery (or to
+reuse the bootstrap-error → Classic degrade path, which is the ✅ 亮点 sibling above). Surfaced
+during the Agent-vs-Classic comparison.
 
-- **Validated existing rules** (❌ examples to cite): §4.2 (①②④⑥⑧⑨, incl. the awaited-write-
-  no-`finally` permanent-disable in ①), §3.5 (②⑥), Edit §2.1 (⑦), Escape Hatch (⑤).
-- **New / strengthenable `ux` items from this audit:**
-  - **Multi-step / wizard flows** (new candidate, likely **Grow** or a new "Getting started"
-    line): a stepwise flow must (a) show a **progress / step indicator** (position + length) and
-    (b) make **non-essential steps skippable** with an always-present escape hatch. ❌ examples:
-    onboarding gaps ③ + ⑤. This class norm is absent from the current checklists.
-  - **Feedback §4.2 strengthen:** an _awaited_ gating write must reset its in-progress flag in a
-    `finally` (and offer retry on catch), or a failed write permanently disables the advance
-    control. ❌ example: onboarding gap ①.
-- **Exemplar to cite the other way** (✅): desktop `LoginStep` idle/loading/success/error state
-  machine with retry + cancel + progress countdown (`LoginStep.tsx`) — the reference pattern for
-  Failure + Retry the web write-steps lack.
+## 4 — Skill feedback
 
-## 4 — Pending: L2 visual + L3 dynamic
+The 回灌 loop has two halves — a gap sharpens a checklist item's ❌ example, a good case sharpens
+its ✅ one. Both landed from this run:
+
+- **New ❌ rule landed:** **Grow §5.2 — Multi-step flows show progress and stay skippable.** A
+  stepwise flow (>2 steps) must (a) show a **progress / step indicator** (position + total) and
+  (b) make **non-essential steps skippable** with an always-visible escape hatch; mirrored into
+  the SKILL.md Quick review. ❌ examples: onboarding gaps ③ + ⑤ (the module's only `<Steps>` are
+  decorative, `current={null}`).
+- **Existing rule strengthened + new ✅ example landed:** **Feedback §4.2** now also covers an
+  _awaited_ gating write — it must reset its in-progress flag in a `finally` and offer retry on
+  catch, or a failed write permanently disables the advance control. ❌ example: gap ①. ✅ example:
+  the desktop `LoginStep` state machine with retry + cancel (§2 亮点) — the positive model the
+  checklist now cites.
+- **Validated existing rules** (fresh ❌ examples to cite): §4.2 (②④⑥⑧⑨⑩), §3.5 (②⑥),
+  Edit §2.1 (⑦), Read §1.1 error-as-empty (⑨), Escape Hatch (⑤).
+- **Methodology 回灌 (from the follow-up comparison):** the Agent-vs-Classic question drove a new
+  **ux-audit ground rule** — "comparing two variants: the winner is an outcome verdict, not a
+  craft verdict" (+ an A/B-winner row in the coverage matrix), citing this module's own miss as
+  the ❌ self-example.
+
+## 5 — Pending: L2 visual + L3 dynamic
 
 - **L2** — confirm no progress indicator renders (③); confirm each step's primary button is the
   dominant control (pending-L2 across all steps); AgentPicker empty vs error vs loading actually
@@ -139,18 +186,17 @@ connections fetch silently shows every integration as unconnected — "load fail
   AgentPicker template load failure and confirm no-retry dead-end (④); walk classic end-to-end to
   confirm forward momentum + no skip (⑤); measure step-transition INP / CLS.
 
-## 5 — Land the findings (queue)
+## 6 — Land the findings (queue)
 
-Systemic 🔴 (①②) are concrete bugs → fix or file as sub-issues under **LOBE-11078**
-(container: "Onboarding UX audit" → one sub-issue per finding). Class-norm gaps (③⑤) →回灌
-`ux` as the new multi-step-flow checklist item, citing onboarding as the ❌ example.
+Landed as **LOBE-11138** ("Onboarding UX Audit", container under the UX-audit parent
+**LOBE-11078**), split into the sub-issues below. Class-norm gaps (③⑤) also 回灌 'd into `ux`
+Grow §5.2; the awaited-write rule (①) into Feedback §4.2 — see §4.
 
-| Prio | Finding                                            | Kind       |
-| ---- | -------------------------------------------------- | ---------- |
-| P0   | ① language-gate stuck step (add `finally` + retry) | bug 🔴     |
-| P0   | ② swallowed install failure → silent finish        | bug 🔴     |
-| P1   | ③ progress/Sequence Map absent                     | bug + 回灌 |
-| P1   | ④ AgentPicker error no retry                       | bug 🟠     |
-| P1   | ⑤ mandatory FullName / no escape hatch             | bug + 回灌 |
-| P2   | ⑥ fire-and-forget profile writes                   | bug 🟡     |
-| P2   | ⑦⑧⑨ draft-loss / silent step-sync / composio state | bug 🟡     |
+| Sub-issue      | Finding(s)                                                                   | Kind       |
+| -------------- | ---------------------------------------------------------------------------- | ---------- |
+| **LOBE-11154** | ① language-gate stuck step (add `finally` + retry)                           | bug 🔴     |
+| **LOBE-11155** | ②④ AgentPicker: install-fail silent finish + load-fail no retry              | bug 🔴     |
+| **LOBE-11156** | ③ progress / Sequence Map absent                                             | bug + 回灌 |
+| **LOBE-11157** | ⑤ mandatory FullName / no escape hatch                                       | bug + 回灌 |
+| **LOBE-11158** | ⑥⑦⑧⑨ fire-and-forget writes / draft-loss / silent step-sync / composio state | bug 🟡     |
+| _unfiled_      | ⑩ Agent conversation `ErrorBoundary` → blank (fold into LOBE-11155 or new)   | bug 🟡     |

@@ -4,7 +4,7 @@ A real run of this skill against the **whole settings area** (personal `/setting
 workspace `/:slug/settings/*`), 2026-07. Unlike the per-page examples, this is a
 **systemic / IA-level** pass: it audits the shared shell and cross-tab _consistency_ rather
 than one surface. Use it as the template for a "audit an area as a system" run; per-tab
-deep-dives are separate runs (see §5).
+deep-dives are separate runs (see §6).
 
 **Layers run:** L1 (static / code) ✅ — everything below. L2 / L3 ⏳ not run.
 
@@ -47,7 +47,32 @@ Findings below cover the shared shell + the \~17 code-readable tabs.
 Weakness clusters hard in **Feedback (failure + autosave feedback)** and **cross-tab
 consistency / IA**.
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The settings area is strong where it counts — these are the ✅ half of the 回灌 loop and the
+"don't regress" baseline for each per-tab deep-dive:
+
+- **✅ 亮点 — Grouped accordion nav over consistent chrome.** The sidebar `Accordion` splits \~25
+  tabs into 4 default-expanded groups (`_layout/Body/index.tsx`) over a `SettingContainer
+maxWidth=1024` shell shared by **both** personal and workspace, so every tab wears the same
+  chrome. Navigation / layout / defaults are the mature core the rest hangs off.
+- **✅ 亮点 — CTA-carrying empty states on the data tabs.** Devices / Creds / Messenger render
+  their "nothing here yet" branch as onboarding with a next-step CTA, not a dead end — the
+  empty state doubles as the entry point to configure the feature.
+- **✅ 亮点 — Full entity lifecycle with bulk-select.** Devices / APIKey / Creds ship complete
+  CRUD, and Devices adds bulk-select for mass management (`DeviceManager.tsx`), the excellent
+  empty + bulk-select combo the per-tab pass called out.
+- **✅ 亮点 — Storage import path is well-built.** The import flow is a proper state machine
+  (preview + progress), the one pocket of resilience craft in a tab whose destructive clear-all
+  is otherwise the audit's biggest stakes (`Advanced.tsx`).
+- **✅ 亮点 — Creds secret-masking + 2-variant empty.** Credentials mask secrets and carry a
+  2-variant empty state (`CredsList.tsx`) — the right handling for sensitive values, and the ✅
+  half of a tab whose error-as-empty leg still needs fixing.
+- **✅ 亮点 — Workspace Body validates the tab enum.** `SideBar/Body.tsx:25` validates the
+  active tab against `WorkspaceSettingsTabs` — the ✅ contrast to personal's silent-Appearance
+  fallback for unknown deep-links (`SettingsContent.tsx:40`, gap ⑧).
+
+## 3 — Experience gaps (ranked)
 
 **① No error/retry anywhere in the settings area — ux §4.2** 🔴 Not one tab has a terminal
 failure + retry. Two failure modes: (a) init-flag set only on success → **permanent
@@ -103,7 +128,7 @@ halves are inconsistent.
 `SettingsTabs` enum, `componentMap`, and `SettingsContent`'s mobile-prop list. Real content
 moved into Profile (PasswordRow / SSO / Email). Dead surface to prune.
 
-## 3 — Skill feedback
+## 4 — Skill feedback
 
 - **Validated existing rules** (❌ examples to cite): §4.2 (①②, incl. init-flag-success-
   gated permanent skeleton), §4.1 (⑥), Read §1.1 (④⑧), §3.5 (②).
@@ -125,7 +150,7 @@ moved into Profile (PasswordRow / SSO / Email). Dead surface to prune.
 - **Noted, not yet landed:** breadcrumb that doesn't deepen per tab (⑧-adjacent) — promote
   if a second surface repeats it.
 
-## 4 — Pending: L2 visual + L3 dynamic
+## 5 — Pending: L2 visual + L3 dynamic
 
 - **L2** — confirm no settings search is rendered anywhere (gap ⑤); confirm the antd `Spin`
   rows read visually off from the rest (⑥); check dark-mode + narrow-width of the accordion
@@ -134,7 +159,7 @@ moved into Profile (PasswordRow / SSO / Email). Dead surface to prune.
   skeleton; silent autosave failure; error-as-empty); walk mobile to confirm the missing
   Devices/Messenger/Notification tabs (⑦); measure settings-tab-switch INP.
 
-## 5 — Phase B: per-tab deep-dive queue (sub-issues under LOBE-11078)
+## 6 — Phase B: per-tab deep-dive queue (sub-issues under LOBE-11078)
 
 The systemic 🔴 (①②③) are **cross-cutting** — file as ONE "settings resilience" issue, not
 per tab. Then deep-audit each tab (`/ux-audit <tab>`), priority by user-path heat:
@@ -149,7 +174,7 @@ per tab. Then deep-audit each tab (`/ux-audit <tab>`), priority by user-path hea
 | P3      | Appearance / Advanced                                                                                  | silent autosave-failure exemplars                               |
 | P3      | Devices / Creds / APIKey / Messenger / Stats / Storage / Memory / Hotkey / Proxy / SystemTools / About | state-handling covered; finish full pattern/i18n/hierarchy pass |
 
-## 6 — Per-tab L1 deep-dive findings (2026-07, all 17 code-readable tabs)
+## 7 — Per-tab L1 deep-dive findings (2026-07, all 17 code-readable tabs)
 
 Each tab was re-audited full-depth (patterns + all ux modules). Severity-tagged one-liners
 with `file:line`; the recurring systemic roots (§4.2 success-only skeleton, §4.4 silent

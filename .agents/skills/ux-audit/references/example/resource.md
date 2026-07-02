@@ -46,7 +46,35 @@ Same "resolves only on success" root cause as the Eval module — see [eval.md](
 clusters entirely in the **read side** — list/detail/search/tree `error` + retry — plus the
 upload dock silently discarding failures.
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The write /ingestion side is strong where it counts — these are the ✅ half of the 回灌 loop and
+the "don't regress" list for the next refactor. Keep, don't "fix":
+
+- **✅ 亮点 — Drag-drop upload with a live progress dock.** A drag-drop zone feeding
+  `UploadDock`, which surfaces both per-file and overall progress bars while ingestion runs — the
+  ingestion side never goes silent. (The one caveat is that it auto-dismisses _failed_ uploads;
+  that's gap C, not a knock on the happy-path dock.)
+- **✅ 亮点 — List at scale done right.** A **virtualized list _and_ masonry** (`Virtuoso` /
+  `VList`) with infinite `endReached` paging plus footer skeletons, so the main list stays smooth
+  at scale and the load-more affordance is honest rather than a hard cap.
+- **✅ 亮点 — Per-folder lazy tree with ancestor auto-expand.** The folder tree loads per-node
+  (per-folder lazy load with per-node loading state) and, on deep-link, auto-expands the whole
+  ancestor chain to restore the folder in place — `/resource/library/:id/:slug` breadcrumb-driven
+  ancestor expand.
+- **✅ 亮点 — Three-mode bulk-select + safe batch ops.** Bulk-select across three modes
+  (none / loaded / all) feeding **batch delete** and **batch chunk**, both gated behind a confirm
+  and run async — destructive batch work never fires unconfirmed.
+- **✅ 亮点 — Optimistic create/rename merged against server data.** KB create modal, inline
+  rename and optimistic resource ops merged against the server via
+  `mergeServerResourcesWithOptimistic` — the list updates instantly without diverging from
+  server truth.
+- **Explorer `EmptyPlaceholder` + chrome-reusing skeletons.** The Explorer `EmptyPlaceholder` is
+  a real onboarding page (Create-KB / Upload-File / Upload-Folder cards), and the list / masonry /
+  sidebar / tree skeletons all reuse row/card chrome for an in-place load→content swap — no antd
+  `Spin` anywhere. A quiet feedback-hygiene win worth keeping.
+
+## 3 — Experience gaps (ranked)
 
 **🔴 A — No error/retry on any read; every fetch resolves only on success → a failed load
 renders as the onboarding empty (or a blank / a false 404).** Systemic: all four consumers
@@ -101,7 +129,7 @@ explorer selection.** Selecting rows in search results doesn't carry into the no
 vice versa) (`SearchResultsOverlay.tsx:34`). Consistency-of-selection gap; verify the intended
 model on L2. → Act §3.1 (bulk parity), Read §1.6-ish (state continuity across views).
 
-## 3 — Skill feedback
+## 4 — Skill feedback
 
 - **New /strengthened rules (回灌):**
   - **Feedback §4.2** — added a clause + ❌ example: _a transient / auto-dismissing status
@@ -117,16 +145,6 @@ model on L2. → Act §3.1 (bulk parity), Read §1.6-ish (state continuity acros
     `onSuccess`-only systemic root cause.
   - Read **§1.2** — search capped at 50 with no paging (gap D).
 - **Validated existing rules:** §1.1 empty-vs-failed, §4.2 loading-can-fail, Act §3.1 done/error.
-
-## 4 — Highlights (keep; don't "fix")
-
-Drag-drop upload with a live per-file + overall progress dock; virtualized list **and** masonry
-with infinite scroll + footer skeletons; per-folder lazy tree with per-node loading and
-ancestor auto-expand on deep-link; three-mode bulk-select (none / loaded / all) with batch
-delete + batch chunk behind confirms; optimistic create/rename merged against server data
-(`mergeServerResourcesWithOptimistic`); the Explorer `EmptyPlaceholder` as a real onboarding
-page with Create-KB / Upload-File / Upload-Folder cards; skeletons reuse row/card chrome; no
-antd `Spin`.
 
 ## 5 — Pending: L2 + L3
 

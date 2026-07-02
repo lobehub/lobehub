@@ -18,6 +18,17 @@ a confirm step stating exactly what happens → an in-progress view with **dismi
 locked** → a done (or error) view in the same modal. Never fire-and-forget with only a
 toast; never leave a dead spinner.
 
+A **long-running or costly** async op — an AI generation (image / video), an export, a
+large upload, a batch job that runs for seconds-to-minutes and often bills tokens — owes one
+more affordance: a **Cancel / Stop while it runs**. "In-progress (locked)" means the user
+can't _dismiss_ the surface, not that they can't _abort the work_. The trap is shipping only
+a **delete-after-the-fact** (remove the finished/failed item) and calling that cancellation —
+it isn't: the job still runs, still costs, and the user watches a spinner they can't stop.
+Wire a real cancel (abort the request / signal the backend) into the in-progress state, and
+keep an **in-place Retry** on the error state so recovery isn't "delete it and rebuild the
+inputs by hand". Absent cancel is a class norm miss on any generation surface (Runway / Kling
+/ Sora / Midjourney all cancel a queued or running job).
+
 An **optimistic mutation** — a create / rename / duplicate that shows its result
 immediately, before the server confirms — owes the same done/error honesty. If the write
 fails, the caller must **catch and tell the user**; a store action fired without a `.catch`
@@ -25,6 +36,26 @@ fails, the caller must **catch and tell the user**; a store action fired without
 invisible — the user watches their new item appear and then vanish with no idea why, worse
 than a plain error because the optimistic UI first _promised_ success. Optimistic ≠
 fire-and-forget: the rollback still needs a toast.
+
+The same rule governs **job-control** actions on an async-run surface — **run / pause / stop /
+retry** a task, a build, a deployment. These optimistically flip a status (`idle → running`,
+`running → paused`) before the server confirms, so a `catch` that only `console.error`s (or a
+caller that `await`s in `try/finally` with **no catch**) lets a failed start / stop **silently
+snap the button back** to its previous state — indistinguishable from the control doing nothing.
+A run that fails to launch must say so. Toast at the store-action boundary so every trigger
+(header button, context menu, drag) inherits the feedback instead of each re-forgetting it.
+
+And an optimistic edit owes **cross-surface coherence**: when the same entity is shown in more
+than one place (a **list row** and its **detail view**, a sidebar item and its open editor), a
+successful mutation must reach **every** copy, not just the surface you edited from. The trap is
+holding the list and the detail in **two separate un-normalized caches** and patching only the
+active one — the detail updates, the list row stays stale, and the two disagree on screen when
+they're mounted together (split view, portal) or when the other is served from cache on
+back-navigation. Either share one **normalized store** (patch once, both read it) or invalidate
+the sibling on every successful write — and audit that the invalidation isn't gated to only
+_some_ fields. This is a seam **between** surfaces, so a per-surface review misses it by
+construction: check it explicitly whenever an entity is editable from one view and listed in
+another.
 
 A **terminal status screen** (a success / error result page — often an `antd Result`) is
 still an action surface: it must carry a way onward. An **error** terminal needs an escape
@@ -48,16 +79,46 @@ triggers is a lie the user waits on.
 > invisibly — the new page flashes in and disappears (`AddButton.tsx`,
 > `PageLayout/Body/List/Item/Editing.tsx`, `Item/useDropdownMenu.tsx`). ✅ The same editor's
 > **Header** duplicate does it right: `try/await/catch` with a success + error `message`.
+> ❌ The Task workspace's **job-control & create** actions swallow failure: `runTask` catches and
+> only `console.error`s (`store/task/slices/lifecycle/action.ts:49-52`) while its callers
+> `handleRunOrPause` / `handleRunNow` `await` in `try/finally` with no catch
+> (`TaskDetailRunPauseAction.tsx:60-67,84-91`), so a failed run rolls the optimistic
+> `status:'running'` back and the button **silently snaps to "Run"**; `createTask` and the
+> context-menu status/run paths (`void updateTaskStatus(...)`, `useTaskItemContextMenu.tsx:114`)
+> are the same shape. ✅ The same feature's **run-all** flow (`TaskSubtasks.tsx:204-255`) is the
+> model: preview → locked confirm → `partialFailure` vs `kickedOff` toasts + `message.error` on
+> planning failure.
+> ❌ The **create / generation** surfaces (视频 / 图像) ship **no cancel** for a running
+> generation — the only way to stop a minutes-long, token-billing job is to **delete the
+> batch** (no `cancel`/`abort` action exists in `store/{video,image}`), and the error item has
+> **no in-place Retry** (recovery is "Reuse Settings → Generate again" by hand). Same surfaces:
+> `handleCopyPrompt` / `handleCopyError` `message.error` on failure, but the sibling
+> `handleDelete` / `handleDeleteBatch` / `handleDownload` **only `console.error`**
+> (`video/…/GenerationFeed/BatchItem.tsx:81,113,129`), and image's `handleDownloadImage` has
+> **no try/catch at all** (`image/…/GenerationItem/index.tsx`) — a failed download of a large
+> video is a dead button with zero feedback while the copy buttons next to it toast. ✅ Add a
+> Cancel to the in-progress state + a Retry to the error state; toast every user-triggered
+> action's failure, not just the copy ones.
+> ❌ **Cross-surface stale**: the same feature keeps the list in a `tasks` array and the detail in
+> a `taskDetailMap` (two un-normalized copies); a detail-side `updateTask` patches only the map and
+> refreshes the list **only when assignee / parent changed** (`store/task/slices/detail/action.ts:295-297`),
+> so editing a task's **title / priority / model** from the detail leaves the list row showing the
+> old value — visible when list + detail are mounted together (Chat portal) or on cached
+> back-navigation (`revalidateOnFocus:false`). ✅ Share one normalized map, or invalidate the list
+> on every successful field write (not a gated subset).
 
 **Checklist**
 
 - [ ] Action leads forward; doesn't just stop. _(Meaningful)_
 - [ ] Optimistic mutation (create / rename / duplicate) surfaces failure — the caller catches and toasts; a silent rollback that just removes the item is fire-and-forget. _(Meaningful・Certainty)_
+- [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + rolls the optimistic status back makes a failed run read as a dead button; toast at the store-action boundary so every trigger inherits it. _(Meaningful・Certainty)_
+- [ ] Cross-surface coherence: an entity shown in both a list and its detail stays in sync — a successful edit reaches every copy (shared normalized store, or invalidate the sibling), not a gated subset of fields; check this seam explicitly (a per-surface review misses it). _(Certainty・Meaningful)_
 - [ ] Success = primary "go to result", secondary "Done". _(Meaningful・Natural)_
 - [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back to sign-in), success → close / go-to-result; no bare `Result` without `extra`. _(Meaningful・Certainty)_
 - [ ] "Auto-closing / redirecting in Ns" copy only when the close / redirect can actually fire (e.g. `window.opener` present); otherwise show a manual action. _(Certainty)_
 - [ ] Bulk ⇄ single-item parity (toolbar action also on the item, and vice versa). _(Certainty)_
 - [ ] Bulk / irreversible / async: confirm → in-progress (locked) → done/error, one surface. _(Certainty・Meaningful)_
+- [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (abort the work), not just delete-after-the-fact, and keeps an **in-place Retry** on the error state — named as a generation-class norm so an absent Cancel is caught. _(Meaningful・Certainty)_
 
 ## 3.2 One primary button, and it's the visually dominant one・Certainty
 
@@ -215,6 +276,10 @@ per Feedback §4.2 and §3.1's confirm → in-progress(locked) → done/**error*
 > sits behind a single one-click danger confirm with no type-to-confirm, and `handleClear`
 > awaits six store wipes with **no try/catch** (`settings/storage/features/Advanced.tsx`), so a
 > partial failure leaves half-deleted data, a still-open modal, and zero feedback.
+> ❌ **Memory** (记忆) "Purge all" wipes every layer + persona (`purgeAllMemories`,
+> `store/userMemory/slices/base/action.ts`) behind a single one-click danger `confirmModal` with
+> **no type-to-confirm** and no undo / soft-delete (`memory/features/ActionBar/PurgeButton.tsx`) —
+> the highest-blast-radius control in the area, one stray click from irreversible total loss.
 
 **Checklist**
 
@@ -244,3 +309,41 @@ persistent-result state, not a toast: the user must be able to copy before dismi
 
 - [ ] A minted secret is shown in full exactly once at creation (persistent reveal + Copy + "won't see again"), not a toast. _(Meaningful・Certainty)_
 - [ ] Secret stored hashed at rest; list / detail return a masked prefix, never re-reveal plaintext. _(Certainty)_
+
+## 3.9 A store of data about the user owes correction, retain-without-use, export & undo・Meaningful・Certainty
+
+A surface that holds **data the product learned about the user** — an AI memory / personalization
+store, a profile the system inferred, a "what we know about you" area — carries a **trust-repair +
+data-control** class norm that ordinary CRUD lists don't, because the records are _claims about the
+person_ and the person is the authority on them. Mature memory / personalization products (ChatGPT
+"Manage memories", Gemini personalization, Mem0, Apple/Google privacy dashboards) ship four
+capabilities beyond plain display; a code-only read is blind to their absence (no `file:line`), so
+name each as an expected capability and check it present / missing:
+
+1. **Correct / mark-wrong**, not just delete — a way to say "this belief is wrong" that survives
+   re-extraction, so a corrected fact isn't silently re-learned. A blind free-text overwrite or a
+   hard delete is not correction (the same claim comes back).
+2. **Retain without use** — pause / exclude a single item (and a global memory off-switch) so the
+   user can _stop the system acting on_ a fact without destroying it. If the only lever to stop use
+   is delete, the user is forced into data loss.
+3. **Export / download** — take the data out (a portability / GDPR-shaped norm for anything storing
+   a profile of the user).
+4. **Undo / soft-delete** — destructive actions on data-about-the-user offer undo or a recovery
+   window; a hard delete of an inferred profile with no recovery is under-protected (pairs with §3.7
+   for the wide-blast "purge all").
+
+> ❌ **Memory** (记忆): item menus offer only edit (blind single-field overwrite) + hard delete
+> (`memory/**/*Dropdown.tsx`); no "mark wrong / don't remember this", no per-item pause/exclude and
+> no global off-switch (a `status` column exists, unused by the UI), no export in the service or UI
+> (`services/userMemory`, `crud.ts` = get/update/delete/deleteAll only), and delete / "Purge all"
+> are hard with no undo. A user who sees a wrong belief can only blind-overwrite or destroy it —
+> and can't stop the AI _using_ a fact without deleting it. ✅ Add mark-wrong (records negative
+> feedback + suppresses re-extraction), a per-item pause + global toggle on the `status` column, an
+> "Export all", and soft-delete with an undo toast.
+
+**Checklist**
+
+- [ ] A store of data _about the user_ (memory / personalization / inferred profile) offers **correct / mark-wrong**, not just blind-edit or delete — a correction survives re-learning. _(Meaningful)_
+- [ ] The user can **retain a fact without the system using it** (per-item pause / exclude + a global off-switch), never forced to delete to stop use. _(Meaningful・Certainty)_
+- [ ] The data is **exportable / downloadable** (portability / GDPR norm). _(Meaningful)_
+- [ ] Destructive actions on user-data offer **undo / soft-delete** (a recovery window), not hard-delete only. _(Certainty)_

@@ -13,7 +13,7 @@ column + the board have empty/loading/**error** states; a live feed **signals ne
 offers **manual refresh**; add / remove / reorder / persist columns; a "keep this column"
 marker actually protects it.
 **Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic + CLS)
-⏳ not yet run — see §4. Verdicts about the render are L1 inferences here, pending L2.
+⏳ not yet run — see §5. Verdicts about the render are L1 inferences here, pending L2.
 
 **Load-bearing files:** `routes/(main)/fleet/index.tsx`, `features/Fleet/{index, ColumnsBoard,
 AgentColumn, RunningTaskSidebar, AddColumnButton, RowsSwitcher, FleetPanelCollapseSync}.tsx`,
@@ -44,7 +44,33 @@ where every audit so far has hit — **Feedback (the poll can't fail)** and **Re
 unloaded live feed masquerading as "empty/idle")** — and here that soft spot feeds a
 **destructive** bulk action, which is what makes ① + ② a trust break rather than cosmetic.
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The board is strong where it counts — these are the ✅ half of the 回灌 loop and the "don't
+regress" list for the next refactor. Two are strong enough to land as **✅ examples in the `ux`
+checklists** (see §4):
+
+- **✅ 亮点 — Layout /persistence/drag.** dnd-kit reorder + cross-band drag with a portaled
+  drag-overlay preview (so the moving card escapes each band's `overflow` clipping),
+  `ColumnsBoard.tsx` + `ColumnDragPreview`, over a `persist` store that survives reload —
+  columns / widths / rows / pins (`store.ts` `partialize`). Movable-Panels done to spec.
+- **✅ 亮点 — Per-task live progress.** `RunningStatus`'s live elapsed clock + ring
+  (`RunningTaskSidebar.tsx:47-107`) reads the runtime's real visible-start time and even hides
+  the spinner in the `visible_output_end` tail (`runningStatus.ts`), so each column honestly
+  shows how long its run has worked rather than a static "running" label.
+- **✅ 亮点 — Selection-into-view done right (→ landed as ux Read §1.3 ✅).** `handleActivate` /
+  `AddColumnButton` scroll a (re-)opened / newly-added column into the horizontal band via a
+  **double-`requestAnimationFrame`** `scrollIntoView({ block: 'nearest', inline: 'end' })`,
+  mirrored across **both** entry points so neither can regress alone.
+- **✅ 亮点 — Skeleton reuses row chrome (→ landed as ux Feedback §4.1 ✅).**
+  `SidebarTaskSkeleton` mirrors `SidebarTaskItem` exactly (28 px square avatar + two text lines
+  at 70 % / 45 % width, same padding), an in-place load→content swap with no relayout.
+- **Reply area's loaded-state gating.** `ReplyArea` reads the conversation's _real_ loaded state
+  (`messagesInit`) rather than the raw `dbMessagesMap` (where `undefined` = "still loading"), so
+  the reply affordance never blanks out mid-load — a stable "回复" placeholder holds the slot
+  (`AgentColumn.tsx:255-292`). A quiet correctness win worth keeping.
+
+## 3 — Experience gaps (ranked)
 
 **① Running-topics poll swallows `error` → false "no running tasks" + every status collapses to idle + no retry — Read §1.1 / §1.7, Feedback §4.2** 🔴
 `useRunningTopics` destructures only `{ data, isLoading }` and drops `error`
@@ -99,9 +125,12 @@ The board empty renders an icon + `fleet.empty` + `fleet.emptyDesc`
 Create task" CTA in the empty region. Whether the "+" reads as _the_ next action is an **L2**
 verdict — confirm on the render.
 
-## 3 — Skill feedback
+## 4 — Skill feedback
 
-- **Landed as strengthened `ux` items** from this audit:
+The 回灌 loop has two halves — a gap sharpens a checklist item's ❌ example, a good case sharpens
+its ✅ one. Both landed from this run:
+
+- **New ❌ rules landed** from this audit:
   - Read **§1.7** — new rule + Fleet ❌: a control **derived from a live-status map** (a "close
     idle" / "clear inactive") must gate on that query's **loaded/error** state — an errored or
     still-loading map reads every row as inactive, turning the bulk action into a wiper; treat
@@ -110,12 +139,25 @@ verdict — confirm on the render.
     honored by _every_ removal path (bulk close, auto-cleanup); a decorative pin a "close idle"
     ignores is a broken promise (gap ③).
   - Each mirrored into the SKILL.md Quick review.
+- **New ✅ good cases — each _refined the rule_, not just decorated it** (the good half of 回灌
+  — see §2). A good case is only worth landing if it teaches the rule a distinction it didn't
+  state:
+  - Read **§1.3** — Fleet's scroll-into-view extracted **two** new sub-rules the rule was
+    missing: (a) the re-run trigger has **two flavors** — async-arriving rows (key off row
+    count) vs. a row **added imperatively in the same handler** (defer to the paint via
+    rAF / double-rAF, since a synchronous `scrollIntoView` fires before React commits the
+    node); and (b) the scroll **axis follows the list direction** — `inline: 'nearest'/'end'`
+    for a horizontal band, not just `block`. Both folded into the prose + checklist; Fleet is
+    the ✅ example.
+  - Feedback **§4.1** — Fleet's `SidebarTaskSkeleton` extracted "match the real text's **width
+    proportion**, not just its height" (long title line over a shorter subtitle, not two equal
+    bars) — the rule previously said only "height ≈ real". §4.1 also had **no** ✅ example before.
 - **Validated existing rules** (fresh ❌ examples to cite): Read §1.1 error-before-empty /
   false-empty (gap ①, sidebar), §1.7 failed-refresh-shown-as-empty (gap ①), Feedback §4.2
   init-flag-not-gated-on-success (`isInit: !isLoading`, gap ①), Read §1.1 empty-needs-CTA
   (gap ⑤).
 
-## 4 — Pending: L2 visual + L3 dynamic
+## 5 — Pending: L2 visual + L3 dynamic
 
 L1-only; a later pass should confirm / quantify:
 

@@ -86,7 +86,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 
 **Read — viewing data & lists** ([read.md](references/read.md))
 
-- [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state.
+- [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state. If the `Empty` component ships a `search`/no-match variant, **wire it** — don't render `<Empty/>` bare so a zero-result search shows the first-run onboarding.
 - [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404).
 - [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
 - [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows).
@@ -96,6 +96,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
 - [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value.
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
+- [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
@@ -109,13 +110,17 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
 - [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (aborts the work, not just delete-after-the-fact) and keeps an in-place **Retry** on error — named as a generation-class norm so an absent Cancel is caught.
 - [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
+- [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + optimistic-status rollback reads as a dead button; toast at the store-action boundary so every trigger inherits it.
+- [ ] Cross-surface coherence: an entity shown in both a list and its detail stays in sync on edit — shared normalized store or invalidate the sibling (not a gated field subset); a per-surface review misses this seam, so check it explicitly.
 - [ ] Scrollable content + actions/status → pin them in a fixed footer/header, not inside the scroll area (verify at the overflowing state).
 - [ ] Exactly one primary button per surface — and it's the visually dominant control (back / cancel / secondary never out-weighs it; verify on the rendered screen, not from `variant`).
 - [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom). A protective marker (pin / keep / lock) is honored by every removal path (bulk close, clear-idle, auto-cleanup) — a marker that gates nothing is a decorative no-op.
 - [ ] An action that commits as a specific identity (OAuth consent, send-as, publish-to) shows the identity **and** a switch-account / re-auth path — never locks the user to the currently-logged-in one.
 - [ ] Unrecoverable / wide-blast action (clear-all, delete-account, wipe) needs an explicit gesture (type-to-confirm / checkbox), not one-click danger; and reports partial failure, never silent half-completion.
 - [ ] A minted secret (API key / token) is shown in full once at creation (persistent reveal + Copy), hashed at rest, masked thereafter — never re-revealed from a list.
+- [ ] A store of data _about the user_ (AI memory / personalization / inferred profile) offers correct-or-mark-wrong (not just blind-edit/delete), retain-without-use (per-item pause + global off-switch), export/download, and undo/soft-delete — named as class norms so an absent one is caught.
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 

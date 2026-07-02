@@ -35,7 +35,29 @@ dataset-import wizard), but the **read side has no error handling at all** — o
 **read side** — list/detail `error` + `loading` — plus an inconsistent band of create/edit
 mutations that surface success/failure unevenly.
 
-## 2 — Experience gaps (ranked)
+## 2 — Strengths / good cases (don't regress)
+
+The write side is mature where it counts — these are the ✅ half of the 回灌 loop and the "don't
+regress" list for the next refactor. They're the validated ✅ baseline against which §3's read-side
+❌ gaps are measured — keep them, don't "fix":
+
+- **✅ 亮点 — Run-execution state machine.** idle / pending / external / running / finished with a
+  3 s poll while active + progress bar, plus retry-errors / batch-resume / per-case resume — each
+  path confirm + loading + toast. Mature enough to be the module's flagship ✅ (act/feedback,
+  §1.7).
+- **✅ 亮点 — Full delete lifecycle.** benchmark / dataset / testCase / run delete all pair a
+  confirm with a success/error toast — the consistent baseline the uneven create/edit writes
+  (gap F) fail to match.
+- **✅ 亮点 — DatasetImport two-step wizard.** `DatasetImportModal` (Upload → Mapping) runs upload
+  progress, a parse-error toast, mapping validation gating the button, and an import lock with a
+  success/error toast — textbook staged input.
+- **✅ 亮点 — Overview empty-with-CTA + chrome-reusing skeleton.** the overview empty state is a
+  real page + "create your first benchmark" CTA (`eval/index.tsx:83-95`), and its `SkeletonGrid`
+  reuses the card chrome for an in-place load→content swap with no relayout (textbook §4.1).
+- **No antd `Spin` anywhere.** loading is always a chrome-matched skeleton rather than a bare
+  spinner — a quiet correctness win worth keeping.
+
+## 3 — Experience gaps (ranked)
 
 **🔴 A — No error/retry anywhere; every fetch resolves only on success → permanent skeleton /
 blank / false-empty.** Systemic: each slice inits `isLoadingX: true` / `xInit: false` and
@@ -86,7 +108,7 @@ the status change (`runs/[runId]/index.tsx`). → Act §3.1.
 create/edit/import modals lose their input on accidental close (`features/**Modal/Content.tsx`).
 → Edit §2.1 (lighter for modals).
 
-## 3 — Skill feedback
+## 4 — Skill feedback
 
 - **Landed as ❌ examples on existing rules** (no new rules — Eval is a textbook instance):
   - Feedback **§4.2** — the whole-module `onSuccess`-only / no-`onError` pattern (gap A).
@@ -94,14 +116,6 @@ create/edit/import modals lose their input on accidental close (`features/**Moda
     that a detail `return null` is not a loading state (gap B), plus a checklist clause.
 - **Validated existing rules:** §4.2 permanent-skeleton, Read §1.1 empty-vs-failed, Act §3.1
   done/error feedback (gaps F/G).
-
-## 4 — Highlights (keep; don't "fix")
-
-Run-execution state machine (idle/pending/external/running/finished + 3s polling + progress +
-retry-errors / batch-resume / per-case resume, each confirm + loading + toast); the full delete
-lifecycle (confirm + success/error toast); the DatasetImport two-step wizard (upload progress,
-parse-error toast, mapping validation gating the button, import lock + success/error toast);
-overview empty-with-CTA + chrome-reusing skeleton; no antd `Spin`.
 
 ## 5 — Pending: L2 + L3
 

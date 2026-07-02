@@ -141,6 +141,32 @@ So a variant comparison must:
 > backwards, cost footnoted, a winner declared from L1 on what is an L3/analytics metric, and the
 > flag-gated /degrades-to-Classic/desktop-excluded signals explained away.
 
+## Ground rule: report the good, not only the gaps
+
+An audit that only lists what's broken has drifted into a bug report. The mandate is
+**patterns in use _and how well_** — so the strengths are first-class findings, not table
+decoration. A well-built state machine, a draft that survives a failed save, an
+open-redirect guard, a smart default: these are the **good cases**. Name them, cite their
+`file:line`, and mark the standouts **✅ 亮点**, for three reasons:
+
+- **They teach.** A good case is the ✅ half of the 回灌 loop — it becomes the positive
+  example a `ux` checklist item cites, exactly as a gap becomes the ❌ one. An audit that
+  reports no good cases can only ever sharpen the ❌ side of the checklists.
+- **They protect.** "Don't regress this" is a finding. The next refactor needs to know
+  which behaviors are load-bearing — the **Strengths worth preserving** block in
+  [`example/tasks.md`](references/example/tasks.md) (the loading/not-found state machine,
+  comment-draft-preserved-on-failure, the run-all preview → confirm flow) and the **✅ 亮点**
+  rows in [`example/home.md`](references/example/home.md) (empty-send → day's-hint fallback,
+  drawer-not-navigate surface contract) are exactly that list.
+- **They calibrate severity.** A gap reads differently against a surface that is otherwise
+  strong than against one weak throughout; the good cases are the baseline the gaps rank on.
+
+> ❌ The drift this prevents: an audit whose "Patterns in use" ✅ rows are one-word ticks
+> ("persistent", "strong", "textbook") while every gap gets a paragraph — the good cases
+> demoted to checkboxes. [`example/tasks.md`](references/example/tasks.md) is the model to
+> match: each standout pattern carries its `file:line` and a **✅ 亮点** call-out, so the
+> strengths are as legible as the gaps.
+
 ## Severity rubric (shared)
 
 - 🔴 **Breaks trust** — data / input loss, stuck / permanent states, a misleading "empty"
@@ -155,11 +181,21 @@ So a variant comparison must:
 See the worked example, [`references/example/home.md`](references/example/home.md). Note
 **which layers ran**, then:
 
-1. **Patterns in use** — table (from L1/L2), grouped by pattern family, with a one-line read.
-2. **Experience gaps** — ranked; each names the finding, the `ux` checklist item / catalog
+1. **Patterns in use** — table (from L1/L2), grouped by pattern family, with a one-line
+   read; mark each standout ✅ row **亮点** and back it with real evidence (`file:line`),
+   never a one-word tick.
+2. **Strengths / good cases (don't regress)** — a **dedicated section** (`## … — Strengths /
+good cases`), not a table footnote: bulleted **✅ 亮点** items, each naming the behavior
+   this surface gets _right_, its evidence (`file:line`), and _why_ it's load-bearing — the
+   ✅ half of the 回灌 loop and the "don't regress" list for the next refactor. Flag the ones
+   strong enough to land as **✅ examples** in `ux` (annotate `→ landed as ux <ref> ✅`, wired
+   to the Skill-feedback section). **Every audit produces this section** — if a surface is
+   genuinely weak throughout, say that explicitly rather than omit it. See
+   [`example/fleet.md`](references/example/fleet.md) §2 for the shape.
+3. **Experience gaps** — ranked; each names the finding, the `ux` checklist item / catalog
    pattern it violates, the **layer + evidence** it came from, and a one-line remedy.
-3. **Skill feedback** — real instances of existing checklist items vs new generalizable gaps
-   worth adding to `ux`.
+4. **Skill feedback** — real instances of existing checklist items vs new generalizable gaps
+   worth adding to `ux`, **and** good cases worth landing as ✅ examples (see 回灌 below).
 
 ## Land the findings (shared)
 
@@ -175,6 +211,19 @@ An audit is not finished when the findings are written — it is finished when t
   _continuous_ — each run leaves the checklists sharper than it found them. If a run genuinely
   surfaces **no** generalizable gap, say so explicitly in the report's Skill-feedback section
   (only validated-existing-rule instances) — silence is not an acceptable close.
+- **Exemplary good cases → 回灌 `ux`, refining the rule (not just decorating it).** The 回灌
+  loop has two halves: a gap sharpens a checklist item's ❌ example, a good case sharpens its ✅
+  one. But a good case is only worth landing if it **teaches the rule something** — the ✅
+  example is the floor; **the goal is to sharpen the rule text or extract a latent sub-rule /
+  checklist item** the current rule doesn't yet state. So when an audit finds a pattern done
+  notably well, ask: _what technique does this do that the rule doesn't already demand?_ and
+  fold that back — refine the prose, split a one-trigger rule into its real cases, add a
+  checklist line — citing the surface as the ✅ example. A good case that merely re-illustrates
+  an already-complete rule adds little; a good case that reveals a missing distinction is the
+  point. (e.g. Fleet's scroll-into-view extracted "the re-run trigger has two flavors — async
+  arrival vs. imperative-add-then-paint" and "the scroll axis follows the list direction" into
+  Read §1.3; its skeleton extracted "match the text's **width proportion**, not just height"
+  into Feedback §4.1 — neither was stated before.)
 - **The audit** → save it as `references/example/<page>.md` so the next run has a template.
 
 > The audit and the `ux` skill are a **closed loop**: `ux` is the benchmark the audit measures

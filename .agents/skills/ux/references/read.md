@@ -34,6 +34,10 @@ gets its own state (reason + Reload). Error is not a kind of empty.
 > ❌ A detail page that `return null`s until its record loads is **not** a loading state — it's a blank flash on the happy path and a **permanent blank** if the fetch fails (no skeleton, no error): **Eval** run / case / dataset detail all `if (!record) return null` (`eval/bench/[benchmarkId]/runs/[runId]/index.tsx`, `.../cases/[caseId]/index.tsx`, `.../datasets/[datasetId]/index.tsx`). Render a skeleton, then an error state.
 > ❌ **Resource** repeats the failure-as-empty trap four times: the Explorer reads only `{ isLoading, isValidating }` (the swr already exposes `error`, unread) so a failed resource fetch renders the "create your first resource" onboarding (`ResourceManager/components/Explorer/index.tsx`, `EmptyPlaceholder.tsx`); the sidebar KB list (`resource/(home)/_layout/Body/LibraryList/index.tsx`), the search overlay (`SearchResultsOverlay.tsx` → false "no results"), and the folder tree (`LibraryHierarchy/index.tsx` → false "add folder") all do the same.
 
+**Distinguishing the two empty variants is a call-site wiring job, not just a component one.** A common miss: the `Empty` component _already_ ships a `search` / "no match" variant, but the list renders it **bare** and never passes the flag — so a legitimate zero-result search shows the first-run "create your first…" onboarding, and the built variant + its i18n keys are dead code. The query is in scope at the call site; thread it in (`search={!!q || !!category}`) and add a clear-filters action.
+
+> ❌ **Discover / Community** lists: all five `*Empty` components take a `search?: boolean` that swaps to the "no results" copy (`community/features/AssistantEmpty.tsx:11-27` + McpEmpty / ModelEmpty / ProviderEmpty / SkillEmpty twins), but every `features/List/index.tsx:17` renders `<XEmpty/>` with **no prop** (`grep 'search={'` over the area → 0 hits), so `q=zzznomatch` returns zero rows and shows the onboarding empty with no clear-filters — the built variant unreachable. (`SearchResultCount.tsx`, a "N results for X" affirmation, is likewise imported by nothing.) ✅ Pass `search` from the page → `List` → `Empty` and add a clear-filters CTA.
+
 **Failure is also not "not found".** A detail page that coerces a fetch failure into a **404 /
 "doesn't exist"** terminal is the same masquerade wearing a different mask: it tells the user the
 record was **deleted** when the load merely **errored** (and a 404 is a dead-end — no Reload).
@@ -44,6 +48,20 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 > `if (!isLoading && !data) return <NotFound/>` (`resource/library/index.tsx`) — a network / 500
 > on the KB fetch renders the permanent "this library doesn't exist" 404, so the user thinks it
 > was deleted and gets no retry. ✅ Branch `error` to a reload state; keep 404 for a genuine miss.
+> ❌ **Task detail** bakes the same conflation into the fetcher: `fetchTaskDetail` `throw`s
+> `Task not found` when `result.data` is falsy **and** lets any network / 500 rejection propagate
+> the same way (`store/task/slices/detail/action.ts:124-129`), then `isNotFound = !!taskError &&
+!hasTaskDetail` (`useActiveTaskDetail.ts:60`) renders a terminal `NotFound` whose only action is
+> "Back to tasks" (`TaskDetailPage.tsx:39-59`). A transient failure tells the user the task was
+> **deleted** and offers no Reload. The rest of the machine is right (skeleton gated on
+> "resolving", not `data === undefined`) — the miss is treating _errored_ and _absent_ as one
+> signal. ✅ Distinguish them: a thrown "not found" → 404, a fetch rejection → reload state.
+> ❌ **Memory** (记忆) detail panels do it in blank form: all five `*RightPanel.tsx` read only
+> `{data, isLoading}` and set the body only in the `isLoading` / `data` branches
+> (`memory/contexts/features/ContextRightPanel.tsx` + 4 twins), so a fetch **error** and a resolved
+> **not-found** (deleted item) both render an empty panel forever — no skeleton, no reason, no
+> reload, deleted indistinguishable from failed-to-load; and the Memory **home** page falls to the
+> "analyze to get started" onboarding empty when a persona/tags fetch fails (`memory/(home)/index.tsx`).
 
 **Checklist**
 
@@ -69,17 +87,47 @@ over the loaded page reports "no results" for a match that lives in the not-yet-
 remainder — a **false empty**, worse than no search because it asserts absence. (This is
 the read-side twin of sorting a paginated list client-side over a partial page.)
 
+The **cleanest way to make this hold by construction** — and get deep-linking + state-restore
+for free — is to make the **URL the single source of truth for the list's read state** (`q`,
+`sort`, `filter`/`category`, `page`) and **derive the fetch key from those params**, rather
+than holding them in local component state. Then filter / sort / search / paginate are
+**server queries by definition** (the key changed → the server re-ran), not client passes
+that can drift from the server's page; the browse state is shareable / restorable from the
+URL; and there's no local-vs-server divergence to reconcile. Reach for this whenever a list
+has more than one read-state dimension — the alternative (local `useState` per control + a
+manual refetch) is where the partial-page traps breed.
+
 > ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
 > `title/content.includes(keyword)` over the loaded set **and disables load-more while
 > searching**, so searching for a page past the loaded window returns "no results" though it
 > exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
 > through matches.
+> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
+> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
+> the whole set — no false "no results" for unfetched rows.
+> ✅ **Discover / Community** lists take the sub-rule to its conclusion: every read dimension
+> (`q` / `sort` / `category` / `page` / `source`) lives in the URL and flows into the SWR key
+> (`libs/swr/keys.ts`; read via `useQuery()` at `community/(list)/agent/index.tsx:16`), so
+> filter·sort·search·paginate are **all server re-queries** and the whole browse state is
+> deep-linkable — none of the client-over-partial-page traps that bit the other list audits
+> can occur here. (This is why the surface's only read-side gap is failure handling, not
+> query correctness.)
+
+> ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
+> `title/content.includes(keyword)` over the loaded set **and disables load-more while
+> searching**, so searching for a page past the loaded window returns "no results" though it
+> exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
+> through matches.
+> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
+> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
+> the whole set — no false "no results" for unfetched rows.
 
 **Checklist**
 
 - [ ] List designed across 1 → 10k rows (plain → pagination → virtual scroll). _(Certainty)_
 - [ ] Batch-select / bulk actions added once counts get large. _(Certainty)_
 - [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page — no false "no results" for unfetched rows. _(Certainty・Meaningful)_
+- [ ] Multi-dimension list read-state (`q`/`sort`/`filter`/`page`) lives in the URL and the fetch key derives from it — server-query, deep-link, and restore by construction, not local state + manual refetch. _(Certainty・Natural)_
 - [ ] Empty / loading / error co-designed with the data state (§1.1). _(Natural)_
 
 ## 1.3 Selection visibility in scrolled lists・Certainty・Natural
@@ -90,20 +138,36 @@ reads it as "nothing selected" or a broken page. Any list that can open with a
 pre-selected item must **scroll that item into view** — hardest when the selection has
 no other anchor (no highlighted parent row, breadcrumb, or header echo), because then
 an off-screen active row means **zero** visible feedback. Scroll only when the row is
-actually off-screen (`block: 'nearest'`) so an already-visible selection doesn't jump,
-and re-run once async rows mount (key off a list-ready signal like row count, not just
-the id) so a restored selection still lands when data arrives. Mirror the behavior
-across duplicated list variants so it can't regress in just one.
+actually off-screen (`block: 'nearest'`, plus `inline: 'nearest'` / `'end'` for a
+**horizontally**-scrolling list — the axis follows the list's scroll direction) so an
+already-visible selection doesn't jump. And **time the scroll to when the target node
+actually exists** — there are two triggers, not one: for rows arriving **async from a
+fetch**, re-run keyed off a list-ready signal (row count, not just the id) so a restored
+selection lands when data arrives; for a row you **add imperatively in the same handler**
+(open-and-scroll / add-and-scroll), the node isn't in the DOM until React commits, so a
+synchronous `scrollIntoView` finds nothing — defer to the paint (a `requestAnimationFrame`,
+or a **double** rAF to clear the commit frame) before querying it. Mirror the behavior
+across **every** entry point that opens/adds an item (and every duplicated list variant)
+so it can't regress in just one.
 
 > ✅ The nested thread list is capped to \~9 rows; a thread restored from `?thread=` below the fold is scrolled into view on mount.
+> ✅ The **Fleet** board scrolls a (re-)opened or newly-added column into the horizontally-scrolling
+> band with `scrollIntoView({ block: 'nearest', inline: 'end' })` after a **double `requestAnimationFrame`**
+> (so the query runs post-paint, once React has committed the new column) — and it's mirrored across
+> **both** entry points, sidebar activate and the "+" add button (`RunningTaskSidebar.tsx` `handleActivate`,
+> `AddColumnButton.tsx`), so neither path can regress alone.
+> ❌ **Memory** (记忆) list/grid: clicking a card deep-links `?contextId=` and opens the detail
+> panel, but the Virtuoso list mounts at `scrollTop=0` and nothing scrolls the active card into
+> view, and the cards take no `active` prop / highlight (`memory/**/TimeLineView`, `**/GridView`,
+> `*Card.tsx`) — a restored selection below the fold shows **zero** list feedback (the no-anchor case).
 
 **Checklist**
 
 - [ ] Restored / deep-linked active item is scrolled into view on mount. _(Certainty)_
 - [ ] Designed for the no-anchor case (parent not highlighted → off-screen = zero feedback). _(Meaningful)_
-- [ ] Uses `block: 'nearest'` — an already-visible selection doesn't jump. _(Natural)_
-- [ ] Scroll re-runs once async rows mount (keyed off row count). _(Certainty)_
-- [ ] Mirrored across duplicated list variants (parallel agent / group lists). _(Certainty)_
+- [ ] Uses `block: 'nearest'` (and `inline: 'nearest'` / `'end'` on a horizontal list — axis follows the scroll direction) so an already-visible selection doesn't jump. _(Natural)_
+- [ ] Scroll is timed to the target node existing — keyed off a list-ready signal (row count) for **async-arriving** rows, or deferred to the paint (`requestAnimationFrame` / double rAF) for a row **added imperatively in the same handler**. _(Certainty)_
+- [ ] Mirrored across **every** open/add entry point (and every duplicated list variant — parallel agent / group lists) so it can't regress in one path. _(Certainty)_
 
 ## 1.4 Option visibility in pickers・Certainty・Meaningful
 
@@ -132,6 +196,7 @@ through `formatShortenNumber`; both already carry the K/M/B/T ladder.
 
 > ✅ `10.3B` ❌ `10285.7M`
 > ❌ an ad-hoc `(n / 1_000_000).toFixed(1) + 'M'` that stops at M.
+> ❌ **Discover / Community** registry cards render social-proof counts **verbatim** — `{installCount}` / `{stars}` / `{commentCount}` in `skill/features/List/MetaInfo.tsx` + the mcp twin (a popular server prints `40000`), and agent `TokenTag.tsx:43` uses `formatIntergerNumber` instead of the `formatUsageValue` ladder — while `formatShortenNumber` is already imported one directory over in `community/features/LikeButton.tsx`. Install/star counts are a scanning metric; roll them.
 
 **Checklist**
 
@@ -223,3 +288,44 @@ the grouped set is large enough that "which group was that under?" becomes a rea
 - [ ] A surface with many navigable entries offers search / filter / jump, not browse-only. _(Natural)_
 - [ ] Search is named as a class norm up front (mature comparables ship it) so an absent box is caught, not overlooked. _(Certainty)_
 - [ ] Scoped to scale — added once the set is genuinely large, not on a short menu. _(Certainty)_
+
+## 1.9 Marketplace / registry browse cards carry lifecycle + trust state・Meaningful・Certainty
+
+A **browse card in a marketplace / registry** (agents, models, providers, plugins/MCP,
+skills, extensions, templates) is not a static poster — the class carries a small set of
+affordances every mature comparable ships (VS Code Marketplace, npm, HuggingFace Hub,
+Raycast Store, Ollama library, the GPT / MCP stores), and a code-only read is **blind to the
+absent ones** because a never-built badge leaves no `file:line`. Name the class expectations
+first, then check each **present / partial / absent** on the tile:
+
+- **Owned / installed / added state.** The card reflects whether _this user_ already has the
+  item — an "Installed ✓" / "Added" badge (and ideally an inline add for bulk↔single parity),
+  so a user scanning the grid doesn't re-add what they own or open a detail page to find out.
+  The state usually already exists one level down (a detail-page install button reading an
+  `isInstalled` selector); the miss is not surfacing it on the tile.
+- **Trust / provenance badges, consistently across sibling registries.** Verified / official /
+  author markers — and applied the **same way** across sibling lists. When one registry's card
+  badges "official" and its sibling's card (equally third-party, equally installable) shows no
+  trust mark at all, a user can't judge either. Define **one card contract** per registry
+  class (owned-state · install/star count · trust badge · what's-inside) and apply it to all.
+- **No-results distinct from first-run** (see §1.1) and **counts abbreviated** (see §1.5).
+- **Contribute → an in-app submit**, not a dead-end to external docs / a GitHub repo (Grow §5.3).
+
+This is a **surface-class norm**: write the expected-capability list from the comparables
+_before_ reading code, then audit gaps against it — otherwise the read only polishes the
+paths that already exist and blesses the absent ones.
+
+> ✅ A model card shows "Added" on models already enabled in the workspace and a hover "Add"
+> for the rest; official models carry a verified check, same as the provider list.
+> ❌ **Discover / Community** cards show avatar / title / author / stats but **no
+> owned/installed state** on any of the five list `Item.tsx` (add/install lives only on the
+> detail; `(detail)/mcp/.../ActionButton` already reads `pluginSelectors.isPluginInstalled`,
+> the list just doesn't). The **mcp** card badges official/validated (`mcp/features/List/Item.tsx:157-191`)
+> but the **skill** card carries no trust mark though skills are equally installable, and
+> "Create" opens a docs modal → GitHub (`CreateButton/Inner.tsx:44-50`) with no in-app submit.
+
+**Checklist**
+
+- [ ] Registry/marketplace browse cards reflect owned / installed / added state on the tile, not only on the detail page. _(Meaningful)_
+- [ ] Trust / verified / official badges applied via one card contract, consistently across sibling registries (no "official on one list, nothing on its twin"). _(Certainty・Meaningful)_
+- [ ] Class-norm capabilities (owned-state, trust badge, counts, no-results≠first-run, contribute→in-app-submit) listed from comparables up front, so an absent one is caught. _(Certainty)_

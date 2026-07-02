@@ -22,6 +22,12 @@ in-memory store alone doesn't count.
 
 > ❌ The home composer holds its input in an in-memory store (no `persist`), so a reload on
 > the app's highest-traffic entry point vaporizes a typed task description.
+> ✅ The agent chat composer is the model to copy: `useChatInputDraft` backs each topic's input
+> to `localStorage` **keyed per context** (`draftKey` = agent+topic+thread), debounced-saves on
+> every keystroke and flushes on blur (`ChatInput/InputEditor/index.tsx:570,567`), restores into
+> an empty editor on mount (`useChatInputDraft.ts:32-43`), flushes on unmount (`:30`), and
+> **removes** the draft on send (`ChatInput/store/action.ts:85`) — durable across reload/crash,
+> scoped per topic so drafts never bleed, with 50-entry LRU eviction (`draftStorage.ts:108-126`).
 
 **Checklist**
 
