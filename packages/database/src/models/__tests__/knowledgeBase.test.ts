@@ -1181,4 +1181,110 @@ describe('KnowledgeBaseModel', () => {
       });
     });
   });
+
+  describe('workspace visibility', () => {
+    const wsId = 'knowledge-base-ws';
+    const ownerModel = new KnowledgeBaseModel(serverDB, userId, wsId);
+    const memberModel = new KnowledgeBaseModel(serverDB, 'user2', wsId);
+
+    beforeEach(async () => {
+      await createWorkspace(wsId, wsId);
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(workspaces).where(eq(workspaces.id, wsId));
+    });
+
+    describe('query with visibility filter', () => {
+      it('should limit the result set to private rows when visibility=private is requested', async () => {
+        await ownerModel.create({ name: 'Owner Private KB', visibility: 'private' });
+        await ownerModel.create({ name: 'Owner Public KB', visibility: 'public' });
+
+        const result = await ownerModel.query({ visibility: 'private' });
+        const names = result.map((kb) => kb.name);
+
+        expect(names).toContain('Owner Private KB');
+        expect(names).not.toContain('Owner Public KB');
+      });
+
+      it('should limit the result set to public rows when visibility=public is requested', async () => {
+        await ownerModel.create({ name: 'Owner Private KB', visibility: 'private' });
+        await ownerModel.create({ name: 'Owner Public KB', visibility: 'public' });
+
+        const result = await ownerModel.query({ visibility: 'public' });
+        const names = result.map((kb) => kb.name);
+
+        expect(names).toContain('Owner Public KB');
+        expect(names).not.toContain('Owner Private KB');
+      });
+
+      it('should hide other members’ private rows from a public-agent caller', async () => {
+        await ownerModel.create({ name: 'Owner Private KB', visibility: 'private' });
+        await ownerModel.create({ name: 'Owner Public KB', visibility: 'public' });
+        await memberModel.create({ name: 'Member Private KB', visibility: 'private' });
+
+        const seenByMemberViaPublicAgent = await memberModel.query({
+          callerAgentVisibility: 'public',
+        });
+        const names = seenByMemberViaPublicAgent.map((kb) => kb.name);
+
+        expect(names).toContain('Owner Public KB');
+        expect(names).not.toContain('Owner Private KB');
+        expect(names).not.toContain('Member Private KB');
+      });
+
+      it('should still let a private-agent caller see their own private rows', async () => {
+        await ownerModel.create({ name: 'Owner Private KB', visibility: 'private' });
+        await memberModel.create({ name: 'Member Private KB', visibility: 'private' });
+
+        const seenByMemberViaPrivateAgent = await memberModel.query({
+          callerAgentVisibility: 'private',
+        });
+        const names = seenByMemberViaPrivateAgent.map((kb) => kb.name);
+
+        expect(names).toContain('Member Private KB');
+        expect(names).not.toContain('Owner Private KB');
+      });
+    });
+
+    describe('publishToWorkspace', () => {
+      it('should flip the creator’s own private KB to public', async () => {
+        const created = await ownerModel.create({ name: 'To Publish', visibility: 'private' });
+
+        await ownerModel.publishToWorkspace(created.id);
+
+        const row = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+        expect(row?.visibility).toBe('public');
+      });
+
+      it('should be a no-op when the KB is already public', async () => {
+        const created = await ownerModel.create({ name: 'Already Public', visibility: 'public' });
+        const before = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+
+        await ownerModel.publishToWorkspace(created.id);
+
+        const after = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+        expect(after?.visibility).toBe('public');
+        expect(after?.updatedAt).toEqual(before?.updatedAt);
+      });
+
+      it('should refuse to publish another member’s private KB', async () => {
+        const owned = await ownerModel.create({ name: 'Owner Private KB', visibility: 'private' });
+
+        await memberModel.publishToWorkspace(owned.id);
+
+        const row = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, owned.id),
+        });
+        expect(row?.visibility).toBe('private');
+        expect(row?.userId).toBe(userId);
+      });
+    });
+  });
 });
