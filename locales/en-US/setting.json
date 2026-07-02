@@ -2255,6 +2255,7 @@
   "workspace.onboarding.step4Invite.heading": "Invite your team",
   "workspace.onboarding.step4Invite.invitedCount": "Invited {{count}} member(s)",
   "workspace.onboarding.step4Invite.seatLimitReached": "You can invite up to {{max}} teammate(s) with your current seats.",
+  "workspace.onboarding.step4Invite.someInviteFailed": "Could not invite {{count}} teammate(s): {{emails}}. Try again from member settings.",
   "workspace.onboarding.step4Invite.subtitle": "Bring teammates into this workspace now, or invite them later from member settings.",
   "workspace.onboarding.step4Invite.subtitleWithExtraSeats": "Your plan includes {{includedSeats}} free seats and supports up to {{maxSeats}} seats with purchased extra seats. Invite teammates now, or add them later from member settings.",
   "workspace.onboarding.step4Invite.subtitleWithLimit": "Free includes up to {{maxSeats}} seats, including you. Invite teammates now, or add them later from member settings.",

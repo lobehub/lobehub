@@ -1209,11 +1209,6 @@ export default {
     'Show a banner at the top of the Community profile.',
   'user.workspaceProfile.settings.description.description':
     'Describe what this workspace publishes or works on.',
-  'user.workspaceProfile.settings.discoverable.description':
-    'Let anyone find this workspace in the Community directory. Turn it off to keep the profile reachable only via its handle.',
-  'user.workspaceProfile.settings.discoverable.hint':
-    'Members, chats, and private resources are never included regardless of this setting.',
-  'user.workspaceProfile.settings.discoverable.title': 'Show in Community directory',
   'user.workspaceProfile.settings.displayName.description':
     'This name appears on the Community profile.',
   'user.workspaceProfile.settings.members.column.member': 'Member',

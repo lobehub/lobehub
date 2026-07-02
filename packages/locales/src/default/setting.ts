@@ -2595,6 +2595,8 @@ When I am ___, I need ___
   'workspace.onboarding.step4Invite.finish': 'Finish',
   'workspace.onboarding.step4Invite.heading': 'Invite your team',
   'workspace.onboarding.step4Invite.invitedCount': 'Invited {{count}} member(s)',
+  'workspace.onboarding.step4Invite.someInviteFailed':
+    'Could not invite {{count}} teammate(s): {{emails}}. Try again from member settings.',
   'workspace.onboarding.step4Invite.seatLimitReached':
     'You can invite up to {{max}} teammate(s) with your current seats.',
   'workspace.onboarding.step4Invite.subtitle':

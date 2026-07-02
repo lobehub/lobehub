@@ -2255,6 +2255,7 @@
   "workspace.onboarding.step4Invite.heading": "邀请您的团队",
   "workspace.onboarding.step4Invite.invitedCount": "已邀请 {{count}} 位成员",
   "workspace.onboarding.step4Invite.seatLimitReached": "已达邀请上限：当前最多可邀请 {{max}} 位成员。",
+  "workspace.onboarding.step4Invite.someInviteFailed": "有 {{count}} 位未能邀请：{{emails}}，可稍后在成员设置中重试。",
   "workspace.onboarding.step4Invite.subtitle": "现在邀请成员加入工作区，或稍后在成员设置中添加。",
   "workspace.onboarding.step4Invite.subtitleWithExtraSeats": "套餐含 {{includedSeats}} 个免费席位，加购后最多扩展至 {{maxSeats}} 个席位。可现在邀请，或稍后在成员设置中添加。",
   "workspace.onboarding.step4Invite.subtitleWithLimit": "免费套餐最多支持 {{maxSeats}} 个席位（包括您）。可现在邀请，或稍后在成员设置中添加。",

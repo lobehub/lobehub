@@ -3,7 +3,6 @@ export interface UpdateCommunityWorkspaceProfileInput {
   bannerUrl?: string | null;
   description?: string;
   displayName?: string;
-  isDiscoverable?: boolean;
   namespace?: string;
   websiteUrl?: string;
 }
