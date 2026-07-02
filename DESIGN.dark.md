@@ -77,18 +77,18 @@ controls:
 
 # LobeHub (Dark)
 
-This is the **Dark theme** of LobeHub's design system. It is the companion to **[DESIGN.md](./DESIGN.md)** (Light) and shares everything but color: the same semantic token _names_, the same typography, spacing, radius, control, motion, shape, component, and voice rules, and the same four design values (Natural · Meaningful · Certainty · Growth).
+This is the Dark theme of LobeHub's design system. It is the companion to [DESIGN.md](./DESIGN.md) (Light) and shares everything but color: the same semantic token _names_, the same typography, spacing, radius, control, motion, shape, component, and voice rules, and the same four design values (Natural · Meaningful · Certainty · Growth).
 
-Read this file for the **dark color values**; read [DESIGN.md](./DESIGN.md) for all the guidance prose, which is theme-independent. As always: consume semantic tokens by name (`cssVar.colorText`, `cssVar.colorBgContainer`, …) so components follow the user's theme automatically — never hard-code the hex values below.
+Read this file for the dark color values; read [DESIGN.md](./DESIGN.md) for all the guidance prose, which is theme-independent. As always: consume semantic tokens by name (`cssVar.colorText`, `cssVar.colorBgContainer`, …) so components follow the user's theme automatically — never hard-code the hex values below.
 
 ## Colors
 
 Dark uses the same semantic-token model as Light, with the values inverted around a near-black canvas. A few things specific to dark:
 
-- **Surfaces lift as they rise.** The page canvas `colorBgLayout` is pure black (`#000000`); `colorBgContainer` (`#0d0d0d`) sits above it, and `colorBgElevated` (`#1a1a1a`) is lighter still for popovers, menus, and modals. Depth reads through getting _lighter_, the opposite of light theme. Keep `colorBgLayout` and `colorBgContainer` distinct — don't flatten the stack.
-- **Text is solid `gray`-scale neutrals**, not translucent: `colorText` `#ffffff` → `colorTextSecondary` `#aaaaaa` → `colorTextTertiary` `#6f6f6f` → `colorTextQuaternary` `#555555` (disabled). Rank information with this ramp rather than with color.
-- **Borders and fills stay translucent white** (`colorFill*`, `rgba(255,255,255,…)`), so they layer correctly over any dark surface. Use `colorBorderSecondary` for the everyday divider and `colorBorder` for a stronger edge.
-- **`colorPrimary` is monochrome by default** — near-white (`#eeeeee`) in dark — and only takes on a hue when the user picks a primary color, keeping the default UI calm.
-- **Functional hues shift for dark legibility.** Dark draws `colorError` from `red` and `colorInfo` from `blue` (Light uses `volcano` and `geekblue`), and `colorSuccess` brightens to `lime`. This is intentional — read the token, not a fixed hue.
+- Surfaces lift as they rise. The page canvas `colorBgLayout` is pure black (`#000000`); `colorBgContainer` (`#0d0d0d`) sits above it, and `colorBgElevated` (`#1a1a1a`) is lighter still for popovers, menus, and modals. Depth reads through getting _lighter_, the opposite of light theme. Keep `colorBgLayout` and `colorBgContainer` distinct — don't flatten the stack.
+- Text is solid `gray`-scale neutrals, not translucent: `colorText` `#ffffff` → `colorTextSecondary` `#aaaaaa` → `colorTextTertiary` `#6f6f6f` → `colorTextQuaternary` `#555555` (disabled). Rank information with this ramp rather than with color.
+- Borders and fills stay translucent white (`colorFill*`, `rgba(255,255,255,…)`), so they layer correctly over any dark surface. Use `colorBorderSecondary` for the everyday divider and `colorBorder` for a stronger edge.
+- `colorPrimary` is monochrome by default — near-white (`#eeeeee`) in dark — and only takes on a hue when the user picks a primary color, keeping the default UI calm.
+- Functional hues shift for dark legibility. Dark draws `colorError` from `red` and `colorInfo` from `blue` (Light uses `volcano` and `geekblue`), and `colorSuccess` brightens to `lime`. This is intentional — read the token, not a fixed hue.
 
-For elevation, motion, shapes, components, typography, layout, voice, and the do's and don'ts, see **[DESIGN.md](./DESIGN.md)** — they apply unchanged in dark.
+For elevation, motion, shapes, components, typography, layout, voice, and the do's and don'ts, see [DESIGN.md](./DESIGN.md) — they apply unchanged in dark.
