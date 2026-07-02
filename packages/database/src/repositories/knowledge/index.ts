@@ -72,10 +72,19 @@ export class KnowledgeRepo {
     )`;
   };
 
-  private documentOwnershipSql = (alias: 'd' | 'documents' = 'd') =>
-    this.workspaceId
-      ? sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId}`
-      : sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+  private documentOwnershipSql = (alias: 'd' | 'documents' = 'd') => {
+    if (!this.workspaceId) {
+      return sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+    }
+
+    // Workspace mode: members see all public rows; private rows are scoped to
+    // their creator. Mirrors `buildWorkspaceWhere` for the raw-SQL UNION paths.
+    return sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId} AND (
+      ${sql.raw(`${alias}.visibility`)} IS NULL
+      OR ${sql.raw(`${alias}.visibility`)} = 'public'
+      OR (${sql.raw(`${alias}.visibility`)} = 'private' AND ${sql.raw(`${alias}.user_id`)} = ${this.userId})
+    )`;
+  };
 
   /**
    * Query combined results from files and documents tables

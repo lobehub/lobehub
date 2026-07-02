@@ -41,6 +41,7 @@ vi.mock('antd', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  createStaticStyles: () => () => ({ styles: {} }),
   cssVar: {
     colorTextTertiary: 'colorTextTertiary',
   },

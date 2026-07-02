@@ -1038,6 +1038,16 @@ export const taskRouter = router({
         parentTaskId === undefined
           ? undefined
           : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
+
+      // Reparenting a public task under a private one breaks the parent
+      // visibility invariant from LOBE-10962 #3 — workspace members would
+      // still see the child while its new parent is hidden. `undefined`
+      // means "no change"; `null` clears the parent and is always safe.
+      if (resolvedParentTaskId) {
+        const newParent = await model.findById(resolvedParentTaskId);
+        ctx.taskService.assertParentVisibilityCompat(resolved.visibility, newParent?.visibility);
+      }
+
       const updateData =
         parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
       const task = await model.update(resolved.id, updateData);
