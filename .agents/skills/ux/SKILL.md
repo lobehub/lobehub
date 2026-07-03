@@ -64,6 +64,19 @@ titles, object labels) should read separately from state and actions (save statu
 sharing, panel toggles, overflow menus). When these roles are mixed, users have to infer
 whether an element describes the current object or acts on it.
 
+### Compose the canonical surface component, don't re-derive it・Certainty・Natural
+
+When a surface class already has a canonical component in this codebase — a sidebar row →
+`NavItem`, a collapsible group → `Accordion` / `GroupedAccordion`, an active surface →
+`Block variant='filled'` — **compose it**, don't rebuild the chrome from raw
+`<div>`/`<button>`/`<input>` + a bespoke `createStaticStyles` block. A hand-rolled parallel
+re-derives padding, hover/active states, alignment, and reveal-on-hover by hand, and drifts
+from its siblings on each one — the aggregate reads as "unpolished" even when every single gap
+is tiny. Before building a list / nav / master-detail panel, find the primitive the sibling
+surface uses (grep `NavItem`, `Accordion`) and compose it; fall to raw elements only for a
+genuinely novel row. See **[Read §1.10](references/read.md)** for the full pattern; the
+**react** component-priority rule covers the mechanics.
+
 ## Checklist modules
 
 Grouped by **interaction type** — the kind of thing the user is doing. Jump to the module
@@ -97,6 +110,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value. Conditional polling starts from **reactive state** (`shouldPoll` → `refreshInterval`), not a function-form `refreshInterval` that never schedules a first timer when its initial value is `0`.
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 - [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
+- [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 

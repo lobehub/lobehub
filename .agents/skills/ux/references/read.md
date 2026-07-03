@@ -407,3 +407,56 @@ paths that already exist and blesses the absent ones.
 - [ ] Registry/marketplace browse cards reflect owned / installed / added state on the tile, not only on the detail page. _(Meaningful)_
 - [ ] Trust / verified / official badges applied via one card contract, consistently across sibling registries (no "official on one list, nothing on its twin"). _(Certainty・Meaningful)_
 - [ ] Class-norm capabilities (owned-state, trust badge, counts, no-results≠first-run, contribute→in-app-submit) listed from comparables up front, so an absent one is caught. _(Certainty)_
+
+## 1.10 Reuse the canonical list / nav row — don't hand-roll sidebar chrome・Certainty・Natural
+
+A navigation / list **sidebar** (topic list, report list, resource tree — any master-detail
+left panel) is a **solved surface class** in this codebase, and the polish is in the shared
+primitive, not in the individual screen. Rows go through **`NavItem`**
+(`src/features/NavPanel/components/NavItem.tsx`); collapsible groups through
+**`Accordion` / `AccordionItem`** (via the shared **`GroupedAccordion`** engine); the active
+row through **`Block variant='filled'`**; spacing through `Flexbox` / `Block` `gap` /
+`padding` props, never hand-picked px. Composing those buys — for free, and identical to every
+sibling panel — the four things bespoke rows get wrong:
+
+1. **The highlight box _is_ the padded content box.** `NavItem` makes the interactive
+   `Block` the hover/active surface, so the highlight always aligns to the row and content
+   can't bleed to the panel edge. A hand-rolled row whose list-container padding, item
+   padding, and highlight radius are chosen independently produces a highlight rectangle that
+   floats / insets differently from the text, and text that runs to the viewport edge.
+2. **The app-wide active treatment.** `variant={active ? 'filled' : 'borderless'}` is _the_
+   active row everywhere. A bespoke `data-active` + `colorFillSecondary` is a slightly-off
+   look that no longer matches the panel next to it.
+3. **A right-aligned `extra` slot + hover-revealed actions**, already solved (timestamp /
+   count on the right; `.nav-item-actions` reveal on `:hover`). Re-implementing the
+   `opacity: 0 → 1` reveal by hand is code that will drift.
+4. **Grouping at scale.** The canonical sidebar offers by-project / by-status / by-time
+   collapsible `Accordion` groups; a hand-rolled panel is almost always a **flat, ungrouped
+   dump** that has no structure once the list grows past a screen.
+
+The row is also where **Edit** (inline rename) and **Act** (delete / overflow menu) live —
+hand-rolling the row drags those into raw `<input>` / raw `<button>` too, missing the shared
+inline-edit and confirm patterns. Each miss is individually tiny; the sum is exactly what
+"做的非常不成熟 /unpolished" means. **Before building any left-panel list, grep the sibling
+surface (`NavItem`, `Accordion`, `GroupedAccordion`) and compose it**; fall to raw elements
+only for a genuinely novel row. (Component-priority _mechanics_ are in **react**; this is the
+UX consequence — a bespoke row is a visible consistency + craft regression.)
+
+> ✅ **Topic sidebar** (`routes/(main)/agent/_layout/Sidebar/Topic/**`) composes `NavItem` rows
+> inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
+> by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
+> props — every row aligns to its highlight and matches every other panel in the app.
+> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
+> `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
+> search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in
+> CSS, and a **flat, ungrouped** list — so the hover box misaligns from the text, content bleeds
+> to the panel edge, and the surface reads as off-rhythm next to the topic sidebar it sits beside.
+
+**Checklist**
+
+- [ ] Sidebar / nav list rows go through the canonical `NavItem` (or the surface's shared row primitive), not a hand-rolled `<div>` / `<button>` — so hover/active is the app-wide treatment and the highlight box **is** the padded content box (no floating/misaligned highlight, no edge-bleed). _(Certainty)_
+- [ ] Active row uses `Block variant='filled'` (the shared active treatment), not a bespoke `data-active` + `colorFill*` re-derivation. _(Certainty)_
+- [ ] Grouping at scale reuses `Accordion` / `GroupedAccordion` (by-project / status / time), not a flat ungrouped dump once the list grows past a screen. _(Natural)_
+- [ ] Search box, inline-rename, and row actions reuse the shared input / editing / action-reveal patterns, not raw `<input>` / `<label>` + hand CSS. _(Certainty)_
+- [ ] Spacing/padding expressed as `Flexbox` / `Block` `gap` / `padding` props (inherits the sidebar rhythm), not hand-picked px constants. _(Natural)_

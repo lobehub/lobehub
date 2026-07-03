@@ -112,7 +112,52 @@ ship a root cause into a report that a one-line probe could have checked.
 
 ---
 
-## Case 5 — (placeholder) append the user's next negative feedback below
+## Case 5 — Attaching the stale "before" screenshot as a passed case's evidence (unlabeled)
+
+**Wrong approach**: after verifying a UI change on the live-code instance, I put
+BOTH the "after" (live) and the "before" (stale-build) screenshots into the same
+`cases[].evidence` array, unlabeled. The verify page renders every evidence image
+with its filename as a heading, so the user opened `01-drag-overlay.png` /
+`02-switcher-popover.png` (the STALE shots) and saw the old 28px gap + Apple logo —
+concluding "还是没贴边 / 还是 Apple logo, 你没改啊".
+
+**Why it's wrong**: a passed case's evidence must show the PASSING (after) state.
+An unlabeled before-shot sitting next to it reads as "the current result", making a
+correct fix look broken. Filenames are not captions — the viewer can't tell
+before from after.
+
+**What it breaks**: the user reads a green/passed report as a failure, loses trust,
+and it takes another round to re-explain.
+
+**Correct approach**: never ship a raw stale/before screenshot as standalone
+evidence. If a contrast helps, build ONE labeled before→after composite (e.g. sharp:
+crop the region from each, add a "BEFORE …/AFTER …" header bar, place side by side)
+and attach that single image. Evidence for a passed case = the after state (or a
+clearly-labeled comparison), full stop.
+
+## Case 6 — `app://renderer` desktop instance runs the STALE built bundle, not working-tree code
+
+**Wrong approach**: driving the already-running desktop app on CDP 9222 (URL
+`app://renderer/…`) to verify a working-tree UI change, and eyeballing the first
+screenshot as "looks changed".
+
+**Why it's wrong**: the resident desktop app serves a BUILT renderer snapshot — it
+does not reflect uncommitted/HMR src changes. The measured `::before` inset was
+still 28px (old) even though the code said 10px. Eyeballing nearly passed it.
+
+**What it breaks**: verifying against code that isn't your change → a false pass (or
+false fail), on the wrong bundle entirely.
+
+**Correct approach**: to verify working-tree UI in the desktop shape, start an
+isolated dev instance that loads live code — `electron-dev.sh start <id>` runs
+`electron-vite dev` (its own CDP/Vite, copied login), which DOES bundle your src
+changes. Prove it's live by MEASURING a known-changed value (e.g. computed
+`::before` inset 10px vs old 28px) before trusting any screenshot. Don't kill the
+user's resident 9222 app — use a pool id. Also: `agent-browser open` mangles
+`app://` → `https://app//…` (ERR\_CONNECTION\_CLOSED); navigate inside the SPA by
+clicking its own `<a href>` links, not `open`.
+
+## Case 7 — (placeholder) append the user's next negative feedback below
 
 <!-- New case template:
 ## Case N — one-line summary of the mistake
