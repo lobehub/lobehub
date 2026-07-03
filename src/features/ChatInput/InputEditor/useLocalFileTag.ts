@@ -1,13 +1,13 @@
 import type { ISlashMenuOption } from '@lobehub/editor';
 
-export interface UseLocalFileMentionResult {
-  enableLocalFileMention: boolean;
+export interface UseLocalFileTagResult {
+  enableLocalFileTag: boolean;
   searchLocalFiles: (matchingString: string) => Promise<ISlashMenuOption[]>;
 }
 
 const searchLocalFiles = async (): Promise<ISlashMenuOption[]> => [];
 
-export const useLocalFileMention = (): UseLocalFileMentionResult => ({
-  enableLocalFileMention: false,
+export const useLocalFileTag = (): UseLocalFileTagResult => ({
+  enableLocalFileTag: false,
   searchLocalFiles,
 });

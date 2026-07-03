@@ -12,7 +12,7 @@ import {
   type Spread,
 } from 'lexical';
 
-export type SerializedLocalFileMentionNode = Spread<
+export type SerializedLocalFileTagNode = Spread<
   {
     isDirectory: boolean;
     name: string;
@@ -28,21 +28,21 @@ export type SerializedLocalFileMentionNode = Spread<
  * `@`) and — crucially — own its `<localFile … />` markdown writer via a plugin
  * that is always registered, independent of whether `mentionOption` is enabled.
  */
-export class LocalFileMentionNode extends DecoratorNode<any> {
+export class LocalFileTagNode extends DecoratorNode<any> {
   __name: string;
   __path: string;
   __isDirectory: boolean;
 
   static getType(): string {
-    return 'local-file-mention';
+    return 'local-file-tag';
   }
 
-  static clone(node: LocalFileMentionNode): LocalFileMentionNode {
-    return new LocalFileMentionNode(node.__name, node.__path, node.__isDirectory, node.__key);
+  static clone(node: LocalFileTagNode): LocalFileTagNode {
+    return new LocalFileTagNode(node.__name, node.__path, node.__isDirectory, node.__key);
   }
 
-  static importJSON(serializedNode: SerializedLocalFileMentionNode): LocalFileMentionNode {
-    return $createLocalFileMentionNode(
+  static importJSON(serializedNode: SerializedLocalFileTagNode): LocalFileTagNode {
+    return $createLocalFileTagNode(
       serializedNode.name,
       serializedNode.path,
       serializedNode.isDirectory,
@@ -78,7 +78,7 @@ export class LocalFileMentionNode extends DecoratorNode<any> {
 
   createDOM(config: EditorConfig): HTMLElement {
     const element = document.createElement('span');
-    addClassNamesToElement(element, config.theme.localFileMention);
+    addClassNamesToElement(element, config.theme.localFileTag);
     return element;
   }
 
@@ -94,7 +94,7 @@ export class LocalFileMentionNode extends DecoratorNode<any> {
     return false;
   }
 
-  exportJSON(): SerializedLocalFileMentionNode {
+  exportJSON(): SerializedLocalFileTagNode {
     return {
       ...super.exportJSON(),
       isDirectory: this.__isDirectory,
@@ -103,12 +103,12 @@ export class LocalFileMentionNode extends DecoratorNode<any> {
     };
   }
 
-  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedLocalFileMentionNode>): this {
+  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedLocalFileTagNode>): this {
     return super.updateFromJSON(serializedNode);
   }
 
   decorate(editor: LexicalEditor): any {
-    const decorator = getKernelFromEditor(editor)?.getDecorator(LocalFileMentionNode.getType());
+    const decorator = getKernelFromEditor(editor)?.getDecorator(LocalFileTagNode.getType());
     if (!decorator) return null;
     if (typeof decorator === 'function') return decorator(this, editor);
     return {
@@ -118,16 +118,16 @@ export class LocalFileMentionNode extends DecoratorNode<any> {
   }
 }
 
-export function $createLocalFileMentionNode(
+export function $createLocalFileTagNode(
   name: string,
   path: string,
   isDirectory = false,
-): LocalFileMentionNode {
-  return $applyNodeReplacement(new LocalFileMentionNode(name, path, isDirectory));
+): LocalFileTagNode {
+  return $applyNodeReplacement(new LocalFileTagNode(name, path, isDirectory));
 }
 
-export function $isLocalFileMentionNode(
+export function $isLocalFileTagNode(
   node: LexicalNode | null | undefined,
-): node is LocalFileMentionNode {
-  return node instanceof LocalFileMentionNode;
+): node is LocalFileTagNode {
+  return node instanceof LocalFileTagNode;
 }

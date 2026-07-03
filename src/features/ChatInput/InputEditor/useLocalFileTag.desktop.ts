@@ -14,15 +14,15 @@ import { useAgentId } from '../hooks/useAgentId';
 import { compactDirectoryTail, compactFileName } from './MentionMenu/localFileDisplay';
 import LocalFileIcon from './MentionMenu/LocalFileIcon';
 
-const MAX_LOCAL_FILE_MENTION_ITEMS = 20;
-const log = debug('chat-input:local-file-mention');
+const MAX_LOCAL_FILE_TAG_ITEMS = 20;
+const log = debug('chat-input:local-file-tag');
 
-export interface UseLocalFileMentionResult {
-  enableLocalFileMention: boolean;
+export interface UseLocalFileTagResult {
+  enableLocalFileTag: boolean;
   searchLocalFiles: (matchingString: string) => Promise<ISlashMenuOption[]>;
 }
 
-export const useLocalFileMention = (): UseLocalFileMentionResult => {
+export const useLocalFileTag = (): UseLocalFileTagResult => {
   const agentId = useAgentId();
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
@@ -39,14 +39,14 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
   const searchDeviceId =
     targetDeviceId && targetDeviceId !== currentDeviceId ? targetDeviceId : undefined;
 
-  const enableLocalFileMention = !!heterogeneousType || isLocalSystemEnabled;
+  const enableLocalFileTag = !!heterogeneousType || isLocalSystemEnabled;
 
   const searchLocalFiles = useCallback(
     async (matchingString: string): Promise<ISlashMenuOption[]> => {
       const keywords = matchingString.trim();
-      if (!enableLocalFileMention || !keywords) {
+      if (!enableLocalFileTag || !keywords) {
         log('Skip search', {
-          enableLocalFileMention,
+          enableLocalFileTag,
           hasKeywords: !!keywords,
           matchingString,
           workingDirectory,
@@ -57,14 +57,14 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
       try {
         log('Search indexed local files', {
           keywords,
-          limit: MAX_LOCAL_FILE_MENTION_ITEMS,
+          limit: MAX_LOCAL_FILE_TAG_ITEMS,
           workingDirectory,
         });
         if (!workingDirectory) return [];
 
         const result = await projectFileService.searchProjectFiles({
           deviceId: searchDeviceId,
-          limit: MAX_LOCAL_FILE_MENTION_ITEMS,
+          limit: MAX_LOCAL_FILE_TAG_ITEMS,
           query: keywords,
           scope: workingDirectory,
         });
@@ -106,12 +106,12 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
           };
         });
       } catch (error) {
-        console.error('[useLocalFileMention] Failed to search local files:', error);
+        console.error('[useLocalFileTag] Failed to search local files:', error);
         return [];
       }
     },
-    [enableLocalFileMention, searchDeviceId, workingDirectory],
+    [enableLocalFileTag, searchDeviceId, workingDirectory],
   );
 
-  return { enableLocalFileMention, searchLocalFiles };
+  return { enableLocalFileTag, searchLocalFiles };
 };

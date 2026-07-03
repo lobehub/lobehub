@@ -16,31 +16,31 @@ import {
 } from 'lexical';
 
 import {
-  $createLocalFileMentionNode,
-  $isLocalFileMentionNode,
-  LocalFileMentionNode,
-  type SerializedLocalFileMentionNode,
-} from './LocalFileMentionNode';
+  $createLocalFileTagNode,
+  $isLocalFileTagNode,
+  LocalFileTagNode,
+  type SerializedLocalFileTagNode,
+} from './LocalFileTagNode';
 
-export interface InsertLocalFileMentionPayload {
+export interface InsertLocalFileTagPayload {
   isDirectory?: boolean;
   name: string;
   path: string;
 }
 
-export const INSERT_LOCAL_FILE_MENTION_COMMAND = createCommand<InsertLocalFileMentionPayload>(
-  'INSERT_LOCAL_FILE_MENTION_COMMAND',
+export const INSERT_LOCAL_FILE_TAG_COMMAND = createCommand<InsertLocalFileTagPayload>(
+  'INSERT_LOCAL_FILE_TAG_COMMAND',
 );
 
 type IEditorKernel = ReturnType<typeof getKernelFromEditor>;
 
-export interface LocalFileMentionPluginOptions {
-  decorator: (node: LocalFileMentionNode, editor: LexicalEditor) => any;
-  theme?: { localFileMention?: string };
+export interface LocalFileTagPluginOptions {
+  decorator: (node: LocalFileTagNode, editor: LexicalEditor) => any;
+  theme?: { localFileTag?: string };
 }
 
 /**
- * Owns the `local-file-mention` node: its decorator, its `<localFile … />`
+ * Owns the `local-file-tag` node: its decorator, its `<localFile … />`
  * markdown writer, and its insert command. Because this plugin is registered
  * unconditionally (via `CHAT_INPUT_EMBED_PLUGINS`), the markdown serialization
  * is always available — unlike the generic mention writer, which is only wired
@@ -48,24 +48,24 @@ export interface LocalFileMentionPluginOptions {
  * serializing to the tag the gateway/device run needs, even on the web client
  * with no other mention categories.
  */
-export class LocalFileMentionPlugin {
-  static pluginName = 'LocalFileMentionPlugin';
+export class LocalFileTagPlugin {
+  static pluginName = 'LocalFileTagPlugin';
 
-  config?: LocalFileMentionPluginOptions;
+  config?: LocalFileTagPluginOptions;
   private kernel: IEditorKernel;
 
-  constructor(kernel: IEditorKernel, config?: LocalFileMentionPluginOptions) {
+  constructor(kernel: IEditorKernel, config?: LocalFileTagPluginOptions) {
     this.kernel = kernel;
     this.config = config;
 
-    kernel.registerNodes([LocalFileMentionNode]);
+    kernel.registerNodes([LocalFileTagNode]);
 
     if (config?.theme) {
       kernel.registerThemes(config.theme);
     }
 
-    kernel.registerDecorator(LocalFileMentionNode.getType(), (node, editor) => {
-      return config?.decorator ? config.decorator(node as LocalFileMentionNode, editor) : null;
+    kernel.registerDecorator(LocalFileTagNode.getType(), (node, editor) => {
+      return config?.decorator ? config.decorator(node as LocalFileTagNode, editor) : null;
     });
   }
 
@@ -78,8 +78,8 @@ export class LocalFileMentionPlugin {
   private registerMarkdown(): void {
     const mdService = this.kernel.requireService(IMarkdownShortCutService);
 
-    mdService?.registerMarkdownWriter(LocalFileMentionNode.getType(), (ctx: any, node: any) => {
-      if ($isLocalFileMentionNode(node)) {
+    mdService?.registerMarkdownWriter(LocalFileTagNode.getType(), (ctx: any, node: any) => {
+      if ($isLocalFileTagNode(node)) {
         const name = escapeXmlAttr(node.name);
         const path = escapeXmlAttr(node.path);
         const isDirectory = node.isDirectory ? ' isDirectory' : '';
@@ -90,14 +90,10 @@ export class LocalFileMentionPlugin {
 
   private registerCommand(editor: LexicalEditor): void {
     editor.registerCommand(
-      INSERT_LOCAL_FILE_MENTION_COMMAND,
+      INSERT_LOCAL_FILE_TAG_COMMAND,
       (payload) => {
         editor.update(() => {
-          const node = $createLocalFileMentionNode(
-            payload.name,
-            payload.path,
-            !!payload.isDirectory,
-          );
+          const node = $createLocalFileTagNode(payload.name, payload.path, !!payload.isDirectory);
           // Trailing space so the user can keep typing without adding one manually.
           $insertNodes([node, $createTextNode(' ')]);
           if ($isRootOrShadowRoot(node.getParentOrThrow())) {
@@ -113,10 +109,10 @@ export class LocalFileMentionPlugin {
   private registerLiteXml(): void {
     const xmlService = this.kernel.requireService(ILitexmlService);
 
-    xmlService?.registerXMLWriter(LocalFileMentionNode.getType(), (node: any, ctx: any) => {
-      if ($isLocalFileMentionNode(node)) {
-        return ctx.createXmlNode('localFileMention', {
-          isDirectory: node.isDirectory ? 'true' : '',
+    xmlService?.registerXMLWriter(LocalFileTagNode.getType(), (node: any, ctx: any) => {
+      if ($isLocalFileTagNode(node)) {
+        return ctx.createXmlNode('localFile', {
+          ...(node.isDirectory ? { isDirectory: 'true' } : {}),
           name: node.name,
           path: node.path,
         });
@@ -124,18 +120,23 @@ export class LocalFileMentionPlugin {
       return false;
     });
 
-    xmlService?.registerXMLReader('localFileMention', (xmlElement: any) => {
+    const readLocalFile = (xmlElement: any) => {
       return {
-        isDirectory: xmlElement.getAttribute('isDirectory') === 'true',
+        isDirectory:
+          xmlElement.hasAttribute?.('isDirectory') ||
+          xmlElement.getAttribute('isDirectory') === 'true',
         name: xmlElement.getAttribute('name') || '',
         path: xmlElement.getAttribute('path') || '',
-        type: LocalFileMentionNode.getType(),
+        type: LocalFileTagNode.getType(),
         version: 1,
-      } satisfies SerializedLocalFileMentionNode;
-    });
+      } satisfies SerializedLocalFileTagNode;
+    };
+
+    xmlService?.registerXMLReader('localFile', readLocalFile);
+    xmlService?.registerXMLReader('localFileTag', readLocalFile);
   }
 
   destroy(): void {
-    this.kernel.unregisterDecorator?.(LocalFileMentionNode.getType());
+    this.kernel.unregisterDecorator?.(LocalFileTagNode.getType());
   }
 }

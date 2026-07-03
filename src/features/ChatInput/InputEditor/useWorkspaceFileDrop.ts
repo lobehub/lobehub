@@ -3,7 +3,7 @@ import type React from 'react';
 import { useCallback } from 'react';
 
 import { useChatInputStore } from '../store';
-import { INSERT_LOCAL_FILE_MENTION_COMMAND } from './LocalFileMention';
+import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { readWorkspaceFileDragData } from './workspaceFileDragData';
 
 interface UseWorkspaceFileDropResult {
@@ -17,7 +17,7 @@ interface UseWorkspaceFileDropResult {
  * it never interferes with the file-upload drop zone (keyed off `Files`) or the
  * skill-chip drop (keyed off its own MIME).
  *
- * On drop it inserts a `LocalFileMention` node — the same compact icon+name chip
+ * On drop it inserts a `LocalFileTag` node — the same compact icon+name chip
  * used by the `@`-menu and folder-drop paths. That node owns its
  * `<localFile … />` markdown writer via an always-registered plugin, so the drop
  * serializes correctly even when the generic `mentionOption` writer is disabled
@@ -45,7 +45,7 @@ export const useWorkspaceFileDrop = (): UseWorkspaceFileDropResult => {
       if (!editor) return;
 
       editor.getLexicalEditor()?.focus();
-      editor.dispatchCommand(INSERT_LOCAL_FILE_MENTION_COMMAND, {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
         isDirectory: payload.isDirectory,
         name: payload.name,
         path: payload.path,

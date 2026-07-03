@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useLocalFileMention } from './useLocalFileMention.desktop';
+import { useLocalFileTag } from './useLocalFileTag.desktop';
 
 const { agentState, chatState, electronState, searchProjectFilesMock } = vi.hoisted(() => ({
   agentState: {
@@ -67,7 +67,7 @@ vi.mock('./MentionMenu/LocalFileIcon', () => ({
   default: () => null,
 }));
 
-describe('useLocalFileMention.desktop', () => {
+describe('useLocalFileTag.desktop', () => {
   beforeEach(() => {
     agentState.agencyConfig = undefined;
     agentState.isLocalSystemEnabled = true;
@@ -84,7 +84,7 @@ describe('useLocalFileMention.desktop', () => {
   });
 
   it('does not pass the local gateway device id for local desktop file search', async () => {
-    const { result } = renderHook(() => useLocalFileMention());
+    const { result } = renderHook(() => useLocalFileTag());
 
     await result.current.searchLocalFiles('button');
 
@@ -111,7 +111,7 @@ describe('useLocalFileMention.desktop', () => {
       source: 'git',
     });
 
-    const { result } = renderHook(() => useLocalFileMention());
+    const { result } = renderHook(() => useLocalFileTag());
 
     const items = await result.current.searchLocalFiles('readme');
 
@@ -136,7 +136,7 @@ describe('useLocalFileMention.desktop', () => {
     };
     agentState.workingDirectory = '/remote/repo';
 
-    const { result } = renderHook(() => useLocalFileMention());
+    const { result } = renderHook(() => useLocalFileTag());
 
     await result.current.searchLocalFiles('button');
 

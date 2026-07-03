@@ -45,12 +45,12 @@ import {
 } from './ActionTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
-import { INSERT_LOCAL_FILE_MENTION_COMMAND } from './LocalFileMention';
+import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
-import { useLocalFileMention } from './useLocalFileMention';
+import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(
@@ -139,7 +139,7 @@ const InputEditor = memo<{
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
 
-  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
+  const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
   const mentionSections = useMemo<ISlashSectionOption[]>(
@@ -211,7 +211,7 @@ const InputEditor = memo<{
     [categories, fuse, mentionSections, searchLocalFiles, t],
   );
 
-  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileMention);
+  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileTag);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
@@ -435,7 +435,7 @@ const InputEditor = memo<{
     if (mention.metadata?.type === 'topic') {
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
-    // localFile references are their own node (LocalFileMentionNode) and serialize
+    // localFile references are their own node (LocalFileTagNode) and serialize
     // via that plugin's always-registered markdown writer — they never reach this
     // generic mention writer, which is only wired up when mentionOption is enabled.
     return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
@@ -455,7 +455,7 @@ const InputEditor = memo<{
       };
       editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
     } else if (option.metadata?.type === 'localFile') {
-      editor.dispatchCommand(INSERT_LOCAL_FILE_MENTION_COMMAND, {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
         isDirectory: !!option.metadata.isDirectory,
         name: String(option.metadata.name ?? option.label),
         path: String(option.metadata.path ?? ''),
