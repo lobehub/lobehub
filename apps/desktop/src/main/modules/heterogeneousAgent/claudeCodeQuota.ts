@@ -29,6 +29,19 @@ const EXTERNAL_AUTH_ENV_KEYS = [
   'ANTHROPIC_BASE_URL',
 ] as const;
 
+// Boolean-ish flags that route Claude Code to a third-party provider
+// (AWS Bedrock / Google Vertex / Mantle), whose quotas are billed there —
+// the Anthropic subscription quota does not apply to those runs either.
+const EXTERNAL_ROUTING_FLAG_ENV_KEYS = [
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_MANTLE',
+  'CLAUDE_CODE_USE_VERTEX',
+] as const;
+
+// The CLI treats these as booleans, so "0"/"false" must not count as enabled.
+const isRoutingFlagEnabled = (value: string | undefined) =>
+  !!value && !['0', 'false'].includes(value.trim().toLowerCase());
+
 export interface FetchClaudeCodeQuotaOptions {
   claudeConfigDirPath?: string | null;
   env?: NodeJS.ProcessEnv;
@@ -258,7 +271,9 @@ const mapScopedWeekly = (payload: OAuthUsageResponse): ClaudeCodeScopedWeekly | 
 export const fetchClaudeCodeQuota = async (
   options: FetchClaudeCodeQuotaOptions = {},
 ): Promise<ClaudeCodeQuotaSnapshot> => {
-  const externalAuthKey = EXTERNAL_AUTH_ENV_KEYS.find((key) => options.env?.[key]);
+  const externalAuthKey =
+    EXTERNAL_AUTH_ENV_KEYS.find((key) => asNonEmpty(options.env?.[key])) ??
+    EXTERNAL_ROUTING_FLAG_ENV_KEYS.find((key) => isRoutingFlagEnabled(options.env?.[key]));
   if (externalAuthKey) {
     return unavailableSnapshot(
       'external-auth',
