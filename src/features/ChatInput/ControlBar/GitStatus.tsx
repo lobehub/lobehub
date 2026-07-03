@@ -243,7 +243,7 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
 
     const currentConfig = activeTopicMetadata.workingDirectoryConfig;
     const currentWorkingDirectory =
-      activeTopicMetadata.workingDirectory ?? getWorkingDirEffectivePath(currentConfig);
+      getWorkingDirEffectivePath(currentConfig) ?? activeTopicMetadata.workingDirectory;
     if (currentWorkingDirectory !== path) return;
 
     const github = toGithubMetadata(prData);

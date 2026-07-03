@@ -1,7 +1,10 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
+import {
+  getTopicMetadataWorkingDirectoryEffectivePath,
+  getTopicMetadataWorkingDirectorySourcePath,
+} from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
@@ -107,12 +110,14 @@ const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
 
 const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => {
   const config = metadata?.workingDirectoryConfig;
-  const workingDirectory = metadata?.workingDirectory ?? getWorkingDirEffectivePath(config);
+  const workingDirectory = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
   if (!workingDirectory) return;
 
   const branch = config?.git?.branch;
   const dirName = getDirName(workingDirectory);
-  const sourceName = config?.git?.isWorktree ? getDirName(config.path) : undefined;
+  const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
+  const sourceName =
+    sourcePath && sourcePath !== workingDirectory ? getDirName(sourcePath) : undefined;
   const pathLabel = sourceName && sourceName !== dirName ? `${sourceName}/${dirName}` : dirName;
 
   return {

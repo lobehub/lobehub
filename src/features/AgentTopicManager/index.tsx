@@ -1,6 +1,10 @@
 'use client';
 
-import { groupTopicsByProject, groupTopicsByUpdatedTime } from '@lobechat/utils/client/topic';
+import {
+  getTopicWorkingDirectorySourcePath,
+  groupTopicsByProject,
+  groupTopicsByUpdatedTime,
+} from '@lobechat/utils/client/topic';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +24,7 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
-  getProjectLabel,
+  getProjectFilterLabel,
   matchesGroup,
   matchesStatus,
   matchesTimeRange,
@@ -144,9 +148,9 @@ const AgentTopicManager = memo(() => {
   const projects = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of baseTopics) {
-      const wd = t.metadata?.workingDirectory;
+      const wd = getTopicWorkingDirectorySourcePath(t);
       if (wd && !map.has(wd)) {
-        map.set(wd, getProjectLabel(t) ?? wd);
+        map.set(wd, getProjectFilterLabel(t) ?? wd);
       }
     }
     return Array.from(map, ([value, label]) => ({ label, value }));

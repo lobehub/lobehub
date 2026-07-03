@@ -583,8 +583,8 @@ export class ConversationLifecycleActionImpl {
           })
         : undefined;
     const workingDirectory =
-      existingTopic?.metadata?.workingDirectory ??
       getWorkingDirEffectivePath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      existingTopic?.metadata?.workingDirectory ??
       agentWorkingDirectory;
     const workingDirectoryConfig =
       existingTopic?.metadata?.workingDirectoryConfig ??
