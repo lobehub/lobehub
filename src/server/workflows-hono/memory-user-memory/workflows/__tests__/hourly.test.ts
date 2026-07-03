@@ -35,6 +35,10 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
   normalizeMemoryExtractionPayload: (payload: unknown) => payload,
 }));
 
+vi.mock('../runGuard', () => ({
+  assertMemoryWorkflowContextAllowed: vi.fn(),
+}));
+
 describe('hourlyWorkflowHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();

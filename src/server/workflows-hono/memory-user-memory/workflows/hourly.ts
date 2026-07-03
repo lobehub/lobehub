@@ -12,10 +12,12 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
+import { assertMemoryWorkflowContextAllowed } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 200;
 const USER_BATCH_SIZE = 20;
+const WORKFLOW_PATH = 'api/workflows/memory-user-memory/call-cron-hourly-analysis';
 
 const { webhook, upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
@@ -25,6 +27,7 @@ export const hourlyWorkflowHandler = async (
   context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
 ) => {
   const { cursor, dryRun } = context.requestPayload || {};
+  await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
 
   const baseUrl = resolveBaseUrl();
   if (!baseUrl) {
@@ -39,9 +42,10 @@ export const hourlyWorkflowHandler = async (
   }
 
   const executor = await MemoryExtractionExecutor.create();
-  const userBatch = await context.run(
-    `memory:user-memory:hourly:list-users:${parsedCursor?.id || 'root'}`,
-    () => executor.getUsersForHourlyExtraction(USER_PAGE_SIZE, parsedCursor),
+  const listUsersStepName = `memory:user-memory:hourly:list-users:${parsedCursor?.id || 'root'}`;
+  await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, listUsersStepName);
+  const userBatch = await context.run(listUsersStepName, () =>
+    executor.getUsersForHourlyExtraction(USER_PAGE_SIZE, parsedCursor),
   );
 
   const userIds = userBatch.ids;
@@ -59,8 +63,11 @@ export const hourlyWorkflowHandler = async (
   if (!dryRun) {
     const batches = chunk(userIds, USER_BATCH_SIZE);
     await Promise.all(
-      batches.map((batchUserIds, index) =>
-        context.run(`memory:user-memory:hourly:trigger-users:${index}`, () =>
+      batches.map(async (batchUserIds, index) => {
+        const stepName = `memory:user-memory:hourly:trigger-users:${index}`;
+        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+
+        return context.run(stepName, () =>
           MemoryExtractionWorkflowService.triggerProcessUsers(
             buildWorkflowPayloadInput(
               normalizeMemoryExtractionPayload({
@@ -72,13 +79,15 @@ export const hourlyWorkflowHandler = async (
             ),
             { extraHeaders: upstashWorkflowExtraHeaders },
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 
   if (nextCursor) {
-    await context.run('memory:user-memory:hourly:schedule-next-page', () =>
+    const stepName = 'memory:user-memory:hourly:schedule-next-page';
+    await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+    await context.run(stepName, () =>
       MemoryExtractionWorkflowService.triggerHourly(
         {
           baseUrl,
