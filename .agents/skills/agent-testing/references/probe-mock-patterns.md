@@ -210,7 +210,41 @@
   screenshot/query; a click-the-Retry-then-observe flow is timing-flaky — fire it
   via `button.click()` in `eval` right after re-triggering, or extend the toast
   duration.
-- **D6. `agent-browser screenshot` can WEDGE the daemon; `eval`/`get` still work.**
+- **D6. The singleton hover action bar is hard to drive; its icons are
+  `div[role=button]`, NOT `<button>`.** The per-message action bar
+  (`SingletonMessageActionsBar`) is one portal that moves via DOM + a
+  freeze/commit `MutationObserver`, so it appears only while hovering and
+  re-hides on the next commit tick. Gotchas that wasted a run:
+  - `host.querySelectorAll('button')` returns 0 — the ActionIcon items render as
+    `<div role="button">`. Query `[role="button"]` (or the broad
+    `button,[role=button],[class*=ActionIcon]`).
+  - Between two evals the bar can vanish (commit tick). Do hover + inspect + act
+    in as few steps as possible.
+  - ✅ WORKS to open the overflow menu on a message and read its items:
+    ```bash
+    S="--session s9224 --cdp 9224"
+    agent-browser $S hover "#<messageId>" # ChatItem root id = message id
+    sleep 1.5
+    # click the LAST role=button in the host = the "…" overflow trigger
+    agent-browser $S eval '(function(){var h=document.querySelector("[data-singleton-message-action-bar-host]");var b=h&&h.querySelectorAll("[role=button]");if(!b||!b.length)return "no-bar";b[b.length-1].click();return "clicked";})()'
+    sleep 1
+    agent-browser $S screenshot /abs/menu.png
+    agent-browser $S eval '(function(){var t=[];document.querySelectorAll("[role=menuitem],li").forEach(function(i){var s=(i.innerText||"").trim();if(s)t.push(s);});return JSON.stringify(Array.from(new Set(t)));})()'
+    ```
+    A programmatic `.click()` on the ellipsis DOES open the antd dropdown (it sets
+    `data-popup-open`, which also freezes the bar so it won't vanish). The action
+    labels are localized (`分享`/`多选`/`删除` = share/select/del).
+- **D7. To get a _finished_ hetero (CC/Codex) turn that ENDS on a tool block**
+  (last child has tools → `getGroupLatestMessageWithoutTools` returns undefined,
+  the `!contentId` action-bar path): send a single long tool call (e.g.
+  `用 Bash 工具运行 sleep 20`) and, the moment the group's last child is a running
+  tool, call `stopGenerateMessage()` in the SAME eval to avoid the race where CC
+  appends a trailing text summary (which would give it a text last-block and a
+  defined contentId). Poll-then-stop-atomically:
+  ```bash
+  agent-browser $S eval '(function(){var c=window.__LOBE_STORES.chat();var t=c.activeTopicId;var a=c.messagesMap["main_"+c.activeAgentId+"_"+t]||[];var g=a.filter(m=>m.role==="assistantGroup").pop();var lc=g&&g.children&&g.children.at(-1);var running=Object.values(c.operations||{}).some(o=>o.status==="running");if(lc&&(lc.tools||[]).length&&running){c.stopGenerateMessage();return "STOPPED";}return "wait";})()'
+  ```
+- **D8. `agent-browser screenshot` can WEDGE the daemon; `eval`/`get` still work.**
   agent-browser is a daemon (`~/.agent-browser/default.sock`, one serialized
   socket). A screenshot RPC that is interrupted — a mis-invoked flag, a command
   the harness auto-backgrounds then kills, `--full` on a giant page — leaves the
@@ -218,23 +252,23 @@
   `Resource temporarily unavailable (os error 35)` / `CDP response channel closed`
   while `eval`/`get url` keep working. **Not** a display-sleep or permission issue.
   - **Works**: reset with `agent-browser close --all` (respawns the daemon), or
-    skip the daemon entirely (D7).
-- **D7. ✅ WORKS — raw-CDP screenshot, bypasses the daemon.**
+    skip the daemon entirely (D9).
+- **D9. ✅ WORKS — raw-CDP screenshot, bypasses the daemon.**
   `scripts/cdp-screenshot.sh [--port 9222] [--out x.png] [--full] [--check]`
   opens its own ws to the target, does one `Page.captureScreenshot`, closes
-  (\~60ms). Immune to the D6 wedge, and **verified robust when the display is
+  (\~60ms). Immune to the D8 wedge, and **verified robust when the display is
   ASLEEP and when the window is MINIMIZED/occluded** (Chromium forces a compositor
   frame). Use it for Electron evidence and as a preflight (`--check` → exit 0 iff a
   real, non-black frame was captured). Needs repo `node_modules/ws` (resolved via
   NODE\_PATH by the wrapper).
-- **D8. OS `screencapture` is BLACK when the display is asleep/locked/screensaver.**
-  Distinct from D6/D7: `screencapture` (and `capture-app-window.sh`, osascript
+- **D10. OS `screencapture` is BLACK when the display is asleep/locked/screensaver.**
+  Distinct from D8/D9: `screencapture` (and `capture-app-window.sh`, osascript
   grabs) captures the physical framebuffer, so an idle-slept display → a uniformly
   black PNG (mean/max=0; a full-screen black frame has a telltale identical byte
   size). Permission can be fine. Gate with `scripts/check-screen-recording.sh`
   (checks `CGPreflightScreenCaptureAccess` + a real-frame blackness probe) and keep
   the display awake for the whole run: `caffeinate -dimsu &` (or `caffeinate -u`
-  to wake it). CDP capture (D7) does not have this problem.
+  to wake it). CDP capture (D9) does not have this problem.
 
 ---
 
