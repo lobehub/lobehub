@@ -31,14 +31,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
   pulse1: css`
     animation: ${airdropPulse} 3s ease-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 
   pulse2: css`
     animation: ${airdropPulse} 3s ease-out 1.2s infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 
   pulse3: css`
     animation: ${airdropPulse} 3s ease-out 1.8s infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   pulseBase: css`
     pointer-events: none;
