@@ -9,6 +9,7 @@ import { Loader2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
@@ -50,10 +51,18 @@ const ModelAssignmentsForm = memo(() => {
     (s) => [settingsSelectors.defaultAgent(s), settingsSelectors.currentSystemAgent(s)],
     isEqual,
   );
-  const [updateDefaultAgent, updateSystemAgent, isUserStateInit] = useUserStore((s) => [
+  const [
+    updateDefaultAgent,
+    updateSystemAgent,
+    isUserStateInit,
+    isUserStateInitError,
+    refreshUserState,
+  ] = useUserStore((s) => [
     s.updateDefaultAgent,
     s.updateSystemAgent,
     s.isUserStateInit,
+    s.isUserStateInitError,
+    s.refreshUserState,
   ]);
   const [loadingKey, setLoadingKey] = useState<LoadingKey>();
 
@@ -61,7 +70,19 @@ const ModelAssignmentsForm = memo(() => {
     if (loadingKey === 'defaultAgent') setLoadingKey(undefined);
   }, [defaultAgent.config.model, defaultAgent.config.provider, loadingKey]);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+  if (!isUserStateInit) {
+    // A failed user-state init must show error + Retry, not a permanent skeleton
+    // (LOBE-11118).
+    if (isUserStateInitError)
+      return (
+        <AsyncError
+          error={isUserStateInitError}
+          variant={'block'}
+          onRetry={() => refreshUserState()}
+        />
+      );
+    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+  }
 
   const updateDefaultAgentModel = async ({
     model,

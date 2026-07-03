@@ -20,6 +20,7 @@ import type React from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -122,10 +123,21 @@ const SkillList = memo<SkillListProps>(
     ]);
 
     useFetchInstalledPlugins();
-    useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-    useFetchUserComposioConnections(isComposioEnabled);
-    useFetchAgentSkills(true);
-    useFetchUninstalledBuiltinTools(true);
+    // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
+    // of a fake-empty list (each hook syncs into the store only on success —
+    // LOBE-11124).
+    const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+    const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
+    const agentSkillsSWR = useFetchAgentSkills(true);
+    const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
+    const skillsError =
+      lobehubSkillsSWR.error ?? composioSWR.error ?? agentSkillsSWR.error ?? builtinToolsSWR.error;
+    const reloadSkills = () => {
+      void lobehubSkillsSWR.mutate();
+      void composioSWR.mutate();
+      void agentSkillsSWR.mutate();
+      void builtinToolsSWR.mutate();
+    };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
     // connectors appear in the Connectors tab list.
@@ -328,6 +340,16 @@ const SkillList = memo<SkillListProps>(
       userAgentSkills.length > 0 ||
       communityMCPs.length > 0 ||
       customMCPs.length > 0;
+
+    // A failed fetch must read as a failure with Retry, never as the "no skills"
+    // empty (error gated ahead of empty — LOBE-11124).
+    if (skillsError && !hasAnySkills) {
+      return (
+        <Center className={styles.container} paddingBlock={48}>
+          <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
+        </Center>
+      );
+    }
 
     if (!hasAnySkills) {
       return (

@@ -462,7 +462,6 @@ export class AiProviderActionImpl {
       opts?.enabled === false ? null : AiProviderSwrKey.fetchAiProviderList,
       () => aiProviderService.getAiProviderList(),
       {
-        fallbackData: [],
         onSuccess: (data) => {
           if (!this.#get().initAiProviderList) {
             this.#set(

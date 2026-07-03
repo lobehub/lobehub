@@ -140,7 +140,6 @@ export class TaskListSliceActionImpl {
         });
       },
       {
-        fallbackData: { data: [], success: true },
         onSuccess: (data: { data: TaskGroupItem[] }) => {
           this.#set(
             { isTaskGroupListInit: true, taskGroups: data.data },
@@ -180,7 +179,6 @@ export class TaskListSliceActionImpl {
         });
       },
       {
-        fallbackData: { data: [], success: true, total: 0 },
         onSuccess: (data: { data: TaskListItem[]; total: number }) => {
           this.#set(
             {

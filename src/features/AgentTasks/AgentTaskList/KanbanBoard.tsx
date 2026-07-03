@@ -15,6 +15,7 @@ import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
@@ -87,10 +88,14 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   const { allowed: canEditTask } = usePermission('create_content');
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList(agentId ? { agentId } : { allAgents: true });
+  // Surface a failed group fetch as error + Retry instead of a permanent
+  // skeleton board (LOBE-11181). `data` (undefined until first success) is the
+  // settled signal.
+  const { data, error, isLoading, mutate } = useFetchTaskGroupList(
+    agentId ? { agentId } : { allAgents: true },
+  );
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
-  const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
@@ -200,34 +205,30 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
     [hiddenColumnSet, t, taskGroups],
   );
 
-  if (!isInit) {
-    return (
-      <Flexbox horizontal className={styles.board}>
-        {visibleColumns.map((col) => (
-          <KanbanColumn
-            loading
-            columnKey={col.key}
-            droppable={false}
-            key={col.key}
-            tasks={[]}
-            total={0}
-          />
-        ))}
-      </Flexbox>
-    );
-  }
-
   const totalTasks = taskGroups.reduce((sum, g) => sum + g.total, 0);
 
-  if (totalTasks === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
-    );
-  }
+  const skeletonBoard = (
+    <Flexbox horizontal className={styles.board}>
+      {visibleColumns.map((col) => (
+        <KanbanColumn
+          loading
+          columnKey={col.key}
+          droppable={false}
+          key={col.key}
+          tasks={[]}
+          total={0}
+        />
+      ))}
+    </Flexbox>
+  );
 
-  return (
+  const emptyState = (
+    <Center height={'80vh'} width={'100%'}>
+      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+    </Center>
+  );
+
+  const board = (
     <DndContext
       collisionDetection={pointerWithin}
       sensors={canEditTask ? sensors : []}
@@ -275,6 +276,24 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+
+  // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
+  // instead of the "no tasks" empty (LOBE-11181). `data` is the SWR result —
+  // undefined until the first fetch settles.
+  return (
+    <AsyncBoundary
+      data={data}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={totalTasks === 0}
+      isLoading={isLoading}
+      loading={skeletonBoard}
+      onRetry={() => mutate()}
+    >
+      {board}
+    </AsyncBoundary>
   );
 });
 

@@ -44,7 +44,9 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { isRevalidating } = useInitRecents();
+  // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
+  // instead of a permanent skeleton (LOBE-11079).
+  const { error, isRevalidating, mutate } = useInitRecents();
 
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
@@ -159,7 +161,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
       }
     >
       <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList />
+        <RecentsList error={error} onRetry={() => mutate()} />
       </Suspense>
     </AccordionItem>
   );

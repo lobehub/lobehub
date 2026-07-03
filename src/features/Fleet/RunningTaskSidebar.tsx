@@ -7,6 +7,7 @@ import { ListXIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import RingLoadingIcon from '@/components/RingLoading';
 import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
@@ -215,7 +216,10 @@ CloseIdleColumnsButton.displayName = 'FleetCloseIdleColumnsButton';
 
 interface RunningTaskSidebarProps {
   columns: FleetColumn[];
+  /** First-load fetch failure — shown as a failed+Reload state, not fake "no tasks". */
+  error?: unknown;
   isLoading?: boolean;
+  onReload?: () => void;
   statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
@@ -227,7 +231,7 @@ interface RunningTaskSidebarProps {
  * list. Clicking an item opens (or re-opens) its column.
  */
 const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
-  ({ columns, isLoading, statusByColumnKey }) => {
+  ({ columns, error, isLoading, onReload, statusByColumnKey }) => {
     const { t } = useTranslation('electron');
     const addColumn = useFleetStore((s) => s.addColumn);
 
@@ -264,7 +268,7 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             <CloseIdleColumnsButton
-              isStatusLoading={isLoading}
+              isStatusLoading={isLoading || !!error}
               statusByColumnKey={statusByColumnKey}
             />
             <RowsSwitcher />
@@ -278,7 +282,11 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
         <Button block icon={PlusIcon} onClick={handleCreateTask}>
           {t('fleet.createTask')}
         </Button>
-        {isLoading && columns.length === 0 ? (
+        {error && columns.length === 0 ? (
+          // A failed poll must read as a failure with Reload, never as the fake
+          // "no running tasks" empty (LOBE-11167).
+          <AsyncError error={error} variant={'inline'} onRetry={onReload} />
+        ) : isLoading && columns.length === 0 ? (
           Array.from({ length: 3 }).map((_, index) => <SidebarTaskSkeleton key={index} />)
         ) : columns.length === 0 ? (
           <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>

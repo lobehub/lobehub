@@ -5,6 +5,7 @@ import { ClipboardCheckIcon, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
@@ -28,6 +29,13 @@ import {
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 interface TaskListProps {
+  /** The list SWR result — `undefined` until the first fetch settles (the settled signal). */
+  data?: unknown;
+  /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
+  error?: unknown;
+  /** First-load / retry in flight (SWR `isLoading`). */
+  isLoading?: boolean;
+  onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
   routeScope?: TaskItemRouteScope;
@@ -125,10 +133,10 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
   </Flexbox>
 );
 
-const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options, routeScope }) => {
+const TaskList = memo<TaskListProps>((props) => {
+  const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
   const { t } = useTranslation('chat');
   const tasks = useTaskStore(taskListSelectors.taskList);
-  const isInit = useTaskStore(taskListSelectors.isTaskListInit);
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -200,26 +208,22 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options, routeSco
     });
   }, [effectiveSubGroupBy, groupBy, options, visibleTasks]);
 
-  if (!isInit) {
-    return (
-      <Block gap={2} padding={2} variant={'borderless'}>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Fragment key={`task-skeleton-${index}`}>
-            <TaskItemSkeleton />
-            {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
-          </Fragment>
-        ))}
-      </Block>
-    );
-  }
+  const skeleton = (
+    <Block gap={2} padding={2} variant={'borderless'}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <Fragment key={`task-skeleton-${index}`}>
+          <TaskItemSkeleton />
+          {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
+        </Fragment>
+      ))}
+    </Block>
+  );
 
-  if (tasks.length === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
-    );
-  }
+  const emptyState = (
+    <Center height={'80vh'} width={'100%'}>
+      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+    </Center>
+  );
 
   const hiddenFooter = hiddenCount > 0 && (
     <Flexbox
@@ -242,58 +246,73 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options, routeSco
     </Flexbox>
   );
 
-  if (groupBy === 'none') {
-    return (
+  const content =
+    groupBy === 'none' ? (
       <>
         {renderTaskListBlock(groupedTaskEntries[0]?.items ?? [], false, routeScope)}
         {hiddenFooter}
       </>
+    ) : (
+      <>
+        <Accordion gap={16}>
+          {groupedTaskEntries.map((group) => {
+            return (
+              <AccordionItem
+                defaultExpand
+                indicatorPlacement={'end'}
+                itemKey={`group-${group.meta.key}`}
+                key={group.meta.key}
+                paddingBlock={8}
+                paddingInline={14}
+                title={renderGroupTitle(group.meta, group.items.length)}
+                variant={'filled'}
+                styles={{
+                  header: { marginBottom: 8 },
+                }}
+              >
+                {group.subGroups.length > 0 ? (
+                  <Accordion gap={6}>
+                    {group.subGroups.map(([subGroup, subGroupTasks]) => (
+                      <AccordionItem
+                        defaultExpand
+                        indicatorPlacement={'end'}
+                        itemKey={`sub-${group.meta.key}-${subGroup.key}`}
+                        key={`${group.meta.key}-${subGroup.key}`}
+                        paddingBlock={6}
+                        paddingInline={14}
+                        title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
+                      >
+                        {renderTaskListBlock(subGroupTasks, true, routeScope)}
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  renderTaskListBlock(group.items, false, routeScope)
+                )}
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+        {hiddenFooter}
+      </>
     );
-  }
 
+  // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
+  // Retry block instead of the "no tasks" empty (LOBE-11181). `data` is the SWR
+  // result — undefined until the first fetch settles.
   return (
-    <>
-      <Accordion gap={16}>
-        {groupedTaskEntries.map((group) => {
-          return (
-            <AccordionItem
-              defaultExpand
-              indicatorPlacement={'end'}
-              itemKey={`group-${group.meta.key}`}
-              key={group.meta.key}
-              paddingBlock={8}
-              paddingInline={14}
-              title={renderGroupTitle(group.meta, group.items.length)}
-              variant={'filled'}
-              styles={{
-                header: { marginBottom: 8 },
-              }}
-            >
-              {group.subGroups.length > 0 ? (
-                <Accordion gap={6}>
-                  {group.subGroups.map(([subGroup, subGroupTasks]) => (
-                    <AccordionItem
-                      defaultExpand
-                      indicatorPlacement={'end'}
-                      itemKey={`sub-${group.meta.key}-${subGroup.key}`}
-                      key={`${group.meta.key}-${subGroup.key}`}
-                      paddingBlock={6}
-                      paddingInline={14}
-                      title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
-                    >
-                      {renderTaskListBlock(subGroupTasks, true, routeScope)}
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              ) : (
-                renderTaskListBlock(group.items, false, routeScope)
-              )}
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
-      {hiddenFooter}
-    </>
+    <AsyncBoundary
+      data={data}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={tasks.length === 0}
+      isLoading={isLoading}
+      loading={skeleton}
+      onRetry={onRetry}
+    >
+      {content}
+    </AsyncBoundary>
   );
 });
 
