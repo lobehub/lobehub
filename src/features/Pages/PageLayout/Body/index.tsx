@@ -49,16 +49,12 @@ const Body = memo(() => {
   // header can show a subtle in-flight indicator (mirrors the Private Agent
   // pattern in `home/_layout/Body/Private`).
   const useFetchDocuments = usePageStore((s) => s.useFetchDocuments);
-  // Keep `error` / `mutate` so a failed document fetch surfaces a Retry state
-  // instead of a permanent sidebar skeleton (the loading flag is
-  // `documents === undefined`, which never clears on failure — LOBE-11127).
-  const { error, isValidating, mutate } = useFetchDocuments();
-
-  const documents = usePageStore((s) => s.documents);
-  const isLoading = usePageStore(pageSelectors.isDocumentsLoading);
-  // Skeleton only while a first load is genuinely in flight; on failure fall
-  // through to AsyncBoundary's error branch (error gated ahead of empty).
-  const showLoading = isLoading && !error;
+  // Use the SWR result as the settled signal: `data` is `undefined` until the
+  // first fetch succeeds, so a failed load surfaces error + Retry instead of a
+  // permanent skeleton. The store's `documents` field can't be the signal — it
+  // initializes to `[]` (a settled-looking empty), so a failed fetch would fall
+  // through to the "no pages" empty rather than the error (LOBE-11127).
+  const { data, error, isLoading, isValidating, mutate } = useFetchDocuments();
 
   const filteredDocumentsCount = usePageStore(pageSelectors.filteredDocumentsCount);
   const privateCount = usePageStore(pageSelectors.privateFilteredDocumentsCount);
@@ -130,10 +126,10 @@ const Body = memo(() => {
             }
           >
             <AsyncBoundary
-              data={documents}
+              data={data}
               error={error}
               errorVariant={'inline'}
-              isLoading={showLoading}
+              isLoading={isLoading}
               loading={<SkeletonList />}
               onRetry={() => mutate()}
             >
@@ -176,10 +172,10 @@ const Body = memo(() => {
             }
           >
             <AsyncBoundary
-              data={documents}
+              data={data}
               error={error}
               errorVariant={'inline'}
-              isLoading={showLoading}
+              isLoading={isLoading}
               loading={<SkeletonList />}
               onRetry={() => mutate()}
             >
@@ -225,10 +221,10 @@ const Body = memo(() => {
             }
           >
             <AsyncBoundary
-              data={documents}
+              data={data}
               error={error}
               errorVariant={'inline'}
-              isLoading={showLoading}
+              isLoading={isLoading}
               loading={<SkeletonList />}
               onRetry={() => mutate()}
             >

@@ -19,8 +19,27 @@ also run as full cloud automation. Every test session follows the same
 contract:
 
 ```
-Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report  →  Step 4: Publish to LobeHub
+Step -2: Read 常犯错误 → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub
 ```
+
+## Step -2 — Read 常犯错误 (mandatory, before every run)
+
+Before doing anything else, read
+[references/common-mistakes.md](./references/common-mistakes.md) (「常犯错误」) in
+full and hold each case in mind for this run. It is the accumulated list of
+mistakes the user has called out — every negative feedback becomes a new case
+there. Two that keep biting:
+
+- **Never declare a case `passed` from grep/skeleton-count heuristics — Read the
+  actual screenshot and confirm it rendered the expected content.** A blank/white
+  page also has 0 skeletons and still matches persistent nav text.
+- **If the task's goal is verifying error/failure states, do NOT stop at
+  happy-path when injection is hard.** Escalate to CDP `Network.setBlockedURLs`
+  or server-side fault injection until you have real failure-state evidence.
+
+When the user gives negative feedback during or after a run, append it to
+`references/common-mistakes.md` as a new case (错误做法 / 为什么 / 会带来的问题 /
+正确做法) before continuing.
 
 ## Step -1 — Plan approval for non-trivial tests
 
@@ -183,8 +202,8 @@ So before the first `agent run`, start QStash in a separate terminal and gate on
 the preflight:
 
 ```bash
-./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash      # terminal B — keep running
-./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight    # exits non-zero if QStash (or Redis) is down
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # terminal B — keep running
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # exits non-zero if QStash (or Redis) is down
 ```
 
 Default script env:

@@ -52,7 +52,7 @@ const HomePage = memo(() => {
       <AsyncBoundary
         data={assistantList}
         error={assistantError}
-        isLoading={assistantLoading || !assistantList}
+        isLoading={assistantLoading}
         loading={<ListLoading length={8} rows={4} />}
         onRetry={() => refetchAssistants()}
       >
@@ -65,7 +65,7 @@ const HomePage = memo(() => {
       <AsyncBoundary
         data={mcpList}
         error={mcpError}
-        isLoading={pluginLoading || !mcpList}
+        isLoading={pluginLoading}
         loading={<ListLoading length={8} rows={4} />}
         onRetry={() => refetchMcp()}
       >
