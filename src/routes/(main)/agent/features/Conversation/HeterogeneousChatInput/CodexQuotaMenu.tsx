@@ -76,12 +76,12 @@ const styles = createStaticStyles(({ css }) => ({
     transition: all 0.2s;
 
     &:hover {
-      color: ${cssVar.colorText};
+      color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillSecondary};
     }
   `,
   triggerOpen: css`
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorTextSecondary};
     background: ${cssVar.colorFillSecondary};
   `,
   value: css`
@@ -321,9 +321,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
     >
       <Icon icon={GaugeIcon} size={14} />
       {sessionLeftPercent !== undefined && (
-        <span className={styles.value}>
-          {t('heteroAgent.codexQuota.compactLeft', { percent: sessionLeftPercent })}
-        </span>
+        <span>{t('heteroAgent.codexQuota.compactLeft', { percent: sessionLeftPercent })}</span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />
     </button>
