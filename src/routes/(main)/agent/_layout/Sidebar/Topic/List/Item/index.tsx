@@ -262,8 +262,8 @@ const TopicItem = memo<TopicItemProps>(
     const workingDirectoryNode =
       showWorkingDirectory && workingDirectory ? (
         <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
-          <DirIcon repoType={isDesktop ? undefined : 'github'} size={12} />
-          <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+          <DirIcon repoType={isDesktop ? undefined : 'github'} size={13} />
+          <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextDescription }}>
             {getDirName(workingDirectory)}
           </Text>
         </Flexbox>
