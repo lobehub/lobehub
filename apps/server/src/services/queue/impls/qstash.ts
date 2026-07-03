@@ -45,7 +45,10 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           stepIndex,
           timestamp: Date.now(),
         },
-        delay: Math.ceil(delay / 1000), // Convert milliseconds to seconds
+        // QStash delay granularity is whole seconds, so sub-second step delays
+        // can't be expressed. Ceiling them up padded every step to a full second;
+        // instead dispatch immediately (0) and only delay for >= 1s intents.
+        delay: delay >= 1000 ? Math.round(delay / 1000) : 0,
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,
