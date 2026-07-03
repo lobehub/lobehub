@@ -13,6 +13,7 @@ Is the process around this change healthy? These are objective state checks — 
 - Tracked issue exists for non-trivial work (Linear for team members — see `.agents/skills/linear/`; GitHub issue otherwise) and its status matches reality
 - PR description still matches the diff — scope drift after review rounds leaves descriptions describing code that no longer exists
 - Key decisions made during implementation (trade-offs, rejected alternatives, scope cuts) recorded in the issue/PR, not only in a chat transcript
+- Decision records still match the implementation: when the implementation legitimately diverged from a decision written earlier in the issue/PR/conversation, the record is updated in the same PR — a stale decision record misleads every later reader, and reviewers without the session context can only trust what is written
 - CI green; preview/deployment build succeeded — a red or pending-forever check is a finding with the failing job named
 - PR targets the right branch (this repo: feature PRs → `canary`; DB schema changes ride a separate branch PR'd to `main` first)
 - Commit messages follow repo convention (gitmoji prefix)
