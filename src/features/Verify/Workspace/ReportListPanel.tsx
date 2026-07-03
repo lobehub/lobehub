@@ -185,6 +185,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   itemTitle: css`
     overflow: hidden;
+    display: block;
 
     font-size: 13px;
     line-height: 1.4;
