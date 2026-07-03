@@ -19,7 +19,7 @@ also run as full cloud automation. Every test session follows the same
 contract:
 
 ```
-Step -2: Read the two living logs → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub
+Step -2: Read the two living logs → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub → Step 5: Teardown
 ```
 
 ## Step -2 — Read the two living logs (mandatory, before every run)
@@ -533,6 +533,38 @@ Notes:
   **missing the skipped evidence**, which is easy to mistake for a complete
   report. If the evidence must appear, publish against an env with real storage
   (e.g. production) or attach it inline with `verify evidence upload --content`.
+
+## Step 5 — Teardown (default: stop what you started)
+
+A test run leaves processes and code edits behind. Clean them up by default once
+the report is published — a dev server left listening or an injection left in a
+service file silently corrupts the next run (and the next agent's mental model).
+
+- **Stop the dev server you started.** If you launched it via `init-dev-env.sh dev`
+  (the no-`.env` path), tear it down with:
+
+  ```bash
+  ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean # stop dev server; keep DB/Redis
+  ```
+
+  `clean` stops the Next + Vite processes on the resolved `SERVER_PORT` / `SPA_PORT`
+  and the `bun run dev` supervisor, and **leaves the managed Postgres/Redis
+  containers running** (they are idempotently reused across runs — `setup-db` is a
+  no-op when they're up). Use `clean-db` only when you deliberately want the
+  containers gone, or `stop-dev` for just the server with no note. If the user
+  started their own `.env` dev server, leave it — you didn't start it.
+
+- **Revert every code injection.** Any HMR fault-injection (A4/A6/A8 in
+  `probe-mock-patterns.md`) must be undone and verified: `git checkout -- <files>`
+  then `grep -rn AGENT-TEST src/` returns nothing. Never leave an injection or a
+  debug global (`__DBG`, `__loadMoreCalls`) behind.
+
+- **Keep the report + evidence.** `.records/reports/**` is the deliverable — do
+  NOT delete it in teardown; it's gitignored and the published verify run points at
+  it.
+
+Skip teardown only when the user explicitly wants the environment left up (e.g.
+"leave the dev server running, I'll keep poking at it").
 
 ## Directory map
 

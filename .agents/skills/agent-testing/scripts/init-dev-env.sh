@@ -19,6 +19,8 @@
 #   init-dev-env.sh preflight        # check agent-runtime prerequisites (QStash up in queue mode)
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
+#   init-dev-env.sh stop-dev         # stop the dev server (Next + Vite) started by `dev`
+#   init-dev-env.sh clean            # teardown: stop dev server (DB/Redis containers kept)
 #   init-dev-env.sh clean-db         # remove the managed Postgres/Redis containers
 #
 # Overrides:
@@ -576,8 +578,40 @@ cmd_clean_db() {
   fi
 }
 
+cmd_stop_dev() {
+  apply_env
+  local any=0 pids port
+  for port in "$SERVER_PORT" "$SPA_PORT"; do
+    pids="$(lsof -ti "tcp:$port" -sTCP:LISTEN 2>/dev/null || true)"
+    if [[ -n "$pids" ]]; then
+      # shellcheck disable=SC2086
+      kill $pids 2>/dev/null || true
+      note "stopped listener(s) on :$port ($(echo "$pids" | tr '\n' ' '))"
+      any=1
+    fi
+  done
+  # `bun run dev` supervises Next + Vite; kill the parent too so neither respawns.
+  if pkill -f "bun run dev" 2>/dev/null; then
+    note "stopped 'bun run dev' supervisor"
+    any=1
+  fi
+  if [[ "$any" == 1 ]]; then
+    ok "dev server stopped"
+  else
+    note "no dev server running on :$SERVER_PORT / :$SPA_PORT"
+  fi
+}
+
+cmd_clean() {
+  # Default teardown after a test run: stop the dev server. The managed
+  # Postgres/Redis containers are intentionally reused across runs (setup-db is
+  # idempotent), so they are left running — remove them explicitly with clean-db.
+  cmd_stop_dev
+  note "managed DB/Redis containers left running (reused across runs); remove with: $0 clean-db"
+}
+
 usage() {
-  sed -n '3,24p' "$0" >&2
+  sed -n '3,27p' "$0" >&2
 }
 
 COMMAND="${1:-status}"
@@ -601,6 +635,8 @@ case "$COMMAND" in
   preflight) cmd_preflight ;;
   dev-next) cmd_dev_next ;;
   dev) cmd_dev ;;
+  stop-dev | stop) cmd_stop_dev ;;
+  clean) cmd_clean ;;
   clean-db) cmd_clean_db ;;
   status) cmd_status ;;
   *)
