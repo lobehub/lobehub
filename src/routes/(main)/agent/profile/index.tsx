@@ -95,9 +95,10 @@ const ProfileArea = memo(() => {
 // updateAgentConfig, which the server rejects under the lock) and while the lock
 // is still resolving — so it doesn't flash in then vanish once a lock is found.
 const AgentBuilderSlot = memo(() => {
+  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
   const lockPending = useProfileStore(profileSelectors.lockPending);
-  if (lockedByOther || lockPending) return null;
+  if (isHeterogeneous || lockedByOther || lockPending) return null;
   return <AgentBuilder />;
 });
 
