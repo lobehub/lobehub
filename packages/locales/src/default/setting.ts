@@ -2591,10 +2591,20 @@ When I am ___, I need ___
   'workspace.onboarding.step3.installed': 'Added {{count}} agent(s) to your workspace',
   'workspace.onboarding.step3.empty': 'No recommendations available right now.',
   'workspace.onboarding.step4Invite.addMore': 'Add another email',
+  'workspace.onboarding.step4Invite.currentTeam.heading': 'Your team so far',
+  'workspace.onboarding.step4Invite.currentTeam.joinedStatus': 'Joined',
+  'workspace.onboarding.step4Invite.currentTeam.linkInvite': 'Invite link',
+  'workspace.onboarding.step4Invite.currentTeam.pendingStatus': 'Pending',
+  'workspace.onboarding.step4Invite.currentTeam.you': 'You',
   'workspace.onboarding.step4Invite.emailPlaceholder': 'teammate@company.com',
   'workspace.onboarding.step4Invite.finish': 'Finish',
   'workspace.onboarding.step4Invite.heading': 'Invite your team',
   'workspace.onboarding.step4Invite.invitedCount': 'Invited {{count}} member(s)',
+  'workspace.onboarding.step4Invite.noRemainingSeats':
+    'Current members and pending invites fill all seats — manage them in member settings.',
+  'workspace.onboarding.step4Invite.pendingInvites.heading': 'Pending invites',
+  'workspace.onboarding.step4Invite.remainingSeats':
+    'Invite up to {{count}} more now, or add them later from member settings.',
   'workspace.onboarding.step4Invite.someInviteFailed':
     'Could not invite {{count}} teammate(s): {{emails}}. Try again from member settings.',
   'workspace.onboarding.step4Invite.seatLimitReached':
@@ -2602,9 +2612,9 @@ When I am ___, I need ___
   'workspace.onboarding.step4Invite.subtitle':
     'Bring teammates into this workspace now, or invite them later from member settings.',
   'workspace.onboarding.step4Invite.subtitleWithExtraSeats':
-    'Your plan includes {{includedSeats}} free seats and supports up to {{maxSeats}} seats with purchased extra seats. Invite teammates now, or add them later from member settings.',
+    'Your plan includes {{includedSeats}} free seats, expandable up to {{maxSeats}} with purchased extras.',
   'workspace.onboarding.step4Invite.subtitleWithLimit':
-    'Free includes up to {{maxSeats}} seats, including you. Invite teammates now, or add them later from member settings.',
+    'Free includes up to {{maxSeats}} seats, including you.',
   'workspace.onboarding.step4.heading': '{{name}} is ready!',
   'workspace.onboarding.step4.subtitle':
     'Your workspace is set up. Jump in and start collaborating with your team.',
