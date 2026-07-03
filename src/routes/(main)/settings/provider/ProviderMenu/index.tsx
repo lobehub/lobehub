@@ -107,7 +107,7 @@ const ProviderMenu = ({
     <AsyncBoundary
       data={initAiProviderList ? true : undefined}
       error={error}
-      errorVariant={'block'}
+      errorVariant={'page'}
       isLoading={!initAiProviderList && !error}
       loading={<SkeletonList />}
       onRetry={() => mutate()}
