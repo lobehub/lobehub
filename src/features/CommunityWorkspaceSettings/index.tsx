@@ -211,10 +211,17 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
                 ) : (
                   nameNode
                 )}
-                {publicHandle && (
-                  <Text style={{ fontSize: 12 }} type="secondary">
-                    @{publicHandle}
-                  </Text>
+                {publicHandle && profileUrl && (
+                  <a
+                    className={styles.memberNameLink}
+                    href={profileUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <Text style={{ fontSize: 12 }} type="secondary">
+                      @{publicHandle}
+                    </Text>
+                  </a>
                 )}
               </Flexbox>
             </Flexbox>
