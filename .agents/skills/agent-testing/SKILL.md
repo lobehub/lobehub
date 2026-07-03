@@ -282,6 +282,32 @@ do not open a login page; verify agent-browser first, then request the Network
 `Cookie:` header only if that verification fails. Full background and failure modes:
 [references/auth.md](./references/auth.md).
 
+### 0.5 — Screen-recording preflight (OS-capture surfaces only)
+
+macOS `screencapture` / osascript / bot-channel captures come out **entirely
+black** when Screen Recording (TCC) permission is missing OR — just as often —
+the **display is asleep / locked / on a screensaver** (permission is fine, but
+there is nothing lit to capture; this bites after a long idle test run). A black
+PNG is easy to mistake for a real capture, so gate BEFORE any OS-capture step:
+
+```bash
+./.agents/skills/agent-testing/scripts/check-screen-recording.sh # exit 0 = OS capture will work
+```
+
+It checks both layers — `CGPreflightScreenCaptureAccess` for permission and a
+real one-frame capture for blackness — and prints the exact fix (which `.app` to
+grant, or wake/unlock the display). `capture-app-window.sh` runs it automatically
+and refuses to write a black artifact (bypass with `SKIP_SCREEN_CHECK=1`).
+
+This gate is **only** for OS-capture surfaces (bot tests, `capture-app-window.sh`,
+osascript screenshots). CDP-based evidence (`agent-browser screenshot`,
+`record-app-screen.sh`) renders from the browser engine and is unaffected. Because
+the display can sleep mid-run, keep it awake for the whole capture session:
+
+```bash
+caffeinate -dimsu & # prevent display/idle sleep for the test run; kill when done
+```
+
 ## Step 1 — Pick the surface by change scope
 
 | Change scope                                            | Default surface                      | Why                                                               | Guide                              |
@@ -362,19 +388,21 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 
 All under `.agents/skills/agent-testing/scripts/`:
 
-| Script                    | Usage                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| `test-env.sh`             | Print/export the resolved local test env and ports                           |
-| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                |
-| `init-dev-env.sh`         | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`) |
-| `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`      |
-| `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations) |
-| `report-init.sh`          | Scaffold a structured test report (Step 3)                                   |
-| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222)                |
-| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests)                |
-| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)                             |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                                         |
-| `agent-gateway/`          | Gateway probe / dump / analyze tools                                         |
+| Script                      | Usage                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `test-env.sh`               | Print/export the resolved local test env and ports                                          |
+| `setup-auth.sh`             | One-stop auth setup & status check (`status` / `cli` / `web`)                               |
+| `init-dev-env.sh`           | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`)                |
+| `app-probe.sh`              | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`                     |
+| `record-gif.sh`             | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
+| `report-init.sh`            | Scaffold a structured test report (Step 3)                                                  |
+| `check-screen-recording.sh` | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
+| `electron-dev.sh`           | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
+| `cdp-screenshot.sh`         | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
+| `capture-app-window.sh`     | Screenshot a specific app window (general; used by bot tests)                               |
+| `record-app-screen.sh`      | Record app screen (video + periodic screenshots)                                            |
+| `record-electron-demo.sh`   | Record Electron app demo with ffmpeg                                                        |
+| `agent-gateway/`            | Gateway probe / dump / analyze tools                                                        |
 
 `app-probe.sh` is the LobeHub-specific fast path into app state — auth check,
 current route, running operations, and `goto <path>` quick navigation

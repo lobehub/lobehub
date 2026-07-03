@@ -210,6 +210,31 @@
   screenshot/query; a click-the-Retry-then-observe flow is timing-flaky — fire it
   via `button.click()` in `eval` right after re-triggering, or extend the toast
   duration.
+- **D6. `agent-browser screenshot` can WEDGE the daemon; `eval`/`get` still work.**
+  agent-browser is a daemon (`~/.agent-browser/default.sock`, one serialized
+  socket). A screenshot RPC that is interrupted — a mis-invoked flag, a command
+  the harness auto-backgrounds then kills, `--full` on a giant page — leaves the
+  socket half-consumed, and every later `screenshot` fails with
+  `Resource temporarily unavailable (os error 35)` / `CDP response channel closed`
+  while `eval`/`get url` keep working. **Not** a display-sleep or permission issue.
+  - **Works**: reset with `agent-browser close --all` (respawns the daemon), or
+    skip the daemon entirely (D7).
+- **D7. ✅ WORKS — raw-CDP screenshot, bypasses the daemon.**
+  `scripts/cdp-screenshot.sh [--port 9222] [--out x.png] [--full] [--check]`
+  opens its own ws to the target, does one `Page.captureScreenshot`, closes
+  (\~60ms). Immune to the D6 wedge, and **verified robust when the display is
+  ASLEEP and when the window is MINIMIZED/occluded** (Chromium forces a compositor
+  frame). Use it for Electron evidence and as a preflight (`--check` → exit 0 iff a
+  real, non-black frame was captured). Needs repo `node_modules/ws` (resolved via
+  NODE\_PATH by the wrapper).
+- **D8. OS `screencapture` is BLACK when the display is asleep/locked/screensaver.**
+  Distinct from D6/D7: `screencapture` (and `capture-app-window.sh`, osascript
+  grabs) captures the physical framebuffer, so an idle-slept display → a uniformly
+  black PNG (mean/max=0; a full-screen black frame has a telltale identical byte
+  size). Permission can be fine. Gate with `scripts/check-screen-recording.sh`
+  (checks `CGPreflightScreenCaptureAccess` + a real-frame blackness probe) and keep
+  the display awake for the whole run: `caffeinate -dimsu &` (or `caffeinate -u`
+  to wake it). CDP capture (D7) does not have this problem.
 
 ---
 
