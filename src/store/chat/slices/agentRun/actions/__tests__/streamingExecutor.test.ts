@@ -2654,7 +2654,12 @@ describe('StreamingExecutor actions', () => {
               ...state.messagesMap,
               [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]: [
                 {
+                  // The completion notification now anchors its body to THIS run's
+                  // assistant (findCompletionAssistantMessageId walks parentMessageId),
+                  // not a positional findLast — so the seeded assistant must descend
+                  // from the run's parentMessageId (TEST_IDS.USER_MESSAGE_ID) to be found.
                   ...createMockMessage({ id: 'assistant-notif', role: 'assistant' }),
+                  parentId: TEST_IDS.USER_MESSAGE_ID,
                   ...overrides,
                 },
               ],

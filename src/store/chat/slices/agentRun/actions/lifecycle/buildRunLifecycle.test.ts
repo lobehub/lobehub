@@ -27,10 +27,10 @@ vi.mock('@/store/chat/utils/desktopNotification', () => ({
 // Force the desktop branch of afterRunComplete on (isDesktop is false in the
 // test env). Only afterRunComplete reads isDesktop, and it early-returns for
 // sub_agent runs before the check, so this is inert for every other test.
-vi.mock('@lobechat/const', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lobechat/const')>()),
-  isDesktop: true,
-}));
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, isDesktop: true };
+});
 
 const OP = 'op1';
 const CONTEXT: ConversationContext = { agentId: 'a1', topicId: 't1' } as ConversationContext;
