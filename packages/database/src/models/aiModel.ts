@@ -373,15 +373,14 @@ export class AiModelModel {
       const defaultModel =
         defaultModelMap.get(`${providerId}:${modelId}`) ??
         defaultModels.find((model) => model.id === modelId);
-      const record: typeof aiModels.$inferInsert = {
+      const record: typeof aiModels.$inferInsert = this.values({
         enabled,
         id: modelId,
         providerId,
         // if the model is not in the db, it's a builtin model
         source: AiModelSourceEnum.Builtin,
         updatedAt: new Date(),
-        userId: this.userId,
-      };
+      });
 
       // Preserve type if available from default model list
       if (defaultModel?.type) {
@@ -400,8 +399,7 @@ export class AiModelModel {
           enabled: sql`excluded.enabled`,
           updatedAt: sql`excluded.updated_at`,
         },
-        target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 

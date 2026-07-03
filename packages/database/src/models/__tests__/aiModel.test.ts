@@ -1,13 +1,21 @@
 // @vitest-environment node
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AiProviderModelListItem } from 'model-bank';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAiModelItem } from '../../schemas';
 import { aiModels, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AiModelModel } from '../aiModel';
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([
+    { id: 'gpt-4', providerId: 'openai', type: 'chat' },
+    { id: 'dall-e-3', providerId: 'openai', type: 'image' },
+    { id: 'gpt-4o', providerId: 'openai', type: 'chat' },
+  ]),
+}));
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -919,6 +927,41 @@ describe('AiModelModel', () => {
       expect(models.find((m) => m.id === 'gpt-4')?.type).toBe('chat');
       expect(models.find((m) => m.id === 'dall-e-3')?.type).toBe('image');
       expect(models.every((m) => !m.enabled)).toBe(true);
+    });
+
+    it('should batch toggle workspace models without updating personal models', async () => {
+      await aiProviderModel.create({
+        enabled: true,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+      await workspaceAiModelModel.create({
+        enabled: true,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+
+      await workspaceAiModelModel.batchToggleAiModels('openai', ['gpt-4o'], false);
+
+      const personal = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          isNull(aiModels.workspaceId),
+        ),
+      });
+      const workspace = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          eq(aiModels.workspaceId, workspaceId),
+        ),
+      });
+
+      expect(personal?.enabled).toBe(true);
+      expect(workspace?.enabled).toBe(false);
     });
   });
 

@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  roles,
+  userRoles,
   users,
   workspaceAuditLogs,
   workspaceInvitations,
@@ -57,6 +59,24 @@ const createWorkspace = async (id = 'workspace-model-ws') => {
     workspaceId: id,
   });
   return id;
+};
+
+const hasOwnerRbacGrant = async (workspaceId: string, userId: string) => {
+  const rows = await serverDB
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.workspaceId, workspaceId),
+        eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
+        eq(roles.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 };
 
 beforeEach(async () => {
@@ -297,6 +317,7 @@ describe('WorkspaceModel', () => {
         where: eq(workspaceMembers.userId, memberId),
       });
       expect(membership?.role).toBe('owner');
+      await expect(hasOwnerRbacGrant(workspaceId, memberId)).resolves.toBe(true);
     });
 
     it('is a no-op when the target is already an owner', async () => {
@@ -336,6 +357,7 @@ describe('WorkspaceModel', () => {
         where: eq(workspaceMembers.userId, secondOwnerId),
       });
       expect(membership?.role).toBe('member');
+      await expect(hasOwnerRbacGrant(workspaceId, secondOwnerId)).resolves.toBe(false);
     });
 
     it('is a no-op when the target is not an owner', async () => {

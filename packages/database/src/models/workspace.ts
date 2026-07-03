@@ -9,6 +9,10 @@ import {
   workspaces,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import {
+  assignWorkspaceRoleToUser,
+  revokeWorkspaceRolesForUser,
+} from '../utils/seedWorkspaceRoles';
 
 const hasWorkspaceOwnerRole = async (
   db: Pick<LobeChatDatabase, 'select'>,
@@ -234,6 +238,12 @@ export class WorkspaceModel {
         .where(
           and(eq(workspaceMembers.workspaceId, id), eq(workspaceMembers.userId, targetUserId)),
         );
+      await revokeWorkspaceRolesForUser(tx, { userId: targetUserId, workspaceId: id });
+      await assignWorkspaceRoleToUser(tx, {
+        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
+        userId: targetUserId,
+        workspaceId: id,
+      });
 
       return { ...target, role: 'owner' };
     });
@@ -277,6 +287,12 @@ export class WorkspaceModel {
         .where(
           and(eq(workspaceMembers.workspaceId, id), eq(workspaceMembers.userId, targetUserId)),
         );
+      await revokeWorkspaceRolesForUser(tx, { userId: targetUserId, workspaceId: id });
+      await assignWorkspaceRoleToUser(tx, {
+        roleName: WORKSPACE_SYSTEM_ROLES.MEMBER,
+        userId: targetUserId,
+        workspaceId: id,
+      });
 
       return { ...target, role: 'member' };
     });
