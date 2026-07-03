@@ -22,13 +22,15 @@ Dimension rules stay one-per-file; Codex only changes how they are **packed**:
 
 Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart.
 
+Extension packs can also **add** dimensions (a `deep-review-*/dimensions/` file whose name matches no built-in). Added dimensions have no row in the table: collect them into a dynamic fourth group, `extras`. Spawn `extras` in the first wave when a slot is free; otherwise immediately after the first `close_agent` frees one — the 3-slot budget stays intact either way. Their verify routing follows each dimension file's own `verify` frontmatter flag (default: verified).
+
 ## Step 0 — Scope & background
 
 Follow [`../scoping.md`](../scoping.md). Outputs: `{changes}` (diff text or fetch commands), the ≤ 200-word scope summary, PR metadata in PR mode.
 
 ## Step 1 — Select dimensions
 
-Same as the pruning + extension-pack procedure in `SKILL.md`: apply the pruning table, detect sibling `deep-review-*` extension packs, collect each surviving dimension's rule-file paths (built-in + extension counterpart). Map surviving dimensions onto the group table.
+Same as the pruning + extension-pack procedure in `SKILL.md`: apply the pruning table, detect sibling `deep-review-*` extension packs, collect each surviving dimension's rule-file paths (built-in + extension counterpart). Map surviving dimensions onto the group table; extension-added dimensions go to the `extras` group (see above) so downstream rules never get silently dropped.
 
 ## Step 2 — Spawn all groups in one wave
 
