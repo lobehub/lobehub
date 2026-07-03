@@ -14,6 +14,12 @@ interface UseDocumentTreeOpsArgs {
   agentId: string;
   data: AgentDocumentItem[];
   mutate: KeyedMutator<AgentDocumentItem[]>;
+  /**
+   * Fires after a delete succeeds (fully or partially) with the `documentId`s
+   * that were removed, so callers can react — e.g. navigate away from a
+   * now-deleted document that's open in the center.
+   */
+  onAfterDelete?: (removedDocumentIds: string[]) => void;
   topicId?: string;
 }
 
@@ -58,6 +64,7 @@ export const useDocumentTreeOps = ({
   agentId,
   data,
   mutate,
+  onAfterDelete,
   topicId,
 }: UseDocumentTreeOpsArgs): DocumentTreeOps => {
   const { t } = useTranslation(['chat', 'common']);
@@ -427,6 +434,9 @@ export const useDocumentTreeOps = ({
           }
 
           const snapshot = dataRef.current;
+          const removedDocumentIds = snapshot
+            .filter((doc) => removedIds.has(doc.id))
+            .map((doc) => doc.documentId);
           mutate((prev) => (prev ?? []).filter((doc) => !removedIds.has(doc.id)), {
             revalidate: false,
           });
@@ -464,6 +474,7 @@ export const useDocumentTreeOps = ({
             }
 
             await mutate();
+            onAfterDelete?.(removedDocumentIds);
             if (errors.length > 0) {
               const detail = errors.map((e) => e.message).join('; ');
               message.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
@@ -476,7 +487,7 @@ export const useDocumentTreeOps = ({
             : t('workingPanel.resources.deleteTitle'),
       });
     },
-    [agentId, buildItemPath, message, mutate, t, topicId],
+    [agentId, buildItemPath, message, mutate, onAfterDelete, t, topicId],
   );
 
   return useMemo(

@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import Header from './Header';
+import { buildAgentDocumentsPath } from './navigation';
 import { useAgentDocumentItem } from './useAgentDocumentItem';
 
 interface AgentDocumentPageProps {
@@ -57,6 +58,13 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     [agentId, navigate],
   );
 
+  // Deleting the open document lands on the docs index (empty-state guidance +
+  // the persistent document tree) rather than the deleted doc's now-404 route.
+  const backToDocs = useCallback(
+    () => navigate(agentId ? buildAgentDocumentsPath(agentId) : '/agent'),
+    [agentId, navigate],
+  );
+
   // A skill index doc is stored as `SKILL.md`; show the skill name (bundle title) instead.
   const isSkillIndex = !!skillBundle;
   const title = skillBundle
@@ -73,10 +81,10 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         title={title}
         updatedAt={item?.updatedAt}
         onBack={backToChat}
-        onDeleted={backToChat}
+        onDeleted={backToDocs}
       />
     ),
-    [agentId, backToChat, documentId, item?.id, item?.updatedAt, itemError, title],
+    [agentId, backToChat, backToDocs, documentId, item?.id, item?.updatedAt, itemError, title],
   );
 
   // Genuinely-absent doc: show the not-found state for the whole content module

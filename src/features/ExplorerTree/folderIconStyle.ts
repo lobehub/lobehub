@@ -287,6 +287,20 @@ ${getFolderIconCSS(MATERIAL_FILE_ICON_ASSETS_URL)}
 ${DOCUMENT_FILE_ICON_CSS}
 `;
 
+// Tree rows are pointer targets, not prose: allowing text selection lets a
+// drag-select swallow the row so a subsequent right-click hits the browser's
+// native selection menu instead of our context menu. Disable selection on rows
+// while keeping the rename input editable.
+export const DISABLE_ROW_TEXT_SELECTION_CSS = `
+  [data-type='item'] {
+    user-select: none;
+  }
+
+  [data-type='item'] input {
+    user-select: text;
+  }
+`;
+
 // pierre/trees marks the clicked row as model-focused, which otherwise paints
 // a pointer-only ring.
 // Keep the native :focus-visible ring for keyboard navigation.

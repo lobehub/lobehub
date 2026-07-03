@@ -25,6 +25,8 @@
   "agentDefaultMessageWithSystemRole": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
   "agentDefaultMessageWithoutEdit": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
   "agentDocument.backToChat": "返回对话",
+  "agentDocument.emptyDescription": "从右侧面板选择一个文档，或新建一个开始编辑。",
+  "agentDocument.emptyTitle": "未打开任何文档",
   "agentDocument.linkCopied": "链接已复制",
   "agentDocument.openAsPage": "打开整页",
   "agentProfile.files_one": "{{count}} 个文件",

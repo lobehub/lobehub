@@ -31,6 +31,9 @@ export default {
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agentDocument.backToChat': 'Back to chat',
+  'agentDocument.emptyDescription':
+    'Pick a document from the panel on the right, or create a new one to get started.',
+  'agentDocument.emptyTitle': 'No document open',
   'agentDocument.linkCopied': 'Link copied',
   'agentDocument.openAsPage': 'Open as full page',
   'agentProfile.files_one': '{{count}} file',

@@ -134,6 +134,7 @@ vi.mock('@/features/ExplorerTree', () => {
   };
 
   return {
+    DISABLE_ROW_TEXT_SELECTION_CSS: '',
     DOCUMENT_TREE_ICON_CSS: '',
     ExplorerTree,
     FOLDER_ICON_CSS: '',

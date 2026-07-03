@@ -2,19 +2,24 @@ import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { Center, Empty, Flexbox } from '@lobehub/ui';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileTextIcon, Maximize2Icon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon, Wand2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import type { KeyedMutator } from 'swr';
 
-import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
+import {
+  buildAgentDocumentPath,
+  buildAgentDocumentsPath,
+} from '@/features/AgentDocumentPage/navigation';
 import type {
   ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import {
+  DISABLE_ROW_TEXT_SELECTION_CSS,
   DOCUMENT_TREE_ICON_CSS,
   ExplorerTree,
   getExplorerTreeStyleVars,
@@ -22,6 +27,7 @@ import {
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentDocumentService } from '@/services/agentDocument';
+import { standardizeIdentifier } from '@/utils/identifier';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -33,7 +39,7 @@ import { canDropDocument } from './utils/canDrop';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}\n${DISABLE_ROW_TEXT_SELECTION_CSS}`;
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
@@ -77,6 +83,9 @@ interface Props {
 const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
+  // Only set while the standalone document route is mounted; undefined in the
+  // chat working-sidebar, where deleting a doc must not navigate anywhere.
+  const { docId: activeDocId } = useParams<{ docId?: string }>();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,7 +96,21 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
-  const ops = useDocumentTreeOps({ agentId, data, mutate });
+  // Deleting the document that's currently open in the center would leave the
+  // route pointed at a now-missing doc (404). When that happens, fall back to
+  // the docs index (empty-state guidance) instead.
+  const handleAfterDelete = useCallback(
+    (removedDocumentIds: string[]) => {
+      if (!activeDocId) return;
+      const removedActive = removedDocumentIds.some(
+        (documentId) => standardizeIdentifier(documentId) === activeDocId,
+      );
+      if (removedActive) navigate(buildAgentDocumentsPath(agentId));
+    },
+    [activeDocId, agentId, navigate],
+  );
+
+  const ops = useDocumentTreeOps({ agentId, data, mutate, onAfterDelete: handleAfterDelete });
 
   const documents = useMemo(() => data.filter((doc) => doc.category !== 'web'), [data]);
 
@@ -314,6 +337,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
       if (!isSkill && !isMulti) {
         items.push({
+          icon: <PenLineIcon size={14} />,
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
@@ -337,6 +361,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
       if (isConvertibleToSkill && !isMulti) {
         items.push({
+          icon: <Wand2Icon size={14} />,
           key: 'convert-to-skill',
           label: t('workingPanel.resources.tree.convertToSkill'),
           onClick: () => handleConvertToSkill(node.data!),

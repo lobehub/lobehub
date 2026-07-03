@@ -1,4 +1,5 @@
 export {
+  DISABLE_ROW_TEXT_SELECTION_CSS,
   DOCUMENT_TREE_ICON_CSS,
   FOLDER_ICON_CSS,
   getExplorerTreeStyleVars,
