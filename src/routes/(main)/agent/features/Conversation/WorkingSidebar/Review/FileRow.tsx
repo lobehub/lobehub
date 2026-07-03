@@ -56,10 +56,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileRowProps {
+  /** Scroll anchor — the tree-nav rail scrolls to `[data-file-key]` on select. */
+  dataFileKey?: string;
   /** Target device the repo lives on — undefined for local desktop. */
   deviceId?: string;
   entry: GitWorkingTreePatch;
   expanded: boolean;
+  /** Hide the leading directory portion (tree layout shows folders already). */
+  hideDir?: boolean;
+  /** Extra inline-start padding (px) for nested tree rows. Applied to the
+   * clickable header row only — the expanded diff stays full-width. */
+  indent?: number;
   mode: ReviewMode;
   onReverted: () => void;
   onToggle: () => void;
@@ -74,9 +81,12 @@ interface FileRowProps {
 
 const FileRow = memo<FileRowProps>(
   ({
+    dataFileKey,
     deviceId,
     entry,
     expanded,
+    hideDir,
+    indent,
     mode,
     onReverted,
     onToggle,
@@ -95,12 +105,13 @@ const FileRow = memo<FileRowProps>(
       [onToggle],
     );
     return (
-      <div className={styles.item}>
+      <div className={styles.item} data-file-key={dataFileKey}>
         <div
           data-review-row
           aria-expanded={expanded}
           className={styles.row}
           role={'button'}
+          style={indent ? { paddingInlineStart: 10 + indent } : undefined}
           tabIndex={0}
           onClick={onToggle}
           onKeyDown={onKeyDown}
@@ -114,6 +125,7 @@ const FileRow = memo<FileRowProps>(
             additions={entry.additions}
             deletions={entry.deletions}
             filePath={entry.filePath}
+            hideDir={hideDir}
             status={entry.status}
             revertContext={
               mode === 'unstaged' ? { deviceId, workingDirectory: repoAbsolutePath } : undefined

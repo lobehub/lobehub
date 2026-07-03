@@ -1428,6 +1428,8 @@ export default {
   'workingPanel.review.textDiff.enable': 'Enable inline text diff',
   'workingPanel.review.title': 'Review',
   'workingPanel.review.tooLarge': 'File is too large to diff inline',
+  'workingPanel.review.tree.hide': 'Hide file tree',
+  'workingPanel.review.tree.show': 'Show file tree',
   'workingPanel.review.unstaged': 'Unstaged',
   'workingPanel.review.viewMode.split': 'Switch to split view',
   'workingPanel.review.viewMode.unified': 'Switch to unified view',

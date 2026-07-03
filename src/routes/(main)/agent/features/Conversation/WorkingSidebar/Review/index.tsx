@@ -10,6 +10,8 @@ import {
   FoldVerticalIcon,
   GitCompareIcon,
   MoreHorizontalIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
   RefreshCwIcon,
   RotateCcwIcon,
   Rows2Icon,
@@ -18,7 +20,7 @@ import {
   WrapTextIcon,
 } from 'lucide-react';
 import path from 'path-browserify-esm';
-import { Fragment, memo, useMemo, useState } from 'react';
+import { Fragment, memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -26,7 +28,9 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useFetchGitBranch } from '@/store/device';
 
 import FileRow from './FileRow';
+import FileTreeNav from './FileTreeNav';
 import GroupHeader from './GroupHeader';
+import { itemKey } from './reviewTreeNodes';
 import { type ReviewMode, useGitRemoteBranches, useReviewPatches } from './useReviewPatches';
 
 interface RepoGroup {
@@ -50,6 +54,10 @@ interface ReviewProps {
    * set for a remote / web-bound device so git ops route through the device RPCs.
    */
   deviceId?: string;
+  /** Toggle the tree-nav rail. Owned by the sidebar so it can widen the panel. */
+  onToggleTree: () => void;
+  /** Whether the right-hand tree-nav rail is shown (two-pane). */
+  showTree: boolean;
   workingDirectory: string;
 }
 
@@ -57,9 +65,6 @@ interface ReviewProps {
 // either way keeps Shiki tokenization under ~250ms on first paint.
 const DEFAULT_EXPAND_BYTE_BUDGET = 100 * 1024;
 const DEFAULT_EXPAND_MAX_COUNT = 50;
-
-const itemKey = (groupPath: string, entry: { filePath: string; status: string }): string =>
-  `${groupPath}|${entry.status}:${entry.filePath}`;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   caret: css`
@@ -82,8 +87,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   `,
+  // Two-pane body: diff list (left, flexes) + tree-nav rail (right, fixed).
+  body: css`
+    overflow: hidden;
+    min-height: 0;
+  `,
   list: css`
     position: relative;
+    min-width: 0;
     border-block: 1px solid ${cssVar.colorBorderSecondary};
 
     /* Strip the first visible row's own top border — the list's
@@ -92,6 +103,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     & > :first-child {
       border-block-start: none;
     }
+  `,
+  treeRail: css`
+    flex: none;
+
+    width: 240px;
+    min-height: 0;
+    padding-block: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   arrow: css`
     flex-shrink: 0;
@@ -198,7 +218,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
+const Review = memo<ReviewProps>(({ deviceId, onToggleTree, showTree, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const [mode, setMode] = useLocalStorageState<ReviewMode>(REVIEW_MODE_STORAGE_KEY, 'unstaged');
   // Per-repo base-ref override — when set, the branch diff compares against
@@ -330,6 +350,31 @@ const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
     }
     setActiveKeys(initialKeys);
   }
+
+  // The file whose diff the tree-nav last scrolled to — highlighted in the rail.
+  const [activeFileKey, setActiveFileKey] = useState<string | undefined>();
+  // Scroll container for the left diff list; tree-nav clicks scroll it to the
+  // matching `[data-file-key]` row.
+  const listRef = useRef<HTMLDivElement>(null);
+  const toggleFileKey = (key: string) =>
+    setActiveKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  // Tree-nav → diff list: reveal the group, expand the file, scroll it into view.
+  const handleSelectFile = (key: string) => {
+    setActiveFileKey(key);
+    const groupPath = key.slice(0, key.indexOf('|'));
+    setCollapsedGroupPaths((prev) => {
+      if (!prev.has(groupPath)) return prev;
+      const next = new Set(prev);
+      next.delete(groupPath);
+      return next;
+    });
+    setActiveKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    // Defer until the row is mounted/uncollapsed, then scroll it to the top.
+    requestAnimationFrame(() => {
+      const el = listRef.current?.querySelector(`[data-file-key="${CSS.escape(key)}"]`);
+      el?.scrollIntoView({ block: 'start' });
+    });
+  };
 
   if (!data && isLoading) {
     return (
@@ -511,6 +556,17 @@ const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
               onClick={handleToggleAll}
             />
           )}
+          {totalEntryCount > 0 && (
+            <ActionIcon
+              active={showTree}
+              icon={showTree ? PanelRightCloseIcon : PanelRightOpenIcon}
+              size={'small'}
+              title={
+                showTree ? t('workingPanel.review.tree.hide') : t('workingPanel.review.tree.show')
+              }
+              onClick={onToggleTree}
+            />
+          )}
           <DropdownMenu items={moreMenuItems} placement={'bottomRight'}>
             <ActionIcon
               icon={MoreHorizontalIcon}
@@ -526,82 +582,92 @@ const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
           <Empty description={emptyText} icon={GitCompareIcon} />
         </Center>
       ) : (
-        <Flexbox className={styles.list} style={{ overflow: 'auto' }} width={'100%'}>
-          {groups.map((group) => {
-            const groupTotals = group.patches.reduce(
-              (acc, p) => {
-                acc.additions += p.additions ?? 0;
-                acc.deletions += p.deletions ?? 0;
-                return acc;
-              },
-              { additions: 0, deletions: 0 },
-            );
-            const groupCollapsed = collapsedGroupPaths.has(group.absolutePath);
-            const groupItemKeys = group.patches.map((p) => itemKey(group.absolutePath, p));
-            const groupAllExpanded =
-              groupItemKeys.length > 0 && groupItemKeys.every((k) => activeKeys.includes(k));
-            const toggleGroupDiffs = () => {
-              setActiveKeys((prev) => {
-                if (groupAllExpanded) {
-                  const set = new Set(groupItemKeys);
-                  return prev.filter((k) => !set.has(k));
-                }
-                const next = new Set(prev);
-                for (const k of groupItemKeys) next.add(k);
-                return Array.from(next);
-              });
-            };
-            return (
-              <Fragment key={group.absolutePath}>
-                {showGroupHeaders && (
-                  <GroupHeader
-                    branch={group.branch}
-                    collapsed={groupCollapsed}
-                    diffsAllExpanded={groupAllExpanded}
-                    hideFoldButton={groupCollapsed || group.patches.length === 0}
-                    name={group.name}
-                    patchCount={group.patches.length}
-                    totalAdditions={groupTotals.additions}
-                    totalDeletions={groupTotals.deletions}
-                    onToggleCollapsed={() => toggleGroupCollapsed(group.absolutePath)}
-                    onToggleDiffs={toggleGroupDiffs}
-                  />
-                )}
-                {showGroupHeaders &&
-                  !groupCollapsed &&
-                  !group.isParent &&
-                  group.patches.length === 0 && (
-                    <div className={styles.groupEmpty}>
-                      {t('workingPanel.review.group.submoduleClean')}
-                    </div>
+        <Flexbox horizontal className={styles.body} flex={1} width={'100%'}>
+          <Flexbox className={styles.list} flex={1} ref={listRef} style={{ overflow: 'auto' }}>
+            {groups.map((group) => {
+              const groupTotals = group.patches.reduce(
+                (acc, p) => {
+                  acc.additions += p.additions ?? 0;
+                  acc.deletions += p.deletions ?? 0;
+                  return acc;
+                },
+                { additions: 0, deletions: 0 },
+              );
+              const groupCollapsed = collapsedGroupPaths.has(group.absolutePath);
+              const groupItemKeys = group.patches.map((p) => itemKey(group.absolutePath, p));
+              const groupAllExpanded =
+                groupItemKeys.length > 0 && groupItemKeys.every((k) => activeKeys.includes(k));
+              const toggleGroupDiffs = () => {
+                setActiveKeys((prev) => {
+                  if (groupAllExpanded) {
+                    const set = new Set(groupItemKeys);
+                    return prev.filter((k) => !set.has(k));
+                  }
+                  const next = new Set(prev);
+                  for (const k of groupItemKeys) next.add(k);
+                  return Array.from(next);
+                });
+              };
+              return (
+                <Fragment key={group.absolutePath}>
+                  {showGroupHeaders && (
+                    <GroupHeader
+                      branch={group.branch}
+                      collapsed={groupCollapsed}
+                      diffsAllExpanded={groupAllExpanded}
+                      hideFoldButton={groupCollapsed || group.patches.length === 0}
+                      name={group.name}
+                      patchCount={group.patches.length}
+                      totalAdditions={groupTotals.additions}
+                      totalDeletions={groupTotals.deletions}
+                      onToggleCollapsed={() => toggleGroupCollapsed(group.absolutePath)}
+                      onToggleDiffs={toggleGroupDiffs}
+                    />
                   )}
-                {!groupCollapsed &&
-                  group.patches.map((entry) => {
-                    const key = itemKey(group.absolutePath, entry);
-                    const expanded = activeKeys.includes(key);
-                    return (
-                      <FileRow
-                        deviceId={deviceId}
-                        entry={entry}
-                        expanded={expanded}
-                        key={key}
-                        mode={mode}
-                        repoAbsolutePath={group.absolutePath}
-                        textDiff={textDiff}
-                        viewMode={viewMode}
-                        wordWrap={wordWrap}
-                        onReverted={() => void mutate()}
-                        onToggle={() =>
-                          setActiveKeys((prev) =>
-                            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-                          )
-                        }
-                      />
-                    );
-                  })}
-              </Fragment>
-            );
-          })}
+                  {showGroupHeaders &&
+                    !groupCollapsed &&
+                    !group.isParent &&
+                    group.patches.length === 0 && (
+                      <div className={styles.groupEmpty}>
+                        {t('workingPanel.review.group.submoduleClean')}
+                      </div>
+                    )}
+                  {!groupCollapsed &&
+                    group.patches.length > 0 &&
+                    group.patches.map((entry) => {
+                      const key = itemKey(group.absolutePath, entry);
+                      const expanded = activeKeys.includes(key);
+                      return (
+                        <FileRow
+                          dataFileKey={key}
+                          deviceId={deviceId}
+                          entry={entry}
+                          expanded={expanded}
+                          key={key}
+                          mode={mode}
+                          repoAbsolutePath={group.absolutePath}
+                          textDiff={textDiff}
+                          viewMode={viewMode}
+                          wordWrap={wordWrap}
+                          onReverted={() => void mutate()}
+                          onToggle={() => toggleFileKey(key)}
+                        />
+                      );
+                    })}
+                </Fragment>
+              );
+            })}
+          </Flexbox>
+          {showTree && (
+            <Flexbox className={styles.treeRail}>
+              <FileTreeNav
+                activeFileKey={activeFileKey}
+                groups={groups}
+                showGroupHeaders={showGroupHeaders}
+                onSelectFile={handleSelectFile}
+              />
+            </Flexbox>
+          )}
         </Flexbox>
       )}
     </Flexbox>

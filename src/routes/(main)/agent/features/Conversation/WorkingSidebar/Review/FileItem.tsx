@@ -116,6 +116,10 @@ interface FileItemHeaderProps {
   additions: number;
   deletions: number;
   filePath: string;
+  /** Hide the leading directory portion — used in tree layout where the
+   * containing folders are already shown by the tree, so the row only needs
+   * the bare filename. */
+  hideDir?: boolean;
   /** Called after a successful revert so the parent can refresh the patch list. */
   onReverted?: () => void;
   /** When provided, enables the per-file revert button (unstaged mode only). */
@@ -126,7 +130,7 @@ interface FileItemHeaderProps {
 }
 
 export const FileItemHeader = memo<FileItemHeaderProps>(
-  ({ filePath, additions, deletions, revertContext, onReverted }) => {
+  ({ filePath, additions, deletions, hideDir, revertContext, onReverted }) => {
     const { t } = useTranslation('chat');
     const revealInFilesTab = useGlobalStore((s) => s.revealInFilesTab);
 
@@ -195,7 +199,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
     return (
       <div className={styles.header}>
         <span className={styles.pathWrapper} title={filePath}>
-          {dir && (
+          {!hideDir && dir && (
             // bdi keeps the dir's visual order LTR while the span is
             // direction: rtl for head-side truncation of leading segments.
             <span className={styles.dir}>

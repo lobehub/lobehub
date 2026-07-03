@@ -1,7 +1,7 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
-import { lazy, memo } from 'react';
+import { lazy, memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
@@ -11,6 +11,7 @@ import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -78,6 +79,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 type Tab = 'files' | 'params' | 'review' | 'resources';
 
+const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
+const DEFAULT_PANEL_WIDTH = 360;
+// Two-pane Review (diff list + file-tree rail) is cramped below this.
+const TWO_PANE_MIN_WIDTH = 560;
+
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation(['chat', 'setting']);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
@@ -137,8 +143,34 @@ const AgentWorkingSidebar = memo(() => {
   };
   const activeTab: Tab = resolveActiveTab();
 
+  // Review's tree-nav rail lives here (not inside Review) so the panel can widen
+  // when the two-pane layout is on. Hidden by default — the panel shows only the
+  // diff list until the user opens the tree from the toolbar. Persisted so it
+  // survives reloads.
+  const [showReviewTree, setShowReviewTree] = useLocalStorageState<boolean>(
+    REVIEW_TREE_STORAGE_KEY,
+    false,
+  );
+  const [panelWidth, setPanelWidth] = useState<number | string>(DEFAULT_PANEL_WIDTH);
+  const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
+  useEffect(() => {
+    if (!reviewTwoPane) return;
+    setPanelWidth((w) =>
+      typeof w === 'number' && w < TWO_PANE_MIN_WIDTH ? TWO_PANE_MIN_WIDTH : w,
+    );
+  }, [reviewTwoPane]);
+
   return (
-    <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
+    <RightPanel
+      stableLayout
+      defaultWidth={DEFAULT_PANEL_WIDTH}
+      maxWidth={720}
+      minWidth={300}
+      width={panelWidth}
+      onSizeChange={(size) => {
+        if (typeof size?.width === 'number') setPanelWidth(size.width);
+      }}
+    >
       <Flexbox height={'100%'} width={'100%'}>
         <Flexbox
           horizontal
@@ -198,7 +230,12 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {reviewAvailable && (
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-              <Review deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
+              <Review
+                deviceId={remoteDeviceId}
+                showTree={showReviewTree}
+                workingDirectory={workingDirectory}
+                onToggleTree={() => setShowReviewTree((v) => !v)}
+              />
             </Flexbox>
           )}
           {filesAvailable && (
