@@ -2,6 +2,8 @@ export default {
   'asyncState.desc': 'Something went wrong while loading. Please try again.',
   'asyncState.metricLabel': 'Failed to load',
   'asyncState.title': 'Failed to load',
+  'saveState.retry': 'Retry',
+  'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
   'error.stack': 'Error Stack',

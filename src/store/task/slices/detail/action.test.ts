@@ -30,6 +30,10 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   notification: { error: vi.fn() },
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
   useTaskStore.setState({
@@ -117,9 +121,9 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
     });
 
-    it('should propagate error, reset saveStatus, refresh, and toast on failure', async () => {
+    it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
       const { mutate } = await import('@/libs/swr');
-      const { message } = await import('@/components/AntdStaticMethods');
+      const { toast } = await import('@lobehub/ui/base-ui');
       useTaskStore.setState({
         taskDetailMap: {
           'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
@@ -132,9 +136,11 @@ describe('TaskDetailSliceAction', () => {
         'fail',
       );
 
-      expect(useTaskStore.getState().taskSaveStatus).toBe('idle');
+      // The failure must surface as `failed` (never `idle`) so the save hint
+      // shows an error + Retry instead of masquerading as a clean state.
+      expect(useTaskStore.getState().taskSaveStatus).toBe('failed');
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
-      expect(message.error).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
     });
 
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {

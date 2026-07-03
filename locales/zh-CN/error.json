@@ -108,6 +108,8 @@
   "response.WorkspaceAgentRequiresWorkspaceDevice": "这是一个工作区助手，只能绑定全员都能访问的工作区设备。个人设备仅注册者本人可达 —— 请改选工作区设备，或先把这台设备加入工作区。",
   "response.WorkspaceFrozenByAdmin": "工作区已被管理员冻结，暂时无法处理请求。请联系工作区所有者处理",
   "response.WorkspaceFrozenByRiskControl": "工作区已被风控系统自动冻结，暂时无法处理请求。请联系客服处理",
+  "saveState.retry": "重试",
+  "saveState.saveFailed": "保存失败，请重试。",
   "stt.responseError": "请求失败。请检查配置后重试",
   "supervisor.decisionFailed": "群组主持人运行失败。请检查主持人配置（模型、API Key 与 API 地址）后重试",
   "testConnectionFailed": "测试连接失败：{{error}}",

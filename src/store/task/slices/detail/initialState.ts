@@ -1,12 +1,14 @@
 import type { TaskDetailData } from '@lobechat/types';
 
+import { type SaveStatus } from '@/types/saveState';
+
 export interface TaskDetailSliceState {
   activeTaskId?: string;
   activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;
   isDeletingTask: boolean;
   taskDetailMap: Record<string, TaskDetailData>;
-  taskSaveStatus: 'idle' | 'saved' | 'saving';
+  taskSaveStatus: SaveStatus;
 }
 
 export const initialTaskDetailSliceState: TaskDetailSliceState = {

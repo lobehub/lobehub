@@ -7,6 +7,8 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
@@ -309,22 +311,18 @@ export class TaskDetailSliceActionImpl {
     };
 
     this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
-    try {
-      await taskService.update(id, data);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-    } catch (error) {
-      this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
-      await refreshPatchedTargets();
-      message.error(
-        t('taskDetail.updateFailed', {
-          defaultValue: 'Failed to update task',
-          ns: 'chat',
-        }),
-      );
-      throw error;
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: () => taskService.update(id, data),
+      name: 'updateTask',
+      // Rollback is a server-truth refetch (not a local snapshot), so the
+      // optimistic dispatch above is reconciled from the source of record.
+      onError: async (error) => {
+        await refreshPatchedTargets();
+        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+      },
+      setStatus: (status) => this.#set({ taskSaveStatus: status }, false, `updateTask/${status}`),
+    });
 
     if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
