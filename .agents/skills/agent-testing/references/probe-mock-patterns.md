@@ -77,6 +77,109 @@
   After reverting, **re-navigate** (`agent-browser open .../task/<id>`) and re-fetch
   element refs before continuing the recovery test.
 
+### A7. ✅ WORKS — render a message-attached error card (hetero guide, AsyncError) by in-memory store dispatch
+
+- To render an error state that lives on a **chat message** (e.g. the heterogeneous
+  `overloaded` / `interrupted` guide card), no network fault or real agent run is
+  needed — inject the error straight into the chat store, **in-memory, no DB write**:
+  ```js
+  // agent-browser --cdp <port> eval --stdin
+  var c = window.__LOBE_STORES.chat();
+  var id = 'tmp_probe';
+  // 1. create a temp assistant message (in the ACTIVE conversation)
+  c.internal_dispatchMessage({
+    id,
+    type: 'createMessage',
+    value: { role: 'assistant', content: 'partial work UNIQUE_MARKER', provider: 'claude-code' },
+  });
+  // 2. attach the error whose `body.code` drives the card
+  c.internal_dispatchMessage({
+    id,
+    type: 'updateMessage',
+    value: {
+      error: {
+        type: 'AgentRuntimeError',
+        message: 'API Error: Connection closed mid-response.',
+        body: {
+          agentType: 'claude-code',
+          code: 'interrupted',
+          message: 'API Error: Connection closed mid-response.',
+        },
+      },
+    },
+  });
+  ```
+  This renders the real component (real i18n) in the running app. `code: 'overloaded'`
+  → OverloadedState; `code: 'interrupted'` → InterruptedState; etc. Clean up with
+  `internal_dispatchMessage({ id, type: 'deleteMessage' })`.
+- **No persistence / no side effects**: `internal_dispatchMessage` is the optimistic
+  in-memory path (same as `optimisticCreateTmpMessage`). Nothing hits the DB, and a
+  reload clears it. Safe even against a **real** account's synced data — do it in an
+  isolated `electron-dev.sh start <id>` instance (copied login) to be extra safe.
+- **Suppress auto-actions on purpose**: the hetero auto-retry only arms when
+  `getRetryScopeId(messageId)` finds a `user` ancestor in `dbMessages`. A tmp message
+  is NOT in `dbMessages`, so scope resolves `undefined` → the card renders in its
+  **manual** state (retry button, no countdown) and **does not auto-fire** (won't spawn
+  a real CLI). To exercise the auto-retry countdown live you'd need a real user→assistant
+  chain in `dbMessages`; otherwise cover the countdown with the component RTL test.
+- **Gotcha — `messagesMap` landing is unreliable to assert; the render is the truth.**
+  `internal_dispatchMessage` (no explicit context) targets the active conversation and
+  the message may not show up where a naive `Object.keys(messagesMap)` scan looks, yet
+  it still renders. Verify by the DOM, not by the store map.
+- **Gotcha — `document.body.innerText` keyword match false-positives in long chats.**
+  The conversation's own text (and the right-hand diff/review panel) frequently contains
+  your assert strings (e.g. `连接中断`, `重试`, `Retry`). Match on a **unique injected
+  marker** instead, `scrollIntoView` its node, then **open the screenshot with Read** to
+  confirm the card (Case 1 rule). Find + scroll to the node:
+  ```js
+  var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null),
+    n,
+    hit;
+  while ((n = w.nextNode())) {
+    if (n.nodeValue.indexOf('UNIQUE_MARKER') >= 0) {
+      hit = n;
+      break;
+    }
+  }
+  var el = hit.parentElement;
+  for (var i = 0; i < 6 && el.parentElement; i++) el = el.parentElement;
+  el.scrollIntoView({ block: 'center' });
+  ```
+
+### A8. ✅ WORKS — trigger a REAL failed load-more via store action when scroll/observer won't trip
+
+- **Situation**: verifying an infinite-scroll `loadMoreError` inline retry row. The
+  `IntersectionObserver` won't fire because the seed data is a short list that fits
+  the viewport without scrolling (virtua renders no scrollable overflow), so
+  `scrollTop = scrollHeight` scrolls nothing and `loadMore` is never called.
+- **Doesn't work**: scrolling any element to the bottom — with only 2 rows there is
+  no scroll container (`scrollHeight <= clientHeight`), and virtua's sentinel never
+  intersects.
+- **Works — two parts**:
+  1. **Force pagination with tiny seed data via HMR**: lower the component's page-size
+     const so a small dataset paginates. `AgentTopicManager` `PAGE_SIZE = 30` → `2`,
+     then an agent with 3 topics loads page-1 = 2, `hasMore = true`.
+  2. **Call the real store action directly** (bypasses the observer, but runs the real
+     fetch + real `catch`): `window.__LOBE_STORES.<store>` is a bound hook — CALL it to
+     get live state + actions (`.getState`/`.setState` are NOT exposed, C1).
+     ```js
+     // agent-browser --session <s> eval
+     var c = window.__LOBE_STORES.chat();
+     await c.loadMoreAgentTopicsView(); // hits the injected getTopics(current>0) throw
+     // → real catch sets agentTopicsViewMap[key].loadMoreError → inline AsyncError row renders
+     ```
+  Pair the service injection (A4, throw only when `params.current > 0` so page-1 loads
+  and page-2 fails) with a **call counter** to prove the observer gate does NOT loop:
+  `(globalThis).__loadMoreCalls = (…||0)+1` inside the throw; after the failure, wait a
+  few seconds and assert `window.__loadMoreCalls` stays `1` (no runaway re-trigger).
+- **Caveat**: calling the action directly proves the render + the real error code path +
+  no-runaway, but NOT the observer's `!loadMoreError` gate under real scroll (the gate
+  lives in the component's IntersectionObserver callback). To exercise the gate live you
+  need a real scrollable list — seed `> PAGE_SIZE` visible-source topics on one agent.
+- **Gotcha — the manager view filters by source (`来源: 对话`) by default.** Topics with a
+  non-conversation source/trigger show `0` even though the agent owns them in the DB;
+  click **清空筛选 / Clear filters** (or `setStatus('all')` + clear) to reveal them.
+
 ---
 
 ## B. Cache / stale state that MASKS the failure
