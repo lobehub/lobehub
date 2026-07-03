@@ -217,7 +217,13 @@ export class StreamingExecutorActionImpl {
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      effectivePluginIds,
+      // Use `mergedToolIds` (not `effectivePluginIds`) so the enable rules cover
+      // user-selected @-mention ids too — the same id set `generateToolsDetailed`
+      // receives below. Otherwise a mentioned tool that isn't pinned to the agent
+      // (e.g. a custom MCP connector picked from the @ list) would have its
+      // manifest included but be defaulted to disabled by the enable checker, so
+      // no function tools are sent. `platformFilter` still gates availability.
+      mergedToolIds,
       // Context-aware builtin manifests: lobe-agent hides callSubAgent in group /
       // sub-agent runs. Replaces the former dropSubAgentInGroup + applyPluginFilters
       // isSubAgent hard-coding.
