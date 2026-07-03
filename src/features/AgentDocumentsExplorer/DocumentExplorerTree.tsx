@@ -1,8 +1,9 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon, Wand2Icon } from 'lucide-react';
+import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -339,7 +340,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
       if (isConvertibleToSkill && !isMulti) {
         items.push({
-          icon: <Wand2Icon size={14} />,
+          icon: <Icon icon={SkillsIcon} size={14} />,
           key: 'convert-to-skill',
           label: t('workingPanel.resources.tree.convertToSkill'),
           onClick: () => handleConvertToSkill(node.data!),

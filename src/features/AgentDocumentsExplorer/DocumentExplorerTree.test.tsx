@@ -29,7 +29,12 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   ),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Icon: () => <span />,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/icons', () => ({
+  SkillsIcon: () => null,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
