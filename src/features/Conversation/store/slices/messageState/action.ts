@@ -23,7 +23,7 @@ export interface MessageEditingAction {
   /**
    * Select every selectable message from the top of the conversation down to
    * `targetId` (inclusive) — the "here" marker line. Falls back to the anchor
-   * when no target is given. Mirrors WeChat's "选择到这里".
+   * when no target is given. Mirrors WeChat's "select to here".
    */
   selectToHere: (targetId?: string) => void;
   /**

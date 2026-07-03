@@ -22,7 +22,7 @@ export interface ForwardTarget {
  * - the first (primary) target is parked + navigated to, so the user lands in
  *   it and {@link ForwardMessageDispatcher} sends the opening turn;
  * - any additional targets are sent in the background via the global chat store
- *   (isolated new topic each), so "分别发送" reaches every recipient.
+ *   (isolated new topic each), so "send separately" reaches every recipient.
  */
 export const useForwardMessages = () => {
   const { t } = useTranslation('chat');
