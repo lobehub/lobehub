@@ -38,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 32px 24px;
+    padding-block: 24px;
     padding-inline: 28px;
   `,
   desc: css`
@@ -50,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusSM};
   `,
   iconGroup: css`
-    margin-block-start: -32px;
+    margin-block-start: 0;
   `,
   overlay: css`
     pointer-events: none;

@@ -257,7 +257,7 @@ export default {
   'heteroAgent.executionTarget.gatewayDesc':
     'Run through the device gateway so other clients can follow progress',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
-  'heteroAgent.executionTarget.local': 'This device',
+  'heteroAgent.executionTarget.local': 'Local device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':

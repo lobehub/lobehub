@@ -390,7 +390,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
   const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
@@ -520,12 +519,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
           icon={<Icon icon={LaptopIcon} size={14} />}
-          tag={t('heteroAgent.executionTarget.local')}
-          label={
-            currentDevice?.friendlyName ||
-            currentDevice?.hostname ||
-            t('heteroAgent.executionTarget.local')
-          }
+          // 本机统一显示「本地设备」，不再带具体设备名称
+          label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local')}
         />
       ) : null}
