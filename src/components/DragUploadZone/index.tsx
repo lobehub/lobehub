@@ -10,10 +10,13 @@ import { useTranslation } from 'react-i18next';
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
 
-const BLOCK_SIZE = 28;
-const ICON_SIZE = { size: 18, strokeWidth: 1.5 };
-const OVERLAY_INSET = 12;
-const OVERLAY_BORDER_INSET = 6;
+const BLOCK_SIZE = 36;
+const ICON_SIZE = { size: 22, strokeWidth: 1.5 };
+const OVERLAY_INSET = 20;
+const OVERLAY_BORDER_INSET = 8;
+// The card keeps its natural (well-proportioned) size and is scaled down as a
+// whole — text included — so a short composer never gets a stretched card.
+const OVERLAY_SCALE = 0.7;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
@@ -38,8 +41,8 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 6px;
-    padding-inline: 16px;
+    padding-block: 16px;
+    padding-inline: 20px;
   `,
   desc: css`
     font-size: 12px;
@@ -69,14 +72,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   overlayContent: css`
     position: relative;
+    transform-origin: center;
+
+    /* Uniformly shrink the whole card (text included) so it keeps its
+       proportions and fits inside a short composer instead of overflowing it. */
+    transform: scale(${OVERLAY_SCALE});
 
     box-sizing: border-box;
-    width: min(520px, 92%);
-    max-width: 100%;
-
-    /* Never taller than the drop container (e.g. a short composer), so the card
-       sits inside the input instead of spilling above/below it. */
-    max-height: 100%;
+    width: min(360px, 84%);
     padding: ${OVERLAY_INSET}px;
     border-radius: 16px;
 
@@ -99,7 +102,7 @@ const styles = createStaticStyles(({ css }) => ({
     box-shadow: 0 16px 48px color-mix(in srgb, ${cssVar.purple} 32%, transparent);
   `,
   title: css`
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
     color: #fff;
   `,
