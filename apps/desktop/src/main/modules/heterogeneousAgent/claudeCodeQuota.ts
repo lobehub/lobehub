@@ -42,6 +42,18 @@ const EXTERNAL_ROUTING_FLAG_ENV_KEYS = [
 const isRoutingFlagEnabled = (value: string | undefined) =>
   !!value && !['0', 'false'].includes(value.trim().toLowerCase());
 
+/**
+ * Unlike the API-key trio (stripped from the inherited spawn env, so only the
+ * agent's own env matters), routing flags inherited from the desktop process
+ * DO reach the spawned CLI. Mirror the spawn-env merge: the agent env is
+ * spread last and wins — even to disable an inherited flag — and the process
+ * env fills the gaps.
+ */
+const effectiveRoutingFlag = (
+  options: FetchClaudeCodeQuotaOptions,
+  key: (typeof EXTERNAL_ROUTING_FLAG_ENV_KEYS)[number],
+): string | undefined => (options.env && key in options.env ? options.env[key] : process.env[key]);
+
 export interface FetchClaudeCodeQuotaOptions {
   claudeConfigDirPath?: string | null;
   env?: NodeJS.ProcessEnv;
@@ -273,7 +285,9 @@ export const fetchClaudeCodeQuota = async (
 ): Promise<ClaudeCodeQuotaSnapshot> => {
   const externalAuthKey =
     EXTERNAL_AUTH_ENV_KEYS.find((key) => asNonEmpty(options.env?.[key])) ??
-    EXTERNAL_ROUTING_FLAG_ENV_KEYS.find((key) => isRoutingFlagEnabled(options.env?.[key]));
+    EXTERNAL_ROUTING_FLAG_ENV_KEYS.find((key) =>
+      isRoutingFlagEnabled(effectiveRoutingFlag(options, key)),
+    );
   if (externalAuthKey) {
     return unavailableSnapshot(
       'external-auth',

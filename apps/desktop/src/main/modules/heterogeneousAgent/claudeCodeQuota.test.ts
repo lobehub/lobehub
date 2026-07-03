@@ -86,6 +86,26 @@ describe('fetchClaudeCodeQuota', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('honors routing flags inherited from the desktop process env', async () => {
+    vi.stubEnv('CLAUDE_CODE_USE_VERTEX', '1');
+
+    const result = await fetchClaudeCodeQuota();
+
+    expect(result).toMatchObject({ reason: 'external-auth', status: 'unavailable' });
+    expect(result.error).toContain('CLAUDE_CODE_USE_VERTEX');
+  });
+
+  it('lets the agent env disable an inherited routing flag', async () => {
+    setPlatform('linux');
+    vi.stubEnv('CLAUDE_CODE_USE_BEDROCK', '1');
+    vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
+    vi.mocked(fetch).mockResolvedValue(okUsageResponse({ five_hour: { utilization: 10 } }));
+
+    const result = await fetchClaudeCodeQuota({ env: { CLAUDE_CODE_USE_BEDROCK: '0' } });
+
+    expect(result.status).toBe('ok');
+  });
+
   it('ignores disabled routing flags and falls through to the credential lookup', async () => {
     setPlatform('linux');
     vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
