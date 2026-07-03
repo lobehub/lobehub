@@ -1,7 +1,6 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { TaskListItem, TaskParticipant } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -11,7 +10,6 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
-import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
@@ -21,6 +19,7 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -1106,18 +1105,14 @@ export const taskRouter = router({
         // policy at line ~1166): only they can change visibility on tasks
         // created by other members.
         if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
-          const [membership] = await ctx.serverDB
-            .select({ role: workspaceMembers.role })
-            .from(workspaceMembers)
-            .where(
-              and(
-                eq(workspaceMembers.workspaceId, ctx.workspaceId),
-                eq(workspaceMembers.userId, ctx.userId),
-                isNull(workspaceMembers.deletedAt),
-              ),
-            )
-            .limit(1);
-          if (!membership || membership.role !== 'owner') {
+          const canOverride = await hasWorkspaceScopedPermission({
+            action: 'AGENT_UPDATE',
+            db: ctx.serverDB,
+            scopes: ['ALL'],
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+          if (!canOverride) {
             throw new TRPCError({
               code: 'FORBIDDEN',
               message: 'Only the task creator or workspace owner can change visibility',
@@ -1295,18 +1290,14 @@ export const taskRouter = router({
         });
 
       if (ctx.workspaceId && task.createdByUserId !== ctx.userId) {
-        const [membership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, ctx.workspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!membership || membership.role !== 'owner') {
+        const canOverride = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          scopes: ['ALL'],
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (!canOverride) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
@@ -1324,18 +1315,13 @@ export const taskRouter = router({
       }
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -1364,18 +1350,13 @@ export const taskRouter = router({
         });
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',

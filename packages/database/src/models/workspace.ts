@@ -1,5 +1,7 @@
-import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
+import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
+import { and, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 
+import { roles, userRoles } from '../schemas/rbac';
 import {
   type NewWorkspace,
   type WorkspaceItem,
@@ -7,6 +9,30 @@ import {
   workspaces,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+
+const hasWorkspaceOwnerRole = async (
+  db: Pick<LobeChatDatabase, 'select'>,
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> => {
+  const rows = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.workspaceId, workspaceId),
+        eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
+        eq(roles.workspaceId, workspaceId),
+        eq(roles.isActive, true),
+        sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
+};
 
 export class WorkspaceModel {
   protected readonly db: LobeChatDatabase;
@@ -161,7 +187,8 @@ export class WorkspaceModel {
       });
       if (!targetMembership)
         throw new Error('Target user must already be a member of the workspace');
-      if (targetMembership.role !== 'owner')
+      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, newPrimaryOwnerUserId);
+      if (!targetIsOwner)
         throw new Error('Target user must already be an owner — promote them first');
 
       await tx
@@ -186,7 +213,8 @@ export class WorkspaceModel {
           isNull(workspaceMembers.deletedAt),
         ),
       });
-      if (actor?.role !== 'owner')
+      const actorIsOwner = await hasWorkspaceOwnerRole(tx, id, this.userId);
+      if (!actor || !actorIsOwner)
         throw new Error('Only an owner can promote other members to owner');
 
       const target = await tx.query.workspaceMembers.findFirst({
@@ -197,7 +225,8 @@ export class WorkspaceModel {
         ),
       });
       if (!target) throw new Error('Target user is not a member of this workspace');
-      if (target.role === 'owner') return target;
+      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, targetUserId);
+      if (targetIsOwner) return { ...target, role: 'owner' };
 
       await tx
         .update(workspaceMembers)
@@ -228,7 +257,8 @@ export class WorkspaceModel {
           isNull(workspaceMembers.deletedAt),
         ),
       });
-      if (actor?.role !== 'owner') throw new Error('Only an owner can demote other owners');
+      const actorIsOwner = await hasWorkspaceOwnerRole(tx, id, this.userId);
+      if (!actor || !actorIsOwner) throw new Error('Only an owner can demote other owners');
 
       const target = await tx.query.workspaceMembers.findFirst({
         where: and(
@@ -238,7 +268,8 @@ export class WorkspaceModel {
         ),
       });
       if (!target) throw new Error('Target user is not a member of this workspace');
-      if (target.role !== 'owner') return target;
+      const targetIsOwner = await hasWorkspaceOwnerRole(tx, id, targetUserId);
+      if (!targetIsOwner) return { ...target, role: 'member' };
 
       await tx
         .update(workspaceMembers)
@@ -255,12 +286,20 @@ export class WorkspaceModel {
     const result = await this.db
       .select({ count: count() })
       .from(workspaceMembers)
+      .innerJoin(
+        userRoles,
+        and(eq(userRoles.userId, workspaceMembers.userId), eq(userRoles.workspaceId, workspaceId)),
+      )
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.role, 'owner'),
           ne(workspaceMembers.userId, excludeUserId),
           isNull(workspaceMembers.deletedAt),
+          eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
+          eq(roles.workspaceId, workspaceId),
+          eq(roles.isActive, true),
+          sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
         ),
       );
     return result[0]?.count ?? 0;

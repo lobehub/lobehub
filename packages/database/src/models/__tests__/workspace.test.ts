@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,6 +12,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { assignWorkspaceRoleToUser, seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
 import { WorkspaceModel } from '../workspace';
 import { WorkspaceAuditLogModel } from '../workspaceAuditLog';
 import { WorkspaceMemberModel } from '../workspaceMember';
@@ -43,6 +45,17 @@ const createWorkspace = async (id = 'workspace-model-ws') => {
     { role: 'member', userId: memberId, workspaceId: id },
     { role: 'owner', userId: secondOwnerId, workspaceId: id },
   ]);
+  await seedWorkspaceRoles(serverDB, id);
+  await assignWorkspaceRoleToUser(serverDB, {
+    roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
+    userId: ownerId,
+    workspaceId: id,
+  });
+  await assignWorkspaceRoleToUser(serverDB, {
+    roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
+    userId: secondOwnerId,
+    workspaceId: id,
+  });
   return id;
 };
 
