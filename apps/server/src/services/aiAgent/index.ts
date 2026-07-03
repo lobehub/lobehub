@@ -320,6 +320,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
     rejectionReason?: string;
     toolCallId: string;
   };
+  /**
+   * Tool identifiers the user @-mentioned in this message. Merged into the
+   * agent's plugin set for this run (alongside `additionalPluginIds`) so a
+   * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
+   * picked from the @ list — is enabled and callable. User-scoped lookups
+   * downstream (connectors, installed plugins) keep it to the caller's own tools.
+   */
+  selectedToolIds?: string[];
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
@@ -912,6 +920,7 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      selectedToolIds,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
@@ -2006,7 +2015,17 @@ export class AiAgentService {
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let composioManifests: LobeToolManifest[] = [];
     let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
-    let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
+    // `selectedToolIds` are the user's @-mention picks for this turn; merged in
+    // (deduped) alongside the agent's pinned plugins and any internal
+    // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
+    // connector) is both queried for manifests and enabled by the tools engine.
+    let agentPlugins: string[] = [
+      ...new Set([
+        ...(agentConfig?.plugins ?? []),
+        ...(additionalPluginIds || []),
+        ...(selectedToolIds || []),
+      ]),
+    ];
 
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');

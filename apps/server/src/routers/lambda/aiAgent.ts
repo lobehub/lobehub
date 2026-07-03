@@ -191,6 +191,14 @@ const ExecAgentSchema = z
         toolCallId: z.string(),
       })
       .optional(),
+    /**
+     * Tool identifiers the user @-mentioned in this message. Enabled for this
+     * run in addition to the agent's pinned plugins, so a mentioned tool that
+     * isn't pinned to the agent (e.g. a custom MCP connector picked from the @
+     * list) is callable. Scoped to the caller's own installed tools/connectors
+     * by the user-scoped lookups downstream, so it can't enable others' tools.
+     */
+    selectedToolIds: z.array(z.string()).optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
     /**
@@ -680,6 +688,7 @@ export const aiAgentRouter = router({
       fileIds,
       parentMessageId,
       resumeApproval,
+      selectedToolIds,
       trigger,
       userInterventionConfig,
     } = input;
@@ -700,6 +709,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
         userInterventionConfig,

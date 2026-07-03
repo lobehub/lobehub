@@ -909,6 +909,11 @@ export class ConversationLifecycleActionImpl {
           metadata: requestMetadata,
           parentOperationId: operationId,
           optimisticTopic,
+          // Forward @-mentioned tool ids so the server runtime enables them for
+          // this run — the gateway/server path otherwise never sees the mention
+          // selection (only the client runtime did). Omit when empty.
+          selectedToolIds:
+            selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.

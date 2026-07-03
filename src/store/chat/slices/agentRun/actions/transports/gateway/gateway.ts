@@ -392,6 +392,14 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
     /**
+     * Tool identifiers the user @-mentioned in this message. Forwarded to the
+     * server as `selectedToolIds` so the server runtime enables them for this
+     * run (mirrors the client runtime's mention → callable-tool wiring). Lets a
+     * user invoke a tool that isn't pinned to the agent (e.g. a custom MCP
+     * connector picked from the @ list).
+     */
+    selectedToolIds?: string[];
+    /**
      * Temporary message IDs created during the initial sendMessage phase.
      * These are associated with the new gateway operation so the UI doesn't
      * show a blank loading state while waiting for the first `step_start`
@@ -409,6 +417,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      selectedToolIds,
       tempMessageIds,
     } = params;
 
@@ -477,6 +486,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        selectedToolIds,
         trigger: metadata?.trigger,
         userInterventionConfig,
       },

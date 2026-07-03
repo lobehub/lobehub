@@ -37,6 +37,8 @@ export interface ExecAgentTaskParams {
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
+  selectedToolIds?: string[];
   slug?: string;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
