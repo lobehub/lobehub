@@ -13,12 +13,11 @@ import type { AssistantContentBlock } from '@/types/index';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import CouncilList from '../../AgentCouncil/components/CouncilList';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
-import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
   formatReasoningDuration,
   getPostToolAnswerSplitIndex,
-  scoreBlockContentAsAnswerLike,
+  isFoldableStatusLine,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
@@ -214,7 +213,8 @@ const appendWorkflowBlock = (
 const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
   if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
 
-  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
+  // Only a single short status line stays folded with its tools; everything else is prose.
+  return !isFoldableStatusLine(block);
 };
 
 const appendWorkflowRangeBlock = (
