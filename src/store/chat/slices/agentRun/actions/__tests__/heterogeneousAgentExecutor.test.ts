@@ -1360,7 +1360,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         heteroSessionId: undefined,
+        heteroSessionIdByWorkingDirectory: {},
         workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
       });
 
       ipc.emitRawLine('ipc-sess-2', { thread_id: 'thread_new_456', type: 'thread.started' });
@@ -1373,7 +1375,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         heteroSessionId: 'thread_new_456',
+        heteroSessionIdByWorkingDirectory: {
+          '/Users/me/repo': 'thread_new_456',
+        },
         workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
       });
     });
 

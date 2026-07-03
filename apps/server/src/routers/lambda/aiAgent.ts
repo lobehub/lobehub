@@ -29,6 +29,8 @@ import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 
+import { workingDirConfigSchema } from './workingDirSchema';
+
 const log = debug('lobe-server:ai-agent-router');
 
 const createUiMessageFileUrlResolver = () => {
@@ -146,6 +148,7 @@ const ExecAgentSchema = z
           .object({
             repos: z.array(z.string()).optional(),
             workingDirectory: z.string().optional(),
+            workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
         /**

@@ -623,6 +623,7 @@ describe('ConversationLifecycle actions', () => {
             metadata: {
               repos: [selectedRepo],
               workingDirectory: selectedRepo,
+              workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
             },
           }),
         );
@@ -632,6 +633,7 @@ describe('ConversationLifecycle actions', () => {
               metadata: {
                 repos: [selectedRepo],
                 workingDirectory: selectedRepo,
+                workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
               },
             }),
           }),

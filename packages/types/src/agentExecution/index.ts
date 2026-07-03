@@ -1,12 +1,9 @@
+import type { WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
 export type AgentSignalOperationKind =
-  | 'memory'
-  | 'nightly-review'
-  | 'self-feedback-intent'
-  | 'self-reflection'
-  | 'skill';
+  'memory' | 'nightly-review' | 'self-feedback-intent' | 'self-reflection' | 'skill';
 
 /**
  * Run-scoped Agent Signal marker stamped onto a background agent operation at
@@ -80,6 +77,7 @@ export interface ExecAgentAppContext {
   initialTopicMetadata?: {
     repos?: string[];
     workingDirectory?: string;
+    workingDirectoryConfig?: WorkingDirConfig;
   };
   /**
    * Whether this operation is an isolated sub-agent execution. Used to disable

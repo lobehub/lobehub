@@ -435,7 +435,11 @@ export class GatewayActionImpl {
       isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
     const initialTopicMetadata =
       pendingRepos.length > 0
-        ? { repos: pendingRepos, workingDirectory: pendingRepos[0] }
+        ? {
+            repos: pendingRepos,
+            workingDirectory: pendingRepos[0],
+            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
+          }
         : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the

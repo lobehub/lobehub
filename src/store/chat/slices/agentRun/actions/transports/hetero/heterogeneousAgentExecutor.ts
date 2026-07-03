@@ -20,11 +20,13 @@ import {
 import type {
   ChatMessageError,
   ChatToolPayload,
+  ChatTopicMetadata,
   ChatTopicStatus,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
   UIChatMessage,
+  WorkingDirConfig,
 } from '@lobechat/types';
 import {
   AgentRuntimeErrorType,
@@ -36,6 +38,10 @@ import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import {
+  removeHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionIdForWorkingDirectory,
+} from '@/helpers/heteroSessionByWorkingDirectory';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
@@ -105,8 +111,7 @@ const maybeClassifyCliAuthRequiredError = (
 
 const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
   const errorBody = error.body as
-    | (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean })
-    | undefined;
+    (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean }) | undefined;
   if (
     !errorBody?.clearEchoedContent &&
     errorBody?.code !== HeterogeneousAgentSessionErrorCode.AuthRequired
@@ -201,7 +206,20 @@ export interface HeterogeneousAgentExecutorParams {
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeSessionId?: string;
   workingDirectory?: string;
+  workingDirectoryConfig?: WorkingDirConfig;
 }
+
+const getTopicMetadataById = (
+  store: ChatStore,
+  topicId: string | undefined,
+): ChatTopicMetadata | undefined => {
+  if (!topicId) return;
+
+  for (const topicData of Object.values(store.topicDataMap ?? {})) {
+    const topic = topicData?.items?.find((item) => item.id === topicId);
+    if (topic) return topic.metadata;
+  }
+};
 
 /**
  * Map heterogeneousProvider.command to adapter type key.
@@ -351,6 +369,7 @@ export const executeHeterogeneousAgent = async (
     operationId,
     resumeSessionId,
     workingDirectory,
+    workingDirectoryConfig,
   } = params;
 
   const adapterType = resolveAdapterType(heterogeneousProvider);
@@ -536,6 +555,12 @@ export const executeHeterogeneousAgent = async (
   const abortSignal = get().operations?.[operationId]?.abortController?.signal;
   const isAborted = () => !!abortSignal?.aborted;
   const updateTopicMetadata = get().updateTopicMetadata;
+  const getPersistedWorkingDirectoryConfig = (
+    topicMetadata: ChatTopicMetadata | undefined,
+  ): WorkingDirConfig | undefined =>
+    workingDirectoryConfig ??
+    topicMetadata?.workingDirectoryConfig ??
+    (workingDirectory === undefined ? undefined : { path: workingDirectory });
   const hasStreamedState = () =>
     sawStreamedEvent ||
     !!mainState.accContent ||
@@ -546,9 +571,15 @@ export const executeHeterogeneousAgent = async (
   const clearStaleResumeMetadata = async () => {
     if (!context.topicId || !updateTopicMetadata) return;
 
+    const topicMetadata = getTopicMetadataById(get(), context.topicId);
     await updateTopicMetadata(context.topicId, {
       heteroSessionId: undefined,
+      heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
+        topicMetadata,
+        workingDirectory,
+      ),
       workingDirectory: workingDirectory ?? '',
+      workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
     });
   };
   const writeTopicStatus = (status: ChatTopicStatus): void => {
@@ -1501,6 +1532,7 @@ export const executeHeterogeneousAgent = async (
       .getSessionInfo(agentSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
+      const topicMetadata = getTopicMetadataById(get(), context.topicId);
       // Best-effort: a rejected
       // metadata save must NOT throw past the queue drain below — guarding the
       // await here keeps the resume-id persistence from blocking the follow-up
@@ -1508,7 +1540,13 @@ export const executeHeterogeneousAgent = async (
       // `resolveHeteroResume` reads the just-finished session id.
       await updateTopicMetadata?.(context.topicId, {
         heteroSessionId: sessionInfo.agentSessionId,
+        heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+          topicMetadata,
+          workingDirectory,
+          sessionInfo.agentSessionId,
+        ),
         workingDirectory: workingDirectory ?? '',
+        workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
       }).catch((err) =>
         console.error('[HeterogeneousAgent] Failed to persist resume session id:', err),
       );

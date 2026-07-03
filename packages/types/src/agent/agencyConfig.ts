@@ -506,9 +506,9 @@ export interface LobeAgentAgencyConfig {
    *     > effective path of `workingDirByDevice[targetDeviceId]`
    *     > `device.defaultCwd`
    *
-   * Legacy values are plain path strings. New git-aware values may carry
-   * `git.activeWorktree`; when present, that active worktree is the effective
-   * cwd while `path` remains the source/recent entry.
+   * Legacy values are plain path strings. New git-aware values may carry `git`
+   * metadata; when `git.activeWorktree` is present, that active worktree is the
+   * effective cwd while `path` remains the source/recent entry.
    *
    * Keyed per device so switching the bound device never resolves a path that
    * only exists on another machine. Persisted (server-synced) so the choice

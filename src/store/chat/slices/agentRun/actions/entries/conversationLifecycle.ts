@@ -20,11 +20,13 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -565,14 +567,30 @@ export class ConversationLifecycleActionImpl {
       ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const agentState = getAgentStoreState();
     const agentWorkingDirectory =
       runtimeType === 'hetero' && heterogeneousProvider
-        ? agentByIdSelectors.getAgentWorkingDirectoryById(
-            agentId,
-            currentDeviceId,
-          )(getAgentStoreState())
+        ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
         : undefined;
-    const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
+    const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
+    const agentWorkingDirectoryConfig =
+      runtimeType === 'hetero' && heterogeneousProvider
+        ? resolveAgentWorkingDirectoryConfig({
+            agencyConfig,
+            currentDeviceId,
+            fallback: agentWorkingDirectory,
+            legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+          })
+        : undefined;
+    const workingDirectory =
+      existingTopic?.metadata?.workingDirectory ??
+      getWorkingDirEffectivePath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      agentWorkingDirectory;
+    const workingDirectoryConfig =
+      existingTopic?.metadata?.workingDirectoryConfig ??
+      (existingTopic?.metadata?.workingDirectory
+        ? { path: existingTopic.metadata.workingDirectory }
+        : agentWorkingDirectoryConfig);
     const pendingTopicRepos =
       runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
         ? getPendingTopicRepos(operationContext.agentId)
@@ -581,9 +599,16 @@ export class ConversationLifecycleActionImpl {
     // until the server topic replaces `tmp_topic_*`.
     const optimisticTopicMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
-        ? { repos: pendingTopicRepos, workingDirectory: pendingTopicRepos[0] }
+        ? {
+            repos: pendingTopicRepos,
+            workingDirectory: pendingTopicRepos[0],
+            workingDirectoryConfig: { path: pendingTopicRepos[0], repoType: 'github' },
+          }
         : workingDirectory
-          ? { workingDirectory }
+          ? {
+              workingDirectory,
+              ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+            }
           : undefined;
 
     const optimisticTopic: OptimisticTopicPlaceholder | undefined =
@@ -715,7 +740,12 @@ export class ConversationLifecycleActionImpl {
             newAssistantMessage: { provider: heterogeneousProvider.type },
             newTopic: !operationContext.topicId
               ? {
-                  metadata: workingDirectory ? { workingDirectory } : undefined,
+                  metadata: workingDirectory
+                    ? {
+                        workingDirectory,
+                        ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+                      }
+                    : undefined,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -877,6 +907,7 @@ export class ConversationLifecycleActionImpl {
           operationId: heteroOpId,
           resumeSessionId,
           workingDirectory,
+          workingDirectoryConfig,
         });
       } catch (e) {
         console.error('[HeterogeneousAgent] Execution failed:', e);

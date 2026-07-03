@@ -59,12 +59,39 @@ export interface WorkspaceInitResult {
 
 /**
  * A working directory source a device has used. Structured (rather than a bare
- * path string) so metadata such as the detected repo type and active git
- * worktree survives — a remote client viewing this device can't re-probe its
- * filesystem, so whatever isn't captured here at the source is lost. Mirrors
- * the client-local `RecentDirEntry` shape.
+ * path string) so metadata such as the detected repo type, active git
+ * branch, and active git worktree survives — a remote client viewing this
+ * device can't re-probe its filesystem, so whatever isn't captured here at the
+ * source is lost.
  */
 export type WorkingDirRepoType = 'git' | 'github';
+
+export type DeviceGitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
+/** A GitHub pull request linked to a branch. */
+export interface DeviceGitLinkedPullRequest {
+  ciStatus?: DeviceGitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
+  number: number;
+  reviewDecision?: string;
+  state: string;
+  title: string;
+  url: string;
+}
+
+export type DeviceGitLinkedPullRequestLookupStatus = 'error' | 'gh-missing' | 'ok';
+
+export interface WorkingDirGithubState {
+  /** Additional open PRs targeting the same head branch, beyond the primary one. */
+  extraPullRequestCount?: number;
+  /** GitHub PR linked to the effective working directory's branch. */
+  pullRequest?: DeviceGitLinkedPullRequest | null;
+  /** Lookup status for the linked PR probe. */
+  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+}
 
 export interface WorkingDirGitState {
   /**
@@ -72,6 +99,20 @@ export interface WorkingDirGitState {
    * path itself is the effective working directory.
    */
   activeWorktree?: string;
+  /**
+   * Branch for the effective working directory. Undefined for detached HEAD or
+   * when it has not been probed yet.
+   */
+  branch?: string;
+  /** True when the effective working directory is currently detached. */
+  detached?: boolean;
+  /** GitHub-specific branch metadata such as linked PR and check status. */
+  github?: WorkingDirGithubState;
+  /**
+   * True when the effective working directory is a linked worktree rather than
+   * the source path itself.
+   */
+  isWorktree?: boolean;
 }
 
 export interface WorkingDirConfig {
@@ -186,14 +227,6 @@ export interface DeviceGitBranchInfo {
   detached?: boolean;
 }
 
-/** A GitHub pull request linked to a branch. */
-export interface DeviceGitLinkedPullRequest {
-  number: number;
-  state: string;
-  title: string;
-  url: string;
-}
-
 /**
  * Result of the `getLinkedPullRequest` device RPC: the PR linked to a branch
  * (when the repo is a GitHub remote). Mirrors the desktop shape.
@@ -204,7 +237,7 @@ export interface DeviceGitLinkedPullRequestResult {
   /** Null when no open PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
-  status: 'error' | 'gh-missing' | 'ok';
+  status: DeviceGitLinkedPullRequestLookupStatus;
 }
 
 /**

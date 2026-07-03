@@ -1,5 +1,6 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
 import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
@@ -103,6 +104,22 @@ const cancelPendingSingleClick = () => {
 // Last non-empty path segment — the folder name. Also yields the repo name for
 // a web github URL (".../owner/repo" → "repo").
 const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
+
+const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => {
+  const config = metadata?.workingDirectoryConfig;
+  const workingDirectory = metadata?.workingDirectory ?? getWorkingDirEffectivePath(config);
+  if (!workingDirectory) return;
+
+  const branch = config?.git?.branch;
+  const dirName = getDirName(workingDirectory);
+  const sourceName = config?.git?.isWorktree ? getDirName(config.path) : undefined;
+  const pathLabel = sourceName && sourceName !== dirName ? `${sourceName}/${dirName}` : dirName;
+
+  return {
+    label: branch ? `${pathLabel} · ${branch}` : pathLabel,
+    repoType: config?.repoType ?? (isDesktop ? undefined : 'github'),
+  };
+};
 
 interface RunningElapsedTimeProps {
   agentId?: string;
@@ -256,15 +273,15 @@ const TopicItem = memo<TopicItemProps>(
 
     // By-status grouping mixes topics from different projects, so surface each
     // topic's working directory as a muted second line. Data is already on the
-    // topic (`metadata.workingDirectory`) — no fetch. On web it's a github repo
-    // URL; on desktop a local path shown with a plain folder icon.
-    const workingDirectory = metadata?.workingDirectory;
+    // topic (`metadata.workingDirectoryConfig` / `workingDirectory`) — no fetch.
+    // On web it's a github repo URL; on desktop a local path.
+    const workingDirectoryDisplay = getWorkingDirectoryDisplay(metadata);
     const workingDirectoryNode =
-      showWorkingDirectory && workingDirectory ? (
+      showWorkingDirectory && workingDirectoryDisplay ? (
         <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
-          <DirIcon repoType={isDesktop ? undefined : 'github'} size={13} />
-          <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextDescription }}>
-            {getDirName(workingDirectory)}
+          <DirIcon repoType={workingDirectoryDisplay.repoType} size={12} />
+          <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+            {workingDirectoryDisplay.label}
           </Text>
         </Flexbox>
       ) : undefined;
