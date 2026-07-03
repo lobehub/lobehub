@@ -262,10 +262,10 @@ export class TaskDetailSliceActionImpl {
       await taskService.updateVisibility(id, visibility);
       await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
     } catch (error) {
-      // LOBE-10961 surfaces a specific actionable error when the task's assignee
-      // is a private agent. The generic "failed" toast hides what the user must
-      // do next; substitute a targeted one so they know to either reassign or
-      // publish the agent first.
+      // Surfaces a specific actionable error when the task's assignee is a
+      // private agent. The generic "failed" toast hides what the user must
+      // do next; substitute a targeted one so they know to either reassign
+      // or publish the agent first.
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
       message.error(

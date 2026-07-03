@@ -105,7 +105,7 @@ describe('DocumentModel — private/public cross-user isolation', () => {
   });
 
   describe('workspace mode — public agent gate (callerAgentVisibility)', () => {
-    // Closes the LOBE-11055 read-path leak: a workspace-public agent must not
+    // Guards against a read-path leak: a workspace-public agent must not
     // read the caller's own private documents even though it runs under the
     // caller's session. Mirrors the task side's `assertAgentVisibilityCompat`
     // (public task ≠ private agent).

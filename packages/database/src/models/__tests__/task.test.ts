@@ -1972,8 +1972,8 @@ describe('TaskModel', () => {
     });
 
     it('should hide private task comments from other workspace members', async () => {
-      // LOBE-10962 #2: comments inherit task visibility on insert and are
-      // filtered by commentsOwnership on read.
+      // Comments inherit task visibility on insert and are filtered by
+      // commentsOwnership on read.
       const alice = new TaskModel(serverDB, userId, wsId);
       const bob = new TaskModel(serverDB, userId2, wsId);
 
@@ -2006,7 +2006,7 @@ describe('TaskModel', () => {
       expect(await bob.getComments(publicTask.id)).toHaveLength(1);
     });
 
-    it('should NOT cascade updateVisibility into historical task_comments (LOBE-11028)', async () => {
+    it('should NOT cascade updateVisibility into historical task_comments', async () => {
       // Comments are event-shaped historical rows whose visibility is fixed at
       // write time. Promoting the parent task to public must not retroactively
       // expose discussions that took place while the task was private — that
@@ -2051,7 +2051,7 @@ describe('TaskModel', () => {
       expect(await bob.getComments(task.id)).toHaveLength(1);
     });
 
-    it('should NOT cascade updateVisibility into historical task_topics (LOBE-11028)', async () => {
+    it('should NOT cascade updateVisibility into historical task_topics', async () => {
       // Same rationale as comments: a task_topics row records one run of the
       // task. Its visibility is fixed at write time; promoting the task to
       // public must not retroactively expose runs (transcripts, handoffs,

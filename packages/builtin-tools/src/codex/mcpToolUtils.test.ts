@@ -46,7 +46,7 @@ describe('getCodexLinearMcpApiName', () => {
   it('normalizes Codex Apps dotted Linear tool names', () => {
     expect(
       getCodexLinearMcpApiName({
-        input: { id: 'LOBE-11078' },
+        input: { id: 'ISSUE-12345' },
         server: 'codex_apps',
         toolName: 'linear.get_issue',
       }),

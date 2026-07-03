@@ -32,8 +32,8 @@ import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * Ownership helpers in this model come in three flavors. Choose by USE CASE,
- * not by table — picking the wrong one is how LOBE-10946's `seq` allocation
- * hotfix got introduced (see git log).
+ * not by table — picking the wrong one led to a `seq` allocation hotfix
+ * (see git log).
  *
  * ┌────────────────────┬──────────────────────────────────────────────┬────────────────────────┐
  * │ Helper             │ Use for                                      │ Visibility-aware?      │
@@ -255,18 +255,18 @@ export class TaskModel {
   }
 
   /**
-   * Promote a task and its full subtree to a new visibility. Combined with the
-   * router-level guard (LOBE-11027), the only legal transition is
-   * `private → public` — there is no `public → private` path.
+   * Promote a task and its full subtree to a new visibility. The only legal
+   * transition is `private → public` — there is no `public → private` path
+   * (one-way commitment; enforced by the router-level guard).
    *
    * Cascades inside a single transaction across structural rows only:
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set.
    *
-   * `task_topics` and `task_comments` are deliberately **not** cascaded
-   * (LOBE-11028). They are event-shaped historical rows whose visibility was
-   * fixed at write time; promoting the task to public must not retroactively
-   * expose runs and discussions that happened while the task was private.
+   * `task_topics` and `task_comments` are deliberately **not** cascaded.
+   * They are event-shaped historical rows whose visibility was fixed at write
+   * time; promoting the task to public must not retroactively expose runs and
+   * discussions that happened while the task was private.
    * Topics / comments created after promotion inherit the task's then-current
    * visibility through their own create paths.
    *

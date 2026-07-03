@@ -74,7 +74,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // In personal mode the chip is hidden and the value is never sent.
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
 
-  // LOBE-10961: a private agent can only run a private task. Coerce + lock the
+  // A private agent can only run a private task. Coerce + lock the
   // visibility chip when the selected agent is private.
   const assigneeVisibility = useAgentVisibility(assigneeAgentId);
   const isPrivateAgent = assigneeVisibility === 'private';

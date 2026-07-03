@@ -248,8 +248,8 @@ export const taskTopics = pgTable(
 
     // Snapshot of the task's visibility at the time this run was created.
     // Topics inherit `tasks.visibility` on insert but are **not** cascaded by
-    // `TaskModel.updateVisibility` (LOBE-11028): promoting a task to public
-    // must not retroactively expose runs that happened while it was private.
+    // `TaskModel.updateVisibility`: promoting a task to public must not
+    // retroactively expose runs that happened while it was private.
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
       .notNull(),

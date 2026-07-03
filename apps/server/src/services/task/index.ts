@@ -157,8 +157,8 @@ export class TaskService {
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
 
-    // Invariant: a subtask can never be more public than its parent (LOBE-10962
-    // #3). Otherwise workspace members see an orphaned child whose parent is
+    // Invariant: a subtask can never be more public than its parent.
+    // Otherwise workspace members see an orphaned child whose parent is
     // hidden, leaking the existence of a private task. The inference path
     // already inherits parent visibility, but the explicit-override path can
     // produce a `Private parent + Public child` combo if the caller insists.

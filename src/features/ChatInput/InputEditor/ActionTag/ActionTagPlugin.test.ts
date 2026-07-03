@@ -17,7 +17,7 @@ const makeNode = (opts: { format?: boolean; parent?: any; type?: string }): any 
 
 describe('INLINE_ACTION_TAG_REGEX', () => {
   it('matches the tag a user typed, with trailing text (the regression case)', () => {
-    const text = '<skill name="ux-audit" label="ux-audit" />  搞 LOBE-11218';
+    const text = '<skill name="ux-audit" label="ux-audit" />  do the UX audit';
     const match = INLINE_ACTION_TAG_REGEX.exec(text);
 
     expect(match).not.toBeNull();

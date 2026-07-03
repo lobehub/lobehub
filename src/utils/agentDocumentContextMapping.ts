@@ -69,8 +69,8 @@ export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentC
  * child's `parentId` points at the folder's `documentId` (`documents.id`),
  * while the surviving context docs are keyed by their own `agentDocuments.id`
  * — so folder-title resolution has to happen here, not in the injector. The
- * progressive index then folds same-folder siblings into one summary row
- * without ever consuming the folder body's token budget (LOBE-11072).
+ * progressive index folds same-folder siblings into one summary row without
+ * ever consuming the folder body's token budget.
  */
 export const toAgentContextDocuments = (
   docs: AgentDocumentContextPayload[],

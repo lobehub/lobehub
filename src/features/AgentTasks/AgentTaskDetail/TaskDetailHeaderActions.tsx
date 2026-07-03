@@ -113,8 +113,8 @@ const TaskDetailHeaderActions = memo(() => {
 
     // Publish-to-workspace is the one-way visibility transition. Only surface
     // it on private tasks inside a workspace; public tasks have no inverse
-    // action (intentional — see LOBE-10944 心智模型 #1) and personal mode has
-    // no workspace to publish to.
+    // action (intentional — visibility is a one-way commitment) and personal
+    // mode has no workspace to publish to.
     const publishItem: DropdownItem | null =
       activeWorkspaceId && visibility === 'private'
         ? {

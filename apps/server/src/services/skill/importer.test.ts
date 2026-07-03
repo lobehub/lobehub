@@ -1166,12 +1166,12 @@ description: A nested skill
     });
   });
 
-  // Regression for LOBE-10893: a skill imported while running inside a workspace
-  // must be written with `workspace_id = <ws>`, not the importer's personal scope
+  // Regression: a skill imported while running inside a workspace must be
+  // written with `workspace_id = <ws>`, not the importer's personal scope
   // (`workspace_id IS NULL`). Otherwise it is invisible to every workspace member
   // — including the creator whenever they operate in workspace mode — and a
   // re-import of a name that already exists personally hits a unique violation.
-  describe('workspace scoping (LOBE-10893)', () => {
+  describe('workspace scoping', () => {
     let workspaceId: string;
     let wsImporter: SkillImporter;
 

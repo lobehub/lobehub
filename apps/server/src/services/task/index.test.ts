@@ -1554,7 +1554,7 @@ describe('TaskService', () => {
     });
   });
 
-  describe('agent ↔ task visibility compat (LOBE-10961)', () => {
+  describe('agent ↔ task visibility compat', () => {
     beforeEach(() => {
       mockTaskModel.create.mockImplementation(async (data: any) => ({
         ...data,
@@ -1628,7 +1628,7 @@ describe('TaskService', () => {
     });
   });
 
-  describe('parent ↔ child visibility compat (LOBE-10962 #3)', () => {
+  describe('parent ↔ child visibility compat', () => {
     beforeEach(() => {
       mockTaskModel.create.mockImplementation(async (data: any) => ({
         ...data,

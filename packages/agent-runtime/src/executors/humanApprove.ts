@@ -3,7 +3,8 @@ import type { AgentEvent, AgentInstruction, AnyHookEvent, InstructionExecutor } 
 
 /**
  * `request_human_approve` executor — pauses the operation for human tool
- * approval (LOBE-10949 Tier A).
+ * approval (Tier A — the most critical executor that requires human
+ * intervention for sensitive operations).
  *
  * Uses the `StreamSink` (event + chunk channels), `LifecycleSink`
  * (`beforeHumanIntervention` hook) and `MessageTransport` (create pending tool

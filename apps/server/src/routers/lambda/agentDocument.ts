@@ -503,7 +503,7 @@ export const agentDocumentRouter = router({
         // user-facing lists stay clean; the agent document-listing tool opts in.
         includeArchivedToolResults: z.boolean().optional().default(false),
         // Restrict the listing to the direct children of this folder so the model
-        // can expand a folder collapsed in the progressive index (LOBE-11072).
+        // can expand a folder collapsed in the progressive index.
         parentId: z.string().optional(),
         scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
         sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),

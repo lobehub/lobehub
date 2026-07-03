@@ -61,9 +61,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     // In personal mode the field is irrelevant and the chip is hidden anyway.
     const [visibility, setVisibility] = useState<'private' | 'public'>('private');
 
-    // LOBE-10961: a private agent can only run a private task. When the
-    // selected agent is private we force visibility back to private and lock
-    // the chip so the user can't pick Workspace.
+    // A private agent can only run a private task. When the selected agent
+    // is private we force visibility back to private and lock the chip so
+    // the user can't pick Workspace.
     const assigneeVisibility = useAgentVisibility(assigneeAgentId);
     const isPrivateAgent = assigneeVisibility === 'private';
     useEffect(() => {

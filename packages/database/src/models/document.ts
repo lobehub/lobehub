@@ -305,8 +305,9 @@ export class DocumentModel {
       // No child-table cascade needed here — Pages (`sourceType: 'api'`) hold
       // content inline in `documents.content` / `documents.pages`, and the
       // `document_chunks` junction has no read consumers on the RAG hot path
-      // (that lane goes through `chunks` + `fileChunks` + `files`). See
-      // LOBE-11040 for the deferred RAG-lane analysis.
+      // (that lane goes through `chunks` + `fileChunks` + `files`).
+      // A future `document_chunks` visibility mirror + RAG filter will add
+      // cascade when that lane is built.
 
       return { documentIds: ids };
     });
