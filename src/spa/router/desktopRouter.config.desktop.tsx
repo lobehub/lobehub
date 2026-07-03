@@ -506,25 +506,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   ...BusinessDesktopRoutesWithMainLayout,
 
-  // Verify report library (master-detail: report-list panel + report detail)
-  {
-    children: [
-      {
-        element: <VerifyEmptyDetail />,
-        index: true,
-      },
-      {
-        element: <VerifyReportPage />,
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: <VerifyWorkspace />,
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: 'verify',
-  },
-
   // Eval routes
   {
     children: [
@@ -788,6 +769,25 @@ export const desktopRoutes: RouteObject[] = [
     element: <VerifyImPage />,
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  // Verify report workspace — standalone master-detail (outside main layout)
+  {
+    children: [
+      {
+        element: <VerifyEmptyDetail />,
+        index: true,
+      },
+      {
+        element: <VerifyReportPage />,
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: <VerifyWorkspace />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyReportsRouteMeta },
+    path: '/verify',
   },
 
   // Devtools route (outside main layout, dev-only)

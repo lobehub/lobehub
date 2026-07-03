@@ -48,6 +48,8 @@
   "report.document.view": "查看文档",
   "report.error.description": "报告加载失败，请检查网络后重试。",
   "report.error.title": "无法加载报告",
+  "report.evidence.count": "{{count}} 条证据",
+  "report.evidence.view": "查看证据（{{count}}）",
   "report.filter.all": "全部",
   "report.filter.failed": "未通过",
   "report.filter.passed": "已通过",
@@ -65,6 +67,7 @@
   "report.scope.surface": "范围",
   "report.sections.checks": "检查项",
   "report.sections.details": "详情",
+  "report.sections.evidence": "证据",
   "report.stats.confidence": "置信度",
   "report.stats.failed": "未通过",
   "report.stats.passed": "通过",
@@ -140,5 +143,5 @@
   "workspace.standardsHint": "已保存的交付标准会显示在这里。",
   "workspace.tabs.reports": "报告",
   "workspace.tabs.standards": "标准",
-  "workspace.title": "验证"
+  "workspace.title": "验证报告"
 }

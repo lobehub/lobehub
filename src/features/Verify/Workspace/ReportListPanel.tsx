@@ -3,7 +3,7 @@
 import type { VerifyRunStatus, VerifyVerdict } from '@lobechat/types';
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
 import { Icon, Text } from '@lobehub/ui';
-import { ScrollArea, Segmented } from '@lobehub/ui/base-ui';
+import { ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -300,7 +300,6 @@ const ReportListPanel = memo(() => {
   const { data } = useVerifyReportSummaries();
   const reports = useMemo(() => data ?? [], [data]);
 
-  const [tab, setTab] = useState<'reports' | 'standards'>('reports');
   const [query, setQuery] = useState('');
 
   const [showPanel, panelWidth, updateSystemStatus] = useGlobalStore((s) => [
@@ -354,34 +353,19 @@ const ReportListPanel = memo(() => {
               <Icon icon={PanelLeftClose} size={16} />
             </button>
           </div>
-          <div style={{ padding: '10px 4px 0' }}>
-            <Segmented
-              size={'small'}
-              value={tab}
-              options={[
-                { label: t('workspace.tabs.reports'), value: 'reports' },
-                { label: t('workspace.tabs.standards'), value: 'standards' },
-              ]}
-              onChange={(v) => setTab(v as 'reports' | 'standards')}
+          <label className={styles.search}>
+            <Icon icon={Search} size={13} />
+            <input
+              placeholder={t('workspace.search')}
+              type={'search'}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
             />
-          </div>
-          {tab === 'reports' && (
-            <label className={styles.search}>
-              <Icon icon={Search} size={13} />
-              <input
-                placeholder={t('workspace.search')}
-                type={'search'}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </label>
-          )}
+          </label>
         </div>
 
         <ScrollArea style={{ flex: 1, minHeight: 0 }}>
-          {tab === 'standards' ? (
-            <div className={styles.empty}>{t('workspace.standardsHint')}</div>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className={styles.empty}>
               {query.trim() ? (
                 <>

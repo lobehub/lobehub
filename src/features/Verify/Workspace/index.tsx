@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 
+import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -60,7 +61,9 @@ const VerifyWorkspace = memo(() => {
   ]);
 
   return (
-    <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
+    <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
+      {/* Standalone route (outside the app main layout): drive the tab title here. */}
+      <RouteMetaBridge />
       <ReportListPanel />
       <div className={styles.main}>
         {!showPanel && (

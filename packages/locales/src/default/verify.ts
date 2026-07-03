@@ -58,6 +58,8 @@ export default {
   'report.error.description':
     'The report could not be loaded. Check your connection and try again.',
   'report.error.title': 'Unable to load report',
+  'report.evidence.count': '{{count}} evidence',
+  'report.evidence.view': 'View evidence ({{count}})',
   'report.filter.all': 'All',
   'report.filter.failed': 'Failed',
   'report.filter.passed': 'Passed',
@@ -76,6 +78,7 @@ export default {
   'report.scope.surface': 'Surface',
   'report.sections.checks': 'Checks',
   'report.sections.details': 'Details',
+  'report.sections.evidence': 'Evidence',
   'report.stats.confidence': 'confidence',
   'report.stats.failed': 'failed',
   'report.stats.passed': 'passed',
@@ -164,5 +167,5 @@ export default {
   'workspace.standardsHint': 'Saved delivery standards will appear here.',
   'workspace.tabs.reports': 'Reports',
   'workspace.tabs.standards': 'Standards',
-  'workspace.title': 'Verification',
+  'workspace.title': 'Verify Reports',
 };

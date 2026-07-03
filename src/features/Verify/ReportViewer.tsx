@@ -4,7 +4,6 @@ import type { VerifyRunContext } from '@lobechat/types';
 import {
   Block,
   Center,
-  Drawer,
   Empty,
   Flexbox,
   Highlighter,
@@ -13,7 +12,7 @@ import {
   Markdown,
   Text,
 } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Modal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -23,6 +22,7 @@ import {
   CircleHelp,
   Clock3,
   FileText,
+  Paperclip,
   RefreshCw,
   X,
 } from 'lucide-react';
@@ -348,7 +348,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     object-fit: contain;
   `,
-  docTrigger: css`
+  evidenceTrigger: css`
     cursor: pointer;
 
     display: inline-flex;
@@ -371,6 +371,30 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorLink};
       color: ${cssVar.colorLink};
     }
+  `,
+  evChip: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 999px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  evidenceDoc: css`
+    overflow: hidden;
+
+    width: 100%;
+    height: 320px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
   `,
   docViewer: css`
     overflow: auto;
@@ -461,79 +485,72 @@ const DocumentViewer = memo<{ url: string }>(({ url }) => {
   );
 });
 
-/** A file-backed (non-media) evidence — opens its decoded content in a drawer. */
-const DocumentEvidence = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence }) => {
-  const { t } = useTranslation('verify');
-  const [open, setOpen] = useState(false);
-  const title = evidence.description || filenameFromUrl(evidence.fileUrl!);
+/** One evidence artifact rendered by its type: zoomable image/gif, video, doc, text. */
+const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl }>(({ evidence: e }) => (
+  <Flexbox gap={6}>
+    {e.description && (
+      <Text fontSize={13} type={'secondary'}>
+        {e.description}
+      </Text>
+    )}
+    {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
+      <Flexbox align={'flex-start'} style={{ maxWidth: '100%' }}>
+        <Image
+          preview
+          alt={e.description ?? e.type}
+          objectFit={'contain'}
+          src={e.fileUrl}
+          style={{ maxWidth: '100%' }}
+          variant={'outlined'}
+        />
+      </Flexbox>
+    ) : e.fileUrl && e.type === 'video' ? (
+      <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+    ) : e.fileUrl ? (
+      <div className={styles.evidenceDoc}>
+        <DocumentViewer url={e.fileUrl} />
+      </div>
+    ) : e.content ? (
+      <div className={styles.evidenceText}>{e.content}</div>
+    ) : (
+      <span className={styles.softTag}>{e.type}</span>
+    )}
+  </Flexbox>
+));
 
-  return (
-    <>
-      <button className={styles.docTrigger} type={'button'} onClick={() => setOpen(true)}>
-        <Icon icon={FileText} size={13} />
-        <span>{t('report.document.view')}</span>
-      </button>
-      <Drawer
-        open={open}
-        styles={{ body: { padding: 0 } }}
-        title={title}
-        width={'min(720px, 80vw)'}
-        onClose={() => setOpen(false)}
-      >
-        {open && <DocumentViewer url={evidence.fileUrl!} />}
-      </Drawer>
-    </>
-  );
-});
-
-/** Evidence artifacts for one check: zoomable screenshots, video, docs, inline text. */
-const EvidenceList = memo<{ evidence: VerifyResultWithEvidence['evidence'] }>(({ evidence }) => {
-  if (evidence.length === 0) return null;
-  return (
-    <Flexbox gap={8}>
+/** Modal gallery of one check's evidence — one section per artifact, by type. */
+const EvidenceModal = memo<{
+  evidence: VerifyEvidenceWithUrl[];
+  onClose: () => void;
+  open: boolean;
+  title: string;
+}>(({ evidence, onClose, open, title }) => (
+  <Modal
+    footer={null}
+    open={open}
+    title={title}
+    width={'min(760px, 92vw)'}
+    onCancel={() => onClose()}
+  >
+    <Flexbox gap={20} style={{ maxHeight: '68vh', overflow: 'auto', paddingBlock: 4 }}>
       {evidence.map((e) => (
-        <Flexbox gap={4} key={e.id}>
-          {e.description && (
-            <Text fontSize={12} type="secondary">
-              {e.description}
-            </Text>
-          )}
-          {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
-            <Flexbox align={'flex-start'} style={{ maxWidth: '100%' }}>
-              <Image
-                preview
-                alt={e.description ?? e.type}
-                maxHeight={360}
-                objectFit={'contain'}
-                src={e.fileUrl}
-                style={{ maxWidth: '100%' }}
-                variant={'outlined'}
-              />
-            </Flexbox>
-          ) : e.fileUrl && e.type === 'video' ? (
-            <video controls className={styles.evidenceVideo} src={e.fileUrl} />
-          ) : e.fileUrl ? (
-            <DocumentEvidence evidence={e} />
-          ) : e.content ? (
-            <div className={styles.evidenceText}>{e.content}</div>
-          ) : (
-            <span className={styles.softTag}>{e.type}</span>
-          )}
-        </Flexbox>
+        <EvidenceItem evidence={e} key={e.id} />
       ))}
     </Flexbox>
-  );
-});
+  </Modal>
+));
 
-/** One check — an expandable row (icon + title + verdict, body with reasoning/evidence). */
+/** One check — an expandable row; evidence opens in a per-check modal gallery. */
 const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }>(
   ({ defaultOpen, result }) => {
     const { t } = useTranslation('verify');
     const [open, setOpen] = useState(defaultOpen);
+    const [evidenceOpen, setEvidenceOpen] = useState(false);
     const verdict = checkVerdict(result);
     const meta = VERDICT_META[verdict];
+    const evidenceCount = result.evidence.length;
     const hasBody =
-      Boolean(result.toulmin?.evidence) || Boolean(result.suggestion) || result.evidence.length > 0;
+      Boolean(result.toulmin?.evidence) || Boolean(result.suggestion) || evidenceCount > 0;
 
     return (
       <div className={styles.row}>
@@ -549,6 +566,15 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
             {result.checkItemTitle || result.checkItemId}
           </span>
           <span className={styles.rowSide}>
+            {evidenceCount > 0 && (
+              <span
+                className={styles.evChip}
+                title={t('report.evidence.count', { count: evidenceCount })}
+              >
+                <Icon icon={Paperclip} size={12} />
+                {evidenceCount}
+              </span>
+            )}
             {!result.required && (
               <span className={styles.softTag}>{t('report.check.optional')}</span>
             )}
@@ -563,7 +589,24 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
               <p className={styles.reasoning}>{result.toulmin.evidence}</p>
             )}
             {result.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
-            <EvidenceList evidence={result.evidence} />
+            {evidenceCount > 0 && (
+              <>
+                <button
+                  className={styles.evidenceTrigger}
+                  type={'button'}
+                  onClick={() => setEvidenceOpen(true)}
+                >
+                  <Icon icon={Paperclip} size={13} />
+                  {t('report.evidence.view', { count: evidenceCount })}
+                </button>
+                <EvidenceModal
+                  evidence={result.evidence}
+                  open={evidenceOpen}
+                  title={result.checkItemTitle || t('report.sections.evidence')}
+                  onClose={() => setEvidenceOpen(false)}
+                />
+              </>
+            )}
           </div>
         )}
       </div>
