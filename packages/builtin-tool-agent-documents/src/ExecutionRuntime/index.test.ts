@@ -157,4 +157,39 @@ describe('AgentDocumentsExecutionRuntime', () => {
       title: 'Draft',
     });
   });
+
+  it('truncates an oversized readDocument content but keeps full content in state', async () => {
+    const hugeXml = 'x'.repeat(500_000);
+    const hugeMarkdown = 'm'.repeat(500_000);
+    const readDocument = vi.fn().mockResolvedValue({
+      content: hugeMarkdown,
+      id: 'agent-doc-1',
+      litexml: hugeXml,
+      title: 'Newsletter Archive',
+    });
+    const runtime = createRuntime({ readDocument });
+
+    const result = await runtime.readDocument({ id: 'agent-doc-1' }, { agentId: 'agent-1' });
+
+    // LLM-facing content is capped well below the raw 500k chars.
+    expect(result.content.length).toBeLessThan(hugeXml.length);
+    expect(result.content).toContain('document truncated to fit the context window');
+    // Inspector still receives the untruncated document via state.
+    expect(result.state).toMatchObject({ content: hugeMarkdown, xml: hugeXml });
+  });
+
+  it('does not truncate a readDocument content under the cap', async () => {
+    const readDocument = vi.fn().mockResolvedValue({
+      content: 'short markdown',
+      id: 'agent-doc-1',
+      litexml: '<doc>short</doc>',
+      title: 'Small Doc',
+    });
+    const runtime = createRuntime({ readDocument });
+
+    const result = await runtime.readDocument({ id: 'agent-doc-1' }, { agentId: 'agent-1' });
+
+    expect(result.content).toBe('<doc>short</doc>');
+    expect(result.content).not.toContain('document truncated');
+  });
 });
