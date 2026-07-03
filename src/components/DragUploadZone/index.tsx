@@ -16,7 +16,7 @@ const OVERLAY_INSET = 20;
 const OVERLAY_BORDER_INSET = 8;
 // The card keeps its natural (well-proportioned) size and is scaled down as a
 // whole — text included — so a short composer never gets a stretched card.
-const OVERLAY_SCALE = 0.7;
+const OVERLAY_SCALE = 0.65;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
