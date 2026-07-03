@@ -33,6 +33,7 @@ const ModelPage = memo<{ mobile?: boolean }>(() => {
       data={data}
       empty={<ModelEmpty />}
       error={error}
+      errorVariant={'page'}
       isEmpty={items.length === 0}
       isLoading={isLoading}
       loading={<Loading />}

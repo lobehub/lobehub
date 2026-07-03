@@ -56,6 +56,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   page: css`
+    flex: 1;
     width: 100%;
     min-height: 320px;
     padding: 48px;
@@ -100,7 +101,7 @@ const AsyncError = memo<AsyncErrorProps>(
     // ─── inline: single-line row failure with a retry link ───
     if (variant === 'inline') {
       return (
-        <Flexbox horizontal align={'center'} className={styles.inline} gap={8}>
+        <Flexbox horizontal align={'center'} className={styles.inline} gap={8} justify={'center'}>
           <Icon className={styles.icon} icon={TriangleAlertIcon} size={14} />
           <Text color={cssVar.colorTextSecondary} fontSize={13}>
             {heading}

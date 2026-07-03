@@ -32,6 +32,7 @@ const ProviderPage = memo(() => {
       data={data}
       empty={<ProviderEmpty />}
       error={error}
+      errorVariant={'page'}
       isEmpty={items.length === 0}
       isLoading={isLoading}
       loading={<Loading />}
