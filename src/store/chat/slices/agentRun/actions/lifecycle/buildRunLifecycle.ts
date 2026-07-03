@@ -246,8 +246,23 @@ export const buildRunLifecycle = (
       if (adapter.runtimeType === 'client') {
         // CLIENT: notify only OUTSIDE tool-calling mode; content comes from the
         // in-memory store. No badge (preserves the prior client behavior).
+        //
+        // Anchor to the assistant message THIS run produced (walk from
+        // parentMessageId), NOT a positional findLast on the topic. On a later
+        // turn the fresh assistant can still be settling into messagesMap while
+        // the previous turn's assistant is the last populated one — a naive
+        // findLast then surfaces the PRIOR turn's reply as the notification body.
+        // Mirror emitComplete's dual-map (messagesMap → dbMessagesMap) lookup so
+        // the body is pinned to this run's freshest persisted content.
         const finalMessages = get().messagesMap[messageKey] || [];
-        const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
+        const dbMessages = get().dbMessagesMap[messageKey] || [];
+        const assistantId =
+          findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
+          findCompletionAssistantMessageId(dbMessages, parentMessageId, parentMessageType);
+        const lastAssistant = assistantId
+          ? (finalMessages.find((m) => m.id === assistantId) ??
+            dbMessages.find((m) => m.id === assistantId))
+          : undefined;
         if (!lastAssistant?.content || lastAssistant?.tools) return;
 
         await notifyDesktopAgentCompleted(get, {
