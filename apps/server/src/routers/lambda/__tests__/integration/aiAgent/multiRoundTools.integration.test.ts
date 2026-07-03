@@ -389,11 +389,15 @@ describe('Multi-Round Tool Execution', () => {
     expect(assistantGroupMessages).toHaveLength(1);
 
     // The assistantGroup children are assistant messages, each with a tools array
-    // containing the tool calls for that round
+    // containing the tool calls for that round. `state.messages` is now rehydrated
+    // from the DB on every step (DB is the single source of truth), so the final
+    // state reflects the complete conversation: the two tool-call rounds plus the
+    // final text answer — all consecutive assistant messages fold into one group.
     const group = assistantGroupMessages[0] as any;
-    expect(group.children).toHaveLength(2); // 2 rounds of tool calls
+    expect(group.children).toHaveLength(3); // 2 tool-call rounds + final text answer
 
-    // Each child should have 2 tools (search + crawl per round)
+    // Each child should have 2 tools (search + crawl per round); the final text
+    // answer carries none, so the total across all rounds is still 4.
     const totalToolCalls = group.children.reduce(
       (sum: number, child: any) => sum + (child.tools?.length ?? 0),
       0,
