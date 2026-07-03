@@ -47,6 +47,9 @@ export default {
   'input.label': 'Extra input for the next repair round',
   'input.placeholder': 'e.g. run type-check first; if it still fails, just add a risk note.',
 
+  'list.failedCount': '{{count}} failed',
+  'list.running': 'Verifying…',
+
   'report.actions.retry': 'Retry',
   'report.check.optional': 'Optional',
   'report.document.failed': 'Failed to load document.',
@@ -55,6 +58,11 @@ export default {
   'report.error.description':
     'The report could not be loaded. Check your connection and try again.',
   'report.error.title': 'Unable to load report',
+  'report.filter.all': 'All',
+  'report.filter.failed': 'Failed',
+  'report.filter.passed': 'Passed',
+  'report.filter.uncertain': 'Uncertain',
+  'report.filterEmpty': 'No checks match this filter.',
   'report.missing.description': 'Open a verification report with a valid run id.',
   'report.missing.title': 'Missing report id',
   'report.notFound.description':
@@ -141,4 +149,20 @@ export default {
   'templates.subtitle':
     'Templates are saved delivery standards. Apply them from a task checker, then every run keeps its own frozen snapshot.',
   'templates.title': 'Reusable templates',
+
+  'workspace.clearSearch': 'Clear search',
+  'workspace.collapse': 'Collapse report list',
+  'workspace.emptyDetail.description':
+    'Pick a verification report from the list to see its verdict, checks, and evidence.',
+  'workspace.emptyDetail.title': 'No report selected',
+  'workspace.expand': 'Show report list',
+  'workspace.listEmpty':
+    'Reports appear here after a checker run finishes or a report is ingested.',
+  'workspace.search': 'Search reports',
+  'workspace.searchEmptyPrefix': 'No reports match “',
+  'workspace.searchEmptySuffix': '”.',
+  'workspace.standardsHint': 'Saved delivery standards will appear here.',
+  'workspace.tabs.reports': 'Reports',
+  'workspace.tabs.standards': 'Standards',
+  'workspace.title': 'Verification',
 };

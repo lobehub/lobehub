@@ -364,6 +364,7 @@ const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
+const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
@@ -385,6 +386,7 @@ const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuild
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
 const videoTopicPanelWidth = (s: GlobalState) => s.status.videoTopicPanelWidth;
@@ -473,9 +475,11 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  verifyReportPanelWidth,
   tokenDisplayFormatShort,
   topicGroupKeys,
   topicPageSize,

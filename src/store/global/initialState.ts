@@ -245,6 +245,11 @@ export interface SystemStatus {
    * Independent from `showRightPanel` so toggling it does not affect other pages.
    */
   showTaskAgentPanel?: boolean;
+  /**
+   * Visibility of the Verify workspace left-side report-list panel.
+   * Independent from the nav rail so collapsing the report list does not affect other pages.
+   */
+  showVerifyReportPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
   /**
@@ -288,6 +293,10 @@ export interface SystemStatus {
    * number of topics to display per page
    */
   topicPageSize?: number;
+  /**
+   * Width of the Verify workspace left-side report-list panel.
+   */
+  verifyReportPanelWidth: number;
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
   videoTopicViewMode?: 'grid' | 'list';
@@ -425,12 +434,14 @@ export const INITIAL_STATUS = {
   showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
+  showVerifyReportPanel: true,
   showVideoPanel: true,
   showVideoTopicPanel: true,
   sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,

@@ -561,9 +561,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   ...BusinessDesktopRoutesWithMainLayout,
 
-  // Verify report library
+  // Verify report library (master-detail: report-list panel + report detail)
   {
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify Reports'),
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/verify/empty'),
+          'Desktop > Verify Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify'),
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: 'verify',
@@ -996,14 +1010,6 @@ export const desktopRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
-  },
-
-  // Standalone verification-report viewer (outside main layout)
-  {
-    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyRouteMeta },
-    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

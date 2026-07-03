@@ -122,7 +122,8 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
-import VerifyReportsPage from '@/routes/(main)/verify';
+import VerifyWorkspace from '@/routes/(main)/verify';
+import VerifyEmptyDetail from '@/routes/(main)/verify/empty';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
@@ -505,9 +506,20 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   ...BusinessDesktopRoutesWithMainLayout,
 
-  // Verify report library
+  // Verify report library (master-detail: report-list panel + report detail)
   {
-    element: <VerifyReportsPage />,
+    children: [
+      {
+        element: <VerifyEmptyDetail />,
+        index: true,
+      },
+      {
+        element: <VerifyReportPage />,
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: <VerifyWorkspace />,
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: 'verify',
@@ -776,14 +788,6 @@ export const desktopRoutes: RouteObject[] = [
     element: <VerifyImPage />,
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
-  },
-
-  // Standalone verification-report viewer (outside main layout)
-  {
-    element: <VerifyReportPage />,
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyRouteMeta },
-    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

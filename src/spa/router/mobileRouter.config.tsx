@@ -209,9 +209,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'community',
   },
 
-  // Verify report library
+  // Verify report library (master-detail: report-list panel + report detail)
   {
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify Reports'),
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/verify/empty'),
+          'Mobile > Verify Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify'),
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: 'verify',
@@ -546,13 +560,5 @@ export const mobileRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
-  },
-
-  // Standalone verification-report viewer (outside main layout)
-  {
-    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyRouteMeta },
-    path: '/verify/:runId',
   },
 ];
