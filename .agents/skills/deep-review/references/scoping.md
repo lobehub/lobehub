@@ -18,7 +18,7 @@ No local default ref (detached HEAD, fresh clone)? `git fetch && git switch <def
 
 1. **User named a PR by URL** → `gh pr diff <num>`. Also fetch `gh pr view <num> --json mergeable,isDraft,reviewDecision,statusCheckRollup` and append those fields to the scope summary (feeds the merge-verdict table). URL only — bare `#123` does not trigger PR mode.
 2. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <local-default>...HEAD`), or both (`git diff <local-default>`). Gitlink-only entries (`M <submodule>` where `git status` shows `(new commits)` and nothing else changed) do NOT count as uncommitted changes — a superproject tracking an in-flight submodule branch shows this permanently; route them through §4 instead of triggering this question.
-3. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard`, subagents read new files themselves.
+3. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard` (§3 defines how their contents join `{changes}` — `git diff HEAD` alone misses them entirely).
 4. **Clean tree on a non-default branch** → `git diff <local-default>...HEAD`
 5. None of the above → ask; don't guess.
 
@@ -36,6 +36,8 @@ Then judge with filtered numbers, checking in this order (very large first, so a
 - **Very large diff** (> 1500 lines) → split into multiple review scopes by directory and run the flow in batches.
 - **Small diff** (≤ 200 lines AND ≤ 5 files) → run the full-diff command now; the diff text becomes `{changes}`.
 - **Large diff** (everything else) → do not fetch; the command itself (with excludes) becomes `{changes}`, subagents run it themselves.
+
+Untracked files in an uncommitted scope are part of the review, not just a name list: count their line counts toward the size judgment; on the small-diff path append each untracked file's full content to `{changes}` (one fenced block per file, path as header); on the large-diff path list their paths next to the fetch commands so subagents read them.
 
 Excluded files are out of scope; reviewing a lockfile on request is a separate task, not this flow.
 

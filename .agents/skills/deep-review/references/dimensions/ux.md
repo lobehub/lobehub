@@ -24,7 +24,6 @@ Design-level review of user-facing flows, judged against this product's design v
 
 - `DESIGN.md` (repo root) — the four design values; judge flows against them explicitly
 - `.agents/skills/ux/SKILL.md` — product design principles and per-pattern checklists
-- `.agents/skills/interface-details/SKILL.md` — micro-interaction and polish patterns
 
 ## How to check
 
