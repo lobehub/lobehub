@@ -2353,7 +2353,7 @@ export class MemoryExtractionExecutor {
     workspaceId?: string,
   ): Promise<AiProviderRuntimeState> {
     const db = await this.db;
-    const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig);
+    const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig, workspaceId);
 
     return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
   }

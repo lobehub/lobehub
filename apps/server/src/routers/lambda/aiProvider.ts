@@ -3,6 +3,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { resolveBusinessAiProviderConfig } from '@/business/server/ai-provider';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiProviderModel } from '@/database/models/aiProvider';
@@ -25,6 +26,11 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
   const { ctx } = opts;
 
   const { aiProvider } = await getServerGlobalConfig();
+  const providerConfig = await resolveBusinessAiProviderConfig({
+    providerConfig: aiProvider as Record<string, ProviderConfig>,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId ?? undefined,
+  });
 
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   return opts.next({
@@ -32,9 +38,10 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
       aiInfraRepos: new AiInfraRepos(
         ctx.serverDB,
         ctx.userId,
-        aiProvider as Record<string, ProviderConfig>,
+        providerConfig,
+        ctx.workspaceId ?? undefined,
       ),
-      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId),
+      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
       gateKeeper,
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },

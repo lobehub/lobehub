@@ -2623,7 +2623,7 @@ When I am ___, I need ___
   'workspace.onboarding.step4.marketProfileNudge':
     "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in Community</cta>.",
   'workspace.onboarding.step4.marketProfileAdjust':
-    'Your workspace already has a Community profile. <cta>Adjust it in Community</cta>.',
+    "We've automatically created a Community profile for your workspace. <cta>Adjust it in Community</cta>.",
   'workspace.onboarding.step4.marketProfileCreate':
     "We couldn't set up your Community profile automatically. <cta>Create one in Community</cta> so workspace agents can be shared.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
