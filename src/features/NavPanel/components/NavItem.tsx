@@ -129,7 +129,15 @@ const NavItem = memo<NavItemProps>(
         {...rest}
       >
         {icon && (
-          <Center flex={'none'} height={28} width={28}>
+          <Center
+            flex={'none'}
+            // With a description the row is two lines tall; align the leading icon
+            // to the title's first line (match its line-height) instead of letting
+            // it center across both lines, which drops it into the gap.
+            height={description ? 22 : 28}
+            style={description ? { alignSelf: 'flex-start' } : undefined}
+            width={28}
+          >
             {loading ? (
               <NeuralNetworkLoading size={iconSize} />
             ) : (
