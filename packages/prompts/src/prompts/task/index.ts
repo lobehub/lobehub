@@ -508,11 +508,15 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   }
 
   // ── 2. Run Instruction ──
-  sections.push(`<run_instruction>
-    You are running this saved task now. Produce the concrete result for this execution.
-    Do not reply with task setup, scheduling confirmation, or future-start messaging.
-    If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
-    </run_instruction>`);
+  sections.push(
+    [
+      '<run_instruction>',
+      'You are running this saved task now. Produce the concrete result for this execution.',
+      'Do not reply with task setup, scheduling confirmation, or future-start messaging.',
+      'If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.',
+      '</run_instruction>',
+    ].join('\n'),
+  );
 
   // ── 3. User Feedback (user comments only, full content) ──
   const userComments = activities?.comments?.filter((c) => !c.agentId);
