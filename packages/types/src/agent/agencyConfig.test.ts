@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
+  codexModelSupportsFastSpeed,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
+  resolveCodexSpeedMode,
 } from './agencyConfig';
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
@@ -242,5 +244,83 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'claude-code',
       }),
     ).toEqual(['--agent-arg=--verbose', '--effort', 'high']);
+  });
+});
+
+describe('codex speed mode', () => {
+  it('resolves missing / default selections to Default', () => {
+    expect(resolveCodexSpeedMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveCodexSpeedMode({ speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION })).toBe(
+      HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+    );
+  });
+
+  it('resolves persisted fast selections', () => {
+    expect(resolveCodexSpeedMode({ speed: 'fast' })).toBe('fast');
+  });
+
+  it('resolves service_tier from args before persisted selections', () => {
+    expect(resolveCodexSpeedMode({ args: ['-c', 'service_tier="fast"'] })).toBe('fast');
+    // The native request value spelling counts as fast too.
+    expect(resolveCodexSpeedMode({ args: ['--config=service_tier="priority"'] })).toBe('fast');
+    // Unknown tiers (e.g. flex) are displayed as Standard.
+    expect(resolveCodexSpeedMode({ args: ['-c', 'service_tier="flex"'], speed: 'fast' })).toBe(
+      HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+    );
+  });
+
+  it('reports fast support for catalog models and the default selection', () => {
+    expect(codexModelSupportsFastSpeed(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.5')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.4')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.4-mini')).toBe(false);
+    expect(codexModelSupportsFastSpeed('gpt-5.3-codex-spark')).toBe(false);
+  });
+
+  it('appends service_tier config for Codex spawns when fast is selected', () => {
+    expect(buildHeteroSpawnArgs({ speed: 'fast', type: 'codex' })).toEqual([
+      '-c',
+      'service_tier="fast"',
+    ]);
+    expect(buildHeteroSpawnArgs({ effort: 'high', speed: 'fast', type: 'codex' })).toEqual([
+      '-c',
+      'model_reasoning_effort="high"',
+      '-c',
+      'service_tier="fast"',
+    ]);
+  });
+
+  it('does not append service_tier for default speed or user-authored overrides', () => {
+    expect(
+      buildHeteroSpawnArgs({ speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION, type: 'codex' }),
+    ).toBeUndefined();
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-c', 'service_tier="priority"'],
+        speed: 'fast',
+        type: 'codex',
+      }),
+    ).toEqual(['-c', 'service_tier="priority"']);
+  });
+
+  it('ignores speed for claude-code spawns', () => {
+    expect(buildHeteroSpawnArgs({ speed: 'fast', type: 'claude-code' })).toBeUndefined();
+  });
+
+  it('keeps lh hetero exec speed overrides in wrapper form', () => {
+    expect(buildHeteroExecArgs({ model: 'gpt-5.5', speed: 'fast', type: 'codex' })).toEqual([
+      '--model',
+      'gpt-5.5',
+      '--speed',
+      'fast',
+    ]);
+    expect(
+      buildHeteroExecArgs({
+        args: ['-c', 'service_tier="priority"'],
+        speed: 'fast',
+        type: 'codex',
+      }),
+    ).toEqual(['--agent-arg=-c', '--agent-arg=service_tier="priority"']);
+    expect(buildHeteroExecArgs({ speed: 'fast', type: 'claude-code' })).toBeUndefined();
   });
 });

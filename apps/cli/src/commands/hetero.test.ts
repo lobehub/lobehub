@@ -239,6 +239,50 @@ describe('hetero exec command', () => {
     });
   });
 
+  it('translates Codex --speed to native service_tier config', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.5',
+      '--speed',
+      'fast',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'gpt-5.5', '-c', 'service_tier="fast"'],
+    });
+  });
+
+  it('ignores --speed for Claude Code runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--model',
+      'opus',
+      '--speed',
+      'fast',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'opus'],
+    });
+  });
+
   it('passes native agent args through --agent-arg without treating them as wrapper options', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

@@ -212,10 +212,16 @@ export default {
   'heteroAgent.modelSelector.model': 'Model',
   'heteroAgent.modelSelector.reasoning': 'Reasoning',
   'heteroAgent.modelSelector.reasoning.high': 'High',
+  'heteroAgent.modelSelector.reasoning.light': 'Light',
   'heteroAgent.modelSelector.reasoning.low': 'Low',
   'heteroAgent.modelSelector.reasoning.max': 'Max',
   'heteroAgent.modelSelector.reasoning.medium': 'Medium',
   'heteroAgent.modelSelector.reasoning.xhigh': 'Extra High',
+  'heteroAgent.modelSelector.speed': 'Speed',
+  'heteroAgent.modelSelector.speed.fast': 'Fast',
+  'heteroAgent.modelSelector.speed.fastDesc': '1.5x speed, increased usage',
+  'heteroAgent.modelSelector.speed.standard': 'Standard',
+  'heteroAgent.modelSelector.speed.standardDesc': 'Default speed',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.resumeReset.resumeFailed':

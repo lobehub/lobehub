@@ -38,9 +38,35 @@ export const CODEX_DEFAULT_REASONING_EFFORT = 'medium' satisfies CodexReasoningE
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 export type HeterogeneousReasoningEffort =
-  | ClaudeCodeReasoningEffort
-  | CodexReasoningEffort
-  | HeterogeneousAgentDefaultSelection;
+  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
+
+/**
+ * Codex speed modes, mirrored to the CLI config key `service_tier`.
+ *
+ * `fast` maps to the Fast service tier (request value `priority`): ~1.5x
+ * faster inference at a higher credit-consumption rate. Requires ChatGPT
+ * sign-in; the Codex CLI silently omits the tier for unsupported models, so
+ * passing it is always safe.
+ */
+export const CODEX_SPEED_MODES = ['fast'] as const;
+
+export type CodexSpeedMode = (typeof CODEX_SPEED_MODES)[number];
+
+export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
+
+export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
+
+/**
+ * Codex models whose catalog exposes the Fast (`priority`) service tier.
+ * Sourced from the model catalog embedded in codex-cli (>= 0.142).
+ */
+export const CODEX_FAST_SPEED_MODELS = ['gpt-5.5', 'gpt-5.4'] as const;
+
+/**
+ * `service_tier` values the Codex CLI resolves to the Fast tier
+ * (`ServiceTier::from_request_value` accepts both spellings).
+ */
+const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
 
 /**
  * Heterogeneous agent provider configuration.
@@ -85,6 +111,14 @@ export interface HeterogeneousProviderConfig {
    */
   platformAgentId?: string;
   /**
+   * Speed mode (Codex only), surfaced through the chat-input model selector
+   * and translated into the `service_tier` CLI config at spawn time. Omitted
+   * or `'default'` values are displayed as Standard in the UI and are not
+   * passed as CLI overrides, so the CLI keeps its own settings and account
+   * defaults.
+   */
+  speed?: HeterogeneousSpeedMode;
+  /**
    * Static context prepended to every user prompt before it reaches the agent CLI.
    * Use this to prime the agent with workspace conventions, rules, or instructions
    * that should apply to every conversation.
@@ -105,6 +139,7 @@ interface CodexSelectionSource {
   args?: string[];
   effort?: string | null;
   model?: string | null;
+  speed?: string | null;
 }
 
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
@@ -268,6 +303,36 @@ const getExplicitCodexReasoningEffort = (
   return isCodexReasoningEffort(effort) ? effort : undefined;
 };
 
+const isCodexFastServiceTier = (value: string | undefined): boolean =>
+  !!value &&
+  CODEX_FAST_SERVICE_TIER_VALUES.includes(value as (typeof CODEX_FAST_SERVICE_TIER_VALUES)[number]);
+
+export const resolveCodexSpeedMode = (
+  source: CodexSelectionSource | null | undefined,
+): HeterogeneousSpeedMode => {
+  const tier = (
+    getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) ?? source?.speed
+  )?.trim();
+
+  return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const getExplicitCodexSpeedMode = (
+  source: CodexSelectionSource | null | undefined,
+): CodexSpeedMode | undefined => {
+  const speed = source?.speed?.trim();
+  return isCodexFastServiceTier(speed) ? 'fast' : undefined;
+};
+
+/**
+ * Whether the Fast speed toggle applies to a selector model value. `default`
+ * counts as supported: the CLI's own default model (currently gpt-5.5)
+ * supports Fast, and unsupported models simply ignore the tier.
+ */
+export const codexModelSupportsFastSpeed = (model: string): boolean =>
+  model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
+  CODEX_FAST_SPEED_MODELS.includes(model as (typeof CODEX_FAST_SPEED_MODELS)[number]);
+
 /**
  * Resolve the effective native CLI args for a heterogeneous spawn.
  *
@@ -313,6 +378,11 @@ export const buildHeteroSpawnArgs = (
     const effort = getExplicitCodexReasoningEffort(provider);
     if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
       extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
     }
   }
 
@@ -364,6 +434,15 @@ export const buildHeteroExecArgs = (
       !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
     ) {
       selectorArgs.push('--effort', effort);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (
+      speed &&
+      !hasCliFlag(baseArgs, '--speed') &&
+      !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
+    ) {
+      selectorArgs.push('--speed', speed);
     }
   }
 
