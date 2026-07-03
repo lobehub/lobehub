@@ -10,10 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
 
-const BLOCK_SIZE = 36;
-const ICON_SIZE = { size: 22, strokeWidth: 1.5 };
-const OVERLAY_INSET = 20;
-const OVERLAY_BORDER_INSET = 8;
+const BLOCK_SIZE = 28;
+const ICON_SIZE = { size: 18, strokeWidth: 1.5 };
+const OVERLAY_INSET = 12;
+const OVERLAY_BORDER_INSET = 6;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
@@ -38,8 +38,8 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 16px;
-    padding-inline: 20px;
+    padding-block: 6px;
+    padding-inline: 16px;
   `,
   desc: css`
     font-size: 12px;
@@ -70,7 +70,13 @@ const styles = createStaticStyles(({ css }) => ({
   overlayContent: css`
     position: relative;
 
-    width: min(340px, 56vw);
+    box-sizing: border-box;
+    width: min(520px, 92%);
+    max-width: 100%;
+
+    /* Never taller than the drop container (e.g. a short composer), so the card
+       sits inside the input instead of spilling above/below it. */
+    max-height: 100%;
     padding: ${OVERLAY_INSET}px;
     border-radius: 16px;
 
@@ -150,7 +156,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     enabledFiles = true,
     enableLocalPathReference = false,
     onLocalPaths,
-    overlayMinHeight = 120,
+    overlayMinHeight = 88,
     onUploadFiles,
     style,
   }) => {
