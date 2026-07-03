@@ -8,7 +8,6 @@ import {
 } from 'model-bank';
 import { z } from 'zod';
 
-import { resolveBusinessAiProviderConfig } from '@/business/server/ai-provider';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiModelModel } from '@/database/models/aiModel';
@@ -50,15 +49,15 @@ const aiModelProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const { aiProvider } = await getServerGlobalConfig();
-  const providerConfig = await resolveBusinessAiProviderConfig({
-    providerConfig: aiProvider as Record<string, ProviderConfig>,
-    userId: ctx.userId,
-    workspaceId: wsId,
-  });
 
   return opts.next({
     ctx: {
-      aiInfraRepos: new AiInfraRepos(ctx.serverDB, ctx.userId, providerConfig, wsId),
+      aiInfraRepos: new AiInfraRepos(
+        ctx.serverDB,
+        ctx.userId,
+        aiProvider as Record<string, ProviderConfig>,
+        wsId,
+      ),
       aiModelModel: new AiModelModel(ctx.serverDB, ctx.userId, wsId),
       gateKeeper,
       userModel: new UserModel(ctx.serverDB, ctx.userId),
