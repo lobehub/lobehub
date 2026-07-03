@@ -124,7 +124,7 @@ Quick reference for assigning issues based on labels.
 
 **MCP marketplace listing/submission requests — @AmAzing129:**
 
-Requests to **add / submit / list a new MCP server** to the marketplace belong to @AmAzing129, not @arvinxx. These may also be processed by the **MCP Submission Handler** workflow (it redirects installable servers to the self-service CLI and closes them, and labels remote-only servers `mcp:remote` for manual review), but if a triage mention is posted, mention @AmAzing129.
+Requests to **add / submit / list a new MCP server** to the marketplace belong to @AmAzing129, not @arvinxx. These may also be processed by the **MCP Submission Handler** workflow (it redirects installable servers to the self-service CLI and closes them, labels non-installable servers `mcp:manual-review`, and labels rescan/refresh requests for existing listings `mcp:rescan`), but if a triage mention is posted, mention @AmAzing129.
 
 - Recognize them by: titles like `[Request] Add <name> to the MCP marketplace`, `[MCP] Add/Submit <name>`, `[MCP Submission] …`, `[MCP Plugin] …`; the body asks to list/index a specific MCP server and links its repo or endpoint.
 - This does **NOT** apply to the following — they still get a normal @mention:

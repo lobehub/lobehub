@@ -2,6 +2,13 @@
 
 import { appendFile } from 'node:fs/promises';
 
+import {
+  MCP_LEGACY_REMOTE_LABEL,
+  MCP_LEGACY_SUBMISSION_LABEL,
+  MCP_MANUAL_REVIEW_LABEL,
+  MCP_RESCAN_LABEL,
+  MCP_SUBMISSION_LABEL,
+} from './shared/mcp-labels';
 import { classify } from './shared/mcp-submission-classifier';
 
 interface GitHubLabel {
@@ -19,6 +26,14 @@ interface DedupeDecision {
   reason: string;
   shouldDedupe: boolean;
 }
+
+const MCP_DEDUPE_SKIP_LABELS = [
+  MCP_SUBMISSION_LABEL,
+  MCP_MANUAL_REVIEW_LABEL,
+  MCP_RESCAN_LABEL,
+  MCP_LEGACY_SUBMISSION_LABEL,
+  MCP_LEGACY_REMOTE_LABEL,
+] as const;
 
 async function githubRequest<T>(endpoint: string, token: string): Promise<T> {
   const response = await fetch(`https://api.github.com${endpoint}`, {
@@ -59,7 +74,7 @@ export function shouldDedupeIssue(issue: DedupeIssue): DedupeDecision {
     };
   }
 
-  if (hasLabel(issue, 'mcp-submission') || hasLabel(issue, 'mcp:remote')) {
+  if (MCP_DEDUPE_SKIP_LABELS.some((label) => hasLabel(issue, label))) {
     return {
       reason: 'MCP marketplace listing request is handled by the MCP submission workflow',
       shouldDedupe: false,
@@ -70,6 +85,12 @@ export function shouldDedupeIssue(issue: DedupeIssue): DedupeDecision {
   if (classification.isSubmission) {
     return {
       reason: `MCP marketplace listing request (${classification.delivery}) is handled by the MCP submission workflow`,
+      shouldDedupe: false,
+    };
+  }
+  if (classification.kind === 'listing-ops') {
+    return {
+      reason: 'MCP listing rescan request is handled by the MCP submission workflow',
       shouldDedupe: false,
     };
   }
