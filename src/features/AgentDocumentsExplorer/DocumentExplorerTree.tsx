@@ -6,13 +6,9 @@ import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon, Wand2Icon } from 
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 import type { KeyedMutator } from 'swr';
 
-import {
-  buildAgentDocumentPath,
-  buildAgentDocumentsPath,
-} from '@/features/AgentDocumentPage/navigation';
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
   ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,
@@ -27,7 +23,6 @@ import {
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentDocumentService } from '@/services/agentDocument';
-import { standardizeIdentifier } from '@/utils/identifier';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -83,9 +78,6 @@ interface Props {
 const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
-  // Only set while the standalone document route is mounted; undefined in the
-  // chat working-sidebar, where deleting a doc must not navigate anywhere.
-  const { docId: activeDocId } = useParams<{ docId?: string }>();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,21 +88,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
-  // Deleting the document that's currently open in the center would leave the
-  // route pointed at a now-missing doc (404). When that happens, fall back to
-  // the docs index (empty-state guidance) instead.
-  const handleAfterDelete = useCallback(
-    (removedDocumentIds: string[]) => {
-      if (!activeDocId) return;
-      const removedActive = removedDocumentIds.some(
-        (documentId) => standardizeIdentifier(documentId) === activeDocId,
-      );
-      if (removedActive) navigate(buildAgentDocumentsPath(agentId));
-    },
-    [activeDocId, agentId, navigate],
-  );
-
-  const ops = useDocumentTreeOps({ agentId, data, mutate, onAfterDelete: handleAfterDelete });
+  const ops = useDocumentTreeOps({ agentId, data, mutate });
 
   const documents = useMemo(() => data.filter((doc) => doc.category !== 'web'), [data]);
 
