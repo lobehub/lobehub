@@ -1382,6 +1382,7 @@ export default {
   'workingPanel.skills.rename.placeholder': 'Skill name',
   'workingPanel.skills.rename.title': 'Rename skill',
   'workingPanel.skills.section.agent': 'Agent skills',
+  'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',

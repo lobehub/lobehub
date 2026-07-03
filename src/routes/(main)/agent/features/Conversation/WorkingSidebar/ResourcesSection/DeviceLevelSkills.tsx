@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
 
-interface ProjectLevelSkillsProps {
+interface DeviceLevelSkillsProps {
   /** Bound remote device id; when set, skills are scanned over RPC. */
   deviceId?: string;
   /**
@@ -15,22 +15,22 @@ interface ProjectLevelSkillsProps {
   workingDirectory: string;
 }
 
-const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
+const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
   ({ deviceId, hideHeader, workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { error, getRowActions, mutate, onOpenFile, onOpenSkill, projectItems } =
-      useProjectSkills(workingDirectory, deviceId);
+    const { deviceItems, error, getRowActions, mutate, onOpenFile, onOpenSkill } = useProjectSkills(
+      workingDirectory,
+      deviceId,
+    );
 
-    // A failed scan must surface an error + Retry, not silently vanish (ux Read
-    // §1.1). Only genuinely-empty (no error) keeps the "hide the section" behavior.
-    if (projectItems.length === 0) {
+    if (deviceItems.length === 0) {
       if (!error) return null;
       if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
       return (
         <SkillSection
           isEmpty
           error={error}
-          sectionHeader={{ title: t('workingPanel.skills.section.project') }}
+          sectionHeader={{ title: t('workingPanel.skills.section.device') }}
           onRetry={mutate}
         />
       );
@@ -39,12 +39,10 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
     const list = (
       <SkillsList
         getRowActions={getRowActions}
-        items={projectItems}
+        items={deviceItems}
         onOpenFile={onOpenFile}
         onOpenSkill={onOpenSkill}
         onSkillDragStart={(item, event) => {
-          // Project skills are resolved by the underlying CLI agent itself, so
-          // we serialize them as a literal `/skill-name` (projectSkill chip).
           startSkillDrag(event, {
             category: 'projectSkill',
             label: item.name,
@@ -59,8 +57,8 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
     return (
       <SkillSection
         sectionHeader={{
-          count: projectItems.length,
-          title: t('workingPanel.skills.section.project'),
+          count: deviceItems.length,
+          title: t('workingPanel.skills.section.device'),
         }}
       >
         {list}
@@ -69,6 +67,6 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
   },
 );
 
-ProjectLevelSkills.displayName = 'ProjectLevelSkills';
+DeviceLevelSkills.displayName = 'DeviceLevelSkills';
 
-export default ProjectLevelSkills;
+export default DeviceLevelSkills;

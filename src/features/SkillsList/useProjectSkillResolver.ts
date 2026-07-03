@@ -21,8 +21,8 @@ export interface ResolvedProjectSkill {
 }
 
 /**
- * Resolve a project-skill tag (by its bare `name`) against the active session's
- * live project-skill list so an inline tag can show the skill's own description
+ * Resolve a filesystem-skill tag (by its bare `name`) against the active
+ * session's live skill list so an inline tag can show the skill's own description
  * and open its `SKILL.md`.
  *
  * Resolution is name-based on purpose: the persisted `<skill name label />` wire

@@ -333,6 +333,7 @@
   "builtins.lobe-skill-store.render.version": "版本",
   "builtins.lobe-skill-store.title": "技能商店",
   "builtins.lobe-skills.apiName.activateAgentSkill": "激活 Agent Skill",
+  "builtins.lobe-skills.apiName.activateDeviceSkill": "激活 Device Skill",
   "builtins.lobe-skills.apiName.activateProjectSkill": "激活 Project Skill",
   "builtins.lobe-skills.apiName.activateSkill": "激活技能",
   "builtins.lobe-skills.apiName.execScript": "执行脚本",

@@ -282,11 +282,12 @@ export const callTool =
                 projectSkills: (state.metadata?.operationSkillSet?.skills ?? [])
                   .filter(
                     (skill: { location?: string; source?: string }) =>
-                      skill.source === 'project' && !!skill.location,
+                      (skill.source === 'project' || skill.source === 'device') && !!skill.location,
                   )
-                  .map((skill: { location: string; name: string }) => ({
+                  .map((skill: { location: string; name: string; source?: string }) => ({
                     location: skill.location,
                     name: skill.name,
+                    source: skill.source === 'device' ? 'device' : 'project',
                   })),
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,

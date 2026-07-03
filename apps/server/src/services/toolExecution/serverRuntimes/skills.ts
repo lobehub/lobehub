@@ -329,7 +329,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           })
       : [];
 
-    // Project skills live on the device filesystem. Read them through the
+    // Project/device skills live on the execution device filesystem. Read them through the
     // device gateway by reusing the local-system tools — no special
     // file-read primitive, just the existing capabilities over deviceGateway.
     //   - `readFile`  loads SKILL.md and validated reference files.

@@ -1,9 +1,9 @@
+import type { WorkspaceScanDeps } from '@lobechat/device-control';
 import {
   initWorkspace as runInitWorkspace,
   listProjectSkills as runListProjectSkills,
   statPath as runStatPath,
-  type WorkspaceScanDeps,
-} from '@lobechat/device-control';
+} from '@lobechat/device-control/workspace';
 import {
   type InitWorkspaceParams,
   type InitWorkspaceResult,

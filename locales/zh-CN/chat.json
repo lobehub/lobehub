@@ -1355,6 +1355,7 @@
   "workingPanel.skills.rename.placeholder": "技能名称",
   "workingPanel.skills.rename.title": "重命名技能",
   "workingPanel.skills.section.agent": "智能体技能",
+  "workingPanel.skills.section.device": "设备技能",
   "workingPanel.skills.section.project": "项目技能",
   "workingPanel.skills.section.user": "用户技能",
   "workingPanel.skills.title": "技能",

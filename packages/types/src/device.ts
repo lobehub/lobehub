@@ -1,6 +1,10 @@
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
 /**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`) by the client at request time.
+ * A filesystem skill discovered on the execution device by the client at
+ * request time. Project skills live under the current working directory;
+ * device skills live under the execution device's home directory.
  * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
  * body and directory tree are loaded on demand at activation time via the
  * readFile / listFiles tools.
@@ -12,6 +16,8 @@ export interface ProjectSkillMeta {
   name: string;
   /** Absolute path to the skill's SKILL.md on the device filesystem. */
   path: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope?: ProjectSkillScope;
 }
 
 /**
@@ -31,8 +37,8 @@ export interface WorkspaceInstructions {
 
 /**
  * Result of scanning a bound project directory ("workspace init"): the agent
- * instructions file plus the project-level skills discovered under
- * `.agents/skills` + `.claude/skills`. Produced in a single device round-trip
+ * instructions file plus filesystem skills discovered under project and
+ * device-level `.agents/skills` + `.claude/skills`. Produced in a single device round-trip
  * (`deviceGateway.initWorkspace`) and cached on `devices.workingDirs[].workspace`
  * so subsequent runs within the TTL — and the web UI — reuse it without
  * re-scanning. Intentionally open to growth (env info, git status, …) as more
@@ -47,7 +53,7 @@ export interface WorkspaceInitResult {
    * when none are present.
    */
   instructions: WorkspaceInstructions[];
-  /** Project-level skills discovered under the project root (metadata only). */
+  /** Filesystem skills discovered on the execution device (metadata only). */
   skills: ProjectSkillMeta[];
 }
 
@@ -431,9 +437,7 @@ export interface DeviceLocalFilePreviewUnsupported {
 }
 
 export type DeviceLocalFilePreview =
-  | DeviceLocalFilePreviewImage
-  | DeviceLocalFilePreviewText
-  | DeviceLocalFilePreviewUnsupported;
+  DeviceLocalFilePreviewImage | DeviceLocalFilePreviewText | DeviceLocalFilePreviewUnsupported;
 
 /**
  * File preview payload for a file on a remote device. Mirrors the desktop local
@@ -492,18 +496,22 @@ export interface DeviceProjectSkillItem {
   name: string;
   /** Absolute path to the SKILL.md file on the device. */
   path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  scope: ProjectSkillScope;
   /** Directory containing the SKILL.md. */
   skillDir: string;
-  source: '.agents/skills' | '.claude/skills';
+  source: ProjectSkillSource;
 }
 
 /**
- * Project skills listing for a directory on a remote device, returned by the
- * `listProjectSkills` device RPC. Powers the Resources tab's skills group in
- * device mode. Mirrors the desktop `ListProjectSkillsResult`.
+ * Project/device skills listing returned by the `listProjectSkills` device RPC.
+ * Powers the Resources tab's skills group in device mode. Mirrors the desktop
+ * `ListProjectSkillsResult`.
  */
 export interface DeviceListProjectSkillsResult {
   root: string;
   skills: DeviceProjectSkillItem[];
-  source: DeviceProjectSkillItem['source'] | null;
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
 }

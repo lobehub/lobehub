@@ -171,7 +171,8 @@ export class DeviceGateway {
     try {
       // The device returns rich `ProjectSkillItem`s; narrow to metadata only so
       // the cached `workingDirs` payload stays small (SKILL.md bodies are still
-      // read lazily at activation time).
+      // read lazily at activation time). Keep scope so project/device skills can
+      // be displayed and activated with the correct origin.
       const result = await client.invokeRpc<{
         instructions?: WorkspaceInitResult['instructions'];
         skills?: (ProjectSkillMeta & Record<string, unknown>)[];
@@ -188,10 +189,11 @@ export class DeviceGateway {
       const { instructions, skills } = result.data;
       return {
         instructions: instructions ?? [],
-        skills: (skills ?? []).map(({ description, name, path }) => ({
+        skills: (skills ?? []).map(({ description, name, path, scope }) => ({
           description,
           name,
           path,
+          scope,
         })),
       };
     } catch (error) {

@@ -3121,10 +3121,10 @@ export class AiAgentService {
 
       const projectMetas = workspaceInit.workspace.skills.map((s) => ({
         description: s.description ?? '',
-        identifier: `project:${s.name}`,
+        identifier: `${s.scope === 'device' ? 'device' : 'project'}:${s.name}`,
         location: s.path,
         name: s.name,
-        source: 'project' as const,
+        source: s.scope === 'device' ? ('device' as const) : ('project' as const),
       }));
 
       if (projectMetas.length) {
