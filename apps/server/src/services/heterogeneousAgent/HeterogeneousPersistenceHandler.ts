@@ -758,7 +758,18 @@ export class HeterogeneousPersistenceHandler {
     // run; the copy is what makes a mid-topic session fork detectable.
     if (event.type === 'stream_start') {
       const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
-      if (typeof sid === 'string' && sid.length > 0) state.heteroSessionId = sid;
+      if (typeof sid === 'string' && sid.length > 0 && sid !== state.heteroSessionId) {
+        state.heteroSessionId = sid;
+        // Persist the resume token the moment CC reports it, not only on a clean
+        // `finish()`. A stuck run is abandoned by the inactivity watchdog via
+        // AbandonOperationService, which never calls finish() — so a run that
+        // produced a valid session id but got killed before finishing would
+        // otherwise leave `topic.metadata.heteroSessionId` empty, forcing the
+        // next turn to spawn a fresh CC session and drop all `--resume` history.
+        // Writing it here makes resume survive abandon. finish() still overwrites
+        // with its own sessionId (or clears a stale one on a resume failure).
+        await this.persistSessionId(state.topicId, sid);
+      }
     }
 
     const { intents, state: next } = reduceMainAgent(state.main, event, this.mainReduceCtx(state));
