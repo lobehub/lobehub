@@ -10,10 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
 
-const BLOCK_SIZE = 48;
-const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
-const OVERLAY_INSET = 28;
-const OVERLAY_BORDER_INSET = 10;
+const BLOCK_SIZE = 36;
+const ICON_SIZE = { size: 22, strokeWidth: 1.5 };
+const OVERLAY_INSET = 20;
+const OVERLAY_BORDER_INSET = 8;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
@@ -38,8 +38,8 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 24px;
-    padding-inline: 28px;
+    padding-block: 16px;
+    padding-inline: 20px;
   `,
   desc: css`
     font-size: 12px;
@@ -70,7 +70,7 @@ const styles = createStaticStyles(({ css }) => ({
   overlayContent: css`
     position: relative;
 
-    min-width: min(640px, 72vw);
+    width: min(340px, 56vw);
     padding: ${OVERLAY_INSET}px;
     border-radius: 16px;
 
@@ -93,7 +93,7 @@ const styles = createStaticStyles(({ css }) => ({
     box-shadow: 0 16px 48px color-mix(in srgb, ${cssVar.purple} 32%, transparent);
   `,
   title: css`
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     color: #fff;
   `,
@@ -150,7 +150,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     enabledFiles = true,
     enableLocalPathReference = false,
     onLocalPaths,
-    overlayMinHeight = 160,
+    overlayMinHeight = 120,
     onUploadFiles,
     style,
   }) => {
