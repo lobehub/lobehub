@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useDragUploadContext } from '@/components/DragUploadZone/DragUploadProvider';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 
-const BLOCK_SIZE = 30;
+const BLOCK_SIZE = 32;
 const ICON_SIZE = { size: 18, strokeWidth: 1.5 };
 // The dashed outline sits this far inside the overlay edge.
 const BORDER_INSET = 8;
@@ -28,7 +28,12 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
   icon: css`
-    border-radius: ${cssVar.borderRadiusSM};
+    flex: none;
+    border-radius: ${cssVar.borderRadius};
+
+    /* Flat, solid-fill tiles laid out in a row (not a folded/fanned stack). */
+    color: ${cssVar.colorTextSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   overlay: css`
     pointer-events: none;
@@ -41,10 +46,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    /* A gray translucent "filled" layer laid over the input — it fills the exact
-       input box, so its width/height always match. A dashed outline sits inside
-       the edge to signal the drop target. */
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 74%, transparent);
+    /* A solid gray layer laid over the input — it fills the exact input box, so
+       its width/height always match. A thin dashed outline sits inside the edge
+       to signal the drop target. */
+    background: ${cssVar.colorBgElevated};
 
     &::before {
       pointer-events: none;
@@ -53,14 +58,9 @@ const styles = createStaticStyles(({ css }) => ({
       position: absolute;
       inset: ${BORDER_INSET}px;
 
-      border: 1.5px dashed ${cssVar.colorTextTertiary};
+      border: 1px dashed ${cssVar.colorTextTertiary};
       border-radius: 12px;
     }
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: bold;
-    color: ${cssVar.colorText};
   `,
 }));
 
@@ -89,50 +89,15 @@ const InputDragUpload = memo<InputDragUploadProps>(
         {children}
         {isDraggingGlobally && (
           <div className={styles.overlay} style={{ borderRadius: radius }}>
-            <Center gap={8}>
-              <Flexbox horizontal>
-                <Center
-                  className={styles.icon}
-                  height={BLOCK_SIZE * 1.2}
-                  width={BLOCK_SIZE}
-                  style={{
-                    background: cssVar.colorFillSecondary,
-                    color: cssVar.colorTextSecondary,
-                    transform: 'rotateZ(-20deg) translateX(8px)',
-                  }}
-                >
-                  <Icon icon={OVERLAY_ICONS[0]} size={ICON_SIZE} />
-                </Center>
-                <Center
-                  className={styles.icon}
-                  height={BLOCK_SIZE * 1.2}
-                  width={BLOCK_SIZE}
-                  style={{
-                    background: cssVar.colorFill,
-                    color: cssVar.colorText,
-                    transform: 'translateY(-8px)',
-                    zIndex: 1,
-                  }}
-                >
-                  <Icon icon={OVERLAY_ICONS[1]} size={ICON_SIZE} />
-                </Center>
-                <Center
-                  className={styles.icon}
-                  height={BLOCK_SIZE * 1.2}
-                  width={BLOCK_SIZE}
-                  style={{
-                    background: cssVar.colorFillSecondary,
-                    color: cssVar.colorTextSecondary,
-                    transform: 'rotateZ(20deg) translateX(-8px)',
-                  }}
-                >
-                  <Icon icon={OVERLAY_ICONS[2]} size={ICON_SIZE} />
-                </Center>
+            <Center gap={10}>
+              <Flexbox horizontal gap={8}>
+                {OVERLAY_ICONS.map((IconComp, i) => (
+                  <Center className={styles.icon} height={BLOCK_SIZE} key={i} width={BLOCK_SIZE}>
+                    <Icon icon={IconComp} size={ICON_SIZE} />
+                  </Center>
+                ))}
               </Flexbox>
-              <Flexbox align={'center'} gap={4}>
-                <div className={styles.title}>{t('DragUpload.dragFileTitle')}</div>
-                <div className={styles.desc}>{t('DragUpload.dragFileDesc')}</div>
-              </Flexbox>
+              <div className={styles.desc}>{t('DragUpload.dragFileDesc')}</div>
             </Center>
           </div>
         )}
