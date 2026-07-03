@@ -81,31 +81,6 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   ),
   copyToClipboard: vi.fn(),
-  Drawer: ({
-    children,
-    closeIconProps,
-    extra,
-    open,
-    styles,
-    title,
-  }: {
-    children?: ReactNode;
-    closeIconProps?: { size?: unknown };
-    extra?: ReactNode;
-    open?: boolean;
-    styles?: { title?: CSSProperties };
-    title?: ReactNode;
-  }) =>
-    open ? (
-      <div data-testid="topic-drawer">
-        <div data-testid="drawer-title-slot" style={styles?.title}>
-          {title}
-        </div>
-        {extra}
-        <button data-size={serializeSize(closeIconProps?.size)} data-testid="drawer-close-icon" />
-        {children}
-      </div>
-    ) : null,
   DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Flexbox: ({
     children,
@@ -122,10 +97,52 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorBorderSecondary: '#ddd',
-  },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  FloatingPanel: ({
+    actions,
+    children,
+    height,
+    minHeight,
+    minWidth,
+    open,
+    placement,
+    resizable = true,
+    styles,
+    title,
+    width,
+  }: {
+    actions?: ReactNode;
+    children?: ReactNode;
+    height?: unknown;
+    minHeight?: number;
+    minWidth?: number;
+    open?: boolean;
+    placement?: string;
+    resizable?: boolean;
+    styles?: { body?: CSSProperties; title?: CSSProperties };
+    title?: ReactNode;
+    width?: unknown;
+  }) =>
+    open ? (
+      <div
+        data-height={serializeSize(height)}
+        data-min-height={serializeSize(minHeight)}
+        data-min-width={serializeSize(minWidth)}
+        data-placement={placement}
+        data-resizable={String(resizable)}
+        data-testid="topic-panel"
+        data-width={serializeSize(width)}
+      >
+        <div data-testid="panel-title-slot" style={styles?.title}>
+          {title}
+        </div>
+        <div data-testid="panel-actions-slot">{actions}</div>
+        <button data-testid="panel-close-icon" />
+        <div data-testid="panel-body-slot" style={styles?.body}>
+          {children}
+        </div>
+      </div>
+    ) : null,
 }));
 
 vi.mock('next/dynamic', () => ({
@@ -228,30 +245,44 @@ describe('TopicChatDrawer', () => {
     expect(getByTitle('requires member')).toBeDisabled();
   });
 
-  it('constrains long drawer titles before the header actions', () => {
+  it('constrains long panel titles before the header actions', () => {
     const { getByTestId, getByText } = render(<TopicChatDrawer />);
 
     const title = getByText('Topic 1');
 
     expect(title).toHaveStyle({ flex: '0 1 auto', minWidth: '0' });
     expect(title.parentElement).toHaveStyle({ maxWidth: '100%', overflow: 'hidden' });
-    expect(getByTestId('drawer-title-slot')).toHaveStyle({
+    expect(getByTestId('panel-title-slot')).toHaveStyle({
       boxSizing: 'border-box',
       maxWidth: '100%',
       overflow: 'hidden',
-      paddingInlineEnd: '48px',
     });
   });
 
-  it('keeps the share button box aligned with the default close button', () => {
+  it('renders the share button in the floating panel actions slot', () => {
     const { getAllByTestId, getByTestId } = render(<TopicChatDrawer />);
 
     const icons = getAllByTestId('header-action-icon');
     const moreIcon = icons.find((icon) => !icon.getAttribute('title'));
     const shareIcon = icons.find((icon) => icon.getAttribute('title') === 'share');
 
-    expect(moreIcon).toHaveAttribute('data-size', 'small');
-    expect(shareIcon).toHaveAttribute('data-size', JSON.stringify({ blockSize: 36, size: 18 }));
-    expect(getByTestId('drawer-close-icon')).toHaveAttribute('data-size', '');
+    expect(moreIcon).toBeDefined();
+    expect(shareIcon).toBeDefined();
+    expect(moreIcon!).toHaveAttribute('data-size', 'small');
+    expect(shareIcon!).toHaveAttribute('data-size', JSON.stringify({ blockSize: 32, size: 16 }));
+    expect(getByTestId('panel-actions-slot')).toContainElement(shareIcon!);
+    expect(getByTestId('panel-close-icon')).toBeInTheDocument();
+  });
+
+  it('uses a resizable bottom-right floating panel', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-placement', 'bottomRight');
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-resizable', 'true');
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-width', '640');
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-height',
+      'min(640px, calc(100dvh - 16px))',
+    );
   });
 });
