@@ -418,13 +418,21 @@ Two hard rules worth front-loading:
   embed images/GIFs in `report.md` (no `![...](assets/...)`) — they would just
   double up with the per-case evidence the page already shows. `report.md` stays
   prose-only (follow-ups / notes / reproduction).
-- **Final replies must include visual evidence links.** When a run includes UI
-  screenshots or GIFs, include the report directory and the most important
-  visual artifacts in the final chat response. Each item must include a stable
-  label, an evidence caption describing the observed UI outcome, and a
-  repo-relative path, for example:
-  `[Image #1 - error toast shows provider auth failure](<report-dir>/assets/foo.png)`.
-  Use repo-relative paths, not absolute paths.
+- **Final replies: lead with the published `/verify/<id>` link; NEVER paste a
+  list of plain local-file links.** A `[Image #1 …](<report-dir>/assets/foo.png)`
+  markdown link renders as blue text that the user cannot click open in the chat
+  UI — it's a dead link. The published verify report already renders every
+  screenshot inline, so the primary deliverable in the reply is the
+  `https://app.lobehub.com/verify/<id>` URL (plus the local report dir for
+  reference). Then EITHER:
+  - **omit the evidence block entirely** (default — the report page already shows
+    it), OR
+  - if a visual genuinely helps inline, **embed it as an image, not a link** —
+    use `![caption](<report-dir>/assets/foo.png)` (leading `!`) so it renders as a
+    picture, with the caption describing the observed UI outcome. Use
+    repo-relative paths, not absolute paths. Do not emit a bare
+    `[label](local/path)` link list — it's the one thing that looks like evidence
+    but can't be opened.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and attach the GIF as that
