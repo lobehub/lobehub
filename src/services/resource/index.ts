@@ -261,7 +261,15 @@ export class ResourceService {
     if (existing.sourceType === 'file') {
       await fileService.removeFile(id);
     } else {
-      await documentService.deleteDocument(id);
+      /* PATCHED: a file mirror document (a file item whose list id is exposed as docs_ via COALESCE)
+         leaves the files row / S3 object behind if only the document is deleted, so it resurfaces on
+         refresh — delete the underlying file instead (fileModel.delete also cleans the mirror doc). */
+      const doc = await documentService.getDocumentById(id);
+      if (doc?.fileId) {
+        await fileService.removeFile(doc.fileId);
+      } else {
+        await documentService.deleteDocument(id);
+      }
     }
   }
 
@@ -280,7 +288,14 @@ export class ResourceService {
           if (item.sourceType === 'file') {
             fileIds.push(id);
           } else {
-            documentIds.push(id);
+            /* PATCHED: for a file mirror document, delete the underlying file instead
+               (fileModel.deleteMany also cleans the mirror doc) */
+            const doc = await documentService.getDocumentById(id);
+            if (doc?.fileId) {
+              fileIds.push(doc.fileId);
+            } else {
+              documentIds.push(id);
+            }
           }
         }
       }),

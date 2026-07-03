@@ -491,7 +491,10 @@ export const fileRouter = router({
             continue;
           }
 
-          if (item.documentId) {
+          /* PATCHED: a sourceType='file' item that also has a documentId is a file mirror document —
+             deleting only the document leaves the file behind, so delete the file
+             (fileModel.deleteMany also cleans the mirror doc). */
+          if (item.documentId && !item.fileId) {
             documentIds.push(item.documentId);
             continue;
           }
