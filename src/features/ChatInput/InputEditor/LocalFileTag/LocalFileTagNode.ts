@@ -1,5 +1,6 @@
 import { addClassNamesToElement } from '@lexical/utils';
 import { getKernelFromEditor } from '@lobehub/editor';
+import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
   $applyNodeReplacement,
   DecoratorNode,
@@ -11,6 +12,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
+import { createElement } from 'react';
+
+import { LocalFile } from '@/features/LocalFile';
 
 export type SerializedLocalFileTagNode = Spread<
   {
@@ -28,7 +32,7 @@ export type SerializedLocalFileTagNode = Spread<
  * `@`) and — crucially — own its `<localFile … />` markdown writer via a plugin
  * that is always registered, independent of whether `mentionOption` is enabled.
  */
-export class LocalFileTagNode extends DecoratorNode<any> {
+export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRenderableNode {
   __name: string;
   __path: string;
   __isDirectory: boolean;
@@ -115,6 +119,15 @@ export class LocalFileTagNode extends DecoratorNode<any> {
       queryDOM: decorator.queryDOM,
       render: decorator.render(this, editor),
     };
+  }
+
+  renderHeadless({ key }: HeadlessRenderContext) {
+    return createElement(LocalFile, {
+      isDirectory: this.__isDirectory,
+      key,
+      name: this.__name,
+      path: this.__path,
+    });
   }
 }
 
