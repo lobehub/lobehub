@@ -16,7 +16,7 @@ Only `verdict: confirmed` findings are rendered (plus unverified dimensions — 
 - **Same-root merge**: findings with `same_root_as: X` fold into X's entry — no separate number; add `**Same root**: id (location, issue_type), ...` at the entry's end; entry severity upgrades to the highest among merged; statistics count merged entries once.
 - **P2 cap (noise control)**: if confirmed P2 count > 6, render the top 6 fully and collapse the rest into one line each under `More P2`: `**#n** [issue_type] summary (file:line)`.
 - Empty severity buckets omit their heading entirely.
-- **Unverified dimensions**: `workflow` findings render under `Process`, `skill-freshness` under `Skill updates` — outside the severity buckets, excluded from P0/P1/P2 statistics, one line each: fact + evidence + suggested action.
+- **Unverified dimensions**: `workflow` findings render under `Process`, `skill-freshness` under `Skill updates` — outside the severity buckets, excluded from P0/P1/P2 statistics. These findings use the same JSON schema as everything else; render one line each mapped from those fields: fact = `summary`, evidence = `location` (plus `scenario` when present), suggested action = the first `fix_options` entry. Their `severity` is advisory and never rendered.
 - **Missing sources**: if any reviewer returned `missing_sources`, append a note recommending the listed rule files be fixed/restored.
 - **Workflow feedback**: merge equivalent suggestions across subagents, accumulate sources (`sources: code-style, verify`), render at the end; omit the section when empty.
 - **PR mode** (the user's message contains a GitHub PR URL): render `Merge verdict` between TL;DR and Findings. Otherwise omit the section entirely. Bare `#123` / `pr 123` do NOT trigger PR mode.
@@ -109,11 +109,11 @@ Before sending, confirm every item; fix and re-render if any is missing:
 
 ## 🔁 Process ← workflow dimension findings, omit when empty
 
-- {fact} — {evidence}; suggested: {action}
+- {summary} — {location}{; scenario when present}; suggested: {fix_options[0]}
 
 ## 📚 Skill updates ← skill-freshness findings, omit when empty
 
-- {stale skill file:line or proposed skill} — {what to change}
+- {location: stale skill file:line or proposed skill} — {summary}; suggested: {fix_options[0]}
 
 ## Statistics
 

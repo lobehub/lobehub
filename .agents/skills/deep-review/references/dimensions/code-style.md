@@ -18,6 +18,7 @@ Fragment-level readability and convention adherence. Look at each changed hunk i
 - Dead code, commented-out blocks, unused exports introduced by this diff
 - Comments: missing on hacky/non-obvious logic; stale after a signature change; or merely restating the code
 - Nesting ≥ 3 levels that early returns / lookup tables would flatten
+- Redundant or derivable state: a variable/state field that mirrors a prop or is computable from existing state — derive it (selector, `useMemo`, plain expression) instead of storing a second copy that can drift
 - Type looseness: `any`, runtime narrowing that the type signature hides, implicit contracts
 - File ballooning past \~800 lines without splitting
 

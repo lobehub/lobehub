@@ -51,6 +51,14 @@ Focus over completeness: findings must serve THIS change and its requirement. Do
   - **Legacy problems this diff triggers, exposes, or depends on** → report normally, location pointing at the implicated old code, `nature: "exposed_legacy"`, scenario explaining how this change surfaces it.
   - Everything else (locations on `+` lines) → `nature: "introduced"`.
 
+## Effort budget
+
+Evidence gathering is bounded — you are a finder, not the final judge:
+
+- Once a finding has concrete `file:line` evidence, stop expanding; do not keep browsing to make it stronger.
+- Deep falsification belongs to the independent verify pass, not to you: when settling a suspicion would take more than a handful of targeted file reads, report it with your best evidence instead of running a multi-file proof campaign.
+- Read rule sources selectively — the sections relevant to the touched surfaces — not cover to cover.
+
 ## Return format (strict JSON)
 
 Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent extracts and `JSON.parse`s it). Valid JSON only: escape quotes/backslashes, no comments, no trailing commas, no single quotes.

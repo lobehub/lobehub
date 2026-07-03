@@ -11,8 +11,9 @@ Will this change be slow, leak, or block — at production data volume, not dev-
 ## Quick checklist
 
 - N+1: per-item queries/fetches inside a loop that a join/batch endpoint would collapse
-- Blocking calls on hot paths: synchronous fs/crypto in request handlers, un-batched sequential awaits that could be `Promise.all`
+- Blocking calls on hot paths: synchronous fs/crypto in request handlers, un-batched sequential awaits that could be `Promise.all`, blocking work added to startup/entry paths
 - Resource leaks: listeners/intervals/subscriptions/AbortControllers created without cleanup (React effects, service singletons)
+- Long-lived objects or callbacks built from closures that capture a large enclosing scope — the closure retains the whole scope for the object's lifetime; copy the needed fields instead
 - Render-path waste: heavy computation in render without memoization, unstable identities re-rendering large lists, missing virtualization for unbounded lists
 - Unbounded growth: caches/maps/arrays that only ever grow
 - **Migration locking**: DDL that takes ACCESS EXCLUSIVE long enough to block production queries — adding a column with a volatile default, non-`CONCURRENTLY` index creation on a large table, table rewrites (`ALTER COLUMN TYPE`), `NOT NULL` on existing columns without a prior validated constraint

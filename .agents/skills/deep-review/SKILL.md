@@ -1,6 +1,6 @@
 ---
 name: deep-review
-description: 'Multi-dimensional code review. Use when reviewing any PR, diff, or branch — even a casual "look at this change" — via light mode: inline review against the dimension quick checklists. Deep mode runs only on explicit invocation (/deep-review): one review subagent per dimension plus independent verification subagents that falsify findings before reporting.'
+description: 'Multi-dimensional code review. Use when the user asks to review, evaluate, or audit a PR, diff, branch, or pasted change — including informal review asks like "look at this change for problems" — via light mode: inline review against the dimension quick checklists. Not for explain-only questions about what a change does or why. Deep mode runs only on explicit invocation (/deep-review): one review subagent per dimension plus independent verification subagents that falsify findings before reporting.'
 ---
 
 # Deep Review
@@ -19,10 +19,10 @@ Every design choice below serves one of these. When unsure how to execute a step
 
 ## Two entry modes
 
-| Mode                | Trigger                                                                                 | What runs                                                                                                                   |
-| ------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Light** (default) | Any ordinary review ask: "look at this change", "review this PR", a diff pasted in chat | Main agent reviews inline against the **Quick checklist** section of each applicable dimension file. No subagents.          |
-| **Deep**            | Explicit only: `/deep-review`, "run deep review", "full multi-agent review"             | Full orchestration: per-dimension review subagents → pipelined verify subagents → structured report → interactive fix flow. |
+| Mode                | Trigger                                                                                                                                                             | What runs                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Light** (default) | Any ordinary review ask: "review this PR", an informal "look at this change for problems", a diff pasted for review — but not explain-only questions about a change | Main agent reviews inline against the **Quick checklist** section of each applicable dimension file. No subagents.          |
+| **Deep**            | Explicit only: `/deep-review`, "run deep review", "full multi-agent review"                                                                                         | Full orchestration: per-dimension review subagents → pipelined verify subagents → structured report → interactive fix flow. |
 
 Do not auto-escalate light to deep. Do not run deep mode for a casual "看看这个改动" — that is light mode.
 
@@ -50,16 +50,16 @@ Rules live in one place: [`references/dimensions/`](references/dimensions/), one
 
 Before spawning, the main agent prunes dimensions that cannot apply to the diff. List pruned dimensions and the one-line reason in the report header. When in doubt, run the dimension.
 
-| Dimension                                             | Skip when                                                                                            |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| code-style, logic, business-logic, reuse-architecture | never (skip only for docs/lockfile-only diffs)                                                       |
-| performance                                           | no server/db/loop/render-path code touched (e.g. docs, copy, pure type changes)                      |
-| security                                              | docs-only diff                                                                                       |
-| compatibility                                         | diff touches no UI theming/routing, no API contract, no deployment config, no runtime-branching code |
-| ux                                                    | no user-facing surface changed (components, styles, copy, interaction flows)                         |
-| observability                                         | no error handling, async flow, or server code touched                                                |
-| workflow                                              | never in deep mode (cheap external-state checks)                                                     |
-| skill-freshness                                       | never in deep mode (cheap)                                                                           |
+| Dimension                                             | Skip when                                                                                                                     |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| code-style, logic, business-logic, reuse-architecture | never (skip only for docs/lockfile-only diffs)                                                                                |
+| performance                                           | no server/db/loop/render-path code touched (e.g. docs, copy, pure type changes)                                               |
+| security                                              | lockfile/generated-only diff — docs and copy still run it (text is a leak vector: secrets, internal URLs, commercial details) |
+| compatibility                                         | diff touches no UI theming/routing, no API contract, no deployment config, no runtime-branching code                          |
+| ux                                                    | no user-facing surface changed (components, styles, copy, interaction flows)                                                  |
+| observability                                         | no error handling, async flow, or server code touched                                                                         |
+| workflow                                              | never in deep mode (cheap external-state checks)                                                                              |
+| skill-freshness                                       | never in deep mode (cheap)                                                                                                    |
 
 Light mode applies the same table to decide which Quick checklists to read.
 

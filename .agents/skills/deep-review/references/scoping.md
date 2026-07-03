@@ -17,7 +17,7 @@ No local default ref (detached HEAD, fresh clone)? `git fetch && git switch <def
 ## 2. Pick the full-diff command by review target
 
 1. **User named a PR by URL** → `gh pr diff <num>`. Also fetch `gh pr view <num> --json mergeable,isDraft,reviewDecision,statusCheckRollup` and append those fields to the scope summary (feeds the merge-verdict table). URL only — bare `#123` does not trigger PR mode.
-2. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <local-default>...HEAD`), or both (`git diff <local-default>`).
+2. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <local-default>...HEAD`), or both (`git diff <local-default>`). Gitlink-only entries (`M <submodule>` where `git status` shows `(new commits)` and nothing else changed) do NOT count as uncommitted changes — a superproject tracking an in-flight submodule branch shows this permanently; route them through §4 instead of triggering this question.
 3. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard`, subagents read new files themselves.
 4. **Clean tree on a non-default branch** → `git diff <local-default>...HEAD`
 5. None of the above → ask; don't guess.
@@ -31,11 +31,11 @@ git diff main...HEAD --stat -- . \
   ':(exclude)pnpm-lock.yaml' ':(exclude)*.snap' ':(exclude)dist/**'
 ```
 
-Then judge with filtered numbers:
+Then judge with filtered numbers, checking in this order (very large first, so a few-files-but-huge diff never counts as small):
 
-- **Small diff** (≤ 200 lines or ≤ 5 files) → run the full-diff command now; the diff text becomes `{changes}`.
-- **Large diff** → do not fetch; the command itself (with excludes) becomes `{changes}`, subagents run it themselves.
 - **Very large diff** (> 1500 lines) → split into multiple review scopes by directory and run the flow in batches.
+- **Small diff** (≤ 200 lines AND ≤ 5 files) → run the full-diff command now; the diff text becomes `{changes}`.
+- **Large diff** (everything else) → do not fetch; the command itself (with excludes) becomes `{changes}`, subagents run it themselves.
 
 Excluded files are out of scope; reviewing a lockfile on request is a separate task, not this flow.
 

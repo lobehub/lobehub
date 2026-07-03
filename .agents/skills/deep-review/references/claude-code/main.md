@@ -71,6 +71,6 @@ Both lists empty → the report ends the flow; ask nothing.
 ## Notes
 
 - **Self-containment**: any information a subagent needs must be in its prompt — especially the scope summary and changes payload.
-- **Small vs large diff**: ≤ 200 lines / ≤ 5 files → inline diff text into prompts; larger → pass fetch commands (see scoping.md).
+- **Small vs large diff**: ≤ 200 lines AND ≤ 5 files → inline diff text into prompts; larger → pass fetch commands (very-large check first — see scoping.md).
 - **PR mode trigger**: GitHub PR URL in the user's message only.
 - **Do not degrade**: if Tasks cannot be spawned in this environment, stop and tell the user to use light mode — a main-agent-only "deep review" violates the skill's core principles.

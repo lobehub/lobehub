@@ -1,7 +1,7 @@
 ---
 id_prefix: sec
 verify: true
-skip_when: docs-only diff
+skip_when: lockfile/generated-only diff (docs, i18n copy, comments are leak vectors — never skip for text changes)
 calibration_exempt: true
 ---
 

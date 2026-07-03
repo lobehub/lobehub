@@ -4,6 +4,7 @@ Deep mode in Codex, end to end. "Subagent" below means a `spawn_agent` agent: su
 
 Codex constraints this manual is built around:
 
+- **Tool discovery first**: multi-agent tool names vary by Codex version and may stay hidden until discovered — e.g. surfaced via `tool_search` as `multi_agent_v1.spawn_agent` / `wait_agent` / `close_agent`, or exposed directly as `spawn_agent` / `wait` / `close_agent`. Before step 2, search/list the session's tools and bind the spawn/wait/close verbs used below to the names actually exposed; do not assume this manual's names exist verbatim. If no multi-agent tools can be surfaced, stop and offer light mode.
 - **Concurrency budget**: multi\_agent\_v2 caps concurrent threads per session (default 4 including the root — 3 usable subagent slots); the legacy `agents.max_threads` default is 6. The flow therefore runs dimensions as **3 composite groups** in a single wave instead of one agent per dimension.
 - **Slots are held until closed**: a finished agent still occupies its slot until `close_agent`. Close every agent as soon as you've consumed its result.
 - **Delegation policy**: Codex spawns subagents only when the user explicitly allows agent delegation. Deep mode is explicitly invoked, which is that permission; if your session policy still forbids spawning, stop and offer light mode — never degrade to a single-agent "deep review".
@@ -69,6 +70,6 @@ Non-empty batch → one `request_user_input` (allowed regardless of delegation p
 ## Notes
 
 - **Self-containment**: everything a subagent needs lives in its prompt — especially scope summary and changes payload.
-- **Small vs large diff**: ≤ 200 lines / ≤ 5 files → inline the diff; larger → pass fetch commands.
+- **Small vs large diff**: ≤ 200 lines AND ≤ 5 files → inline the diff; larger → pass fetch commands (very-large check first — see scoping.md).
 - **PR mode trigger**: GitHub PR URL in the user's message only.
 - Raising `agents.max_threads` shortens nothing here (the wave already fits 3 slots) — keep the group table as the execution grain for predictability.
