@@ -553,13 +553,13 @@ const Group = memo<GroupChildrenProps>(
       );
     };
 
-    // Codex-style turn folding: once the turn's op has ended, fold its whole
-    // process (reasoning + tools + intermediate prose) under a single "已处理
-    // {duration}" header, leaving the final answer always visible. The latest
-    // turn folds only after a final answer exists; still-generating turns render
-    // in full.
+    // Codex-style turn folding: once the turn's op has ended, fold it under a
+    // single "已处理 {duration}" header. A non-latest turn folds *whole* — its
+    // final answer collapses in too, so scrolled-past turns read as one compact
+    // row. The latest turn only folds its process and keeps the final answer
+    // visible (so a just-finished reply stays readable); still-generating turns
+    // render in full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    const processStepCount = countFoldedProcessSteps(processSegments);
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,
       hasFinalAnswer: hasRenderableFinalAnswer(finalSegments),
@@ -568,6 +568,12 @@ const Group = memo<GroupChildrenProps>(
       operationEnded: !hasActiveOperation,
       processSegments,
     });
+
+    // Non-latest turns collapse everything; the latest turn keeps its final
+    // answer out of the fold.
+    const foldedSegments = isLatestItem ? processSegments : segments;
+    const visibleSegments = isLatestItem ? finalSegments : [];
+    const processStepCount = countFoldedProcessSteps(foldedSegments);
 
     const durationText =
       turnDurationMs >= 1000 ? formatReasoningDuration(turnDurationMs) : undefined;
@@ -579,12 +585,12 @@ const Group = memo<GroupChildrenProps>(
             <>
               <ProcessFold durationText={durationText} stepCount={processStepCount}>
                 <Flexbox gap={8}>
-                  {processSegments.map((segment) =>
+                  {foldedSegments.map((segment) =>
                     renderSegment(segment, segments.indexOf(segment)),
                   )}
                 </Flexbox>
               </ProcessFold>
-              {finalSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
+              {visibleSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
             </>
           ) : (
             <>
