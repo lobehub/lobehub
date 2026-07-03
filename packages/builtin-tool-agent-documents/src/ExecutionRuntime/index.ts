@@ -255,9 +255,18 @@ export class AgentDocumentsExecutionRuntime {
   private capReadContent(content: string) {
     if (content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
 
-    const omitted = content.length - MAX_READ_DOCUMENT_CONTENT_CHARS;
+    // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
+    // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
+    // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
+    // providers (DeepSeek, Anthropic) reject — which would re-break the exact
+    // large-document requests this cap is meant to protect.
+    let cutoff = MAX_READ_DOCUMENT_CONTENT_CHARS;
+    const lastCharCode = content.charCodeAt(cutoff - 1);
+    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
+
+    const omitted = content.length - cutoff;
     return (
-      content.slice(0, MAX_READ_DOCUMENT_CONTENT_CHARS) +
+      content.slice(0, cutoff) +
       `\n\n[... document truncated to fit the context window: ${omitted} of ${content.length} ` +
       `characters omitted. This is only the beginning of the document — do not assume it is ` +
       `complete. Read a smaller/specific document, or list and target sections instead of ` +

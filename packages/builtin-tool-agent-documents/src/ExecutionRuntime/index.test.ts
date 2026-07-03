@@ -192,4 +192,27 @@ describe('AgentDocumentsExecutionRuntime', () => {
     expect(result.content).toBe('<doc>short</doc>');
     expect(result.content).not.toContain('document truncated');
   });
+
+  it('does not split a surrogate pair when the cutoff lands mid-emoji', async () => {
+    // Place a 2-code-unit emoji so its high surrogate sits exactly at the
+    // 200,000-char cutoff; a naive slice would emit a lone `\uD83D`, which some
+    // providers reject and would re-break the large-document request.
+    const content = `${'a'.repeat(199_999)}😀${'b'.repeat(2000)}`;
+    const readDocument = vi.fn().mockResolvedValue({
+      content: 'markdown',
+      id: 'agent-doc-1',
+      litexml: content,
+      title: 'Emoji Archive',
+    });
+    const runtime = createRuntime({ readDocument });
+
+    const result = await runtime.readDocument({ id: 'agent-doc-1' }, { agentId: 'agent-1' });
+
+    // No lone high/low surrogate survives in the LLM-facing content.
+    const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(result.content).not.toMatch(loneSurrogate);
+    // JSON serialization (the actual failure surface) stays well-formed.
+    expect(() => JSON.parse(JSON.stringify(result.content))).not.toThrow();
+    expect(result.content).toContain('document truncated to fit the context window');
+  });
 });
