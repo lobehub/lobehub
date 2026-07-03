@@ -516,6 +516,25 @@ inline screenshot/text evidence). On production that resolves to
 `https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
 link in the final chat reply** alongside the local report dir.
 
+### Re-verifying the same case updates the report in place (don't spawn a new one)
+
+When you iterate on one change — fix → re-verify → fix again — **keep reusing the
+same report dir (`$DIR`)**. `ingest-report` records the session it created in a
+`.verify-run.json` sidecar inside `$DIR`, so re-ingesting the **same dir**
+**updates that session in place** (same `/verify/<id>` URL) instead of creating a
+new list entry every round. The update is a full replace: cases are overwritten
+by their stable `id`, each case's evidence is re-attached (old screenshots
+cleared, not stacked), and cases the new report dropped are pruned.
+
+So the rule for an iterative case: `report-init.sh` **once**, then re-run
+`ingest-report "$DIR"` after each fix — the report accretes value at one stable
+URL rather than flooding the list with near-duplicate runs. Only scaffold a fresh
+`$DIR` when you start verifying a genuinely different case.
+
+Escape hatches: `--new` forces a fresh session even if the dir already made one;
+`--run <verifyRunId>` targets an existing session explicitly (e.g. to update from
+a different machine/checkout where the sidecar is absent).
+
 Notes:
 
 - `result.json` cases use `{ id?, name, result, observation?, evidence? }`;

@@ -5,6 +5,7 @@ import { FileService } from '@/server/services/file';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  deleteResult: vi.fn(),
   deleteRun: vi.fn(),
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
   VerifyCheckResultModel: vi.fn(() => ({
+    delete: modelMocks.deleteResult,
     findById: modelMocks.findResultById,
     upsertByCheckItem: modelMocks.upsertByCheckItem,
   })),
@@ -145,6 +147,44 @@ describe('verifyRouter', () => {
 
       expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', { title: 'Renamed report' });
       expect(res).toEqual({ data: updatedRun, success: true });
+    });
+
+    it('refreshes the scope context in place on a re-ingest', async () => {
+      const updatedRun = { id: 'run-1' };
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.updateRun.mockResolvedValueOnce(updatedRun);
+
+      await createCaller().updateRun({
+        value: { context: { branch: 'feat/x', commit: 'abc123' }, goal: 'ship x' },
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', {
+        context: { branch: 'feat/x', commit: 'abc123' },
+        goal: 'ship x',
+      });
+    });
+  });
+
+  describe('deleteResult', () => {
+    it("rejects a result outside the caller's scope before deleting", async () => {
+      modelMocks.findResultById.mockResolvedValueOnce(undefined);
+
+      await expect(createCaller().deleteResult({ id: 'other-user-result' })).rejects.toThrow(
+        'Verification check result not found',
+      );
+
+      expect(modelMocks.findResultById).toHaveBeenCalledWith('other-user-result');
+      expect(modelMocks.deleteResult).not.toHaveBeenCalled();
+    });
+
+    it('prunes a result the caller owns', async () => {
+      modelMocks.findResultById.mockResolvedValueOnce({ id: 'result-1' });
+
+      const res = await createCaller().deleteResult({ id: 'result-1' });
+
+      expect(modelMocks.deleteResult).toHaveBeenCalledWith('result-1');
+      expect(res).toEqual({ id: 'result-1', success: true });
     });
   });
 

@@ -87,9 +87,26 @@ const checkItemSchema = z.object({
 });
 
 const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+
+// The scenario's context (coding scope), rendered as the report's scope header.
+// Shared by createRun and updateRun so a re-ingest can refresh the scope in place.
+const runContextSchema = z.object({
+  branch: z.string().optional(),
+  commit: z.string().optional(),
+  entry: z.string().optional(),
+  focus: z.string().optional(),
+  surfaces: z.array(z.string()).optional(),
+  testedAt: z.string().optional(),
+});
+
 const updateRunInputSchema = verifyRunIdInputSchema.extend({
+  // Every field optional — a re-ingest may refresh only the context/goal while
+  // keeping the original title, so nothing here is required.
   value: z.object({
-    title: z.string().trim().min(1).max(200),
+    context: runContextSchema.optional(),
+    goal: z.string().optional(),
+    scenario: z.enum(['coding']).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
   }),
 });
 
@@ -437,16 +454,7 @@ export const verifyRouter = router({
     .input(
       z.object({
         // The active scenario's context, rendered as the report's scope header.
-        context: z
-          .object({
-            branch: z.string().optional(),
-            commit: z.string().optional(),
-            entry: z.string().optional(),
-            focus: z.string().optional(),
-            surfaces: z.array(z.string()).optional(),
-            testedAt: z.string().optional(),
-          })
-          .optional(),
+        context: runContextSchema.optional(),
         goal: z.string().optional(),
         operationId: z.string().optional(),
         scenario: z.enum(['coding']).optional(),
@@ -519,7 +527,12 @@ export const verifyRouter = router({
   updateRun: verifyProcedure.input(updateRunInputSchema).mutation(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
 
-    const updated = await ctx.runModel.update(run.id, { title: input.value.title });
+    const updated = await ctx.runModel.update(run.id, {
+      context: input.value.context,
+      goal: input.value.goal,
+      scenario: input.value.scenario,
+      title: input.value.title,
+    });
     return { data: updated, success: true };
   }),
 
@@ -556,6 +569,19 @@ export const verifyRouter = router({
         verifierType: input.verifierType ?? 'agent',
         verifyRunId: run.id,
       });
+    }),
+
+  // Prune one check result (ownership-scoped; its evidence cascades). The
+  // re-ingest path calls this for cases a later report round dropped, so
+  // updating a session in place stays a full replace and never accretes stale
+  // checks. resolveCheckResult 404s a result that isn't the caller's.
+  deleteResult: verifyProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await resolveCheckResult(ctx, input.id);
+
+      await ctx.resultModel.delete(result.id);
+      return { id: result.id, success: true };
     }),
 
   uploadEvidence: verifyProcedure
