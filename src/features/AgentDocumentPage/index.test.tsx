@@ -17,6 +17,10 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
+vi.mock('@/components/404', () => ({
+  default: () => <div data-testid="not-found" />,
+}));
+
 vi.mock('@/features/PageEditor', () => ({
   PageEditor: ({ pageId, header }: { header?: ReactNode; pageId?: string }) => (
     <div data-page-id={pageId} data-testid="page-editor">
@@ -45,7 +49,8 @@ vi.mock('./Header', () => ({
 const agentDocumentItemState = vi.hoisted(() => ({
   current: {
     error: undefined as unknown,
-    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
+    isNotFound: false as boolean | undefined,
+    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' } as unknown,
     mutate: vi.fn(),
     skillBundle: undefined as unknown,
   },
@@ -102,6 +107,7 @@ describe('AgentDocumentPage', () => {
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     agentDocumentItemState.current = {
       error: undefined,
+      isNotFound: false,
       item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
       mutate: vi.fn(),
       skillBundle: undefined,
@@ -124,6 +130,16 @@ describe('AgentDocumentPage', () => {
     render(<AgentDocumentPage documentId="docs_abc" />);
     expect(screen.getByTestId('page-editor').dataset.pageId).toBe('docs_abc');
     expect(screen.getByTestId('header').dataset.documentId).toBe('docs_abc');
+  });
+
+  it('renders the not-found module (no header/editor) when the doc is genuinely absent', () => {
+    agentDocumentItemState.current = { ...agentDocumentItemState.current, isNotFound: true };
+
+    render(<AgentDocumentPage documentId="docs_missing" />);
+
+    expect(screen.getByTestId('not-found')).toBeInTheDocument();
+    expect(screen.queryByTestId('page-editor')).toBeNull();
+    expect(screen.queryByTestId('header')).toBeNull();
   });
 
   it('passes document list fetch errors to the header', () => {

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 
+import NotFound from '@/components/404';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import { PageEditor } from '@/features/PageEditor';
@@ -31,7 +32,13 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   const { aid } = useParams<{ aid: string }>();
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
-  const { error: itemError, item, mutate, skillBundle } = useAgentDocumentItem(agentId, documentId);
+  const {
+    error: itemError,
+    isNotFound,
+    item,
+    mutate,
+    skillBundle,
+  } = useAgentDocumentItem(agentId, documentId);
 
   const enableFloatingChatPanel = useUserStore(
     labPreferSelectors.enableAgentDocumentFloatingChatPanel,
@@ -71,6 +78,17 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     ),
     [agentId, backToChat, documentId, item?.id, item?.updatedAt, itemError, title],
   );
+
+  // Genuinely-absent doc: show the not-found state for the whole content module
+  // rather than a breadcrumb with a placeholder "无标题" title + a title skeleton
+  // sitting above a 404 body.
+  if (isNotFound) {
+    return (
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
+        <NotFound />
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }} width={'100%'}>
