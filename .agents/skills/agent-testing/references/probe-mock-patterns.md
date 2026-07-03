@@ -55,6 +55,28 @@
   DOES catch TRPC). Needs a raw CDP ws (see C2 for getting the endpoint).
 - Server-side: temporarily make the one endpoint return 500.
 
+### A6. ✅ WORKS — WRITE-side (mutation) fault injection, same HMR technique
+
+- To test the write-side save-state UI (`AutoSaveHint` failed tag + `saveToast`),
+  inject the throw into the client service **mutation** method, not a fetcher:
+  ```ts
+  // src/services/task.ts — the method the store action calls (updateTask → taskService.update)
+  update = async (id, data) => {
+    // [AGENT-TEST] REMOVE
+    if (true)
+      throw Object.assign(new Error('injected save failure'), { data: { httpStatus: 500 } });
+    return lambdaClient.task.update.mutate({ id, ...data });
+  };
+  ```
+  Then trigger a save in the UI (edit the title / change the model). `runMutation`
+  sets `taskSaveStatus:'failed'` and calls `saveToast`. `httpStatus:500` ⇒ retryable
+  ⇒ the toast shows a Retry action; 401/403 would suppress it.
+- **Gotcha — reverting the injection triggers a FULL page reload.** `git checkout --`
+  on a service file makes Vite do a full reload (not just HMR), so the SPA resets to
+  a blank Main Layout (Case 1 trap: a blank shell with only the `Debug ID` tag).
+  After reverting, **re-navigate** (`agent-browser open .../task/<id>`) and re-fetch
+  element refs before continuing the recovery test.
+
 ---
 
 ## B. Cache / stale state that MASKS the failure
@@ -144,6 +166,19 @@
 - `agent-browser console` and `app-probe.sh errors` returned nothing this run.
   Prefer the debug-global (C2) over console reading.
 
+### C4. `document.body.innerText` keyword grep false-positives on fixture text
+
+- **Situation**: asserting a state like "保存失败" / "Save failed" via
+  `body.innerText.includes('保存失败')`. If the test fixture's own content contains
+  that substring (e.g. a task literally named " 验证保存**失败**态的测试任务 "), the grep
+  matches the fixture, not the state indicator — a false PASS on the error state
+  even when it never rendered (a Case-1 grep trap).
+- **Works**: scope the check to the actual UI element, never `body.innerText`:
+  - the save hint tag → `[...document.querySelectorAll('[class*=Tag],.ant-tag')].map(t=>t.textContent.trim())`
+  - the toast → find the leaf node matching the message, climb while the subtree
+    text stays short, then read its `button`s (`[Close, 重试]`).
+    Pick fixture names that do NOT contain any state keyword you'll assert on.
+
 ---
 
 ## D. agent-browser / CDP mechanics
@@ -159,6 +194,22 @@
 - **D4. `wait --load networkidle` HANGS during a retry loop** (network never
   idles) and can blow the command timeout — use a fixed `wait <ms>` instead when
   a fetch is stuck retrying.
+- **D5. base-ui `toast` lives in a portal, auto-dismisses in \~5s, and can be
+  occluded by the dev FPS overlay.** `snapshot -i` does NOT reliably surface the
+  portal's action buttons (the `重试`/Retry ref came back empty); read the toast
+  via `eval` DOM query instead. The bottom-right dev FPS/debug widget overlaps the
+  bottom-right toast, hiding the action row in screenshots — relocate the toast
+  region for a clean shot:
+  ```js
+  [...document.querySelectorAll('[aria-label=Notifications]')].forEach((r) => {
+    r.style.cssText +=
+      ';position:fixed!important;top:100px!important;left:360px!important;right:auto!important;bottom:auto!important;z-index:2147483647!important;';
+  });
+  ```
+  Because it dismisses in 5s, re-trigger the toast immediately before the
+  screenshot/query; a click-the-Retry-then-observe flow is timing-flaky — fire it
+  via `button.click()` in `eval` right after re-triggering, or extend the toast
+  duration.
 
 ---
 

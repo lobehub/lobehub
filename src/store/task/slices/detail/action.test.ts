@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { useTaskStore } from '../../store';
 
@@ -41,7 +42,7 @@ beforeEach(() => {
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
-    taskSaveStatus: 'idle',
+    taskSaveStatusMap: {},
   });
 });
 
@@ -118,7 +119,7 @@ describe('TaskDetailSliceAction', () => {
 
       expect(useTaskStore.getState().taskDetailMap['T-1'].name).toBe('New Name');
       expect(taskService.update).toHaveBeenCalledWith('T-1', { name: 'New Name' });
-      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
 
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
@@ -138,7 +139,7 @@ describe('TaskDetailSliceAction', () => {
 
       // The failure must surface as `failed` (never `idle`) so the save hint
       // shows an error + Retry instead of masquerading as a clean state.
-      expect(useTaskStore.getState().taskSaveStatus).toBe('failed');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
       expect(toast.error).toHaveBeenCalled();
     });
@@ -183,7 +184,7 @@ describe('TaskDetailSliceAction', () => {
 
       await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agent-x' });
 
-      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
       expect(message.error).not.toHaveBeenCalled();
     });
 
@@ -241,6 +242,30 @@ describe('TaskDetailSliceAction', () => {
 
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+    });
+
+    it('should scope save status per task so a failure does not leak across navigation', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', instruction: 'One', status: 'backlog' },
+          'T-2': { identifier: 'T-2', instruction: 'Two', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTask('T-1', { name: 'New' })).rejects.toThrow(
+        'fail',
+      );
+
+      // Opening task T-2 must show a clean state — T-1's `failed` stays with T-1.
+      useTaskStore.getState().setActiveTaskId('T-2');
+      expect(taskDetailSelectors.taskSaveStatus(useTaskStore.getState())).toBe('idle');
+
+      // Returning to T-1 still reflects its own failed save.
+      useTaskStore.getState().setActiveTaskId('T-1');
+      expect(taskDetailSelectors.taskSaveStatus(useTaskStore.getState())).toBe('failed');
     });
   });
 

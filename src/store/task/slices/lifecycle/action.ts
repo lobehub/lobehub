@@ -110,7 +110,7 @@ export class TaskLifecycleSliceActionImpl {
           retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
         });
       },
-      setStatus: (s) => this.#set({ taskSaveStatus: s }, false, `transitionStatus/${s}`),
+      setStatus: (s) => this.#get().internal_setTaskSaveStatus(id, s),
     });
   };
 }

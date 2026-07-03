@@ -157,8 +157,7 @@ export class TaskConfigSliceActionImpl {
       },
       // Best-effort toggle — the toast + refetch surface the failure, callers don't rethrow.
       rethrow: false,
-      setStatus: (status) =>
-        this.#set({ taskSaveStatus: status }, false, `updateTaskModelConfig/${status}`),
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
   };
 

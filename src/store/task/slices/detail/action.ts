@@ -9,6 +9,7 @@ import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
+import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
@@ -321,7 +322,7 @@ export class TaskDetailSliceActionImpl {
         await refreshPatchedTargets();
         saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
       },
-      setStatus: (status) => this.#set({ taskSaveStatus: status }, false, `updateTask/${status}`),
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
 
     if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
@@ -347,6 +348,17 @@ export class TaskDetailSliceActionImpl {
   };
 
   // ── Internal Actions ──
+
+  // Write the save status for a single task id. Keyed per task so a `failed`
+  // status stays with its task and never bleeds into another task's header after
+  // navigation. Shared by every runMutation-based write across the task slices.
+  internal_setTaskSaveStatus = (id: string, status: SaveStatus): void => {
+    this.#set(
+      { taskSaveStatusMap: { ...this.#get().taskSaveStatusMap, [id]: status } },
+      false,
+      `setTaskSaveStatus/${status}`,
+    );
+  };
 
   internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
     const currentMap = this.#get().taskDetailMap;
