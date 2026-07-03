@@ -1,9 +1,17 @@
 'use client';
 
 import type { VerifyRunStatus, VerifyVerdict } from '@lobechat/types';
-import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
-import { Icon, Text } from '@lobehub/ui';
-import { ScrollArea } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  DraggablePanel,
+  DraggablePanelContainer,
+  type DraggablePanelProps,
+  Icon,
+  Text,
+} from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { confirmModal, DropdownMenu, ScrollArea } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -12,14 +20,20 @@ import {
   CircleHelp,
   CircleX,
   LoaderCircle,
+  MoreHorizontal,
   PanelLeftClose,
+  Pencil,
   Search,
+  Trash2,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
+import { mutate } from '@/libs/swr';
+import { verifyKeys } from '@/libs/swr/keys';
 import type { VerifyReportSummary } from '@/services/verify';
+import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -109,22 +123,17 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
   `,
   item: css`
-    cursor: pointer;
-
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 18px minmax(0, 1fr) 26px;
     gap: 10px;
-    align-items: start;
+    align-items: center;
 
     width: 100%;
     padding-block: 9px;
     padding-inline: 10px;
-    border: none;
     border-radius: ${cssVar.borderRadius};
 
-    text-align: start;
-
-    background: none;
+    background: transparent;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
@@ -133,10 +142,37 @@ const styles = createStaticStyles(({ css }) => ({
     &[data-active='true'] {
       background: ${cssVar.colorFillSecondary};
     }
+
+    &[data-mutating='true'] {
+      pointer-events: none;
+      opacity: 0.62;
+    }
+
+    &:hover [data-role='item-action'],
+    &:focus-within [data-role='item-action'],
+    &[data-active='true'] [data-role='item-action'] {
+      opacity: 1;
+    }
   `,
   glyph: css`
     display: flex;
-    margin-block-start: 2px;
+  `,
+  itemBody: css`
+    min-width: 0;
+  `,
+  itemMain: css`
+    cursor: pointer;
+
+    display: block;
+
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none;
+
+    text-align: start;
+
+    background: transparent;
   `,
   spin: css`
     animation: verify-spin 1.1s linear infinite;
@@ -168,6 +204,29 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  itemTitleInput: css`
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+    padding-inline: 6px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 4px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgContainer};
+    outline: none;
+
+    &:focus {
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
+    }
+  `,
+  itemAction: css`
+    opacity: 0;
+    transition: opacity 0.12s ease;
   `,
   counts: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -245,9 +304,19 @@ const relativeTime = (value?: Date | string | null) => {
   return dayjs().diff(d, 'day') < 7 ? d.fromNow() : d.format('MMM D');
 };
 
-const ReportListItem = memo<{ active: boolean; item: VerifyReportSummary }>(({ active, item }) => {
-  const { t } = useTranslation('verify');
+const ReportListItem = memo<{
+  active: boolean;
+  item: VerifyReportSummary;
+  onReportsChanged: () => Promise<unknown> | unknown;
+}>(({ active, item, onReportsChanged }) => {
+  const { t } = useTranslation(['verify', 'common']);
+  const { message } = App.useApp();
   const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(item.run.title || '');
+  const [mutating, setMutating] = useState(false);
+  const isSavingRef = useRef(false);
+
   const status = item.run.status ?? null;
   const glyph = glyphOf(status, item.report?.verdict);
   const meta = glyphMeta[glyph];
@@ -256,19 +325,104 @@ const ReportListItem = memo<{ active: boolean; item: VerifyReportSummary }>(({ a
   const total = item.report?.totalChecks ?? planCount;
   const passed = item.report?.passedChecks ?? 0;
   const failed = item.report?.failedChecks ?? 0;
-  const title = item.run.title || t('reports.untitled');
+  const title = item.run.title || t('verify:reports.untitled');
   const time =
     glyph === 'running'
-      ? t('list.running')
+      ? t('verify:list.running')
       : relativeTime(item.report?.generatedAt ?? item.run.createdAt);
 
+  const refreshRelatedReports = async () => {
+    await Promise.all([onReportsChanged(), mutate(verifyKeys.reportBundle(item.run.id))]);
+  };
+
+  const startRename = () => {
+    setDraftTitle(title);
+    setEditing(true);
+  };
+
+  const cancelRename = () => {
+    if (isSavingRef.current) return;
+    setDraftTitle(item.run.title || '');
+    setEditing(false);
+  };
+
+  const commitRename = async () => {
+    if (isSavingRef.current) return;
+
+    const nextTitle = draftTitle.trim();
+    if (!nextTitle) {
+      message.error(t('verify:workspace.renameEmpty'));
+      setDraftTitle(item.run.title || '');
+      setEditing(false);
+      return;
+    }
+
+    if (nextTitle === title) {
+      setEditing(false);
+      return;
+    }
+
+    isSavingRef.current = true;
+    setMutating(true);
+    try {
+      await verifyService.updateRunTitle(item.run.id, nextTitle);
+      await refreshRelatedReports();
+      message.success(t('verify:workspace.renameSuccess'));
+      setEditing(false);
+    } catch (error) {
+      console.error('[verify:renameReport]', error);
+      message.error(t('verify:workspace.renameError'));
+    } finally {
+      isSavingRef.current = false;
+      setMutating(false);
+    }
+  };
+
+  const deleteReport = () => {
+    confirmModal({
+      cancelText: t('common:cancel'),
+      content: t('verify:workspace.deleteConfirmDescription', { title }),
+      okButtonProps: { danger: true },
+      okText: t('common:delete'),
+      onOk: async () => {
+        setMutating(true);
+        try {
+          await verifyService.deleteRun(item.run.id);
+          if (active) navigate('/verify', { replace: true });
+          await Promise.all([
+            onReportsChanged(),
+            mutate(verifyKeys.reportBundle(item.run.id), null, { revalidate: false }),
+          ]);
+          message.success(t('verify:workspace.deleteSuccess'));
+        } catch (error) {
+          console.error('[verify:deleteReport]', error);
+          message.error(t('verify:workspace.deleteError'));
+        } finally {
+          setMutating(false);
+        }
+      },
+      title: t('verify:workspace.deleteConfirmTitle'),
+    });
+  };
+
+  const menuItems: DropdownItem[] = [
+    {
+      icon: <Icon icon={Pencil} />,
+      key: 'rename',
+      label: t('verify:workspace.actions.rename'),
+      onClick: startRename,
+    },
+    {
+      danger: true,
+      icon: <Icon icon={Trash2} />,
+      key: 'delete',
+      label: t('verify:workspace.actions.delete'),
+      onClick: deleteReport,
+    },
+  ];
+
   return (
-    <button
-      className={styles.item}
-      data-active={active}
-      type={'button'}
-      onClick={() => navigate(`/verify/${item.run.id}`)}
-    >
+    <div className={styles.item} data-active={active} data-mutating={mutating}>
       <span className={styles.glyph} style={{ color: meta.color }}>
         <Icon
           className={glyph === 'running' ? styles.spin : undefined}
@@ -276,26 +430,71 @@ const ReportListItem = memo<{ active: boolean; item: VerifyReportSummary }>(({ a
           size={15}
         />
       </span>
-      <span style={{ minWidth: 0 }}>
-        <span className={styles.itemTitle} data-active={active}>
-          {title}
-        </span>
-        <span className={styles.itemSub}>
-          {time ? <span>{time}</span> : null}
-          {total > 0 && glyph !== 'running' ? (
-            <span className={styles.counts}>
-              {passed}/{total}
-              {failed > 0 ? (
-                <>
-                  {' '}
-                  · <em>{t('list.failedCount', { count: failed })}</em>
-                </>
+      <span className={styles.itemBody}>
+        {editing ? (
+          <input
+            autoFocus
+            className={styles.itemTitleInput}
+            value={draftTitle}
+            onBlur={() => void commitRename()}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void commitRename();
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelRename();
+              }
+            }}
+          />
+        ) : (
+          <button
+            className={styles.itemMain}
+            title={title}
+            type={'button'}
+            onClick={() => navigate(`/verify/${item.run.id}`)}
+          >
+            <span className={styles.itemTitle} data-active={active}>
+              {title}
+            </span>
+            <span className={styles.itemSub}>
+              {time ? <span>{time}</span> : null}
+              {total > 0 && glyph !== 'running' ? (
+                <span className={styles.counts}>
+                  {passed}/{total}
+                  {failed > 0 ? (
+                    <>
+                      {' '}
+                      · <em>{t('verify:list.failedCount', { count: failed })}</em>
+                    </>
+                  ) : null}
+                </span>
               ) : null}
             </span>
-          ) : null}
-        </span>
+          </button>
+        )}
       </span>
-    </button>
+      {!editing && (
+        <DropdownMenu
+          iconSpaceMode={'group'}
+          items={menuItems}
+          placement={'bottomRight'}
+          popupProps={{ style: { minWidth: 140 } }}
+        >
+          <ActionIcon
+            className={styles.itemAction}
+            data-role={'item-action'}
+            icon={MoreHorizontal}
+            size={'small'}
+            title={t('verify:workspace.actions.more')}
+          />
+        </DropdownMenu>
+      )}
+    </div>
   );
 });
 
@@ -305,7 +504,7 @@ const ReportListPanel = memo(() => {
   const { t } = useTranslation('verify');
   const { runId } = useParams<{ runId: string }>();
   const { md = true } = useResponsive();
-  const { data } = useVerifyReportSummaries();
+  const { data, mutate: refreshReports } = useVerifyReportSummaries();
   const reports = useMemo(() => data ?? [], [data]);
 
   const [query, setQuery] = useState('');
@@ -393,7 +592,12 @@ const ReportListPanel = memo(() => {
           ) : (
             <div className={styles.list}>
               {filtered.map((item) => (
-                <ReportListItem active={item.run.id === runId} item={item} key={item.run.id} />
+                <ReportListItem
+                  active={item.run.id === runId}
+                  item={item}
+                  key={item.run.id}
+                  onReportsChanged={refreshReports}
+                />
               ))}
             </div>
           )}

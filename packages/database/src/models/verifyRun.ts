@@ -203,6 +203,19 @@ export class VerifyRunModel {
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
+  update = async (
+    runId: string,
+    value: Partial<Pick<NewVerifyRun, 'title'>>,
+  ): Promise<VerifyRunItem | undefined> => {
+    const [run] = await this.db
+      .update(verifyRuns)
+      .set(value)
+      .where(and(eq(verifyRuns.id, runId), this.ownership()))
+      .returning();
+
+    return run;
+  };
+
   /** Read just the verify-related fields for a session (legacy state shape). */
   getState = async (runId: string): Promise<VerifyRunState | null> => {
     const run = await this.findById(runId);

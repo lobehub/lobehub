@@ -67,8 +67,11 @@ export interface VerifyStateResponse {
   verifyStatus: VerifyStatus | null;
 }
 
-/** One evidence artifact plus its resolved (signed) file URL, when file-backed. */
-export type VerifyEvidenceWithUrl = VerifyEvidence & { fileUrl: string | null };
+/** One evidence artifact plus resolved display metadata, when file-backed. */
+export type VerifyEvidenceWithUrl = VerifyEvidence & {
+  fileName: string | null;
+  fileUrl: string | null;
+};
 
 /** One check result plus the evidence artifacts attached to it. */
 export type VerifyResultWithEvidence = VerifyCheckResultItem & {
@@ -162,6 +165,12 @@ export class VerifyService {
   /** Current user's recent verification sessions with report rollup fields. */
   listReportSummaries = (): Promise<VerifyReportSummary[]> =>
     lambdaClient.verify.listReportSummaries.query() as Promise<VerifyReportSummary[]>;
+
+  deleteRun = (verifyRunId: string): Promise<unknown> =>
+    lambdaClient.verify.deleteRun.mutate({ verifyRunId });
+
+  updateRunTitle = (verifyRunId: string, title: string): Promise<unknown> =>
+    lambdaClient.verify.updateRun.mutate({ value: { title }, verifyRunId });
 
   executeVerify = (input: {
     batchLlm?: boolean;

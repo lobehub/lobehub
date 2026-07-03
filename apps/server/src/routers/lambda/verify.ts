@@ -87,6 +87,11 @@ const checkItemSchema = z.object({
 });
 
 const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+const updateRunInputSchema = verifyRunIdInputSchema.extend({
+  value: z.object({
+    title: z.string().trim().min(1).max(200),
+  }),
+});
 
 const uploadEvidenceInputSchema = z
   .object({
@@ -511,6 +516,13 @@ export const verifyRouter = router({
     return ctx.resultModel.listByRun(run.id);
   }),
 
+  updateRun: verifyProcedure.input(updateRunInputSchema).mutation(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+    const updated = await ctx.runModel.update(run.id, { title: input.value.title });
+    return { data: updated, success: true };
+  }),
+
   ingestResult: verifyProcedure
     .input(
       z.object({
@@ -761,7 +773,7 @@ export const verifyRouter = router({
           .orderBy(asc(verifyCheckResults.checkItemIndex)),
       ]);
 
-      // Resolve a displayable URL for each file-backed evidence artifact.
+      // Resolve display metadata for each file-backed evidence artifact.
       let fileService: FileService | null | undefined;
       const getFileService = () => {
         if (fileService !== undefined) return fileService;
@@ -769,24 +781,38 @@ export const verifyRouter = router({
         try {
           fileService = new FileService(ctx.serverDB, run.userId, run.workspaceId ?? undefined);
         } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileUrl]', error);
+          console.error('[verify:getReportBundle:resolveFileMeta]', error);
           fileService = null;
         }
 
         return fileService;
       };
-      const resolveFileUrl = async (fileId: string | null) => {
-        if (!fileId) return null;
+      const resolveFileMeta = async (fileId: string | null) => {
+        if (!fileId) return { fileName: null, fileUrl: null };
 
         try {
           const file = await FileModel.getFileById(ctx.serverDB, fileId);
-          if (!file?.url) return null;
+          if (!file) return { fileName: null, fileUrl: null };
+          if (!file.url) return { fileName: file.name ?? null, fileUrl: null };
 
           const service = getFileService();
-          return service ? await service.getFullFileUrl(file.url) : null;
+          if (!service) return { fileName: file.name ?? null, fileUrl: null };
+
+          try {
+            return {
+              fileName: file.name ?? null,
+              fileUrl: await service.getFullFileUrl(file.url),
+            };
+          } catch (error) {
+            console.error('[verify:getReportBundle:resolveFileMeta]', error);
+            return { fileName: file.name ?? null, fileUrl: null };
+          }
         } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileUrl]', error);
-          return null;
+          console.error('[verify:getReportBundle:resolveFileMeta]', error);
+          return {
+            fileName: null,
+            fileUrl: null,
+          };
         }
       };
 
@@ -800,7 +826,7 @@ export const verifyRouter = router({
           return {
             ...r,
             evidence: await Promise.all(
-              evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
+              evidence.map(async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId)) })),
             ),
           };
         }),

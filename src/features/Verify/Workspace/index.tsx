@@ -10,6 +10,8 @@ import { Outlet } from 'react-router';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import ReportListPanel from './ReportListPanel';
 
@@ -59,14 +61,17 @@ const VerifyWorkspace = memo(() => {
     systemStatusSelectors.showVerifyReportPanel(s),
     s.updateSystemStatus,
   ]);
+  const isAuthLoaded = useUserStore(authSelectors.isLoaded);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const canShowReportList = Boolean(isAuthLoaded && isLogin);
 
   return (
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       {/* Standalone route (outside the app main layout): drive the tab title here. */}
       <RouteMetaBridge />
-      <ReportListPanel />
+      {canShowReportList && <ReportListPanel />}
       <div className={styles.main}>
-        {!showPanel && (
+        {canShowReportList && !showPanel && (
           <button
             aria-label={t('workspace.expand')}
             className={styles.expandBtn}

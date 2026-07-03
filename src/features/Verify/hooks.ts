@@ -22,8 +22,10 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
   );
 
 /** Current user's recent verification sessions with report rollup fields. */
-export const useVerifyReportSummaries = () =>
-  useClientDataSWR(verifyKeys.reportSummaries(), () => verifyService.listReportSummaries());
+export const useVerifyReportSummaries = (enabled = true) =>
+  useClientDataSWR(enabled ? verifyKeys.reportSummaries() : null, () =>
+    verifyService.listReportSummaries(),
+  );
 
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
 export const useVerifierTracing = (tracingId: string | null | undefined) =>
