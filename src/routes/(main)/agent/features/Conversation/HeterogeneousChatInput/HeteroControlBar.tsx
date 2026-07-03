@@ -13,6 +13,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -100,12 +101,14 @@ const HeteroControlBar = memo(() => {
       <span className={styles.fullAccessLabel}>{tChat('heteroAgent.fullAccess.label')}</span>
     </div>
   );
-  const shouldShowCodexQuota =
-    agencyConfig?.heterogeneousProvider?.type === 'codex' &&
+  const heteroProvider = agencyConfig?.heterogeneousProvider;
+  const isLocalHeteroExecution =
     resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       isHetero: true,
     }) === 'local';
+  const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
+  const shouldShowClaudeQuota = heteroProvider?.type === 'claude-code' && isLocalHeteroExecution;
 
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
@@ -114,11 +117,9 @@ const HeteroControlBar = memo(() => {
       </Flexbox>
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
         {shouldShowCodexQuota && (
-          <CodexQuotaMenu
-            command={agencyConfig.heterogeneousProvider?.command}
-            env={agencyConfig.heterogeneousProvider?.env}
-          />
+          <CodexQuotaMenu command={heteroProvider?.command} env={heteroProvider?.env} />
         )}
+        {shouldShowClaudeQuota && <ClaudeCodeQuotaMenu env={heteroProvider?.env} />}
         <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
       </Flexbox>
     </Flexbox>

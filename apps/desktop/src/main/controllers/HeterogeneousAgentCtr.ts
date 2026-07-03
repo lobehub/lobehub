@@ -9,6 +9,7 @@ import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
 
 import type {
+  ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   HeterogeneousAgentSessionError,
 } from '@lobechat/electron-client-ipc';
@@ -41,6 +42,7 @@ import { app as electronApp, BrowserWindow } from 'electron';
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import type {
   HeterogeneousAgentBuildPlan,
@@ -168,6 +170,10 @@ interface GetSessionInfoParams {
 
 interface GetCodexQuotaParams {
   command?: string;
+  env?: Record<string, string>;
+}
+
+interface GetClaudeCodeQuotaParams {
   env?: Record<string, string>;
 }
 
@@ -1322,6 +1328,18 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       command: status.available && status.path ? status.path : command,
       env: Object.keys(env).length > 0 ? env : undefined,
     });
+  }
+
+  /**
+   * Read the Claude Code subscription quota. No CLI is spawned: the quota
+   * comes from Anthropic's OAuth usage API using the local `claude` login,
+   * and the request goes through the app's global proxy dispatcher.
+   */
+  @IpcMethod()
+  async getClaudeCodeQuota(
+    params: GetClaudeCodeQuotaParams = {},
+  ): Promise<ClaudeCodeQuotaSnapshot> {
+    return fetchClaudeCodeQuota({ env: params.env });
   }
 
   /**
