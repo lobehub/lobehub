@@ -18,6 +18,7 @@ import { serializeWorkflowCursor } from './utils';
 const USER_PAGE_SIZE = 50;
 const USER_BATCH_SIZE = 10;
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users';
+const PROCESS_USERS_FLOW_CONTROL_KEY = 'memory-user-memory.pipelines.chat-topic.process-users';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
@@ -117,4 +118,28 @@ export const processUsersHandler = async (
     nextCursor: cursor ? cursor.id : null,
     processedUsers: ids.length,
   };
+};
+
+/**
+ * Shared flow-control settings for the process-users workflow.
+ *
+ * Use when:
+ * - Serving process-users workflow runs through Upstash Workflow
+ * - Keeping hourly/user-triggered process-users runs from executing unbounded work concurrently
+ *
+ * Expects:
+ * - Trigger-side workflow calls use the same key to throttle initial workflow delivery
+ *
+ * Returns:
+ * - Upstash Workflow serve options that limit follow-up workflow steps
+ */
+export const processUsersWorkflowOptions = {
+  // NOTICE: Serve-side flow control only applies after a workflow run has entered Upstash
+  // Workflow execution. triggerProcessUsers must pass the same key so initial deliveries
+  // are throttled before many process-users runs can start at once.
+  flowControl: {
+    key: PROCESS_USERS_FLOW_CONTROL_KEY,
+    parallelism: 1,
+    ratePerSecond: 1,
+  },
 };

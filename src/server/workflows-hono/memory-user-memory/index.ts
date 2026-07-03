@@ -6,8 +6,11 @@ import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly
 import { personaUpdateHandler } from './workflows/personaUpdate';
 import { processTopicWorkflow } from './workflows/processTopic';
 import { processTopicsHandler } from './workflows/processTopics';
-import { processUsersHandler } from './workflows/processUsers';
-import { processUserTopicsHandler } from './workflows/processUserTopics';
+import { processUsersHandler, processUsersWorkflowOptions } from './workflows/processUsers';
+import {
+  processUserTopicsHandler,
+  processUserTopicsWorkflowOptions,
+} from './workflows/processUserTopics';
 
 const app = new Hono();
 
@@ -26,12 +29,18 @@ app.post(
 
 app.post(
   '/pipelines/chat-topic/process-users',
-  serve(processUsersHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(processUsersHandler, {
+    ...processUsersWorkflowOptions,
+    qstashClient: createWorkflowQstashClient(),
+  }),
 );
 
 app.post(
   '/pipelines/chat-topic/process-user-topics',
-  serve(processUserTopicsHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(processUserTopicsHandler, {
+    ...processUserTopicsWorkflowOptions,
+    qstashClient: createWorkflowQstashClient(),
+  }),
 );
 
 app.post(

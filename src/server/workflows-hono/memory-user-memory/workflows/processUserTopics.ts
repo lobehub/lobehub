@@ -19,6 +19,8 @@ import { assertMemoryWorkflowContextAllowed } from './runGuard';
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics';
+const PROCESS_USER_TOPICS_FLOW_CONTROL_KEY =
+  'memory-user-memory.pipelines.chat-topic.process-user-topics';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
@@ -168,4 +170,27 @@ export const processUserTopicsHandler = async (
   }
 
   return { processedUsers: params.userIds.length };
+};
+
+/**
+ * Shared flow-control settings for active user-topic workers.
+ *
+ * Use when:
+ * - Serving process-user-topics workflow runs through Upstash Workflow
+ * - Keeping memory extraction bounded to 25 concurrently active users
+ *
+ * Expects:
+ * - Trigger-side calls use the same key to throttle initial workflow delivery
+ *
+ * Returns:
+ * - Upstash Workflow serve options that limit process-user-topics executions
+ */
+export const processUserTopicsWorkflowOptions = {
+  // NOTICE: This key intentionally omits userId. Adding userId would create one independent
+  // bucket per user and would not cap total database pressure; the global key keeps at most
+  // 25 user-topic workers active across all users.
+  flowControl: {
+    key: PROCESS_USER_TOPICS_FLOW_CONTROL_KEY,
+    parallelism: 25,
+  },
 };

@@ -2712,6 +2712,20 @@ const WORKFLOW_PATHS = {
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
 } as const;
 
+const PROCESS_USERS_FLOW_CONTROL = {
+  key: 'memory-user-memory.pipelines.chat-topic.process-users',
+  parallelism: 1,
+  ratePerSecond: 1,
+} satisfies FlowControl;
+
+// NOTICE: Trigger-side flow control is required for initial workflow delivery.
+// A serve() flowControl setting alone is applied after the run starts, so it cannot prevent
+// many process-user-topics runs from entering execution at the same time.
+const PROCESS_USER_TOPICS_FLOW_CONTROL = {
+  key: 'memory-user-memory.pipelines.chat-topic.process-user-topics',
+  parallelism: 25,
+} satisfies FlowControl;
+
 const getWorkflowUrl = (path: string, baseUrl: string) => {
   const url = new URL(path, baseUrl);
 
@@ -2751,7 +2765,12 @@ export class MemoryExtractionWorkflowService {
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.users, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      flowControl: PROCESS_USERS_FLOW_CONTROL,
+      headers: options?.extraHeaders,
+      url,
+    });
   }
 
   static triggerHourly(
@@ -2777,6 +2796,7 @@ export class MemoryExtractionWorkflowService {
     const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
     return this.getClient().trigger({
       body: payload,
+      flowControl: PROCESS_USER_TOPICS_FLOW_CONTROL,
       headers: options?.extraHeaders,
       url,
     });
@@ -2796,13 +2816,11 @@ export class MemoryExtractionWorkflowService {
       body: payload,
       flowControl: {
         key: `memory-user-memory.pipelines.chat-topic.process-topics.user.${userId}`,
-        // NOTICE: if modified the parallelism of
-        // src/server/workflows-hono/memory-user-memory/workflows/processTopics.ts
-        // or added new memory layer, make sure to update the number below.
-        //
-        // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
-        // and since identity requires sequential processing, we set parallelism to 5.
-        parallelism: 5,
+        // NOTICE: Each process-topics workflow currently invokes topic workflows sequentially.
+        // Parallelism 20 therefore bounds each user's active topic extraction workflows to 20.
+        // If process-topics changes back to parallel per-topic invoke, divide this number by
+        // the per-batch topic concurrency to preserve the same per-user topic budget.
+        parallelism: 20,
       },
       headers: options?.extraHeaders,
       url,
