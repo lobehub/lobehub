@@ -34,7 +34,7 @@ const McpPage = memo(() => {
       empty={<McpEmpty />}
       error={error}
       isEmpty={items.length === 0}
-      isLoading={isLoading || !data}
+      isLoading={isLoading}
       loading={<Loading />}
       onRetry={() => mutate()}
     >

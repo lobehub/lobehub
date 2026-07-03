@@ -34,7 +34,7 @@ const ModelPage = memo<{ mobile?: boolean }>(() => {
       empty={<ModelEmpty />}
       error={error}
       isEmpty={items.length === 0}
-      isLoading={isLoading || !data}
+      isLoading={isLoading}
       loading={<Loading />}
       onRetry={() => mutate()}
     >
