@@ -262,6 +262,6 @@ An audit is not finished when the findings are written — it is finished when t
   generalizable findings get landed.
 - **agent-testing** — the automation framework L3 drives (agent-browser CDP: snapshot / eval
   / screenshot / GIF). L3 assumes its Step 0 env + auth are green.
-- **review-checklist** — code-level review; this skill is its design-level sibling.
+- **deep-review** — code-level review; this skill is its design-level sibling (deep-review's `ux` dimension checks flows inside a code review; this skill audits a whole surface).
 - **skills-audit** — the same "periodic, evidence-based audit" shape, applied to the skill
   catalog.

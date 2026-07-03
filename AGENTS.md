@@ -135,7 +135,7 @@ bun run type-check
 
 ### Code Review
 
-Before reviewing a PR / diff / branch change, read the **review-checklist** skill (`.agents/skills/review-checklist/SKILL.md`) — it lists the recurring mistakes specific to this codebase.
+Before reviewing a PR / diff / branch change, read the **deep-review** skill (`.agents/skills/deep-review/SKILL.md`). Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
 When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).
 
