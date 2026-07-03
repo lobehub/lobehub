@@ -17,10 +17,6 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
-vi.mock('@/components/404', () => ({
-  default: () => <div data-testid="not-found" />,
-}));
-
 vi.mock('@/features/PageEditor', () => ({
   PageEditor: ({ pageId, header }: { header?: ReactNode; pageId?: string }) => (
     <div data-page-id={pageId} data-testid="page-editor">
@@ -60,8 +56,9 @@ vi.mock('./useAgentDocumentItem', () => ({
   useAgentDocumentItem: () => agentDocumentItemState.current,
 }));
 
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
-  useWorkspaceAwareNavigate: () => vi.fn(),
+  useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
 const docChatTopicState = vi.hoisted(() => ({
@@ -119,6 +116,7 @@ describe('AgentDocumentPage', () => {
     };
     headerProps.current = undefined;
     panelProps.current = undefined;
+    navigateMock.mockClear();
   });
 
   afterEach(() => {
@@ -132,12 +130,14 @@ describe('AgentDocumentPage', () => {
     expect(screen.getByTestId('header').dataset.documentId).toBe('docs_abc');
   });
 
-  it('renders the not-found module (no header/editor) when the doc is genuinely absent', () => {
+  it('redirects to the docs index (no header/editor) when the doc is genuinely absent', () => {
     agentDocumentItemState.current = { ...agentDocumentItemState.current, isNotFound: true };
 
     render(<AgentDocumentPage documentId="docs_missing" />);
 
-    expect(screen.getByTestId('not-found')).toBeInTheDocument();
+    // A deleted/absent doc must not strand the user on a 404 — it redirects to
+    // the docs index empty state.
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-from-url/docs', { replace: true });
     expect(screen.queryByTestId('page-editor')).toBeNull();
     expect(screen.queryByTestId('header')).toBeNull();
   });
