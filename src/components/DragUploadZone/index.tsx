@@ -10,13 +10,9 @@ import { useTranslation } from 'react-i18next';
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
 
-const BLOCK_SIZE = 36;
-const ICON_SIZE = { size: 22, strokeWidth: 1.5 };
-const OVERLAY_INSET = 20;
-const OVERLAY_BORDER_INSET = 8;
-// The card keeps its natural (well-proportioned) size and is scaled down as a
-// whole — text included — so a short composer never gets a stretched card.
-const OVERLAY_SCALE = 0.65;
+const BLOCK_SIZE = 48;
+const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
+const OVERLAY_INSET = 28;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
@@ -41,8 +37,8 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 16px;
-    padding-inline: 20px;
+    padding-block: 32px 24px;
+    padding-inline: 28px;
   `,
   desc: css`
     font-size: 12px;
@@ -53,7 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusSM};
   `,
   iconGroup: css`
-    margin-block-start: 0;
+    margin-block-start: -32px;
   `,
   overlay: css`
     pointer-events: none;
@@ -72,14 +68,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   overlayContent: css`
     position: relative;
-    transform-origin: center;
 
-    /* Uniformly shrink the whole card (text included) so it keeps its
-       proportions and fits inside a short composer instead of overflowing it. */
-    transform: scale(${OVERLAY_SCALE});
-
-    box-sizing: border-box;
-    width: min(360px, 84%);
+    min-width: min(640px, 72vw);
     padding: ${OVERLAY_INSET}px;
     border-radius: 16px;
 
@@ -91,7 +81,7 @@ const styles = createStaticStyles(({ css }) => ({
       content: '';
 
       position: absolute;
-      inset: ${OVERLAY_BORDER_INSET}px;
+      inset: ${OVERLAY_INSET}px;
 
       border: 1.5px dashed #fff;
       border-radius: ${cssVar.borderRadiusLG};
@@ -159,7 +149,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     enabledFiles = true,
     enableLocalPathReference = false,
     onLocalPaths,
-    overlayMinHeight = 88,
+    overlayMinHeight = 160,
     onUploadFiles,
     style,
   }) => {
