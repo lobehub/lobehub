@@ -269,7 +269,7 @@ export const buildRunLifecycle = (
 
       await notifyDesktopAgentCompleted(get, {
         badge: true,
-        content: event.notification?.content ?? fallbackContent,
+        content: event.notification?.content || fallbackContent,
         context: notificationContext,
       });
     },
