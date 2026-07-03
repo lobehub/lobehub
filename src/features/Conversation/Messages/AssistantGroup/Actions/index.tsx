@@ -3,6 +3,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { ReactionPicker } from '../../../components/Reaction';
+import { messageStateSelectors, useConversationStore } from '../../../store';
 import type { MessageActionsConfig } from '../../../types';
 import {
   MessageActionBar,
@@ -25,6 +26,12 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'del',
 ];
 const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
+// Finished turn whose last child block is a tool call (typical for heterogeneous
+// CC/Codex turns, which end on a Bash/Read/Edit/Task block with no trailing text).
+// There's no text block to edit/copy, but the turn IS complete — it can still be
+// shared and, crucially, multi-selected/forwarded like a native reply.
+const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['share', 'select', 'divider', 'del'];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
@@ -41,10 +48,19 @@ export const GroupActionsBar = memo<GroupActionsProps>(
       [contentBlock, data, id],
     );
 
-    // No finalized text block yet (group is either empty or last child is a
-    // still-running tool call). Only delete is meaningful here.
+    const isGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(id),
+    );
+
+    // No finalized text block (group is empty, or its last child is a tool call).
     if (!contentId) {
-      return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
+      // Still streaming → only delete is meaningful.
+      if (isGenerating) {
+        return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
+      }
+      // Finished, but the turn ends on a tool-call block — no text to edit/copy,
+      // yet it's a complete reply that can be shared and multi-selected/forwarded.
+      return <MessageActionBar bar={NO_TEXT_BLOCK_BAR} ctx={ctx} menu={NO_TEXT_BLOCK_MENU} />;
     }
 
     const defaultBar = data.tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
