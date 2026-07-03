@@ -181,14 +181,22 @@ const styles = createStaticStyles(({ css }) => ({
   empty: css`
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     align-items: flex-start;
 
     padding-block: 24px;
     padding-inline: 12px;
-
+  `,
+  emptyMsg: css`
     font-size: 12px;
+    line-height: 1.6;
     color: ${cssVar.colorTextTertiary};
+    word-break: break-word;
+  `,
+  queryHl: css`
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
+    word-break: break-all;
   `,
   clearBtn: css`
     cursor: pointer;
@@ -369,11 +377,9 @@ const ReportListPanel = memo(() => {
             <div className={styles.empty}>
               {query.trim() ? (
                 <>
-                  <span>
+                  <span className={styles.emptyMsg}>
                     {t('workspace.searchEmptyPrefix')}
-                    <Text strong style={{ fontSize: 12 }}>
-                      {query.trim()}
-                    </Text>
+                    <b className={styles.queryHl}>{query.trim()}</b>
                     {t('workspace.searchEmptySuffix')}
                   </span>
                   <button className={styles.clearBtn} type={'button'} onClick={() => setQuery('')}>
@@ -381,7 +387,7 @@ const ReportListPanel = memo(() => {
                   </button>
                 </>
               ) : (
-                t('workspace.listEmpty')
+                <span className={styles.emptyMsg}>{t('workspace.listEmpty')}</span>
               )}
             </div>
           ) : (
