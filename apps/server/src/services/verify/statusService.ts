@@ -27,8 +27,11 @@ export class VerifyStatusService {
    * Returns the computed status. Gate logic only considers `required` items:
    * - any required result still pending/running → `verifying`
    * - any required result failed → `failed`
+   * - else any required result errored (verifier couldn't run) → `errored`
    * - otherwise → `passed`
-   * `skipped` results (e.g. v1 program placeholders) are pass-through.
+   * A genuine `failed` dominates an `errored` (the delivery has a real problem to
+   * fix, so it should still gate + repair). `skipped` results (e.g. v1 program
+   * placeholders) are pass-through.
    */
   async recompute(operationId: string): Promise<VerifyRunStatus | null> {
     const run = await this.runModel.findByOperation(operationId);
@@ -48,6 +51,7 @@ export class VerifyStatusService {
 
     let anyPending = false;
     let anyFailed = false;
+    let anyErrored = false;
     for (const item of requiredItems) {
       const result = byItem.get(item.id);
       // A required item without a result yet is still pending.
@@ -56,9 +60,16 @@ export class VerifyStatusService {
         continue;
       }
       if (result.status === 'failed' || result.verdict === 'failed') anyFailed = true;
+      else if (result.status === 'errored') anyErrored = true;
     }
 
-    const status: VerifyRunStatus = anyPending ? 'verifying' : anyFailed ? 'failed' : 'passed';
+    const status: VerifyRunStatus = anyPending
+      ? 'verifying'
+      : anyFailed
+        ? 'failed'
+        : anyErrored
+          ? 'errored'
+          : 'passed';
 
     if (status !== run.status) {
       await this.runModel.updateStatus(run.id, status);

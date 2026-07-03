@@ -18,12 +18,18 @@ export type VerifierType = (typeof verifierTypes)[number];
 export const verifyOnFailStrategies = ['manual', 'auto_repair'] as const;
 export type VerifyOnFailStrategy = (typeof verifyOnFailStrategies)[number];
 
-/** Lifecycle of a single check result. */
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
 export const verifyCheckResultStatuses = [
   'pending',
   'running',
   'passed',
   'failed',
+  'errored',
   'skipped',
 ] as const;
 export type VerifyCheckResultStatus = (typeof verifyCheckResultStatuses)[number];
@@ -47,6 +53,9 @@ export const verifyRunStatuses = [
   'verifying',
   'passed',
   'failed',
+  // At least one required check errored (verifier couldn't run) and none
+  // genuinely failed — verification is inconclusive, not a rejected delivery.
+  'errored',
   'repairing',
   'delivered',
 ] as const;

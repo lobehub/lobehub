@@ -41,6 +41,7 @@ const verifyStatuses = [
   'verifying',
   'passed',
   'failed',
+  'errored',
   'repairing',
   'delivered',
 ] as const;
