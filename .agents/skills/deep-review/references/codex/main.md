@@ -22,7 +22,7 @@ Dimension rules stay one-per-file; Codex only changes how they are **packed**:
 
 Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart.
 
-Extension packs can also **add** dimensions (a `deep-review-*/dimensions/` file whose name matches no built-in). Added dimensions have no row in the table: collect them into a dynamic fourth group, `extras`. Spawn `extras` in the first wave when a slot is free; otherwise immediately after the first `close_agent` frees one — the 3-slot budget stays intact either way. Their verify routing follows each dimension file's own `verify` frontmatter flag (default: verified).
+Extension packs can also **add** dimensions (a `deep-review-*/dimensions/` file whose name matches no built-in). Added dimensions have no row in the table: collect them into a dynamic fourth group, `extras`. `extras` never joins the initial wave — it queues until the first `close_agent` frees a slot (a slot is only free in the initial wave when a built-in group was fully pruned). Their verify routing follows each dimension file's own `verify` frontmatter flag (default: verified).
 
 ## Step 0 — Scope & background
 
@@ -34,7 +34,7 @@ Same as the pruning + extension-pack procedure in `SKILL.md`: apply the pruning 
 
 ## Step 2 — Spawn all groups in one wave
 
-Launch every non-empty group's `spawn_agent` concurrently in a single turn (≤ 3 agents — fits the default slot budget).
+Launch the three built-in groups' `spawn_agent` concurrently in a single turn (≤ 3 agents — fits the default slot budget). A non-empty `extras` group is NOT part of this wave: queue it and spawn it after the first `close_agent` frees a slot (step 3 closes each review agent as soon as its result is consumed, so the wait is short).
 
 Per group:
 

@@ -61,6 +61,8 @@ Before spawning, the main agent prunes dimensions that cannot apply to the diff.
 | workflow                                              | never in deep mode (cheap external-state checks)                                                                              |
 | skill-freshness                                       | never in deep mode (cheap)                                                                                                    |
 
+**"Docs-only" means human-facing prose only.** Files that are executable instructions for agents — `.agents/skills/**`, `AGENTS.md` / `CLAUDE.md`, prompt templates, orchestration manuals — count as code for pruning purposes: their "prose" carries control flow, contracts, and rules whose contradictions are exactly what logic / business-logic / reuse-architecture exist to catch. A diff touching them is never docs-only.
+
 Light mode applies the same table to decide which Quick checklists to read.
 
 ## Extension packs
