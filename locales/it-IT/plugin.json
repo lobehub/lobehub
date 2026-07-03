@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Domanda",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Risposta",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Selezionato",
+  "builtins.lobe-claude-code.sendMessage.queued": "In coda per la consegna",
+  "builtins.lobe-claude-code.sendMessage.title": "Invia messaggio",
   "builtins.lobe-claude-code.task.create.completed": "Attività creata: ",
   "builtins.lobe-claude-code.task.create.loading": "Creazione attività: ",
   "builtins.lobe-claude-code.task.getLabel": "Ispezione attività #{{taskId}}",

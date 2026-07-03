@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Frage",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Antwort",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Ausgewählt",
+  "builtins.lobe-claude-code.sendMessage.queued": "Zur Zustellung eingereiht",
+  "builtins.lobe-claude-code.sendMessage.title": "Nachricht senden",
   "builtins.lobe-claude-code.task.create.completed": "Aufgabe erstellt: ",
   "builtins.lobe-claude-code.task.create.loading": "Aufgabe wird erstellt: ",
   "builtins.lobe-claude-code.task.getLabel": "Aufgabe #{{taskId}} überprüfen",

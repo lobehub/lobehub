@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "질문",
   "builtins.lobe-claude-code.askUserQuestion.reply": "답변",
   "builtins.lobe-claude-code.askUserQuestion.selected": "선택됨",
+  "builtins.lobe-claude-code.sendMessage.queued": "전송 대기 중",
+  "builtins.lobe-claude-code.sendMessage.title": "메시지 보내기",
   "builtins.lobe-claude-code.task.create.completed": "작업 생성됨: ",
   "builtins.lobe-claude-code.task.create.loading": "작업 생성 중: ",
   "builtins.lobe-claude-code.task.getLabel": "작업 #{{taskId}} 검사 중",

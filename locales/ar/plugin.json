@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "سؤال",
   "builtins.lobe-claude-code.askUserQuestion.reply": "رد",
   "builtins.lobe-claude-code.askUserQuestion.selected": "محدد",
+  "builtins.lobe-claude-code.sendMessage.queued": "في انتظار الإرسال",
+  "builtins.lobe-claude-code.sendMessage.title": "إرسال رسالة",
   "builtins.lobe-claude-code.task.create.completed": "تم إنشاء المهمة: ",
   "builtins.lobe-claude-code.task.create.loading": "جارٍ إنشاء المهمة: ",
   "builtins.lobe-claude-code.task.getLabel": "تفحص المهمة #{{taskId}}",

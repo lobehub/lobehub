@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Soru",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Yanıt",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Seçildi",
+  "builtins.lobe-claude-code.sendMessage.queued": "Teslimat için sıraya alındı",
+  "builtins.lobe-claude-code.sendMessage.title": "Mesaj gönder",
   "builtins.lobe-claude-code.task.create.completed": "Görev oluşturuldu: ",
   "builtins.lobe-claude-code.task.create.loading": "Görev oluşturuluyor: ",
   "builtins.lobe-claude-code.task.getLabel": "Görev inceleniyor #{{taskId}}",

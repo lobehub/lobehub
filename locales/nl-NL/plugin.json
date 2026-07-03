@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Vraag",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Antwoord",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Geselecteerd",
+  "builtins.lobe-claude-code.sendMessage.queued": "In de wachtrij voor bezorging",
+  "builtins.lobe-claude-code.sendMessage.title": "Bericht verzenden",
   "builtins.lobe-claude-code.task.create.completed": "Taak aangemaakt: ",
   "builtins.lobe-claude-code.task.create.loading": "Taak aan het aanmaken: ",
   "builtins.lobe-claude-code.task.getLabel": "Taak inspecteren #{{taskId}}",

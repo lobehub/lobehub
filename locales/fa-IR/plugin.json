@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "سؤال",
   "builtins.lobe-claude-code.askUserQuestion.reply": "پاسخ",
   "builtins.lobe-claude-code.askUserQuestion.selected": "انتخاب شده",
+  "builtins.lobe-claude-code.sendMessage.queued": "در صف ارسال",
+  "builtins.lobe-claude-code.sendMessage.title": "ارسال پیام",
   "builtins.lobe-claude-code.task.create.completed": "وظیفه ایجاد شد: ",
   "builtins.lobe-claude-code.task.create.loading": "در حال ایجاد وظیفه: ",
   "builtins.lobe-claude-code.task.getLabel": "بررسی وظیفه #{{taskId}}",

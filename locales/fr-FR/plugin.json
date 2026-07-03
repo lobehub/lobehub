@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Question",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Réponse",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Sélectionné",
+  "builtins.lobe-claude-code.sendMessage.queued": "En file d'attente pour la livraison",
+  "builtins.lobe-claude-code.sendMessage.title": "Envoyer un message",
   "builtins.lobe-claude-code.task.create.completed": "Tâche créée : ",
   "builtins.lobe-claude-code.task.create.loading": "Création de la tâche : ",
   "builtins.lobe-claude-code.task.getLabel": "Inspection de la tâche #{{taskId}}",

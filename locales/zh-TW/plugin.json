@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "問題",
   "builtins.lobe-claude-code.askUserQuestion.reply": "回覆",
   "builtins.lobe-claude-code.askUserQuestion.selected": "已選擇",
+  "builtins.lobe-claude-code.sendMessage.queued": "已排隊等待傳送",
+  "builtins.lobe-claude-code.sendMessage.title": "傳送訊息",
   "builtins.lobe-claude-code.task.create.completed": "任務已建立：",
   "builtins.lobe-claude-code.task.create.loading": "正在建立任務：",
   "builtins.lobe-claude-code.task.getLabel": "檢查任務 #{{taskId}}",

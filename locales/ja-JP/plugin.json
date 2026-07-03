@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "質問",
   "builtins.lobe-claude-code.askUserQuestion.reply": "返信",
   "builtins.lobe-claude-code.askUserQuestion.selected": "選択済み",
+  "builtins.lobe-claude-code.sendMessage.queued": "配信待ち",
+  "builtins.lobe-claude-code.sendMessage.title": "メッセージを送信",
   "builtins.lobe-claude-code.task.create.completed": "タスクが作成されました: ",
   "builtins.lobe-claude-code.task.create.loading": "タスクを作成中: ",
   "builtins.lobe-claude-code.task.getLabel": "タスク #{{taskId}} を確認中",

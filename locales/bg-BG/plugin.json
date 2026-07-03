@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Въпрос",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Отговор",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Избрано",
+  "builtins.lobe-claude-code.sendMessage.queued": "Поставено на опашката за доставка",
+  "builtins.lobe-claude-code.sendMessage.title": "Изпрати съобщение",
   "builtins.lobe-claude-code.task.create.completed": "Задачата е създадена: ",
   "builtins.lobe-claude-code.task.create.loading": "Създаване на задача: ",
   "builtins.lobe-claude-code.task.getLabel": "Преглеждане на задача #{{taskId}}",

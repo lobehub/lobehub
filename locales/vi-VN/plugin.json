@@ -126,6 +126,8 @@
   "builtins.lobe-claude-code.askUserQuestion.question": "Câu hỏi",
   "builtins.lobe-claude-code.askUserQuestion.reply": "Trả lời",
   "builtins.lobe-claude-code.askUserQuestion.selected": "Đã chọn",
+  "builtins.lobe-claude-code.sendMessage.queued": "Đã xếp hàng để gửi",
+  "builtins.lobe-claude-code.sendMessage.title": "Gửi tin nhắn",
   "builtins.lobe-claude-code.task.create.completed": "Nhiệm vụ đã được tạo: ",
   "builtins.lobe-claude-code.task.create.loading": "Đang tạo nhiệm vụ: ",
   "builtins.lobe-claude-code.task.getLabel": "Đang kiểm tra nhiệm vụ #{{taskId}}",
