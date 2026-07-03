@@ -1,5 +1,6 @@
 'use client';
 
+import { SiGit, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
 import {
   createGrepContentInspector,
   createReadLocalFileInspector,
@@ -7,9 +8,12 @@ import {
 } from '@lobechat/shared-tool-ui/inspectors';
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
+import type { ComponentType } from 'react';
 import { memo } from 'react';
 
 import {
+  type CodexCommandProgram,
+  getCodexCommandProgram,
   getCodexGrepCommandDisplay,
   getCodexReadFileCommandDisplay,
 } from './commandExecutionUtils';
@@ -18,6 +22,16 @@ const COMMAND_EXECUTION_KEY = 'builtins.codex.apiName.command_execution';
 const GREP_KEY = 'builtins.codex.commandExecution.grep';
 const GREP_NO_RESULTS_KEY = 'builtins.codex.commandExecution.noResults';
 const READ_FILE_KEY = 'builtins.codex.commandExecution.readFile';
+
+/** Dedicated label + brand icon per program family. */
+const PROGRAM_DISPLAY: Record<
+  CodexCommandProgram,
+  { icon: ComponentType<{ className?: string; size?: number }>; translationKey: string }
+> = {
+  git: { icon: SiGit, translationKey: 'builtins.codex.commandExecution.gitOperation' },
+  node: { icon: SiNodedotjs, translationKey: 'builtins.codex.commandExecution.runNode' },
+  python: { icon: SiPython, translationKey: 'builtins.codex.commandExecution.runPython' },
+};
 const SharedGrepInspector = createGrepContentInspector({
   noResultsKey: GREP_NO_RESULTS_KEY,
   translationKey: GREP_KEY,
@@ -105,6 +119,13 @@ const CommandExecutionInspector = memo<
         toolCallId={toolCallId}
       />
     );
+  }
+
+  const program =
+    getCodexCommandProgram(args?.command) ?? getCodexCommandProgram(partialArgs?.command);
+  if (program) {
+    const { icon, translationKey } = PROGRAM_DISPLAY[program];
+    return <RunCommandInspector {...props} icon={icon} translationKey={translationKey} />;
   }
 
   return <RunCommandInspector {...props} translationKey={COMMAND_EXECUTION_KEY} />;

@@ -279,3 +279,38 @@ export const getCodexGrepCommandDisplay = (
 
   return { pattern };
 };
+
+/** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
+export type CodexCommandProgram = 'git' | 'node' | 'python';
+
+const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
+  git: 'git',
+  node: 'node',
+  python: 'python',
+  python3: 'python',
+};
+
+const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
+
+/**
+ * Classify the leading executable of a codex command (e.g. `node app.js` → `node`).
+ * Unwraps `bash -lc "..."`, skips leading `KEY=value` env assignments, and normalizes an
+ * absolute path to its basename (`/usr/bin/python3` → `python3`). Returns undefined for
+ * anything not in {@link PROGRAM_BY_BASENAME}.
+ */
+export const getCodexCommandProgram = (command?: string): CodexCommandProgram | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const head = tokens[index];
+  if (!head) return;
+
+  const basename = head.split('/').at(-1) || head;
+  return PROGRAM_BY_BASENAME[basename];
+};

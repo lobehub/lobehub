@@ -18,6 +18,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@icons-pack/react-simple-icons": "^13.13.0",
     "@lobechat/builtin-tool-activator": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",

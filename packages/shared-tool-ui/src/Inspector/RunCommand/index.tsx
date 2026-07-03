@@ -4,7 +4,7 @@ import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, SquareChevronRight, X } from 'lucide-react';
-import { memo } from 'react';
+import { type ComponentType, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
@@ -57,12 +57,22 @@ export interface RunCommandInspectorProps extends BuiltinInspectorProps<
   RunCommandArgs,
   RunCommandState
 > {
+  /** Leading chip icon; defaults to a terminal glyph. Override for program-specific inspectors. */
+  icon?: ComponentType<{ className?: string; size?: number }>;
   /** i18n key for the API name label, e.g. 'builtins.lobe-local-system.apiName.runCommand' */
   translationKey: string;
 }
 
 export const RunCommandInspector = memo<RunCommandInspectorProps>(
-  ({ args, partialArgs, isArgumentsStreaming, pluginState, isLoading, translationKey }) => {
+  ({
+    args,
+    partialArgs,
+    isArgumentsStreaming,
+    pluginState,
+    isLoading,
+    translationKey,
+    icon: LeadingIcon = SquareChevronRight,
+  }) => {
     const { t } = useTranslation('plugin');
 
     const command = getRunCommandDisplayCommand(args?.command || partialArgs?.command);
@@ -80,7 +90,7 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
         <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t(translationKey as any)}:</span>
           <span className={styles.chip}>
-            <SquareChevronRight className={styles.terminalIcon} size={14} />
+            <LeadingIcon className={styles.terminalIcon} size={14} />
             <span className={styles.command}>{description}</span>
           </span>
         </div>
@@ -94,7 +104,7 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
         <span>{t(translationKey as any)}:</span>
         {description && (
           <span className={styles.chip}>
-            <SquareChevronRight className={styles.terminalIcon} size={14} />
+            <LeadingIcon className={styles.terminalIcon} size={14} />
             <span className={styles.command}>{description}</span>
           </span>
         )}
