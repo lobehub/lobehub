@@ -468,6 +468,8 @@ const VERDICT_META: Record<
 };
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
+const isInlineImageEvidence = (evidence: VerifyEvidenceWithUrl) =>
+  Boolean(evidence.fileUrl && imageEvidenceTypes.has(evidence.type));
 const terminalRunStatuses = new Set(['delivered', 'failed', 'passed']);
 const liveStatusLabelKey = {
   planned: 'report.status.planned',
@@ -555,7 +557,7 @@ const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
               alt={e.description ?? label}
               objectFit={'contain'}
               src={e.fileUrl}
-              style={{ maxWidth: '100%' }}
+              style={{ maxHeight: 360, maxWidth: '100%' }}
               variant={'outlined'}
             />
           </Flexbox>
@@ -688,14 +690,18 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
             {evidenceCount > 0 && (
               <>
                 <div className={styles.evidenceList}>
-                  {result.evidence.map((e, index) => (
-                    <EvidenceFileButton
-                      evidence={e}
-                      index={index + 1}
-                      key={e.id}
-                      onClick={() => setSelectedEvidenceId(e.id)}
-                    />
-                  ))}
+                  {result.evidence.map((e, index) =>
+                    isInlineImageEvidence(e) ? (
+                      <EvidenceItem evidence={e} index={index + 1} key={e.id} />
+                    ) : (
+                      <EvidenceFileButton
+                        evidence={e}
+                        index={index + 1}
+                        key={e.id}
+                        onClick={() => setSelectedEvidenceId(e.id)}
+                      />
+                    ),
+                  )}
                 </div>
                 {selectedEvidence && (
                   <EvidenceModal
@@ -909,7 +915,11 @@ const ReportViewer = memo(() => {
         {visible.length > 0 ? (
           <div className={styles.checks}>
             {visible.map((r) => (
-              <CheckRow defaultOpen={checkVerdict(r) === 'failed'} key={r.id} result={r} />
+              <CheckRow
+                defaultOpen={checkVerdict(r) === 'failed' || r.evidence.some(isInlineImageEvidence)}
+                key={r.id}
+                result={r}
+              />
             ))}
           </div>
         ) : (
