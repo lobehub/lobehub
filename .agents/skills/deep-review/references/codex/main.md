@@ -13,11 +13,11 @@ Codex constraints this manual is built around:
 
 Dimension rules stay one-per-file; Codex only changes how they are **packed**:
 
-| Group         | Dimensions (in prompt order)                         |
-| ------------- | ---------------------------------------------------- |
-| `quality`     | code-style, reuse-architecture, ux                   |
-| `correctness` | business-logic, performance, security, compatibility |
-| `process`     | workflow, skill-freshness, observability             |
+| Group         | Dimensions (in prompt order)                       |
+| ------------- | -------------------------------------------------- |
+| `quality`     | code-style, reuse-architecture, business-logic, ux |
+| `correctness` | logic, performance, security, compatibility        |
+| `process`     | workflow, skill-freshness, observability           |
 
 Pruning removes dimensions from a group; a fully pruned group is not spawned. The table is a starting point — recalibrate the packing in this file if group runtimes drift far apart.
 

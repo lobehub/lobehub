@@ -14,7 +14,7 @@ Every design choice below serves one of these. When unsure how to execute a step
 1. **Anti-hallucination** — reviewers that only see diff fragments invent bugs. Candidate findings are therefore falsified one by one by an **independent verify subagent** that reads full context and returns a three-way verdict (`confirmed` / `false_positive` / `need_more_context`). Three-way verdicts beat confidence percentages: calibrated-sounding scores are unreliable as hard filters.
 2. **Anti self-approval** — an agent that just wrote the code is grading its own homework and will pass it. Review must run in **independent subagents** with a third-party reviewer stance. Never silently degrade deep mode to "the main agent reviews and then verifies its own findings".
 3. **Rules over model** — review quality comes from fine-grained, executable dimension rules, not from a smarter model. Subagents run on balanced/fast model tiers; each dimension file tells them exactly how to check, what counts, and what does not.
-4. **Calibrate to this codebase** — hold the diff to the standard the codebase already meets, not an idealized one. If a pattern is widespread in the existing code and this diff does not make it worse, it is not a finding. (Security is exempt — see the dimension file.)
+4. **Calibrate to codebase and lifespan** — hold the diff to the standard the codebase already meets, not an idealized one. If a pattern is widespread in the existing code and this diff does not make it worse, it is not a finding. Declared-temporary code (time-boxed campaign, experiment, one-off script) is judged against its lifespan: hardcoding and low-extensibility shortcuts are the intended trade-off for shipping fast, and "delete the code at expiry" is a valid plan — do not demand configurability from code built to be deleted. (Security is exempt from all calibration — see the dimension file.)
 5. **Speed is a feature** — one wave of parallel reviewers, verification pipelined per dimension (never a global barrier), irrelevant dimensions pruned up front.
 
 ## Two entry modes
@@ -33,7 +33,8 @@ Rules live in one place: [`references/dimensions/`](references/dimensions/), one
 | Dimension                                                         | id prefix | Covers                                                                                                                                                                                          | Verified?            |
 | ----------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | [code-style](references/dimensions/code-style.md)                 | `style`   | naming, readability, dead code, comments, i18n hardcoding, UI-library and styling conventions                                                                                                   | yes                  |
-| [business-logic](references/dimensions/business-logic.md)         | `logic`   | logic correctness (edge cases, null, races, error handling, state machines, requirement deviation), test coverage, best-practice violations, self-inflicted complexity                          | yes                  |
+| [logic](references/dimensions/logic.md)                           | `logic`   | logic correctness: edge cases, null, races, error handling, state machines, requirement deviation, test coverage                                                                                | yes                  |
+| [business-logic](references/dimensions/business-logic.md)         | `design`  | design judgment: framework misuse, best-practice violations, solution-weight mismatch, self-inflicted complexity                                                                                | yes                  |
 | [reuse-architecture](references/dimensions/reuse-architecture.md) | `reuse`   | duplicate implementations, unused existing patterns, extensibility, architectural boundaries                                                                                                    | yes                  |
 | [performance](references/dimensions/performance.md)               | `perf`    | N+1, blocking calls, resource leaks, render-path waste, **DB migration locking and idempotency**                                                                                                | yes                  |
 | [security](references/dimensions/security.md)                     | `sec`     | injection, auth bypass, secret/PII leakage, business-slot confidentiality                                                                                                                       | yes                  |
@@ -49,16 +50,16 @@ Rules live in one place: [`references/dimensions/`](references/dimensions/), one
 
 Before spawning, the main agent prunes dimensions that cannot apply to the diff. List pruned dimensions and the one-line reason in the report header. When in doubt, run the dimension.
 
-| Dimension                                      | Skip when                                                                                            |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| code-style, business-logic, reuse-architecture | never (skip only for docs/lockfile-only diffs)                                                       |
-| performance                                    | no server/db/loop/render-path code touched (e.g. docs, copy, pure type changes)                      |
-| security                                       | docs-only diff                                                                                       |
-| compatibility                                  | diff touches no UI theming/routing, no API contract, no deployment config, no runtime-branching code |
-| ux                                             | no user-facing surface changed (components, styles, copy, interaction flows)                         |
-| observability                                  | no error handling, async flow, or server code touched                                                |
-| workflow                                       | never in deep mode (cheap external-state checks)                                                     |
-| skill-freshness                                | never in deep mode (cheap)                                                                           |
+| Dimension                                             | Skip when                                                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| code-style, logic, business-logic, reuse-architecture | never (skip only for docs/lockfile-only diffs)                                                       |
+| performance                                           | no server/db/loop/render-path code touched (e.g. docs, copy, pure type changes)                      |
+| security                                              | docs-only diff                                                                                       |
+| compatibility                                         | diff touches no UI theming/routing, no API contract, no deployment config, no runtime-branching code |
+| ux                                                    | no user-facing surface changed (components, styles, copy, interaction flows)                         |
+| observability                                         | no error handling, async flow, or server code touched                                                |
+| workflow                                              | never in deep mode (cheap external-state checks)                                                     |
+| skill-freshness                                       | never in deep mode (cheap)                                                                           |
 
 Light mode applies the same table to decide which Quick checklists to read.
 

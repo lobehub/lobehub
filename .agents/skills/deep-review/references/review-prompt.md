@@ -39,6 +39,8 @@ Priority: repo-specific rules in those files > general experience. Use general e
 
 Hold the diff to the standard this codebase already meets, not an idealized one. Before reporting a style/design-level finding, ask: is this pattern already widespread in the existing code, and does this diff make it worse? Widespread + not-worse → do not report. Dimension files may declare themselves exempt (`calibration_exempt: true`, e.g. security) — for those, report regardless of precedent.
 
+Calibrate to lifespan as well: when the scope summary, PR/issue, or code comments declare the code short-lived (a time-boxed campaign, an experiment, a one-off script), judge it against its lifespan, not permanent-code standards. Hardcoded dates/copy/thresholds and low-extensibility designs are the intended trade-off for shipping fast — do not demand configurability, extension points, or expiry automation; "delete the code and redeploy when it expires" is a legitimate expiry mechanism. Two things stay reportable in temporary code: `calibration_exempt` dimensions (security), and damage that outlives the window (wrong billing/credit/data writes that persist after the code is removed).
+
 Focus over completeness: findings must serve THIS change and its requirement. Do not audit unrelated legacy code, and do not propose rewrites beyond the change's scope.
 
 ## Review scope (hard rules)
@@ -58,7 +60,7 @@ Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent 
   "issues": [
     {
       "id": "logic-1",               // required; dimension id_prefix + ordinal (prefix defined in the dimension file)
-      "dimension": "business-logic", // required; one of your assigned dimension ids
+      "dimension": "logic",          // required; one of your assigned dimension ids
       "issue_type": "edge case",     // required; a precise short phrase (2-5 words), NOT the dimension name — e.g. "missing auth scope", "N+1 query", "stale comment"
       "nature": "introduced",        // required; introduced | exposed_legacy
       "severity": "p1",              // required; p0 | p1 | p2 (definitions below)
@@ -98,7 +100,7 @@ Return `{"issues": []}`. No silence, no pleasantries.
   "issues": [
     {
       "id": "logic-1",
-      "dimension": "business-logic",
+      "dimension": "logic",
       "issue_type": "edge case",
       "nature": "introduced",
       "severity": "p1",

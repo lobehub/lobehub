@@ -1,47 +1,38 @@
 ---
-id_prefix: logic
+id_prefix: design
 verify: true
 skip_when: docs/lockfile-only diff
 ---
 
-# Business Logic
+# Business Logic Design
 
-Does the change do what the requirement asked, and does it hold up under real inputs? This dimension owns logic correctness (the classic bug hunt) plus design-level judgment: best-practice violations and self-inflicted complexity.
+Design-level judgment on how the change solves its requirement: does it use the platform as documented, match the solution's weight to the problem, and avoid self-inflicted complexity? Whether the code is _correct_ belongs to the logic dimension; this dimension asks whether it is _well-conceived_.
 
 ## Quick checklist
 
-- Edge cases: empty arrays/strings, zero, boundary indexes, first/last page, single-item collections
-- Null/undefined flowing into code that assumes presence
-- Race conditions: concurrent mutations, stale closures, un-awaited promises whose order matters
-- Error handling: failure paths that leave state half-mutated or the UI stuck
-- State machines: unreachable/unhandled states after this change
-- Requirement deviation: the diff contradicts the stated need or acceptance criteria in the PR/issue/conversation
-- Bug fixes ship a regression test covering the fixed scenario; new services / store actions / utilities have test coverage; new database Model/Repository ships a sibling `__tests__/<name>.test.ts` incl. user isolation (see `.agents/skills/testing/`)
 - Framework misuse: fighting Next.js/React/Drizzle instead of using the documented mechanism (check official docs before assuming custom code is needed)
 - Self-inflicted complexity ("没苦硬吃"): hand-rolling what the framework, an existing dep, or a simpler design gives for free
+- Solution weight mismatched to requirement scale: a new abstraction layer, config system, or queue where a direct implementation satisfies the stated need — and the inverse, a quick hack on a path the requirement marks critical (billing, auth, data integrity)
+- Best-practice violations with a citable source (official docs, a repo skill, `DESIGN.md`) — not personal taste
 
 ## Rule sources (deep mode: read before reviewing)
 
-- The requirement background in the review prompt's scope summary — the primary yardstick for requirement deviation
-- `.agents/skills/testing/SKILL.md` — what needs tests and how they are structured here
 - Framework docs when the diff leans on framework behavior (`node_modules/next/dist/docs/` for Next.js — this repo pins a version with breaking changes; do not trust training data)
+- The requirement background in the scope summary — the yardstick for solution-weight judgments
 
 ## How to check
 
-1. Read the diff line by line with side effects in mind; for each changed function ask "what input breaks this?"
-2. Trace each error path to its end state: user feedback, state rollback, log.
-3. Compare behavior against the scope summary; deviations are findings even when the code is internally correct.
-4. For fixes: `ls` the sibling `__tests__/` and check the fixed scenario is actually covered, not just any test touched.
+1. For each non-trivial mechanism the diff introduces, ask "does the framework or an existing dep already provide this?" — check the docs, do not assume.
+2. Compare the solution's weight against the requirement's stated scope and lifespan (a temporary campaign does not need a config system; a billing path does not get a quick hack).
+3. For each best-practice finding, name the source you would cite in `rule_source` — no citable source, no finding.
 
 ## Violations
 
-- A concrete input/state sequence produces a wrong result, crash, stuck UI, or half-committed state.
-- The change silently narrows/broadens behavior versus the requirement.
-- A bug fix without a test that would have caught the original bug.
 - Custom machinery duplicating a documented framework feature (cite the doc).
+- Solution complexity unjustified by the requirement, or robustness shortcuts on paths the requirement marks critical.
 
 ## Not violations
 
-- Hypothetical inputs the system cannot produce (verify against callers before reporting).
-- Missing tests for trivial glue code with no logic.
-- Simple implementations of simple needs — do not demand defensive programming for states upstream code already guarantees. The existing codebase keeps e.g. optimistic updates deliberately simple; match that bar instead of demanding exhaustive edge handling (calibration principle).
+- Simple implementations of simple needs (calibration principle — match the codebase's bar, not an idealized one).
+- Personal-taste preferences without a citable source.
+- Complexity with a stated reason (a comment or the PR explains the constraint that forces it).
