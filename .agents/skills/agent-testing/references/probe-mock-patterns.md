@@ -385,3 +385,23 @@
   `SPA_PORT||9876`; Next proxies `VITE_DEV_PORT||9876`. Pass `SPA_PORT=9877` to
   `init-dev-env.sh dev` (it exports `VITE_DEV_PORT=$SPA_PORT`) so both agree and
   you don't fight a worktree already on 9876.
+
+### E3. ✅ WORKS — deep-link to an authed SPA route bounces to /signin; load `/` then soft-nav
+
+- **Situation**: after `setup-auth.sh web-seed`, `agent-browser open <app>/` lands
+  authed, but a hard `open <app>/agent/<id>/docs` (or any deep authed route)
+  redirects to `/signin?callbackUrl=...` — the deep-route hard-load runs an
+  SSR/middleware auth check the seeded cookie doesn't satisfy, even though `/`
+  is authed and the agent is owned by the seeded user.
+- **Doesn't work**: hard-loading the deep route directly; repeated deep hard-loads
+  can also drop the seeded cookie so even `/` starts bouncing (re-run `web-seed`).
+- **Works**: hard-load `/` (authed), confirm by screenshot (not the app-probe auth
+  JSON — it false-negatives here, returns `isSignedIn:false` on an authed page),
+  then **client-side soft-nav** with no server round-trip:
+  ```bash
+  agent-browser eval "history.pushState({},'','/agent/<id>/docs'); window.dispatchEvent(new PopStateEvent('popstate')); 'nav'" --session lobehub-dev
+  ```
+  react-router picks up the popstate and renders the route in-context with the
+  already-hydrated auth. Right-panels that render at a _layout_ level do NOT see a
+  child route's `:param` via `useParams()` — read it from `location.pathname` if
+  you need it.
