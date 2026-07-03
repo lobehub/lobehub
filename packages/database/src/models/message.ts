@@ -2592,7 +2592,13 @@ export class MessageModel {
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
-          sql`${messages.metadata} -> 'signal' IS NULL`,
+          // Exclude signal-tagged assistants by key existence. The equivalent
+          // `metadata -> 'signal' IS NULL` crashes the serverless Postgres engine
+          // when used as a WHERE predicate (rt_fetch out-of-bounds, SQLSTATE
+          // XX000) — the `->` operator only survives in the SELECT/ORDER BY
+          // position, not as a filter qual. `jsonb_exists` is GIN-friendly and
+          // equivalent for real data, since the signal tag is always an object.
+          sql`NOT COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)`,
           this.ownership(),
         ),
       )
