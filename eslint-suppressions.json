@@ -119,16 +119,6 @@
       "count": 1
     }
   },
-  "src/features/AgentSetting/AgentTTS/SelectWithTTSPreview.tsx": {
-    "no-restricted-imports": {
-      "count": 2
-    }
-  },
-  "src/features/AgentSetting/AgentTTS/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/AgentSkillEdit/index.tsx": {
     "no-restricted-imports": {
       "count": 1

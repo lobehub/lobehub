@@ -6,8 +6,6 @@ describe('API_ENDPOINTS', () => {
   it('should return correct basePath URLs', () => {
     expect(API_ENDPOINTS.oauth).toBe('/api/auth');
     expect(API_ENDPOINTS.trace).toBe('/webapi/trace');
-    expect(API_ENDPOINTS.edge).toBe('/webapi/tts/edge');
-    expect(API_ENDPOINTS.microsoft).toBe('/webapi/tts/microsoft');
   });
 
   it('should return correct dynamic URLs', () => {

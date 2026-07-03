@@ -179,13 +179,13 @@ describe('agentByIdSelectors', () => {
         },
       });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1', 'en-US')(state)).toBe('nova');
+      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1')(state)).toBe('nova');
     });
 
     it('falls back to a default voice when the agent config is missing', () => {
       const state = createState({ agentMap: {} });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('missing', 'en-US')(state)).toBeTruthy();
+      expect(agentByIdSelectors.getAgentTTSVoiceById('missing')(state)).toBe('alloy');
     });
   });
 });

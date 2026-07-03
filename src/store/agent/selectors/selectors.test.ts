@@ -8,22 +8,13 @@ import {
   INBOX_SESSION_ID,
 } from '@lobechat/const';
 import { KnowledgeType } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
 
 import { agentSelectors, currentAgentConfig } from './selectors';
-
-// Mock VoiceList
-vi.mock('@lobehub/tts', () => ({
-  VoiceList: class {
-    static openaiVoiceOptions = [{ value: 'alloy' }];
-    edgeVoiceOptions = [{ value: 'edge-voice' }];
-    microsoftVoiceOptions = [{ value: 'microsoft-voice' }];
-  },
-}));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
@@ -466,7 +457,7 @@ describe('agentSelectors', () => {
   });
 
   describe('currentAgentTTSVoice', () => {
-    it('should return openai voice when ttsService is openai', () => {
+    it('should return openai voice', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
@@ -476,33 +467,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('nova');
-    });
-
-    it('should return edge voice when ttsService is edge', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'edge', voice: { edge: 'edge-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('edge-custom');
-    });
-
-    it('should return microsoft voice when ttsService is microsoft', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'microsoft', voice: { microsoft: 'microsoft-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('microsoft-custom');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('nova');
     });
 
     it('should return default voice when no voice specified', () => {
@@ -515,7 +480,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('alloy');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('alloy');
     });
   });
 
