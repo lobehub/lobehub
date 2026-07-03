@@ -17,10 +17,11 @@ No local default ref (detached HEAD, fresh clone)? `git fetch && git switch <def
 ## 2. Pick the full-diff command by review target
 
 1. **User named a PR by URL** → `gh pr diff <num>`. Also fetch `gh pr view <num> --json mergeable,isDraft,reviewDecision,statusCheckRollup` and append those fields to the scope summary (feeds the merge-verdict table). URL only — bare `#123` does not trigger PR mode.
-2. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <local-default>...HEAD`), or both (`git diff <local-default>`). Gitlink-only entries (`M <submodule>` where `git status` shows `(new commits)` and nothing else changed) do NOT count as uncommitted changes — a superproject tracking an in-flight submodule branch shows this permanently; route them through §4 instead of triggering this question.
-3. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard` (§3 defines how their contents join `{changes}` — `git diff HEAD` alone misses them entirely).
-4. **Clean tree on a non-default branch** → `git diff <local-default>...HEAD`
-5. None of the above → ask; don't guess.
+2. **User named a specific commit or range** (a SHA, `abc123..def456`) → review exactly that object: `git show <sha> --stat` then `git show <sha>` for a single commit, `git diff <a>..<b>` for a range. The named object IS the scope — ignore branch/worktree state and do not fall through to the rules below.
+3. **Non-default branch AND uncommitted changes both exist** → ask the user which to review: uncommitted only (`git diff HEAD` + untracked files read separately), committed branch work (`git diff <local-default>...HEAD`), or both (`git diff $(git merge-base <local-default> HEAD)` — worktree against the merge-base; the plain one-commit form `git diff <local-default>` would re-import default-branch advances as reverse diffs). Gitlink-only entries (`M <submodule>` where `git status` shows `(new commits)` and nothing else changed) do NOT count as uncommitted changes — a superproject tracking an in-flight submodule branch shows this permanently; route them through §4 instead of triggering this question.
+4. **Uncommitted changes on the default branch** → `git diff HEAD`; list untracked via `git ls-files --others --exclude-standard` (§3 defines how their contents join `{changes}` — `git diff HEAD` alone misses them entirely).
+5. **Clean tree on a non-default branch** → `git diff <local-default>...HEAD`
+6. None of the above → ask; don't guess.
 
 ## 3. Exclude bulk files before judging size
 
