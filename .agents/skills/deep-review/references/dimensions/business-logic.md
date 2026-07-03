@@ -11,7 +11,7 @@ Design-level judgment on how the change solves its requirement: does it use the 
 ## Quick checklist
 
 - Framework misuse: fighting Next.js/React/Drizzle instead of using the documented mechanism (check official docs before assuming custom code is needed)
-- Self-inflicted complexity ("没苦硬吃"): hand-rolling what the framework, an existing dep, or a simpler design gives for free
+- Self-inflicted complexity ("没苦硬吃"): hand-rolling what the framework, an external dependency, or a simpler design gives for free. "External" is the boundary — duplicating a sibling in-repo implementation belongs to reuse-architecture, not here; report it there or leave it to that reviewer
 - Hand-built domain machinery the external platform offers natively: custom implementations of domain mechanisms (usage metering, billing math, invoice generation, subscription lifecycle, scheduling, webhook retry) when the platform the feature runs on — payment provider, auth service, deployment platform — ships the capability built in. Classic failure: hand-rolling usage records + charge calculation + invoices because nobody knew the payment provider has native metered billing. Reviewers share the author's blind spots — check the platform's official docs, don't trust memory
 - Solution weight mismatched to requirement scale: a new abstraction layer, config system, or queue where a direct implementation satisfies the stated need — and the inverse, a quick hack on a path the requirement marks critical (billing, auth, data integrity)
 - Best-practice violations with a citable source (official docs, a repo skill, `DESIGN.md`) — not personal taste
