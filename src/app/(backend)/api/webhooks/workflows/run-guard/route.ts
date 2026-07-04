@@ -11,6 +11,8 @@ import { cancelWorkflowRunsByGuardPolicy, setWorkflowRunGuard } from '@/server/w
 // Next.js route segment config is required here because this operational webhook reads
 // runtime env, Redis, and QStash clients. Keep it on Node.js and force dynamic handling so
 // the route is evaluated per request instead of being statically optimized.
+// Source/context: `https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config`
+// and `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/02-route-segment-config/runtime.md`.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +91,9 @@ export const POST = async (request: Request) => {
     const redisConfig = getRedisConfig();
     if (!isRedisEnabled(redisConfig)) throw new Error('Redis is not configured');
 
-    const redis = initializeRedis(redisConfig);
+    const redis = await initializeRedis(redisConfig);
+    if (!redis) throw new Error('Redis is not configured');
+
     const { policy, reason, scope, ttlSeconds } = parsed.data;
     const guard = await setWorkflowRunGuard(redis, {
       scope,
