@@ -39,11 +39,14 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
 
         // Without a DB handle we cannot merge aliases / DB rows; fall back to the
         // raw gateway pool for the active scope (workspace runs never include
-        // personal devices), still tagged with scope.
+        // personal devices), still tagged with scope. The gateway only returns
+        // live-connected devices, so they are online by definition — without this
+        // flag the runtime's `.filter(d => d.online)` drops every device and the
+        // agent reports no online device even with a live, connected one.
         if (!serverDB) {
           const scope = workspaceId ? ('workspace' as const) : ('personal' as const);
           const online = await deviceGateway.queryDeviceList(userId, workspaceId);
-          return online.map((d) => ({ ...d, scope }));
+          return online.map((d) => ({ ...d, online: true, scope }));
         }
 
         const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);
