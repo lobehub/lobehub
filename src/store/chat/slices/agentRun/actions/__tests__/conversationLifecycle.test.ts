@@ -1888,6 +1888,115 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should route a single leading @agent through the gateway when gateway mode is enabled', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const targetAgentId = 'agent-direct-target';
+        const toolMessageId = 'tool-call-agent-result';
+        const message = '@Agent B hello';
+
+        const userMessage = createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+          content: message,
+        });
+        let assistantMessage = createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+          content: '',
+          tools: [],
+        });
+
+        // sendMessageInServer must still run: directMention deliberately uses the
+        // client message-persistence path even under gateway mode (the supervisor
+        // is a pure router and never executes an LLM turn on the gateway).
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            messages: [userMessage, assistantMessage],
+            topics: [],
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        (messageService.updateMessage as any).mockImplementation(
+          async (_id: string, value: any) => {
+            assistantMessage = { ...assistantMessage, ...value };
+            return { messages: [userMessage, assistantMessage], success: true };
+          },
+        );
+        (messageService.createMessage as any).mockImplementation(async (params: any) => {
+          const toolMessage = createMockMessage({ ...params, id: toolMessageId, role: 'tool' });
+          return { id: toolMessageId, messages: [userMessage, assistantMessage, toolMessage] };
+        });
+
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'op-gw-sub',
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message,
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Agent B',
+                        metadata: { id: targetAgentId, type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' hello', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            context: createTestContext(),
+          });
+        });
+
+        // Messages were persisted client-side (we did NOT take the supervisor
+        // gateway early-return, which skips sendMessageInServer entirely).
+        expect(sendMessageInServerSpy).toHaveBeenCalled();
+        // The callAgent tool call was still emitted on the supervisor message.
+        expect(messageService.updateMessage).toHaveBeenCalledWith(
+          TEST_IDS.ASSISTANT_MESSAGE_ID,
+          expect.objectContaining({
+            tools: [
+              expect.objectContaining({
+                apiName: 'callAgent',
+                identifier: 'lobe-agent-management',
+              }),
+            ],
+          }),
+          expect.objectContaining({ agentId: TEST_IDS.SESSION_ID }),
+        );
+        // The TARGET agent runs on the gateway, not the client.
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            context: expect.objectContaining({
+              agentId: targetAgentId,
+              scope: 'sub_agent',
+              subAgentId: targetAgentId,
+            }),
+            message,
+          }),
+        );
+      });
+
       it('should keep supervisor delegation for multiple @agent mentions', async () => {
         const { result } = renderHook(() => useChatStore());
 

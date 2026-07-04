@@ -895,7 +895,15 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (runtimeType === 'gateway') {
+    // A single-agent @mention (`directMentionRoute`) is the exception: the current
+    // agent acts as a pure deterministic router and never runs an LLM turn itself, so
+    // there is nothing to execute on the gateway. We let it fall through to the client
+    // message-persistence path below, where `#executeDirectMentionRoute` emits the
+    // callAgent tool call and dispatches the *target* agent via
+    // `dispatchNonHeteroSubAgent` — which re-selects the runtime and runs the target on
+    // the gateway when gateway mode is enabled. Routing the supervisor through the
+    // gateway here would drop the mention entirely (execAgentTask carries no mention data).
+    if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
