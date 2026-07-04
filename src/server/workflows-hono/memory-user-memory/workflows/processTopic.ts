@@ -1,7 +1,8 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
-  buildUpstashWorkflowAttributes,
+  buildUpstashWorkflowMetricAttributes,
   tracer as upstashWorkflowTracer,
+  withOtelMetricsForUpstashWorkflows,
 } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { errorMessageFrom } from '@lobechat/utils';
@@ -38,7 +39,7 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
       span.setAttributes({
-        ...buildUpstashWorkflowAttributes(context),
+        ...buildUpstashWorkflowMetricAttributes(context),
         'workflow.memory_user_memory.layers': payload.layers.join(','),
         'workflow.memory_user_memory.source': payload.sources.join(','),
         'workflow.memory_user_memory.topic_id': payload.topicIds[0],
@@ -200,7 +201,9 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
   );
 
 export const processTopicWorkflow = createWorkflow<MemoryExtractionPayloadInput, unknown>(
-  processTopicRoute,
+  withOtelMetricsForUpstashWorkflows(processTopicRoute, {
+    url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+  }),
   {
     failureFunction: async ({ context, failStatus, failResponse }) => {
       try {

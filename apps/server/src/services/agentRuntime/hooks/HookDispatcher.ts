@@ -1,6 +1,7 @@
 import debug from 'debug';
 import urlJoin from 'url-join';
 
+import { OtelQstashClient } from '@/libs/qstash';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import type {
@@ -31,7 +32,6 @@ export async function deliverWebhook(
 
   if (delivery === 'qstash') {
     try {
-      const { Client } = await import('@upstash/qstash');
       const qstashToken = process.env.QSTASH_TOKEN;
       if (!qstashToken) {
         if (fallback === 'none') {
@@ -41,7 +41,7 @@ export async function deliverWebhook(
         await fetchDeliver(resolvedUrl, payload);
         return;
       }
-      const client = new Client({ token: qstashToken });
+      const client = new OtelQstashClient({ token: qstashToken });
       await client.publishJSON({
         body: payload,
         headers: {

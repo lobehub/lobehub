@@ -49,7 +49,7 @@ import type {
 } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { type FlowControl } from '@upstash/qstash';
-import { Client } from '@upstash/workflow';
+import type { Client } from '@upstash/workflow';
 import debug from 'debug';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { join } from 'pathe';
@@ -67,6 +67,7 @@ import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemo
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerDB } from '@/database/server';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { OtelWorkflowClient } from '@/libs/qstash';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
@@ -2746,7 +2747,7 @@ const getWorkflowClient = () => {
     (config as Record<string, unknown>).url = process.env.QSTASH_URL;
   }
 
-  return new Client(config);
+  return new OtelWorkflowClient(config);
 };
 
 export class MemoryExtractionWorkflowService {

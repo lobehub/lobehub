@@ -1,6 +1,6 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
-  buildUpstashWorkflowAttributes,
+  buildUpstashWorkflowMetricAttributes,
   tracer as upstashWorkflowTracer,
 } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
@@ -37,7 +37,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
       const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
       span.setAttributes({
-        ...buildUpstashWorkflowAttributes(context),
+        ...buildUpstashWorkflowMetricAttributes(context),
         'workflow.memory_user_memory.force_all': payload.forceAll,
         'workflow.memory_user_memory.force_topics': payload.forceTopics,
         'workflow.memory_user_memory.layers': payload.layers.join(','),
