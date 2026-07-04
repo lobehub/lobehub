@@ -18,7 +18,7 @@ export interface CancelWorkflowRunsByGuardPolicyParams {
 }
 
 /**
- * Result returned after resolving and optionally cancelling QStash workflow runs.
+ * Result returned after cancelling QStash workflow runs by URL prefix.
  */
 export interface CancelWorkflowRunsByGuardPolicyResult {
   /**
@@ -27,21 +27,16 @@ export interface CancelWorkflowRunsByGuardPolicyResult {
   cancelled: number;
 
   /**
-   * Deduplicated workflow run ids selected from active QStash logs.
-   */
-  matchedRunIds: string[];
-
-  /**
-   * Absolute workflow URL prefix used for local log filtering.
+   * Absolute workflow URL prefix passed to the QStash workflow cancellation API.
    */
   workflowUrlPrefix: string;
 }
 
 /**
- * Builds the absolute workflow URL prefix used for QStash log matching.
+ * Builds the absolute workflow URL prefix used for QStash cancellation.
  *
  * Use when:
- * - Resolving workflow runs from QStash logs by workflow path.
+ * - Cancelling workflow runs from QStash by workflow path.
  * - Matching child workflow endpoint prefixes under a route group.
  *
  * Expects:
@@ -57,51 +52,28 @@ export const buildWorkflowUrlPrefix = ({
 }: CancelWorkflowRunsByGuardPolicyParams): string =>
   new URL(`/${normalizeWorkflowRunGuardPath(workflowPath)}`, appUrl).toString().replace(/\/$/, '');
 
-const matchesWorkflowUrlPrefix = (workflowUrl: string, workflowUrlPrefix: string): boolean => {
-  if (workflowUrl === workflowUrlPrefix) return true;
-  if (!workflowUrl.startsWith(workflowUrlPrefix)) return false;
-
-  const boundary = workflowUrl.at(workflowUrlPrefix.length);
-  return boundary === '/' || boundary === '?' || boundary === '#';
-};
-
 /**
- * Cancels active QStash workflow runs selected by a workflow run guard policy.
+ * Cancels QStash workflow runs selected by a workflow run guard policy.
  *
  * Use when:
- * - A guard with QStash cancellation enabled should stop already-started workflow runs.
- * - SDK `urlStartingWith` cancellation cannot be trusted and run ids must be resolved first.
+ * - A guard with QStash cancellation enabled should stop pending and active workflow runs.
+ * - QStash should resolve matching workflow runs by URL prefix.
  *
  * Expects:
- * - `client.logs` supports filtering with `{ count: 100, state: 'RUN_STARTED' }`.
- * - QStash log entries include workflow URL, state, and run id fields.
+ * - `client.cancel` supports `{ urlStartingWith }` for workflow URL prefix cancellation.
  *
  * Returns:
- * - The workflow URL prefix, matched run ids, and QStash cancellation count.
+ * - The workflow URL prefix and QStash cancellation count.
  */
 export const cancelWorkflowRunsByGuardPolicy = async (
-  client: Pick<WorkflowClient, 'cancel' | 'logs'>,
+  client: Pick<WorkflowClient, 'cancel'>,
   params: CancelWorkflowRunsByGuardPolicyParams,
 ): Promise<CancelWorkflowRunsByGuardPolicyResult> => {
   const workflowUrlPrefix = buildWorkflowUrlPrefix(params);
-  const logs = await client.logs({ count: 100, state: 'RUN_STARTED' });
-  const matchedRunIds = Array.from(
-    new Set(
-      logs.runs
-        .filter((run) => matchesWorkflowUrlPrefix(run.workflowUrl, workflowUrlPrefix))
-        .map((run) => run.workflowRunId),
-    ),
-  );
-
-  if (matchedRunIds.length === 0) {
-    return { cancelled: 0, matchedRunIds, workflowUrlPrefix };
-  }
-
-  const result = await client.cancel({ ids: matchedRunIds });
+  const result = await client.cancel({ urlStartingWith: workflowUrlPrefix });
 
   return {
     cancelled: result.cancelled || 0,
-    matchedRunIds,
     workflowUrlPrefix,
   };
 };
