@@ -157,12 +157,25 @@ user's resident 9222 app — use a pool id. Also: `agent-browser open` mangles
 `app://` → `https://app//…` (ERR\_CONNECTION\_CLOSED); navigate inside the SPA by
 clicking its own `<a href>` links, not `open`.
 
-## Case 7 — (placeholder) append the user's next negative feedback below
+## Case 7 — Embedding a local-path screenshot in the chat reply (broken-image placeholder)
 
-<!-- New case template:
-## Case N — one-line summary of the mistake
-**Wrong approach**: …
-**Why it's wrong**: …
-**What it breaks**: …
-**Correct approach**: …
--->
+**Wrong approach**: ending the final reply with an inline image embed pointing at
+the report dir — `![caption](.records/reports/<ts>-<slug>/assets/06-foo.png)` —
+believing a leading `!` makes it render as a picture in chat.
+
+**Why it's wrong**: the chat UI can't load a local filesystem path. The embed
+renders as an empty grey broken-image box (the user sees a placeholder + " 完全
+看不了图内容 "), and the plain-link form `[Image](…local…png)` is an un-openable
+dead link. Local report paths only resolve on the machine, never inside the
+message. The earlier guidance that said "if a visual helps, embed it as an image,
+not a link" was itself wrong and has been removed.
+
+**What it breaks**: the reply looks like it has evidence but shows nothing —
+the user gets a broken box instead of the screenshot, and has to go find the
+verify link anyway.
+
+**Correct approach**: put NO images and NO local-file links in the chat reply.
+The published `https://app.lobehub.com/verify/<id>` page already renders every
+screenshot inline — that URL is the only visual deliverable. Describe key visual
+outcomes in prose; mention the local report dir as a plain string (not a
+markdown link) if a reference is useful.
