@@ -292,7 +292,7 @@ export const deviceRouter = router({
     ),
 
   /**
-   * Remove a detached worktree in a directory's repository on a remote device,
+   * Remove a worktree in a directory's repository on a remote device,
    * via the device's `removeGitWorktree` RPC.
    */
   removeGitWorktree: deviceProcedure

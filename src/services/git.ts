@@ -104,7 +104,7 @@ class GitService {
       : electronGitService.deleteGitBranch({ branch, path });
   }
 
-  /** Remove a detached worktree from a working directory's repository. */
+  /** Remove a worktree from a working directory's repository. */
   removeGitWorktree({
     deviceId,
     path,

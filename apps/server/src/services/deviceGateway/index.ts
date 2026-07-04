@@ -421,7 +421,7 @@ export class DeviceGateway {
   }
 
   /**
-   * Remove a detached worktree in a directory's repository on a remote device via
+   * Remove a worktree in a directory's repository on a remote device via
    * the `removeGitWorktree` device RPC.
    */
   async removeGitWorktree(params: {

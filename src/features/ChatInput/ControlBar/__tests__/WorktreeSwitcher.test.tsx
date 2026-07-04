@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -98,8 +98,9 @@ describe('WorktreeSwitcher', () => {
       />,
     );
 
-    expect(screen.getByTestId('worktree-dropdown-trigger').firstElementChild?.tagName).toBe('DIV');
-    expect(screen.getByTestId('worktree-tooltip')).toBeTruthy();
+    const trigger = screen.getByTestId('worktree-dropdown-trigger');
+    expect(trigger.firstElementChild?.tagName).toBe('DIV');
+    expect(within(trigger).getByTestId('worktree-tooltip')).toBeTruthy();
   });
 
   it('renders dirty stats and omits clean labels in the worktree list', () => {
@@ -173,7 +174,7 @@ describe('WorktreeSwitcher', () => {
     expect(screen.getByText('/tmp/project-scratch')).toBeTruthy();
   });
 
-  it('confirms and removes a detached non-current worktree', async () => {
+  it('confirms and removes a non-current worktree', async () => {
     const onWorktreesChange = vi.fn();
     render(
       <WorktreeSwitcher
@@ -208,9 +209,11 @@ describe('WorktreeSwitcher', () => {
       />,
     );
 
-    expect(screen.getAllByLabelText('workingDirectory.removeWorktreeAction')).toHaveLength(1);
+    // both the detached and the branch worktree are removable; only the current one is not
+    const removeButtons = screen.getAllByLabelText('workingDirectory.removeWorktreeAction');
+    expect(removeButtons).toHaveLength(2);
 
-    fireEvent.click(screen.getByLabelText('workingDirectory.removeWorktreeAction'));
+    fireEvent.click(removeButtons[0]);
 
     expect(commitMock).not.toHaveBeenCalled();
     expect(confirmModalMock).toHaveBeenCalledTimes(1);

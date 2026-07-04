@@ -337,7 +337,7 @@ const isDisabled = (worktree: DeviceGitWorktreeListItem): boolean =>
   !!worktree.bare || !!worktree.prunable;
 
 const canRemoveWorktree = (worktree: DeviceGitWorktreeListItem): boolean =>
-  !!worktree.detached && !worktree.current && !worktree.locked && !isDisabled(worktree);
+  !worktree.current && !worktree.locked && !isDisabled(worktree);
 
 interface DirtyStatProps {
   status?: DeviceGitWorktreeListItem['status'];
