@@ -75,6 +75,24 @@ export class RoleModel {
     return this.db.query.userRoles.findMany({ where: sql`user_id = ${userId}` });
   }
 
+  async getUserPermissions(userId: string) {
+    // Return distinct permission strings granted to the user via assigned roles (global/workspace)
+    try {
+      const assignments = await this.db.query.userRoles.findMany({ where: sql`user_id = ${userId}` });
+      const roleIds = assignments.map((a) => a.roleId).filter(Boolean);
+      if (roleIds.length === 0) return [];
+
+      // Build SQL IN clause
+      const inClause = sql.join(roleIds.map((r) => sql`${r}`), sql`, `);
+      const perms = await this.db.query.rolePermissions.findMany({ where: sql`role_id IN (${inClause})` });
+      const unique = Array.from(new Set(perms.map((p) => p.permission)));
+      return unique;
+    } catch (error) {
+      console.error('Failed to get user permissions', error);
+      return [];
+    }
+  }
+
   async cloneRole(sourceRoleId: string, newName: string, cloneAssignments = false) {
     const source = await this.findById(sourceRoleId);
     if (!source) throw new Error('ROLE_NOT_FOUND');
