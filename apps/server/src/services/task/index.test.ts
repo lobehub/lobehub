@@ -7,7 +7,6 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
-import { BriefService } from '@/server/services/brief';
 
 import { TaskService } from './index';
 
@@ -558,7 +557,7 @@ describe('TaskService', () => {
       ]);
     });
 
-    it('should build activities sorted by time ascending', async () => {
+    it('should build activities sorted by time ascending and exclude briefs (LOBE-11393)', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -623,11 +622,12 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
 
-      expect(result?.activities).toHaveLength(3);
-      // sorted ascending: brief (Jan 1) < comment (Jan 2) < topic (Jan 3)
-      expect(result?.activities?.[0].type).toBe('brief');
-      expect(result?.activities?.[1].type).toBe('comment');
-      expect(result?.activities?.[2].type).toBe('topic');
+      // Brief (Jan 1) is intentionally excluded from the feed (LOBE-11393), even
+      // though one exists for the task; only comment (Jan 2) + topic (Jan 3) remain.
+      expect(result?.activities).toHaveLength(2);
+      expect(result?.activities?.some((a) => a.type === 'brief')).toBe(false);
+      expect(result?.activities?.[0].type).toBe('comment');
+      expect(result?.activities?.[1].type).toBe('topic');
     });
 
     it('should resolve author info for activities', async () => {
@@ -1155,204 +1155,6 @@ describe('TaskService', () => {
       expect(result?.workspace).toBeUndefined();
     });
 
-    it('should build brief activities with full BriefItem fields', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      const briefs = [
-        {
-          actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
-          agentId: 'agent-1',
-          artifacts: ['doc_1'],
-          createdAt: new Date('2024-01-01T00:00:00Z'),
-          cronJobId: null,
-          id: 'brief-1',
-          priority: 'urgent',
-          readAt: new Date('2024-01-01T01:00:00Z'),
-          resolvedAction: 'approved',
-          resolvedAt: new Date('2024-01-01T02:00:00Z'),
-          resolvedComment: 'looks good',
-          summary: 'Review brief',
-          taskId: 'task_001',
-          title: 'Approval',
-          topicId: null,
-          type: 'decision',
-          userId: 'user-1',
-        },
-      ];
-
-      mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
-        { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
-      ]);
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result?.activities?.[0]).toMatchObject({
-        actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
-        agent: { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
-        agentId: 'agent-1',
-        artifacts: ['doc_1'],
-        briefType: 'decision',
-        createdAt: '2024-01-01T00:00:00.000Z',
-        id: 'brief-1',
-        priority: 'urgent',
-        readAt: '2024-01-01T01:00:00.000Z',
-        resolvedAction: 'approved',
-        resolvedAt: '2024-01-01T02:00:00.000Z',
-        resolvedComment: 'looks good',
-        summary: 'Review brief',
-        taskId: 'task_001',
-        title: 'Approval',
-        type: 'brief',
-        userId: 'user-1',
-      });
-    });
-
-    it('should keep resolvedAction and resolvedComment as separate fields', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      const briefs = [
-        {
-          createdAt: new Date('2024-01-01T00:00:00Z'),
-          id: 'brief-1',
-          priority: 'normal',
-          resolvedAction: 'retry',
-          resolvedComment: null,
-          summary: 'Retry brief',
-          title: 'Retry',
-          type: 'insight',
-        },
-      ];
-
-      mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result?.activities?.[0]).toMatchObject({
-        resolvedAction: 'retry',
-        resolvedComment: null,
-        type: 'brief',
-      });
-    });
-
-    it('should still return task detail when brief agent enrichment fails', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      const briefs = [
-        {
-          agentId: 'agent-1',
-          createdAt: new Date('2024-01-01T00:00:00Z'),
-          id: 'brief-1',
-          priority: 'normal',
-          resolvedAction: null,
-          resolvedComment: null,
-          summary: 'Brief',
-          taskId: 'task_001',
-          title: 'Brief A',
-          type: 'insight',
-        },
-      ];
-
-      mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-      // Force the brief enrichment path to reject without breaking the
-      // sibling resolveAuthors call (which shares the agent model mock).
-      const enrichSpy = vi
-        .spyOn(BriefService.prototype, 'enrichBriefAgentOnly')
-        .mockRejectedValueOnce(new Error('DB error'));
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result).not.toBeNull();
-      expect(result?.activities).toHaveLength(1);
-      expect(result?.activities?.[0]).toMatchObject({
-        agent: null,
-        id: 'brief-1',
-        type: 'brief',
-      });
-      enrichSpy.mockRestore();
-    });
-
     it('should use topic handoff title with fallback to Untitled', async () => {
       const task = {
         assigneeAgentId: null,
@@ -1429,16 +1231,14 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      const briefs = [
+      // A topic without a createdAt should sort to the end (time-less items last).
+      const topics = [
         {
           createdAt: null,
-          id: 'brief-1',
-          priority: 'normal',
-          resolvedAction: null,
-          resolvedComment: null,
-          summary: 'No time brief',
-          title: 'No Time',
-          type: 'insight',
+          handoff: { title: 'No Time' },
+          seq: 1,
+          status: 'completed',
+          topicId: 'topic-1',
         },
       ];
 
@@ -1453,8 +1253,8 @@ describe('TaskService', () => {
       mockTaskModel.resolve.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
       mockTaskModel.getComments.mockResolvedValue(comments);
       mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
       mockTaskModel.findByIds.mockResolvedValue([]);
@@ -1465,9 +1265,9 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.activities).toHaveLength(2);
-      // comment with time should come first, brief without time at end
+      // comment with time should come first, topic without time at end
       expect(result?.activities?.[0].type).toBe('comment');
-      expect(result?.activities?.[1].type).toBe('brief');
+      expect(result?.activities?.[1].type).toBe('topic');
     });
   });
 

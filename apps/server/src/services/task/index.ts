@@ -13,7 +13,6 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
-import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -21,7 +20,6 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { BriefService } from '../brief';
 import { extractFileIdsFromEditorData } from '../file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
@@ -88,8 +86,6 @@ export interface RunReadySubtasksResult {
 
 export class TaskService {
   private agentModel: AgentModel;
-  private briefModel: BriefModel;
-  private briefService: BriefService;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
@@ -106,8 +102,6 @@ export class TaskService {
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
-    this.briefModel = new BriefModel(db, userId, workspaceId);
-    this.briefService = new BriefService(db, userId, workspaceId);
   }
 
   /**
@@ -516,17 +510,17 @@ export class TaskService {
       task = { ...task, error: null };
     }
 
-    const [allDescendants, dependencies, directTopics, briefs, comments, workspace] =
-      await Promise.all([
-        this.taskModel.findAllDescendants(task.id),
-        this.taskModel.getDependencies(task.id),
-        this.taskTopicModel
-          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
-          .catch(() => []),
-        this.briefModel.findByTaskId(task.id).catch(() => []),
-        this.taskModel.getComments(task.id).catch(() => []),
-        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-      ]);
+    // Brief hidden (LOBE-11393): the task detail activity feed no longer carries
+    // brief-type activities — the UI converges on Task Run. Briefs are therefore
+    // not fetched/enriched here (see the omitted brief spread below). The brief
+    // lifecycle, model and data are untouched; revert this to bring them back.
+    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
+      this.taskModel.findAllDescendants(task.id),
+      this.taskModel.getDependencies(task.id),
+      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
+      this.taskModel.getComments(task.id).catch(() => []),
+      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+    ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -713,10 +707,6 @@ export class TaskService {
       const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
       if (topicAgentId) agentIds.add(topicAgentId);
     }
-    // Briefs may have an agentId
-    for (const b of briefs) {
-      if (b.agentId) agentIds.add(b.agentId);
-    }
     // Comments have authorAgentId or authorUserId
     for (const c of comments) {
       if (c.authorAgentId) agentIds.add(c.authorAgentId);
@@ -726,12 +716,7 @@ export class TaskService {
     if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
     else if (task.createdByUserId) userIds.add(task.createdByUserId);
 
-    const [authorMap, enrichedBriefs] = await Promise.all([
-      this.resolveAuthors(agentIds, userIds),
-      this.briefService
-        .enrichBriefAgentOnly(briefs)
-        .catch(() => briefs.map((b) => ({ ...b, agent: null }))),
-    ]);
+    const authorMap = await this.resolveAuthors(agentIds, userIds);
 
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
@@ -765,29 +750,7 @@ export class TaskService {
           type: 'topic' as const,
         };
       }),
-      ...enrichedBriefs.map((b) => ({
-        actions: b.actions ?? undefined,
-        agent: b.agent,
-        agentId: b.agentId,
-        artifacts: b.artifacts ?? undefined,
-        author: b.agentId ? authorMap.get(b.agentId) : undefined,
-        briefType: b.type,
-        createdAt: toISO(b.createdAt),
-        cronJobId: b.cronJobId,
-        id: b.id,
-        priority: b.priority,
-        readAt: toISO(b.readAt),
-        resolvedAction: b.resolvedAction,
-        resolvedAt: toISO(b.resolvedAt),
-        resolvedComment: b.resolvedComment,
-        summary: b.summary,
-        taskId: b.taskId,
-        time: toISO(b.createdAt),
-        title: b.title,
-        topicId: b.topicId,
-        type: 'brief' as const,
-        userId: b.userId,
-      })),
+      // Brief activities intentionally omitted (LOBE-11393) — see the fetch note above.
       ...comments.map((c) => {
         const ids = commentFileIdsMap[c.id] ?? [];
         const files = ids.map((id) => fileById.get(id)).filter((f) => !!f);
