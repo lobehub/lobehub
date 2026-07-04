@@ -1,18 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockGetRedisConfig, redis, redisLib, workflowClient } = vi.hoisted(() => ({
-  mockGetRedisConfig: vi.fn(),
-  redis: {
-    set: vi.fn(),
-  },
-  redisLib: {
-    initializeRedis: vi.fn(),
-    isRedisEnabled: vi.fn(),
-  },
-  workflowClient: {
-    cancel: vi.fn(),
-    logs: vi.fn(),
-  },
+import type * as RunGuardModule from '@/server/workflows/runGuard';
+
+const { mockCancelWorkflowRunsByGuardPolicy, mockGetRedisConfig, redis, redisLib } = vi.hoisted(
+  () => ({
+    mockCancelWorkflowRunsByGuardPolicy: vi.fn(),
+    mockGetRedisConfig: vi.fn(),
+    redis: {
+      set: vi.fn(),
+    },
+    redisLib: {
+      initializeRedis: vi.fn(),
+      isRedisEnabled: vi.fn(),
+    },
+  }),
+);
+
+vi.mock('@/server/workflows/runGuard', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunGuardModule>()),
+  cancelWorkflowRunsByGuardPolicy: mockCancelWorkflowRunsByGuardPolicy,
 }));
 
 vi.mock('@/envs/redis', () => ({
@@ -22,10 +28,6 @@ vi.mock('@/envs/redis', () => ({
 vi.mock('@/libs/redis', () => ({
   initializeRedis: redisLib.initializeRedis,
   isRedisEnabled: redisLib.isRedisEnabled,
-}));
-
-vi.mock('@/libs/qstash', () => ({
-  workflowClient,
 }));
 
 const { POST } = await import('./route');
@@ -166,7 +168,10 @@ describe('workflow run guard webhook route', () => {
   it('cancels qstash runs for path guards when policy requests it', async () => {
     process.env.MEMORY_USER_MEMORY_WEBHOOK_BASE_URL = 'https://internal.lobehub.com';
     redis.set.mockResolvedValue('OK');
-    workflowClient.cancel.mockResolvedValue({ cancelled: 1 });
+    mockCancelWorkflowRunsByGuardPolicy.mockResolvedValue({
+      cancelled: 1,
+      workflowUrlPrefix: 'https://internal.lobehub.com/api/workflows/memory-user-memory',
+    });
 
     const response = await POST(
       new Request('https://app.lobehub.com/api/webhooks/workflows/run-guard', {
@@ -191,9 +196,9 @@ describe('workflow run guard webhook route', () => {
       },
       success: true,
     });
-    expect(workflowClient.logs).not.toHaveBeenCalled();
-    expect(workflowClient.cancel).toHaveBeenCalledWith({
-      urlStartingWith: 'https://internal.lobehub.com/api/workflows/memory-user-memory',
+    expect(mockCancelWorkflowRunsByGuardPolicy).toHaveBeenCalledWith({
+      appUrl: 'https://internal.lobehub.com',
+      workflowPath: 'api/workflows/memory-user-memory',
     });
   });
 

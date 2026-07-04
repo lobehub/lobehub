@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getRedisConfig } from '@/envs/redis';
-import { workflowClient } from '@/libs/qstash';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { parseWorkflowRunGuardConfig } from '@/server/globalConfig/parseWorkflowRunGuardConfig';
 import { cancelWorkflowRunsByGuardPolicy, setWorkflowRunGuard } from '@/server/workflows/runGuard';
@@ -109,7 +108,7 @@ export const POST = async (request: Request) => {
     if (policy?.cancelQstash && scope.type === 'path') {
       if (!appUrl) throw new Error('App URL is not configured');
 
-      qstash = await cancelWorkflowRunsByGuardPolicy(workflowClient, {
+      qstash = await cancelWorkflowRunsByGuardPolicy({
         appUrl,
         workflowPath: scope.workflowPath,
       });

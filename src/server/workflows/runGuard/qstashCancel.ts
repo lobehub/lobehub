@@ -1,6 +1,9 @@
-import type { Client as WorkflowClient } from '@upstash/workflow';
-
 import { normalizeWorkflowRunGuardPath } from './keys';
+
+/**
+ * Default Upstash QStash origin used by the SDK when `QSTASH_URL` is not configured.
+ */
+const DEFAULT_QSTASH_URL = 'https://qstash.upstash.io';
 
 /**
  * Input used to resolve active QStash workflow runs affected by a run guard.
@@ -32,6 +35,11 @@ export interface CancelWorkflowRunsByGuardPolicyResult {
   workflowUrlPrefix: string;
 }
 
+interface CancelWorkflowRunsResponse {
+  cancelled?: number;
+  error?: string;
+}
+
 /**
  * Builds the absolute workflow URL prefix used for QStash cancellation.
  *
@@ -60,17 +68,42 @@ export const buildWorkflowUrlPrefix = ({
  * - QStash should resolve matching workflow runs by URL prefix.
  *
  * Expects:
- * - `client.cancel` supports `{ urlStartingWith }` for workflow URL prefix cancellation.
+ * - `QSTASH_TOKEN` is configured for the Upstash Workflow REST API.
  *
  * Returns:
  * - The workflow URL prefix and QStash cancellation count.
  */
 export const cancelWorkflowRunsByGuardPolicy = async (
-  client: Pick<WorkflowClient, 'cancel'>,
   params: CancelWorkflowRunsByGuardPolicyParams,
 ): Promise<CancelWorkflowRunsByGuardPolicyResult> => {
+  const token = process.env.QSTASH_TOKEN;
+  if (!token) throw new Error('QSTASH_TOKEN is required to cancel workflow runs');
+
   const workflowUrlPrefix = buildWorkflowUrlPrefix(params);
-  const result = await client.cancel({ urlStartingWith: workflowUrlPrefix });
+  const qstashUrl = process.env.QSTASH_URL || DEFAULT_QSTASH_URL;
+
+  // NOTICE:
+  // `@upstash/workflow@0.2.23` serializes `urlStartingWith` as `{ workflowUrl: string }`,
+  // but the current Workflow REST API expects the body field to be an array.
+  // Source/context: production returned
+  // `json: cannot unmarshal string into Go struct field CancelWorkflowRunsRequest.workflowUrl of type []string`;
+  // docs: `https://upstash.com/docs/workflow/api-reference/runs/bulk-cancel-workflow-runs`.
+  // Removal condition: replace this direct REST call after upgrading the SDK to a version whose
+  // `client.cancel` URL-prefix branch sends the current API shape.
+  const response = await fetch(new URL('/v2/workflows/runs', qstashUrl), {
+    body: JSON.stringify({ workflowUrl: [workflowUrlPrefix] }),
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'DELETE',
+  });
+
+  const result = (await response.json()) as CancelWorkflowRunsResponse;
+
+  if (!response.ok || result.error) {
+    throw new Error(result.error || `QStash workflow cancellation failed: ${response.status}`);
+  }
 
   return {
     cancelled: result.cancelled || 0,
