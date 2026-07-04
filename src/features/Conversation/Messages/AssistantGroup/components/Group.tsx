@@ -553,13 +553,16 @@ const Group = memo<GroupChildrenProps>(
       );
     };
 
-    // Codex-style turn folding: once the turn's op has ended, fold it under a
-    // single "已处理 {duration}" header. A non-latest turn folds *whole* — its
-    // final answer collapses in too, so scrolled-past turns read as one compact
-    // row. The latest turn only folds its process and keeps the final answer
-    // visible (so a just-finished reply stays readable); still-generating turns
-    // render in full.
+    // Codex-style turn folding: once the turn's op has ended, fold its whole
+    // process (reasoning + tools + intermediate prose) under a single "已处理
+    // {duration}" header, leaving the final answer always visible — for every
+    // turn, latest or not. Folding must never swallow the final answer, since
+    // that is the turn's payload; only the process collapses. The latest turn
+    // is eligible only once its final answer exists (so a tool-only latest turn
+    // does not collapse into a lone header); still-generating turns render in
+    // full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
+    const processStepCount = countFoldedProcessSteps(processSegments);
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,
       hasFinalAnswer: hasRenderableFinalAnswer(finalSegments),
@@ -568,12 +571,6 @@ const Group = memo<GroupChildrenProps>(
       operationEnded: !hasActiveOperation,
       processSegments,
     });
-
-    // Non-latest turns collapse everything; the latest turn keeps its final
-    // answer out of the fold.
-    const foldedSegments = isLatestItem ? processSegments : segments;
-    const visibleSegments = isLatestItem ? finalSegments : [];
-    const processStepCount = countFoldedProcessSteps(foldedSegments);
 
     const durationText =
       turnDurationMs >= 1000 ? formatReasoningDuration(turnDurationMs) : undefined;
@@ -585,12 +582,12 @@ const Group = memo<GroupChildrenProps>(
             <>
               <ProcessFold durationText={durationText} stepCount={processStepCount}>
                 <Flexbox gap={8}>
-                  {foldedSegments.map((segment) =>
+                  {processSegments.map((segment) =>
                     renderSegment(segment, segments.indexOf(segment)),
                   )}
                 </Flexbox>
               </ProcessFold>
-              {visibleSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
+              {finalSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
             </>
           ) : (
             <>
