@@ -94,15 +94,15 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
 
-    it('should surface a toast, return null, and reset isCreatingTask on error', async () => {
-      const { message } = await import('@/components/AntdStaticMethods');
+    it('should reject and reset isCreatingTask on error (callers own the error path)', async () => {
       vi.mocked(taskService.create).mockRejectedValue(new Error('fail'));
 
-      // A failed create resolves to null (not a rejection) so the inline
-      // composer / modal keep their draft instead of hitting an unhandled
-      // rejection, and the reason is surfaced via a toast.
-      await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).resolves.toBeNull();
-      expect(message.error).toHaveBeenCalled();
+      // createTask keeps its rejecting contract so callers that rely on `catch`
+      // (e.g. the recommend-template flow) don't fall through to a false success;
+      // the composer callers add their own catch + toast (V4).
+      await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).rejects.toThrow(
+        'fail',
+      );
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
   });

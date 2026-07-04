@@ -10,6 +10,7 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { message } from '@/components/AntdStaticMethods';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -90,7 +91,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     () => (parentTaskId ? null : `lobehub:task-create-draft:${agentId ?? 'all'}`),
     [agentId, parentTaskId],
   );
-  const draftRestoredRef = useRef(false);
+  // Tracks which scope key the editor is currently hydrated for. The component
+  // is reused across /agent/A/tasks -> /agent/B/tasks -> /tasks without
+  // unmounting, so a boolean would strand the new scope on the old draft.
+  const draftRestoredKeyRef = useRef<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
@@ -112,11 +116,21 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (autoFocus || isHero) editor?.focus?.();
   }, [autoFocus, canCreateTask, editor, isHero]);
 
-  // Restore a saved draft once the editor is ready; the editor's
-  // onContentChange then syncs the derived `instruction` state.
+  // Hydrate the editor with the current scope's saved draft. Re-runs whenever
+  // the scope key changes (not just on mount): it first resets to this scope's
+  // baseline so a previous scope's draft can't leak across a switch, then loads
+  // the new key's draft. The editor's onContentChange syncs `instruction`.
   useEffect(() => {
-    if (draftRestoredRef.current || !draftStorageKey || !editor) return;
-    draftRestoredRef.current = true;
+    if (!draftStorageKey || !editor) return;
+    if (draftRestoredKeyRef.current === draftStorageKey) return;
+    draftRestoredKeyRef.current = draftStorageKey;
+
+    // Reset to baseline for the new scope before hydrating.
+    editor.cleanDocument?.();
+    setPriority(0);
+    setVisibility('private');
+    if (!lockAssignee) setAssigneeAgentId(agentId);
+
     let raw: string | null;
     try {
       raw = localStorage.getItem(draftStorageKey);
@@ -138,14 +152,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } catch {
       /* ignore a malformed draft */
     }
-  }, [draftStorageKey, editor, lockAssignee]);
+  }, [agentId, draftStorageKey, editor, lockAssignee]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Write-only on non-empty:
   // the key is cleared only on a successful submit (below), never here — so a
   // `setDocument`-timing gap right after restore can't wipe a valid draft.
   useEffect(() => {
-    if (!draftRestoredRef.current || !draftStorageKey || !editor) return;
+    if (!draftStorageKey || draftRestoredKeyRef.current !== draftStorageKey || !editor) return;
     const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
     if (!markdown) return;
     try {
@@ -204,37 +218,45 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
     const editorJson = editor?.getDocument?.('json') as unknown;
 
-    const result = await createTask({
-      assigneeAgentId,
-      editorData: editorJson,
-      instruction: markdown || trimmedText || name || '',
-      name,
-      parentTaskId,
-      priority: priority || undefined,
-      // Only send visibility in workspace mode; personal mode lets the server
-      // fall through to the schema default ('public', inert in personal mode).
-      visibility: activeWorkspaceId ? visibility : undefined,
-    });
-
-    if (result) {
-      setPriority(0);
-      setAssigneeAgentId(agentId);
-      setInstruction('');
-      setVisibility('private');
-      editor?.cleanDocument?.();
-      if (draftStorageKey) {
-        try {
-          localStorage.removeItem(draftStorageKey);
-        } catch {
-          /* ignore */
-        }
-      }
-      onCreated?.({
-        agentId: result.assigneeAgentId ?? undefined,
-        identifier: result.identifier,
+    // `createTask` keeps its rejecting contract (other callers rely on `catch`);
+    // handle the composer's own failure here so it isn't silent, keeping the
+    // draft intact (the reset only runs on success).
+    try {
+      const result = await createTask({
+        assigneeAgentId,
+        editorData: editorJson,
+        instruction: markdown || trimmedText || name || '',
+        name,
+        parentTaskId,
+        priority: priority || undefined,
+        // Only send visibility in workspace mode; personal mode lets the server
+        // fall through to the schema default ('public', inert in personal mode).
+        visibility: activeWorkspaceId ? visibility : undefined,
       });
+
+      if (result) {
+        setPriority(0);
+        setAssigneeAgentId(agentId);
+        setInstruction('');
+        setVisibility('private');
+        editor?.cleanDocument?.();
+        if (draftStorageKey) {
+          try {
+            localStorage.removeItem(draftStorageKey);
+          } catch {
+            /* ignore */
+          }
+        }
+        onCreated?.({
+          agentId: result.assigneeAgentId ?? undefined,
+          identifier: result.identifier,
+        });
+      }
+    } catch {
+      message.error(t('createTask.createFailed'));
     }
   }, [
+    t,
     activeWorkspaceId,
     agentId,
     assigneeAgentId,
