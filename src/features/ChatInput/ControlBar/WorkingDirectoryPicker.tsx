@@ -3,7 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import type { WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
@@ -11,10 +12,11 @@ import {
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
-  InfoIcon,
+  SearchIcon,
+  StarIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
@@ -37,7 +39,23 @@ import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
 
+// Show the in-place search box only once the list is long enough that scanning
+// gets tedious — a short list doesn't need the extra chrome.
+const SEARCH_THRESHOLD = 8;
+
 const styles = createStaticStyles(({ css }) => ({
+  badge: css`
+    flex: none;
+
+    padding-inline: 5px;
+    border-radius: 999px;
+
+    font-size: 10px;
+    line-height: 15px;
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
   button: css`
     cursor: pointer;
 
@@ -111,14 +129,23 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
+
+    /* Reveal the row actions (set-default / remove) only on hover. */
+    &:hover .wd-row-actions {
+      display: flex;
+    }
   `,
   dirItemActive: css`
     background: ${cssVar.colorFillTertiary};
   `,
   dirName: css`
+    overflow: hidden;
+
     font-size: 13px;
     font-weight: 500;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   dirPath: css`
     overflow: hidden;
@@ -128,20 +155,7 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  hint: css`
-    margin-block: 2px 4px;
-    margin-inline: 4px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  removeBtn: css`
+  rowAction: css`
     cursor: pointer;
 
     display: flex;
@@ -162,9 +176,28 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  rowActions: css`
+    display: none;
+    flex: none;
+    gap: 2px;
+    align-items: center;
+  `,
   scrollContainer: css`
     overflow-y: auto;
-    max-height: 360px;
+    max-height: 320px;
+  `,
+  searchBar: css`
+    padding-block: 2px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
+
+    .ant-input-affix-wrapper {
+      padding-inline: 0;
+    }
+
+    .ant-input-prefix {
+      margin-inline-end: 8px;
+    }
   `,
   sectionTitle: css`
     padding-block: 6px 2px;
@@ -259,10 +292,17 @@ interface WorkingDirectoryPickerProps {
  * `useCommitWorkingDirectory` (topic override / agent per-device choice). When
  * the target is this machine, the native folder dialog is offered; a true remote
  * device falls back to manual path entry (its filesystem isn't browsable here).
+ *
+ * The device-wide **default** directory (`device.defaultCwd`) is surfaced
+ * explicitly — the row carrying it wears a "default" badge, and any row can be
+ * promoted to the default from its hover actions — so the fallback the agent
+ * runs in when nothing is picked is never invisible.
  */
 const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) => {
   const { t } = useTranslation('device');
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const activeRowRef = useRef<HTMLDivElement>(null);
 
   // Populate the device store (SWR dedupes across callers). Devices sit behind an
   // authed lambda procedure, so only fetch once signed in (desktop always fetches).
@@ -272,10 +312,6 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   useMigrateDeviceRecents();
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  // Derive hetero-ness from the agencyConfig already in hand — `heterogeneousProvider`
-  // is exactly what `isAgentHeterogeneousById` checks, so a second store subscription
-  // would only be redundant binding.
-  const isHeterogeneous = !!agencyConfig?.heterogeneousProvider;
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   // The local machine's filesystem is browsable; a remote device's is not.
@@ -289,7 +325,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   );
 
   // The explicitly-selected cwd (no home fallback) — drives the active check and
-  // the Clear affordance.
+  // the Reset affordance.
   const selectedDir = resolveAgentWorkingDirectory({
     agencyConfig,
     currentDeviceId,
@@ -298,8 +334,8 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     topicWorkingDirectory,
   });
 
-  // Clear only makes sense when an agent-level override exists. The device-wide
-  // `deviceDefaultCwd` isn't clearable from here (it's a device setting), so
+  // Reset only makes sense when an agent-level override exists. The device-wide
+  // `deviceDefaultCwd` isn't clearable from here (it's the fallback itself), so
   // gating on it would render a dead button when the cwd comes from the default.
   const agentChoice = targetDeviceId
     ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
@@ -312,24 +348,125 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const { clear, commit } = useCommitWorkingDirectory(agentId);
   const removeDeviceWorkingDir = useDeviceStore((s) => s.removeDeviceWorkingDir);
+  const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return recents;
+    return recents.filter(
+      (entry) =>
+        getDirName(entry.path).toLowerCase().includes(query) ||
+        entry.path.toLowerCase().includes(query),
+    );
+  }, [recents, search]);
+
+  const showSearch = recents.length > SEARCH_THRESHOLD;
+
+  // Reset the query each time the picker closes.
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+
+  // Scroll the current selection into view every time the picker opens — the
+  // popover re-mounts its list at scrollTop=0, so a selected dir below the fold
+  // would otherwise read as "nothing selected". Re-run when the filtered rows
+  // change (search) so the active row, if still present, stays visible.
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => {
+      activeRowRef.current?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open, filtered.length]);
 
   const pick = async (entry: WorkingDirEntry) => {
     await commit(entry);
     setOpen(false);
   };
 
-  const handleRemoveRecent = (e: React.MouseEvent, path: string) => {
+  const handleRemoveRecent = (e: React.MouseEvent, entry: WorkingDirEntry) => {
     e.stopPropagation();
-    if (targetDeviceId) void removeDeviceWorkingDir(targetDeviceId, path);
+    if (!targetDeviceId) return;
+    void removeDeviceWorkingDir(targetDeviceId, entry.path);
+    // Removal is one-click, so keep an undo path — re-add without touching the
+    // device default.
+    toast.success({
+      actions: [
+        {
+          label: t('workingDirectory.undo'),
+          onClick: () => void updateDeviceCwd(targetDeviceId, entry, { setDefault: false }),
+          variant: 'text',
+        },
+      ],
+      title: t('workingDirectory.removed', { name: getDirName(entry.path) }),
+    });
+  };
+
+  const handleSetDefault = (e: React.MouseEvent, entry: WorkingDirEntry) => {
+    e.stopPropagation();
+    if (targetDeviceId) void updateDeviceCwd(targetDeviceId, entry, { setDefault: true });
+  };
+
+  const renderRow = (entry: WorkingDirEntry) => {
+    const effectivePath = getWorkingDirEffectivePath(entry);
+    const isActive = effectivePath === selectedDir;
+    const isDefault = !!deviceDefaultCwd && effectivePath === deviceDefaultCwd;
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={cx(styles.dirItem, isActive && styles.dirItemActive)}
+        gap={8}
+        key={entry.path}
+        ref={isActive ? activeRowRef : undefined}
+        onClick={() => void pick(entry)}
+      >
+        <DirIcon repoType={entry.repoType} />
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} gap={6}>
+            <div className={styles.dirName}>{getDirName(entry.path)}</div>
+            {isDefault && (
+              <span className={styles.badge}>{t('workingDirectory.defaultBadge')}</span>
+            )}
+          </Flexbox>
+          <div className={styles.dirPath}>{entry.path}</div>
+        </Flexbox>
+        {isActive ? (
+          <Icon icon={CheckIcon} size={16} style={{ color: cssVar.colorSuccess, flex: 'none' }} />
+        ) : (
+          <div className={cx('wd-row-actions', styles.rowActions)}>
+            {!isDefault && (
+              <Tooltip title={t('workingDirectory.setDefault')}>
+                <div className={styles.rowAction} onClick={(e) => handleSetDefault(e, entry)}>
+                  <Icon icon={StarIcon} size={13} />
+                </div>
+              </Tooltip>
+            )}
+            <Tooltip title={t('workingDirectory.removeRecent')}>
+              <div className={styles.rowAction} onClick={(e) => handleRemoveRecent(e, entry)}>
+                <Icon icon={XIcon} size={12} />
+              </div>
+            </Tooltip>
+          </div>
+        )}
+      </Flexbox>
+    );
   };
 
   const content = (
-    <Flexbox gap={4} style={{ minWidth: 280 }}>
-      {isHeterogeneous && (
-        <Flexbox horizontal align={'flex-start'} className={styles.hint} gap={6}>
-          <Icon icon={InfoIcon} size={14} style={{ flex: 'none', marginTop: 2 }} />
-          <span>{t('workingDirectory.heteroHint')}</span>
-        </Flexbox>
+    <Flexbox gap={4} style={{ maxWidth: 'calc(100vw - 48px)', width: 320 }}>
+      {showSearch && (
+        <div className={styles.searchBar}>
+          <Input
+            autoFocus
+            placeholder={t('workingDirectory.searchPlaceholder')}
+            prefix={<Icon icon={SearchIcon} size={14} />}
+            size="small"
+            value={search}
+            variant="borderless"
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       )}
       <Flexbox horizontal align={'center'} distribution={'space-between'}>
         <div className={styles.sectionTitle}>{t('workingDirectory.recent')}</div>
@@ -340,49 +477,16 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         )}
       </Flexbox>
       <div className={styles.scrollContainer}>
-        {recents.length === 0 ? (
+        {filtered.length === 0 ? (
           <Flexbox
             align={'center'}
             justify={'center'}
             style={{ color: cssVar.colorTextQuaternary, fontSize: 12, padding: '12px 8px' }}
           >
-            {t('workingDirectory.noRecent')}
+            {search.trim() ? t('workingDirectory.noMatch') : t('workingDirectory.noRecent')}
           </Flexbox>
         ) : (
-          recents.map((entry) => {
-            const isActive = getWorkingDirEffectivePath(entry) === selectedDir;
-            return (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={cx(styles.dirItem, isActive && styles.dirItemActive)}
-                gap={8}
-                key={entry.path}
-                onClick={() => void pick(entry)}
-              >
-                <DirIcon repoType={entry.repoType} />
-                <Flexbox flex={1} style={{ minWidth: 0 }}>
-                  <div className={styles.dirName}>{getDirName(entry.path)}</div>
-                  <div className={styles.dirPath}>{entry.path}</div>
-                </Flexbox>
-                {isActive ? (
-                  <Icon
-                    icon={CheckIcon}
-                    size={16}
-                    style={{ color: cssVar.colorSuccess, flex: 'none' }}
-                  />
-                ) : (
-                  <div
-                    className={styles.removeBtn}
-                    title={t('workingDirectory.removeRecent')}
-                    onClick={(e) => handleRemoveRecent(e, entry.path)}
-                  >
-                    <Icon icon={XIcon} size={12} />
-                  </div>
-                )}
-              </Flexbox>
-            );
-          })
+          filtered.map(renderRow)
         )}
       </div>
 

@@ -48,6 +48,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </div>
   ),
+  toast: { error: messageErrorMock, info: vi.fn(), success: messageSuccessMock },
 }));
 
 vi.mock('antd-style', () => ({

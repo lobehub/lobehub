@@ -1,10 +1,10 @@
 import { Icon, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
 import { electronSystemService } from '@/services/electron/system';
 import { gitService } from '@/services/git';
@@ -225,13 +225,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       const result = await gitService.pullGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('workingDirectory.pullNoop'));
+          toast.info(t('workingDirectory.pullNoop'));
         } else {
-          message.success(t('workingDirectory.pullSuccess'));
+          toast.success(t('workingDirectory.pullSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('workingDirectory.pullFailed'));
+        toast.error(result.error || t('workingDirectory.pullFailed'));
       }
     } finally {
       setPulling(false);
@@ -245,13 +245,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       const result = await gitService.pushGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('workingDirectory.pushNoop'));
+          toast.info(t('workingDirectory.pushNoop'));
         } else {
-          message.success(t('workingDirectory.pushSuccess'));
+          toast.success(t('workingDirectory.pushSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('workingDirectory.pushFailed'));
+        toast.error(result.error || t('workingDirectory.pushFailed'));
       }
     } finally {
       setPushing(false);
