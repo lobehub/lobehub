@@ -85,9 +85,9 @@ export default {
   'workingDirectory.removeWorktreeFailed': 'Delete worktree failed',
   'workingDirectory.removeWorktreeSuccess': 'Worktree deleted',
   'workingDirectory.removeWorktreeTitle': 'Delete worktree',
-  'workingDirectory.worktreeCount': '{{count}} worktrees',
-  'workingDirectory.worktreeSwitchDescription': 'Switch the current conversation working directory',
+  'workingDirectory.worktreeSearchPlaceholder': 'Search worktrees',
   'workingDirectory.worktreeUnavailable': 'unavailable',
   'workingDirectory.worktreesEmpty': 'No worktrees found',
   'workingDirectory.worktreesHeading': 'Worktrees',
+  'workingDirectory.worktreesNoMatch': 'No matching worktrees',
 };

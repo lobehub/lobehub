@@ -29,6 +29,9 @@ vi.mock('@/services/git', () => ({
 
 vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="icon" />,
+  Input: ({ value, onChange, placeholder }: any) => (
+    <input placeholder={placeholder} value={value} onChange={onChange} />
+  ),
   Tooltip: ({ children }: { children: ReactNode }) => (
     <span data-testid="worktree-tooltip">{children}</span>
   ),

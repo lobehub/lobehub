@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "未提交的更改：{{count}} 个文件",
   "workingDirectory.uncommittedChanges_other": "未提交的更改：{{count}} 个文件",
   "workingDirectory.undo": "撤销",
-  "workingDirectory.worktreeCount": "{{count}} 个 worktree",
-  "workingDirectory.worktreeSwitchDescription": "切换当前对话的 working directory",
+  "workingDirectory.worktreeSearchPlaceholder": "搜索 worktree",
   "workingDirectory.worktreeUnavailable": "不可用",
   "workingDirectory.worktreesEmpty": "未发现 worktree",
-  "workingDirectory.worktreesHeading": "选择 Worktree"
+  "workingDirectory.worktreesHeading": "Worktree",
+  "workingDirectory.worktreesNoMatch": "无匹配的 worktree"
 }

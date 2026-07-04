@@ -1,5 +1,5 @@
 import type { DeviceGitWorktreeListItem, WorkingDirEntry } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
   DropdownMenuItem,
@@ -10,8 +10,15 @@ import {
   DropdownMenuTrigger,
   toast,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckIcon, GitForkIcon, LoaderCircleIcon, Trash2Icon } from 'lucide-react';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  CheckIcon,
+  GitForkIcon,
+  LoaderCircleIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -78,8 +85,11 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     flex-direction: column;
 
-    width: 520px;
+    width: 460px;
     max-width: calc(100vw - 48px);
+    height: 380px;
+
+    /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
     margin: -4px;
   `,
   count: css`
@@ -118,27 +128,61 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 8px;
+  searchBar: css`
+    padding-block: 4px;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorSplit};
+
+    .ant-input-affix-wrapper {
+      padding-inline: 0;
+    }
+
+    .ant-input-prefix {
+      margin-inline-end: 8px;
+    }
   `,
-  headerMeta: css`
-    flex: none;
+  section: css`
+    flex: 1;
+    font-size: 11px;
+    font-weight: 500;
     color: ${cssVar.colorTextTertiary};
   `,
-  headerSubtitle: css`
-    margin-block-start: 1px;
-    color: ${cssVar.colorTextTertiary};
+  sectionRow: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 4px 2px;
+    padding-inline: 8px;
   `,
-  headerTitle: css`
-    font-weight: 600;
-    color: ${cssVar.colorText};
+  refreshButton: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  spinning: css`
+    animation: worktree-switcher-spin 0.8s linear infinite;
+
+    @keyframes worktree-switcher-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   `,
   item: css`
     cursor: pointer;
@@ -187,7 +231,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   list: css`
     overflow-y: auto;
-    max-height: 360px;
+    flex: 1;
     padding: 6px;
   `,
   name: css`
@@ -391,6 +435,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const { t } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const [isRefreshing, setIsRefreshing] = useState(false);
     // Paths currently being removed in the background. `git worktree remove` is
     // slow (up to a 30s timeout + device round-trip), so removal runs detached
     // from the confirm dialog — this tracks in-flight rows to guard against a
@@ -398,6 +444,35 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const [removingPaths, setRemovingPaths] = useState<Set<string>>(new Set());
     const currentRowRef = useRef<HTMLDivElement>(null);
     const { commit } = useCommitWorkingDirectory(agentId);
+
+    // Clear the query each time the dropdown closes so it reopens unfiltered.
+    useEffect(() => {
+      if (!open) setSearch('');
+    }, [open]);
+
+    const handleRefresh = useCallback(async () => {
+      if (isRefreshing) return;
+      setIsRefreshing(true);
+      try {
+        await onWorktreesChange?.();
+      } finally {
+        setIsRefreshing(false);
+      }
+    }, [isRefreshing, onWorktreesChange]);
+
+    // Filter by worktree folder name, path, or branch.
+    const filtered = useMemo(() => {
+      const query = search.trim().toLowerCase();
+      if (!query) return worktrees;
+      return worktrees.filter((worktree) => {
+        const branch = getWorktreeBranch(worktree, currentBranch, () => '');
+        return (
+          getPathName(worktree.path).toLowerCase().includes(query) ||
+          worktree.path.toLowerCase().includes(query) ||
+          branch.toLowerCase().includes(query)
+        );
+      });
+    }, [worktrees, search, currentBranch]);
 
     const currentWorktree = useMemo(
       () =>
@@ -485,7 +560,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         currentRowRef.current?.scrollIntoView({ block: 'nearest' });
       });
       return () => cancelAnimationFrame(raf);
-    }, [open, worktrees.length, currentPath]);
+    }, [open, filtered.length, currentPath]);
 
     const triggerTitle = detached
       ? t('workingDirectory.detachedHead', { sha: currentBranch })
@@ -509,25 +584,39 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
             <DropdownMenuPopup>
               <div className={styles.container}>
-                <div className={styles.header}>
-                  <div>
-                    <div className={styles.headerTitle}>
-                      {t('workingDirectory.worktreesHeading')}
-                    </div>
-                    <div className={styles.headerSubtitle}>
-                      {t('workingDirectory.worktreeSwitchDescription')}
-                    </div>
-                  </div>
-                  <div className={styles.headerMeta}>
-                    {t('workingDirectory.worktreeCount', { count: worktrees.length })}
-                  </div>
+                <div className={styles.searchBar}>
+                  <Input
+                    autoFocus
+                    placeholder={t('workingDirectory.worktreeSearchPlaceholder')}
+                    prefix={<Icon icon={SearchIcon} size={14} />}
+                    size="small"
+                    value={search}
+                    variant="borderless"
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                 </div>
 
                 <div className={styles.list}>
-                  {worktrees.length === 0 ? (
-                    <div className={styles.emptyState}>{t('workingDirectory.worktreesEmpty')}</div>
+                  <div className={styles.sectionRow}>
+                    <div className={styles.section}>{t('workingDirectory.worktreesHeading')}</div>
+                    <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                      <Icon
+                        className={cx(isRefreshing && styles.spinning)}
+                        icon={RefreshCwIcon}
+                        size={12}
+                      />
+                    </div>
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      {search.trim()
+                        ? t('workingDirectory.worktreesNoMatch')
+                        : t('workingDirectory.worktreesEmpty')}
+                    </div>
                   ) : (
-                    worktrees.map((worktree) => {
+                    filtered.map((worktree) => {
                       const branch = getWorktreeBranch(worktree, currentBranch, (sha) =>
                         t('workingDirectory.detachedHeadShort', { sha }),
                       );
