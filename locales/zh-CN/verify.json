@@ -146,6 +146,7 @@
   "workspace.emptyDetail.title": "未选择报告",
   "workspace.expand": "显示报告列表",
   "workspace.listEmpty": "检查器运行完成或导入报告后，报告会显示在这里。",
+  "workspace.listEmptyTitle": "暂无验证报告",
   "workspace.renameEmpty": "报告标题不能为空",
   "workspace.renameError": "报告重命名失败",
   "workspace.renameSuccess": "报告已重命名",

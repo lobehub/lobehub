@@ -171,6 +171,7 @@ export default {
   'workspace.expand': 'Show report list',
   'workspace.listEmpty':
     'Reports appear here after a checker run finishes or a report is ingested.',
+  'workspace.listEmptyTitle': 'No reports yet',
   'workspace.renameEmpty': 'Report title cannot be empty',
   'workspace.renameError': 'Failed to rename report',
   'workspace.renameSuccess': 'Report renamed',

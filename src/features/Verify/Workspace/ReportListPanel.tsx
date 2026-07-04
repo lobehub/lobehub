@@ -3,9 +3,11 @@
 import type { VerifyRunStatus, VerifyVerdict } from '@lobechat/types';
 import {
   ActionIcon,
+  Center,
   DraggablePanel,
   DraggablePanelContainer,
   type DraggablePanelProps,
+  Empty,
   Icon,
   Text,
 } from '@lobehub/ui';
@@ -19,6 +21,7 @@ import {
   CircleCheck,
   CircleHelp,
   CircleX,
+  ClipboardCheck,
   LoaderCircle,
   MoreHorizontal,
   PanelLeftClose,
@@ -123,8 +126,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
   `,
   item: css`
+    position: relative;
+
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) 26px;
+    grid-template-columns: 18px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
 
@@ -226,11 +231,21 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   itemAction: css`
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 6px;
+    transform: translateY(-50%);
+
+    display: inline-flex;
+    align-items: center;
+    border-radius: 6px;
+
     opacity: 0;
     transition: opacity 0.12s ease;
+
+    background: ${cssVar.colorFillSecondary};
   `,
   counts: css`
-    font-family: ${cssVar.fontFamilyCode};
     font-variant-numeric: tabular-nums;
 
     em {
@@ -246,6 +261,46 @@ const styles = createStaticStyles(({ css }) => ({
 
     padding-block: 24px;
     padding-inline: 12px;
+  `,
+  emptyState: css`
+    height: 100%;
+    min-height: 240px;
+    padding-block: 24px;
+    padding-inline: 16px;
+  `,
+  skeletonList: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+  `,
+  skeletonItem: css`
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+
+    padding-block: 11px;
+    padding-inline: 10px;
+  `,
+  skeletonBlock: css`
+    border-radius: 6px;
+    background: ${cssVar.colorFillSecondary};
+
+    animation: verify-skeleton 1.4s ease-in-out infinite;
+
+    @keyframes verify-skeleton {
+      0%,
+      100% {
+        opacity: 0.55;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
   `,
   emptyMsg: css`
     font-size: 12px;
@@ -480,20 +535,20 @@ const ReportListItem = memo<{
         )}
       </span>
       {!editing && (
-        <DropdownMenu
-          iconSpaceMode={'group'}
-          items={menuItems}
-          placement={'bottomRight'}
-          popupProps={{ style: { minWidth: 140 } }}
-        >
-          <ActionIcon
-            className={styles.itemAction}
-            data-role={'item-action'}
-            icon={MoreHorizontal}
-            size={'small'}
-            title={t('verify:workspace.actions.more')}
-          />
-        </DropdownMenu>
+        <span className={styles.itemAction} data-role={'item-action'}>
+          <DropdownMenu
+            iconSpaceMode={'group'}
+            items={menuItems}
+            placement={'bottomRight'}
+            popupProps={{ style: { minWidth: 140 } }}
+          >
+            <ActionIcon
+              icon={MoreHorizontal}
+              size={'small'}
+              title={t('verify:workspace.actions.more')}
+            />
+          </DropdownMenu>
+        </span>
       )}
     </div>
   );
@@ -505,7 +560,7 @@ const ReportListPanel = memo(() => {
   const { t } = useTranslation('verify');
   const { runId } = useParams<{ runId: string }>();
   const { md = true } = useResponsive();
-  const { data, mutate: refreshReports } = useVerifyReportSummaries();
+  const { data, isLoading, mutate: refreshReports } = useVerifyReportSummaries();
   const reports = useMemo(() => data ?? [], [data]);
 
   const [query, setQuery] = useState('');
@@ -573,23 +628,39 @@ const ReportListPanel = memo(() => {
         </div>
 
         <ScrollArea style={{ flex: 1, minHeight: 0 }}>
-          {filtered.length === 0 ? (
-            <div className={styles.empty}>
-              {query.trim() ? (
-                <>
-                  <span className={styles.emptyMsg}>
-                    {t('workspace.searchEmptyPrefix')}
-                    <b className={styles.queryHl}>{query.trim()}</b>
-                    {t('workspace.searchEmptySuffix')}
-                  </span>
-                  <button className={styles.clearBtn} type={'button'} onClick={() => setQuery('')}>
-                    {t('workspace.clearSearch')}
-                  </button>
-                </>
-              ) : (
-                <span className={styles.emptyMsg}>{t('workspace.listEmpty')}</span>
-              )}
+          {isLoading && !data ? (
+            <div className={styles.skeletonList}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div className={styles.skeletonItem} key={i}>
+                  <span className={styles.skeletonBlock} style={{ height: 15, width: 15 }} />
+                  <span
+                    className={styles.skeletonBlock}
+                    style={{ height: 12, width: `${68 - (i % 3) * 12}%` }}
+                  />
+                </div>
+              ))}
             </div>
+          ) : filtered.length === 0 ? (
+            query.trim() ? (
+              <div className={styles.empty}>
+                <span className={styles.emptyMsg}>
+                  {t('workspace.searchEmptyPrefix')}
+                  <b className={styles.queryHl}>{query.trim()}</b>
+                  {t('workspace.searchEmptySuffix')}
+                </span>
+                <button className={styles.clearBtn} type={'button'} onClick={() => setQuery('')}>
+                  {t('workspace.clearSearch')}
+                </button>
+              </div>
+            ) : (
+              <Center className={styles.emptyState}>
+                <Empty
+                  description={t('workspace.listEmpty')}
+                  icon={ClipboardCheck}
+                  title={t('workspace.listEmptyTitle')}
+                />
+              </Center>
+            )
           ) : (
             <div className={styles.list}>
               {filtered.map((item) => (

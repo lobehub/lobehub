@@ -163,7 +163,6 @@ const styles = createStaticStyles(({ css }) => ({
     transition: background 0.12s ease;
 
     b {
-      font-family: ${cssVar.fontFamilyCode};
       font-weight: 600;
       font-variant-numeric: tabular-nums;
       color: ${cssVar.colorText};
@@ -417,7 +416,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 6px;
     border-radius: 999px;
 
-    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
@@ -539,12 +537,17 @@ const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
     const { t } = useTranslation('verify');
     const label = evidenceDisplayName(e, t, index);
     const description = e.description && e.description !== label ? e.description : null;
+    // Images speak for themselves — the raw filename header is visual noise, so
+    // only keep a meaningful caption (description) for image/gif evidence.
+    const isImage = isInlineImageEvidence(e);
 
     return (
       <Flexbox gap={6}>
-        <Text strong fontSize={13}>
-          {label}
-        </Text>
+        {!isImage && (
+          <Text strong fontSize={13}>
+            {label}
+          </Text>
+        )}
         {description && (
           <Text fontSize={13} type={'secondary'}>
             {description}
@@ -555,9 +558,8 @@ const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
             <Image
               preview
               alt={e.description ?? label}
-              objectFit={'contain'}
               src={e.fileUrl}
-              style={{ maxHeight: 360, maxWidth: '100%' }}
+              style={{ maxWidth: '100%' }}
               variant={'outlined'}
             />
           </Flexbox>
