@@ -7,14 +7,9 @@ export const tracer = trace.getTracer('@lobechat/upstash-workflow', '0.0.1');
 export const ATTR_UPSTASH_WORKFLOW_OPERATION = 'upstash_workflow_operation' as const;
 export const ATTR_UPSTASH_WORKFLOW_STATUS = 'upstash_workflow_status' as const;
 export const ATTR_UPSTASH_WORKFLOW_INTERFACE = 'upstash_workflow_interface' as const;
-export const ATTR_UPSTASH_WORKFLOW_RUN_ID = 'upstash_workflow_run_id' as const;
-export const ATTR_UPSTASH_WORKFLOW_URL = 'upstash_workflow_url' as const;
 export const ATTR_UPSTASH_WORKFLOW_PATH = 'upstash_workflow_path' as const;
-export const ATTR_UPSTASH_WORKFLOW_FAILURE_URL = 'upstash_workflow_failure_url' as const;
-export const ATTR_UPSTASH_WORKFLOW_LABEL = 'upstash_workflow_label' as const;
 export const ATTR_UPSTASH_WORKFLOW_RETRY_COUNT = 'upstash_workflow_retries' as const;
 export const ATTR_UPSTASH_WORKFLOW_RETRY_DELAY = 'upstash_workflow_retry_delay' as const;
-export const ATTR_UPSTASH_WORKFLOW_STEP_NAME = 'upstash_workflow_step_name' as const;
 export const ATTR_UPSTASH_WORKFLOW_ERROR_TYPE = 'upstash_workflow_error_type' as const;
 
 /**
@@ -98,6 +93,7 @@ export const normalizeUpstashWorkflowPath = (url?: string): string | undefined =
  * Expects:
  * - `operation` and `status` are present for metric counter events
  * - `url` may be absolute or an already-normalized route path
+ * - Per-run identifiers are excluded from metric labels to avoid high-cardinality series
  *
  * Returns:
  * - Attribute map accepted by OpenTelemetry metrics APIs
@@ -107,17 +103,12 @@ export const buildUpstashWorkflowMetricAttributes = (
     Partial<Omit<UpstashWorkflowMetricAttributes, keyof UpstashWorkflowContextAttributes>>,
 ): Record<string, boolean | number | string | undefined> => ({
   [ATTR_UPSTASH_WORKFLOW_ERROR_TYPE]: attributes.errorType,
-  [ATTR_UPSTASH_WORKFLOW_FAILURE_URL]: attributes.failureUrl,
   [ATTR_UPSTASH_WORKFLOW_INTERFACE]: attributes.interface,
-  [ATTR_UPSTASH_WORKFLOW_LABEL]: attributes.label,
   [ATTR_UPSTASH_WORKFLOW_OPERATION]: attributes.operation,
   [ATTR_UPSTASH_WORKFLOW_PATH]: attributes.path ?? normalizeUpstashWorkflowPath(attributes.url),
   [ATTR_UPSTASH_WORKFLOW_RETRY_COUNT]: attributes.retries,
   [ATTR_UPSTASH_WORKFLOW_RETRY_DELAY]: attributes.retryDelay,
-  [ATTR_UPSTASH_WORKFLOW_RUN_ID]: attributes.workflowRunId,
   [ATTR_UPSTASH_WORKFLOW_STATUS]: attributes.status,
-  [ATTR_UPSTASH_WORKFLOW_STEP_NAME]: attributes.stepName,
-  [ATTR_UPSTASH_WORKFLOW_URL]: attributes.url,
 });
 
 /**
