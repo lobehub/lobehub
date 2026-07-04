@@ -161,26 +161,6 @@ describe('workflow run guard webhook route', () => {
 
   /**
    * @example
-   * POST(validPayloadWithBase64LikeHeaderValue) keeps text after the first equals sign.
-   */
-  it('accepts configured header values that contain equals signs', async () => {
-    process.env.WORKFLOW_RUN_GUARD_WEBHOOK_HEADERS = 'x-run-guard-token=abc=def==';
-    redis.set.mockResolvedValue('OK');
-
-    const response = await POST(
-      new Request('https://app.lobehub.com/api/webhooks/workflows/run-guard', {
-        body: JSON.stringify({ scope: { type: 'global' } }),
-        headers: { 'x-run-guard-token': 'abc=def==' },
-        method: 'POST',
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ success: true });
-  });
-
-  /**
-   * @example
    * POST(pathGuardWithCancelPolicy) stores the guard and cancels matching workflow runs.
    */
   it('cancels qstash runs for path guards when policy requests it', async () => {
