@@ -387,14 +387,17 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const handleRemoveRecent = (e: React.MouseEvent, entry: WorkingDirEntry) => {
     e.stopPropagation();
     if (!targetDeviceId) return;
-    void removeDeviceWorkingDir(targetDeviceId, entry.path);
-    // Removal is one-click, so keep an undo path — re-add without touching the
-    // device default.
+    // Both remove and the undo re-add persist the *whole* `workingDirs` array, so
+    // an undo fired before the remove settles would race it — a late-finishing
+    // remove would clobber the re-added entry and the undo would silently fail.
+    // Chain the undo behind the remove promise so the re-add always writes last.
+    const removed = removeDeviceWorkingDir(targetDeviceId, entry.path);
     toast.success({
       actions: [
         {
           label: t('workingDirectory.undo'),
-          onClick: () => void updateDeviceCwd(targetDeviceId, entry, { setDefault: false }),
+          onClick: () =>
+            void removed.then(() => updateDeviceCwd(targetDeviceId, entry, { setDefault: false })),
           variant: 'text',
         },
       ],
@@ -431,9 +434,11 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
           </Flexbox>
           <div className={styles.dirPath}>{entry.path}</div>
         </Flexbox>
-        {isActive ? (
-          <Icon icon={CheckIcon} size={16} style={{ color: cssVar.colorSuccess, flex: 'none' }} />
-        ) : (
+        <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
+          {/* Set-as-default is offered on every non-default row — including the
+              active one (promoting the dir you're currently using to the device
+              default is the common case). Remove (X) is hidden on the active row:
+              you can't remove the selection out from under yourself. */}
           <div className={cx('wd-row-actions', styles.rowActions)}>
             {!isDefault && (
               <Tooltip title={t('workingDirectory.setDefault')}>
@@ -442,13 +447,18 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
                 </div>
               </Tooltip>
             )}
-            <Tooltip title={t('workingDirectory.removeRecent')}>
-              <div className={styles.rowAction} onClick={(e) => handleRemoveRecent(e, entry)}>
-                <Icon icon={XIcon} size={12} />
-              </div>
-            </Tooltip>
+            {!isActive && (
+              <Tooltip title={t('workingDirectory.removeRecent')}>
+                <div className={styles.rowAction} onClick={(e) => handleRemoveRecent(e, entry)}>
+                  <Icon icon={XIcon} size={12} />
+                </div>
+              </Tooltip>
+            )}
           </div>
-        )}
+          {isActive && (
+            <Icon icon={CheckIcon} size={16} style={{ color: cssVar.colorSuccess, flex: 'none' }} />
+          )}
+        </Flexbox>
       </Flexbox>
     );
   };
