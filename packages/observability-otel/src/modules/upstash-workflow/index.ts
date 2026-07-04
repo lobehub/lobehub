@@ -34,7 +34,9 @@ export const workflowEventCounter = meter.createCounter('upstash_workflow_events
 
 export type UpstashWorkflowOperation = 'invoke' | 'serve' | 'step' | 'trigger';
 export type UpstashWorkflowInterface = 'qstash' | 'workflow';
-export type UpstashWorkflowStatus = 'error' | 'success';
+export type UpstashWorkflowStatus = 'abort' | 'error' | 'success';
+
+const UPSTASH_WORKFLOW_ABORT_ERROR_TYPES = new Set(['WorkflowAbort', 'WorkflowRetryAfterError']);
 
 export interface UpstashWorkflowContextAttributes {
   failureUrl?: string;
@@ -83,6 +85,9 @@ export const normalizeUpstashWorkflowPath = (url?: string): string | undefined =
     return url.startsWith('/') ? url : undefined;
   }
 };
+
+const statusFromUpstashWorkflowError = (error: unknown): UpstashWorkflowStatus =>
+  UPSTASH_WORKFLOW_ABORT_ERROR_TYPES.has(errorNameFrom(error) ?? '') ? 'abort' : 'error';
 
 /**
  * Builds metric attributes for Upstash Workflow and QStash events.
@@ -180,7 +185,7 @@ export const withOtelMetricsForUpstashWorkflowContext = <
         ...context,
         errorType: errorNameFrom(error) ?? typeof error,
         operation: 'step',
-        status: 'error',
+        status: statusFromUpstashWorkflowError(error),
         stepName,
       });
 
@@ -212,7 +217,7 @@ export const withOtelMetricsForUpstashWorkflowContext = <
           ...context,
           errorType: errorNameFrom(error) ?? typeof error,
           operation: 'invoke',
-          status: 'error',
+          status: statusFromUpstashWorkflowError(error),
           stepName,
         });
 
@@ -263,7 +268,7 @@ export const withOtelMetricsForUpstashWorkflows = <TContext, TResult>(
         ...(context as UpstashWorkflowContextAttributes),
         errorType: errorNameFrom(error) ?? typeof error,
         operation: 'serve',
-        status: 'error',
+        status: statusFromUpstashWorkflowError(error),
       });
 
       throw error;
