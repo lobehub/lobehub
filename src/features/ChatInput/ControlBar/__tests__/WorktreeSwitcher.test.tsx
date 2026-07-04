@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -219,16 +219,65 @@ describe('WorktreeSwitcher', () => {
     expect(commitMock).not.toHaveBeenCalled();
     expect(confirmModalMock).toHaveBeenCalledTimes(1);
 
-    await confirmModalMock.mock.calls[0][0].onOk();
+    // onOk returns synchronously (non-blocking) — the removal runs in the
+    // background, so assert against the eventual side effects rather than the
+    // resolved value.
+    confirmModalMock.mock.calls[0][0].onOk();
 
     expect(removeGitWorktreeMock).toHaveBeenCalledWith({
       deviceId: 'device-1',
       path: '/repo',
       worktreePath: '/repo-detached',
     });
-    expect(onWorktreesChange).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onWorktreesChange).toHaveBeenCalled();
+    });
     expect(messageSuccessMock).toHaveBeenCalledWith('workingDirectory.removeWorktreeSuccess');
     expect(messageErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an error toast without rolling into success when removal fails', async () => {
+    removeGitWorktreeMock.mockResolvedValue({
+      error: 'fatal: worktree contains modified or untracked files',
+      success: false,
+    });
+    const onWorktreesChange = vi.fn();
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        deviceId="device-1"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            branch: 'feat/current',
+            current: true,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'canary',
+            current: false,
+            path: '/repo-canary',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+        onWorktreesChange={onWorktreesChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('workingDirectory.removeWorktreeAction'));
+    confirmModalMock.mock.calls[0][0].onOk();
+
+    await waitFor(() => {
+      expect(messageErrorMock).toHaveBeenCalledWith(
+        'fatal: worktree contains modified or untracked files',
+      );
+    });
+    expect(messageSuccessMock).not.toHaveBeenCalled();
+    expect(onWorktreesChange).not.toHaveBeenCalled();
   });
 
   it('never offers to remove the source worktree even when it is not current', () => {

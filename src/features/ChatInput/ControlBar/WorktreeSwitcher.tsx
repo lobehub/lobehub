@@ -11,7 +11,7 @@ import {
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckIcon, GitForkIcon, Trash2Icon } from 'lucide-react';
+import { CheckIcon, GitForkIcon, LoaderCircleIcon, Trash2Icon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -391,6 +391,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const { t } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const [open, setOpen] = useState(false);
+    // Paths currently being removed in the background. `git worktree remove` is
+    // slow (up to a 30s timeout + device round-trip), so removal runs detached
+    // from the confirm dialog — this tracks in-flight rows to guard against a
+    // duplicate delete if the dropdown is reopened mid-removal.
+    const [removingPaths, setRemovingPaths] = useState<Set<string>>(new Set());
     const currentRowRef = useRef<HTMLDivElement>(null);
     const { commit } = useCommitWorkingDirectory(agentId);
 
@@ -437,18 +442,33 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
           }),
           okButtonProps: { danger: true },
           okText: tCommon('delete'),
-          onOk: async () => {
-            const result = await gitService.removeGitWorktree({
-              deviceId,
-              path,
-              worktreePath: worktree.path,
-            });
-            if (result.success) {
-              toast.success(t('workingDirectory.removeWorktreeSuccess'));
-              await onWorktreesChange?.();
-              return;
-            }
-            toast.error(result.error || t('workingDirectory.removeWorktreeFailed'));
+          // Return synchronously (no promise) so the dialog closes instantly
+          // instead of holding the user on a spinning modal for the duration of
+          // a slow `git worktree remove`. The removal runs in the background;
+          // completion and failure surface via bottom-left toasts, and the row
+          // reconciles on the next `onWorktreesChange` revalidate.
+          onOk: () => {
+            setRemovingPaths((prev) => new Set(prev).add(worktree.path));
+            void (async () => {
+              const result = await gitService.removeGitWorktree({
+                deviceId,
+                path,
+                worktreePath: worktree.path,
+              });
+              if (result.success) {
+                // The list is hidden behind the closed dropdown, so this toast
+                // is the only signal that the background removal finished.
+                toast.success(t('workingDirectory.removeWorktreeSuccess'));
+                await onWorktreesChange?.();
+              } else {
+                toast.error(result.error || t('workingDirectory.removeWorktreeFailed'));
+              }
+              setRemovingPaths((prev) => {
+                const next = new Set(prev);
+                next.delete(worktree.path);
+                return next;
+              });
+            })();
           },
           title: t('workingDirectory.removeWorktreeTitle'),
         });
@@ -513,7 +533,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       );
                       const displayPath = getRelativeDisplayPath(worktree.path, sourcePath);
                       const disabled = isDisabled(worktree);
-                      const removable = canRemoveWorktree(worktree, sourcePath);
+                      const removing = removingPaths.has(worktree.path);
+                      const removable = canRemoveWorktree(worktree, sourcePath) && !removing;
 
                       return (
                         <DropdownMenuItem
@@ -563,7 +584,9 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                             <DirtyStat status={worktree.status} />
                           </div>
                           <div className={styles.actionCell}>
-                            {worktree.current ? (
+                            {removing ? (
+                              <Icon spin icon={LoaderCircleIcon} size={13} />
+                            ) : worktree.current ? (
                               <Icon className={styles.check} icon={CheckIcon} size={14} />
                             ) : (
                               removable && (
