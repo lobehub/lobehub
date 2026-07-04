@@ -390,7 +390,12 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     }
 
     return new SkillsExecutionRuntime({
-      builtinSkills: [...filterBuiltinSkills(builtinSkills), ...agentSkillBuiltins],
+      builtinSkills: [
+        // Device-only skills resolve only when this run executes on a device —
+        // mirrors the SkillEngine gate in aiAgent that builds <available_skills>.
+        ...filterBuiltinSkills(builtinSkills, { canExecuteOnDevice: !!activeDeviceId }),
+        ...agentSkillBuiltins,
+      ],
       deviceFileAccess,
       projectSkills,
       service,

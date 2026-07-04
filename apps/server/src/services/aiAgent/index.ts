@@ -3188,8 +3188,12 @@ export class AiAgentService {
         },
       );
 
+      // Device-only builtin skills (agent-browser) are gated on the run's
+      // execution plan, not the compile-time `isDesktop` constant (always false
+      // on the server) — same signal that gates local-system tool injection.
       const skillEngine = new SkillEngine({
-        enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
+        enableChecker: (skill) =>
+          shouldEnableBuiltinSkill(skill.identifier, { canExecuteOnDevice: !!activeDeviceId }),
         skills,
       });
       operationSkillSet = skillEngine.generate(agentPlugins ?? []);
