@@ -112,7 +112,7 @@ describe('runScheduleTick', () => {
 
     expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
     expect(mockTaskTopicModel.countByTask).not.toHaveBeenCalled();
-    expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId });
+    expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId, trigger: 'schedule' });
   });
 
   it('runs the task when the run count is still under maxExecutions', async () => {
@@ -123,10 +123,12 @@ describe('runScheduleTick', () => {
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
+    // Quota counts only scheduled ticks, not ad-hoc manual runs (LOBE-11391).
     expect(mockTaskTopicModel.countByTask).toHaveBeenCalledWith(taskId, {
       since: new Date('2026-05-01T00:00:00Z'),
+      triggers: ['schedule'],
     });
-    expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId });
+    expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId, trigger: 'schedule' });
     expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
   });
 
