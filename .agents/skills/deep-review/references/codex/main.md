@@ -34,7 +34,7 @@ Same as the pruning + extension-pack procedure in `SKILL.md`: apply the pruning 
 
 ## Step 2 — Spawn all groups in one wave
 
-Launch the three built-in groups' `spawn_agent` concurrently in a single turn (≤ 3 agents — fits the default slot budget). A non-empty `extras` group is NOT part of this wave: queue it and spawn it after the first `close_agent` frees a slot (step 3 closes each review agent as soon as its result is consumed, so the wait is short).
+Launch the three built-in groups' `spawn_agent` concurrently in a single turn (≤ 3 agents — fits the default slot budget). A non-empty `extras` group is NOT part of this wave: queue it — step 3's dispatch priority gives it the first freed slot (step 3 closes each review agent as soon as its result is consumed, so the wait is short).
 
 Per group:
 
@@ -46,16 +46,16 @@ Per group:
 
 ## Step 3 — Collect, close, verify (pipelined)
 
-Loop `wait` until all review agents have returned (wait is wait-any — call it repeatedly). For **each** returned review agent, immediately:
+Loop `wait` until all review agents have returned — the initial wave plus a late-spawned `extras` (wait is wait-any — call it repeatedly). For **each** returned review agent, immediately:
 
-1. `close_agent` it — frees the slot for the verifier.
+1. `close_agent` it — frees a slot. **Dispatch priority for the freed slot**: a still-queued `extras` group spawns first and joins the review wait set; only then does the slot go to a verifier.
 2. Extract the ` ```json ` fence and parse. Parse failure / wrong schema → reject, re-spawn that group with the same prompt.
 3. Partition its findings by dimension `verify` flag: `verify: false` dimensions (workflow, skill-freshness) go straight to the report pool; zero verifiable findings → done with this group.
-4. Otherwise spawn that group's verify agent now (do not wait for other groups): [`../verify-prompt.md`](../verify-prompt.md) with `{issues}` = this group's verifiable findings, plus `{scope_summary}` / `{changes}`.
+4. Otherwise spawn that group's verify agent in the next slot the dispatch priority allows (do not wait for other groups): [`../verify-prompt.md`](../verify-prompt.md) with `{issues}` = this group's verifiable findings, plus `{scope_summary}` / `{changes}`.
 
 On each verify return: `close_agent` first, then validate — `verifications.length` equals input count, ids one-to-one (Set difference). Mismatch → spawn a fresh verify agent with the missing ids' findings and the full prompt; do not loosen. Verdicts: `confirmed` → report pool (apply overrides / `same_root_as`); `false_positive` → drop; `need_more_context` → "Needs your input" appendix. The main agent never re-verifies findings itself.
 
-Slot arithmetic: 3 review agents spawn together; each close frees a slot before its verifier spawns, so the flow never exceeds 3 concurrent agents and never deadlocks on the default budget.
+Slot arithmetic: up to 3 review agents spawn together; every later spawn (queued `extras`, verifiers) fills a slot freed by `close_agent`, so the flow never exceeds 3 concurrent agents and never deadlocks on the default budget. When `extras` claims the first freed slot it delays that one verifier by a single turn — acceptable, review coverage is the contract.
 
 ## Step 4 — Render the report
 
