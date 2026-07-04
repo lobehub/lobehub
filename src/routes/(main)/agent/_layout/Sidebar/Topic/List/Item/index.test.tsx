@@ -15,6 +15,7 @@ vi.mock('@lobehub/ui', () => ({
     <div {...props}>{children}</div>
   ),
   Icon: () => <div data-testid="topic-item-icon" />,
+  Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Skeleton: {
     Button: (props: Record<string, unknown>) => <div {...props} />,
   },
@@ -115,6 +116,15 @@ vi.mock('@/store/electron', () => ({
 }));
 vi.mock('../../hooks/useTopicNavigation', () => ({
   useTopicNavigation: () => useTopicNavigationMock(),
+}));
+vi.mock('./MetaHoverCard', () => ({
+  default: () => null,
+}));
+vi.mock('./metaCardData', () => ({
+  PR_STATE_VISUAL: {},
+  getPullRequestState: () => 'open',
+  // Return undefined so TopicItem skips the hover Popover wrapper in tests.
+  getTopicMetaCard: () => undefined,
 }));
 vi.mock('./Actions', () => ({
   default: () => null,
@@ -224,72 +234,5 @@ describe('TopicItem active state', () => {
     );
 
     expect(screen.getByText('repo/repo-fix · fix')).toBeInTheDocument();
-  });
-
-  it('surfaces the worktree id and linked PR number in by-project mode', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
-    render(
-      <TopicItem
-        id="tpc_test"
-        title="Topic"
-        metadata={{
-          workingDirectory: '/repo-fix',
-          workingDirectoryConfig: {
-            git: {
-              activeWorktree: '/repo-fix',
-              branch: 'feat/foo',
-              github: {
-                pullRequest: {
-                  number: 16_675,
-                  state: 'open',
-                  title: 'My PR',
-                  url: 'https://github.com/lobehub/lobehub/pull/16675',
-                },
-              },
-              isWorktree: true,
-            },
-            path: '/repo',
-            repoType: 'git',
-          },
-        }}
-      />,
-    );
-
-    // by-project mode omits `showWorkingDirectory`, so the row surfaces the
-    // worktree id + branch and the linked PR number instead of the full path.
-    expect(screen.getByText('repo-fix · feat/foo')).toBeInTheDocument();
-    expect(screen.getByText('#16675')).toBeInTheDocument();
-  });
-
-  it('omits the worktree line for a plain source checkout without a linked PR', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
-    render(
-      <TopicItem
-        id="tpc_test"
-        title="Topic"
-        metadata={{
-          workingDirectory: '/repo',
-          workingDirectoryConfig: {
-            git: { branch: 'canary', isWorktree: false },
-            path: '/repo',
-            repoType: 'git',
-          },
-        }}
-      />,
-    );
-
-    expect(screen.queryByText('canary')).not.toBeInTheDocument();
   });
 });

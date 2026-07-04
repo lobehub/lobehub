@@ -5,17 +5,9 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import {
-  CheckCircle2,
-  GitBranchIcon,
-  GitPullRequestIcon,
-  Hand,
-  HashIcon,
-  MessageSquareDashed,
-  TriangleAlert,
-} from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,6 +31,8 @@ import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
 import Editing from './Editing';
+import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
+import MetaHoverCard from './MetaHoverCard';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
 const rippleAnim = keyframes`
@@ -131,41 +125,6 @@ const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => 
   return {
     label: branch ? `${pathLabel} · ${branch}` : pathLabel,
     repoType: config?.repoType ?? (isDesktop ? undefined : 'github'),
-  };
-};
-
-/**
- * Per-topic worktree + linked-PR context, surfaced as a compact second line even
- * in by-project mode (where the group header already names the repo, so the
- * distinguishing info is which worktree/branch and PR the topic sits on). Returns
- * `undefined` for topics on the plain source checkout with no linked PR, so
- * ordinary rows stay clean. Data is already on the topic metadata — no probe.
- */
-const getWorktreeMeta = (metadata: ChatTopicMetadata | undefined) => {
-  const git = metadata?.workingDirectoryConfig?.git;
-  if (!git) return undefined;
-
-  const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
-  const effectivePath = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
-  const isWorktree =
-    !!git.isWorktree || (!!git.activeWorktree && git.activeWorktree !== sourcePath);
-  const pullRequest = git.github?.pullRequest ?? undefined;
-
-  if (!isWorktree && !pullRequest) return undefined;
-
-  // The worktree's directory name is the human-facing "worktree id"; pair it with
-  // the branch when they differ so the row reads e.g. "repo-fix · feat/foo".
-  const worktreeName = isWorktree && effectivePath ? getDirName(effectivePath) : undefined;
-  const branch = git.branch;
-  const worktreeLabel =
-    worktreeName && branch && worktreeName !== branch
-      ? `${worktreeName} · ${branch}`
-      : (worktreeName ?? branch);
-
-  return {
-    prNumber: pullRequest?.number,
-    prTitle: pullRequest?.title,
-    worktreeLabel,
   };
 };
 
@@ -334,47 +293,6 @@ const TopicItem = memo<TopicItemProps>(
         </Flexbox>
       ) : undefined;
 
-    // In by-project mode the group header already names the repo, so the row's
-    // second line carries the per-topic worktree id + linked PR number instead.
-    // Falls back under the full-path line used by by-status grouping.
-    const worktreeMeta = getWorktreeMeta(metadata);
-    const worktreeMetaNode = worktreeMeta ? (
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={10}
-        style={{ marginBlockStart: 2, overflow: 'hidden' }}
-      >
-        {worktreeMeta.worktreeLabel && (
-          <Flexbox horizontal align={'center'} gap={5} style={{ minWidth: 0 }}>
-            <Icon
-              icon={GitBranchIcon}
-              size={13}
-              style={{ color: cssVar.colorTextTertiary, flex: 'none' }}
-            />
-            <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextSecondary }}>
-              {worktreeMeta.worktreeLabel}
-            </Text>
-          </Flexbox>
-        )}
-        {worktreeMeta.prNumber !== undefined && (
-          <Tooltip title={worktreeMeta.prTitle}>
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={4}
-              style={{ color: cssVar.colorTextSecondary, flex: 'none' }}
-            >
-              <Icon icon={GitPullRequestIcon} size={13} style={{ flex: 'none' }} />
-              <Text fontSize={12} style={{ color: 'inherit' }}>
-                #{worktreeMeta.prNumber}
-              </Text>
-            </Flexbox>
-          </Tooltip>
-        )}
-      </Flexbox>
-    ) : undefined;
-
     const hasUnread = id && isUnreadCompleted;
     const unreadIcon = (
       <span className={styles.unreadWrapper}>
@@ -435,72 +353,105 @@ const TopicItem = memo<TopicItemProps>(
       );
     }
 
-    return (
-      <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
-        <NavItem
-          actions={<Actions dropdownMenu={dropdownMenu} />}
-          active={isTopicActive}
-          contextMenuItems={dropdownMenu}
-          description={workingDirectoryNode ?? worktreeMetaNode}
-          disabled={editing}
-          extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
-          href={href}
-          slots={{ titlePrefix: draftPrefix }}
-          title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
-          titleColor={cssVar.colorText}
-          icon={(() => {
-            if (isWaitingForHuman) {
-              return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
-            }
-            if (shouldShowRunningIcon) {
-              return (
-                <RingLoadingIcon
-                  ringColor={loadingRingColor}
-                  size={14}
-                  style={{ color: cssVar.colorWarning }}
-                />
-              );
-            }
-            if (isFailed) {
-              return (
-                <Tooltip title={t('failedStatusTip')}>
-                  <Icon icon={TriangleAlert} size={'small'} style={{ color: cssVar.colorError }} />
-                </Tooltip>
-              );
-            }
-            if (isCompleted) {
-              return (
-                <Icon
-                  icon={CheckCircle2}
-                  size={'small'}
-                  style={{ color: cssVar.colorTextDescription }}
-                />
-              );
-            }
-            if (hasUnread) return unreadIcon;
-            if (metadata?.bot?.platform) {
-              const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
-              if (ProviderIcon) {
-                return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
-              }
-            }
+    // Codex-style hover detail card: when the topic carries git context, hovering
+    // the row reveals a card on the right with repo / branch / worktree / PR / CI —
+    // keeping the row itself clean.
+    const metaCard = getTopicMetaCard(metadata);
+
+    const navItem = (
+      <NavItem
+        actions={<Actions dropdownMenu={dropdownMenu} />}
+        active={isTopicActive}
+        contextMenuItems={dropdownMenu}
+        description={workingDirectoryNode}
+        disabled={editing}
+        extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
+        href={href}
+        slots={{ titlePrefix: draftPrefix }}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
+        titleColor={cssVar.colorText}
+        icon={(() => {
+          if (isWaitingForHuman) {
+            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
+          }
+          if (shouldShowRunningIcon) {
             return (
-              <Icon
-                icon={HashIcon}
-                size={'small'}
-                style={{
-                  color: cssVar.colorTextDescription,
-                  // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
-                  // topic semantics, so suppress the `#` glyph while keeping its
-                  // box so the title stays aligned with sibling rows.
-                  visibility: isHeterogeneousAgent ? 'hidden' : undefined,
-                }}
+              <RingLoadingIcon
+                ringColor={loadingRingColor}
+                size={14}
+                style={{ color: cssVar.colorWarning }}
               />
             );
-          })()}
-          onClick={handleClick}
-          onDoubleClick={() => void handleDoubleClick()}
-        />
+          }
+          if (isFailed) {
+            return (
+              <Tooltip title={t('failedStatusTip')}>
+                <Icon icon={TriangleAlert} size={'small'} style={{ color: cssVar.colorError }} />
+              </Tooltip>
+            );
+          }
+          // GitHub PR state marker (open=green, merged=purple, closed=red),
+          // like Codex. Sits below the attention/active states but above the
+          // idle default so an idle topic surfaces its linked PR at a glance.
+          if (metaCard?.pullRequest) {
+            const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+            return (
+              <Tooltip title={t(prVisual.labelKey)}>
+                <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
+              </Tooltip>
+            );
+          }
+          if (isCompleted) {
+            return (
+              <Icon
+                icon={CheckCircle2}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            );
+          }
+          if (hasUnread) return unreadIcon;
+          if (metadata?.bot?.platform) {
+            const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
+            if (ProviderIcon) {
+              return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
+            }
+          }
+          return (
+            <Icon
+              icon={HashIcon}
+              size={'small'}
+              style={{
+                color: cssVar.colorTextDescription,
+                // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+                // topic semantics, so suppress the `#` glyph while keeping its
+                // box so the title stays aligned with sibling rows.
+                visibility: isHeterogeneousAgent ? 'hidden' : undefined,
+              }}
+            />
+          );
+        })()}
+        onClick={handleClick}
+        onDoubleClick={() => void handleDoubleClick()}
+      />
+    );
+
+    return (
+      <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
+        {metaCard ? (
+          <Popover
+            arrow={false}
+            content={<MetaHoverCard metadata={metadata} title={title} />}
+            mouseEnterDelay={0.4}
+            placement={'right'}
+            styles={{ content: { padding: 12 } }}
+            trigger={'hover'}
+          >
+            <div>{navItem}</div>
+          </Popover>
+        ) : (
+          navItem
+        )}
         <Editing id={id} title={title} toggleEditing={toggleEditing} />
         {shouldShowThreadList && (
           <Suspense
