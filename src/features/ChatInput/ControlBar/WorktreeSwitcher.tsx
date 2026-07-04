@@ -336,8 +336,15 @@ const getWorktreeBranch = (
 const isDisabled = (worktree: DeviceGitWorktreeListItem): boolean =>
   !!worktree.bare || !!worktree.prunable;
 
-const canRemoveWorktree = (worktree: DeviceGitWorktreeListItem): boolean =>
-  !worktree.current && !worktree.locked && !isDisabled(worktree);
+// The main/source worktree can never be removed (`git worktree remove <main>`
+// fails with "is a main working tree"), and when the agent runs on a linked
+// worktree it is listed with `current: false` — so exclude it by path too, not
+// just via the `current` flag, to avoid offering a delete that always errors.
+const canRemoveWorktree = (worktree: DeviceGitWorktreeListItem, sourcePath: string): boolean =>
+  !worktree.current &&
+  !worktree.locked &&
+  !isDisabled(worktree) &&
+  normalizeDisplayPath(worktree.path) !== normalizeDisplayPath(sourcePath);
 
 interface DirtyStatProps {
   status?: DeviceGitWorktreeListItem['status'];
@@ -494,7 +501,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       );
                       const displayPath = getRelativeDisplayPath(worktree.path, sourcePath);
                       const disabled = isDisabled(worktree);
-                      const removable = canRemoveWorktree(worktree);
+                      const removable = canRemoveWorktree(worktree, sourcePath);
 
                       return (
                         <DropdownMenuItem

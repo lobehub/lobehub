@@ -230,6 +230,45 @@ describe('WorktreeSwitcher', () => {
     expect(messageErrorMock).not.toHaveBeenCalled();
   });
 
+  it('never offers to remove the source worktree even when it is not current', () => {
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        deviceId="device-1"
+        path="/repo-canary"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            // The main/source worktree — listed as non-current because the agent
+            // runs on a linked worktree. `git worktree remove` would always fail.
+            branch: 'main',
+            current: false,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'canary',
+            current: true,
+            path: '/repo-canary',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'feature',
+            current: false,
+            path: '/repo-feature',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    // Only the linked branch worktree is removable; the source and the current
+    // worktree are both excluded.
+    expect(screen.getAllByLabelText('workingDirectory.removeWorktreeAction')).toHaveLength(1);
+  });
+
   it('commits the selected worktree path as the working directory', () => {
     render(
       <WorktreeSwitcher
