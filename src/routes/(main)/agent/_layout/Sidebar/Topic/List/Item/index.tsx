@@ -7,7 +7,15 @@ import {
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
+import {
+  CheckCircle2,
+  GitBranchIcon,
+  GitPullRequestIcon,
+  Hand,
+  HashIcon,
+  MessageSquareDashed,
+  TriangleAlert,
+} from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -123,6 +131,41 @@ const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => 
   return {
     label: branch ? `${pathLabel} · ${branch}` : pathLabel,
     repoType: config?.repoType ?? (isDesktop ? undefined : 'github'),
+  };
+};
+
+/**
+ * Per-topic worktree + linked-PR context, surfaced as a compact second line even
+ * in by-project mode (where the group header already names the repo, so the
+ * distinguishing info is which worktree/branch and PR the topic sits on). Returns
+ * `undefined` for topics on the plain source checkout with no linked PR, so
+ * ordinary rows stay clean. Data is already on the topic metadata — no probe.
+ */
+const getWorktreeMeta = (metadata: ChatTopicMetadata | undefined) => {
+  const git = metadata?.workingDirectoryConfig?.git;
+  if (!git) return undefined;
+
+  const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
+  const effectivePath = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
+  const isWorktree =
+    !!git.isWorktree || (!!git.activeWorktree && git.activeWorktree !== sourcePath);
+  const pullRequest = git.github?.pullRequest ?? undefined;
+
+  if (!isWorktree && !pullRequest) return undefined;
+
+  // The worktree's directory name is the human-facing "worktree id"; pair it with
+  // the branch when they differ so the row reads e.g. "repo-fix · feat/foo".
+  const worktreeName = isWorktree && effectivePath ? getDirName(effectivePath) : undefined;
+  const branch = git.branch;
+  const worktreeLabel =
+    worktreeName && branch && worktreeName !== branch
+      ? `${worktreeName} · ${branch}`
+      : (worktreeName ?? branch);
+
+  return {
+    prNumber: pullRequest?.number,
+    prTitle: pullRequest?.title,
+    worktreeLabel,
   };
 };
 
@@ -291,6 +334,42 @@ const TopicItem = memo<TopicItemProps>(
         </Flexbox>
       ) : undefined;
 
+    // In by-project mode the group header already names the repo, so the row's
+    // second line carries the per-topic worktree id + linked PR number instead.
+    // Falls back under the full-path line used by by-status grouping.
+    const worktreeMeta = getWorktreeMeta(metadata);
+    const worktreeMetaNode = worktreeMeta ? (
+      <Flexbox horizontal align={'center'} gap={6} style={{ overflow: 'hidden' }}>
+        {worktreeMeta.worktreeLabel && (
+          <Flexbox horizontal align={'center'} gap={3} style={{ minWidth: 0 }}>
+            <Icon
+              icon={GitBranchIcon}
+              size={11}
+              style={{ color: cssVar.colorTextTertiary, flex: 'none' }}
+            />
+            <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+              {worktreeMeta.worktreeLabel}
+            </Text>
+          </Flexbox>
+        )}
+        {worktreeMeta.prNumber !== undefined && (
+          <Tooltip title={worktreeMeta.prTitle}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={2}
+              style={{ color: cssVar.colorTextDescription, flex: 'none' }}
+            >
+              <Icon icon={GitPullRequestIcon} size={11} style={{ flex: 'none' }} />
+              <Text fontSize={11} style={{ color: 'inherit' }}>
+                #{worktreeMeta.prNumber}
+              </Text>
+            </Flexbox>
+          </Tooltip>
+        )}
+      </Flexbox>
+    ) : undefined;
+
     const hasUnread = id && isUnreadCompleted;
     const unreadIcon = (
       <span className={styles.unreadWrapper}>
@@ -357,7 +436,7 @@ const TopicItem = memo<TopicItemProps>(
           actions={<Actions dropdownMenu={dropdownMenu} />}
           active={isTopicActive}
           contextMenuItems={dropdownMenu}
-          description={workingDirectoryNode}
+          description={workingDirectoryNode ?? worktreeMetaNode}
           disabled={editing}
           extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
           href={href}
