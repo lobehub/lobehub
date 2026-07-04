@@ -7,6 +7,10 @@ import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { parseWorkflowRunGuardConfig } from '@/server/globalConfig/parseWorkflowRunGuardConfig';
 import { cancelWorkflowRunsByGuardPolicy, setWorkflowRunGuard } from '@/server/workflows/runGuard';
 
+// NOTICE:
+// Next.js route segment config is required here because this operational webhook reads
+// runtime env, Redis, and QStash clients. Keep it on Node.js and force dynamic handling so
+// the route is evaluated per request instead of being statically optimized.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
