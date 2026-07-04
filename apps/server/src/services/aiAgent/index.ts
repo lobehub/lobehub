@@ -3190,10 +3190,17 @@ export class AiAgentService {
 
       // Device-only builtin skills (agent-browser) are gated on the run's
       // execution plan, not the compile-time `isDesktop` constant (always false
-      // on the server) — same signal that gates local-system tool injection.
+      // on the server). Gate the static `<available_skills>` listing on the
+      // device-CAPABLE plan rather than `activeDeviceId`: `device-unrouted`
+      // runs let the model pick a device mid-run, and this skill set is built
+      // once per operation — gating on `activeDeviceId` would hide the skill
+      // forever in those runs. Activation/loading stay gated on the per-step
+      // `activeDeviceId` (refreshed from state metadata after device pick).
       const skillEngine = new SkillEngine({
         enableChecker: (skill) =>
-          shouldEnableBuiltinSkill(skill.identifier, { canExecuteOnDevice: !!activeDeviceId }),
+          shouldEnableBuiltinSkill(skill.identifier, {
+            canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
+          }),
         skills,
       });
       operationSkillSet = skillEngine.generate(agentPlugins ?? []);
