@@ -84,8 +84,8 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1;
   `,
   summary: css`
-    max-width: 64ch;
-    color: ${cssVar.colorTextSecondary};
+    max-width: 100%;
+    color: ${cssVar.colorText};
   `,
   meta: css`
     display: flex;
