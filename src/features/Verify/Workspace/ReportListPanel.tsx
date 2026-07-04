@@ -126,11 +126,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
   `,
   item: css`
-    position: relative;
-
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    gap: 10px;
+    display: flex;
     align-items: center;
 
     width: 100%;
@@ -153,16 +149,22 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0.62;
     }
 
+    /* Reveal by claiming layout space so the title compresses instead of being overlapped. */
     &:hover [data-role='item-action'],
     &:focus-within [data-role='item-action'],
     &[data-active='true'] [data-role='item-action'] {
+      width: 24px;
+      margin-inline-start: 6px;
       opacity: 1;
     }
   `,
   glyph: css`
     display: flex;
+    flex: none;
+    margin-inline-end: 10px;
   `,
   itemBody: css`
+    flex: 1;
     min-width: 0;
   `,
   itemMain: css`
@@ -231,19 +233,20 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   itemAction: css`
-    position: absolute;
-    inset-block-start: 50%;
-    inset-inline-end: 6px;
-    transform: translateY(-50%);
-
     display: inline-flex;
+    flex: none;
     align-items: center;
-    border-radius: 6px;
+    justify-content: flex-end;
+
+    width: 0;
+    margin-inline-start: 0;
+    overflow: hidden;
 
     opacity: 0;
-    transition: opacity 0.12s ease;
-
-    background: ${cssVar.colorFillSecondary};
+    transition:
+      width 0.12s ease,
+      margin 0.12s ease,
+      opacity 0.12s ease;
   `,
   counts: css`
     font-variant-numeric: tabular-nums;
@@ -278,12 +281,18 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   skeletonItem: css`
     display: grid;
-    grid-template-columns: 16px minmax(0, 1fr);
+    grid-template-columns: 15px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
 
-    padding-block: 11px;
+    padding-block: 9px;
     padding-inline: 10px;
+  `,
+  skeletonLines: css`
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
   `,
   skeletonBlock: css`
     border-radius: 6px;
@@ -632,11 +641,20 @@ const ReportListPanel = memo(() => {
             <div className={styles.skeletonList}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div className={styles.skeletonItem} key={i}>
-                  <span className={styles.skeletonBlock} style={{ height: 15, width: 15 }} />
                   <span
                     className={styles.skeletonBlock}
-                    style={{ height: 12, width: `${68 - (i % 3) * 12}%` }}
+                    style={{ borderRadius: 999, height: 15, width: 15 }}
                   />
+                  <div className={styles.skeletonLines}>
+                    <span
+                      className={styles.skeletonBlock}
+                      style={{ height: 12, width: `${70 - (i % 3) * 12}%` }}
+                    />
+                    <span
+                      className={styles.skeletonBlock}
+                      style={{ height: 9, opacity: 0.7, width: `${40 - (i % 3) * 6}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
