@@ -8,7 +8,10 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Card sits inline with the chat — no surrounding panel chrome. Hover
   // tints the row so the stack reads as clickable; selection swaps to a
-  // filled `colorPrimaryBg` so the pick is visually weighty.
+  // neutral filled row so the pick is visually weighty. We use `colorFill*`
+  // rather than `colorPrimaryBg` because LobeHub's default primary is a
+  // near-black neutral, which makes `colorPrimaryBg` render as a muddy black
+  // block; the selection signal instead rides the filled row + the checkmark.
   option: css`
     cursor: pointer;
 
@@ -54,10 +57,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
   `,
   optionSelected: css`
-    background: ${cssVar.colorPrimaryBg};
+    background: ${cssVar.colorFillSecondary};
 
     &:hover {
-      background: ${cssVar.colorPrimaryBgHover};
+      background: ${cssVar.colorFill};
     }
   `,
 }));
