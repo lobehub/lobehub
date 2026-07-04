@@ -1,6 +1,6 @@
 import { GROUP_CHAT_URL } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
@@ -34,6 +34,18 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
+
+  // Group conversations show a "群组" tag so they stand out from single agents.
+  const titleNode = (
+    <Flexbox horizontal align="center" gap={4}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayTitle}
+      </span>
+      <Tag size={'small'} style={{ flexShrink: 0 }}>
+        {t('group.title')}
+      </Tag>
+    </Flexbox>
+  );
 
   // Get URL for this group
   const groupUrl = GROUP_CHAT_URL(id);
@@ -115,7 +127,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
         icon={avatarIcon}
         key={id}
         style={style}
-        title={displayTitle}
+        title={titleNode}
         onDoubleClick={handleDoubleClick}
         onDragEnd={handleDragEnd}
         onDragStart={handleDragStart}

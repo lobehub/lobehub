@@ -102,18 +102,14 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobechat/agent-runtime', () => ({
+// Spread the real module and override only `AgentRuntime` (to stub `.step()`).
+// Keeps the real status predicates + package-hosted executors (e.g. `finish`),
+// so this mock survives future executor migrations without edits.
+vi.mock('@lobechat/agent-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
-  // Mirror the real status predicates (packages/agent-runtime/src/utils/status.ts)
-  // so completion-lifecycle / getOperationStatus paths don't crash on the mock.
-  isBlockedStatus: (status: string) =>
-    status === 'waiting_for_human' ||
-    status === 'waiting_for_async_tool' ||
-    status === 'interrupted',
-  isParkedStatus: (status: string) =>
-    status === 'waiting_for_human' || status === 'waiting_for_async_tool',
 }));
 
 vi.mock('@/server/services/queue', () => ({
@@ -1851,6 +1847,52 @@ describe('AgentRuntimeService', () => {
       const won = await service.tryResumeParentFromAsyncTool(
         { parentOperationId: parentOpId },
         { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('arms a verify when the parent state is missing/expired and scheduleVerifyOnHold is set', async () => {
+      // Redis read replica hasn't seen the park yet, or the child outran the
+      // parent's park. A missing state must retry, not strand on the first miss.
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      const casSpy = vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool');
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(casSpy).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: parentOpId,
+          payload: { asyncToolVerifyAttempt: 1, verifyAsyncToolBarrier: true },
+          // No state to read stepCount from — falls back to 0.
+          stepIndex: 0,
+        }),
+      );
+    });
+
+    it('does not arm a verify on missing state when scheduleVerifyOnHold is not set', async () => {
+      // The clean-done bridge path resumes without opting into the watchdog;
+      // a missing state there must stay a silent no-op, not schedule a re-check.
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('stops re-arming on missing state once the bounded attempts are exhausted', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true, verifyAttempt: 6 },
       );
 
       expect(won).toBe(false);

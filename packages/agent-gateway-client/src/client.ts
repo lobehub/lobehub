@@ -283,13 +283,24 @@ export class AgentStreamClient extends TypedEmitter {
           const agentEvent: AgentStreamEvent = message.event;
           if (message.id) this.lastEventId = message.id;
 
+          // A single WebSocket is multiplexed: alongside this op's events it may
+          // carry forwarded events from other operations (e.g. broadcast council
+          // members mirrored onto the supervisor's channel). A terminal event
+          // ends the SESSION only when it belongs to THIS op — a member
+          // finishing must not disconnect the supervisor's socket and stop
+          // sibling/supervisor streaming. Events with no operationId (legacy
+          // gateway) are treated as this op's, preserving old behavior.
+          const isOwnTerminal =
+            (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
+            (!agentEvent.operationId || agentEvent.operationId === this.operationId);
+
           if (this.resumeMode) {
             // Buffer events during resume — will be deduplicated and emitted after replay
             this.resumeBuffer.push({ event: agentEvent, id: message.id });
             this.scheduleResumeFlush();
 
-            // Terminal events still end the session even in resume mode
-            if (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') {
+            // Only this op's terminal ends the session (even in resume mode).
+            if (isOwnTerminal) {
               this.sessionEnded = true;
               this.flushResumeBuffer();
               this.disconnect();
@@ -299,8 +310,10 @@ export class AgentStreamClient extends TypedEmitter {
 
           this.emit('agent_event', agentEvent);
 
-          // Terminal events — session is done, no need to reconnect
-          if (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') {
+          // This op's terminal — session is done, no need to reconnect. A
+          // forwarded member terminal is still emitted above (so its handler can
+          // finalize that member) but must NOT tear down this connection.
+          if (isOwnTerminal) {
             this.sessionEnded = true;
             this.disconnect();
           }

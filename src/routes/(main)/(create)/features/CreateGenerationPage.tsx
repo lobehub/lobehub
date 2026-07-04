@@ -12,10 +12,16 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
 
+// The drop zone is a sibling of NavHeader inside a column flex container.
+// `height: 100%` would size it to the FULL container (its content floor keeps
+// flex-shrink from absorbing the nav height), pushing the bottom prompt input
+// below the clipped edge by exactly the nav header height. `flex: 1` +
+// `minHeight: 0` sizes it to the remaining space instead.
 const dropZoneStyle: CSSProperties = {
   display: 'flex',
+  flex: 1,
   flexDirection: 'column',
-  height: '100%',
+  minHeight: 0,
   width: '100%',
 };
 

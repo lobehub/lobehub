@@ -19,7 +19,13 @@ export interface ResourceRuntimePrimitiveDeps {
   db: LobeChatDatabase;
   /** Builds the memory-candidate reason; lets each mode tag its origin. */
   memoryReason: (evidenceCount: number) => string;
+  /** Agent runtime operation id, when the tool context exposes it. */
+  operationId?: string;
   skillDocumentService: SkillManagementDocumentService;
+  /** Agent Signal source id that started the self-iteration run. */
+  sourceId?: string;
+  /** Topic id associated with the tool execution, when available. */
+  topicId?: string;
   userId: string;
   /** Workspace id, so memory-write operations target the correct workspace. */
   workspaceId?: string;
@@ -79,6 +85,13 @@ export const createResourceRuntimePrimitives = ({
       return {
         skillDocumentId: result.bundle.agentDocumentId,
         summary: `Created managed skill ${result.name}.`,
+        target: {
+          agentDocumentId: result.bundle.agentDocumentId,
+          documentId: result.bundle.documentId,
+          id: result.bundle.agentDocumentId,
+          title: result.title,
+          type: 'skill',
+        },
       };
     },
     refineSkill: async ({ input }) => {
@@ -91,8 +104,19 @@ export const createResourceRuntimePrimitives = ({
       if (!result) throw new Error('Skill target not found');
 
       return {
+        agentDocumentId: result.bundle.agentDocumentId,
+        documentId: result.index.documentId,
+        expectedCurrentDocumentUpdatedAt: result.expectedCurrentDocumentUpdatedAt,
+        historyId: result.preMutationHistoryId,
         skillDocumentId: result.bundle.agentDocumentId,
         summary: `Refined managed skill ${result.name}.`,
+        target: {
+          agentDocumentId: result.bundle.agentDocumentId,
+          documentId: result.bundle.documentId,
+          id: result.bundle.agentDocumentId,
+          title: result.title,
+          type: 'skill',
+        },
       };
     },
   });
@@ -106,7 +130,17 @@ export const createResourceRuntimePrimitives = ({
         input,
       });
 
-      return { resourceId: result.skillDocumentId, summary: result.summary };
+      return {
+        resourceId: result.skillDocumentId,
+        summary: result.summary,
+        target: result.target,
+        ...(result.agentDocumentId ? { agentDocumentId: result.agentDocumentId } : {}),
+        ...(result.documentId ? { documentId: result.documentId } : {}),
+        ...(result.expectedCurrentDocumentUpdatedAt
+          ? { expectedCurrentDocumentUpdatedAt: result.expectedCurrentDocumentUpdatedAt }
+          : {}),
+        ...(result.historyId ? { historyId: result.historyId } : {}),
+      };
     },
     getManagedSkill: async (rawInput) => {
       const { agentId: targetAgentId, skillDocumentId } = rawInput as {
@@ -173,12 +207,19 @@ export const createResourceRuntimePrimitives = ({
         input: enriched,
       });
 
-      return { resourceId: result.skillDocumentId, summary: result.summary };
+      return {
+        resourceId: result.skillDocumentId,
+        summary: result.summary,
+        target: result.target,
+        ...(result.agentDocumentId ? { agentDocumentId: result.agentDocumentId } : {}),
+        ...(result.documentId ? { documentId: result.documentId } : {}),
+        ...(result.historyId ? { historyId: result.historyId } : {}),
+      };
     },
     writeMemory: async (rawInput) => {
       const input = rawInput as unknown as WriteMemoryInput;
       const memoryService = createMemoryService({
-        writeMemory: async ({ content, evidenceRefs, idempotencyKey }) => {
+        writeMemory: async ({ content, evidenceRefs }) => {
           const result = await runMemoryActionAgent(
             { agentId, message: content, reason: memoryReason(evidenceRefs.length) },
             { db, userId, workspaceId },
@@ -190,7 +231,20 @@ export const createResourceRuntimePrimitives = ({
             );
           }
 
-          return { memoryId: idempotencyKey, summary: result.detail ?? content };
+          return {
+            memoryId: result.target?.memoryId ?? result.target?.id,
+            summary: result.detail ?? result.target?.summary ?? content,
+            target: result.target
+              ? {
+                  id: result.target.id,
+                  memoryId: result.target.memoryId,
+                  memoryLayer: result.target.memoryLayer,
+                  summary: result.target.summary ?? result.detail,
+                  title: result.target.title,
+                  type: 'memory',
+                }
+              : undefined,
+          };
         },
       });
       const result = await memoryService.writeMemory({
@@ -199,7 +253,11 @@ export const createResourceRuntimePrimitives = ({
         input: { content: input.content, userId: input.userId },
       });
 
-      return { resourceId: result.memoryId, summary: result.summary };
+      return {
+        resourceId: result.target?.id ?? result.memoryId,
+        summary: result.summary,
+        target: result.target,
+      };
     },
   };
 };

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { type LobeChatDatabase } from '@lobechat/database';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type CreateSkillInput,
   type ImportGitHubInput,
@@ -322,7 +323,12 @@ export class SkillImporter {
 
       let response: Response;
       try {
-        response = await fetch(input.url, { signal: controller.signal });
+        // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
+        // so a raw fetch would let an authenticated user make the server request arbitrary
+        // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
+        // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
+        // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
+        response = await ssrfSafeFetch(input.url, { signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
       }

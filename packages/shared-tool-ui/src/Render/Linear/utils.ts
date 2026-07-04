@@ -28,6 +28,9 @@ const FIELD_KEYS = [
   'query',
   'url',
 ] as const;
+// updatedAt is pulled out of the generic field grid and rendered as a relative
+// timestamp on the entity header instead (see LinearEntity below). createdAt is
+// intentionally dropped — it adds noise without signalling recency.
 const ENTITY_FIELD_KEYS = [
   'state',
   'status',
@@ -38,8 +41,6 @@ const ENTITY_FIELD_KEYS = [
   'milestone',
   'priority',
   'parentId',
-  'createdAt',
-  'updatedAt',
 ] as const;
 const RESULT_ARRAY_KEYS = [
   'issues',
@@ -71,11 +72,26 @@ export interface LinearEntity {
   links: LinearLink[];
   state?: string;
   title?: string;
+  /** Raw ISO last-update timestamp; rendered as relative time on the header. */
+  updatedAt?: string;
   url?: string;
 }
 
+// A bare UUID (e.g. a team/comment internal id) carries no meaning for the
+// reader; suppress it when the entity already has a human-readable title. Linear
+// human ids like `LIN-123` never match this shape, so they stay visible.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+export const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
+
 export interface LinearRenderModel {
   actionLabel: string;
+  /**
+   * Collection key (e.g. `comments`) when the result is a list wrapper that
+   * unwrapped to an empty array — drives the "no results" empty state instead of
+   * dumping raw JSON.
+   */
+  emptyCollectionKey?: string;
   errorText?: string;
   rawResultJson?: string;
   requestFields: LinearField[];
@@ -143,7 +159,7 @@ const DATE_FIELD_KEYS = new Set([
 // concrete date + time as `YYYY-MM-DD HH:mm:ss` (dropping the millisecond / `Z`
 // noise) instead of the raw ISO string. Date-only values (e.g. `dueDate`) are
 // left untouched.
-const formatIsoDate = (value: string): string => {
+export const formatIsoDate = (value: string): string => {
   const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/u.exec(value);
   return match ? `${match[1]} ${match[2]}` : value;
 };
@@ -254,8 +270,18 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
     (field) => !((field.key === 'state' || field.key === 'status') && field.value === state),
   );
   const links = getLinearLinks(record.links);
+  const updatedAt = trimString(record.updatedAt);
 
-  if (!id && !title && !url && !state && !description && fields.length === 0 && links.length === 0)
+  if (
+    !id &&
+    !title &&
+    !url &&
+    !state &&
+    !description &&
+    !updatedAt &&
+    fields.length === 0 &&
+    links.length === 0
+  )
     return;
 
   return {
@@ -265,6 +291,7 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
     links,
     state,
     title,
+    updatedAt,
     url,
   };
 };
@@ -278,9 +305,15 @@ const ENTITY_IDENTITY_KEYS = ['id', 'identifier', 'title', 'name', 'subject'] as
 const looksLikeEntity = (record: Record<PropertyKey, unknown>): boolean =>
   ENTITY_IDENTITY_KEYS.some((key) => Boolean(readDisplayString(record[key])));
 
-const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] => {
-  if (Array.isArray(value)) return value.filter(isRecord);
-  if (!isRecord(value)) return [];
+interface LinearResultShape {
+  /** The collection key when the result is a list wrapper (e.g. `comments`). */
+  collectionKey?: string;
+  records: Record<PropertyKey, unknown>[];
+}
+
+const extractResultShape = (value: unknown): LinearResultShape => {
+  if (Array.isArray(value)) return { records: value.filter(isRecord) };
+  if (!isRecord(value)) return { records: [] };
 
   // Wrapper responses (`list_*`, `search`, fetch-collection) carry their payload
   // in a nested collection (`{ issues: [...] }`, `{ results: [...] }`) and have
@@ -295,11 +328,11 @@ const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] =>
   if (!looksLikeEntity(value)) {
     for (const key of RESULT_ARRAY_KEYS) {
       const nested = value[key];
-      if (Array.isArray(nested)) return nested.filter(isRecord);
+      if (Array.isArray(nested)) return { collectionKey: key, records: nested.filter(isRecord) };
     }
   }
 
-  return [value];
+  return { records: [value] };
 };
 
 const getErrorText = (error: unknown): string | undefined => {
@@ -327,17 +360,26 @@ export const buildLinearRenderModel = ({
 }): LinearRenderModel => {
   const parsedTool = parseToolName(apiName || '');
   const result = parseResultContent(content);
-  const resultEntities = extractResultRecords(result)
+  const { collectionKey, records } = extractResultShape(result);
+  const resultEntities = records
     .map(buildEntity)
     .filter((entity): entity is LinearEntity => Boolean(entity));
   const resultText = typeof result === 'string' ? result : undefined;
+  // A list wrapper that unwrapped to zero records (e.g. `{ comments: [] }`) is an
+  // intentional empty result — show a "no results" message rather than the raw
+  // JSON payload.
+  const emptyCollectionKey = collectionKey && records.length === 0 ? collectionKey : undefined;
   const rawResultJson =
-    result !== undefined && typeof result !== 'string' && resultEntities.length === 0
+    result !== undefined &&
+    typeof result !== 'string' &&
+    resultEntities.length === 0 &&
+    !emptyCollectionKey
       ? stringifyUnknown(result)
       : undefined;
 
   return {
     actionLabel: staticLabelFor(parsedTool),
+    emptyCollectionKey,
     errorText: getErrorText(pluginError),
     requestFields: getLinearRequestFields(args),
     requestLinks: isRecord(args) ? getLinearLinks(args.links) : [],

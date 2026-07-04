@@ -16,12 +16,12 @@ export default class ContentSearchService extends ServiceModule {
   private impl: BaseContentSearch = createContentSearchImpl();
 
   async grep(params: GrepContentParams): Promise<GrepContentResult> {
-    // Lazily wire the desktop ToolDetectorManager so we don't hit the
+    // Lazily wire the desktop BinaryManager so we don't hit the
     // class-field init-before-super-constructor gotcha. The manager already
     // satisfies the minimal `ToolDetector` contract (only `getBestTool` is
     // consumed by the search impls).
-    if (this.app?.toolDetectorManager) {
-      this.impl.setToolDetector(this.app.toolDetectorManager);
+    if (this.app?.binaryManager) {
+      this.impl.setToolDetector(this.app.binaryManager);
     }
     return this.impl.grep(params);
   }

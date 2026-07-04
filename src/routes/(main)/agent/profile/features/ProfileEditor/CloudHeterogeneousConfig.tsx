@@ -183,6 +183,7 @@ const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChan
       ) : (
         <Flexbox horizontal gap={8}>
           <Input.Password
+            autoComplete="new-password"
             autoFocus={!!existingCred}
             disabled={!canEdit}
             placeholder={t('heterogeneousStatus.cloud.tokenPlaceholder')}

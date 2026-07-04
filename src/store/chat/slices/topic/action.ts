@@ -138,8 +138,15 @@ export class ChatTopicActionImpl {
 
     this.#get().internal_updateTopicLoading(topicId, true);
     // 2. auto summary topic Title
-    // we don't need to wait for summary, just let it run async
-    summaryTopicTitle(topicId, messages);
+    // We don't need to await the summary, but this owner keeps the new topic
+    // spinning immediately until the fire-and-forget title summary settles.
+    void summaryTopicTitle(topicId, messages)
+      .catch((error) => {
+        console.error('[saveToTopic] Failed to summarize topic title:', error);
+      })
+      .finally(() => {
+        this.#get().internal_updateTopicLoading(topicId, false);
+      });
 
     return topicId;
   };
@@ -204,7 +211,11 @@ export class ChatTopicActionImpl {
     const topic = topicSelectors.getTopicById(topicId)(this.#get());
     if (!topic) return;
 
-    internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
+    // Keep an optimistic title like "阅读下面..." stable while AI rename runs;
+    // otherwise the sidebar flickers `title -> ... -> final title`.
+    const shouldStreamSummaryTitle = !topic.title || topic.title === LOADING_FLAT;
+
+    if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
 
     let output = '';
 
@@ -214,7 +225,7 @@ export class ChatTopicActionImpl {
     // Automatically summarize the topic title
     await chatService.fetchPresetTaskResult({
       onError: () => {
-        internal_updateTopicTitleInSummary(topicId, topic.title);
+        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, topic.title);
       },
       onFinish: async (text) => {
         await this.#get().internal_updateTopic(topicId, { title: text });
@@ -229,7 +240,7 @@ export class ChatTopicActionImpl {
           }
         }
 
-        internal_updateTopicTitleInSummary(topicId, output);
+        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, output);
       },
       params: merge(
         topicConfig,
@@ -501,6 +512,7 @@ export class ChatTopicActionImpl {
                   isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -598,6 +610,7 @@ export class ChatTopicActionImpl {
                   hasMore,
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -629,7 +642,7 @@ export class ChatTopicActionImpl {
       {
         agentTopicsViewMap: {
           ...agentTopicsViewMap,
-          [key]: { ...currentData, isLoadingMore: true },
+          [key]: { ...currentData, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -656,6 +669,7 @@ export class ChatTopicActionImpl {
               currentPage: nextPage,
               hasMore,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               total: result.total,
             },
@@ -664,12 +678,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreAgentTopicsView(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           agentTopicsViewMap: {
             ...this.#get().agentTopicsViewMap,
-            [key]: { ...this.#get().agentTopicsViewMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().agentTopicsViewMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,
@@ -701,7 +719,7 @@ export class ChatTopicActionImpl {
       {
         topicDataMap: {
           ...topicDataMap,
-          [key]: { ...currentData!, isLoadingMore: true },
+          [key]: { ...currentData!, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -741,6 +759,7 @@ export class ChatTopicActionImpl {
               hasMore,
               isInbox: currentData?.isInbox,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               pageSize,
               total: result.total,
@@ -751,12 +770,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreTopics(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           topicDataMap: {
             ...this.#get().topicDataMap,
-            [key]: { ...this.#get().topicDataMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().topicDataMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,
@@ -969,12 +992,86 @@ export class ChatTopicActionImpl {
   internal_updateTopicLoading = (id: string, loading: boolean): void => {
     this.#set(
       (state) => {
-        if (loading) return { topicLoadingIds: [...state.topicLoadingIds, id] };
+        const currentCount =
+          state.topicLoadingIdCounts[id] ?? (state.topicLoadingIds.includes(id) ? 1 : 0);
+        const nextCounts = { ...state.topicLoadingIdCounts };
 
-        return { topicLoadingIds: state.topicLoadingIds.filter((i) => i !== id) };
+        if (loading) {
+          nextCounts[id] = currentCount + 1;
+          const nextIds = state.topicLoadingIds.includes(id)
+            ? state.topicLoadingIds
+            : [...state.topicLoadingIds, id];
+
+          return {
+            topicLoadingIdCounts: nextCounts,
+            topicLoadingIds: nextIds,
+          };
+        }
+
+        if (currentCount > 1) {
+          nextCounts[id] = currentCount - 1;
+
+          return { topicLoadingIdCounts: nextCounts, topicLoadingIds: state.topicLoadingIds };
+        }
+
+        delete nextCounts[id];
+        const nextIds = state.topicLoadingIds.filter((i) => i !== id);
+
+        return {
+          topicLoadingIdCounts: nextCounts,
+          topicLoadingIds: nextIds,
+        };
       },
       false,
       n('updateTopicLoading'),
+    );
+  };
+
+  internal_replaceTopicId = (params: {
+    agentId?: string;
+    groupId?: string;
+    nextId: string;
+    previousId: string;
+    value?: Partial<ChatTopic>;
+  }): void => {
+    const { agentId, groupId, nextId, previousId, value } = params;
+
+    // The first-message optimistic topic starts as `tmp_topic_*`. Once the
+    // server returns the real id, keep the same row alive so loading state and
+    // title-summary updates continue targeting the visible topic.
+    this.#get().internal_dispatchTopic(
+      {
+        agentId,
+        groupId,
+        id: previousId,
+        nextId,
+        type: 'replaceTopicId',
+        value,
+      },
+      n('replaceTopicId'),
+    );
+
+    this.#set(
+      (state) => {
+        const previousCount = state.topicLoadingIdCounts[previousId] ?? 0;
+        const nextCount = state.topicLoadingIdCounts[nextId] ?? 0;
+        const topicLoadingIdCounts = { ...state.topicLoadingIdCounts };
+        delete topicLoadingIdCounts[previousId];
+        if (previousCount > 0 || nextCount > 0) {
+          topicLoadingIdCounts[nextId] = previousCount + nextCount;
+        }
+        const topicLoadingIds = Array.from(
+          new Set(state.topicLoadingIds.map((id) => (id === previousId ? nextId : id))),
+        );
+
+        return {
+          activeTopicId: state.activeTopicId === previousId ? nextId : state.activeTopicId,
+          topicLoadingIdCounts,
+          topicLoadingIds,
+        };
+      },
+      false,
+      n('replaceTopicId/loading'),
     );
   };
 
@@ -982,9 +1079,13 @@ export class ChatTopicActionImpl {
     this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
 
     this.#get().internal_updateTopicLoading(id, true);
-    await topicService.updateTopic(id, data);
-    await this.#get().refreshTopic();
-    this.#get().internal_updateTopicLoading(id, false);
+    try {
+      await topicService.updateTopic(id, data);
+      await this.#get().refreshTopic();
+    } finally {
+      // Rename "Topic" -> "New" can fail after opening a loading owner; always release it.
+      this.#get().internal_updateTopicLoading(id, false);
+    }
   };
 
   internal_createTopic = async (params: CreateTopicParams): Promise<string> => {
@@ -1081,7 +1182,7 @@ export class ChatTopicActionImpl {
   };
 
   internal_updateTopics = (
-    agentId: string,
+    agentId: string | undefined,
     params: {
       append?: boolean;
       currentPage?: number;

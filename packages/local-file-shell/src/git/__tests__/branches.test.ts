@@ -18,7 +18,7 @@ import {
 } from '../branches';
 import { getGitAheadBehind, getGitBranch } from '../info';
 import { getGitBranchDiff, getGitWorkingTreeFiles, getGitWorkingTreePatches } from '../workingTree';
-import { listGitWorktrees, parseGitWorktreeList } from '../worktrees';
+import { listGitWorktrees, parseGitWorktreeList, removeGitWorktree } from '../worktrees';
 
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -123,6 +123,45 @@ describe('branch read operations', () => {
         }),
       ]),
     );
+  });
+});
+
+describe('removeGitWorktree', () => {
+  it('removes a detached non-current worktree', async () => {
+    const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-remove-'));
+    cleanup.push(worktreeParent);
+    const linked = path.join(worktreeParent, 'detached');
+    git(repo, 'worktree', 'add', '--detach', linked, 'HEAD');
+    const linkedRealPath = await realpath(linked);
+
+    expect(await removeGitWorktree({ path: repo, worktreePath: linked })).toEqual({
+      success: true,
+    });
+
+    expect(existsSync(linkedRealPath)).toBe(false);
+    expect((await listGitWorktrees(repo)).map((worktree) => worktree.path)).not.toContain(
+      linkedRealPath,
+    );
+  });
+
+  it('refuses to remove a branch worktree', async () => {
+    git(repo, 'branch', 'feature');
+    const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-branch-'));
+    cleanup.push(worktreeParent);
+    const linked = path.join(worktreeParent, 'linked');
+    git(repo, 'worktree', 'add', linked, 'feature');
+
+    expect(await removeGitWorktree({ path: repo, worktreePath: linked })).toEqual({
+      error: 'Only detached worktrees can be removed',
+      success: false,
+    });
+  });
+
+  it('refuses to remove the current worktree', async () => {
+    expect(await removeGitWorktree({ path: repo, worktreePath: repo })).toEqual({
+      error: 'Cannot remove the current worktree',
+      success: false,
+    });
   });
 });
 

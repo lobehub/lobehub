@@ -1,9 +1,12 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  roles,
+  userRoles,
   users,
   workspaceAuditLogs,
   workspaceInvitations,
@@ -11,6 +14,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { assignWorkspaceRoleToUser, seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
 import { WorkspaceModel } from '../workspace';
 import { WorkspaceAuditLogModel } from '../workspaceAuditLog';
 import { WorkspaceMemberModel } from '../workspaceMember';
@@ -43,7 +47,36 @@ const createWorkspace = async (id = 'workspace-model-ws') => {
     { role: 'member', userId: memberId, workspaceId: id },
     { role: 'owner', userId: secondOwnerId, workspaceId: id },
   ]);
+  await seedWorkspaceRoles(serverDB, id);
+  await assignWorkspaceRoleToUser(serverDB, {
+    roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
+    userId: ownerId,
+    workspaceId: id,
+  });
+  await assignWorkspaceRoleToUser(serverDB, {
+    roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
+    userId: secondOwnerId,
+    workspaceId: id,
+  });
   return id;
+};
+
+const hasOwnerRbacGrant = async (workspaceId: string, userId: string) => {
+  const rows = await serverDB
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.workspaceId, workspaceId),
+        eq(roles.name, WORKSPACE_SYSTEM_ROLES.OWNER),
+        eq(roles.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 };
 
 beforeEach(async () => {
@@ -284,6 +317,7 @@ describe('WorkspaceModel', () => {
         where: eq(workspaceMembers.userId, memberId),
       });
       expect(membership?.role).toBe('owner');
+      await expect(hasOwnerRbacGrant(workspaceId, memberId)).resolves.toBe(true);
     });
 
     it('is a no-op when the target is already an owner', async () => {
@@ -323,6 +357,7 @@ describe('WorkspaceModel', () => {
         where: eq(workspaceMembers.userId, secondOwnerId),
       });
       expect(membership?.role).toBe('member');
+      await expect(hasOwnerRbacGrant(workspaceId, secondOwnerId)).resolves.toBe(false);
     });
 
     it('is a no-op when the target is not an owner', async () => {
@@ -478,6 +513,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.created',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         resourceId: 'old',
+        resourceType: 'workspace',
         userId: ownerId,
         workspaceId,
       },
@@ -485,6 +521,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.updated',
         createdAt: new Date('2026-01-02T00:00:00.000Z'),
         resourceId: 'middle',
+        resourceType: 'workspace',
         userId: ownerId,
         workspaceId,
       },
@@ -492,6 +529,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.updated',
         createdAt: new Date('2026-01-03T00:00:00.000Z'),
         resourceId: 'new',
+        resourceType: 'invitation',
         userId: ownerId,
         workspaceId,
       },
@@ -513,5 +551,55 @@ describe('WorkspaceAuditLogModel', () => {
       workspaceId,
     });
     expect(next.items.map((item) => item.resourceId)).toEqual(['middle']);
+
+    const invitationResult = await new WorkspaceAuditLogModel(serverDB).list({
+      resourceType: 'invitation',
+      workspaceId,
+    });
+    expect(invitationResult.items.map((item) => item.resourceId)).toEqual(['new']);
+  });
+
+  it('searches logs by audit fields and matched user ids', async () => {
+    const workspaceId = await createWorkspace();
+    await serverDB.insert(workspaceAuditLogs).values([
+      {
+        action: 'billing.payment_method_added',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        ipAddress: '203.0.113.10',
+        resourceId: 'pm_card_visa',
+        resourceType: 'payment_method',
+        userId: ownerId,
+        workspaceId,
+      },
+      {
+        action: 'member.invited',
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        resourceId: 'invitation-1',
+        resourceType: 'invitation',
+        userId: memberId,
+        workspaceId,
+      },
+      {
+        action: 'workspace.updated',
+        createdAt: new Date('2026-01-03T00:00:00.000Z'),
+        resourceId: 'workspace-1',
+        resourceType: 'workspace',
+        userId: secondOwnerId,
+        workspaceId,
+      },
+    ]);
+
+    const auditFieldResult = await new WorkspaceAuditLogModel(serverDB).list({
+      q: 'PAYMENT',
+      workspaceId,
+    });
+    expect(auditFieldResult.items.map((item) => item.resourceId)).toEqual(['pm_card_visa']);
+
+    const userResult = await new WorkspaceAuditLogModel(serverDB).list({
+      q: 'member@example.com',
+      userIds: [memberId],
+      workspaceId,
+    });
+    expect(userResult.items.map((item) => item.resourceId)).toEqual(['invitation-1']);
   });
 });

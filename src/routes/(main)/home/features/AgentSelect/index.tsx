@@ -39,8 +39,10 @@ const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
 
-  // Trigger fetching the home agent list so the popover content is ready when opened.
-  useFetchAgentList();
+  // Trigger fetching the home agent list so the popover content is ready when
+  // opened. Keep `error` / `mutate` so a failed list fetch shows a Retry state
+  // in the popover instead of a permanent skeleton (LOBE-11079).
+  const { error: agentListError, mutate: refetchAgentList } = useFetchAgentList();
 
   const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -106,12 +108,19 @@ const AgentSelect = memo(() => {
   return (
     <Popover
       classNames={{ trigger: styles.trigger }}
-      content={<AgentList activeAgentId={displayAgentId} onSelect={handleSelect} />}
       nativeButton={false}
       open={open}
       placement="bottomLeft"
       styles={{ content: { padding: 0, width: 360 } }}
       trigger="click"
+      content={
+        <AgentList
+          activeAgentId={displayAgentId}
+          error={agentListError}
+          onRetry={() => refetchAgentList()}
+          onSelect={handleSelect}
+        />
+      }
       onOpenChange={setOpen}
     >
       <Block

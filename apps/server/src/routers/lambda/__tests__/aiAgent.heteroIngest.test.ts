@@ -73,6 +73,8 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       const events = [
         buildEvent('stream_start', 0),
         buildEvent('stream_chunk', 1),
+        buildEvent('stream_end', 2),
+        buildEvent('visible_output_end', 2),
         buildEvent('agent_runtime_end', 2),
       ];
 

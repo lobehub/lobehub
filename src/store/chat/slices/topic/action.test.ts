@@ -74,8 +74,10 @@ beforeEach(() => {
       activeAgentId: undefined,
       activeGroupId: undefined,
       activeTopicId: undefined,
+      agentTopicsViewMap: {},
       searchTopics: [],
       topicDataMap: {},
+      topicLoadingIdCounts: {},
       topicLoadingIds: [],
       // ... initial state
     },
@@ -176,6 +178,46 @@ describe('topic action', () => {
         }),
       );
       expect(topicId).toEqual('new-topic-id');
+    });
+
+    it('should release the fire-and-forget summary loading owner when title summary finishes', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }, { id: 'message2' }] as UIChatMessage[];
+      let resolveSummary!: () => void;
+      const summaryPromise = new Promise<void>((resolve) => {
+        resolveSummary = resolve;
+      });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          topicLoadingIdCounts: {},
+          topicLoadingIds: [],
+        });
+      });
+
+      vi.spyOn(result.current, 'internal_createTopic').mockResolvedValue('new-topic-id');
+      vi.spyOn(result.current, 'summaryTopicTitle').mockReturnValue(summaryPromise);
+
+      await act(async () => {
+        await result.current.saveToTopic();
+      });
+
+      expect(useChatStore.getState().topicLoadingIds).toEqual(['new-topic-id']);
+      expect(useChatStore.getState().topicLoadingIdCounts).toEqual({ 'new-topic-id': 1 });
+
+      await act(async () => {
+        resolveSummary();
+        await summaryPromise;
+      });
+
+      await waitFor(() => {
+        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
+        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
+      });
     });
   });
   describe('refreshTopic', () => {
@@ -1244,6 +1286,93 @@ describe('topic action', () => {
       expect(topicData.hasMore).toBe(false);
     });
   });
+  describe('loadMoreAgentTopicsView', () => {
+    it('records a pagination error without clearing existing topics or hasMore', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const topics = [
+        { id: 'topic-1', title: 'Topic 1' },
+        { id: 'topic-2', title: 'Topic 2' },
+      ] as ChatTopic[];
+      const error = new Error('load more failed');
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: true,
+              isLoadingMore: false,
+              items: topics,
+              pageSize: 2,
+              total: 4,
+              withDetails: true,
+            },
+          },
+        });
+      });
+
+      (topicService.getTopics as Mock).mockRejectedValueOnce(error);
+
+      await act(async () => {
+        await result.current.loadMoreAgentTopicsView();
+      });
+
+      const topicData = useChatStore.getState().agentTopicsViewMap[key];
+      expect(topicService.getTopics).toHaveBeenCalledWith({
+        agentId,
+        current: 1,
+        pageSize: 2,
+        withDetails: true,
+      });
+      expect(topicData.items).toEqual(topics);
+      expect(topicData.hasMore).toBe(true);
+      expect(topicData.isLoadingMore).toBe(false);
+      expect(topicData.loadMoreError).toBe(error);
+    });
+
+    it('clears a stale pagination error after retry succeeds', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: true,
+              isLoadingMore: false,
+              items: [{ id: 'topic-1', title: 'Topic 1' } as ChatTopic],
+              loadMoreError: new Error('previous failure'),
+              pageSize: 1,
+              total: 2,
+            },
+          },
+        });
+      });
+
+      (topicService.getTopics as Mock).mockResolvedValueOnce({
+        items: [{ id: 'topic-2', title: 'Topic 2' }],
+        total: 2,
+      });
+
+      await act(async () => {
+        await result.current.loadMoreAgentTopicsView();
+      });
+
+      const topicData = useChatStore.getState().agentTopicsViewMap[key];
+      expect(topicData.items.map((item) => item.id)).toEqual(['topic-1', 'topic-2']);
+      expect(topicData.currentPage).toBe(1);
+      expect(topicData.hasMore).toBe(false);
+      expect(topicData.isLoadingMore).toBe(false);
+      expect(topicData.loadMoreError).toBeUndefined();
+    });
+  });
+
   describe('removeUnstarredTopic', () => {
     it('should remove unstarred topics and refresh the topic list', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1279,6 +1408,52 @@ describe('topic action', () => {
       expect(switchTopicSpy).toHaveBeenCalled();
     });
   });
+  describe('internal_updateTopic', () => {
+    it('should release the loading owner when updating a topic fails', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const topic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: topicId,
+        sessionId: agentId,
+        title: 'Topic',
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              isLoadingMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          topicLoadingIdCounts: {},
+          topicLoadingIds: [],
+        });
+      });
+
+      vi.spyOn(topicService, 'updateTopic').mockRejectedValue(new Error('rename failed'));
+
+      await act(async () => {
+        await expect(
+          result.current.internal_updateTopic(topicId, { title: 'New' }),
+        ).rejects.toThrow('rename failed');
+      });
+
+      expect(useChatStore.getState().topicLoadingIds).not.toContain(topicId);
+      expect(useChatStore.getState().topicLoadingIdCounts[topicId]).toBeUndefined();
+    });
+  });
   describe('updateTopicLoading', () => {
     it('should call update topicLoadingId', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1295,12 +1470,94 @@ describe('topic action', () => {
 
       expect(result.current.topicLoadingIds).toEqual(['loading-id']);
     });
+
+    it('should keep a topic loading until all loading owners finish', () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({ topicLoadingIdCounts: {}, topicLoadingIds: [] });
+      });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', true);
+        result.current.internal_updateTopicLoading('topic-1', true);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', false);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 1 });
+
+      act(() => {
+        result.current.internal_updateTopicLoading('topic-1', false);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual([]);
+      expect(result.current.topicLoadingIdCounts).toEqual({});
+    });
+  });
+  describe('replaceTopicId', () => {
+    it('should migrate a loading optimistic topic to the server topic id', () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const optimisticTopic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: 'tmp_topic_1',
+        sessionId: agentId,
+        title: '666',
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              isLoadingMore: false,
+              items: [optimisticTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          topicLoadingIdCounts: { tmp_topic_1: 2 },
+          topicLoadingIds: ['tmp_topic_1'],
+        });
+      });
+
+      act(() => {
+        result.current.internal_replaceTopicId({
+          agentId,
+          nextId: 'topic-1',
+          previousId: 'tmp_topic_1',
+          value: { sessionId: agentId },
+        });
+      });
+
+      expect(result.current.topicDataMap[key].items).toEqual([
+        expect.objectContaining({
+          id: 'topic-1',
+          sessionId: agentId,
+          title: '666',
+        }),
+      ]);
+      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
+      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
+    });
   });
   describe('summaryTopicTitle', () => {
-    it('should auto-summarize the topic title and update it', async () => {
+    it('should show a loading placeholder when auto-summarizing a topic without a title', async () => {
       const topicId = 'topic-1';
       const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
-      const topics = [{ id: 'topic-1', title: 'Test Topic' }] as ChatTopic[];
+      const topics = [{ id: 'topic-1', title: '' }] as ChatTopic[];
       const { result } = renderHook(() => useChatStore());
       await act(async () => {
         useChatStore.setState({
@@ -1341,6 +1598,47 @@ describe('topic action', () => {
       expect(refreshTopicSpy).toHaveBeenCalled();
 
       // TODO: need to test with fetchPresetTaskResult
+    });
+
+    it('should keep an optimistic title visible until the summarized title is ready', async () => {
+      const topicId = 'topic-1';
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
+      const optimisticTitle = '阅读下面的材料，根据要求写作。';
+      const topics = [{ id: topicId, title: optimisticTitle }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+      await act(async () => {
+        useChatStore.setState({
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              items: topics,
+              total: topics.length,
+              currentPage: 0,
+              hasMore: false,
+              pageSize: 20,
+            },
+          },
+          activeAgentId: 'test',
+        });
+      });
+
+      const updateTopicTitleInSummarySpy = vi.spyOn(
+        result.current,
+        'internal_updateTopicTitleInSummary',
+      );
+      const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+
+      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(async (params) => {
+        params?.onMessageHandle?.({ type: 'text', text: 'Partial Title' } as any);
+        await params?.onFinish?.('Summarized Title', { type: 'done' });
+      });
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, LOADING_FLAT);
+      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, 'Partial Title');
+      expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
     });
   });
   describe('createTopic', () => {

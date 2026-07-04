@@ -8,11 +8,34 @@ import { useTranslation } from 'react-i18next';
 import type { AskUserQuestionItem } from '../../../types';
 import OptionCard from './OptionCard';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   // Per-question "write your own" input — sits as the last row in the option
-  // stack so it reads as one more choice rather than a separate control.
-  customInput: css`
+  // stack, carrying the next sequential number so it reads as one more choice
+  // rather than a separate control.
+  customRow: css`
     margin-block-start: 2px;
+
+    /* Align the chip under the option number chips (OptionCard padding-inline). */
+    padding-inline: 12px;
+  `,
+  // Mirrors OptionCard's `optionIndex` chip so the free-text row's number reads
+  // identically to the numbered options above it.
+  index: css`
+    flex-shrink: 0;
+
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 22px;
+    color: ${cssVar.colorTextSecondary};
+    text-align: center;
+
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
@@ -61,16 +84,20 @@ const QuestionPanel = memo<QuestionPanelProps>(
               onToggle={() => onToggle(question, opt.label)}
             />
           ))}
-          {/* Last item: let the user write their own answer for this question. */}
-          <TextArea
-            autoSize={{ maxRows: 4, minRows: 1 }}
-            className={styles.customInput}
-            disabled={disabled}
-            placeholder={t('claudeCode.askUserQuestion.customOption.placeholder')}
-            value={customValue}
-            variant="filled"
-            onChange={(e) => onCustomChange(question, e.target.value)}
-          />
+          {/* Last item: let the user write their own answer for this question.
+              Numbered as the next option so it reads as one more choice. */}
+          <Flexbox horizontal align="center" className={styles.customRow} gap={12}>
+            <span className={styles.index}>{question.options.length + 1}</span>
+            <TextArea
+              autoSize={{ maxRows: 4, minRows: 1 }}
+              disabled={disabled}
+              placeholder={t('claudeCode.askUserQuestion.customOption.placeholder')}
+              style={{ flex: 1 }}
+              value={customValue}
+              variant="filled"
+              onChange={(e) => onCustomChange(question, e.target.value)}
+            />
+          </Flexbox>
         </Flexbox>
       </Flexbox>
     );

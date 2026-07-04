@@ -8,7 +8,11 @@ import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
 
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  HeterogeneousAgentSessionError,
+} from '@lobechat/electron-client-ipc';
 import {
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
@@ -36,13 +40,15 @@ import {
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
+import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
+import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
 } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
-import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -160,6 +166,15 @@ interface StopSessionParams {
 
 interface GetSessionInfoParams {
   sessionId: string;
+}
+
+interface GetCodexQuotaParams {
+  command?: string;
+  env?: Record<string, string>;
+}
+
+interface GetClaudeCodeQuotaParams {
+  env?: Record<string, string>;
 }
 
 interface SessionInfo {
@@ -480,7 +495,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
-        ? await this.app.toolDetectorManager?.detect?.(defaultCommand, true)
+        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
         : await detectHeterogeneousCliCommand(
             session.agentType === 'claude-code' ? 'claude-code' : 'codex',
             command,
@@ -1297,6 +1312,34 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
     const session = this.sessions.get(params.sessionId);
     return { agentSessionId: session?.agentSessionId };
+  }
+
+  @IpcMethod()
+  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
+    const command = params.command?.trim() || 'codex';
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return fetchCodexQuota({
+      command: status.available && status.path ? status.path : command,
+      env: Object.keys(env).length > 0 ? env : undefined,
+    });
+  }
+
+  /**
+   * Read the Claude Code subscription quota. No CLI is spawned: the quota
+   * comes from Anthropic's OAuth usage API using the local `claude` login,
+   * and the request goes through the app's global proxy dispatcher.
+   */
+  @IpcMethod()
+  async getClaudeCodeQuota(
+    params: GetClaudeCodeQuotaParams = {},
+  ): Promise<ClaudeCodeQuotaSnapshot> {
+    return fetchClaudeCodeQuota({ env: params.env });
   }
 
   /**

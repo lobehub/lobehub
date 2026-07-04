@@ -7,7 +7,7 @@ import { shallow } from 'zustand/shallow';
 
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
-import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
@@ -126,6 +126,7 @@ const FileListItem = ({
   createdAt,
   embeddingError,
   embeddingStatus,
+  fileId,
   fileType,
   finishEmbedding,
   id,
@@ -139,11 +140,13 @@ const FileListItem = ({
   sourceType,
   url,
   userId,
+  visibility,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const fileStoreState = useFileStore(
     (s) => ({
-      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
+      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(chunkTargetId)(s),
       parseFiles: s.parseFilesToChunks,
       refreshFileList: s.refreshFileList,
       updateResource: s.updateResource,
@@ -222,6 +225,8 @@ const FileListItem = ({
     onRenameStart: isFolder ? handleRenameStart : undefined,
     sourceType,
     url,
+    userId,
+    visibility,
   });
 
   const handleCheckboxClick = useCallback(
@@ -310,6 +315,7 @@ const FileListItem = ({
             chunkingStatus={chunkingStatus}
             embeddingError={embeddingError}
             embeddingStatus={embeddingStatus}
+            fileId={fileId}
             finishEmbedding={finishEmbedding}
             id={id}
             isCreatingFileParseTask={fileStoreState.isCreatingFileParseTask}

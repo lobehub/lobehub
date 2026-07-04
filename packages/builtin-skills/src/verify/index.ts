@@ -37,7 +37,7 @@ export const VerifySkill: BuiltinSkill = {
   description:
     'Self-evidence for task delivery verification — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and submit each with `lh verify submit` so the delivery is judged on real proof.',
   identifier: VerifyIdentifier,
-  name: 'Verify',
+  name: 'verify',
   resources: toResourceMeta({
     'references/agent-browser.md': agentBrowser,
     'references/auth.md': auth,

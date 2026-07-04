@@ -26,6 +26,7 @@ describe('executeToolCall', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
@@ -73,8 +74,8 @@ describe('executeToolCall', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('dispatched');
-    const state = result.state as { output?: string; stdout?: string };
-    expect(state.stdout ?? state.output).toContain('dispatched');
+    const state = result.state as { stdout?: string };
+    expect(state.stdout).toContain('dispatched');
   });
 
   it('should dispatch listFiles', async () => {
@@ -152,26 +153,19 @@ describe('executeToolCall', () => {
   });
 
   it('should dispatch grepContent', async () => {
-    const workerResult = {
-      content: 'grep result',
-      state: { matches: [{ type: 'match' }] },
-      success: true,
-    };
-    const spy = vi
-      .spyOn(isolatedWorker, 'executeToolCallInWorker')
-      .mockResolvedValueOnce(workerResult);
+    const pattern = `findme-${process.pid}`;
+    await writeFile(path.join(tmpDir, 'grep.txt'), `${pattern} here`);
 
+    vi.stubEnv('LOBEHUB_CLI_TOOL_WORKER', '1');
     const result = await executeToolCall(
       'grepContent',
-      JSON.stringify({ cwd: tmpDir, pattern: 'findme' }),
+      // Use the manifest-facing `scope` field. `directory` is a runtime-only
+      // normalized shape and would hide scope->cwd forwarding regressions.
+      JSON.stringify({ glob: '*.txt', output_mode: 'files_with_matches', pattern, scope: tmpDir }),
     );
 
-    expect(result).toEqual(workerResult);
-    expect(spy).toHaveBeenCalledWith(
-      'grepContent',
-      JSON.stringify({ cwd: tmpDir, pattern: 'findme' }),
-      undefined,
-    );
+    expect(result.success).toBe(true);
+    expect((result.state as { totalMatches: number }).totalMatches).toBe(1);
   });
 
   it('should dispatch searchFiles', async () => {

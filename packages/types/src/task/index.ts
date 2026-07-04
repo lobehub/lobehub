@@ -4,13 +4,7 @@ import type { ChatFileItem } from '../message/ui/chat';
 // ── Task type aliases ──
 
 export type TaskStatus =
-  | 'backlog'
-  | 'canceled'
-  | 'completed'
-  | 'failed'
-  | 'paused'
-  | 'running'
-  | 'scheduled';
+  'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
@@ -204,6 +198,10 @@ export interface TaskItem {
   status: string;
   totalTopics: number | null;
   updatedAt: Date;
+  // 'private' tasks are only visible to their creator in workspace mode.
+  // 'public' (default) tasks are visible to every workspace member.
+  // The column is ignored in personal mode (no workspace).
+  visibility: 'private' | 'public';
   workspaceId: string | null;
 }
 
@@ -244,6 +242,7 @@ export interface NewTask {
   status?: string;
   totalTopics?: number | null;
   updatedAt?: Date;
+  visibility?: 'private' | 'public';
   workspaceId?: string | null;
 }
 
@@ -256,6 +255,11 @@ export interface TaskDetailSubtaskAssignee {
   title: string | null;
 }
 
+export interface TaskDetailSubtaskRunningTopic {
+  id: string;
+  operationId?: string | null;
+}
+
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
   automationMode?: TaskAutomationMode | null;
@@ -265,6 +269,7 @@ export interface TaskDetailSubtask {
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
@@ -340,6 +345,12 @@ export interface TaskDetailActivity {
     threadId?: string | null;
   } | null;
   seq?: number | null;
+  /** Topic-only: task that owns this run when a parent detail includes descendant topics. */
+  sourceTaskId?: string | null;
+  /** Topic-only: display identifier of the task that owns this run, e.g. T-12. */
+  sourceTaskIdentifier?: string | null;
+  /** Topic-only: display name of the task that owns this run. */
+  sourceTaskName?: string | null;
   status?: string | null;
   summary?: string;
   taskId?: string | null;
@@ -387,6 +398,9 @@ export interface TaskDetailData {
   userId?: string | null;
   /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
   verify?: TaskVerifyConfig | null;
+  /** Visibility within a workspace. 'public' is workspace-shared (default);
+   *  'private' is only visible to the creator. Ignored in personal mode. */
+  visibility?: 'private' | 'public';
   workspace?: TaskDetailWorkspaceNode[];
   /** Owning workspace; null for personal (non-workspace) tasks. */
   workspaceId?: string | null;

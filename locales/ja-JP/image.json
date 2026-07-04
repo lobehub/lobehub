@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "生成テーマを削除",
   "topic.deleteConfirmDesc": "この生成テーマを削除すると復元できません。慎重に操作してください。",
   "topic.empty": "生成されたテーマはありません",
+  "topic.privateTitle": "非公開",
   "topic.title": "絵画のテーマ",
-  "topic.untitled": "デフォルトテーマ"
+  "topic.untitled": "デフォルトテーマ",
+  "topic.visibility.existingLocked": "現在のトピックの可視性は固定されています。別のスペースを選択するには、新しいトピックを作成してください。",
+  "topic.workspaceTitle": "ワークスペース"
 }

@@ -4,7 +4,7 @@ import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobe
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Select, Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ const DEFAULT_MAX_STEPS = 100;
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const MAX_TIMEOUT_MINUTES = 240;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   agentSelect: css`
     .ant-select-content-value {
       height: 22px !important;
@@ -26,7 +26,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextQuaternary};
   `,
   timestampLink: css`
@@ -36,12 +36,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin-block-start: 4px;
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
 
-    transition: color 0.2s;
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
 }));
@@ -259,7 +263,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                 <Space>
                   <span>{ds.name}</span>
                   {ds.testCaseCount !== undefined && (
-                    <span style={{ color: 'var(--ant-color-text-quaternary)', fontSize: 12 }}>
+                    <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
                       {t('run.create.caseCount', { count: ds.testCaseCount })}
                     </span>
                   )}
@@ -274,7 +278,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       <Accordion defaultExpandedKeys={[]}>
         <AccordionItem
           itemKey="advanced"
-          paddingBlock={6}
+          paddingBlock={8}
           paddingInline={4}
           title={t('run.create.advanced')}
         >

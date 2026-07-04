@@ -39,6 +39,9 @@ export const getRuntimeModelKnowledgeCutoff = (
   provider: string,
 ): string | undefined => getEnabledRuntimeModel(model, provider)?.knowledgeCutoff;
 
+export const getRuntimeModelDisplayName = (model: string, provider: string): string | undefined =>
+  getEnabledRuntimeModel(model, provider)?.displayName;
+
 /**
  * TODO: we need to update this function to auto find deploymentName with provider setting config
  */

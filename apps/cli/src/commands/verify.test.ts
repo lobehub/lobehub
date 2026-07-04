@@ -11,6 +11,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     verify: {
       createRubric: { mutate: vi.fn() },
+      deleteRun: { mutate: vi.fn() },
       getRubric: { query: vi.fn() },
       getSkillBundle: { query: vi.fn() },
       updateRubric: { mutate: vi.fn() },
@@ -94,6 +95,34 @@ describe('verify rubric config commands', () => {
   });
 });
 
+describe('verify run delete command', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockTrpcClient.verify.deleteRun.mutate.mockReset().mockResolvedValue({
+      id: 'run-1',
+      success: true,
+    });
+  });
+
+  afterEach(() => consoleSpy.mockRestore());
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommand(program);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('deletes the run without prompting when --yes is passed', async () => {
+    await run(['run', 'delete', 'run-1', '--yes']);
+
+    expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run-1' });
+  });
+});
+
 describe('verify evidence upload command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
 
@@ -147,7 +176,7 @@ describe('verify init command', () => {
       content: '# Verify SKILL',
       files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
       identifier: 'verify',
-      name: 'Verify',
+      name: 'verify',
     });
     dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
   });
@@ -185,7 +214,7 @@ describe('verify init command', () => {
       content: '# Updated SKILL',
       files: {},
       identifier: 'verify',
-      name: 'Verify',
+      name: 'verify',
     });
 
     await run(['init', '--dir', dir]); // no --force → keep existing

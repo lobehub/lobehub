@@ -3,6 +3,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { bootTiming } from '@/libs/bootTiming';
+
 import { taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
@@ -277,6 +279,61 @@ describe('createCacheProvider — tiering', () => {
     expect(CACHE_TIERS.local).toContain('recent:list');
     expect(CACHE_TIERS.local).toContain('taskTemplate:');
     expect(CACHE_TIERS.local).toContain('modelConfig:');
+  });
+});
+
+describe('cache-hydration span', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    (bootTiming as unknown as { _reset: () => void })._reset();
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await localDataCache.clearScope('span-s1');
+    await localDataCache.clearScope('span-s2');
+  });
+
+  it('records exactly one cache-hydration span after initial hydration', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValue(200);
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    const { spans } = bootTiming.snapshot();
+    const hydrationSpans = spans.filter((s) => s.name === 'cache-hydration');
+    expect(hydrationSpans).toHaveLength(1);
+    expect(hydrationSpans[0].startMs).toBe(100);
+    expect(hydrationSpans[0].durMs).toBe(100);
+  });
+
+  it('does not record a second cache-hydration span on scope reload', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(50);
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    scope.value = 'span-s2';
+    await provider.reloadScope!();
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans.filter((s) => s.name === 'cache-hydration')).toHaveLength(1);
+  });
+
+  it('does not record a span when hydration fails', async () => {
+    vi.spyOn(localDataCache, 'entriesByScope').mockRejectedValueOnce(new Error('idb error'));
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans.filter((s) => s.name === 'cache-hydration')).toHaveLength(0);
   });
 });
 

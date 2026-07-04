@@ -10,6 +10,10 @@ import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import {
+  ForwardMessageDispatcher,
+  MessageForwardFooter,
+} from '@/features/Conversation/MessageForward';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -131,9 +135,14 @@ const Conversation = memo(() => {
           }
         />
       </Flexbox>
-      {!isSubagentThread && (isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />)}
+      {!isSubagentThread && (
+        <MessageForwardFooter>
+          {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
+        </MessageForwardFooter>
+      )}
       <ThreadHydration />
       <ChatMiniMap />
+      <ForwardMessageDispatcher />
       <Suspense>
         <MessageFromUrl />
       </Suspense>

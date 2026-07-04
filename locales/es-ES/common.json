@@ -1,5 +1,6 @@
 {
   "about": "Acerca de",
+  "addNew": "Agregar nuevo",
   "advanceSettings": "Configuración avanzada",
   "agentOnboardingPromo.actionLabel": "Probar ahora",
   "agentOnboardingPromo.description": "Configura tus equipos de agentes en un chat breve con Lobe AI. Tus agentes actuales no se modificarán.",
@@ -273,6 +274,7 @@
   "generation.promptModeration.blocked": "La verificación de la política de contenido falló. Por favor, revisa tu solicitud.",
   "getDesktopApp": "Obtener la aplicación de escritorio",
   "goToTarget": "Ir al objetivo",
+  "gotIt": "Entendido",
   "historyRange": "Rango de historial",
   "home.suggestQuestions": "Prueba con estos ejemplos",
   "import": "Importar",
@@ -363,6 +365,8 @@
   "navPanel.moveDown": "Mover hacia abajo",
   "navPanel.moveUp": "Mover hacia arriba",
   "navPanel.pinned": "Fijado",
+  "navPanel.privateAgents": "Privado",
+  "navPanel.publicAgents": "Espacio de trabajo",
   "navPanel.resetDefault": "Restablecer valores predeterminados",
   "navPanel.searchAgent": "Buscar agente...",
   "navPanel.searchRecent": "Buscar recientes...",

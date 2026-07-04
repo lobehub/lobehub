@@ -47,7 +47,7 @@ const InboxEntry = memo(() => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId!));
   const isLoading = useChatStore(
-    inboxAgentId ? operationSelectors.isAgentRunning(inboxAgentId) : () => false,
+    inboxAgentId ? operationSelectors.isAgentVisiblyRunning(inboxAgentId) : () => false,
   );
 
   const title = inboxMeta.title || 'Lobe AI';

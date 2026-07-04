@@ -2,6 +2,7 @@ import { type ConversationContext, RequestTrigger } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { lambdaClient } from '@/libs/trpc/client';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
 import { useChatStore } from '../../../../store';
@@ -18,6 +19,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     aiAgent: {
       processHumanIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+      submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
   },
 }));
@@ -1942,12 +1944,13 @@ describe('ConversationControl actions', () => {
       );
     });
 
-    it("CURRENT BEHAVIOR: falls back to global-state optimistic context (empty op) and still submits when the operation is GC'd", async () => {
-      // Characterizes action.ts ~735/~758: when the resolved op has already been
-      // garbage-collected (not present in `operations`), the optimistic context
-      // is the empty object `{}` (global-state fallback) rather than carrying the
-      // stale operationId — but the IPC submit STILL fires with that operationId,
-      // and the call does NOT throw. Locked as-is.
+    it("falls back to global-state optimistic context and routes a GC'd op to the remote tRPC transport", async () => {
+      // When the resolved op has already been garbage-collected (not present in
+      // `operations`), the optimistic context is the empty object `{}`
+      // (global-state fallback) rather than carrying the stale operationId. With
+      // no live op to prove local-desktop provenance, the answer routes to the
+      // universal remote transport (tRPC) — the run has already ended, so this is
+      // a harmless no-op either way — and the call does NOT throw.
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'hetero-agent';
@@ -2004,13 +2007,89 @@ describe('ConversationControl actions', () => {
         {},
       );
 
-      // IPC submit still fires with the (stale) resolved operationId + cancel.
-      expect(submitInterventionSpy).toHaveBeenCalledWith(
+      // Remote tRPC submit fires with the (stale) resolved operationId + cancel;
+      // the desktop IPC path is not taken for a GC'd (non-local) op.
+      expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).toHaveBeenCalledWith(
         expect.objectContaining({
           cancelled: true,
           operationId: 'gc-op-id',
           toolCallId: 'cc_call_1',
         }),
+      );
+      expect(submitInterventionSpy).not.toHaveBeenCalled();
+    });
+
+    it('flips topic status on the passed context, NOT the active topic, when submitting from a background conversation', async () => {
+      // Regression: submitting a hetero intervention from the global approval
+      // card while the user is viewing a DIFFERENT topic must flip *that card's*
+      // topic back to `running` — not whatever topic is currently active. Before
+      // the fix the chat store fell back to `activeTopicId`, so the unrelated
+      // topic the user was looking at flickered into a loading/running state.
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'hetero-agent';
+      const cardTopicId = 'background-topic';
+      const activeTopicId = 'the-topic-user-is-viewing';
+      const chatKey = messageMapKey({ agentId, topicId: cardTopicId });
+
+      const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        parentId: assistantMessage.id,
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-claude-code',
+          type: 'default',
+        },
+        role: 'tool',
+        tool_call_id: 'cc_call_1',
+      } as any);
+
+      let assistantOpId!: string;
+      act(() => {
+        useChatStore.setState({
+          // The user is parked on a completely different topic.
+          activeAgentId: agentId,
+          activeThreadId: undefined,
+          activeTopicId,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+        });
+
+        assistantOpId = result.current.startOperation({
+          context: { agentId, topicId: cardTopicId, threadId: null },
+          type: 'execHeterogeneousAgent',
+        }).operationId;
+
+        useChatStore.setState((s) => ({
+          messageOperationMap: { ...s.messageOperationMap, [assistantMessage.id]: assistantOpId },
+        }));
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(heterogeneousAgentService, 'submitIntervention').mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention(
+          'tool-msg-1',
+          'submit',
+          { 'Which color?': 'Blue' },
+          { agentId, threadId: undefined, topicId: cardTopicId },
+        );
+      });
+
+      // The card's own topic flips to running...
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'running', topicId: cardTopicId }),
+      );
+      // ...and the topic the user is currently viewing is never touched.
+      expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: activeTopicId }),
       );
     });
   });

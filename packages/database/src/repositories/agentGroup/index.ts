@@ -92,6 +92,8 @@ export class AgentGroupRepository {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, chatGroups);
   private agentOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents);
+  private groupAgentOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, chatGroupsAgents);
   private topicOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
   private threadOwnership = () =>
@@ -403,6 +405,11 @@ export class AgentGroupRepository {
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
+    // Mirror the group's visibility onto the synthetic supervisor agent so
+    // workspace members don't see a stray supervisor when the parent group is
+    // private. Defaults to 'public' to match the column default.
+    const groupVisibility = groupParams.visibility ?? 'public';
+
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
       .insert(agents)
@@ -420,6 +427,7 @@ export class AgentGroupRepository {
         title: supervisorConfig?.title ?? 'Supervisor',
         userId: this.userId,
         virtual: true,
+        visibility: groupVisibility,
         workspaceId: this.workspaceId ?? null,
       })
       .returning();
@@ -538,12 +546,19 @@ export class AgentGroupRepository {
     const { virtualAgents } = await this.checkAgentsBeforeRemoval(groupId, agentIds);
     const virtualAgentIds = virtualAgents.map((a) => a.id);
 
-    // 2. Remove all agents from the group (batch delete from junction table)
-    await this.db
+    // 2. Remove all agents from the group (batch delete from junction table).
+    // Scope by the caller's ownership so a client-supplied groupId can only touch
+    // the caller's own junction rows — never another user's group membership (IDOR).
+    const removed = await this.db
       .delete(chatGroupsAgents)
       .where(
-        and(eq(chatGroupsAgents.chatGroupId, groupId), inArray(chatGroupsAgents.agentId, agentIds)),
-      );
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          inArray(chatGroupsAgents.agentId, agentIds),
+          this.groupAgentOwnership(),
+        ),
+      )
+      .returning({ agentId: chatGroupsAgents.agentId });
 
     // 3. Delete virtual agents if requested
     // Note: Virtual agents are standalone (no associated sessions), so we can delete them directly
@@ -556,7 +571,7 @@ export class AgentGroupRepository {
 
     return {
       deletedVirtualAgentIds: deleteVirtualAgents ? virtualAgentIds : [],
-      removedFromGroup: agentIds.length,
+      removedFromGroup: removed.length,
     };
   }
 

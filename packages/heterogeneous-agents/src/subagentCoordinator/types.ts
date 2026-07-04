@@ -279,6 +279,12 @@ export interface PersistToolBatchIntent {
   content?: string;
   kind: 'persistToolBatch';
   reasoning?: string;
+  /**
+   * CC `message.id` of the turn these tools belong to, so the interpreter can
+   * stamp `metadata.heteroMessageId` on each new tool row (mirrors the id it
+   * stamps on the turn's assistant via {@link CreateMessageIntent}).
+   */
+  subagentMessageId?: string;
   threadId: string;
   tools: PersistToolBatchEntry[];
 }
@@ -304,6 +310,13 @@ export interface RecordUsageIntent {
   messageId: string;
   model?: string;
   provider?: string;
+  /**
+   * CC `message.id` of the turn whose usage this is. recordUsage overwrites the
+   * assistant row's metadata wholesale, so it must re-stamp `heteroMessageId`
+   * or the value {@link CreateMessageIntent} wrote would be wiped (mirrors the
+   * main-agent recordUsage re-stamp).
+   */
+  subagentMessageId?: string;
   threadId: string;
   usage: unknown;
 }

@@ -5,21 +5,30 @@ import { memo, useMemo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { OperationStatus } from '@/store/chat/slices/operation/types';
 import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
+import CouncilList from '../../AgentCouncil/components/CouncilList';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
-import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
   formatReasoningDuration,
   getPostToolAnswerSplitIndex,
-  scoreBlockContentAsAnswerLike,
+  isFoldableStatusLine,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import ProcessFold from './ProcessFold';
-import { type GroupRenderSegment, shouldFoldProcess, splitFinalAnswer } from './segments';
+import type { GroupRenderSegment } from './segments';
+import {
+  countFoldedProcessSteps,
+  hasRenderableFinalAnswer,
+  shouldFoldProcess,
+  splitFinalAnswer,
+} from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 import WorkflowCollapse, { type WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
@@ -74,6 +83,41 @@ const getTurnDurationMs = (
   return max > min ? max - min : 0;
 };
 
+/**
+ * `createdAt` of the turn's last step, normalized to epoch ms. Used to anchor the
+ * tail running indicator's elapsed timer to "time since the last step" instead of
+ * the whole run — the operation's own startTime marks the run's beginning.
+ *
+ * When the last block ends on tool calls, its freshest message is the tool RESULT
+ * row (`result_msg_id`), created when the tool finished — not the assistant block
+ * that issued the call. Anchoring to the block id alone would fold the tool's
+ * runtime back into the elapsed time, defeating the point. So we take the latest
+ * `createdAt` across the block and its tool-result rows.
+ */
+const getLastBlockCreatedAt = (
+  dbMessages: { createdAt?: Date | number | string | null; id: string }[] | undefined,
+  lastBlock: AssistantContentBlock | undefined,
+): number | undefined => {
+  if (!Array.isArray(dbMessages) || !lastBlock) return undefined;
+
+  const candidateIds = new Set<string>([lastBlock.id]);
+  for (const tool of lastBlock.tools ?? []) {
+    if (tool.result_msg_id) candidateIds.add(tool.result_msg_id);
+  }
+
+  let latest: number | undefined;
+  for (const message of dbMessages) {
+    if (!candidateIds.has(message.id) || message.createdAt == null) continue;
+    const time =
+      message.createdAt instanceof Date
+        ? message.createdAt.getTime()
+        : new Date(message.createdAt).getTime();
+    if (Number.isNaN(time)) continue;
+    if (latest === undefined || time > latest) latest = time;
+  }
+  return latest;
+};
+
 interface PartitionedBlocks {
   /** True while generating if long post-tool answer was moved outside the fold (tool phase UI may show “done”). */
   postToolTailPromoted: boolean;
@@ -82,10 +126,12 @@ interface PartitionedBlocks {
 
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
+const ACTIVE_OPERATION_STATUSES = new Set<OperationStatus>(['pending', 'paused', 'running']);
 
 const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   (!block.content || block.content === LOADING_FLAT) &&
   (!block.tools || block.tools.length === 0) &&
+  (!block.council || block.council.length === 0) &&
   !block.error &&
   !block.reasoning;
 
@@ -167,7 +213,8 @@ const appendWorkflowBlock = (
 const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
   if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
 
-  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
+  // Only a single short status line stays folded with its tools; everything else is prose.
+  return !isFoldableStatusLine(block);
 };
 
 const appendWorkflowRangeBlock = (
@@ -396,9 +443,18 @@ const Group = memo<GroupChildrenProps>(
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
+    const hasActiveOperation = useChatStore((s) =>
+      operationSelectors
+        .getOperationsByMessage(id)(s)
+        .some((op) => ACTIVE_OPERATION_STATUSES.has(op.status)),
+    );
     const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
-    const lastBlockId = blocks.at(-1)?.id;
+    const lastBlock = blocks.at(-1);
+    const lastBlockId = lastBlock?.id;
+    const lastBlockCreatedAt = useConversationStore((s) =>
+      getLastBlockCreatedAt(s.dbMessages, lastBlock),
+    );
 
     const { segments, postToolTailPromoted } = useMemo(
       () => partitionBlocks(blocks, isGenerating),
@@ -456,10 +512,10 @@ const Group = memo<GroupChildrenProps>(
         return (
           <WorkflowCollapse
             assistantMessageId={id}
+            blocks={segment.blocks.map((block) => withMarkdownStreamingState(block, lastBlockId))}
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             disableEditing={disableEditing}
             key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
-            blocks={segment.blocks.map((block) => withMarkdownStreamingState(block, lastBlockId))}
             workflowChromeComplete={
               workflowChromeComplete ||
               (hasRenderedContentAfter(segments, index) && !hasPendingIntervention(segment.blocks))
@@ -469,6 +525,20 @@ const Group = memo<GroupChildrenProps>(
       }
 
       const item = segment.block;
+
+      // AgentCouncil block: broadcast members rendered as parallel columns inside
+      // the supervisor's bubble.
+      if (item.council && item.council.length > 0) {
+        return (
+          <CouncilList
+            activeTab={0}
+            displayMode={'horizontal'}
+            key={item.renderKey ?? `${id}.${item.id}.${index}`}
+            members={item.council}
+          />
+        );
+      }
+
       if (!isGenerating && isEmptyBlock(item)) return null;
 
       return (
@@ -483,17 +553,27 @@ const Group = memo<GroupChildrenProps>(
       );
     };
 
-    // Codex-style turn folding: once a turn is finished and no longer the latest
-    // one, fold its whole process (reasoning + tools + intermediate prose) under
-    // a single "已处理 {duration}" header, leaving the final answer always
-    // visible. The latest / still-generating turn renders in full.
+    // Codex-style turn folding: once the turn's op has ended, fold it under a
+    // single "已处理 {duration}" header. A non-latest turn folds *whole* — its
+    // final answer collapses in too, so scrolled-past turns read as one compact
+    // row. The latest turn only folds its process and keeps the final answer
+    // visible (so a just-finished reply stays readable); still-generating turns
+    // render in full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,
+      hasFinalAnswer: hasRenderableFinalAnswer(finalSegments),
       isGenerating,
       isLatestItem,
+      operationEnded: !hasActiveOperation,
       processSegments,
     });
+
+    // Non-latest turns collapse everything; the latest turn keeps its final
+    // answer out of the fold.
+    const foldedSegments = isLatestItem ? processSegments : segments;
+    const visibleSegments = isLatestItem ? finalSegments : [];
+    const processStepCount = countFoldedProcessSteps(foldedSegments);
 
     const durationText =
       turnDurationMs >= 1000 ? formatReasoningDuration(turnDurationMs) : undefined;
@@ -503,19 +583,21 @@ const Group = memo<GroupChildrenProps>(
         <Flexbox className={styles.container} gap={8}>
           {foldProcess ? (
             <>
-              <ProcessFold durationText={durationText}>
+              <ProcessFold durationText={durationText} stepCount={processStepCount}>
                 <Flexbox gap={8}>
-                  {processSegments.map((segment, index) => renderSegment(segment, index))}
+                  {foldedSegments.map((segment) =>
+                    renderSegment(segment, segments.indexOf(segment)),
+                  )}
                 </Flexbox>
               </ProcessFold>
-              {finalSegments.map((segment, index) =>
-                renderSegment(segment, processSegments.length + index),
-              )}
+              {visibleSegments.map((segment) => renderSegment(segment, segments.indexOf(segment)))}
             </>
           ) : (
             <>
               {segments.map((segment, index) => renderSegment(segment, index))}
-              {showTailRunningIndicator && <ContentLoading id={id} />}
+              {showTailRunningIndicator && (
+                <ContentLoading id={id} startTime={lastBlockCreatedAt} />
+              )}
             </>
           )}
         </Flexbox>

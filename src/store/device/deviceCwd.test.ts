@@ -31,6 +31,36 @@ describe('nextWorkingDirs', () => {
     ]);
   });
 
+  it('stores active worktree metadata on the source entry without duplicating the source', () => {
+    const result = nextWorkingDirs(
+      { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      [entry('/repo', 'git'), entry('/other')],
+    );
+
+    expect(result).toEqual([
+      { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      entry('/other'),
+    ]);
+  });
+
+  it('preserves existing workspace cache when updating a source entry', () => {
+    const workspace = { instructions: [], skills: [] };
+    const result = nextWorkingDirs(
+      { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      [{ path: '/repo', repoType: 'git', workspace, workspaceScannedAt: 123 }],
+    );
+
+    expect(result).toEqual([
+      {
+        git: { activeWorktree: '/repo-fix' },
+        path: '/repo',
+        repoType: 'git',
+        workspace,
+        workspaceScannedAt: 123,
+      },
+    ]);
+  });
+
   it('caps the list length', () => {
     const current = Array.from({ length: WORKING_DIRS_MAX }, (_, i) => entry(`/p${i}`));
     const result = nextWorkingDirs(entry('/new'), current);

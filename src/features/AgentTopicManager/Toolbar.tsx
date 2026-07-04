@@ -1,6 +1,14 @@
 'use client';
 
-import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { confirmModal, Tabs } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -9,6 +17,8 @@ import {
   CalendarRange,
   ChevronDown,
   FolderClosed,
+  LayoutGrid,
+  List as ListIcon,
   ListFilter,
   ListTodoIcon,
   type LucideIcon,
@@ -220,6 +230,8 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const setSortBy = useTopicsViewStore((s) => s.setSortBy);
   const groupBy = useTopicsViewStore((s) => s.groupBy);
   const setGroupBy = useTopicsViewStore((s) => s.setGroupBy);
+  const viewMode = useTopicsViewStore((s) => s.viewMode);
+  const setViewMode = useTopicsViewStore((s) => s.setViewMode);
 
   const triggerItems: DropdownItem[] = useMemo(
     () =>
@@ -477,6 +489,33 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
       )}
 
       <Flexbox flex={1} />
+
+      <Tabs
+        activeKey={viewMode}
+        size={'small'}
+        style={{ width: 'auto' }}
+        items={[
+          {
+            key: 'card',
+            label: (
+              <Tooltip title={t('management.view.card')}>
+                <Icon icon={LayoutGrid} />
+              </Tooltip>
+            ),
+          },
+          {
+            key: 'list',
+            label: (
+              <Tooltip title={t('management.view.list')}>
+                <Icon icon={ListIcon} />
+              </Tooltip>
+            ),
+          },
+        ]}
+        onChange={(key) => setViewMode(key as 'card' | 'list')}
+      />
+
+      <span className={styles.divider} />
 
       <DropdownMenu items={sortItems}>
         <span className={styles.sortPill}>

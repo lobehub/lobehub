@@ -731,6 +731,32 @@ describe('AgentGroupRepository', () => {
       expect(agent).toBeDefined();
     });
 
+    it('should not remove agents from another user’s group (IDOR)', async () => {
+      // Attacker scoped to a different user targets the victim's group + agents.
+      const attackerRepo = new AgentGroupRepository(serverDB, otherUserId);
+
+      const result = await attackerRepo.removeAgentsFromGroup('remove-group', [
+        'remove-virtual',
+        'remove-regular',
+      ]);
+
+      // Nothing removed: junction rows belong to the victim, not the attacker.
+      expect(result.removedFromGroup).toBe(0);
+      expect(result.deletedVirtualAgentIds).toEqual([]);
+
+      // Victim's group membership is untouched.
+      const groupAgents = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, 'remove-group'),
+      });
+      expect(groupAgents).toHaveLength(3);
+
+      // Victim's virtual agent is not deleted.
+      const virtualAgent = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'remove-virtual'),
+      });
+      expect(virtualAgent).toBeDefined();
+    });
+
     it('should handle multiple virtual agents', async () => {
       // Add another virtual agent
       await serverDB.insert(agents).values({

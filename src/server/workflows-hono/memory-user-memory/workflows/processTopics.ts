@@ -17,8 +17,10 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { processTopicWorkflow } from './processTopic';
+import { assertMemoryWorkflowContextAllowed } from './runGuard';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topics';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -46,6 +48,8 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
       });
 
       try {
+        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
+
         if (!payload.userIds.length) {
           span.setStatus({ code: SpanStatusCode.OK });
 
@@ -78,16 +82,16 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
         if (payload.asyncTaskId && userId) {
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // If cancelled, stop before fan-out into per-topic child workflows.
-          const cancelled = await context.run(
-            `memory:user-memory:extract:users:${userId}:cancel-check`,
-            () =>
-              getServerDB().then((db) =>
-                new AsyncTaskModel(
-                  db,
-                  userId,
-                  payload.workspaceId,
-                ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
-              ),
+          const stepName = `memory:user-memory:extract:users:${userId}:cancel-check`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          const cancelled = await context.run(stepName, () =>
+            getServerDB().then((db) =>
+              new AsyncTaskModel(
+                db,
+                userId,
+                payload.workspaceId,
+              ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
+            ),
           );
           if (cancelled) {
             span.setStatus({ code: SpanStatusCode.OK });
@@ -98,41 +102,38 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             };
           }
         }
-        // Delegate per-topic extraction to dedicated workflow for better isolation
-        await Promise.all(
-          payload.topicIds.map(async (topicId, index) => {
-            await context.invoke(
-              `memory:user-memory:extract:users:${userId}:topics:${topicId}:invoke:${index}`,
-              {
-                body: {
-                  ...payload,
-                  layers: payload.layers.length
-                    ? payload.layers
-                    : [...CEPA_LAYERS, ...IDENTITY_LAYERS],
-                  topicIds: [topicId],
-                  userId,
-                  userIds: [userId],
-                },
-                // CEPA: run in parallel across the batch
-                //
-                // NOTICE: if modified the parallelism of CEPA_LAYERS
-                // or added new memory layer, make sure to update the number below.
-                //
-                // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
-                // and since identity requires sequential processing, we set parallelism to 5.
-                flowControl: {
-                  key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}.topic.${topicId}`,
-                  parallelism: 5,
-                },
-                headers: upstashWorkflowExtraHeaders,
-                workflow: processTopicWorkflow,
-              },
-            );
-          }),
-        );
+        // Delegate per-topic extraction to dedicated workflow for better isolation.
+        for (const [index, topicId] of payload.topicIds.entries()) {
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:invoke:${index}`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          await context.invoke(stepName, {
+            body: {
+              ...payload,
+              layers: payload.layers.length ? payload.layers : [...CEPA_LAYERS, ...IDENTITY_LAYERS],
+              topicIds: [topicId],
+              userId,
+              userIds: [userId],
+            },
+            // CEPA: run in parallel across the batch
+            //
+            // NOTICE: if modified the parallelism of CEPA_LAYERS
+            // or added new memory layer, make sure to update the number below.
+            //
+            // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
+            // and since identity requires sequential processing, we set parallelism to 5.
+            flowControl: {
+              key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}.topic.${topicId}`,
+              parallelism: 5,
+            },
+            headers: upstashWorkflowExtraHeaders,
+            workflow: processTopicWorkflow,
+          });
+        }
 
         // Trigger user persona update after topic processing using the workflow client.
-        await context.run(`memory:user-memory:users:${userId}`, async () => {
+        const personaUpdateStepName = `memory:user-memory:users:${userId}`;
+        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, personaUpdateStepName);
+        await context.run(personaUpdateStepName, async () => {
           await MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
             extraHeaders: upstashWorkflowExtraHeaders,
           });

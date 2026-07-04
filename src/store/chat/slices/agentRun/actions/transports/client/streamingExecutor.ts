@@ -217,7 +217,13 @@ export class StreamingExecutorActionImpl {
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      effectivePluginIds,
+      // Use `mergedToolIds` (not `effectivePluginIds`) so the enable rules cover
+      // user-selected @-mention ids too — the same id set `generateToolsDetailed`
+      // receives below. Otherwise a mentioned tool that isn't pinned to the agent
+      // (e.g. a custom MCP connector picked from the @ list) would have its
+      // manifest included but be defaulted to disabled by the enable checker, so
+      // no function tools are sent. `platformFilter` still gates availability.
+      mergedToolIds,
       // Context-aware builtin manifests: lobe-agent hides callSubAgent in group /
       // sub-agent runs. Replaces the former dropSubAgentInGroup + applyPluginFilters
       // isSubAgent hard-coding.
@@ -509,6 +515,16 @@ export class StreamingExecutorActionImpl {
 
     // Create a new array to avoid modifying the original messages
     const messages = [...originalMessages];
+
+    // Decide tool / function-calling capability from real data, not a guess.
+    // The enabled-model list hydrates asynchronously (auth session → aiProvider
+    // runtime-state SWR); until it's ready `isCanUseFC` optimistically assumes
+    // tool use so we don't drop tools for a capable model. But this is the
+    // outbound path: `createAgentToolsEngine` below bakes the tool set into the
+    // payload and the `/webapi/chat/[provider]` route forwards it to the provider
+    // without rechecking capability. Wait (bounded) for the list so a fast first
+    // send after reload never attaches tools to a model that can't use them.
+    await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
 
     // ===========================================
     // Step 1: Create Agent State (resolves config once)

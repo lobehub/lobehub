@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
+import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 
 const log = debug('lobe-server:verify-lifecycle');
@@ -47,8 +48,8 @@ export const runVerifyOnCompletion = async (
     if (run.status !== 'planned') return;
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
-    if (!op?.model || !op?.provider) {
-      log('op %s missing model/provider, cannot run verify', params.operationId);
+    if (!op) {
+      log('op %s missing, cannot run verify', params.operationId);
       return;
     }
 
@@ -62,19 +63,30 @@ export const runVerifyOnCompletion = async (
       verifierAgentId = verifyConfig?.verifierAgentId ?? undefined;
     }
 
+    const modelConfig = await resolveVerifyModelConfig(
+      db,
+      userId,
+      {
+        parentModel: op.model,
+        parentProvider: op.provider,
+        verifierAgentId,
+      },
+      workspaceId,
+    );
+
     const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
       deliverable: params.deliverable,
       goal: params.goal,
-      modelConfig: { model: op.model, provider: op.provider },
+      modelConfig,
       operationId: params.operationId,
       // `agent`-type checks run as the task-pinned verify agent (or the builtin
       // one), which writes its verdict back via the submitVerifyResult tool.
       runVerifierAgent: createVerifierAgentRunner({
         db,
         deliverable: params.deliverable,
-        model: op.model,
-        provider: op.provider,
+        model: modelConfig.model,
+        provider: modelConfig.provider,
         topicId: op.topicId,
         userId,
         verifierAgentId,
@@ -95,7 +107,7 @@ export const runVerifyOnCompletion = async (
         report: {
           deliverable: params.deliverable,
           goal: params.goal,
-          modelConfig: { model: op.model, provider: op.provider },
+          modelConfig,
         },
       },
       workspaceId,

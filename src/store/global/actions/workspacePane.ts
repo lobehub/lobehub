@@ -1,9 +1,11 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { produce } from 'immer';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { INBOX_SESSION_ID } from '@/const/session';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
+import { readOverridableField } from '@/store/global/selectors/systemStatus';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
@@ -63,7 +65,11 @@ export class GlobalWorkspacePaneActionImpl {
 
   toggleExpandSessionGroup = (id: string, expand: boolean): void => {
     const { status } = this.#get();
-    const nextExpandSessionGroup = produce(status.expandSessionGroupKeys, (draft: string[]) => {
+    // Read the effective (overlay-aware) value so workspace-mode toggles compose
+    // off the workspace list, not the personal one underneath it.
+    const currentKeys =
+      readOverridableField(status, 'expandSessionGroupKeys', getActiveWorkspaceId()) ?? [];
+    const nextExpandSessionGroup = produce(currentKeys, (draft: string[]) => {
       if (expand) {
         if (draft.includes(id)) return;
         draft.push(id);

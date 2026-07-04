@@ -13,7 +13,11 @@ const Sidebar = memo<GenerationLayoutCommonProps>((props) => {
   const { navKey } = props;
   return (
     <NavPanelPortal navKey={navKey}>
-      <SideBarLayout body={<Body {...props} />} header={<Header {...props} />} />
+      <SideBarLayout
+        body={<Body {...props} />}
+        header={<Header {...props} />}
+        key={props.namespace}
+      />
     </NavPanelPortal>
   );
 });

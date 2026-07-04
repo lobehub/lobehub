@@ -12,6 +12,7 @@ const {
   mockAsyncTaskModelUpdate,
   mockChargeBeforeGenerate,
   mockCreateAsyncCaller,
+  mockGenerationTopicFindById,
   mockFindUserById,
   mockInsertValues,
   mockIsLobeHubModelAvailable,
@@ -25,6 +26,7 @@ const {
   mockAsyncTaskModelUpdate: vi.fn(),
   mockChargeBeforeGenerate: vi.fn(),
   mockCreateAsyncCaller: vi.fn(),
+  mockGenerationTopicFindById: vi.fn(),
   mockFindUserById: vi.fn(),
   mockInsertValues: [] as unknown[],
   mockIsLobeHubModelAvailable: vi.fn(),
@@ -53,6 +55,12 @@ vi.mock('@/server/services/file', () => ({
 vi.mock('@/database/models/asyncTask', () => ({
   AsyncTaskModel: vi.fn(() => ({
     update: mockAsyncTaskModelUpdate,
+  })),
+}));
+
+vi.mock('@/database/models/generationTopic', () => ({
+  GenerationTopicModel: vi.fn(() => ({
+    findById: mockGenerationTopicFindById,
   })),
 }));
 
@@ -143,6 +151,7 @@ describe('imageRouter', () => {
     mockGetFullFileUrl.mockResolvedValue(null);
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
 
     // Setup default transaction mock
     const mockBatch = {
@@ -240,6 +249,21 @@ describe('imageRouter', () => {
       await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
       expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
       expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should reject inaccessible generation topic before charging or creating records', async () => {
+      mockGenerationTopicFindById.mockResolvedValue(undefined);
+
+      const caller = imageRouter.createCaller(createMockCtx({ workspaceId: 'workspace-1' }));
+
+      await expect(caller.createImage(createDefaultInput())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Invalid generation topic',
+      });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
     it('should reject unavailable lobehub image models before creating async tasks', async () => {

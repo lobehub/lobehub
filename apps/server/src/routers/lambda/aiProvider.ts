@@ -1,4 +1,5 @@
 import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -22,7 +23,6 @@ import { type ProviderConfig } from '@/types/user/settings';
 
 const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const wsId = ctx.workspaceId ?? undefined;
 
   const { aiProvider } = await getServerGlobalConfig();
 
@@ -33,8 +33,9 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
         ctx.serverDB,
         ctx.userId,
         aiProvider as Record<string, ProviderConfig>,
+        ctx.workspaceId ?? undefined,
       ),
-      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId),
+      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
       gateKeeper,
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -70,12 +71,17 @@ export const aiProviderRouter = router({
           ctx.workspaceId ?? undefined,
         );
 
-        const response = await modelRuntime.chat({
-          messages: [{ content: 'Hi', role: 'user' }],
-          model,
-          stream: false,
-          temperature: 0,
-        });
+        const response = await modelRuntime.chat(
+          {
+            messages: [{ content: 'Hi', role: 'user' }],
+            model,
+            stream: false,
+            temperature: 0,
+          },
+          {
+            metadata: { trigger: RequestTrigger.Api },
+          },
+        );
 
         // If we get a response without error, connectivity is ok
         if (response.ok) {
@@ -86,11 +92,11 @@ export const aiProviderRouter = router({
         return { error: errorBody, model, ok: false, status: response.status };
       } catch (error: any) {
         const errorType = error.errorType || error.type;
-        const msg = errorType
-          ? errorType
-          : typeof error === 'string'
+        const msg =
+          errorType ||
+          (typeof error === 'string'
             ? error
-            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error)));
         return { error: msg, model, ok: false };
       }
     }),

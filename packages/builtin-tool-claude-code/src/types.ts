@@ -45,6 +45,14 @@ export enum ClaudeCodeApiName {
   Monitor = 'Monitor',
   Read = 'Read',
   ScheduleWakeup = 'ScheduleWakeup',
+  /**
+   * Multi-agent messaging tool. The agent sends a message to a peer agent
+   * (addressed by its opaque id) so the two can coordinate mid-run; the
+   * recipient receives it on its next tool round. Discovered at runtime via
+   * `ToolSearch`, so — like the Task* tools — it's not part of CC's fixed
+   * built-in set but shows up as a `tool_use` named `SendMessage`.
+   */
+  SendMessage = 'SendMessage',
   Skill = 'Skill',
   /**
    * Imperative successor to {@link TodoWrite} in CC 2.1.143+. The model creates
@@ -218,6 +226,37 @@ export interface TaskOutputArgs {
 export interface TaskStopArgs {
   shell_id?: string;
   task_id?: string;
+}
+
+/**
+ * Arguments for the multi-agent `SendMessage` tool. The tool is exposed to the
+ * model through `ToolSearch` with aliased fields, so the same payload arrives
+ * under two spellings: `to`/`recipient` for the target agent id and
+ * `message`/`content` for the body. Readers should prefer the canonical
+ * `to`/`message` and fall back to the alias.
+ */
+export interface SendMessageArgs {
+  /** Alias for {@link SendMessageArgs.message}. */
+  content?: string;
+  /** Message body sent to the peer agent (markdown allowed). */
+  message?: string;
+  /** Alias for {@link SendMessageArgs.to}. */
+  recipient?: string;
+  /** Short human-facing recap of the message, shown as the card label. */
+  summary?: string;
+  /** Target peer agent id the message is delivered to. */
+  to?: string;
+  /** Delivery kind — usually `message`; kept open for future variants. */
+  type?: string;
+}
+
+/**
+ * Shape of the `SendMessage` tool_result. Confirms the message was queued for
+ * the recipient's next tool round.
+ */
+export interface SendMessageResult {
+  message?: string;
+  success?: boolean;
 }
 
 /**

@@ -7,6 +7,7 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 
@@ -21,13 +22,7 @@ interface ProviderMenuProps {
 const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   const { t } = useTranslation('modelProvider');
 
-  const [providerSearchKeyword, useFetchAiProviderList] = useAiInfraStore((s) => [
-    s.providerSearchKeyword,
-    s.useFetchAiProviderList,
-    s.initAiProviderList,
-  ]);
-
-  useFetchAiProviderList();
+  const providerSearchKeyword = useAiInfraStore((s) => s.providerSearchKeyword);
 
   const width = mobile ? undefined : 280;
   return (
@@ -95,18 +90,31 @@ const ProviderMenu = ({
   mobile?: boolean;
   onProviderSelect?: (providerKey: string) => void;
 }) => {
-  const [initAiProviderList, providerSearchKeyword] = useAiInfraStore((s) => [
-    s.initAiProviderList,
-    s.providerSearchKeyword,
-  ]);
+  const [initAiProviderList, providerSearchKeyword, useFetchAiProviderList] = useAiInfraStore(
+    (s) => [s.initAiProviderList, s.providerSearchKeyword, s.useFetchAiProviderList],
+  );
 
-  let Content = <ProviderList mobile={mobile} onProviderSelect={onProviderSelect} />;
+  // Own the provider-list fetch here so a failed load surfaces error + Retry
+  // instead of a permanent skeleton — `initAiProviderList` only flips on success
+  // (LOBE-11117).
+  const { error, mutate } = useFetchAiProviderList();
 
-  // loading
-  if (!initAiProviderList) Content = <SkeletonList />;
-
-  // search
-  if (!!providerSearchKeyword) Content = <SearchResult onProviderSelect={onProviderSelect} />;
+  // Search overrides everything (matches prior behavior); otherwise gate the
+  // list on load/error via AsyncBoundary.
+  const Content = providerSearchKeyword ? (
+    <SearchResult onProviderSelect={onProviderSelect} />
+  ) : (
+    <AsyncBoundary
+      data={initAiProviderList ? true : undefined}
+      error={error}
+      errorVariant={'page'}
+      isLoading={!initAiProviderList && !error}
+      loading={<SkeletonList />}
+      onRetry={() => mutate()}
+    >
+      <ProviderList mobile={mobile} onProviderSelect={onProviderSelect} />
+    </AsyncBoundary>
+  );
 
   return <Layout mobile={mobile}>{Content}</Layout>;
 };

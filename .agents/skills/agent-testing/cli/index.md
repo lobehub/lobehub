@@ -19,6 +19,7 @@ flakiness.
 | CLI source   | `apps/cli/` — runs from source, no rebuild; standalone `node_modules` — run `pnpm install` inside `apps/cli/` (root install does not cover it) |
 | CLI dev mode | `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings                                                                                          |
 | Auth         | Seeded API key first; Device Code Flow only as fallback — see [../references/auth.md](../references/auth.md)                                   |
+| QStash       | **Required for `agent run`** (queue mode). Start `init-dev-env.sh qstash` and verify with `init-dev-env.sh preflight` — see below              |
 
 All CLI dev commands run from `apps/cli/`. Subsequent examples use `$CLI`:
 
@@ -101,10 +102,21 @@ $CLI task delete T-1 -y
 
 ### Agent system
 
+`agent run` executes through the **server agent runtime in queue mode**, which
+POSTs the operation to local QStash (`127.0.0.1:8080`). If QStash is not
+running, the run fails at operation creation with `fetch failed` /
+`ECONNREFUSED 127.0.0.1:8080` **before any LLM call** — and no trace is
+recorded. So before running an agent, start QStash and gate on the preflight:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash      # separate terminal — keep running
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight    # non-zero exit if QStash/Redis is down
+```
+
 ```bash
 $CLI agent list
 $CLI agent view <agent-id>
-$CLI agent run <agent-id> -m "Test prompt"
+$CLI agent run <agent-id> -m "Test prompt"   # requires QStash (see preflight above)
 ```
 
 ### Document & knowledge base

@@ -23,12 +23,12 @@
     "@lobechat/utils": "workspace:*",
     "random-words": "^2.0.1",
     "ts-md5": "^2.0.1",
-    "type-fest": "^5.2.0",
-    "ws": "^8.18.3"
+    "type-fest": "^5.7.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.14",
-    "dotenv": "^17.2.3",
+    "@electric-sql/pglite": "^0.3.16",
+    "dotenv": "^17.4.2",
     "fake-indexeddb": "^6.2.5"
   },
   "peerDependencies": {

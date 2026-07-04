@@ -45,6 +45,10 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  triggerAnchor: css`
+    display: inline-flex;
+    flex: none;
+  `,
   container: css`
     display: flex;
     flex-direction: column;
@@ -392,7 +396,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger className={styles.triggerAnchor}>
+          <div>{children}</div>
+        </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
             <DropdownMenuPopup>

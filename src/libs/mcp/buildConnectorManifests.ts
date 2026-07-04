@@ -96,10 +96,17 @@ function buildMcpParams(connector: DecryptedConnector) {
   }
 
   const { auth, headers } = buildHttpAuthFromCredentials(connector.credentials);
+  // Custom headers live in `metadata.customHeaders` (independent of the
+  // single-kind `credentials` column) so they can coexist with bearer/no-auth.
+  // Merge them on top of any header-type credential headers (legacy rows), to
+  // mirror the sync/callTool path in services/connector/sync.ts.
+  const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
+  const mergedHeaders =
+    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
 
   return {
     auth,
-    headers,
+    headers: mergedHeaders,
     name: connector.identifier,
     type: 'http' as const,
     url: connector.mcpServerUrl ?? '',

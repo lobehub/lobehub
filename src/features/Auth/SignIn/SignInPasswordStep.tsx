@@ -40,8 +40,16 @@ export const SignInPasswordStep = ({
         <>
           <Text fontSize={13} type={'secondary'}>
             <a
+              role="button"
               style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              tabIndex={0}
               onClick={onForgotPassword}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  void onForgotPassword();
+                }
+              }}
             >
               {t('betterAuth.signin.forgotPassword')}
             </a>
@@ -70,6 +78,7 @@ export const SignInPasswordStep = ({
           style={{ marginBottom: 0 }}
         >
           <InputPassword
+            autoComplete="current-password"
             placeholder={t('betterAuth.signin.passwordPlaceholder')}
             ref={passwordInputRef}
             size="large"

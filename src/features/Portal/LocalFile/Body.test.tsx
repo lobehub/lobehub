@@ -77,7 +77,6 @@ vi.mock('@/services/projectFile', () => ({
 
 vi.mock('@/utils/skillMarkdown', () => ({
   parseSkillMarkdownFrontmatter: (content: string) => ({ body: content }),
-  parseSkillMarkdownFrontmatterFields: () => ({}),
   parseSkillMarkdownMetadata: () => [],
 }));
 

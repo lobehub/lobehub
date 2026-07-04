@@ -1,10 +1,11 @@
 'use client';
 
-import { Flexbox, Modal, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { App, Form, Input } from 'antd';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { lambdaClient } from '@/libs/trpc/client';
 
 interface SubmitRepoModalProps {
@@ -61,7 +62,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
     }, [form, onClose]);
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         cancelText={t('user.cancel')}
         confirmLoading={isSubmitting}
@@ -100,7 +101,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
             {t('user.submitRepoHint')}
           </Text>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

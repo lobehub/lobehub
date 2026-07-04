@@ -262,6 +262,7 @@ export class SessionActionImpl {
               title: session.meta?.title || 'Untitled Group',
               updatedAt: session.updatedAt,
               userId: '', // Use updatedAt as accessedAt fallback
+              visibility: 'public' as const,
               workspaceId: null,
             }));
 

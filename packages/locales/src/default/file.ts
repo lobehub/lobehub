@@ -62,6 +62,7 @@ export default {
   'library.import.success': 'Library imported to {{name}}.',
   'library.import.tooltip':
     'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
+  'library.privateEmpty': 'Create a private library',
   'library.list.confirmRemoveLibrary':
     'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
   'library.list.copyDescription':
@@ -78,7 +79,12 @@ export default {
   'library.list.transferTitle': 'Transfer library',
   'library.list.transferTo': 'Transfer to…',
   'library.new': 'New Library',
+  'library.publish': 'Publish to workspace',
+  'library.publishConfirm.content':
+    'All workspace members will see this knowledge base. This action cannot be undone.',
+  'library.publishConfirm.title': 'Publish knowledge base to workspace?',
   'library.title': 'Library',
+  'library.workspaceEmpty': 'Create a workspace library',
   'loadMore': 'Load More',
   'menu.allFiles': 'All Files',
   'menu.allPages': 'All Pages',
@@ -191,7 +197,16 @@ export default {
   'pageList.noResults': 'No matching pages found',
   'pageList.pageCount': '{{count}} pages in total',
   'pageList.pageSizeItem': '{{count}} items',
+  'pageList.privateTitle': 'Private',
+  'pageList.publishConfirm.content':
+    'After publishing, everyone in the workspace can see this page. You can’t change it back to private later.',
+  'pageList.publishConfirm.ok': 'Publish',
+  'pageList.publishConfirm.title': 'Publish to workspace',
+  'pageList.publishError': 'Failed to publish page',
+  'pageList.publishSuccess': 'Page published to workspace',
+  'pageList.publishToWorkspace': 'Publish to workspace',
   'pageList.title': 'Pages',
+  'pageList.workspaceTitle': 'Workspace',
   'pageList.transferConfirm': 'Transfer',
   'pageList.transferDescription':
     'Move this page (and any folders it contains) to another workspace.',

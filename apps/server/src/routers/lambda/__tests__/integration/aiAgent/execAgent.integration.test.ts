@@ -168,10 +168,32 @@ describe('execAgent', () => {
         .insert(topics)
         .values({ agentId: testAgentId, title: 'Existing Topic', userId })
         .returning();
+      const [seedUserMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Initial question',
+          role: 'user',
+          topicId: existingTopic.id,
+          userId,
+        })
+        .returning()) as any[];
+      const [latestAssistantMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Initial answer',
+          parentId: seedUserMessage.id,
+          role: 'assistant',
+          topicId: existingTopic.id,
+          userId,
+        })
+        .returning()) as any[];
 
       const result = await caller.execAgent({
         agentId: testAgentId,
         appContext: { topicId: existingTopic.id },
+        autoStart: false,
         prompt: 'Follow up question',
       });
 
@@ -180,6 +202,20 @@ describe('execAgent', () => {
       const allTopics = await serverDB.select().from(topics).where(eq(topics.agentId, testAgentId));
       expect(allTopics).toHaveLength(1);
       expect(allTopics[0].id).toBe(existingTopic.id);
+
+      const allMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, existingTopic.id));
+      const followUpUserMessage = allMessages.find(
+        (message) => message.role === 'user' && message.content === 'Follow up question',
+      );
+      expect(followUpUserMessage?.parentId).toBe(latestAssistantMessage.id);
+
+      const followUpAssistantMessage = allMessages.find(
+        (message) => message.role === 'assistant' && message.parentId === followUpUserMessage?.id,
+      );
+      expect(followUpAssistantMessage).toBeDefined();
     });
   });
 

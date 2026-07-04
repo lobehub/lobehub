@@ -7,10 +7,17 @@ import {
   agentBotProviders,
   agents,
   agentsToSessions,
+  briefs,
   chatGroups,
   chatGroupsAgents,
+  documents,
   messages,
   sessions,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
   topics,
   users,
   workspaces,
@@ -21,15 +28,16 @@ import { AgentModel } from '../agent';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'transfer-test-user';
+const targetUserId = 'transfer-test-target-user';
 const wsId1 = 'transfer-test-ws-1';
 const wsId2 = 'transfer-test-ws-2';
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: userId }]);
+  await serverDB.insert(users).values([{ id: userId }, { id: targetUserId }]);
   await serverDB.insert(workspaces).values([
     { id: wsId1, name: 'WS 1', slug: 'ws-1', primaryOwnerId: userId },
-    { id: wsId2, name: 'WS 2', slug: 'ws-2', primaryOwnerId: userId },
+    { id: wsId2, name: 'WS 2', slug: 'ws-2', primaryOwnerId: targetUserId },
   ]);
 });
 
@@ -160,6 +168,136 @@ describe('AgentModel.transferAgent', () => {
       .where(eq(agentBotProviders.agentId, agent.id));
     expect(bot.workspaceId).toBe(wsId1);
     expect(bot.userId).toBe(userId);
+  });
+
+  it('should transfer tasks assigned to the agent and their child records', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Task Agent' });
+
+    await serverDB.insert(tasks).values([
+      {
+        assigneeAgentId: agent.id,
+        automationMode: 'schedule',
+        createdByAgentId: agent.id,
+        createdByUserId: userId,
+        id: 'task-assigned-to-agent',
+        identifier: 'T-1',
+        instruction: 'Run scheduled work',
+        schedulePattern: '0 * * * *',
+        seq: 1,
+        workspaceId: wsId1,
+      },
+      {
+        createdByUserId: userId,
+        id: 'task-blocker',
+        identifier: 'T-2',
+        instruction: 'External blocker',
+        seq: 2,
+        workspaceId: wsId1,
+      },
+    ]);
+    await serverDB.insert(taskDependencies).values({
+      dependsOnId: 'task-blocker',
+      taskId: 'task-assigned-to-agent',
+      type: 'blocks',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'text/plain',
+      id: 'task-doc',
+      source: 'test',
+      sourceType: 'file',
+      title: 'Task doc',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-doc',
+      taskId: 'task-assigned-to-agent',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topics).values({
+      id: 'task-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskTopics).values({
+      seq: 1,
+      status: 'completed',
+      taskId: 'task-assigned-to-agent',
+      topicId: 'task-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(briefs).values({
+      agentId: agent.id,
+      id: 'task-brief',
+      summary: 'Done',
+      taskId: 'task-assigned-to-agent',
+      title: 'Result',
+      type: 'result',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskComments).values({
+      authorAgentId: agent.id,
+      content: 'Comment',
+      id: 'task-comment',
+      taskId: 'task-assigned-to-agent',
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [task] = await serverDB
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, 'task-assigned-to-agent'));
+    expect(task.createdByUserId).toBe(targetUserId);
+    expect(task.workspaceId).toBe(wsId2);
+    expect(task.assigneeAgentId).toBe(agent.id);
+    expect(task.createdByAgentId).toBe(agent.id);
+
+    const [dependency] = await serverDB
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.taskId, 'task-assigned-to-agent'));
+    expect(dependency.userId).toBe(targetUserId);
+    expect(dependency.workspaceId).toBe(wsId2);
+
+    const [taskDocument] = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'task-assigned-to-agent'));
+    expect(taskDocument.userId).toBe(targetUserId);
+    expect(taskDocument.workspaceId).toBe(wsId2);
+
+    const [taskTopic] = await serverDB
+      .select()
+      .from(taskTopics)
+      .where(eq(taskTopics.taskId, 'task-assigned-to-agent'));
+    expect(taskTopic.userId).toBe(targetUserId);
+    expect(taskTopic.workspaceId).toBe(wsId2);
+
+    const [brief] = await serverDB
+      .select()
+      .from(briefs)
+      .where(eq(briefs.taskId, 'task-assigned-to-agent'));
+    expect(brief.userId).toBe(targetUserId);
+    expect(brief.workspaceId).toBe(wsId2);
+
+    const [comment] = await serverDB
+      .select()
+      .from(taskComments)
+      .where(eq(taskComments.taskId, 'task-assigned-to-agent'));
+    expect(comment.userId).toBe(targetUserId);
+    expect(comment.workspaceId).toBe(wsId2);
   });
 
   it('should remove chat group associations', async () => {

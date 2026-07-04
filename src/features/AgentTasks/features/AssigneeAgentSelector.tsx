@@ -1,10 +1,12 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type SidebarAgentItem } from '@/database/repositories/home';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -42,6 +44,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorTextPlaceholder};
     }
   `,
+  sectionHeader: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+
+    font-size: 12px;
+    line-height: 1.4;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 const triggerStyle: CSSProperties = {
@@ -53,7 +63,7 @@ const triggerStyle: CSSProperties = {
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
   ({ children, currentAgentId, disabled, onChange, taskIdentifier }) => {
-    const { t } = useTranslation(['chat', 'common']);
+    const { t } = useTranslation(['chat', 'common', 'topic']);
     const { allowed: canEditTask, reason } = usePermission('create_content');
     const [key, setKey] = useState(0);
     const [search, setSearch] = useState('');
@@ -61,7 +71,15 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const listRef = useRef<HTMLDivElement>(null);
 
     const updateTask = useTaskStore((s) => s.updateTask);
-    const agents = useHomeStore(homeAgentListSelectors.allAgents);
+    const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
+    const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+    const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+    const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+    const privateUngroupedAgents = useHomeStore(
+      homeAgentListSelectors.privateUngroupedAgents,
+      isEqual,
+    );
+    const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
     const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
 
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -71,9 +89,15 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
     useFetchAgentList();
 
-    const agentList = useMemo(() => {
-      const available = agents.filter((a) => a.type === 'agent');
-      const hasInbox = available.some((a) => a.id === inboxAgentId);
+    // Workspace bucket: pinned + grouped + ungrouped. In personal mode this is the
+    // entire list (private buckets stay empty). The inbox agent is shared content,
+    // so it is injected at the top of this bucket when missing.
+    const workspaceAgents = useMemo<SidebarAgentItem[]>(() => {
+      const groupedItems = agentGroups.flatMap((group) => group.items);
+      const available = [...pinnedAgents, ...groupedItems, ...ungroupedAgents].filter(
+        (agent) => agent.type === 'agent',
+      );
+      const hasInbox = available.some((agent) => agent.id === inboxAgentId);
 
       if (inboxAgentId && !hasInbox) {
         return [
@@ -91,22 +115,40 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       }
 
       return available;
-    }, [agents, inboxAgentId, inboxMeta, t]);
+    }, [pinnedAgents, agentGroups, ungroupedAgents, inboxAgentId, inboxMeta, t]);
 
-    const filteredAgents = useMemo(() => {
+    const privateAgents = useMemo<SidebarAgentItem[]>(() => {
+      const groupedItems = privateAgentGroups.flatMap((group) => group.items);
+      return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
+    }, [privateAgentGroups, privateUngroupedAgents]);
+
+    const filteredPrivate = useMemo(() => {
       const q = search.trim().toLowerCase();
-      if (!q) return agentList;
-      return agentList.filter((a) => (a.title || '').toLowerCase().includes(q));
-    }, [agentList, search]);
+      if (!q) return privateAgents;
+      return privateAgents.filter((agent) => (agent.title || '').toLowerCase().includes(q));
+    }, [privateAgents, search]);
+
+    const filteredWorkspace = useMemo(() => {
+      const q = search.trim().toLowerCase();
+      if (!q) return workspaceAgents;
+      return workspaceAgents.filter((agent) => (agent.title || '').toLowerCase().includes(q));
+    }, [workspaceAgents, search]);
+
+    // Flat order for keyboard navigation and activeIndex: private first, then workspace.
+    // In personal / no-private mode, only the workspace list contributes.
+    const filteredFlat = useMemo(
+      () => (hasPrivateAgents ? [...filteredPrivate, ...filteredWorkspace] : filteredWorkspace),
+      [hasPrivateAgents, filteredPrivate, filteredWorkspace],
+    );
 
     useEffect(() => {
       if (search.trim()) {
         setActiveIndex(0);
         return;
       }
-      const selectedIdx = filteredAgents.findIndex((a) => a.id === currentAgentId);
+      const selectedIdx = filteredFlat.findIndex((a) => a.id === currentAgentId);
       setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
-    }, [search, filteredAgents, currentAgentId]);
+    }, [search, filteredFlat, currentAgentId]);
 
     const handleAgentChange = useCallback(
       (agentId: string) => {
@@ -127,21 +169,21 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
     const handleSearchKeyDown = useCallback(
       (e: KeyboardEvent<HTMLInputElement>) => {
-        if (filteredAgents.length === 0) return;
+        if (filteredFlat.length === 0) return;
 
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setActiveIndex((i) => (i + 1) % filteredAgents.length);
+          setActiveIndex((i) => (i + 1) % filteredFlat.length);
         } else if (e.key === 'ArrowUp') {
           e.preventDefault();
-          setActiveIndex((i) => (i - 1 + filteredAgents.length) % filteredAgents.length);
+          setActiveIndex((i) => (i - 1 + filteredFlat.length) % filteredFlat.length);
         } else if (e.key === 'Enter') {
           e.preventDefault();
-          const target = filteredAgents[activeIndex];
+          const target = filteredFlat[activeIndex];
           if (target) handleAgentChange(target.id);
         }
       },
-      [activeIndex, filteredAgents, handleAgentChange],
+      [activeIndex, filteredFlat, handleAgentChange],
     );
 
     useEffect(() => {
@@ -150,6 +192,28 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       const active = list.querySelector<HTMLElement>(`[data-agent-index="${activeIndex}"]`);
       active?.scrollIntoView({ block: 'nearest' });
     }, [activeIndex]);
+
+    const renderItems = (list: SidebarAgentItem[], offset: number) =>
+      list.map((agent, i) => {
+        const flatIndex = offset + i;
+        return (
+          <div
+            data-agent-index={flatIndex}
+            key={agent.id}
+            onMouseEnter={() => setActiveIndex(flatIndex)}
+          >
+            <AgentItem
+              active={flatIndex === activeIndex}
+              agentId={agent.id}
+              agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+              avatar={agent.avatar}
+              heterogeneousType={agent.heterogeneousType}
+              onAgentChange={handleAgentChange}
+              onClose={() => setKey((k) => k + 1)}
+            />
+          </div>
+        );
+      });
 
     const blocked = disabled || !canEditTask;
     const trigger = blocked ? (
@@ -186,7 +250,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                 />
-                {filteredAgents.length === 0 ? (
+                {filteredFlat.length === 0 ? (
                   <Flexbox align={'center'} justify={'center'} padding={16}>
                     <Text fontSize={12} type={'secondary'}>
                       {t('taskList.assigneeSearch.empty', { ns: 'chat' })}
@@ -199,23 +263,28 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                     ref={listRef}
                     style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
                   >
-                    {filteredAgents.map((agent, index) => (
-                      <div
-                        data-agent-index={index}
-                        key={agent.id}
-                        onMouseEnter={() => setActiveIndex(index)}
-                      >
-                        <AgentItem
-                          active={index === activeIndex}
-                          agentId={agent.id}
-                          agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
-                          avatar={agent.avatar}
-                          heterogeneousType={agent.heterogeneousType}
-                          onAgentChange={handleAgentChange}
-                          onClose={() => setKey((k) => k + 1)}
-                        />
-                      </div>
-                    ))}
+                    {hasPrivateAgents ? (
+                      <>
+                        {filteredPrivate.length > 0 && (
+                          <>
+                            <div className={styles.sectionHeader}>
+                              {t('taskManager.agentSelector.privateGroup', { ns: 'topic' })}
+                            </div>
+                            {renderItems(filteredPrivate, 0)}
+                          </>
+                        )}
+                        {filteredWorkspace.length > 0 && (
+                          <>
+                            <div className={styles.sectionHeader}>
+                              {t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })}
+                            </div>
+                            {renderItems(filteredWorkspace, filteredPrivate.length)}
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      renderItems(filteredFlat, 0)
+                    )}
                   </Flexbox>
                 )}
               </Flexbox>

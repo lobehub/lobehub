@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,
   ArrowRight,
@@ -26,7 +26,8 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import RunRow from './RunRow';
+import Sparkline from '../Sparkline';
+import StatusBadge from '../StatusBadge';
 
 const SYSTEM_ICONS = [
   LoaderPinwheel,
@@ -47,50 +48,78 @@ const getSystemIcon = (id: string) => {
   return SYSTEM_ICONS[hash % SYSTEM_ICONS.length];
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     height: 100%;
-    padding: 20px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
+    background: ${cssVar.colorBgContainer};
+
+    transition: border-color 0.15s ease;
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  // Tonal hero band that carries the headline metric — the first thing the eye
+  // lands on, separated from the identity row by a subtle fill.
+  metricBand: css`
+    padding: 16px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  metricValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading2};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
+  ctaBand: css`
+    padding-block: 24px;
+    padding-inline: 16px;
+    border: 1px dashed ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    text-align: center;
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   detailLink: css`
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
 
     width: 28px;
     height: 28px;
-    border-radius: 6px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     color: ${cssVar.colorTextTertiary};
 
-    transition: all 200ms ${cssVar.motionEaseOut};
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
-  `,
-  emptyBox: css`
-    padding-block: 24px;
-    padding-inline: 16px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
 
-    text-align: center;
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
 
-    background: ${cssVar.colorFillQuaternary};
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   iconBox: css`
     display: flex;
@@ -98,39 +127,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+    width: 40px;
+    height: 40px;
+    border-radius: ${cssVar.borderRadius};
   `,
   name: css`
-    font-size: 14px;
-    font-weight: 500;
+    font-size: ${cssVar.fontSizeLG};
+    font-weight: 600;
     color: ${cssVar.colorText};
     text-decoration: none;
 
-    transition: color 200ms ${cssVar.motionEaseOut};
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorPrimary};
     }
-  `,
-  recentLabel: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  viewAll: css`
-    font-size: 11px;
-    color: ${cssVar.colorPrimary};
-    text-decoration: none;
 
-    &:hover {
-      text-decoration: underline;
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
+  `,
+  statDivider: css`
+    width: 1px;
+    height: 24px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  statValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-weight: 600;
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -147,6 +172,18 @@ interface BenchmarkCardProps {
   testCaseCount?: number;
 }
 
+// One labeled figure in the stat strip (big mono number over a quiet label).
+const Stat = memo<{ label: string; value: number | string }>(({ value, label }) => (
+  <Flexbox gap={2}>
+    <Text className={styles.statValue} fontSize={16}>
+      {value}
+    </Text>
+    <Text color={cssVar.colorTextTertiary} fontSize={12}>
+      {label}
+    </Text>
+  </Flexbox>
+));
+
 const BenchmarkCard = memo<BenchmarkCardProps>(
   ({
     id,
@@ -162,204 +199,133 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
   }) => {
     const { t } = useTranslation('eval');
     const allRunCount = runCount || recentRuns?.length || 0;
-    const displayRuns = recentRuns?.slice(0, 3) || [];
     const hasDatasets = datasetCount > 0;
     const systemIcon = useMemo(() => getSystemIcon(id), [id]);
+    const isUser = source === 'user';
+
+    // Pass-rate trend: recentRuns arrives newest-first, so reverse a copy to read
+    // left→right oldest→newest. Drop runs that never produced a rate.
+    const trend = useMemo(() => {
+      const rates = (recentRuns ?? [])
+        .map((r) => r?.metrics?.passRate)
+        .filter((v): v is number => typeof v === 'number');
+      return rates.reverse();
+    }, [recentRuns]);
+
+    const bestRate = trend.length > 0 ? Math.max(...trend) : undefined;
+    const latestRun = recentRuns?.[0];
 
     return (
-      <Flexbox className={styles.card} gap={12} justify="space-between">
-        {/* Top: Header + Description + Tags */}
+      <Flexbox className={styles.card} gap={16} justify={'space-between'} padding={20}>
         <Flexbox gap={16}>
-          {/* Header */}
-          <Flexbox horizontal justify="space-between">
-            <Flexbox horizontal align="start" gap={12}>
+          {/* Identity */}
+          <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
+            <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0 }}>
               <div
                 className={styles.iconBox}
-                style={{
-                  background:
-                    source === 'user'
-                      ? 'var(--ant-color-success-bg)'
-                      : 'var(--ant-color-primary-bg)',
-                }}
+                style={{ background: isUser ? cssVar.colorSuccessBg : cssVar.colorPrimaryBg }}
               >
                 <Icon
-                  icon={source === 'user' ? User : systemIcon}
-                  size={24}
-                  style={{
-                    color:
-                      source === 'user' ? 'var(--ant-color-success)' : 'var(--ant-color-primary)',
-                  }}
+                  icon={isUser ? User : systemIcon}
+                  size={22}
+                  style={{ color: isUser ? cssVar.colorSuccess : cssVar.colorPrimary }}
                 />
               </div>
-              <Flexbox gap={4}>
+              <Flexbox gap={2} style={{ minWidth: 0 }}>
                 <WorkspaceLink className={styles.name} to={`/eval/bench/${id}`}>
                   {name}
                 </WorkspaceLink>
-                <Flexbox horizontal align="center" className={styles.meta} gap={4}>
-                  <span>{t('benchmark.card.datasetCount', { count: datasetCount })}</span>
-                  <span>·</span>
-                  <span>{t('benchmark.card.caseCount', { count: testCaseCount || 0 })}</span>
-                  <span>·</span>
-                  <span>{t('benchmark.card.runCount', { count: allRunCount })}</span>
-                  {bestScore !== undefined && (
-                    <>
-                      <span>·</span>
-                      <span>
-                        {t('benchmark.card.bestScore')}{' '}
-                        <span
-                          style={{
-                            color: 'var(--ant-color-text)',
-                            fontFamily: 'monospace',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {bestScore.toFixed(1)}
-                        </span>
-                      </span>
-                    </>
-                  )}
-                </Flexbox>
+                {description && (
+                  <Text color={cssVar.colorTextTertiary} fontSize={12} lineClamp={1}>
+                    {description}
+                  </Text>
+                )}
               </Flexbox>
             </Flexbox>
-
             <WorkspaceLink className={styles.detailLink} to={`/eval/bench/${id}`}>
               <Icon icon={ArrowRight} size={16} />
             </WorkspaceLink>
           </Flexbox>
 
-          {/* Description */}
-          {description && <p className={styles.description}>{description}</p>}
-
-          {/* Tags */}
-          {tags && tags.length > 0 && (
-            <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap' }}>
-              {tags.slice(0, 4).map((tag) => (
-                <Tag key={tag} style={{ fontSize: 10 }}>
-                  {tag}
-                </Tag>
-              ))}
-              {tags.length > 4 && <Tag style={{ fontSize: 10 }}>+{tags.length - 4}</Tag>}
+          {/* Hero metric band — headline pass rate + trend, or a focused CTA */}
+          {!hasDatasets ? (
+            <Flexbox align={'center'} className={styles.ctaBand} gap={8}>
+              <Icon icon={Database} size={24} style={{ color: cssVar.colorTextQuaternary }} />
+              <Flexbox align={'center'} gap={2}>
+                <Text color={cssVar.colorTextTertiary}>{t('benchmark.card.noDataset')}</Text>
+                <Text color={cssVar.colorTextQuaternary} fontSize={12}>
+                  {t('benchmark.card.noDatasetHint')}
+                </Text>
+              </Flexbox>
+              <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}`}>
+                <Button icon={Upload} size={'small'} variant={'filled'}>
+                  {t('benchmark.card.importDataset')}
+                </Button>
+              </WorkspaceLink>
+            </Flexbox>
+          ) : bestRate !== undefined ? (
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.metricBand}
+              justify={'space-between'}
+            >
+              <Flexbox gap={4}>
+                <span className={styles.metricValue}>{(bestRate * 100).toFixed(0)}%</span>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                    {t('benchmark.card.bestPassRate')}
+                  </Text>
+                  {latestRun?.status && <StatusBadge status={latestRun.status} />}
+                </Flexbox>
+              </Flexbox>
+              {trend.length > 1 && <Sparkline values={trend} />}
+            </Flexbox>
+          ) : (
+            <Flexbox align={'center'} className={styles.ctaBand} gap={8}>
+              <Icon icon={FlaskConical} size={24} style={{ color: cssVar.colorTextQuaternary }} />
+              <Flexbox align={'center'} gap={2}>
+                <Text color={cssVar.colorTextTertiary}>{t('benchmark.card.empty')}</Text>
+                <Text color={cssVar.colorTextQuaternary} fontSize={12}>
+                  {t('benchmark.card.emptyHint')}
+                </Text>
+              </Flexbox>
+              <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}?tab=runs`}>
+                <Button icon={Play} size={'small'} variant={'filled'}>
+                  {t('benchmark.card.startFirst')}
+                </Button>
+              </WorkspaceLink>
             </Flexbox>
           )}
         </Flexbox>
 
-        {/* Bottom (pinned) */}
-        {!hasDatasets ? (
-          <div className={styles.emptyBox}>
-            <Icon
-              icon={Database}
-              size={24}
-              style={{ color: 'var(--ant-color-text-quaternary)', marginBottom: 8 }}
-            />
-            <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 13, margin: '0 0 4px' }}>
-              {t('benchmark.card.noDataset')}
-            </p>
-            <p
-              style={{
-                color: 'var(--ant-color-text-quaternary)',
-                fontSize: 12,
-                margin: '0 0 12px',
-              }}
-            >
-              {t('benchmark.card.noDatasetHint')}
-            </p>
-            <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}`}>
-              <Button icon={Upload} size="small" variant="filled">
-                {t('benchmark.card.importDataset')}
-              </Button>
-            </WorkspaceLink>
-          </div>
-        ) : (
-          <Flexbox gap={8}>
-            <Flexbox horizontal align="center" justify="space-between">
-              <span className={styles.recentLabel}>{t('benchmark.card.recentRuns')}</span>
-              {allRunCount > 3 && (
-                <WorkspaceLink className={styles.viewAll} to={`/eval/bench/${id}`}>
-                  {t('benchmark.card.viewAll', { count: allRunCount })}
-                </WorkspaceLink>
-              )}
-            </Flexbox>
-
-            {allRunCount > 0 ? (
-              <Flexbox gap={6}>
-                {displayRuns.length > 0 ? (
-                  displayRuns.map((run: any) => {
-                    const metrics = run.metrics;
-                    const agentSnapshot = run.config?.agentSnapshot;
-                    const passedCases = metrics?.passedCases ?? 0;
-                    const failedCases = metrics?.failedCases ?? 0;
-                    const errorCases = metrics?.errorCases ?? 0;
-
-                    return (
-                      <RunRow
-                        agentName={agentSnapshot?.title}
-                        benchmarkId={id}
-                        cost={metrics?.totalCost}
-                        createdAt={run.createdAt}
-                        errorCount={errorCases}
-                        failCount={failedCases}
-                        id={run.id}
-                        key={run.id}
-                        model={agentSnapshot?.model}
-                        name={run.name}
-                        passCount={passedCases}
-                        passRate={metrics?.passRate}
-                        score={metrics?.averageScore}
-                        status={run.status}
-                        totalCases={metrics?.totalCases ?? 0}
-                        completedCases={
-                          metrics?.completedCases ?? passedCases + failedCases + errorCases
-                        }
-                      />
-                    );
-                  })
-                ) : (
-                  <p
-                    style={{
-                      color: 'var(--ant-color-text-tertiary)',
-                      fontSize: 12,
-                      textAlign: 'center',
-                      padding: '12px 0',
-                    }}
-                  >
-                    {t('benchmark.card.noRecentRuns')}
-                  </p>
-                )}
-              </Flexbox>
-            ) : (
-              <div className={styles.emptyBox}>
-                <Icon
-                  icon={FlaskConical}
-                  size={24}
-                  style={{ color: 'var(--ant-color-text-quaternary)', marginBottom: 8 }}
-                />
-                <p
-                  style={{
-                    color: 'var(--ant-color-text-tertiary)',
-                    fontSize: 13,
-                    margin: '0 0 4px',
-                  }}
-                >
-                  {t('benchmark.card.empty')}
-                </p>
-                <p
-                  style={{
-                    color: 'var(--ant-color-text-quaternary)',
-                    fontSize: 12,
-                    margin: '0 0 12px',
-                  }}
-                >
-                  {t('benchmark.card.emptyHint')}
-                </p>
-                <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}?tab=runs`}>
-                  <Button icon={Play} size="small" variant="filled">
-                    {t('benchmark.card.startFirst')}
-                  </Button>
-                </WorkspaceLink>
-              </div>
+        {/* Stat strip + tags (pinned) */}
+        <Flexbox gap={16}>
+          <Flexbox horizontal align={'center'} gap={20}>
+            <Stat label={t('sidebar.datasets')} value={datasetCount} />
+            <span className={styles.statDivider} />
+            <Stat label={t('benchmark.card.casesLabel')} value={testCaseCount || 0} />
+            <span className={styles.statDivider} />
+            <Stat label={t('benchmark.card.evalsLabel')} value={allRunCount} />
+            {bestScore !== undefined && (
+              <>
+                <span className={styles.statDivider} />
+                <Stat label={t('benchmark.card.bestScore')} value={bestScore.toFixed(1)} />
+              </>
             )}
           </Flexbox>
-        )}
+
+          {tags && tags.length > 0 && (
+            <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap' }}>
+              {tags.slice(0, 4).map((tag) => (
+                <Tag key={tag} size={'small'}>
+                  {tag}
+                </Tag>
+              ))}
+              {tags.length > 4 && <Tag size={'small'}>+{tags.length - 4}</Tag>}
+            </Flexbox>
+          )}
+        </Flexbox>
       </Flexbox>
     );
   },

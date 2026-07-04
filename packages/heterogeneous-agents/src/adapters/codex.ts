@@ -17,7 +17,9 @@ const CODEX_COMMAND_API = 'command_execution';
 const CODEX_FILE_CHANGE_API = 'file_change';
 const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
+const CODEX_WEB_SEARCH_API = 'web_search';
 const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
+const CODEX_COMMAND_OUTPUT_MAX_LENGTH = 25_000;
 
 const CODEX_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your usage limit/i,
@@ -72,6 +74,11 @@ interface CodexMcpToolCallItem extends CodexBaseItem {
   tool?: string;
 }
 
+interface CodexWebSearchItem extends CodexBaseItem {
+  action?: unknown;
+  query?: unknown;
+}
+
 interface CodexCollabAgentState {
   message?: string | null;
   status?: string;
@@ -91,7 +98,8 @@ type CodexToolItem =
   | CodexCommandExecutionItem
   | CodexFileChangeItem
   | CodexMcpToolCallItem
-  | CodexTodoListItem;
+  | CodexTodoListItem
+  | CodexWebSearchItem;
 
 interface ZonedDateTimeParts {
   day: number;
@@ -116,6 +124,9 @@ const isMcpToolCallItem = (item: CodexToolItem): item is CodexMcpToolCallItem =>
 
 const isTodoListItem = (item: CodexToolItem): item is CodexTodoListItem =>
   item.type === CODEX_TODO_LIST_API;
+
+const isWebSearchItem = (item: CodexToolItem): item is CodexWebSearchItem =>
+  item.type === CODEX_WEB_SEARCH_API;
 
 const normalizeTodoListItems = (item: CodexTodoListItem) =>
   (item.items || [])
@@ -190,6 +201,35 @@ const stringifyUnknown = (value: unknown): string => {
 const getRecordString = (record: Record<string, unknown>, key: string): string | undefined => {
   const value = record[key];
   return typeof value === 'string' && value.trim() ? value : undefined;
+};
+
+const getFirstStringFromArray = (value: unknown): string | undefined => {
+  if (!Array.isArray(value)) return;
+
+  for (const item of value) {
+    if (typeof item === 'string' && item.trim()) return item.trim();
+  }
+};
+
+const getWebSearchActionQuery = (action: Record<string, unknown>): string | undefined =>
+  getRecordString(action, 'query')?.trim() || getFirstStringFromArray(action.queries);
+
+const getWebSearchQuery = (item: CodexWebSearchItem): string | undefined => {
+  if (typeof item.query === 'string' && item.query.trim()) return item.query.trim();
+
+  return isRecord(item.action) ? getWebSearchActionQuery(item.action) : undefined;
+};
+
+const synthesizeWebSearchPluginState = (item: CodexWebSearchItem) => {
+  const query = getWebSearchQuery(item);
+
+  if (item.action === undefined && !query && !item.status) return;
+
+  return {
+    ...(item.action === undefined ? {} : { action: item.action }),
+    ...(query ? { query } : {}),
+    ...(item.status ? { status: item.status } : {}),
+  };
 };
 
 const unwrapMcpResultEnvelope = (value: unknown): unknown => {
@@ -367,6 +407,10 @@ const summarizeCollabToolCall = (item: CodexCollabToolCallItem): string => {
   return `${toolName} completed.`;
 };
 
+const summarizeWebSearch = (item: CodexWebSearchItem): string => {
+  return `Completed ${item.type}.`;
+};
+
 const summarizeFallbackTool = (item: CodexToolItem): string => {
   return `Completed ${item.type}.`;
 };
@@ -396,6 +440,7 @@ const getToolContent = (item: CodexToolItem, isSuccess: boolean): string => {
   if (isFileChangeItem(item)) return summarizeFileChange(item);
   if (isMcpToolCallItem(item)) return getMcpResultContent(item);
   if (isCollabToolCallItem(item)) return summarizeCollabToolCall(item);
+  if (isWebSearchItem(item)) return summarizeWebSearch(item);
 
   return summarizeFallbackTool(item);
 };
@@ -411,22 +456,57 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
   return item.status !== 'cancelled' && item.status !== 'error' && item.status !== 'failed';
 };
 
+const truncateCodexCommandOutput = (content: string) => {
+  if (!content || content.length <= CODEX_COMMAND_OUTPUT_MAX_LENGTH) {
+    return {
+      output: content,
+      truncated: false,
+    };
+  }
+
+  let cutoff = CODEX_COMMAND_OUTPUT_MAX_LENGTH;
+  const lastCharCode = content.charCodeAt(cutoff - 1);
+  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
+    cutoff -= 1;
+  }
+
+  const omittedCharacters = content.length - cutoff;
+  const notice = `\n\n[Output truncated: ${omittedCharacters} characters omitted. Original length: ${content.length} characters]`;
+
+  return {
+    omittedCharacters,
+    originalLength: content.length,
+    output: content.slice(0, cutoff) + notice,
+    truncated: true,
+  };
+};
+
 const getToolResultData = (item: CodexToolItem): ToolResultData => {
   const isSuccess = isSuccessfulToolCompletion(item);
   const output = getToolContent(item, isSuccess);
 
   if (isCommandExecutionItem(item)) {
     const exitCode = item.exit_code ?? undefined;
+    const truncatedOutput = truncateCodexCommandOutput(output);
 
     return {
-      content: output,
+      content: truncatedOutput.output,
       isError: !isSuccess,
       pluginState: {
         ...(exitCode !== undefined ? { exitCode } : {}),
-        ...(isSuccess ? {} : { error: output || `Command failed (${exitCode ?? 'unknown'})` }),
+        ...(isSuccess
+          ? {}
+          : { error: truncatedOutput.output || `Command failed (${exitCode ?? 'unknown'})` }),
         isBackground: false,
-        output,
-        stdout: output,
+        ...(truncatedOutput.truncated
+          ? {
+              omittedOutputCharacters: truncatedOutput.omittedCharacters,
+              originalOutputLength: truncatedOutput.originalLength,
+              outputTruncated: true,
+            }
+          : {}),
+        output: truncatedOutput.output,
+        stdout: truncatedOutput.output,
         success: isSuccess,
       },
       toolCallId: item.id,
@@ -442,7 +522,9 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
           ? synthesizeMcpToolPluginState(item)
           : isCollabToolCallItem(item)
             ? synthesizeCollabToolPluginState(item)
-            : undefined;
+            : isWebSearchItem(item)
+              ? synthesizeWebSearchPluginState(item)
+              : undefined;
 
   return {
     content: output,
@@ -783,7 +865,10 @@ export class CodexAdapter implements AgentEventAdapter {
       events.push(this.makeEvent('step_complete', data));
     }
 
-    if (this.started) events.push(this.makeEvent('stream_end', {}));
+    if (this.started) {
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('visible_output_end', {}));
+    }
     events.push(this.makeEvent('agent_runtime_end', {}));
 
     return events;
@@ -811,7 +896,7 @@ export class CodexAdapter implements AgentEventAdapter {
     };
 
     const events: HeterogeneousAgentEvent[] = this.started
-      ? [this.makeEvent('stream_end', {})]
+      ? [this.makeEvent('stream_end', {}), this.makeEvent('visible_output_end', {})]
       : [];
     events.push(this.makeEvent('error', data));
 

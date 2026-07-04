@@ -150,6 +150,33 @@ describe('WorkspaceCtr', () => {
       expect(result.skills.map((s) => s.name)).toEqual(['alpha']);
     });
 
+    it('parses folded block scalar descriptions', async () => {
+      vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
+        if (dir === '/proj/.agents/skills') return [dirent('agent-testing', 'dir')];
+        if (dir === '/proj/.agents/skills/agent-testing') return [dirent('SKILL.md', 'file')];
+        throw new Error('ENOENT');
+      });
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue(
+        [
+          '---',
+          'name: agent-testing',
+          'description: >',
+          '  Agentic end-to-end testing for LobeHub: backend verification via the CLI,',
+          '  frontend verification via agent-browser (Electron).',
+          '---',
+          'body',
+        ].join('\n'),
+      );
+
+      const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
+
+      expect(result.skills[0]).toMatchObject({
+        description:
+          'Agentic end-to-end testing for LobeHub: backend verification via the CLI, frontend verification via agent-browser (Electron).',
+        name: 'agent-testing',
+      });
+    });
+
     it('returns empty + null source when no skills exist', async () => {
       vi.mocked(mockFsPromises.readdir).mockRejectedValue(new Error('ENOENT'));
 

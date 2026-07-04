@@ -5,11 +5,13 @@ import { FileService } from '@/server/services/file';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  deleteRun: vi.fn(),
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
+  updateRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
 
@@ -26,8 +28,10 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    delete: modelMocks.deleteRun,
     findByOperation: modelMocks.findRunByOperation,
     findById: modelMocks.findRunById,
+    update: modelMocks.updateRun,
   })),
 }));
 
@@ -89,6 +93,58 @@ describe('verifyRouter', () => {
 
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
       expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteRun', () => {
+    it("rejects a run outside the caller's scope before deleting", async () => {
+      modelMocks.findRunById.mockResolvedValueOnce(undefined);
+
+      await expect(createCaller().deleteRun({ verifyRunId: 'other-user-run' })).rejects.toThrow(
+        'Verification run not found',
+      );
+
+      expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
+      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
+    });
+
+    it('deletes a run the caller owns and returns its id', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+
+      const res = await createCaller().deleteRun({ verifyRunId: 'run-1' });
+
+      expect(modelMocks.deleteRun).toHaveBeenCalledWith('run-1');
+      expect(res).toEqual({ id: 'run-1', success: true });
+    });
+  });
+
+  describe('updateRun', () => {
+    it("rejects a run outside the caller's scope before updating", async () => {
+      modelMocks.findRunById.mockResolvedValueOnce(undefined);
+
+      await expect(
+        createCaller().updateRun({
+          value: { title: 'Renamed report' },
+          verifyRunId: 'other-user-run',
+        }),
+      ).rejects.toThrow('Verification run not found');
+
+      expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
+      expect(modelMocks.updateRun).not.toHaveBeenCalled();
+    });
+
+    it('renames a run the caller owns', async () => {
+      const updatedRun = { id: 'run-1', title: 'Renamed report' };
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.updateRun.mockResolvedValueOnce(updatedRun);
+
+      const res = await createCaller().updateRun({
+        value: { title: 'Renamed report' },
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', { title: 'Renamed report' });
+      expect(res).toEqual({ data: updatedRun, success: true });
     });
   });
 
@@ -282,7 +338,11 @@ describe('verifyRouter', () => {
       const serverDB = {
         query: {
           files: {
-            findFirst: vi.fn(async () => ({ id: 'file-1', url: 'verify/evidence.png' })),
+            findFirst: vi.fn(async () => ({
+              id: 'file-1',
+              name: 'evidence.png',
+              url: 'verify/evidence.png',
+            })),
           },
           verifyReports: {
             findFirst: vi.fn(async () => report),
@@ -309,6 +369,7 @@ describe('verifyRouter', () => {
             evidence: [
               {
                 fileId: 'file-1',
+                fileName: 'evidence.png',
                 fileUrl: 'https://cdn.example.com/verify/evidence.png',
               },
             ],
@@ -353,7 +414,11 @@ describe('verifyRouter', () => {
       const serverDB = {
         query: {
           files: {
-            findFirst: vi.fn(async () => ({ id: 'file-1', url: 'verify/evidence.png' })),
+            findFirst: vi.fn(async () => ({
+              id: 'file-1',
+              name: 'evidence.png',
+              url: 'verify/evidence.png',
+            })),
           },
           verifyReports: {
             findFirst: vi.fn(async () => null),
@@ -377,6 +442,7 @@ describe('verifyRouter', () => {
             evidence: [
               {
                 fileId: 'file-1',
+                fileName: 'evidence.png',
                 fileUrl: null,
               },
             ],
@@ -385,7 +451,7 @@ describe('verifyRouter', () => {
         run,
       });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[verify:getReportBundle:resolveFileUrl]',
+        '[verify:getReportBundle:resolveFileMeta]',
         expect.any(Error),
       );
       consoleErrorSpy.mockRestore();

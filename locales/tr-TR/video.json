@@ -29,6 +29,9 @@
   "topic.createNew": "Yeni Konu Oluştur",
   "topic.deleteConfirm": "Video Konusunu Sil",
   "topic.deleteConfirmDesc": "Bu video konusunu silmek üzeresiniz. Bu işlem geri alınamaz.",
+  "topic.privateTitle": "Özel",
   "topic.title": "Video Konuları",
-  "topic.untitled": "Varsayılan Konu"
+  "topic.untitled": "Varsayılan Konu",
+  "topic.visibility.existingLocked": "Görünürlük mevcut konu için sabitlenmiştir. Farklı bir alan seçmek için yeni bir konu oluşturun.",
+  "topic.workspaceTitle": "Çalışma Alanı"
 }

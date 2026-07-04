@@ -33,7 +33,7 @@ const toColumn = (topic: RunningTopic): FleetColumn | null => {
  * (sidebar / column badge).
  */
 export const useRunningTopics = () => {
-  const { data, isLoading } = useClientDataSWR(
+  const { data, error, isLoading, mutate } = useClientDataSWR(
     fleetKeys.runningTopics(),
     () => topicService.queryTopics({ statuses: RUNNING_STATUSES }),
     // The board is a live overview — refetch on focus almost immediately
@@ -41,6 +41,11 @@ export const useRunningTopics = () => {
     // the user looks at it.
     { focusThrottleInterval: 1000 },
   );
+
+  // Only a first-load failure (no data yet) is a hard error worth a failed
+  // state; a background poll error while we still hold columns keeps the stale
+  // list instead of flapping to "no running tasks" (LOBE-11167).
+  const hasHardError = Boolean(error) && data === undefined;
 
   const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);
 
@@ -58,5 +63,14 @@ export const useRunningTopics = () => {
     return map;
   }, [running]);
 
-  return { columns, isInit: !isLoading, statusByColumnKey };
+  // `isInit` is gated on `!hasHardError` so a failed first fetch is NOT treated
+  // as "loaded, nothing running" (which would collapse every status to idle and
+  // let close-idle wipe live columns).
+  return {
+    columns,
+    error: hasHardError ? error : undefined,
+    isInit: !isLoading && !hasHardError,
+    reload: mutate,
+    statusByColumnKey,
+  };
 };

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
@@ -41,6 +42,7 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
+    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
     operations: {
@@ -432,7 +434,72 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('should clear tool streaming only', async () => {
+    it('keeps visible loading for a plain no-tool stream boundary', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('keeps visible loading after stream_end when tool calls need another step', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'tc-1' }],
+        }),
+      );
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('applies finalContent before ending a reasoning-only stream', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking text' }));
+      handler(makeEvent('stream_end', { finalContent: 'final answer' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'final answer' },
+        },
+        { operationId: 'op-1' },
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+    });
+
+    it('should clear tool streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -443,6 +510,45 @@ describe('createGatewayEventHandler', () => {
         'msg-initial',
         undefined,
       );
+    });
+  });
+
+  describe('visible_output_end', () => {
+    it('clears visible loading without completing the operation', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('visible_output_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('keeps topic loading when another message is queued in the same context', async () => {
+      const store = createMockStore();
+      (store as any).queuedMessages = {
+        [messageMapKey({ agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any)]: [
+          { content: 'next' },
+        ],
+      };
+      const handler = createHandler(store);
+
+      handler(makeEvent('visible_output_end'));
+      await flush();
+
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
   });
 

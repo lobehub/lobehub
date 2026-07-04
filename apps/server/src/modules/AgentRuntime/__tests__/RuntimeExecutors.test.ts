@@ -1,13 +1,17 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { ModelEmptyError } from '../ModelEmptyError';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
+import type { StreamEvent } from '../StreamEventManager';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+
+type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
+type PublishStreamEventCall = [string, PublishedStreamEvent];
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -64,26 +68,36 @@ vi.mock('@/server/services/message', () => ({
 
 // @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
 // cloud-specific dependencies that are unavailable in the test environment
-vi.mock('@lobechat/model-runtime', () => ({
-  // The executor resolves extend params via this helper; an empty result keeps
-  // the runtime payload unchanged, matching this suite's pre-existing behavior.
-  applyModelExtendParams: vi.fn(() => ({})),
-  consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
-  // `llmErrorClassification.ts` reads these at module-load time; an empty
-  // spec map is fine here because this suite never exercises the runtime
-  // retry classifier path.
-  ERROR_CODE_SPECS: {},
-  getErrorCodeSpec: () => undefined,
-  isDeepSeekThinkingEligibleModel: (model: string) =>
-    typeof model === 'string' &&
-    (model.toLowerCase().includes('deepseek-reasoner') ||
-      model.toLowerCase().includes('deepseek-v4')),
-  isDeepSeekV4FamilyModel: (model: string) =>
-    typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
-  isKimiAlwaysPreserveThinkingModel: (model: string) =>
-    /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
-  refineErrorCode: () => undefined,
-}));
+vi.mock('@lobechat/model-runtime', async () => {
+  // ModelEmptyError + isEmptyModelCompletion are pure (they only depend on
+  // @lobechat/types), so import the real implementations directly from source —
+  // bypassing this cloud-package mock — so the executor's empty-completion
+  // retry path and these tests share a single class identity for instanceof.
+  const { isEmptyModelCompletion, ModelEmptyError } =
+    await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  return {
+    // The executor resolves extend params via this helper; an empty result keeps
+    // the runtime payload unchanged, matching this suite's pre-existing behavior.
+    applyModelExtendParams: vi.fn(() => ({})),
+    consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
+    // `llmErrorClassification.ts` reads these at module-load time; an empty
+    // spec map is fine here because this suite never exercises the runtime
+    // retry classifier path.
+    ERROR_CODE_SPECS: {},
+    getErrorCodeSpec: () => undefined,
+    isDeepSeekThinkingEligibleModel: (model: string) =>
+      typeof model === 'string' &&
+      (model.toLowerCase().includes('deepseek-reasoner') ||
+        model.toLowerCase().includes('deepseek-v4')),
+    isDeepSeekV4FamilyModel: (model: string) =>
+      typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
+    isEmptyModelCompletion,
+    isKimiAlwaysPreserveThinkingModel: (model: string) =>
+      /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
+    ModelEmptyError,
+    refineErrorCode: () => undefined,
+  };
+});
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels: vi.fn().mockResolvedValue(mockBuiltinModels),
@@ -428,6 +442,108 @@ describe('RuntimeExecutors', () => {
           provider: 'openai',
         }),
       );
+    });
+
+    it('publishes visible_output_end before persistence for no-tool final answers', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const calls = mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[];
+      const streamEndIndex = calls.findIndex(([, event]) => event.type === 'stream_end');
+      const visibleEndIndex = calls.findIndex(([, event]) => event.type === 'visible_output_end');
+
+      expect(streamEndIndex).toBeGreaterThanOrEqual(0);
+      expect(visibleEndIndex).toBeGreaterThan(streamEndIndex);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.invocationCallOrder[visibleEndIndex],
+      ).toBeLessThan(mockMessageModel.update.mock.invocationCallOrder[0]);
+      expect(result.newState.metadata).toMatchObject({
+        [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: ctx.stepIndex,
+      });
+    });
+
+    it('does not publish early visible_output_end for tool-call steps', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
+    });
+
+    it('does not publish early visible_output_end for injected multi-step agents', async () => {
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        allowEarlyFinalAnswerVisibleOutputEnd: false,
+      });
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          // GraphAgent extraction calls can have tools: [] and still continue to the next node.
+          stepLabel: 'research:extract',
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
     });
 
     // preserveThinking gates whether reasoning is replayed into the next LLM
@@ -2050,7 +2166,30 @@ describe('RuntimeExecutors', () => {
         expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ evalContext }));
       });
 
-      it('should inject current agent identity for bot-originated runs', async () => {
+      it('forwards the bot-originated agent identity snapshot to serverMessagesEngine', async () => {
+        // The bot/group member roster is resolved once at op creation
+        // (AiAgentService.execAgent → buildBotConversationGroupContext) and
+        // snapshotted into op metadata as `agentGroup`. The per-step executor no
+        // longer rebuilds it — it just forwards the snapshot to the engine.
+        const agentGroup = {
+          agentMap: {
+            'agent-support': {
+              name: 'Support Bot',
+              role: 'participant',
+            },
+          },
+          currentAgentId: 'agent-support',
+          currentAgentName: 'Support Bot',
+          currentAgentRole: 'participant',
+          members: [
+            {
+              id: 'agent-support',
+              name: 'Support Bot',
+              role: 'participant',
+            },
+          ],
+          systemPrompt: 'Answers customer support questions.',
+        };
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
           agentConfig: {
@@ -2070,6 +2209,7 @@ describe('RuntimeExecutors', () => {
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
           metadata: {
+            agentGroup,
             agentId: 'agent-support',
             botContext: ctxWithConfig.botContext,
             topicId: 'topic-123',
@@ -2087,29 +2227,7 @@ describe('RuntimeExecutors', () => {
 
         await executors.call_llm!(instruction, state);
 
-        expect(engineSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            agentGroup: {
-              agentMap: {
-                'agent-support': {
-                  name: 'Support Bot',
-                  role: 'participant',
-                },
-              },
-              currentAgentId: 'agent-support',
-              currentAgentName: 'Support Bot',
-              currentAgentRole: 'participant',
-              members: [
-                {
-                  id: 'agent-support',
-                  name: 'Support Bot',
-                  role: 'participant',
-                },
-              ],
-              systemPrompt: 'Answers customer support questions.',
-            },
-          }),
-        );
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ agentGroup }));
       });
 
       it('should build capabilities from LOBE_DEFAULT_MODEL_LIST', async () => {

@@ -13,6 +13,7 @@ import {
   knowledgeBaseFiles,
   knowledgeBases,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { KnowledgeRepo } from '../index';
@@ -1244,6 +1245,101 @@ describe('KnowledgeRepo', () => {
 
       // Should still return results (falls back to created_at DESC)
       expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('query with workspace visibility filter', () => {
+    const workspaceId = 'kr-vis-ws';
+    let wsRepo: KnowledgeRepo;
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Visibility WS',
+        slug: 'kr-vis-ws',
+        primaryOwnerId: userId,
+      });
+
+      await serverDB.insert(files).values([
+        {
+          id: 'vis-file-priv',
+          userId,
+          workspaceId,
+          visibility: 'private',
+          name: 'private.txt',
+          fileType: 'text/plain',
+          size: 10,
+          url: 'https://example.com/priv.txt',
+        },
+        {
+          id: 'vis-file-pub',
+          userId,
+          workspaceId,
+          visibility: 'public',
+          name: 'public.txt',
+          fileType: 'text/plain',
+          size: 10,
+          url: 'https://example.com/pub.txt',
+        },
+        {
+          id: 'vis-file-other-priv',
+          userId: otherUserId,
+          workspaceId,
+          visibility: 'private',
+          name: 'other-private.txt',
+          fileType: 'text/plain',
+          size: 10,
+          url: 'https://example.com/other.txt',
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          id: 'vis-doc-priv',
+          userId,
+          workspaceId,
+          visibility: 'private',
+          title: 'Private Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/vis-priv',
+          totalCharCount: 5,
+          totalLineCount: 1,
+        },
+        {
+          id: 'vis-doc-pub',
+          userId,
+          workspaceId,
+          visibility: 'public',
+          title: 'Public Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/vis-pub',
+          totalCharCount: 5,
+          totalLineCount: 1,
+        },
+      ]);
+
+      wsRepo = new KnowledgeRepo(serverDB, userId, workspaceId);
+    });
+
+    it('should return only private rows when visibility=private', async () => {
+      const result = await wsRepo.query({ visibility: 'private' });
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual(['vis-doc-priv', 'vis-file-priv']);
+    });
+
+    it('should return only public rows when visibility=public', async () => {
+      const result = await wsRepo.query({ visibility: 'public' });
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual(['vis-doc-pub', 'vis-file-pub']);
+    });
+
+    it('should ignore the visibility filter when the repo has no workspaceId (personal mode)', async () => {
+      // knowledgeRepo has no workspaceId; personal-mode rows above are absent
+      // from this branch so we're just asserting the call succeeds without
+      // an unexpected error caused by hidden clauses.
+      await expect(knowledgeRepo.query({ visibility: 'private' })).resolves.toBeDefined();
     });
   });
 });

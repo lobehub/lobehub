@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "생성된 주제 삭제",
   "topic.deleteConfirmDesc": "이 생성 주제를 삭제하려고 합니다. 삭제 후 복구할 수 없으니 신중히 진행하세요.",
   "topic.empty": "생성된 주제가 없습니다",
+  "topic.privateTitle": "비공개",
   "topic.title": "그림 주제",
-  "topic.untitled": "기본 주제"
+  "topic.untitled": "기본 주제",
+  "topic.visibility.existingLocked": "현재 주제의 가시성이 고정되어 있습니다. 다른 공간을 선택하려면 새 주제를 생성하세요.",
+  "topic.workspaceTitle": "워크스페이스"
 }

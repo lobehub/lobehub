@@ -112,7 +112,7 @@ interface RunningElapsedTimeProps {
 const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, topicId }) => {
   const startTime = useChatStore(
     agentId
-      ? operationSelectors.getAgentRuntimeStartTimeByContext({ agentId, topicId })
+      ? operationSelectors.getVisibleAgentRuntimeStartTimeByContext({ agentId, topicId })
       : () => undefined,
   );
   const [now, setNow] = useState(() => Date.now());
@@ -180,6 +180,19 @@ const TopicItem = memo<TopicItemProps>(
     const isUnreadCompleted = useChatStore(
       id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
     );
+    const hasLocalRunningRuntime = useChatStore(
+      id && activeAgentId
+        ? operationSelectors.isAgentRuntimeRunningByContext({ agentId: activeAgentId, topicId: id })
+        : () => false,
+    );
+    const isRuntimeVisiblyRunning = useChatStore(
+      id && activeAgentId
+        ? operationSelectors.isAgentRuntimeVisiblyRunningByContext({
+            agentId: activeAgentId,
+            topicId: id,
+          })
+        : () => false,
+    );
 
     const {
       focusTopicPopup,
@@ -238,6 +251,8 @@ const TopicItem = memo<TopicItemProps>(
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
     const isWaitingForHuman = status === 'waitingForHuman';
+    const shouldShowRunningIcon =
+      isLoading || (isRunning && (!hasLocalRunningRuntime || isRuntimeVisiblyRunning));
 
     // By-status grouping mixes topics from different projects, so surface each
     // topic's working directory as a muted second line. Data is already on the
@@ -247,8 +262,8 @@ const TopicItem = memo<TopicItemProps>(
     const workingDirectoryNode =
       showWorkingDirectory && workingDirectory ? (
         <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
-          <DirIcon repoType={isDesktop ? undefined : 'github'} size={12} />
-          <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+          <DirIcon repoType={isDesktop ? undefined : 'github'} size={13} />
+          <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextDescription }}>
             {getDirName(workingDirectory)}
           </Text>
         </Flexbox>
@@ -331,7 +346,7 @@ const TopicItem = memo<TopicItemProps>(
             if (isWaitingForHuman) {
               return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
             }
-            if (isLoading || isRunning) {
+            if (shouldShowRunningIcon) {
               return (
                 <RingLoadingIcon
                   ringColor={loadingRingColor}

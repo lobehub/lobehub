@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode, Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +27,7 @@ const gitFilesMock = vi.hoisted(() => ({
   },
 }));
 const openLocalFileMock = vi.hoisted(() => vi.fn());
+const searchProjectFilesMock = vi.hoisted(() => vi.fn());
 
 // ─── mocks ────────────────────────────────────────────────────────────────────
 
@@ -86,12 +87,17 @@ vi.mock('../useProjectFiles', () => ({
       indexedAt: '2026-01-01',
       root: '/repo',
       source: 'git',
-      totalCount: 2,
     },
     isLoading: false,
     isValidating: false,
     mutate: vi.fn(),
   }),
+}));
+
+vi.mock('@/services/projectFile', () => ({
+  projectFileService: {
+    searchProjectFiles: searchProjectFilesMock,
+  },
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -112,11 +118,26 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => <button type="button" onClick={onClick} />,
   Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   copyToClipboard: vi.fn(),
   Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  SearchBar: ({
+    onChange,
+    placeholder,
+    value,
+  }: {
+    onChange?: (e: { target: { value: string } }) => void;
+    placeholder?: string;
+    value?: string;
+  }) => (
+    <input
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange?.({ target: { value: e.target.value } })}
+    />
+  ),
+  stopPropagation: vi.fn(),
 }));
 
 vi.mock('antd-style', () => ({
@@ -147,6 +168,7 @@ beforeEach(() => {
   handleSpies.setExpanded.mockClear();
   messageSpy.warning.mockClear();
   openLocalFileMock.mockClear();
+  searchProjectFilesMock.mockReset();
   useGlobalStore.setState({
     ...initialState,
     status: { ...initialState.status, workingSidebarRevealRequest: undefined },
@@ -216,6 +238,57 @@ describe('Files — reveal request integration', () => {
       filePath: '/repo/root.ts',
       workingDirectory: '/repo',
     });
+  });
+
+  it('filters file tree nodes while retaining ancestor directories', async () => {
+    searchProjectFilesMock.mockResolvedValueOnce({
+      entries: [
+        { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
+        { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
+        {
+          isDirectory: false,
+          name: 'bar.ts',
+          path: '/repo/src/foo/bar.ts',
+          relativePath: 'src/foo/bar.ts',
+        },
+      ],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'bar' },
+    });
+
+    await waitFor(() => {
+      expect(searchProjectFilesMock).toHaveBeenCalledWith({
+        deviceId: undefined,
+        limit: 200,
+        query: 'bar',
+        scope: '/repo',
+      });
+      expect((explorerTreeProps.current?.nodes as { id: string }[]).map((node) => node.id)).toEqual(
+        ['src/', 'src/foo/', 'src/foo/bar.ts'],
+      );
+    });
+  });
+
+  it('shows a no-results state when the file filter has no matches', async () => {
+    searchProjectFilesMock.mockResolvedValueOnce({
+      entries: [],
+      root: '/repo',
+      searchedAt: '2026-01-01',
+      source: 'git',
+    });
+    render(<Files workingDirectory="/repo" />);
+
+    fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
+      target: { value: 'missing' },
+    });
+
+    expect(await screen.findByText('workingPanel.files.noSearchResults')).toBeInTheDocument();
   });
 
   it('(a) reveals existing path: calls setExpanded with ancestors, then select and focus', async () => {

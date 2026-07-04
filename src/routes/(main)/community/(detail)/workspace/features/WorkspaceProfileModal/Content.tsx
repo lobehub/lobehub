@@ -27,7 +27,7 @@ import {
   setupCommunityWorkspaceProfile,
   updateCommunityWorkspaceProfile,
 } from '@/business/client/services/communityWorkspaceProfile';
-import EmojiPicker from '@/components/EmojiPicker';
+import AvatarUpload from '@/components/AvatarUpload';
 import { useFileStore } from '@/store/file';
 import type { DiscoverUserInfo } from '@/types/discover';
 
@@ -152,18 +152,6 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     },
     [message, t, uploadWithProgress],
   );
-
-  const handleAvatarChange = useCallback((next: string) => {
-    if (next.startsWith('data:')) return;
-    try {
-      const { protocol } = new URL(next);
-      if (protocol === 'http:' || protocol === 'https:') {
-        setAvatarUrl(next);
-      }
-    } catch {
-      // Workspace Market profiles only accept URL avatars.
-    }
-  }, []);
 
   const handleBannerUpload: UploadProps['customRequest'] = useCallback(
     async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]) => {
@@ -407,16 +395,12 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
           </Flexbox>
 
           <Form.Item>
-            <EmojiPicker
+            <AvatarUpload
               allowDelete={!!avatarUrl}
               loading={avatarUploading}
               shape="square"
               size={80}
               value={avatarUrl || undefined}
-              allowUpload={{
-                enableEmoji: false,
-              }}
-              onChange={handleAvatarChange}
               onDelete={() => setAvatarUrl(null)}
               onUpload={handleAvatarUpload}
             />

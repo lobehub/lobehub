@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Badge, Card, Skeleton } from 'antd';
+import { Card, Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,
@@ -53,8 +53,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   sectionTitle: css`
     margin: 0;
-    font-size: 16px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 600;
+    color: ${cssVar.colorText};
+  `,
+  tag: css`
+    padding-block: 2px;
+    padding-inline: 8px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusXS};
+
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
   `,
 }));
 
@@ -105,7 +117,7 @@ const BenchmarkDetail = memo(() => {
         {/* Header skeleton */}
         <Flexbox gap={16}>
           <Flexbox horizontal align="start" gap={12}>
-            <Skeleton.Avatar active shape="square" size={40} style={{ borderRadius: 10 }} />
+            <Skeleton.Avatar active shape="square" size={40} style={{ borderRadius: cssVar.borderRadiusLG }} />
             <Flexbox flex={1} gap={8}>
               <Skeleton.Input active style={{ height: 24, width: 200 }} />
               <Skeleton.Input active size="small" style={{ height: 14, width: 320 }} />
@@ -120,16 +132,21 @@ const BenchmarkDetail = memo(() => {
               key={i}
               styles={{ body: { padding: 16 } }}
               style={{
-                border: `1px solid ${cssVar.colorBorder}`,
-                borderRadius: 8,
+                border: `1px solid ${cssVar.colorBorderSecondary}`,
+                borderRadius: cssVar.borderRadius,
                 flex: 1,
                 minWidth: 0,
               }}
             >
               <Flexbox gap={12}>
                 <Flexbox horizontal align="center" gap={8}>
-                  <Skeleton.Avatar active shape="square" size={36} style={{ borderRadius: 8 }} />
-                  <Skeleton.Input active size="small" style={{ height: 13, width: 80 }} />
+                  <Skeleton.Avatar
+                    active
+                    shape="square"
+                    size={36}
+                    style={{ borderRadius: cssVar.borderRadius }}
+                  />
+                  <Skeleton.Input active size="small" style={{ height: 14, width: 80 }} />
                 </Flexbox>
                 <Flexbox gap={4}>
                   <Skeleton.Input active style={{ height: 24, width: 60 }} />
@@ -163,19 +180,11 @@ const BenchmarkDetail = memo(() => {
 
       {/* Tags */}
       {(benchmark as any).tags && (benchmark as any).tags.length > 0 && (
-        <Flexbox horizontal gap={6} style={{ flexWrap: 'wrap' }}>
+        <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
           {(benchmark as any).tags.map((tag: string) => (
-            <Badge
-              key={tag}
-              style={{
-                backgroundColor: 'transparent',
-                borderColor: 'var(--ant-color-border)',
-                color: 'var(--ant-color-text-tertiary)',
-                fontSize: 12,
-              }}
-            >
+            <span className={styles.tag} key={tag}>
               {tag}
-            </Badge>
+            </span>
           ))}
         </Flexbox>
       )}

@@ -26,10 +26,7 @@ describe('resolveTargetDeviceId', () => {
 
   it('does not use stale bindings for sandbox targets', () => {
     expect(
-      resolveTargetDeviceId(
-        cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }),
-        undefined,
-      ),
+      resolveTargetDeviceId(cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }), undefined),
     ).toBeUndefined();
   });
 
@@ -84,6 +81,19 @@ describe('resolveAgentWorkingDirectory', () => {
     // resolves the bound device's path, not the current machine's
     expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
       '/remote-choice',
+    );
+  });
+
+  it('uses the active worktree from the per-device source entry as the effective cwd', () => {
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: {
+        cur: { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      },
+    });
+
+    expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo-fix',
     );
   });
 

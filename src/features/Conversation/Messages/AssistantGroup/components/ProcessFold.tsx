@@ -11,6 +11,8 @@ interface ProcessFoldProps {
   defaultExpanded?: boolean;
   /** Formatted turn duration, e.g. "3m 37s". Hidden when absent. */
   durationText?: string;
+  /** Number of steps in the turn = count of assistant (call_llm) messages. */
+  stepCount: number;
 }
 
 /**
@@ -22,14 +24,16 @@ interface ProcessFoldProps {
  * affordance — never persisted.
  */
 const ProcessFold = memo<ProcessFoldProps>(
-  ({ children, durationText, defaultExpanded = false }) => {
+  ({ children, durationText, stepCount, defaultExpanded = false }) => {
     const { t } = useTranslation('chat');
     const [expanded, setExpanded] = useState(defaultExpanded);
     const expandedKeys = useMemo(() => (expanded ? [PROCESS_KEY] : []), [expanded]);
 
     const title = (
       <Text style={{ minWidth: 0 }} type={'secondary'}>
-        {durationText ? t('turnProcess.ranFor', { duration: durationText }) : t('turnProcess.done')}
+        {durationText
+          ? t('turnProcess.ranFor', { count: stepCount, duration: durationText })
+          : t('turnProcess.done', { count: stepCount })}
       </Text>
     );
 

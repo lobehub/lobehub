@@ -1,3 +1,6 @@
+import type { WorkingDirConfigValue } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
+
 /**
  * Resolve the working directory for a device-bound run.
  *
@@ -22,10 +25,12 @@ export const resolveDeviceWorkingDirectory = (params: {
   deviceId?: string;
   initialWorkingDirectory?: string;
   topicWorkingDirectory?: string;
-  workingDirByDevice?: Record<string, string> | null;
+  workingDirByDevice?: Record<string, WorkingDirConfigValue> | null;
 }): string | undefined =>
   params.topicWorkingDirectory ||
   params.initialWorkingDirectory ||
-  (params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined) ||
+  getWorkingDirEffectivePath(
+    params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined,
+  ) ||
   params.deviceDefaultCwd ||
   undefined;

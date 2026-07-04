@@ -120,6 +120,14 @@ export default defineConfig({
       reportsDirectory: './coverage/app',
     },
     environment: 'happy-dom',
+    // Frontend (src/**) needs a DOM, but apps/server is backend code that runs
+    // under Node in production. Forcing Node here makes `typeof window` undefined
+    // so the t3-env server/client guard reads server config instead of throwing
+    // "server-side environment variable on the client" — the failure the full
+    // `Test Server` run hit non-deterministically (it depended on which
+    // ModelRuntime-importing suite a happy-dom worker evaluated first). Per-file
+    // `// @vitest-environment` directives still win over this.
+    environmentMatchGlobs: [['**/apps/server/**', 'node']],
     exclude: [
       '**/node_modules/**',
       '**/.*/**',

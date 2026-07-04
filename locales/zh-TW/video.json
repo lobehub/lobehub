@@ -29,6 +29,9 @@
   "topic.createNew": "建立新主題",
   "topic.deleteConfirm": "刪除影片主題",
   "topic.deleteConfirmDesc": "您即將刪除此影片主題，此操作無法復原。",
+  "topic.privateTitle": "私人",
   "topic.title": "影片主題",
-  "topic.untitled": "預設主題"
+  "topic.untitled": "預設主題",
+  "topic.visibility.existingLocked": "當前主題的可見性已固定。請創建一個新主題以選擇不同的空間。",
+  "topic.workspaceTitle": "工作區"
 }

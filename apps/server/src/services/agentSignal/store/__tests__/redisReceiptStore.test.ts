@@ -165,6 +165,42 @@ describe('redis receipt store', () => {
     });
   });
 
+  it('updates persisted receipt metadata so refetches reuse the terminal rollback status', async () => {
+    const store = await loadStore();
+
+    await store.appendReceipt(
+      {
+        ...receipt,
+        id: 'receipt-skill-rollback-1',
+        kind: 'skill',
+        metadata: {
+          documentId: 'doc-1',
+          expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
+          historyId: 'history-1',
+          rollbackStatus: 'available',
+        },
+        status: 'updated',
+      },
+      259_200,
+    );
+
+    await store.updateReceiptMetadata?.('receipt-skill-rollback-1', {
+      documentId: 'doc-1',
+      expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
+      historyId: 'history-1',
+      rollbackStatus: 'rolled_back',
+    });
+
+    await expect(store.getReceipt?.('receipt-skill-rollback-1')).resolves.toMatchObject({
+      metadata: {
+        documentId: 'doc-1',
+        expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
+        historyId: 'history-1',
+        rollbackStatus: 'rolled_back',
+      },
+    });
+  });
+
   it('lists receipts created after a known timestamp for refresh polling', async () => {
     const store = await loadStore();
 

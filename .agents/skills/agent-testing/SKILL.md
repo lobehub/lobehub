@@ -18,9 +18,35 @@ One skill for all agentic end-to-end testing — local-first today, designed to
 also run as full cloud automation. Every test session follows the same
 contract:
 
+```text
+Step -2: Read the two living logs → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub → Step 5: Teardown
 ```
-Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report  →  Step 4: Publish to LobeHub
-```
+
+## Step -2 — Read the two living logs (mandatory, before every run)
+
+Before doing anything else, read both of these in full and hold them in mind for
+this run:
+
+- [references/common-mistakes.md](./references/common-mistakes.md) — mistakes the
+  user has called out. Two that keep biting:
+  - **Never declare a case `passed` from grep/skeleton-count heuristics — open
+    the actual screenshot with Read and confirm it rendered the expected
+    content.** A blank/white page also has 0 skeletons and still matches
+    persistent nav text.
+  - **If the task's goal is verifying error/failure states, do NOT stop at
+    happy-path when injection is hard.** Escalate (see the pattern library) until
+    you have real failure-state evidence.
+- [references/probe-mock-patterns.md](./references/probe-mock-patterns.md) — the
+  verified recipes for forcing failures, beating the SWR cache/retry, and probing
+  runtime state. Read it before any run that must force an error state or inspect
+  store/SWR values, so you don't rediscover the dead ends.
+
+**Both files are living logs — append to them during the run**, in English:
+
+- User gives negative feedback → new case in `common-mistakes.md`
+  (Wrong approach / Why / What it breaks / Correct approach).
+- You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
+  item in `probe-mock-patterns.md` (Situation / Doesn't work / Works).
 
 ## Step -1 — Plan approval for non-trivial tests
 
@@ -31,8 +57,11 @@ Otherwise, propose a test plan (surface, cases, expected evidence, assumptions)
 and use the runtime structured question tool (`request_user_input` /
 ask-user-question equivalent) with two fixed choices:
 
-1. `开始执行 (Recommended)` — 测试方案没问题，开始执行
-2. `先讨论下` — 方案有问题，先讨论下
+1. `Start (Recommended)` — the plan looks good, begin executing
+2. `Discuss first` — the plan has issues, let's talk it over first
+
+(Match the button labels to the user's conversation language at runtime, but
+keep this skill file in English.)
 
 Wait for the user's choice before proceeding.
 
@@ -162,7 +191,29 @@ Useful subcommands:
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate   # migrations only
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user # seed user + CLI API key
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # local QStash for workflow paths
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # gate agent-runtime tests (QStash up in queue mode)
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db  # remove managed DB container
+```
+
+#### Agent-runtime prerequisite: QStash MUST be up (queue mode)
+
+Any test that runs an **agent** (`lh agent run`, durable ops, `/api/agent/run`,
+the server agent runtime) goes through `AGENT_RUNTIME_MODE=queue` — the default
+here and in production. Creating an agent operation **POSTs to local QStash
+(`127.0.0.1:8080`)**, so if QStash is not running the run dies at operation
+creation with `TypeError: fetch failed` / `ECONNREFUSED 127.0.0.1:8080`
+**before any LLM call** — no trace is recorded and the failure reads as
+unrelated to the env. `FEATURE_FLAGS=-agent_self_iteration` only drops the
+self-iteration workflow; it does **not** remove this dispatch dependency. Treat
+QStash as a hard prerequisite for agent-runtime tests, not an "only when
+workflow" nicety.
+
+So before the first `agent run`, start QStash in a separate terminal and gate on
+the preflight:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # terminal B — keep running
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # exits non-zero if QStash (or Redis) is down
 ```
 
 Default script env:
@@ -173,10 +224,13 @@ Default script env:
 - `AGENT_RUNTIME_MODE=queue` so backend-only agent runtime checks use the
   same queued execution path as production
 - `REDIS_URL=redis://localhost:6380` for queue-mode agent runtime state
-- `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
-- Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported;
-  run `init-dev-env.sh qstash` in a separate terminal when the path under test
-  triggers QStash/Workflow.
+- `FEATURE_FLAGS=-agent_self_iteration` drops the self-iteration workflow (so a
+  simple chat doesn't fan out), but this does **not** remove QStash from the
+  agent-runtime path — queue-mode operation creation still POSTs to QStash.
+- Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported,
+  but the QStash server itself is not auto-started. Run `init-dev-env.sh qstash`
+  in a separate terminal for **any agent-runtime test** (see the agent-runtime
+  prerequisite above), not only workflow paths.
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
 - S3 mock vars
 - Managed DB container: `lobehub-agent-testing-postgres`
@@ -228,6 +282,32 @@ do not open a login page; verify agent-browser first, then request the Network
 `Cookie:` header only if that verification fails. Full background and failure modes:
 [references/auth.md](./references/auth.md).
 
+### 0.5 — Screen-recording preflight (OS-capture surfaces only)
+
+macOS `screencapture` / osascript / bot-channel captures come out **entirely
+black** when Screen Recording (TCC) permission is missing OR — just as often —
+the **display is asleep / locked / on a screensaver** (permission is fine, but
+there is nothing lit to capture; this bites after a long idle test run). A black
+PNG is easy to mistake for a real capture, so gate BEFORE any OS-capture step:
+
+```bash
+./.agents/skills/agent-testing/scripts/check-screen-recording.sh # exit 0 = OS capture will work
+```
+
+It checks both layers — `CGPreflightScreenCaptureAccess` for permission and a
+real one-frame capture for blackness — and prints the exact fix (which `.app` to
+grant, or wake/unlock the display). `capture-app-window.sh` runs it automatically
+and refuses to write a black artifact (bypass with `SKIP_SCREEN_CHECK=1`).
+
+This gate is **only** for OS-capture surfaces (bot tests, `capture-app-window.sh`,
+osascript screenshots). CDP-based evidence (`agent-browser screenshot`,
+`record-app-screen.sh`) renders from the browser engine and is unaffected. Because
+the display can sleep mid-run, keep it awake for the whole capture session:
+
+```bash
+caffeinate -dimsu & # prevent display/idle sleep for the test run; kill when done
+```
+
 ## Step 1 — Pick the surface by change scope
 
 | Change scope                                            | Default surface                      | Why                                                               | Guide                              |
@@ -239,6 +319,16 @@ do not open a login page; verify agent-browser first, then request the Network
 
 Escalate, don't duplicate: verify a backend change with the CLI first; only add
 a UI pass when the change actually affects the UI.
+
+**Verify the change runs where you think it does — confirm runtime, don't assume.**
+Some features have two execution paths and the UI silently picks one (e.g. group
+orchestration: the chat UI defaults to the **client** runtime, while the fix may
+live in the **server** runtime / `AGENT_RUNTIME_MODE=queue` durable-op path). A
+test that exercises the wrong path can pass green without ever touching the code
+under test. Before trusting a result, **prove which runtime ran** — e.g. check for
+a server `agent_operations` row, the QStash `/api/agent/run` steps, or server-only
+log lines. If the UI won't take the server path, drive it directly (call the
+server TRPC mutation / endpoint) so the server runtime actually executes.
 
 ### Environment support (local macOS vs cloud Linux)
 
@@ -291,26 +381,28 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 | Start / restart the local dev server | [references/dev-server.md](./references/dev-server.md)               |
 | `agent-browser` command reference    | [references/agent-browser.md](./references/agent-browser.md)         |
 | osascript patterns (general macOS)   | [references/osascript.md](./references/osascript.md)                 |
-| Agent gateway probing                | [references/agent-gateway.md](./references/agent-gateway.md)         |
+| Local gateway closed loop + probing  | [references/agent-gateway.md](./references/agent-gateway.md)         |
 | Screen recording                     | [references/record-app-screen.md](./references/record-app-screen.md) |
 
 ### Scripts
 
 All under `.agents/skills/agent-testing/scripts/`:
 
-| Script                    | Usage                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| `test-env.sh`             | Print/export the resolved local test env and ports                           |
-| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                |
-| `init-dev-env.sh`         | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`) |
-| `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`      |
-| `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations) |
-| `report-init.sh`          | Scaffold a structured test report (Step 3)                                   |
-| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222)                |
-| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests)                |
-| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)                             |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                                         |
-| `agent-gateway/`          | Gateway probe / dump / analyze tools                                         |
+| Script                      | Usage                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `test-env.sh`               | Print/export the resolved local test env and ports                                          |
+| `setup-auth.sh`             | One-stop auth setup & status check (`status` / `cli` / `web`)                               |
+| `init-dev-env.sh`           | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`)                |
+| `app-probe.sh`              | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`                     |
+| `record-gif.sh`             | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
+| `report-init.sh`            | Scaffold a structured test report (Step 3)                                                  |
+| `check-screen-recording.sh` | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
+| `electron-dev.sh`           | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
+| `cdp-screenshot.sh`         | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
+| `capture-app-window.sh`     | Screenshot a specific app window (general; used by bot tests)                               |
+| `record-app-screen.sh`      | Record app screen (video + periodic screenshots)                                            |
+| `record-electron-demo.sh`   | Record Electron app demo with ffmpeg                                                        |
+| `agent-gateway/`            | Gateway probe / dump / analyze tools                                                        |
 
 `app-probe.sh` is the LobeHub-specific fast path into app state — auth check,
 current route, running operations, and `goto <path>` quick navigation
@@ -327,7 +419,7 @@ not a chat-only summary. Scaffold it up front and fill it as you test:
 DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
 # fill $DIR/result.json (scenario, context, cases[], summary.conclusion) — the report;
-# $DIR/report.md holds only the narrative tail (跟进 / 本轮验证 / 评分)
+# $DIR/report.md holds only the narrative tail (follow-ups / notes / score)
 ```
 
 Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `result.json`
@@ -345,24 +437,34 @@ Two hard rules worth front-loading:
   behavior is one entry in `cases[]` (`{ name, result, observation, evidence }`);
   the published `/verify/<id>` page builds the scope header from
   `scenario`+`context`, the check list from `cases[]`, and the headline verdict
-  from `summary.conclusion`. So do NOT hand-build a 用例 table or a 范围 block in
+  from `summary.conclusion`. So do NOT hand-build a case table or a scope block in
   `report.md` — they double up on the page. `report.md` is the narrative tail
-  only (跟进 / 本轮验证 / 评分).
-- **Visual evidence must render inline.** Screenshots and GIFs in `report.md`
-  must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
-  use bare file paths, Markdown links, or local file links as the primary
-  visual evidence; those make the report unreadable without opening each asset.
-- **Final replies must include visual evidence links.** When a run includes UI
-  screenshots or GIFs, include the report directory and the most important
-  visual artifacts in the final chat response. Each item must include a stable
-  label, an evidence caption describing the observed UI outcome, and a
-  repo-relative path, for example:
-  `[Image #1 - error toast shows provider auth failure](<report-dir>/assets/foo.png)`.
-  Use repo-relative paths, not absolute paths.
+  only (follow-ups / this-round notes / score).
+- **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
+  screenshot/GIF to the relevant case via `cases[].evidence` (path or array of
+  paths under `$DIR`); the verify page renders it next to that check. Do NOT
+  embed images/GIFs in `report.md` (no `![...](assets/...)`) — they would just
+  double up with the per-case evidence the page already shows. `report.md` stays
+  prose-only (follow-ups / notes / reproduction).
+- **Final replies: lead with the published `/verify/<id>` link; NEVER paste a
+  list of plain local-file links.** A `[Image #1 …](<report-dir>/assets/foo.png)`
+  markdown link renders as blue text that the user cannot click open in the chat
+  UI — it's a dead link. The published verify report already renders every
+  screenshot inline, so the primary deliverable in the reply is the
+  `https://app.lobehub.com/verify/<id>` URL (plus the local report dir for
+  reference). Then EITHER:
+  - **omit the evidence block entirely** (default — the report page already shows
+    it), OR
+  - if a visual genuinely helps inline, **embed it as an image, not a link** —
+    use `![caption](<report-dir>/assets/foo.png)` (leading `!`) so it renders as a
+    picture, with the caption describing the observed UI outcome. Use
+    repo-relative paths, not absolute paths. Do not emit a bare
+    `[label](local/path)` link list — it's the one thing that looks like evidence
+    but can't be opened.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
-  animations), record it with `scripts/record-gif.sh` and embed the GIF —
-  a static screenshot cannot prove the behavior.
+  animations), record it with `scripts/record-gif.sh` and attach the GIF as that
+  case's `evidence` — a static screenshot cannot prove the behavior.
 
 ## Step 4 — Publish to LobeHub (mandatory)
 
@@ -432,9 +534,41 @@ Notes:
   report. If the evidence must appear, publish against an env with real storage
   (e.g. production) or attach it inline with `verify evidence upload --content`.
 
+## Step 5 — Teardown (default: stop what you started)
+
+A test run leaves processes and code edits behind. Clean them up by default once
+the report is published — a dev server left listening or an injection left in a
+service file silently corrupts the next run (and the next agent's mental model).
+
+- **Stop the dev server you started.** If you launched it via `init-dev-env.sh dev`
+  (the no-`.env` path), tear it down with:
+
+  ```bash
+  ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean # stop dev server; keep DB/Redis
+  ```
+
+  `clean` stops the Next + Vite processes on the resolved `SERVER_PORT` / `SPA_PORT`
+  and the `bun run dev` supervisor, and **leaves the managed Postgres/Redis
+  containers running** (they are idempotently reused across runs — `setup-db` is a
+  no-op when they're up). Use `clean-db` only when you deliberately want the
+  containers gone, or `stop-dev` for just the server with no note. If the user
+  started their own `.env` dev server, leave it — you didn't start it.
+
+- **Revert every code injection.** Any HMR fault-injection (A4/A6/A8 in
+  `probe-mock-patterns.md`) must be undone and verified: `git checkout -- <files>`
+  then `grep -rn AGENT-TEST src/` returns nothing. Never leave an injection or a
+  debug global (`__DBG`, `__loadMoreCalls`) behind.
+
+- **Keep the report + evidence.** `.records/reports/**` is the deliverable — do
+  NOT delete it in teardown; it's gitignored and the published verify run points at
+  it.
+
+Skip teardown only when the user explicitly wants the environment left up (e.g.
+"leave the dev server running, I'll keep poking at it").
+
 ## Directory map
 
-```
+```text
 agent-testing/
 ├── SKILL.md            # this router
 ├── cli/index.md        # backend verification via the LobeHub CLI

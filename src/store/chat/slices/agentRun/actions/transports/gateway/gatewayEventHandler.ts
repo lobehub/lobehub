@@ -24,6 +24,7 @@ import type {
 } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -429,6 +430,7 @@ export const createGatewayEventHandler = (
           // Reset accumulators for the new stream
           accumulatedContent = '';
           accumulatedReasoning = '';
+          get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Skip the DB read ONLY for native gateway streams — those carry
           // `assistantMessage.id` directly on stream_start AND the preceding
@@ -550,11 +552,43 @@ export const createGatewayEventHandler = (
 
       case 'stream_end': {
         enqueue(() => {
-          // Only clear tool calling streaming — keep message loading active
-          // until agent_runtime_end so users don't think the session ended
-          // during tool execution gaps between steps
+          const data = toRecord(event.data);
+          const finalContent = pickNonEmptyString(data?.finalContent);
+          if (finalContent !== undefined) {
+            // Example: reasoning-only answers stream as reasoning chunks, then
+            // the server promotes that text into stream_end.finalContent. Apply
+            // it before ending reasoning so visible_output_end cannot leave an
+            // empty completed assistant bubble while waiting for terminal SoT.
+            accumulatedContent = finalContent;
+            hasStreamedContent = true;
+            get().internal_dispatchMessage(
+              {
+                id: currentAssistantMessageId,
+                type: 'updateMessage',
+                value: { content: accumulatedContent },
+              },
+              dispatchContext,
+            );
+          }
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
+        });
+        break;
+      }
+
+      case 'visible_output_end': {
+        enqueue(() => {
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
+          // Example: CC/Codex may emit stream_end -> stream_start(newStep) for
+          // assistant-assistant transitions. Only this explicit producer signal
+          // means visible output is done; the operation still waits for
+          // agent_runtime_end to preserve terminal side-effect ordering.
+          get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+          const hasQueuedMessage =
+            (get().queuedMessages?.[messageMapKey(context)]?.length ?? 0) > 0;
+          if (context.topicId && !hasQueuedMessage)
+            get().internal_updateTopicLoading(context.topicId, false);
         });
         break;
       }

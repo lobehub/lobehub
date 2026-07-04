@@ -23,6 +23,7 @@ export type ActionTagType = CommandType | SkillType;
 
 export interface ActionTagData {
   category: ActionTagCategory;
+  description?: string;
   icon?: string;
   label: string;
   type: ActionTagType;

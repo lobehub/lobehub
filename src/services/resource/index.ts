@@ -34,6 +34,8 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     embeddingTaskId: item.embeddingStatus ? 'placeholder' : null,
 
+    fileId: item.fileId,
+
     fileType: item.fileType,
 
     finishEmbedding: item.finishEmbedding,
@@ -57,6 +59,10 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     // File-specific fields
     url: item.url,
+
+    userId: item.userId,
+
+    visibility: item.visibility,
   };
 };
 

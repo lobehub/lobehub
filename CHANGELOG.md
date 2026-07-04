@@ -2,6 +2,33 @@
 
 # Changelog
 
+### [Version 2.2.8](https://github.com/lobehub/lobe-chat/compare/v2.2.7...v2.2.8)
+
+<sup>Released on **2026-06-22**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: drop legacy task template recommendations.
+- **misc**: drop legacy task template recommendations.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: drop legacy task template recommendations, closes [#16183](https://github.com/lobehub/lobe-chat/issues/16183) ([ac2e91e](https://github.com/lobehub/lobe-chat/commit/ac2e91e))
+- **misc**: drop legacy task template recommendations, closes [#16170](https://github.com/lobehub/lobe-chat/issues/16170) ([1569ab6](https://github.com/lobehub/lobe-chat/commit/1569ab6))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.2.7](https://github.com/lobehub/lobe-chat/compare/v2.2.7-canary.14...v2.2.7)
 
 <sup>Released on **2026-06-20**</sup>

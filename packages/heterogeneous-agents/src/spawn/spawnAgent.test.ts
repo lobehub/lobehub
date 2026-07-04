@@ -134,12 +134,11 @@ describe('spawnAgent', () => {
     expect(call.args).toContain('--output-format');
     expect(call.args.filter((a) => a === 'stream-json')).toHaveLength(2);
     expect(call.args).toContain('-p');
-    // CC's built-in interactive Q&A is disabled at every spawn site so the
-    // model degrades to plain-text questioning instead of stalling on a
-    // synthetic "Answer questions?" tool_result.
+    // These tools are disabled at every spawn site so CC does not stall on
+    // built-in interactive Q&A or wakeup/monitor lifecycle calls.
     const disallowedIdx = call.args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion');
+    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
     // Partial deltas are opt-in — terminal/sandbox callers want fewer events.
     expect(call.args).not.toContain('--include-partial-messages');
     // Prompt MUST go through stdin as a stream-json user message — never as argv.
@@ -258,7 +257,7 @@ describe('spawnAgent', () => {
       path.join(sessionDir, `rollout-2026-06-11T01-31-27-${threadId}.jsonl`),
       JSON.stringify({
         type: 'turn.completed',
-        usage: { cached_input_tokens: 42_000, input_tokens: 52_000, output_tokens: 300 },
+        usage: { cached_input_tokens: 42_000, input_tokens: 51_000, output_tokens: 300 },
       }),
     );
 
@@ -289,10 +288,10 @@ describe('spawnAgent', () => {
         phase: 'turn_metadata',
         usage: {
           inputCachedTokens: 1008,
-          inputCacheMissTokens: 937,
-          totalInputTokens: 1945,
+          inputCacheMissTokens: 929,
+          totalInputTokens: 1937,
           totalOutputTokens: 116,
-          totalTokens: 2061,
+          totalTokens: 2053,
         },
       },
       type: 'step_complete',
@@ -566,6 +565,31 @@ describe('spawnAgent', () => {
         // drain
       }
     }).rejects.toThrow(/boom/);
+  });
+
+  it('events iterator surfaces child spawn errors instead of hanging', async () => {
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    const exitError = handle.exit.catch((err) => err);
+
+    const drainEvents = async () => {
+      for await (const _e of handle.events) {
+        // drain
+      }
+    };
+
+    const spawnError = new Error('spawn claude ENOENT');
+    fake.proc.emit('error', spawnError);
+
+    await expect(drainEvents()).rejects.toThrow(/spawn claude ENOENT/);
+    await expect(exitError).resolves.toBe(spawnError);
   });
 
   it('tees the child raw stdout to onRawStdout verbatim, before adapting', async () => {

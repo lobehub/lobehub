@@ -31,7 +31,12 @@ const makeDeps = (): DeviceControlDeps => ({
     indexedAt: '',
     root: '',
     source: 'glob' as const,
-    totalCount: 0,
+  })),
+  searchProjectFiles: vi.fn(async () => ({
+    entries: [],
+    root: '',
+    searchedAt: '',
+    source: 'glob' as const,
   })),
 });
 
@@ -61,6 +66,30 @@ describe('executeDeviceRpc', () => {
     expect(result.source).toBe('.agents/skills');
   });
 
+  it('parses folded skill descriptions from frontmatter', async () => {
+    await mkdir(path.join(root, '.agents', 'skills', 'agent-testing'), { recursive: true });
+    await writeFile(
+      path.join(root, '.agents', 'skills', 'agent-testing', 'SKILL.md'),
+      [
+        '---',
+        'name: agent-testing',
+        'description: >',
+        '  Agentic end-to-end testing for LobeHub: backend verification via the CLI,',
+        '  frontend verification via agent-browser (Electron).',
+        '---',
+        'body',
+      ].join('\n'),
+    );
+
+    const result = (await executeDeviceRpc('listProjectSkills', { scope: root }, makeDeps())) as {
+      skills: { description?: string; name: string }[];
+    };
+
+    expect(result.skills.find((skill) => skill.name === 'agent-testing')?.description).toBe(
+      'Agentic end-to-end testing for LobeHub: backend verification via the CLI, frontend verification via agent-browser (Electron).',
+    );
+  });
+
   it('routes statPath and reports a directory + repo type', async () => {
     const result = (await executeDeviceRpc('statPath', { path: root }, makeDeps())) as {
       exists: boolean;
@@ -70,10 +99,13 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
-  it('delegates getProjectFileIndex and getLocalFilePreview to injected deps', async () => {
+  it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);
     expect(deps.getProjectFileIndex).toHaveBeenCalledWith({ scope: root });
+
+    await executeDeviceRpc('searchProjectFiles', { query: 'agent', scope: root }, deps);
+    expect(deps.searchProjectFiles).toHaveBeenCalledWith({ query: 'agent', scope: root });
 
     const previewParams = { path: path.join(root, 'AGENTS.md'), workingDirectory: root };
     await executeDeviceRpc('getLocalFilePreview', previewParams, deps);
@@ -127,5 +159,20 @@ describe('executeDeviceRpc', () => {
 
     expect(result.success).toBe(true);
     expect(await readFile(filePath, 'utf8')).toBe('remote edit');
+  });
+
+  it('routes listGitWorktrees through the shared git dispatcher', async () => {
+    // Not a git repo → the shared local-file-shell impl returns an empty list.
+    const result = await executeDeviceRpc('listGitWorktrees', { path: root }, makeDeps());
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('routes removeGitWorktree through the shared git dispatcher', async () => {
+    const result = (await executeDeviceRpc(
+      'removeGitWorktree',
+      { path: root, worktreePath: root },
+      makeDeps(),
+    )) as { success: boolean };
+    expect(result.success).toBe(false);
   });
 });

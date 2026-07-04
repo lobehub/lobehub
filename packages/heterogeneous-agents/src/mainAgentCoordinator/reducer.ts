@@ -172,13 +172,28 @@ const streamInit = (state: MainAgentRunState, data: any): ReduceResult => {
   const update: Record<string, any> = {};
   if (data?.model) update.model = data.model;
   if (data?.provider) update.provider = data.provider;
-  if (Object.keys(update).length === 0) return { intents: [], state };
+
+  // The seeded assistant's CC message.id arrives on the first non-newStep
+  // stream_start after system:init (the seed was opened with no id). Record it
+  // as `currentMainMessageId` so the first turn's rows get `heteroMessageId`
+  // provenance; `openTurn` owns it for every later turn. Only seed it once — a
+  // later non-newStep stream_start must not clobber the open turn's id.
+  const seedMainMessageId =
+    typeof data?.messageId === 'string' && !state.currentMainMessageId
+      ? data.messageId
+      : undefined;
+
+  if (Object.keys(update).length === 0 && !seedMainMessageId) return { intents: [], state };
 
   const next = copyState(state);
   if (data.model) next.turnModel = data.model;
   if (data.provider) next.turnProvider = data.provider;
+  if (seedMainMessageId) next.currentMainMessageId = seedMainMessageId;
   return {
-    intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...update }],
+    intents:
+      Object.keys(update).length > 0
+        ? [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...update }]
+        : [],
     state: next,
   };
 };

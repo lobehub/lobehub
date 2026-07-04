@@ -90,6 +90,23 @@ export const agentKeys = {
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
+// ---- agent builder (opening-suggestion chips) ---------------------------
+// Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
+// `contextSummary` is intentionally NOT part of the key so config autosaves for
+// the same target don't refetch; `nonce` bumps on manual refresh.
+export const agentBuilderKeys = {
+  suggestions: def(
+    'agentBuilder:suggestions',
+    (mode: string, builderAgentId: string, targetId: string | undefined, nonce: number) => [
+      'agentBuilder:suggestions',
+      mode,
+      builderAgentId,
+      targetId,
+      nonce,
+    ],
+  ),
+};
+
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
@@ -126,8 +143,22 @@ export const recentKeys = {
 // ---- task ---------------------------------------------------------------
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
-  groupList: def('task:groupList', (agentKey: string | undefined) => ['task:groupList', agentKey]),
-  list: def('task:list', (agentKey: string | undefined) => ['task:list', agentKey]),
+  groupList: def(
+    'task:groupList',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:groupList',
+      agentKey,
+      visibility,
+    ],
+  ),
+  list: def(
+    'task:list',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:list',
+      agentKey,
+      visibility,
+    ],
+  ),
 };
 
 // ---- brief --------------------------------------------------------------
@@ -400,8 +431,12 @@ export const ragEvalKeys = {
 // ---- knowledge base -----------------------------------------------------
 export const knowledgeBaseKeys = {
   item: def('knowledgeBase:item', (id: string) => ['knowledgeBase:item', id]),
-  list: def('knowledgeBase:list', (workspaceId?: string | null) =>
-    workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'],
+  list: def(
+    'knowledgeBase:list',
+    (workspaceId?: string | null, visibility?: 'private' | 'public') => {
+      const base = workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'];
+      return visibility ? [...base, visibility] : base;
+    },
   ),
 };
 
@@ -412,10 +447,21 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
+  gitBranch: def('device:gitBranch', (deviceId: string, path: string) => [
+    'device:gitBranch',
+    deviceId,
+    path,
+  ]),
   gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
     'device:gitBranches',
     deviceId,
     path,
+  ]),
+  gitLinkedPR: def('device:gitLinkedPR', (deviceId: string, path: string, branch: string) => [
+    'device:gitLinkedPR',
+    deviceId,
+    path,
+    branch,
   ]),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
@@ -432,14 +478,13 @@ export const deviceKeys = {
       baseRef,
     ],
   ),
-  gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
-    'device:gitInfo',
-    deviceId,
-    path,
-    isGithub,
-  ]),
   gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
     'device:gitWorkingTreeStatus',
+    deviceId,
+    path,
+  ]),
+  gitWorktrees: def('device:gitWorktrees', (deviceId: string, path: string) => [
+    'device:gitWorktrees',
     deviceId,
     path,
   ]),
@@ -524,10 +569,13 @@ export const globalKeys = {
 
 // ---- agent knowledge (kept off the `agent:` idb tier on purpose) --------
 export const agentKnowledgeKeys = {
-  list: def('agentKnowledge:list', (agentId: string | undefined) => [
+  list: def(
     'agentKnowledge:list',
-    agentId,
-  ]),
+    (agentId: string | undefined, visibility?: 'private' | 'public') => {
+      const base = ['agentKnowledge:list', agentId] as const;
+      return visibility ? [...base, visibility] : base;
+    },
+  ),
 };
 
 // ---- agent bot ----------------------------------------------------------
@@ -556,6 +604,18 @@ export const chatToolKeys = {
 
 // ---- stats (settings/stats + user header counts) ------------------------
 export const statsKeys = {
+  agentUsageStat: def(
+    'stats:agentUsageStat',
+    (agentId: string, startAt: string, endAt: string, granularity: string) => [
+      'stats:agentUsageStat',
+      agentId,
+      startAt,
+      endAt,
+      granularity,
+    ],
+  ),
+  agents: def('stats:agents', () => ['stats:agents']),
+  countAgents: def('stats:countAgents', () => ['stats:countAgents']),
   countMessages: def('stats:countMessages', () => ['stats:countMessages']),
   countSessions: def('stats:countSessions', () => ['stats:countSessions']),
   countTopics: def('stats:countTopics', () => ['stats:countTopics']),
@@ -603,6 +663,7 @@ export const verifyKeys = {
     'verify:reportBundle',
     verifyRunId,
   ]),
+  reportSummaries: def('verify:reportSummaries', () => ['verify:reportSummaries']),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
@@ -828,6 +889,7 @@ export const matchDomain =
 export const swrKeys = {
   agent: { ...agentKeys, ...agentConfigKeys },
   agentBot: agentBotKeys,
+  agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,

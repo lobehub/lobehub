@@ -7,12 +7,14 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     message: {
       count: { query: vi.fn() },
+      countByTopic: { query: vi.fn() },
       getHeatmaps: { query: vi.fn() },
       getMessages: { query: vi.fn() },
       listAll: { query: vi.fn() },
       removeMessage: { mutate: vi.fn() },
       removeMessages: { mutate: vi.fn() },
       searchMessages: { query: vi.fn() },
+      topicStats: { query: vi.fn() },
     },
   },
 }));
@@ -184,6 +186,116 @@ describe('message command', () => {
       await program.parseAsync(['node', 'test', 'message', 'count', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify({ count: 42 }));
+    });
+
+    it('should forward topic / agent / role filters', async () => {
+      mockTrpcClient.message.count.query.mockResolvedValue(3);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'message',
+        'count',
+        '--topic-id',
+        't1',
+        '--agent-id',
+        'a1',
+        '--role',
+        'user',
+      ]);
+
+      expect(mockTrpcClient.message.count.query).toHaveBeenCalledWith({
+        agentId: 'a1',
+        role: 'user',
+        topicId: 't1',
+      });
+    });
+
+    it('should group by topic', async () => {
+      mockTrpcClient.message.countByTopic.query.mockResolvedValue([
+        { count: 7, topicId: 't1' },
+        { count: 2, topicId: 't2' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'message',
+        'count',
+        '--group-by',
+        'topic',
+        '--agent-id',
+        'a1',
+        '--json',
+      ]);
+
+      expect(mockTrpcClient.message.countByTopic.query).toHaveBeenCalledWith({ agentId: 'a1' });
+      expect(mockTrpcClient.message.count.query).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify([
+          { count: 7, topicId: 't1' },
+          { count: 2, topicId: 't2' },
+        ]),
+      );
+    });
+
+    it('should reject an unsupported --group-by', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'count', '--group-by', 'agent']);
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.message.countByTopic.query).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stats', () => {
+    const sampleStats = {
+      histogram: [
+        { topics: 1, userCount: 1 },
+        { topics: 1, userCount: 5 },
+      ],
+      max: 5,
+      mean: 3,
+      median: 3,
+      min: 1,
+      oneshot: 1,
+      oneshotRatio: 0.5,
+      p90: 5,
+      p99: 5,
+      topics: 2,
+      totalMessages: 6,
+    };
+
+    it('should default to user-role distribution', async () => {
+      mockTrpcClient.message.topicStats.query.mockResolvedValue(sampleStats);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'stats', '--agent-id', 'a1']);
+
+      expect(mockTrpcClient.message.topicStats.query).toHaveBeenCalledWith({
+        agentId: 'a1',
+        role: 'user',
+      });
+    });
+
+    it('should support --all-roles', async () => {
+      mockTrpcClient.message.topicStats.query.mockResolvedValue(sampleStats);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'stats', '--all-roles']);
+
+      expect(mockTrpcClient.message.topicStats.query).toHaveBeenCalledWith({});
+    });
+
+    it('should output JSON', async () => {
+      mockTrpcClient.message.topicStats.query.mockResolvedValue(sampleStats);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'stats', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(sampleStats, null, 2));
     });
   });
 });

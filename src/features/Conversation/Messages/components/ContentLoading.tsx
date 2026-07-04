@@ -28,13 +28,24 @@ const DEDICATED_OPERATION_LABELS = new Set<OperationType>([
 
 interface ContentLoadingProps {
   id: string;
+  /**
+   * Anchor the elapsed-time counter to this timestamp instead of the operation's
+   * startTime. The operation's startTime marks the whole run's beginning (the run-
+   * start assistant message), so a tail indicator sitting after several completed
+   * steps would count the entire run. Passing the last message's `createdAt` here
+   * makes the counter reflect "time since the last step" instead.
+   */
+  startTime?: number;
 }
 
-const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
+const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOverride }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
 
-  const startTime = runningOp?.metadata?.startTime;
+  const startTime =
+    startTimeOverride !== undefined && Number.isFinite(startTimeOverride)
+      ? startTimeOverride
+      : runningOp?.metadata?.startTime;
   const operationType = runningOp?.type as OperationType | undefined;
 
   const [elapsedSeconds, setElapsedSeconds] = useState(() =>

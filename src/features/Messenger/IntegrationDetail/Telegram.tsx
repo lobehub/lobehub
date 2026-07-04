@@ -5,6 +5,7 @@ import { LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
 
 import { createMessengerLinkModal } from '../LinkModal';
@@ -40,6 +41,8 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
     platform: 'telegram',
   });
 
+  if (data.error && data.isInitialLoading)
+    return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
   if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
 
   const { links } = data;

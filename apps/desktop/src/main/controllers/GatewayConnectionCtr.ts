@@ -29,6 +29,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
@@ -382,6 +383,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       },
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
     };
   }
 
@@ -1066,6 +1068,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         'Oidc-Auth': token,
       };
       if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+      setDesktopUserAgentHeader(headers);
 
       await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: body }),
@@ -1095,12 +1098,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
     ]);
     if (!serverUrl || !token) return;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
     await fetch(`${serverUrl}/trpc/lambda/device.register`, {
       body: JSON.stringify({ json: info }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      },
+      headers,
       method: 'POST',
     });
   }

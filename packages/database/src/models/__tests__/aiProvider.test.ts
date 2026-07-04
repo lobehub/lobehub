@@ -1,23 +1,31 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sleep } from '@/utils/sleep';
 
 import { getTestDB } from '../../core/getTestDB';
-import { aiProviders, users } from '../../schemas';
+import { aiProviders, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AiProviderModel } from '../aiProvider';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'session-group-model-test-user-id';
+const workspaceId = 'ai-provider-test-workspace-id';
 const aiProviderModel = new AiProviderModel(serverDB, userId);
+const workspaceAiProviderModel = new AiProviderModel(serverDB, userId, workspaceId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: 'user2' }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Provider Test Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 });
 
 afterEach(async () => {
@@ -200,6 +208,59 @@ describe('AiProviderModel', () => {
         sort: 1,
         source: 'custom',
       });
+    });
+
+    it('should not include personal providers in workspace scope', async () => {
+      await serverDB.insert(aiProviders).values([
+        {
+          enabled: true,
+          id: 'openai',
+          name: 'Personal OpenAI',
+          source: 'builtin',
+          userId,
+        },
+        {
+          enabled: true,
+          id: 'anthropic',
+          name: 'Workspace Anthropic',
+          source: 'builtin',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const list = await workspaceAiProviderModel.getAiProviderList();
+
+      expect(list.map((item) => item.id)).toEqual(['anthropic']);
+    });
+
+    it('should write workspace provider toggles without updating personal providers', async () => {
+      await serverDB.insert(aiProviders).values({
+        enabled: true,
+        id: ModelProvider.OpenAI,
+        source: 'builtin',
+        userId,
+      });
+
+      await workspaceAiProviderModel.toggleProviderEnabled(ModelProvider.OpenAI, false);
+
+      const personal = await serverDB.query.aiProviders.findFirst({
+        where: and(
+          eq(aiProviders.id, ModelProvider.OpenAI),
+          eq(aiProviders.userId, userId),
+          isNull(aiProviders.workspaceId),
+        ),
+      });
+      const workspace = await serverDB.query.aiProviders.findFirst({
+        where: and(
+          eq(aiProviders.id, ModelProvider.OpenAI),
+          eq(aiProviders.userId, userId),
+          eq(aiProviders.workspaceId, workspaceId),
+        ),
+      });
+
+      expect(personal?.enabled).toBe(true);
+      expect(workspace).toMatchObject({ enabled: false, workspaceId });
     });
   });
 

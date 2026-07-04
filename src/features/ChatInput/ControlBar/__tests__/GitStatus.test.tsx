@@ -15,21 +15,31 @@ const globalStoreMock = vi.hoisted(() => ({
 
 const gitHookMocks = vi.hoisted(() => ({
   mutateAheadBehind: vi.fn(),
-  mutateGitInfo: vi.fn(),
+  mutateBranch: vi.fn(),
+  mutatePR: vi.fn(),
   mutateWorkingTreeStatus: vi.fn(),
+  mutateWorktrees: vi.fn(),
   useFetchGitAheadBehind: vi.fn(),
-  useFetchGitInfo: vi.fn(),
+  useFetchGitBranch: vi.fn(),
+  useFetchGitLinkedPR: vi.fn(),
   useFetchGitWorkingTreeStatus: vi.fn(),
+  useFetchGitWorktrees: vi.fn(),
 }));
 
 vi.mock('../BranchSwitcher', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('../WorktreeSwitcher', () => ({
+  default: () => <span data-testid="worktree-switcher" />,
+}));
+
 vi.mock('@/store/device', () => ({
   useFetchGitAheadBehind: gitHookMocks.useFetchGitAheadBehind,
-  useFetchGitInfo: gitHookMocks.useFetchGitInfo,
+  useFetchGitBranch: gitHookMocks.useFetchGitBranch,
+  useFetchGitLinkedPR: gitHookMocks.useFetchGitLinkedPR,
   useFetchGitWorkingTreeStatus: gitHookMocks.useFetchGitWorkingTreeStatus,
+  useFetchGitWorktrees: gitHookMocks.useFetchGitWorktrees,
 }));
 
 vi.mock('@/store/global', () => ({
@@ -86,9 +96,13 @@ beforeEach(() => {
   globalStoreMock.status.showRightPanel = false;
   globalStoreMock.status.workingSidebarTab = 'resources';
 
-  gitHookMocks.useFetchGitInfo.mockReturnValue({
-    data: { branch: 'fix/remote-review', detached: false, pullRequest: null },
-    mutate: gitHookMocks.mutateGitInfo,
+  gitHookMocks.useFetchGitBranch.mockReturnValue({
+    data: { branch: 'fix/remote-review', detached: false },
+    mutate: gitHookMocks.mutateBranch,
+  });
+  gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
+    data: { pullRequest: null },
+    mutate: gitHookMocks.mutatePR,
   });
   gitHookMocks.useFetchGitWorkingTreeStatus.mockReturnValue({
     data: { added: 1, clean: false, deleted: 0, modified: 2, total: 3 },
@@ -98,11 +112,15 @@ beforeEach(() => {
     data: undefined,
     mutate: gitHookMocks.mutateAheadBehind,
   });
+  gitHookMocks.useFetchGitWorktrees.mockReturnValue({
+    data: [],
+    mutate: gitHookMocks.mutateWorktrees,
+  });
 });
 
 describe('GitStatus', () => {
   it('opens the review panel when clicking remote device diff stats', () => {
-    render(<GitStatus deviceId="device-1" isGithub={false} path="/repo" />);
+    render(<GitStatus agentId="agent-1" deviceId="device-1" isGithub={false} path="/repo" />);
 
     fireEvent.click(screen.getByRole('button'));
 

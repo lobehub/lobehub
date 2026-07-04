@@ -6,12 +6,14 @@ import { ToggleRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import ModelItem from './ModelItem';
 
 const SearchResult = memo(() => {
   const { t } = useTranslation('modelProvider');
+  const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
   const searchKeyword = useAiInfraStore((s) => s.modelSearchKeyword);
   const batchToggleAiModels = useAiInfraStore((s) => s.batchToggleAiModels);
@@ -30,17 +32,23 @@ const SearchResult = memo(() => {
         {!isEmpty && (
           <Flexbox horizontal>
             <ActionIcon
+              disabled={!canManageProvider}
               icon={ToggleRightIcon}
               loading={batchLoading}
               size={'small'}
-              title={t('providerModels.list.enabledActions.enableAll')}
+              title={canManageProvider ? t('providerModels.list.enabledActions.enableAll') : reason}
               onClick={async () => {
-                setBatchLoading(true);
-                await batchToggleAiModels(
-                  filteredModels.map((i) => i.id),
-                  true,
-                );
-                setBatchLoading(false);
+                if (!canManageProvider) return;
+
+                try {
+                  setBatchLoading(true);
+                  await batchToggleAiModels(
+                    filteredModels.map((i) => i.id),
+                    true,
+                  );
+                } finally {
+                  setBatchLoading(false);
+                }
               }}
             />
           </Flexbox>

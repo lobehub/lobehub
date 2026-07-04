@@ -11,6 +11,7 @@ import type {
   GitPullResult,
   GitPushResult,
   GitRemoteBranchListItem,
+  GitRemoveWorktreeResult,
   GitRenameBranchResult,
   GitWorkingTreeFiles,
   GitWorkingTreePatches,
@@ -34,6 +35,7 @@ import {
   listGitWorktrees as computeListGitWorktrees,
   pullGitBranch as runPullGitBranch,
   pushGitBranch as runPushGitBranch,
+  removeGitWorktree as runRemoveGitWorktree,
   renameGitBranch as runRenameGitBranch,
   revertGitFile as runRevertGitFile,
 } from '@lobechat/local-file-shell';
@@ -136,6 +138,14 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async deleteGitBranch(payload: { branch: string; path: string }): Promise<GitDeleteBranchResult> {
     return runDeleteGitBranch(payload);
+  }
+
+  @IpcMethod()
+  async removeGitWorktree(payload: {
+    path: string;
+    worktreePath: string;
+  }): Promise<GitRemoveWorktreeResult> {
+    return runRemoveGitWorktree(payload);
   }
 
   @IpcMethod()

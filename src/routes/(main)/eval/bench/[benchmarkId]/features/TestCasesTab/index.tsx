@@ -1,18 +1,19 @@
 'use client';
 
-import { Button, Flexbox, Input } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
 import { Badge, Card, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Eye, Search } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEvalStore } from '@/store/eval';
 
+import SegmentBar from '../../../../features/SegmentBar';
 import { createTestCasePreviewModal } from '../TestCasePreviewModal';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     .ant-card-body {
       padding: 0;
@@ -22,16 +23,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     padding-block: 4px;
-    padding-inline: 10px;
+    padding-inline: 8px;
     border: none;
 
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     text-transform: capitalize;
 
     background: transparent;
 
-    transition: all 0.2s;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
 
     &[data-active='true'] {
       color: ${cssVar.colorText};
@@ -49,12 +52,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:not(:first-child) {
       border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -1px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   filterContainer: css`
     overflow: hidden;
     display: flex;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
+    border-radius: ${cssVar.borderRadiusSM};
   `,
   header: css`
     padding-block: 12px;
@@ -62,13 +74,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   headerTitle: css`
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
   indexCell: css`
-    font-family: monospace;
-    font-size: 12px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
   inputCell: css`
@@ -81,10 +93,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  // Summary strip — case total as a mono figure plus the difficulty mix bar,
+  // sitting between the title row and the table.
+  summaryDot: css`
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+  `,
+  summaryRow: css`
+    display: flex;
+    gap: 16px;
+    align-items: center;
+
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  summaryValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeLG};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
   searchIcon: css`
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-start: 10px;
+    inset-inline-start: 12px;
     transform: translateY(-50%);
 
     color: ${cssVar.colorTextTertiary};
@@ -92,15 +127,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   searchInput: css`
     width: 192px;
     padding-inline-start: 32px;
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
   `,
   table: css`
     .ant-table {
-      font-size: 14px;
+      font-size: ${cssVar.fontSize};
     }
 
     .ant-table-thead > tr > th {
-      font-size: 12px;
+      font-size: ${cssVar.fontSizeSM};
       font-weight: 500;
       color: ${cssVar.colorTextTertiary};
       background: ${cssVar.colorFillQuaternary};
@@ -111,12 +146,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
         background: ${cssVar.colorFillQuaternary};
       }
     }
-  `,
-  viewButton: css`
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -139,6 +168,25 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
   });
 
   const data = testCaseData?.data || [];
+  const total = testCaseData?.total || 0;
+
+  // Difficulty mix across the loaded page — drives the summary strip's bar.
+  const difficulty = useMemo(() => {
+    const counts = { easy: 0, hard: 0, medium: 0 };
+    for (const c of data) {
+      const d = c?.metadata?.difficulty as 'easy' | 'hard' | 'medium' | undefined;
+      if (d === 'easy' || d === 'medium' || d === 'hard') counts[d] += 1;
+    }
+    return {
+      counts,
+      segments: [
+        { color: cssVar.colorSuccess, value: counts.easy },
+        { color: cssVar.colorWarning, value: counts.medium },
+        { color: cssVar.colorError, value: counts.hard },
+      ],
+      tagged: counts.easy + counts.medium + counts.hard,
+    };
+  }, [data]);
 
   // Client-side filtering
   const filteredData = data.filter((c: any) => {
@@ -150,16 +198,16 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
   const getDifficultyBadge = (difficulty: string) => {
     const config: Record<string, { bg: string; color: string }> = {
       easy: {
-        bg: 'var(--ant-color-success-bg)',
-        color: 'var(--ant-color-success)',
+        bg: cssVar.colorSuccessBg,
+        color: cssVar.colorSuccess,
       },
       hard: {
-        bg: 'var(--ant-color-error-bg)',
-        color: 'var(--ant-color-error)',
+        bg: cssVar.colorErrorBg,
+        color: cssVar.colorError,
       },
       medium: {
-        bg: 'var(--ant-color-warning-bg)',
-        color: 'var(--ant-color-warning)',
+        bg: cssVar.colorWarningBg,
+        color: cssVar.colorWarning,
       },
     };
 
@@ -170,7 +218,7 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
           backgroundColor: c.bg,
           borderColor: c.color + '30',
           color: c.color,
-          fontSize: 11,
+          fontSize: 12,
           textTransform: 'capitalize',
         }}
       >
@@ -216,9 +264,9 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
                 key={tag}
                 style={{
                   backgroundColor: 'transparent',
-                  borderColor: 'var(--ant-color-border)',
-                  color: 'var(--ant-color-text-tertiary)',
-                  fontSize: 10,
+                  borderColor: cssVar.colorBorder,
+                  color: cssVar.colorTextTertiary,
+                  fontSize: 12,
                 }}
               >
                 {tag}
@@ -234,11 +282,9 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
     {
       key: 'actions',
       render: (_: any, record: any) => (
-        <Button
-          className={styles.viewButton}
+        <ActionIcon
           icon={Eye}
           size="small"
-          variant="text"
           onClick={() => createTestCasePreviewModal({ testCase: record })}
         />
       ),
@@ -283,6 +329,40 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
               </div>
             </Flexbox>
           </Flexbox>
+        </div>
+
+        <div className={styles.summaryRow}>
+          <Flexbox gap={2}>
+            <span className={styles.summaryValue}>{total}</span>
+            <Text color={cssVar.colorTextTertiary} fontSize={12}>
+              {t('benchmark.detail.stats.cases')}
+            </Text>
+          </Flexbox>
+          {difficulty.tagged > 0 && (
+            <Flexbox flex={1} gap={6} style={{ maxWidth: 320, minWidth: 0 }}>
+              <SegmentBar segments={difficulty.segments} />
+              <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+                {(['easy', 'medium', 'hard'] as const).map((d) => (
+                  <Flexbox horizontal align="center" gap={6} key={d}>
+                    <span
+                      className={styles.summaryDot}
+                      style={{
+                        background:
+                          d === 'easy'
+                            ? cssVar.colorSuccess
+                            : d === 'medium'
+                              ? cssVar.colorWarning
+                              : cssVar.colorError,
+                      }}
+                    />
+                    <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                      {t(`difficulty.${d}`)} {difficulty.counts[d]}
+                    </Text>
+                  </Flexbox>
+                ))}
+              </Flexbox>
+            </Flexbox>
+          )}
         </div>
 
         <div className={styles.table}>

@@ -100,6 +100,12 @@ export interface CreateDocumentParams {
   parentId?: string;
   slug?: string;
   title: string;
+  /**
+   * Workspace-only: force the new document into a specific visibility bucket.
+   * Omit to let the server pick the default (`api` sourceType top-level docs
+   * default to `private`, nested docs inherit their parent).
+   */
+  visibility?: 'private' | 'public';
 }
 
 export interface ListDocumentHistoryParams extends ListHistoryInput {}
@@ -263,6 +269,14 @@ export class DocumentService {
     targetWorkspaceId: string | null,
   ): Promise<{ rootId: string }> {
     return lambdaClient.document.copyDocumentToWorkspace.mutate({ documentId, targetWorkspaceId });
+  }
+
+  /**
+   * Publish a private document (and its whole subtree) into the workspace.
+   * One-way: once published there is no client-side path back to `private`.
+   */
+  async publishDocumentToWorkspace(id: string): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.publishDocumentToWorkspace.mutate({ id });
   }
 }
 

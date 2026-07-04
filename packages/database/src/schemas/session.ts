@@ -24,6 +24,16 @@ export const sessionGroups = pgTable(
 
     clientId: text('client_id'),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see the folder; `private` constrains it to the
+     * creator (`user_id`). Ignored in personal mode.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (table) => ({
@@ -33,6 +43,11 @@ export const sessionGroups = pgTable(
     ),
     userIdIdx: index('session_groups_user_id_idx').on(table.userId),
     workspaceIdIdx: index('session_groups_workspace_id_idx').on(table.workspaceId),
+    workspaceVisibilityIdx: index('session_groups_workspace_visibility_idx').on(
+      table.workspaceId,
+      table.visibility,
+      table.userId,
+    ),
   }),
 );
 

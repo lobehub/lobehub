@@ -39,9 +39,16 @@ const updateTopicCoverSchema = z.object({
 export const generationTopicRouter = router({
   createTopic: generationTopicProcedure
     .use(withScopedPermission('topic:create'))
-    .input(z.object({ type: z.enum(['image', 'video']).optional() }).optional())
+    .input(
+      z
+        .object({
+          type: z.enum(['image', 'video']).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .mutation(async ({ ctx, input }) => {
-      const data = await ctx.generationTopicModel.create('', input?.type);
+      const data = await ctx.generationTopicModel.create('', input?.type, input?.visibility);
       return data.id;
     }),
   deleteTopic: generationTopicProcedure

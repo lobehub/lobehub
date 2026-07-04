@@ -112,7 +112,11 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         icon: COMMAND_ICONS[action.type],
         key: `action-${action.type}`,
         label: t(`slash.${action.type}` as any),
-        metadata: { category: action.category, type: action.type },
+        metadata: {
+          category: action.category,
+          description: t(`slash.${action.type}.desc` as any, { defaultValue: '' }),
+          type: action.type,
+        },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
             category: action.category,
@@ -148,7 +152,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         icon: SkillsIcon,
         key: `skill-${skill.type}`,
         label: skill.label,
-        metadata: { category: 'skill', type: skill.type },
+        metadata: { category: 'skill', description: skill.description, type: skill.type },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
             category: 'skill',
@@ -250,7 +254,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       // Fuzzy filtering
       if (search?.matchingString && search.matchingString.length > 0) {
-        const fuse = new Fuse(allItems, { keys: ['key', 'label'], threshold: 0.4 });
+        const fuse = new Fuse(allItems, {
+          keys: ['key', 'label', 'metadata.description'],
+          threshold: 0.4,
+        });
         return fuse.search(search.matchingString).map((r) => r.item);
       }
 

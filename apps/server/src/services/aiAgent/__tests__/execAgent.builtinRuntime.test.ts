@@ -276,7 +276,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toContain('You are Lobe');
-    expect(callArgs.agentConfig.systemRole).toContain('{{model}}');
+    // Model identity is injected by ModelInfoProvider now, not the `{{model}}`
+    // template placeholder; `{{date}}` still proves the runtime template merged.
+    expect(callArgs.agentConfig.systemRole).toContain('{{date}}');
   });
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {

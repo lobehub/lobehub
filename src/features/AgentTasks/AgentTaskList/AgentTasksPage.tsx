@@ -25,6 +25,7 @@ import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
+import TaskListVisibilityFilter from './TaskListVisibilityFilter';
 import TasksGroupConfig from './TasksGroupConfig';
 
 interface TaskCreateActionBehaviorParams {
@@ -60,7 +61,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList(agentId ? { agentId } : { allAgents: true });
+  // Keep the SWR handle so a failed list fetch surfaces error + Retry instead of
+  // a permanent skeleton (the store only flips `isTaskListInit` on success — see
+  // LOBE-11181). `data` (undefined until first success) is the settled signal.
+  const { data, error, isLoading, mutate } = useFetchTaskList(
+    agentId ? { agentId } : { allAgents: true },
+  );
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
@@ -70,6 +76,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
     s.toggleTaskAgentPanel,
   ]);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const routeScope = agentId ? 'agent' : 'global';
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
       const next = normalizeTaskListViewOptions(updater(viewOptions));
@@ -99,7 +106,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
       agentId,
       lockAssignee: !!agentId,
       onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, task.agentId));
+        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
       },
     });
   }, [agentId, canCreateTask, createActionBehavior.mode, navigate, updateSystemStatus]);
@@ -116,6 +123,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
+            {!agentId && <TaskListVisibilityFilter />}
             {(inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}
@@ -146,7 +154,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         <EmptyState agentId={agentId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} />
+          <KanbanBoard agentId={agentId} routeScope={routeScope} />
         </Flexbox>
       ) : (
         <WideScreenContainer
@@ -155,7 +163,15 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
           {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} />}
-          <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
+          <TaskList
+            data={data}
+            error={error}
+            isLoading={isLoading}
+            options={viewOptions}
+            routeScope={routeScope}
+            onRetry={() => mutate()}
+            onShowHiddenCompleted={handleShowHiddenCompleted}
+          />
         </WideScreenContainer>
       )}
     </Flexbox>

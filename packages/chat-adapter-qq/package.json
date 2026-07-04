@@ -16,12 +16,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "chat": "^4.23.0",
+    "chat": "^4.31.0",
     "mime": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
-    "tsup": "^8.3.5",
+    "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
 }

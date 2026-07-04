@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "删除生成主题",
   "topic.deleteConfirmDesc": "确认删除该生成主题吗？删除后无法恢复",
   "topic.empty": "暂无生成主题",
+  "topic.privateTitle": "私人",
   "topic.title": "图片主题",
-  "topic.untitled": "默认主题"
+  "topic.untitled": "默认主题",
+  "topic.visibility.existingLocked": "当前主题的可见性已固定。创建新主题后可选择不同空间。",
+  "topic.workspaceTitle": "工作区"
 }

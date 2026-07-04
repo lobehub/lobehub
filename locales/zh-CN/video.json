@@ -29,6 +29,9 @@
   "topic.createNew": "创作新主题",
   "topic.deleteConfirm": "删除视频主题",
   "topic.deleteConfirmDesc": "你即将删除该视频主题，此操作无法撤销。",
+  "topic.privateTitle": "私人",
   "topic.title": "视频主题",
-  "topic.untitled": "默认主题"
+  "topic.untitled": "默认主题",
+  "topic.visibility.existingLocked": "当前主题的可见性已固定。创建新主题后可选择不同空间。",
+  "topic.workspaceTitle": "工作区"
 }

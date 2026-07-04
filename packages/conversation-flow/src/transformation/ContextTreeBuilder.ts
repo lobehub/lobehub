@@ -218,7 +218,10 @@ export class ContextTreeBuilder {
     // group head legitimately has a mix of tool + assistant children. (In the
     // old tool-anchored form a tool-using assistant only ever had tool children,
     // so this stays a no-op for legacy data.)
-    return idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool');
+    return (
+      idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool') ||
+      this.messageCollector.isToolChainHead(message)
+    );
   }
 
   /**

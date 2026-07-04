@@ -10,9 +10,11 @@ import {
   getLinkedPullRequest,
   listGitBranches,
   listGitRemoteBranches,
+  listGitWorktrees,
   moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
+  removeGitWorktree,
   renameGitBranch,
   renameLocalFile,
   revertGitFile,
@@ -25,6 +27,7 @@ import type {
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   ProjectFileIndexParams,
+  ProjectFileSearchParams,
 } from './types';
 import { initWorkspace, listProjectSkills, statPath } from './workspace';
 
@@ -39,6 +42,7 @@ export const DEVICE_RPC_METHODS = [
   'listProjectSkills',
   'statPath',
   'getProjectFileIndex',
+  'searchProjectFiles',
   'getLocalFilePreview',
   'moveLocalFiles',
   'renameLocalFile',
@@ -52,9 +56,11 @@ export const DEVICE_RPC_METHODS = [
   'getGitAheadBehind',
   'listGitBranches',
   'listGitRemoteBranches',
+  'listGitWorktrees',
   'checkoutGitBranch',
   'renameGitBranch',
   'deleteGitBranch',
+  'removeGitWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -93,6 +99,10 @@ export const executeDeviceRpc = async (
 
     case 'getProjectFileIndex': {
       return deps.getProjectFileIndex(params as ProjectFileIndexParams);
+    }
+
+    case 'searchProjectFiles': {
+      return deps.searchProjectFiles(params as ProjectFileSearchParams);
     }
 
     case 'getLocalFilePreview': {
@@ -147,6 +157,10 @@ export const executeDeviceRpc = async (
       return listGitRemoteBranches((params as { path: string }).path);
     }
 
+    case 'listGitWorktrees': {
+      return listGitWorktrees((params as { path: string }).path);
+    }
+
     case 'checkoutGitBranch': {
       return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
     }
@@ -157,6 +171,10 @@ export const executeDeviceRpc = async (
 
     case 'deleteGitBranch': {
       return deleteGitBranch(params as { branch: string; path: string });
+    }
+
+    case 'removeGitWorktree': {
+      return removeGitWorktree(params as { path: string; worktreePath: string });
     }
 
     case 'pullGitBranch': {

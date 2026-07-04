@@ -157,23 +157,29 @@ export const useAskUserForm = ({
     [custom, picks, writeDraft],
   );
 
-  const handleEscapeToggle = useCallback(() => {
-    setEscapeActive((prev) => {
-      const next = !prev;
+  const setEscapeMode = useCallback(
+    (next: boolean) => {
+      setEscapeActive(next);
       writeDraft({ custom, escapeActive: next, escapeText, picks });
-      return next;
-    });
-  }, [custom, escapeText, picks, writeDraft]);
+    },
+    [custom, escapeText, picks, writeDraft],
+  );
+
+  // Whole-form freeform only makes sense with more than one question — with a
+  // single question the per-question custom box already IS the full custom
+  // answer, so escape is redundant there and never offered.
+  const escapeAvailable = questions.length > 1;
+  const inEscape = escapeActive && escapeAvailable;
 
   const handleSubmit = useCallback(() => {
-    if (escapeActive) {
+    if (escapeActive && escapeAvailable) {
       // Escape mode is mutually exclusive with picks — send the text alone
       // under `__freeform__`. Bridge formatter forwards it to CC verbatim.
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
     } else {
       void submitWith(buildSubmitPayload(questions, picks, custom));
     }
-  }, [custom, escapeActive, escapeText, picks, questions, submitWith]);
+  }, [custom, escapeActive, escapeAvailable, escapeText, picks, questions, submitWith]);
 
   const handleSkip = useCallback(async () => {
     if (!onInteractionAction || submitting) return;
@@ -200,7 +206,7 @@ export const useAskUserForm = ({
   // when the clock hits zero, submit that text as-is rather than discarding it.
   useEffect(() => {
     if (!expired || submitting || questions.length === 0) return;
-    if (escapeActive && escapeText.trim().length > 0) {
+    if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
       return;
     }
@@ -214,10 +220,20 @@ export const useAskUserForm = ({
       }
     }
     void submitWith(fallback);
-  }, [expired, submitting, questions, escapeActive, escapeText, picks, custom, submitWith]);
+  }, [
+    expired,
+    submitting,
+    questions,
+    escapeActive,
+    escapeAvailable,
+    escapeText,
+    picks,
+    custom,
+    submitWith,
+  ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
-  const isSubmitDisabled = escapeActive
+  const isSubmitDisabled = inEscape
     ? !escapeText.trim() || submitting || expired
     : !allAnswered || expired || submitting;
 
@@ -225,21 +241,21 @@ export const useAskUserForm = ({
     activeQuestion,
     activeTab,
     custom,
-    escapeActive,
+    escapeActive: inEscape,
     escapeText,
     expired,
     handleCustomChange,
     handleEscapeTextChange,
-    handleEscapeToggle,
     handleSkip,
     handleSubmit,
     handleToggle,
-    isMulti: questions.length > 1,
+    isMulti: escapeAvailable,
     isSubmitDisabled,
     picks,
     questions,
     remainingMs: deadline - now,
     setActiveTab,
+    setEscapeMode,
     submitting,
   };
 };

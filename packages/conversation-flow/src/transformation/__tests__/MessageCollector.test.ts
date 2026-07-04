@@ -816,5 +816,71 @@ describe('MessageCollector', () => {
 
       expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-C']);
     });
+
+    it('bridges a toolless prose step wedged between two tool steps (no visual split)', () => {
+      // Regression: the model narrates mid-turn (toolless assistant) right before
+      // its next tool call. The prose step is part of ONE continuous run, but the
+      // chain used to terminate at it — splitting the following tool step into a
+      // second AssistantGroup that renders as a separate "Claude Code" bubble.
+      // assistant-anchored shape: the prose is a sibling of ast-A's tool result.
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-1')] });
+      const toolA = mkTool('tool-1', { parentId: 'ast-A', tool_call_id: 'tc-1' });
+      const prose = mkAssistant('ast-prose', { createdAt: 1, parentId: 'ast-A' });
+      const astC = mkAssistant('ast-C', { parentId: 'ast-prose', tools: [bashTool('tc-2')] });
+      const toolC = mkTool('tool-2', { parentId: 'ast-C', tool_call_id: 'tc-2' });
+      const astFinal = mkAssistant('ast-final', { parentId: 'tool-2' });
+
+      const allMessages: Message[] = [astA, toolA, prose, astC, toolC, astFinal];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      const allToolMessages: Message[] = [];
+      collector.collectAssistantChain(
+        astA,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        new Set(),
+      );
+
+      // One unbroken chain — prose step folded in, both tool steps kept together.
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-prose', 'ast-C', 'ast-final']);
+      expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
+    });
+
+    it('bridges multiple toolless prose steps before the next tool step', () => {
+      // Codex can stream several plain assistant progress updates before the
+      // next command. They are still one run and should not split into
+      // standalone bubbles between tool-using steps.
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-1')] });
+      const toolA = mkTool('tool-1', { parentId: 'ast-A', tool_call_id: 'tc-1' });
+      const prose1 = mkAssistant('ast-prose-1', { createdAt: 1, parentId: 'ast-A' });
+      const prose2 = mkAssistant('ast-prose-2', { createdAt: 2, parentId: 'ast-prose-1' });
+      const astC = mkAssistant('ast-C', { parentId: 'ast-prose-2', tools: [bashTool('tc-2')] });
+      const toolC = mkTool('tool-2', { parentId: 'ast-C', tool_call_id: 'tc-2' });
+      const astFinal = mkAssistant('ast-final', { parentId: 'ast-C' });
+
+      const allMessages: Message[] = [astA, toolA, prose1, prose2, astC, toolC, astFinal];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      const allToolMessages: Message[] = [];
+      collector.collectAssistantChain(
+        astA,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        new Set(),
+      );
+
+      expect(assistantChain.map((m) => m.id)).toEqual([
+        'ast-A',
+        'ast-prose-1',
+        'ast-prose-2',
+        'ast-C',
+        'ast-final',
+      ]);
+      expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
+    });
   });
 });

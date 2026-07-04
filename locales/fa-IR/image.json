@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "حذف موضوع تولید",
   "topic.deleteConfirmDesc": "در حال حذف این موضوع تولید هستید. این عمل قابل بازگشت نیست، لطفاً با احتیاط ادامه دهید.",
   "topic.empty": "هیچ موضوع تولیدی وجود ندارد",
+  "topic.privateTitle": "خصوصی",
   "topic.title": "موضوع نقاشی",
-  "topic.untitled": "موضوع پیش‌فرض"
+  "topic.untitled": "موضوع پیش‌فرض",
+  "topic.visibility.existingLocked": "قابلیت مشاهده برای موضوع فعلی ثابت است. برای انتخاب فضای متفاوت، یک موضوع جدید ایجاد کنید.",
+  "topic.workspaceTitle": "فضای کاری"
 }

@@ -107,6 +107,9 @@ export class CommonActionImpl {
       () => userService.getUserState(),
       {
         onError: (error) => {
+          // Record the init failure so gated tabs (Advanced / ServiceModel) can
+          // render error + Retry instead of a permanent skeleton (LOBE-11118/11139).
+          this.#set({ isUserStateInitError: error }, false, n('initUserState/error'));
           options?.onError?.(error);
         },
         onSuccess: (data) => {
@@ -150,6 +153,7 @@ export class CommonActionImpl {
                 isUserCanEnableTrace: data.canEnableTrace,
                 isUserHasConversation: data.hasConversation,
                 isUserStateInit: true,
+                isUserStateInitError: undefined,
                 agentOnboarding: data.agentOnboarding,
                 onboarding: data.onboarding,
                 preference,

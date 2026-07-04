@@ -61,6 +61,7 @@ export interface BuilderContext {
   contextSummary: string;
   generationMode: BuilderSuggestionMode;
   locale: string;
+  targetId?: string;
 }
 
 /**
@@ -88,5 +89,10 @@ export const useBuilderContext = (mode: SuggestMode): BuilderContext => {
     [isGroup, agentItem, group],
   );
 
-  return { contextSummary, generationMode: isGroup ? 'group' : 'agent', locale: i18n.language };
+  return {
+    contextSummary,
+    generationMode: isGroup ? 'group' : 'agent',
+    locale: i18n.language,
+    targetId: isGroup ? activeGroupId : activeAgentId,
+  };
 };

@@ -250,7 +250,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     const runtimeOperationIds: string[] = [];
 
     for (const op of ops) {
-      if (op.status !== 'running' || op.metadata.isAborting) continue;
+      if (op.status !== 'running' || op.metadata.isAborting || op.metadata.visibleLoadingDone)
+        continue;
 
       const mapped = resolveOperationActivity(op.type);
       if (mapped && op.metadata.startTime > latestActivityStart) {

@@ -1,5 +1,5 @@
 import isEqual from 'fast-deep-equal';
-import { produce } from 'immer';
+import { current, produce } from 'immer';
 
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
@@ -31,7 +31,15 @@ type DeleteChatTopicAction = ChatTopicScope & {
   type: 'deleteTopic';
 };
 
-export type ChatTopicDispatch = AddChatTopicAction | UpdateChatTopicAction | DeleteChatTopicAction;
+type ReplaceChatTopicIdAction = ChatTopicScope & {
+  id: string;
+  nextId: string;
+  type: 'replaceTopicId';
+  value?: Partial<ChatTopic>;
+};
+
+export type ChatTopicDispatch =
+  AddChatTopicAction | UpdateChatTopicAction | DeleteChatTopicAction | ReplaceChatTopicIdAction;
 
 export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch): ChatTopic[] => {
   switch (payload.type) {
@@ -59,13 +67,37 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           const currentTopic = draftState[topicIndex];
           const mergedTopic = { ...currentTopic, ...value };
 
-          // Only update if the merged value is different from current (excluding updatedAt)
-
-          if (!isEqual(currentTopic, mergedTopic)) {
+          // Only update if the merged value is different from current (excluding updatedAt).
+          // Compare against a plain snapshot, not the raw draft proxy — see message/reducer.ts.
+          if (!isEqual(current(currentTopic), mergedTopic)) {
             // TODO: updatedAt type needs to be changed to Date later
             // @ts-ignore
             draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
           }
+        }
+      });
+    }
+
+    case 'replaceTopicId': {
+      return produce(state, (draftState) => {
+        const { value, id, nextId } = payload;
+        const topicIndex = draftState.findIndex((topic) => topic.id === id);
+        const existingNextIndex = draftState.findIndex((topic) => topic.id === nextId);
+
+        if (topicIndex === -1) return;
+
+        const currentTopic = draftState[topicIndex];
+        const nextTopic = existingNextIndex === -1 ? undefined : draftState[existingNextIndex];
+        draftState[topicIndex] = {
+          ...currentTopic,
+          ...nextTopic,
+          ...value,
+          id: nextId,
+          updatedAt: Date.now(),
+        };
+
+        if (existingNextIndex !== -1 && existingNextIndex !== topicIndex) {
+          draftState.splice(existingNextIndex, 1);
         }
       });
     }

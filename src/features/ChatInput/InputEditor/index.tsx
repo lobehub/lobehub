@@ -3,20 +3,20 @@ import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import {
   chainInputCompletion,
-  escapeXmlAttr,
   INPUT_COMPLETION_PROMPT_VERSION,
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import { isCommandPressed } from '@lobechat/utils';
-import type { IEditor } from '@lobehub/editor';
-import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
-import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
+import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
+import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
+import { Editor, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
+import { useTranslation } from 'react-i18next';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
@@ -31,10 +31,12 @@ import {
   labPreferSelectors,
   settingsSelectors,
   systemAgentSelectors,
+  userProfileSelectors,
 } from '@/store/user/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
+import { useChatInputHistory } from '../hooks/useChatInputHistory';
 import { useChatInputStore, useStoreApi } from '../store';
 import {
   INSERT_ACTION_TAG_COMMAND,
@@ -42,13 +44,13 @@ import {
   useSlashActionItems,
 } from './ActionTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
-import { createMentionMenu } from './MentionMenu';
-import type { MentionMenuState } from './MentionMenu/types';
+import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
+import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
-import { useLocalFileMention } from './useLocalFileMention';
+import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(
@@ -60,11 +62,23 @@ const className = cx(
   mentionFilledClassName,
 );
 
+// Single-line dimmed preview of the highlighted history entry, shown through the
+// editor's placeholder slot while the input is empty (history popup open).
+const ghostClassName = cx(css`
+  overflow: hidden;
+  display: block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`);
+
+type MentionOption = ISlashMenuOption | ISlashSectionOption;
+
 const InputEditor = memo<{
   defaultRows?: number;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
 }>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+  const { t } = useTranslation('chat');
   const [
     editor,
     slashMenuRef,
@@ -73,6 +87,7 @@ const InputEditor = memo<{
     expand,
     slashPlacement,
     isInputCompletionEnabled,
+    isInputHistoryEnabled,
     isMentionEnabled,
     isSlashEnabled,
   ] = useChatInputStore((s) => [
@@ -83,6 +98,7 @@ const InputEditor = memo<{
     s.expand,
     s.slashPlacement ?? 'top',
     s.feature?.inputCompletion ?? true,
+    s.feature?.inputHistory ?? true,
     s.feature?.mention ?? true,
     s.feature?.slash ?? true,
   ]);
@@ -93,29 +109,49 @@ const InputEditor = memo<{
   const state = useEditorState(editor);
   const { allowed: canCreateContent } = usePermission('create_content');
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
+  const userId = useUserStore(userProfileSelectors.userId);
   const { enableScope, disableScope } = useHotkeysContext();
+  const agentId = useAgentId();
+  const inputHistoryScope = useMemo(() => ({ agentId, userId }), [agentId, userId]);
 
   const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const shouldSendOnEnter = useEnterToSend();
+  const getMarkdownContent = useCallback(
+    () => storeApi.getState().getMarkdownContent(),
+    [storeApi],
+  );
+  const inputHistory = useChatInputHistory({
+    editor,
+    enabled: isInputHistoryEnabled,
+    getMarkdownContent,
+    isComposingRef,
+    scope: inputHistoryScope,
+  });
 
   // --- Category-based mention system ---
   const categories = useMentionCategories();
-  const stateRef = useRef<MentionMenuState>({ isSearch: false, matchingString: '' });
-  const categoriesRef = useRef(categories);
-  categoriesRef.current = categories;
 
   // Get agent's model info for vision support check and handle paste upload
-  const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const heterogeneousType = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
 
-  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
+  const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  const mentionSections = useMemo<ISlashSectionOption[]>(
+    () =>
+      categories.map((category) => ({
+        items: category.items,
+        key: `mention-section-${category.id}`,
+        label: category.label,
+        type: 'section',
+      })),
+    [categories],
+  );
 
   const fuse = useMemo(
     () =>
@@ -131,23 +167,51 @@ const InputEditor = memo<{
       search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
     ) => {
       if (search?.matchingString) {
-        stateRef.current = { isSearch: true, matchingString: search.matchingString };
         const [localFileItems, mentionItems] = await Promise.all([
           searchLocalFiles(search.matchingString),
           Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
         ]);
 
-        return [...localFileItems, ...mentionItems];
+        const rankByKey = new Map(mentionItems.map((item, index) => [String(item.key), index]));
+        const matchedSections = categories
+          .map((category): ISlashSectionOption => {
+            const items = category.items
+              .filter((item) => rankByKey.has(String(item.key)))
+              .sort(
+                (a, b) =>
+                  (rankByKey.get(String(a.key)) ?? Number.MAX_SAFE_INTEGER) -
+                  (rankByKey.get(String(b.key)) ?? Number.MAX_SAFE_INTEGER),
+              );
+
+            return {
+              items,
+              key: `mention-section-${category.id}`,
+              label: category.label,
+              type: 'section',
+            };
+          })
+          .filter((section) => section.items.length > 0);
+
+        if (localFileItems.length > 0) {
+          return [
+            {
+              items: localFileItems,
+              key: 'mention-section-local-file',
+              label: t('mention.category.files'),
+              type: 'section',
+            },
+            ...matchedSections,
+          ] satisfies MentionOption[];
+        }
+
+        return matchedSections;
       }
-      stateRef.current = { isSearch: false, matchingString: '' };
-      return [...allMentionItems];
+      return mentionSections;
     },
-    [allMentionItems, fuse, searchLocalFiles],
+    [categories, fuse, mentionSections, searchLocalFiles, t],
   );
 
-  const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
-
-  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileMention);
+  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileTag);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
@@ -371,13 +435,9 @@ const InputEditor = memo<{
     if (mention.metadata?.type === 'topic') {
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
-    if (mention.metadata?.type === 'localFile') {
-      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
-      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
-      const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
-
-      return `<localFile name="${name}" path="${path}"${isDirectory} />`;
-    }
+    // localFile references are their own node (LocalFileTagNode) and serialize
+    // via that plugin's always-registered markdown writer — they never reach this
+    // generic mention writer, which is only wired up when mentionOption is enabled.
     return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
   }, []);
 
@@ -394,6 +454,12 @@ const InputEditor = memo<{
         type: String(option.metadata.actionType),
       };
       editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else if (option.metadata?.type === 'localFile') {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
+        isDirectory: !!option.metadata.isDirectory,
+        name: String(option.metadata.name ?? option.label),
+        path: String(option.metadata.path ?? ''),
+      });
     } else {
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
         label: String(option.label),
@@ -410,10 +476,9 @@ const InputEditor = memo<{
             markdownWriter: mentionMarkdownWriter,
             maxLength: 50,
             onSelect: mentionOnSelect,
-            renderComp: MentionMenuComp,
           }
         : undefined,
-    [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect, MentionMenuComp],
+    [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect],
   );
 
   const slashOption = useMemo(
@@ -424,23 +489,14 @@ const InputEditor = memo<{
   const richRenderProps = useMemo(() => {
     const basePlugins = !enableRichRender
       ? CHAT_INPUT_EMBED_PLUGINS
-      : createChatInputRichPlugins({
-          linkPlugin: false,
-          mathPlugin: Editor.withProps(ReactMathPlugin, {
-            renderComp: expand
-              ? undefined
-              : (props) => (
-                  <FloatMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
-                ),
-          }),
-        });
+      : createChatInputRichPlugins({ linkPlugin: false });
 
     const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
 
     return !enableRichRender
       ? { enablePasteMarkdown: false, markdownOption: false, plugins }
       : { plugins };
-  }, [enableRichRender, expand, slashMenuRef, autoCompletePlugin]);
+  }, [enableRichRender, autoCompletePlugin]);
 
   const handleEditorInit = useCallback(
     (editor: IEditor) => {
@@ -463,86 +519,115 @@ const InputEditor = memo<{
     [restoreDraft, storeApi],
   );
 
+  const ghostMarkdown = inputHistory.ghostMarkdown;
+
   return (
-    <Editor
-      autoFocus
-      pasteAsPlainText
-      className={className}
-      content={''}
-      editable={canCreateContent}
-      editor={editor}
-      {...{ slashPlacement }}
-      {...richRenderProps}
-      mentionOption={mentionOption}
-      slashOption={slashOption}
-      type={'text'}
-      variant={'chat'}
-      placeholder={
-        placeholder ?? (
-          <Placeholder
-            heterogeneousName={heterogeneousName}
-            showAgentAssignmentHint={showAgentAssignmentHint}
-            variant={placeholderVariant}
-          />
-        )
-      }
-      style={{
-        minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
-      }}
-      onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-      onInit={handleEditorInit}
-      onBlur={() => {
-        disableScope(HotkeyEnum.AddUserMessage);
-        saveDraftDebounced.flush();
-      }}
-      onChange={() => {
-        updateMarkdownContent();
-        saveDraftDebounced();
-      }}
-      onCompositionStart={({ event }) => {
-        compositionProps.onCompositionStart(event);
-        // Clear autocomplete placeholder nodes before IME composition starts —
-        // composing next to placeholder inline nodes freezes the editor.
-        if (isAutoCompleteEnabled) {
-          editor?.dispatchCommand(
-            KEY_ESCAPE_COMMAND,
-            new KeyboardEvent('keydown', { key: 'Escape' }),
-          );
+    <>
+      <InputHistoryPopup
+        activeIndex={inputHistory.popup.activeIndex}
+        container={(slashMenuRef as any)?.current ?? null}
+        entries={inputHistory.popup.entries}
+        open={inputHistory.popup.open}
+        onClose={inputHistory.close}
+        onHover={inputHistory.setActiveIndex}
+        onSelect={inputHistory.confirm}
+      />
+      <Editor
+        autoFocus
+        pasteAsPlainText
+        className={className}
+        content={''}
+        editable={canCreateContent}
+        editor={editor}
+        getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
+        {...{ slashPlacement }}
+        {...richRenderProps}
+        mentionOption={mentionOption}
+        slashOption={slashOption}
+        type={'text'}
+        variant={'chat'}
+        placeholder={
+          ghostMarkdown === undefined ? (
+            (placeholder ?? (
+              <Placeholder
+                heterogeneousName={heterogeneousName}
+                showAgentAssignmentHint={showAgentAssignmentHint}
+                variant={placeholderVariant}
+              />
+            ))
+          ) : (
+            <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
+          )
         }
-      }}
-      onContextMenu={async ({ event: e, editor }) => {
-        if (isDesktop) {
-          e.preventDefault();
-          const { electronSystemService } = await import('@/services/electron/system');
+        style={{
+          minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
+        }}
+        onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
+        onInit={handleEditorInit}
+        onBlur={() => {
+          disableScope(HotkeyEnum.AddUserMessage);
+          saveDraftDebounced.flush();
+        }}
+        onChange={() => {
+          updateMarkdownContent();
+          inputHistory.handleEditorChange();
+          saveDraftDebounced();
+        }}
+        onCompositionStart={({ event }) => {
+          compositionProps.onCompositionStart(event);
+          // Clear autocomplete placeholder nodes before IME composition starts —
+          // composing next to placeholder inline nodes freezes the editor.
+          if (isAutoCompleteEnabled) {
+            editor?.dispatchCommand(
+              KEY_ESCAPE_COMMAND,
+              new KeyboardEvent('keydown', { key: 'Escape' }),
+            );
+          }
+        }}
+        onContextMenu={async ({ event: e, editor }) => {
+          if (isDesktop) {
+            e.preventDefault();
+            const { electronSystemService } = await import('@/services/electron/system');
 
-          const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
+            const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
 
-          await electronSystemService.showContextMenu('editor', {
-            selectionText: selectionText || undefined,
-          });
-        }
-      }}
-      onFocus={() => {
-        enableScope(HotkeyEnum.AddUserMessage);
-      }}
-      onPressEnter={({ event: e }) => {
-        if (e.shiftKey || isComposingRef.current) return;
-        // when user like alt + enter to add ai message
-        if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
-        // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
-        if (expand) {
-          if (isCommandPressed(e)) {
+            await electronSystemService.showContextMenu('editor', {
+              selectionText: selectionText || undefined,
+            });
+          }
+        }}
+        onFocus={() => {
+          enableScope(HotkeyEnum.AddUserMessage);
+        }}
+        onKeyDown={({ event }) => {
+          if (inputHistory.handleKeyDown(event)) return true;
+        }}
+        onPressEnter={({ event: e }) => {
+          // While the history popup is open, Enter confirms the highlighted entry
+          // instead of sending. onPressEnter runs before onKeyDown for Enter, so
+          // returning true here also prevents a newline / send.
+          if (inputHistory.popup.open) {
+            inputHistory.confirm();
+            return true;
+          }
+          if (e.shiftKey || isComposingRef.current) return;
+          // when user like alt + enter to add ai message
+          if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
+          // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
+          if (expand) {
+            if (isCommandPressed(e)) {
+              send();
+              return true;
+            }
+            return;
+          }
+          if (shouldSendOnEnter(e)) {
             send();
             return true;
           }
-          return;
-        }
-        if (shouldSendOnEnter(e)) {
-          send();
-          return true;
-        }
-      }}
-    />
+        }}
+      />
+    </>
   );
 });
 

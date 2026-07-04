@@ -16,8 +16,10 @@ import {
   MemoryExtractionExecutor,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { WorkflowRunGuardError } from '@/server/workflows/runGuard';
 
 import { createWorkflowQstashClient } from '../../qstashClient';
+import { assertMemoryWorkflowContextAllowed } from './runGuard';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -27,6 +29,7 @@ const CEPA_LAYERS: LayersEnum[] = [
 ];
 
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
+const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic';
 
 const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloadInput>) =>
   upstashWorkflowTracer.startActiveSpan(
@@ -43,35 +46,37 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
         'workflow.name': 'memory-user-memory:process-topic',
       });
 
-      const topicId = payload.topicIds[0];
-      const userId = payload.userIds[0];
-
-      if (!userId || !topicId) {
-        span.setStatus({ code: SpanStatusCode.OK });
-        return { message: 'Missing userId or topicId for topic workflow.' };
-      }
-
-      if (!payload.sources.includes(MemorySourceType.ChatTopic)) {
-        span.setStatus({ code: SpanStatusCode.OK });
-        return { message: 'Source not supported in topic workflow.' };
-      }
-
-      const executor = await MemoryExtractionExecutor.create();
-
       try {
+        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
+
+        const topicId = payload.topicIds[0];
+        const userId = payload.userIds[0];
+
+        if (!userId || !topicId) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return { message: 'Missing userId or topicId for topic workflow.' };
+        }
+
+        if (!payload.sources.includes(MemorySourceType.ChatTopic)) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return { message: 'Source not supported in topic workflow.' };
+        }
+
+        const executor = await MemoryExtractionExecutor.create();
+
         if (payload.asyncTaskId) {
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // Check before CEPA extraction so cancelled tasks stop at the earliest safe boundary.
-          const cancelled = await context.run(
-            `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`,
-            () =>
-              getServerDB().then((db) =>
-                new AsyncTaskModel(
-                  db,
-                  userId,
-                  payload.workspaceId,
-                ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
-              ),
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          const cancelled = await context.run(stepName, () =>
+            getServerDB().then((db) =>
+              new AsyncTaskModel(
+                db,
+                userId,
+                payload.workspaceId,
+              ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
+            ),
           );
           if (cancelled) {
             span.setStatus({ code: SpanStatusCode.OK });
@@ -85,39 +90,39 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             layers = payload.layers.filter((layer) => CEPA_LAYERS.includes(layer));
           }
 
-          await context.run(
-            `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa`,
-            () =>
-              executor.extractTopic({
-                asyncTaskId: payload.asyncTaskId,
-                forceAll: payload.forceAll,
-                forceTopics: payload.forceTopics,
-                from: payload.from,
-                layers,
-                reportProgress: false,
-                source: MemorySourceType.ChatTopic,
-                to: payload.to,
-                topicId,
-                userId,
-                userInitiated: payload.userInitiated,
-                workspaceId: payload.workspaceId,
-              }),
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          await context.run(stepName, () =>
+            executor.extractTopic({
+              asyncTaskId: payload.asyncTaskId,
+              forceAll: payload.forceAll,
+              forceTopics: payload.forceTopics,
+              from: payload.from,
+              layers,
+              reportProgress: false,
+              source: MemorySourceType.ChatTopic,
+              to: payload.to,
+              topicId,
+              userId,
+              userInitiated: payload.userInitiated,
+              workspaceId: payload.workspaceId,
+            }),
           );
         }
         {
           if (payload.asyncTaskId) {
             // NOTICE: Cooperative cascading cancellation for the workflow tree.
             // Re-check before identity extraction to avoid running sequential identity step after cancel.
-            const cancelled = await context.run(
-              `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`,
-              () =>
-                getServerDB().then((db) =>
-                  new AsyncTaskModel(
-                    db,
-                    userId,
-                    payload.workspaceId,
-                  ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
-                ),
+            const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`;
+            await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+            const cancelled = await context.run(stepName, () =>
+              getServerDB().then((db) =>
+                new AsyncTaskModel(
+                  db,
+                  userId,
+                  payload.workspaceId,
+                ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
+              ),
             );
             if (cancelled) {
               span.setStatus({ code: SpanStatusCode.OK });
@@ -132,37 +137,37 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             layers = payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer));
           }
 
-          await context.run(
-            `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`,
-            () =>
-              executor.extractTopic({
-                asyncTaskId: payload.asyncTaskId,
-                forceAll: payload.forceAll,
-                forceTopics: payload.forceTopics,
-                from: payload.from,
-                layers,
-                reportProgress: false,
-                source: MemorySourceType.ChatTopic,
-                to: payload.to,
-                topicId,
-                userId,
-                userInitiated: payload.userInitiated,
-                workspaceId: payload.workspaceId,
-              }),
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          await context.run(stepName, () =>
+            executor.extractTopic({
+              asyncTaskId: payload.asyncTaskId,
+              forceAll: payload.forceAll,
+              forceTopics: payload.forceTopics,
+              from: payload.from,
+              layers,
+              reportProgress: false,
+              source: MemorySourceType.ChatTopic,
+              to: payload.to,
+              topicId,
+              userId,
+              userInitiated: payload.userInitiated,
+              workspaceId: payload.workspaceId,
+            }),
           );
         }
 
         if (payload.asyncTaskId && payload.userInitiated) {
-          await context.run(
-            `memory:user-memory:extract:users:${userId}:topics:${topicId}:progress`,
-            () =>
-              getServerDB().then((db) =>
-                new AsyncTaskModel(
-                  db,
-                  userId,
-                  payload.workspaceId,
-                ).incrementUserMemoryExtractionProgress(payload.asyncTaskId!),
-              ),
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:progress`;
+          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
+          await context.run(stepName, () =>
+            getServerDB().then((db) =>
+              new AsyncTaskModel(
+                db,
+                userId,
+                payload.workspaceId,
+              ).incrementUserMemoryExtractionProgress(payload.asyncTaskId!),
+            ),
           );
         }
 
@@ -176,6 +181,7 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       } catch (error) {
         // Let Upstash internal aborts bubble through but treat others as non-retry-able
         if (error instanceof WorkflowAbort) throw error;
+        if (error instanceof WorkflowRunGuardError) throw error;
 
         span.recordException(error as Error);
         span.setStatus({

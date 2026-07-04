@@ -18,12 +18,25 @@ interface ProjectLevelSkillsProps {
 const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
   ({ deviceId, hideHeader, workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { getRowActions, items, onOpenFile, onOpenSkill } = useProjectSkills(
+    const { error, getRowActions, items, mutate, onOpenFile, onOpenSkill } = useProjectSkills(
       workingDirectory,
       deviceId,
     );
 
-    if (items.length === 0) return null;
+    // A failed scan must surface an error + Retry, not silently vanish (ux Read
+    // §1.1). Only genuinely-empty (no error) keeps the "hide the section" behavior.
+    if (items.length === 0) {
+      if (!error) return null;
+      if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
+      return (
+        <SkillSection
+          isEmpty
+          error={error}
+          sectionHeader={{ title: t('workingPanel.skills.section.project') }}
+          onRetry={mutate}
+        />
+      );
+    }
 
     const list = (
       <SkillsList

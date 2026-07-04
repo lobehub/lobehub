@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
@@ -170,6 +171,18 @@ const ChatList = memo<ChatListProps>(
     // When topicId is null (new conversation), show welcome directly without waiting for fetch
     // because there's no server data to fetch - only local optimistic updates exist
     const isNewConversation = !context.topicId;
+
+    if (!messagesInit && !isNewConversation && messagesSWR.error && !messagesSWR.isLoading) {
+      return (
+        <AsyncError
+          error={messagesSWR.error}
+          variant={'page'}
+          onRetry={() => {
+            void messagesSWR.mutate();
+          }}
+        />
+      );
+    }
 
     if (!messagesInit && !isNewConversation) {
       return <SkeletonList />;

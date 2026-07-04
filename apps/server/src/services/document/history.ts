@@ -85,20 +85,25 @@ export class DocumentHistoryService {
           .set({ editorData: params.editorData, savedAt: params.savedAt })
           .where(and(eq(documentHistories.id, latest.id), this.historiesOwnership()));
 
-        return;
+        return { id: latest.id, savedAt: params.savedAt };
       }
     }
 
-    await this.db.insert(documentHistories).values({
-      documentId: params.documentId,
-      editorData: params.editorData,
-      saveSource: params.saveSource,
-      savedAt: params.savedAt,
-      userId: this.userId,
-      workspaceId: this.workspaceId ?? null,
-    });
+    const [history] = await this.db
+      .insert(documentHistories)
+      .values({
+        documentId: params.documentId,
+        editorData: params.editorData,
+        saveSource: params.saveSource,
+        savedAt: params.savedAt,
+        userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
+      })
+      .returning({ id: documentHistories.id });
 
     await this.trimHistoryBySource(params.documentId, params.saveSource);
+
+    return { id: history!.id, savedAt: params.savedAt };
   };
 
   compareDocumentHistoryItems = async (

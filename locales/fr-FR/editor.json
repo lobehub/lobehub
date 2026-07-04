@@ -5,6 +5,7 @@
   "actionTag.category.skill": "Compétence",
   "actionTag.category.tool": "Outil",
   "actionTag.tooltip.agentSkill": "Charge un ensemble de compétences à partir des documents de cet agent pour la demande.",
+  "actionTag.tooltip.clickToView": "Cliquez pour voir les détails",
   "actionTag.tooltip.command": "Exécute une commande slash côté client avant l’envoi.",
   "actionTag.tooltip.projectSkill": "Envoyé comme une invocation par barre oblique pour que le CLI de l'agent exécute la compétence de projet correspondante.",
   "actionTag.tooltip.skill": "Charge un paquet de compétences réutilisable pour cette requête.",

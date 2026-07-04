@@ -1,9 +1,64 @@
-import type { GlobalState, ModelDetailPanelExpandedKey } from '../initialState';
+import type {
+  GlobalState,
+  ModelDetailPanelExpandedKey,
+  SystemStatus,
+  WorkspaceOverridableField,
+} from '../initialState';
 import {
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
   DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
+  WORKSPACE_OVERRIDABLE_FIELDS,
 } from '../initialState';
+
+/**
+ * Read a workspace-overridable field from SystemStatus.
+ * When `workspaceId` is non-null and the overlay carries the field, returns the overlay
+ * value; otherwise falls back to the top-level (personal mode) value.
+ */
+export const readOverridableField = <K extends WorkspaceOverridableField>(
+  status: SystemStatus,
+  field: K,
+  workspaceId: string | null,
+): SystemStatus[K] => {
+  if (workspaceId) {
+    const overlay = status.workspace?.[field];
+    if (overlay !== undefined) return overlay as SystemStatus[K];
+  }
+  return status[field];
+};
+
+const OVERRIDABLE_SET = new Set<string>(WORKSPACE_OVERRIDABLE_FIELDS);
+
+/**
+ * Reshape an `updateSystemStatus` patch when the user is inside a workspace:
+ * whitelisted fields land in `workspace.*` so they do not bleed into personal
+ * mode. Non-whitelisted fields stay at the top level. An explicit `workspace`
+ * key in the patch is preserved and merged with the routed overlay.
+ *
+ * Pass `workspaceId = null` to bypass routing (init path, personal mode).
+ */
+export const routeOverlayWrites = (
+  patch: Partial<SystemStatus>,
+  workspaceId: string | null,
+): Partial<SystemStatus> => {
+  if (!workspaceId) return patch;
+
+  const { workspace: explicitOverlay, ...rest } = patch;
+  const overlayUpdates: Partial<Pick<SystemStatus, WorkspaceOverridableField>> = {};
+  const topLevel: Partial<SystemStatus> = {};
+
+  for (const key of Object.keys(rest)) {
+    if (OVERRIDABLE_SET.has(key)) {
+      (overlayUpdates as any)[key] = (rest as any)[key];
+    } else {
+      (topLevel as any)[key] = (rest as any)[key];
+    }
+  }
+
+  const overlay = { ...explicitOverlay, ...overlayUpdates };
+  return Object.keys(overlay).length > 0 ? { ...topLevel, workspace: overlay } : topLevel;
+};
 
 export const systemStatus = (s: GlobalState) => s.status;
 
@@ -21,8 +76,12 @@ const normalizeNavPanelWidth = (width: number | string | undefined): number => {
 
 const agentBuilderPanelWidth = (s: GlobalState) => s.status.agentBuilderPanelWidth || 360;
 
-const sessionGroupKeys = (s: GlobalState): string[] =>
-  s.status.expandSessionGroupKeys || INITIAL_STATUS.expandSessionGroupKeys;
+const sessionGroupKeys =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    const value = readOverridableField(s.status, 'expandSessionGroupKeys', workspaceId);
+    return value || INITIAL_STATUS.expandSessionGroupKeys;
+  };
 
 const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
 
@@ -34,6 +93,8 @@ const agentSidebarSections =
 const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
 
 const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
+
+const privateAgentPageSize = (s: GlobalState): number => s.status.privateAgentPageSize || 5;
 
 const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 
@@ -61,11 +122,43 @@ const taskKanbanHiddenPanelCollapsed = (s: GlobalState): boolean =>
 
 export const DEFAULT_HIDDEN_SECTIONS: string[] = [];
 
-const hiddenSidebarSections = (s: GlobalState): string[] =>
-  s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+/** Sections hidden by default in workspace mode until the user customizes
+ * sidebar visibility. `recents` lives in personal mode where the catch-all
+ * stream is useful, but in a workspace the agent/project lists are the
+ * primary entry points — surfacing recents on top adds noise. */
+export const WORKSPACE_DEFAULT_HIDDEN_SECTIONS: string[] = ['recents'];
 
-const sidebarExpandedKeys = (s: GlobalState): string[] =>
-  s.status.sidebarExpandedKeys ?? DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
+/** Sections hidden by default for the given mode. The customize-sidebar
+ * "Reset to default" path uses this so resetting in a workspace restores
+ * the workspace defaults, not the empty personal-mode defaults. */
+export const getDefaultHiddenSections = (isWorkspaceMode: boolean): string[] =>
+  isWorkspaceMode ? [...WORKSPACE_DEFAULT_HIDDEN_SECTIONS] : DEFAULT_HIDDEN_SECTIONS;
+
+const hiddenSidebarSections =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    if (workspaceId) {
+      const overlay = s.status.workspace?.hiddenSidebarSections;
+      // Once the user touches sidebar visibility in this workspace the overlay
+      // owns the list — including an explicit empty array meaning "show all".
+      if (overlay !== undefined) return overlay;
+      // Untouched workspace: inherit any personal-mode hides and layer the
+      // workspace defaults on top so `recents` starts collapsed.
+      const personal = s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+      const merged = [...personal];
+      for (const k of WORKSPACE_DEFAULT_HIDDEN_SECTIONS) {
+        if (!merged.includes(k)) merged.push(k);
+      }
+      return merged;
+    }
+    return s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+  };
+
+const sidebarExpandedKeys =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] =>
+    readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
+    DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
 
 /** Sentinel id representing the flex spacer slot. Its position in `sidebarItems`
  * determines where the sidebar pushes items to the bottom. */
@@ -75,6 +168,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'pages',
   'recents',
+  'private',
   'agent',
   SIDEBAR_SPACER_ID,
   'image',
@@ -83,8 +177,10 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'memory',
 ];
 
-/** Items that must stay contiguous in the sidebar list (accordion block). */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'agent']);
+/** Items that must stay contiguous in the sidebar list (accordion block).
+ * `private` sits above `agent` so workspace users see their personal items
+ * first, with the workspace-shared agents right below. */
+export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'private', 'agent']);
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -225,38 +321,40 @@ export const reorderSidebarItems = (items: string[], from: number, to: number): 
   return arraysEqual(normalized, items) ? items : normalized;
 };
 
-const sidebarItems = (s: GlobalState): string[] => {
-  const items = s.status.sidebarItems;
-  if (items && items.length > 0) return withAllKnownKeys(items);
+const sidebarItems =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    const items = readOverridableField(s.status, 'sidebarItems', workspaceId);
+    if (items && items.length > 0) return withAllKnownKeys(items);
 
-  // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
-  // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
-  // slot inside the default list so users keep their custom accordion arrangement.
-  const legacy = s.status.sidebarSectionOrder;
-  if (legacy && legacy.length > 0) {
-    const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
-    if (legacyAcc.length > 0) {
-      const seen = new Set<string>();
-      const merged: string[] = [];
-      for (const k of DEFAULT_SIDEBAR_ITEMS) {
-        if (SIDEBAR_ACCORDION_KEYS.has(k)) {
-          for (const lk of legacyAcc) {
-            if (!seen.has(lk)) {
-              merged.push(lk);
-              seen.add(lk);
+    // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
+    // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
+    // slot inside the default list so users keep their custom accordion arrangement.
+    const legacy = s.status.sidebarSectionOrder;
+    if (legacy && legacy.length > 0) {
+      const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+      if (legacyAcc.length > 0) {
+        const seen = new Set<string>();
+        const merged: string[] = [];
+        for (const k of DEFAULT_SIDEBAR_ITEMS) {
+          if (SIDEBAR_ACCORDION_KEYS.has(k)) {
+            for (const lk of legacyAcc) {
+              if (!seen.has(lk)) {
+                merged.push(lk);
+                seen.add(lk);
+              }
             }
+          } else if (!seen.has(k)) {
+            merged.push(k);
+            seen.add(k);
           }
-        } else if (!seen.has(k)) {
-          merged.push(k);
-          seen.add(k);
         }
+        return withAllKnownKeys(merged);
       }
-      return withAllKnownKeys(merged);
     }
-  }
 
-  return DEFAULT_SIDEBAR_ITEMS;
-};
+    return DEFAULT_SIDEBAR_ITEMS;
+  };
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
@@ -266,6 +364,7 @@ const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
+const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
@@ -287,6 +386,7 @@ const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuild
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
 const videoTopicPanelWidth = (s: GlobalState) => s.status.videoTopicPanelWidth;
@@ -356,6 +456,7 @@ export const systemStatusSelectors = {
   pageAgentPanelWidth,
   pagePageSize,
   portalWidth,
+  privateAgentPageSize,
   recentPageSize,
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
@@ -374,9 +475,11 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  verifyReportPanelWidth,
   tokenDisplayFormatShort,
   topicGroupKeys,
   topicPageSize,

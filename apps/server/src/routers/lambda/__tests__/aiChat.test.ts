@@ -28,7 +28,12 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 describe('aiChatRouter', () => {
   const mockCtx = { userId: 'u1' };
-  const mockMessageModel = (mockCreateMessage: ReturnType<typeof vi.fn>) => {
+  const mockMessageModel = (
+    mockCreateMessage: ReturnType<typeof vi.fn>,
+    // spine head returned by the server-authoritative parentId resolution;
+    // undefined keeps the client-provided parentId unchanged
+    latestSpineMessageId?: string,
+  ) => {
     const mockCreateUserAndAssistantMessages = vi.fn(
       async (
         {
@@ -55,6 +60,8 @@ describe('aiChatRouter', () => {
         ({
           create: mockCreateMessage,
           createUserAndAssistantMessages: mockCreateUserAndAssistantMessages,
+          // server-authoritative parentId resolution for existing-topic appends
+          getLatestSpineMessageId: vi.fn().mockResolvedValue(latestSpineMessageId),
         }) as any,
     );
 
@@ -172,6 +179,71 @@ describe('aiChatRouter', () => {
     );
     expect(res.isCreateNewTopic).toBe(false);
     expect(res.topicId).toBe('t-exist');
+  });
+
+  it('should override the client parentId with the server-resolved spine head for an existing-topic append', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    // server spine head differs from the (stale) client parentId
+    mockMessageModel(mockCreateMessage, 'server-head');
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi', parentId: 'stale-client-parent' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    // the user message parents off the server spine head, not the stale client value
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        content: 'hi',
+        parentId: 'server-head',
+        role: 'user',
+      }),
+    );
+  });
+
+  it('should keep the client parentId for a new thread (no server override)', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    // spine head would resolve, but newThread must anchor on its branch point
+    mockMessageModel(mockCreateMessage, 'server-head');
+    vi.mocked(ThreadModel).mockImplementation(
+      () => ({ create: vi.fn().mockResolvedValue({ id: 'thread-new' }) }) as any,
+    );
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newThread: { sourceMessageId: 'branch-point', type: ThreadType.Continuation },
+      newUserMessage: { content: 'hi', parentId: 'branch-point' },
+      sessionId: 's1',
+      topicId: 't1',
+    } as any);
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        content: 'hi',
+        parentId: 'branch-point',
+        role: 'user',
+      }),
+    );
   });
 
   it('should pass threadId to both user and assistant messages when provided', async () => {

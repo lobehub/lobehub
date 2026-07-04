@@ -575,6 +575,66 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('visible loading selectors', () => {
+    it('should hide a no-tool terminal tail without unblocking the operation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        });
+      });
+
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+      expect(operationSelectors.isAgentRuntimeRunning(result.current)).toBe(true);
+      expect(operationSelectors.isMainWindowAgentRuntimeRunning(result.current)).toBe(true);
+      expect(operationSelectors.isAgentRuntimeRunningByContext(context)(result.current)).toBe(true);
+      expect(operationSelectors.isInputLoadingByContext(context)(result.current)).toBe(true);
+      expect(operationSelectors.canSendMessage(result.current)).toBe(false);
+
+      expect(operationSelectors.isAgentVisiblyRunning('agent1')(result.current)).toBe(false);
+      expect(operationSelectors.isAgentRuntimeVisiblyRunning(result.current)).toBe(false);
+      expect(operationSelectors.isMainWindowAgentRuntimeVisiblyRunning(result.current)).toBe(false);
+      expect(
+        operationSelectors.isAgentRuntimeVisiblyRunningByContext(context)(result.current),
+      ).toBe(false);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
+      expect(
+        operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
+      ).toBeUndefined();
+    });
+
+    it('should keep visible loading for a normal running runtime operation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+          metadata: { startTime: 1000 },
+        });
+      });
+
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      expect(
+        operationSelectors.isAgentRuntimeVisiblyRunningByContext(context)(result.current),
+      ).toBe(true);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+      expect(
+        operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
+      ).toBe(1000);
+    });
+  });
+
   describe('getRunningToolCallStartTime', () => {
     it('should prefer the running executeToolCall start time', () => {
       const { result } = renderHook(() => useChatStore());

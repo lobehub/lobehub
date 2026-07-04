@@ -272,7 +272,10 @@ const ChatInput = memo<ChatInputProps>(
     }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
-    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputVisiblyLoading);
+    const isInputQueueBlocked = useChatStore((s) =>
+      operationSelectors.isInputLoadingByContext(context)(s),
+    );
 
     // Pending interventions — use custom equality to prevent infinite re-render loop.
     // The selector creates new array/object refs each call; without equality check,
@@ -317,7 +320,7 @@ const ChatInput = memo<ChatInputProps>(
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
     const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading) || !!disableSend;
+      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -339,7 +342,7 @@ const ChatInput = memo<ChatInputProps>(
 
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
-        if (disableQueue && isInputLoading) return;
+        if (disableQueue && isInputQueueBlocked) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -365,7 +368,7 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [sendMessage, disableQueue, disableSend, isInputLoading],
+      [sendMessage, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {

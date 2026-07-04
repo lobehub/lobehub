@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Supprimer le sujet de génération",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet de génération. Cette action est irréversible, veuillez procéder avec prudence.",
   "topic.empty": "Aucun sujet de génération",
+  "topic.privateTitle": "Privé",
   "topic.title": "Thème de peinture",
-  "topic.untitled": "Sujet par défaut"
+  "topic.untitled": "Sujet par défaut",
+  "topic.visibility.existingLocked": "La visibilité est fixée pour le sujet actuel. Créez un nouveau sujet pour choisir un espace différent.",
+  "topic.workspaceTitle": "Espace de travail"
 }

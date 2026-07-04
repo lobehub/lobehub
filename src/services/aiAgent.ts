@@ -1,4 +1,4 @@
-import type { ExecAgentAppContext, ExecAgentResult } from '@lobechat/types';
+import type { ExecAgentAppContext, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -37,6 +37,8 @@ export interface ExecAgentTaskParams {
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
+  selectedToolIds?: string[];
   slug?: string;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
@@ -44,6 +46,7 @@ export interface ExecAgentTaskParams {
    * `agent_operations.trigger` column reflects the real source.
    */
   trigger?: string;
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

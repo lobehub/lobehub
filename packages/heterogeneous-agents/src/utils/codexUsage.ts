@@ -11,9 +11,10 @@ export const toCodexUsageData = (
 ): UsageData | undefined => {
   if (!raw) return undefined;
 
-  const inputCacheMissTokens = raw.input_tokens || 0;
   const inputCachedTokens = raw.cached_input_tokens || 0;
-  const totalInputTokens = inputCacheMissTokens + inputCachedTokens;
+  // Codex reports `input_tokens` as total input; cached input is a subset.
+  const totalInputTokens = Math.max(raw.input_tokens || 0, inputCachedTokens);
+  const inputCacheMissTokens = Math.max(0, totalInputTokens - inputCachedTokens);
   const totalOutputTokens = raw.output_tokens || 0;
 
   if (totalInputTokens + totalOutputTokens === 0) return undefined;

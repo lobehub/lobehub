@@ -20,6 +20,7 @@ import {
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useInitRecents } from '@/hooks/useInitRecents';
@@ -43,14 +44,17 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { isRevalidating } = useInitRecents();
+  // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
+  // instead of a permanent skeleton (LOBE-11079).
+  const { error, isRevalidating, mutate } = useInitRecents();
 
-  const [recentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.recentPageSize(s),
-    systemStatusSelectors.sidebarItems(s),
-    systemStatusSelectors.hiddenSidebarSections(s),
-    s.updateSystemStatus,
-  ]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
+  const hiddenSections = useGlobalStore(
+    systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
+  );
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('recents');
@@ -157,7 +161,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
       }
     >
       <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList />
+        <RecentsList error={error} onRetry={() => mutate()} />
       </Suspense>
     </AccordionItem>
   );

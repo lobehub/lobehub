@@ -2,14 +2,15 @@
 
 import { DOWNLOAD_URL } from '@lobechat/const';
 import type { DeviceScope } from '@lobechat/types';
-import { Button, CopyButton, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import ImperativeModal from '@/components/ImperativeModal';
 
 const styles = createStaticStyles(({ css }) => ({
   codeBlock: css`
@@ -17,8 +18,8 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 12px;
     align-items: center;
 
-    padding-block: 10px;
-    padding-inline: 14px;
+    padding-block: 12px;
+    padding-inline: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -29,7 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -38,9 +39,6 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 4px;
     padding-block-start: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
   index: css`
     display: flex;
@@ -52,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
     height: 24px;
     border-radius: 50%;
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
     color: ${cssVar.colorPrimary};
 
@@ -63,15 +61,6 @@ const styles = createStaticStyles(({ css }) => ({
     width: 1px;
     margin-block-start: 4px;
     background: ${cssVar.colorBorderSecondary};
-  `,
-  stepDesc: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  subtitle: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -84,14 +73,16 @@ interface StepProps {
 }
 
 const Step = memo<StepProps>(({ index, title, desc, children, last }) => (
-  <Flexbox horizontal gap={14}>
+  <Flexbox horizontal gap={16}>
     <Flexbox align={'center'}>
       <span className={styles.index}>{index}</span>
       {!last && <span className={styles.line} />}
     </Flexbox>
     <Flexbox flex={1} gap={4} style={{ paddingBlockEnd: last ? 0 : 24 }}>
-      <Text style={{ fontSize: 14, fontWeight: 500 }}>{title}</Text>
-      <Text className={styles.stepDesc}>{desc}</Text>
+      <Text weight={500}>{title}</Text>
+      <Text color={cssVar.colorTextTertiary} lineHeight={1.6}>
+        {desc}
+      </Text>
       {children && <div style={{ marginBlockStart: 12 }}>{children}</div>}
     </Flexbox>
   </Flexbox>
@@ -164,7 +155,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
   );
 
   return (
-    <Modal
+    <ImperativeModal
       footer={null}
       open={open}
       title={t('devices.connectWizard.title')}
@@ -172,7 +163,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
       onCancel={onClose}
     >
       <Flexbox gap={20}>
-        <Text className={styles.subtitle}>
+        <Text color={cssVar.colorTextTertiary}>
           {isWorkspace ? t('workspaceSetting.devices.desc') : t('devices.connectWizard.subtitle')}
         </Text>
 
@@ -207,7 +198,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
               title={t('devices.connectWizard.desktop.step1')}
             >
               <a href={DOWNLOAD_URL.default} rel="noreferrer" target="_blank">
-                <Button icon={<Icon icon={DownloadIcon} />} size={'small'} type={'primary'}>
+                <Button icon={<Icon icon={DownloadIcon} />} type={'primary'}>
                   {t('devices.connectWizard.desktop.downloadLink')}
                 </Button>
               </a>
@@ -229,11 +220,13 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
         )}
 
         <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
-          <Icon icon={ShieldCheckIcon} size={14} style={{ color: cssVar.colorPrimary }} />
-          {t('devices.connectWizard.footer')}
+          <Icon icon={ShieldCheckIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
+          <Text color={cssVar.colorTextTertiary} fontSize={12}>
+            {t('devices.connectWizard.footer')}
+          </Text>
         </Flexbox>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

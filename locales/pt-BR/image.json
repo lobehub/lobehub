@@ -63,6 +63,9 @@
   "topic.deleteConfirm": "Excluir Tópico de Geração",
   "topic.deleteConfirmDesc": "Você está prestes a excluir este tópico de geração. Esta ação não pode ser desfeita, prossiga com cautela.",
   "topic.empty": "Nenhum tópico de geração",
+  "topic.privateTitle": "Privado",
   "topic.title": "Tema da Pintura",
-  "topic.untitled": "Tópico Padrão"
+  "topic.untitled": "Tópico Padrão",
+  "topic.visibility.existingLocked": "A visibilidade está fixa para o tópico atual. Crie um novo tópico para escolher um espaço diferente.",
+  "topic.workspaceTitle": "Espaço de Trabalho"
 }

@@ -5,6 +5,7 @@
   "actionTag.category.skill": "スキル",
   "actionTag.category.tool": "ツール",
   "actionTag.tooltip.agentSkill": "このエージェントのドキュメントからスキルバンドルをリクエスト用に読み込みます。",
+  "actionTag.tooltip.clickToView": "詳細を見るにはクリックしてください",
   "actionTag.tooltip.command": "送信前にクライアント側のスラッシュコマンドを実行します。",
   "actionTag.tooltip.projectSkill": "スラッシュ呼び出しとして送信され、エージェントのCLIが一致するプロジェクトスキルを実行します。",
   "actionTag.tooltip.skill": "このリクエスト用に再利用可能なスキルパッケージを読み込みます。",

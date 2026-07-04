@@ -29,6 +29,9 @@
   "topic.createNew": "Создать новую тему",
   "topic.deleteConfirm": "Удалить тему видео",
   "topic.deleteConfirmDesc": "Вы собираетесь удалить эту тему видео. Это действие необратимо.",
+  "topic.privateTitle": "Приватный",
   "topic.title": "Темы видео",
-  "topic.untitled": "Тема по умолчанию"
+  "topic.untitled": "Тема по умолчанию",
+  "topic.visibility.existingLocked": "Видимость зафиксирована для текущей темы. Создайте новую тему, чтобы выбрать другое пространство.",
+  "topic.workspaceTitle": "Рабочая область"
 }

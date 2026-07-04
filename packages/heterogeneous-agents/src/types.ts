@@ -19,6 +19,12 @@ export type HeterogeneousEventType =
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
+  /**
+   * Producer-side boundary meaning this operation will not emit more visible
+   * assistant/tool output. The operation may still wait for `agent_runtime_end`
+   * to finish terminal bookkeeping.
+   */
+  | 'visible_output_end'
   | 'tool_start'
   | 'tool_end'
   /**
@@ -60,6 +66,16 @@ export interface StreamStartData {
   externalSignal?: ExternalSignalContext;
   model?: string;
   provider?: string;
+  /**
+   * CC-native session id (`system:init.session_id`), carried on every
+   * stream_start so the server can stamp it on each persisted message's
+   * `metadata.heteroSessionId`. The topic-level `heteroSessionId` only keeps
+   * the single latest value; a per-message copy lets a diff pinpoint the exact
+   * row where CC forked to a new session (e.g. `--resume` hit a recycled /
+   * empty session and started fresh) — the forensic signal for a lost-history
+   * "session break".
+   */
+  sessionId?: string;
 }
 
 /**

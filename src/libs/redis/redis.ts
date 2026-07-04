@@ -7,6 +7,8 @@ import {
   type RedisKey,
   type RedisMSetArgument,
   type RedisPipeline,
+  type RedisScanArgs,
+  type RedisScanResult,
   type RedisSetResult,
   type RedisValue,
   type SetOptions,
@@ -85,6 +87,19 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
 
   async ttl(key: RedisKey): Promise<number> {
     return this.ensureClient().ttl(key);
+  }
+
+  async scan(cursor: string, ...args: RedisScanArgs): Promise<RedisScanResult> {
+    const client = this.ensureClient();
+
+    if (args.length === 0) return client.scan(cursor);
+    if (args[0] === 'MATCH' && args.length === 2) return client.scan(cursor, 'MATCH', args[1]);
+    if (args[0] === 'COUNT' && args.length === 2) return client.scan(cursor, 'COUNT', args[1]);
+    if (args[0] === 'MATCH') {
+      return client.scan(cursor, 'MATCH', args[1], 'COUNT', args[3]);
+    }
+
+    return client.scan(cursor, 'MATCH', args[3], 'COUNT', args[1]);
   }
 
   async incr(key: RedisKey): Promise<number> {

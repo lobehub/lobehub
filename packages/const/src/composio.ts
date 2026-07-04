@@ -175,7 +175,7 @@ export const COMPOSIO_APP_TYPES: ComposioAppType[] = [
       'Integrate with HubSpot to manage contacts, deals, and marketing campaigns. Access CRM data, track pipelines, automate workflows, and streamline your sales and marketing operations.',
   },
   {
-    appSlug: 'ONEDRIVE',
+    appSlug: 'ONE_DRIVE',
     author: 'Composio',
     authorUrl: 'https://composio.dev',
     description:

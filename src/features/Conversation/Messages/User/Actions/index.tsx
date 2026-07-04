@@ -17,11 +17,14 @@ import MessageBranch from '../../components/MessageBranch';
 const DEFAULT_BAR: MessageActionSlot[] = ['regenerate', 'edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
+  'restoreToInput',
   'copy',
   'branching',
   'divider',
   'tts',
   'translate',
+  'divider',
+  'select',
   'divider',
   'regenerate',
   'del',

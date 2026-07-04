@@ -264,6 +264,19 @@ export class AgentActionImpl {
         break;
       }
 
+      case 'visible_output_end': {
+        // Example: no-tool answers can finish visible text several seconds
+        // before agent_runtime_end reconciles cache, queue, unread, and
+        // notification side effects. Retire only visible loading here.
+        this.#get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+        if (operation.parentOperationId) {
+          this.#get().updateOperationMetadata(operation.parentOperationId, {
+            visibleLoadingDone: true,
+          });
+        }
+        break;
+      }
+
       case 'step_start': {
         const { phase, toolCall, pendingToolsCalling, requiresApproval, uiMessages } =
           event.data || {};

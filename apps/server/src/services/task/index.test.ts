@@ -50,10 +50,17 @@ describe('TaskService', () => {
   const userId = 'user-1';
 
   const mockAgentModel = {
+    existsById: vi.fn().mockResolvedValue(true),
     getAgentAvatarsByIds: vi.fn().mockResolvedValue([]),
+    getAgentModelConfig: vi.fn().mockResolvedValue(null),
+    getAgentSnapshotForTaskCreate: vi
+      .fn()
+      .mockResolvedValue({ snapshot: null, visibility: 'public' }),
+    getAgentVisibility: vi.fn().mockResolvedValue('public'),
   };
 
   const mockTaskModel = {
+    create: vi.fn(),
     findById: vi.fn(),
     findByIds: vi.fn(),
     findAllDescendants: vi.fn(),
@@ -61,7 +68,7 @@ describe('TaskService', () => {
     getComments: vi.fn(),
     getCommentFileIdsMap: vi.fn().mockResolvedValue({}),
     getDependencies: vi.fn(),
-    getDependenciesByTaskIds: vi.fn(),
+    getDependenciesByTaskIds: vi.fn().mockResolvedValue([]),
     getReviewConfig: vi.fn(),
     getVerifyConfig: vi.fn(),
     getTaskFileIds: vi.fn().mockResolvedValue([]),
@@ -76,7 +83,9 @@ describe('TaskService', () => {
   const mockTaskTopicModel = {
     cancelIfRunning: vi.fn(),
     findByTaskId: vi.fn(),
+    findRunningByTaskIds: vi.fn().mockResolvedValue([]),
     findWithHandoff: vi.fn(),
+    findWithHandoffByTaskIds: vi.fn().mockResolvedValue([]),
     timeoutRunning: vi.fn(),
   };
 
@@ -86,6 +95,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
@@ -314,6 +324,69 @@ describe('TaskService', () => {
         name: 'Sub 2',
         priority: 'high',
         status: 'in_progress',
+      });
+    });
+
+    it('should include running topic info for subtasks with an active topic run', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Parent Task',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const subtasks = [
+        {
+          currentTopicId: 'topic-running',
+          id: 'task_002',
+          identifier: 'TASK-2',
+          name: 'Sub 1',
+          parentTaskId: 'task_001',
+          priority: 'normal',
+          status: 'running',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue(subtasks);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
+        {
+          operationId: 'op-running',
+          seq: 2,
+          status: 'running',
+          taskId: 'task_002',
+          topicId: 'topic-running',
+        },
+      ]);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.getDependenciesByTaskIds.mockResolvedValue([]);
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      expect(mockTaskTopicModel.findRunningByTaskIds).toHaveBeenCalledWith(['task_002']);
+      expect(result?.subtasks?.[0].runningTopic).toEqual({
+        id: 'topic-running',
+        operationId: 'op-running',
       });
     });
 
@@ -677,6 +750,118 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.topicCount).toBe(2);
+    });
+
+    it('should include descendant task topics in parent activities with source task context', async () => {
+      const task = {
+        assigneeAgentId: 'agt_parent',
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_parent',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Parent task',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const descendants = [
+        {
+          assigneeAgentId: 'agt_child',
+          automationMode: null,
+          heartbeatInterval: null,
+          id: 'task_child',
+          identifier: 'TASK-2',
+          name: 'Child task',
+          parentTaskId: 'task_parent',
+          priority: 'normal',
+          schedulePattern: null,
+          scheduleTimezone: null,
+          seq: 2,
+          sortOrder: 0,
+          status: 'running',
+        },
+      ];
+
+      const directTopics = [
+        {
+          agentId: null,
+          completedAt: null,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          handoff: { title: 'Parent run' },
+          metadata: null,
+          operationId: 'op-parent',
+          seq: 1,
+          status: 'completed',
+          title: null,
+          topicId: 'topic-parent',
+        },
+      ];
+
+      const descendantTopics = [
+        {
+          agentId: null,
+          completedAt: null,
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+          handoff: { title: 'Child run' },
+          metadata: null,
+          operationId: 'op-child',
+          seq: 1,
+          sourceTaskAssigneeAgentId: null,
+          sourceTaskId: 'task_child',
+          sourceTaskIdentifier: null,
+          sourceTaskName: null,
+          status: 'running',
+          title: null,
+          topicId: 'topic-child',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue(descendants);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(directTopics);
+      mockTaskTopicModel.findWithHandoffByTaskIds.mockResolvedValue(descendantTopics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: null, id: 'agt_parent', title: 'Parent Agent' },
+        { avatar: null, id: 'agt_child', title: 'Child Agent' },
+      ]);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      expect(mockTaskTopicModel.findWithHandoffByTaskIds).toHaveBeenCalledWith(['task_child'], 300);
+
+      const topicActivities = result?.activities?.filter((a) => a.type === 'topic') ?? [];
+      expect(topicActivities).toHaveLength(2);
+
+      const childTopic = topicActivities.find((a) => a.id === 'topic-child');
+      expect(childTopic).toMatchObject({
+        author: {
+          id: 'agt_child',
+          name: 'Child Agent',
+          type: 'agent',
+        },
+        operationId: 'op-child',
+        sourceTaskId: 'task_child',
+        sourceTaskIdentifier: 'TASK-2',
+        sourceTaskName: 'Child task',
+        status: 'running',
+        title: 'Child run',
+      });
     });
 
     it('should propagate topic completedAt to the topic activity', async () => {
@@ -1366,6 +1551,137 @@ describe('TaskService', () => {
       await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
 
       expect(mockTaskModel.updateContext).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('agent ↔ task visibility compat', () => {
+    beforeEach(() => {
+      mockTaskModel.create.mockImplementation(async (data: any) => ({
+        ...data,
+        id: 'task_test',
+        identifier: 'T-1',
+        seq: 1,
+      }));
+    });
+
+    it('rejects creating a public task with a private agent', async () => {
+      mockAgentModel.existsById.mockResolvedValue(true);
+      mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValue({
+        snapshot: null,
+        visibility: 'private',
+      });
+
+      const service = new TaskService(db, userId, 'ws-1');
+      await expect(
+        service.createTask({
+          assigneeAgentId: 'agent-private',
+          instruction: 'do something',
+          visibility: 'public',
+        }),
+      ).rejects.toThrow(/public task cannot be assigned to a private agent/i);
+      expect(mockTaskModel.create).not.toHaveBeenCalled();
+    });
+
+    it('allows creating a private task with a public agent', async () => {
+      mockAgentModel.existsById.mockResolvedValue(true);
+      mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValue({
+        snapshot: null,
+        visibility: 'public',
+      });
+
+      const service = new TaskService(db, userId, 'ws-1');
+      await service.createTask({
+        assigneeAgentId: 'agent-public',
+        instruction: 'do something private',
+        visibility: 'private',
+      });
+      expect(mockTaskModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('infers private visibility from a private agent when caller omits it', async () => {
+      mockAgentModel.existsById.mockResolvedValue(true);
+      mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValue({
+        snapshot: null,
+        visibility: 'private',
+      });
+
+      const service = new TaskService(db, userId, 'ws-1');
+      await service.createTask({
+        assigneeAgentId: 'agent-private',
+        instruction: 'do something',
+      });
+      expect(mockTaskModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('assertAgentVisibilityCompat allows null agent (no assignee)', () => {
+      const service = new TaskService(db, userId, 'ws-1');
+      expect(() => service.assertAgentVisibilityCompat('public', null)).not.toThrow();
+    });
+
+    it('assertAgentVisibilityCompat allows private task + private agent', () => {
+      const service = new TaskService(db, userId, 'ws-1');
+      expect(() => service.assertAgentVisibilityCompat('private', 'private')).not.toThrow();
+    });
+  });
+
+  describe('parent ↔ child visibility compat', () => {
+    beforeEach(() => {
+      mockTaskModel.create.mockImplementation(async (data: any) => ({
+        ...data,
+        id: 'task_test',
+        identifier: 'T-2',
+        seq: 2,
+      }));
+    });
+
+    it('rejects creating a public subtask under a private parent', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        id: 'parent_id',
+        identifier: 'T-1',
+        visibility: 'private',
+      });
+
+      const service = new TaskService(db, userId, 'ws-1');
+      await expect(
+        service.createTask({
+          instruction: 'leak attempt',
+          parentTaskId: 'T-1',
+          visibility: 'public',
+        }),
+      ).rejects.toThrow(/subtask cannot be more public than its parent/i);
+      expect(mockTaskModel.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a private subtask under a public parent', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        id: 'parent_id',
+        identifier: 'T-1',
+        visibility: 'public',
+      });
+
+      const service = new TaskService(db, userId, 'ws-1');
+      await service.createTask({
+        instruction: 'narrower scope',
+        parentTaskId: 'T-1',
+        visibility: 'private',
+      });
+      expect(mockTaskModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('assertParentVisibilityCompat allows no parent', () => {
+      const service = new TaskService(db, userId, 'ws-1');
+      expect(() => service.assertParentVisibilityCompat('public', undefined)).not.toThrow();
+    });
+
+    it('assertParentVisibilityCompat allows public child under public parent', () => {
+      const service = new TaskService(db, userId, 'ws-1');
+      expect(() => service.assertParentVisibilityCompat('public', 'public')).not.toThrow();
     });
   });
 });

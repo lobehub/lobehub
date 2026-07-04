@@ -125,6 +125,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ type, disabled, onBack, onSuccess }) 
                     style={{ flex: 2, marginBottom: 0 }}
                   >
                     <Input.Password
+                      autoComplete="new-password"
                       disabled={disabled}
                       placeholder={t('creds.form.valuePlaceholder')}
                     />

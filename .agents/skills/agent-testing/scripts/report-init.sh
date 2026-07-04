@@ -29,13 +29,10 @@ DATE_ISO=$(date '+%Y-%m-%dT%H:%M:%S%z')
 # summary.conclusion + summary.score), so DON'T repeat any of them here or they
 # double up. Keep only non-duplicate detail: repro commands, caveats, follow-ups.
 cat > "$DIR/report.md" << EOF
-<!-- Rendered as the verify page's "Details" tail. The page already shows the
-     title / scope / checks / conclusion / score, so DON'T add an H1 title or
-     repeat them here — write only the non-duplicate comment below. -->
-
 ## 备注 / 说明
 
-<!-- 复现命令、注意事项、仍需跟进项；没有则写“无”。 -->
+<!-- 复现命令、注意事项、仍需跟进项；没有则写“无”。不要贴图片/GIF——视觉证据放在
+     result.json 的 cases[].evidence 里，页面会渲染，report.md 里重复会重复展示。 -->
 
 \`\`\`bash
 # command

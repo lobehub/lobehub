@@ -18,8 +18,11 @@ export class KnowledgeBaseModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, knowledgeBases);
+  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+    buildWorkspaceWhere(
+      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      knowledgeBases,
+    );
 
   // create
 
@@ -160,7 +163,15 @@ export class KnowledgeBaseModel {
       );
   };
   // query
-  query = async () => {
+  query = async (options?: {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    visibility?: 'private' | 'public';
+  }) => {
+    const ownershipWhere = this.ownership(options?.callerAgentVisibility);
+    const conditions = options?.visibility
+      ? and(ownershipWhere, eq(knowledgeBases.visibility, options.visibility))
+      : ownershipWhere;
+
     const data = await this.db
       .select({
         avatar: knowledgeBases.avatar,
@@ -172,9 +183,11 @@ export class KnowledgeBaseModel {
         settings: knowledgeBases.settings,
         type: knowledgeBases.type,
         updatedAt: knowledgeBases.updatedAt,
+        userId: knowledgeBases.userId,
+        visibility: knowledgeBases.visibility,
       })
       .from(knowledgeBases)
-      .where(this.ownership())
+      .where(conditions)
       .orderBy(desc(knowledgeBases.updatedAt));
 
     return data as KnowledgeBaseItem[];
@@ -210,6 +223,25 @@ export class KnowledgeBaseModel {
       .update(knowledgeBases)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(knowledgeBases.id, id), this.ownership()));
+
+  /**
+   * Publish a private knowledge base into the workspace. **One-way only** —
+   * mirrors `FileModel.publishToWorkspace`. The combined `user_id = ?` +
+   * `visibility = 'private'` guards lock the operation to the creator's own
+   * still-private KB; an already-public row is a no-op.
+   */
+  publishToWorkspace = async (id: string) =>
+    this.db
+      .update(knowledgeBases)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          this.ownership(),
+          eq(knowledgeBases.userId, this.userId),
+          eq(knowledgeBases.visibility, 'private'),
+        ),
+      );
 
   private resolveAvailableName = async (
     db: LobeChatDatabase,

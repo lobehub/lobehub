@@ -68,6 +68,7 @@ export class ConnectorActionImpl {
         | null;
       isEnabled?: boolean;
       mcpServerUrl?: string;
+      metadata?: Record<string, unknown>;
       name?: string;
       oidcConfig?: {
         clientId?: string;

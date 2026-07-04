@@ -11,9 +11,15 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Badge, Button } from 'antd';
+import { Button } from 'antd';
 import { cssVar } from 'antd-style';
-import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import {
+  CircleCheck,
+  Loader2,
+  MoreHorizontalIcon,
+  SquareArrowOutUpRight,
+  Unplug,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -284,7 +290,38 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     };
 
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
-    const isError = server?.status === LobehubSkillStatus.ERROR;
+
+    // Compact connect/status control for the left-list (NavItem) row. Mirrors the
+    // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
+    // button that opens the OAuth flow inline, so users can tell what is connected
+    // and aren't left staring at a blank detail panel wondering if it's a bug.
+    const renderNavExtra = () => {
+      if (isConnecting || isWaitingAuth) {
+        return <Button disabled icon={<Icon spin icon={Loader2} />} size="small" type="text" />;
+      }
+      if (isConnected) {
+        return (
+          <Tooltip title={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}>
+            <Center width={20}>
+              <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
+            </Center>
+          </Tooltip>
+        );
+      }
+      return (
+        <Tooltip title={!canCreate ? createReason : editReason}>
+          <Button
+            disabled={!canCreate || !canEdit}
+            icon={<Icon icon={SquareArrowOutUpRight} />}
+            size="small"
+            type="text"
+            onClick={handleConnect}
+          >
+            {t('tools.lobehubSkill.connect')}
+          </Button>
+        </Tooltip>
+      );
+    };
 
     if (onSelect) {
       const renderNavIcon = () => {
@@ -295,17 +332,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       return (
         <NavItem
           active={isSelected}
+          extra={renderNavExtra()}
           icon={renderNavIcon}
           title={provider.label}
           titleColor={!isConnected ? cssVar.colorTextDescription : undefined}
-          extra={
-            isError ? (
-              <Center width={18}>
-                <Badge status="error" />
-              </Center>
-            ) : undefined
-          }
-          onClick={onSelect}
+          // Only connected connectors open the detail panel. When disconnected,
+          // the row is inert and the only affordance is the inline Connect button —
+          // otherwise clicking opens a blank detail panel that reads as a bug.
+          onClick={isConnected ? onSelect : undefined}
         />
       );
     }

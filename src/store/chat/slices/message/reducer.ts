@@ -7,7 +7,7 @@ import {
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import i18n from 'i18next';
-import { produce } from 'immer';
+import { current, produce } from 'immer';
 
 import { merge } from '@/utils/merge';
 
@@ -152,7 +152,10 @@ export const messagesReducer = (
           newState = merge(message.pluginState, { [key]: value });
         }
 
-        if (isEqual(message.pluginState, newState)) return;
+        // Compare against a plain snapshot, not the raw draft proxy — fast-deep-equal's
+        // traversal of an Immer draft is an implementation detail that can change between
+        // immer patch releases (e.g. immer 11.1.9 broke this exact comparison vs 11.1.8).
+        if (message.pluginState && isEqual(current(message.pluginState), newState)) return;
 
         message.pluginState = newState;
         message.updatedAt = Date.now();

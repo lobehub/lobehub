@@ -44,6 +44,14 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { fetchCodexQuotaMock } = vi.hoisted(() => ({
+  fetchCodexQuotaMock: vi.fn(),
+}));
+
+vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
+  fetchCodexQuota: fetchCodexQuotaMock,
+}));
+
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
@@ -121,6 +129,7 @@ describe('HeterogeneousAgentCtr', () => {
 
   beforeEach(async () => {
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
+    fetchCodexQuotaMock.mockReset();
   });
 
   afterEach(async () => {
@@ -206,6 +215,65 @@ describe('HeterogeneousAgentCtr', () => {
       expect(Buffer.from(result.buffer).toString('utf8')).toBe('IGNORED');
       expect(result.mediaType).toBe('text/plain');
       await expect(readFile(outOfRootDataPath, 'utf8')).resolves.toBe('SECRET');
+    });
+  });
+
+  describe('getCodexQuota', () => {
+    beforeEach(() => {
+      execFileMock.mockReset();
+    });
+
+    it('forwards desktop proxy env to the Codex quota RPC', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (
+            error: Error | null,
+            result: { stderr: string; stdout: string },
+          ) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      fetchCodexQuotaMock.mockResolvedValue({
+        error: null,
+        provider: 'codex',
+        session: null,
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      });
+      const networkProxy = {
+        enableProxy: true,
+        proxyPort: '7890',
+        proxyServer: '127.0.0.1',
+        proxyType: 'http',
+      };
+      const storeGet = vi.fn((key: string) => (key === 'networkProxy' ? networkProxy : undefined));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: storeGet },
+      } as any);
+
+      await ctr.getCodexQuota({
+        command: '/custom/bin/codex',
+        env: { CODEX_HOME: '/tmp/codex-home', PATH: '/custom/bin' },
+      });
+
+      expect(storeGet).toHaveBeenCalledWith('networkProxy');
+      expect(fetchCodexQuotaMock).toHaveBeenCalledWith({
+        command: '/custom/bin/codex',
+        env: expect.objectContaining({
+          CODEX_HOME: '/tmp/codex-home',
+          HTTPS_PROXY: 'http://127.0.0.1:7890',
+          HTTP_PROXY: 'http://127.0.0.1:7890',
+          PATH: '/custom/bin',
+        }),
+      });
     });
   });
 
@@ -407,7 +475,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
@@ -427,7 +495,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
@@ -465,7 +533,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
@@ -492,7 +560,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
@@ -518,7 +586,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
@@ -549,7 +617,7 @@ describe('HeterogeneousAgentCtr', () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
-        toolDetectorManager: { detect },
+        binaryManager: { detect },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',

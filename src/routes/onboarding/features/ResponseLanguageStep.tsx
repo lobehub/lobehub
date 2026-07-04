@@ -32,14 +32,27 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
     i18n.resolvedLanguage || i18n.language || navigator.language,
   );
   const [isNavigating, setIsNavigating] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const isNavigatingRef = useRef(false);
 
   const handleNext = useCallback(async () => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     setIsNavigating(true);
-    await setSettings({ general: { responseLanguage: value } });
-    await onNext();
+    setHasError(false);
+    try {
+      // This write is the sole gate for the whole onboarding flow
+      // (`commonStepsCompleted` keys off `responseLanguage`), so it must be able
+      // to fail: on error reset the navigating lock so the user can retry
+      // instead of being stuck with both buttons permanently disabled
+      // (LOBE-11154).
+      await setSettings({ general: { responseLanguage: value } });
+      await onNext();
+    } catch {
+      setHasError(true);
+      isNavigatingRef.current = false;
+      setIsNavigating(false);
+    }
   }, [value, setSettings, onNext]);
 
   const handleBack = useCallback(() => {
@@ -101,6 +114,11 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       <Text style={{ fontSize: 12 }} type="secondary">
         {t('responseLanguage.hint')}
       </Text>
+      {hasError && (
+        <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+          {t('responseLanguage.saveFailed')}
+        </Text>
+      )}
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
         <Button
           disabled={isNavigating}

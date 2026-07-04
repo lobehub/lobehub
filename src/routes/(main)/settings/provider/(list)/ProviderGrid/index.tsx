@@ -5,6 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import Card from './Card';
@@ -27,32 +28,43 @@ const List = memo((props: ListProps) => {
     isEqual,
   );
   const [initAiProviderList] = useAiInfraStore((s) => [s.initAiProviderList]);
+  // Own the same list fetch (SWR-deduped with ProviderMenu) so a failed load
+  // shows error + Retry here too, instead of a permanent skeleton grid
+  // (`initAiProviderList` only flips on success — LOBE-11117).
+  const useFetchAiProviderList = useAiInfraStore((s) => s.useFetchAiProviderList);
+  const { error, mutate } = useFetchAiProviderList();
 
-  if (!initAiProviderList)
-    return (
-      <Flexbox gap={24} paddingBlock={'0 16px'}>
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Text strong style={{ fontSize: 16 }}>
-            {t('list.title.enabled')}
-          </Text>
-        </Flexbox>
-        <Grid gap={16} rows={3}>
-          {loadingArr.map((item) => (
-            <Card
-              loading
-              enabled={false}
-              id={item}
-              key={item}
-              source={'builtin'}
-              onProviderSelect={onProviderSelect}
-            />
-          ))}
-        </Grid>
+  const skeleton = (
+    <Flexbox gap={24} paddingBlock={'0 16px'}>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Text strong style={{ fontSize: 16 }}>
+          {t('list.title.enabled')}
+        </Text>
       </Flexbox>
-    );
+      <Grid gap={16} rows={3}>
+        {loadingArr.map((item) => (
+          <Card
+            loading
+            enabled={false}
+            id={item}
+            key={item}
+            source={'builtin'}
+            onProviderSelect={onProviderSelect}
+          />
+        ))}
+      </Grid>
+    </Flexbox>
+  );
 
   return (
-    <>
+    <AsyncBoundary
+      data={initAiProviderList ? true : undefined}
+      error={error}
+      errorVariant={'page'}
+      isLoading={!initAiProviderList && !error}
+      loading={skeleton}
+      onRetry={() => mutate()}
+    >
       <Flexbox gap={24}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text strong style={{ fontSize: 18 }}>
@@ -94,7 +106,7 @@ const List = memo((props: ListProps) => {
           ))}
         </Grid>
       </Flexbox>
-    </>
+    </AsyncBoundary>
   );
 });
 

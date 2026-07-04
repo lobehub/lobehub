@@ -3,11 +3,11 @@ import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/co
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
+  getWorkingDirEffectivePath,
   type LobeAgentAgencyConfig,
   type LobeAgentTTSConfig,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
-import { VoiceList } from '@lobehub/tts';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
@@ -46,27 +46,9 @@ const getAgentTTSById =
     agentSelectors.getAgentConfigById(agentId)(s)?.tts || DEFAUTT_AGENT_TTS_CONFIG;
 
 const getAgentTTSVoiceById =
-  (agentId: string, lang: string) =>
-  (s: AgentStoreState): string => {
-    const { voice, ttsService } = getAgentTTSById(agentId)(s);
-    const voiceList = new VoiceList(lang);
-    let currentVoice;
-    switch (ttsService) {
-      case 'openai': {
-        currentVoice = voice.openai || (VoiceList.openaiVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'edge': {
-        currentVoice = voice.edge || (voiceList.edgeVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'microsoft': {
-        currentVoice = voice.microsoft || (voiceList.microsoftVoiceOptions?.[0].value as string);
-        break;
-      }
-    }
-    return currentVoice || 'alloy';
-  };
+  (agentId: string) =>
+  (s: AgentStoreState): string =>
+    getAgentTTSById(agentId)(s).voice?.openai || 'alloy';
 
 const getAgentConfigErrorById =
   (agentId: string) =>
@@ -140,7 +122,7 @@ const getAgentWorkingDirectoryById =
     const agencyConfig = agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
     const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
     const agentChoice = targetDeviceId
-      ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+      ? getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[targetDeviceId])
       : undefined;
 
     return (

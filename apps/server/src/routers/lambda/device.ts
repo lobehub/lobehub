@@ -292,6 +292,27 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Remove a detached worktree in a directory's repository on a remote device,
+   * via the device's `removeGitWorktree` RPC.
+   */
+  removeGitWorktree: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string(),
+        worktreePath: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.removeGitWorktree({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        worktreePath: input.worktreePath,
+      }),
+    ),
+
+  /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */
@@ -398,6 +419,31 @@ export const deviceRouter = router({
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.getProjectFileIndex({
         deviceId: input.deviceId,
+        scope: input.scope,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * Search project files on a remote device. The device performs the match and
+   * returns only the result subtree needed by the UI.
+   */
+  searchProjectFiles: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        limit: z.number().int().positive().max(500).optional(),
+        query: z.string(),
+        scope: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.searchProjectFiles({
+        deviceId: input.deviceId,
+        limit: input.limit,
+        query: input.query,
         scope: input.scope,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
@@ -865,7 +911,13 @@ export const deviceRouter = router({
         deviceId: z.string(),
         friendlyName: z.string().max(100).nullish(),
         workingDirs: z
-          .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
+          .array(
+            z.object({
+              git: z.object({ activeWorktree: z.string().optional() }).optional(),
+              path: z.string(),
+              repoType: z.enum(['git', 'github']).optional(),
+            }),
+          )
           .max(20)
           .optional(),
       }),

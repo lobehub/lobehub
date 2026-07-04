@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { useFetchGitInfo } from '@/store/device';
+import { useFetchGitBranch } from '@/store/device';
 
 import FileRow from './FileRow';
 import GroupHeader from './GroupHeader';
@@ -239,9 +239,9 @@ const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
   const headRef = data?.mode === 'branch' ? data.headRef : undefined;
   // Parent branch — only needed for the group header label, so we only fetch
   // it when there's at least one submodule group to render alongside it.
-  // SWR-deduped under the hood by `useFetchGitInfo`'s own cache key. Routes
+  // SWR-deduped under the hood by `useFetchGitBranch`'s own cache key. Routes
   // through the target device so remote repos resolve the same way.
-  const { data: parentGitInfo } = useFetchGitInfo(
+  const { data: parentGitInfo } = useFetchGitBranch(
     deviceId,
     submoduleGroups.length > 0 ? workingDirectory : undefined,
   );

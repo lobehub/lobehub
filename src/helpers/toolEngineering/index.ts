@@ -187,7 +187,8 @@ export const createAgentToolsEngine = (
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
   const isChatMode =
-    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false;
+    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
+    !isCanUseFC(workingModel.model, workingModel.provider);
 
   // Each entry below still respects its own runtime gate; in chat mode this
   // is the entire whitelist. `allowExplicitActivation` and user plugins /

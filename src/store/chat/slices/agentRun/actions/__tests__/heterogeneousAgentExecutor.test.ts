@@ -1472,7 +1472,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           codexThreadStarted(),
           codexTurnStarted(),
           codexAgentMessage('item_0', 'Done.'),
-          codexTurnCompleted({ cached_input_tokens: 4, input_tokens: 6, output_tokens: 3 }),
+          codexTurnCompleted({ cached_input_tokens: 4, input_tokens: 10, output_tokens: 3 }),
         ],
         {
           params: {

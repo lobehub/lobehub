@@ -5,7 +5,10 @@ import type { ConnectorCredentials } from '@/database/schemas';
 
 import { buildConnectorMcpParams, buildHttpAuthFromCredentials } from './sync';
 
-const httpConnector = (credentials: ConnectorCredentials | null): DecryptedConnector =>
+const httpConnector = (
+  credentials: ConnectorCredentials | null,
+  metadata?: Record<string, unknown>,
+): DecryptedConnector =>
   ({
     credentials,
     id: 'c1',
@@ -14,6 +17,7 @@ const httpConnector = (credentials: ConnectorCredentials | null): DecryptedConne
     mcpConnectionType: 'http',
     mcpServerUrl: 'https://mcp.example.com',
     mcpStdioConfig: null,
+    metadata: metadata ?? null,
     name: 'My Connector',
     oidcConfig: null,
   }) as any;
@@ -87,6 +91,54 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { Authorization: 'Token x' },
+      name: 'My Connector',
+      type: 'http',
+      url: 'https://mcp.example.com',
+    });
+  });
+
+  it('merges metadata.customHeaders alongside bearer auth', () => {
+    expect(
+      buildConnectorMcpParams(
+        httpConnector(
+          { token: 'tok', type: 'bearer' },
+          { customHeaders: { 'X-Tenant': 't1' } },
+        ),
+      ),
+    ).toEqual({
+      auth: { token: 'tok', type: 'bearer' },
+      headers: { 'X-Tenant': 't1' },
+      name: 'My Connector',
+      type: 'http',
+      url: 'https://mcp.example.com',
+    });
+  });
+
+  it('applies metadata.customHeaders with no auth credential', () => {
+    expect(
+      buildConnectorMcpParams(
+        httpConnector(null, { customHeaders: { 'X-Api-Key': 'abc' } }),
+      ),
+    ).toEqual({
+      auth: undefined,
+      headers: { 'X-Api-Key': 'abc' },
+      name: 'My Connector',
+      type: 'http',
+      url: 'https://mcp.example.com',
+    });
+  });
+
+  it('lets metadata.customHeaders override legacy header-credential keys', () => {
+    expect(
+      buildConnectorMcpParams(
+        httpConnector(
+          { headers: { Authorization: 'Token old' }, type: 'header' },
+          { customHeaders: { Authorization: 'Token new' } },
+        ),
+      ),
+    ).toEqual({
+      auth: undefined,
+      headers: { Authorization: 'Token new' },
       name: 'My Connector',
       type: 'http',
       url: 'https://mcp.example.com',

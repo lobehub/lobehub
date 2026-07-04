@@ -108,7 +108,7 @@ const mockApp = {
     return mockSearchService;
   }),
   localFileProtocolManager: mockLocalFileProtocolManager,
-  toolDetectorManager: {
+  binaryManager: {
     getBestTool: vi.fn(() => null), // No external tools available, use Node.js fallback
   },
 } as unknown as App;
@@ -729,7 +729,7 @@ describe('LocalFileCtr', () => {
           }),
         ]),
       );
-      expect(result.totalCount).toBe(result.entries.length);
+      expect(result).not.toHaveProperty('totalCount');
     });
 
     it('should fall back to glob when git indexing fails', async () => {
@@ -746,6 +746,11 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
 
+      expect(mockSearchService.glob).toHaveBeenCalledWith({
+        limit: 5000,
+        pattern: '**/*',
+        scope: '/workspace/project',
+      });
       expect(result.source).toBe('glob');
       expect(result.entries).toEqual([
         expect.objectContaining({
@@ -759,6 +764,7 @@ describe('LocalFileCtr', () => {
           relativePath: 'src/index.ts',
         }),
       ]);
+      expect(result).not.toHaveProperty('totalCount');
     });
 
     it('should mark glob entries as files when stat fails', async () => {

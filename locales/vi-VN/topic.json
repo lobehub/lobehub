@@ -168,6 +168,8 @@
   "sidebar.expandAll": "Mở rộng tất cả nhóm",
   "sidebar.title": "Chủ đề",
   "taskManager.agent": "Tác vụ Agent",
+  "taskManager.agentSelector.privateGroup": "Riêng tư",
+  "taskManager.agentSelector.workspaceGroup": "Không gian làm việc",
   "taskManager.welcome": "Hãy hỏi tôi về các công việc của bạn",
   "temp": "Tạm thời",
   "title": "Chủ đề"

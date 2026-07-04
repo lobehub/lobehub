@@ -40,6 +40,8 @@ const homeState = vi.hoisted(() => ({
   inputActiveMode: null,
   isAgentListInit: true,
   pinnedAgents: [],
+  privateAgentGroups: [],
+  privateUngroupedAgents: [],
   sendAsAgent: vi.fn(),
   sendAsGroup: vi.fn(),
   sendAsResearch: vi.fn(),

@@ -24,6 +24,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import {
+  finalizeVerifyRun,
   VerifyExecutorService,
   VerifyFeedbackService,
   VerifyPlanGeneratorService,
@@ -86,6 +87,11 @@ const checkItemSchema = z.object({
 });
 
 const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+const updateRunInputSchema = verifyRunIdInputSchema.extend({
+  value: z.object({
+    title: z.string().trim().min(1).max(200),
+  }),
+});
 
 const uploadEvidenceInputSchema = z
   .object({
@@ -387,6 +393,24 @@ export const verifyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.executorService.execute(input);
+      // Settle the run through the SAME finalizer the completion-time gate uses
+      // (runVerifyOnCompletion → finalizeVerifyRun): repair-aware tail (spawn a
+      // repair round on auto_repair failures), then report + drive the bound task.
+      // Without this, a verify triggered via the CLI (`lh verify run`, e.g. a
+      // device/agent-testing run) would write verdicts and stop — never auto-repair.
+      await finalizeVerifyRun(
+        ctx.serverDB,
+        ctx.userId,
+        input.operationId,
+        {
+          report: {
+            deliverable: input.deliverable,
+            goal: input.goal,
+            modelConfig: input.modelConfig,
+          },
+        },
+        ctx.workspaceId ?? undefined,
+      );
       const run = await ctx.runModel.findByOperation(input.operationId);
       return run ? ctx.resultModel.listByRun(run.id) : [];
     }),
@@ -445,11 +469,58 @@ export const verifyRouter = router({
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
 
+  // Delete a whole verification session: the run row cascades to its check
+  // results (→ their evidence) and its report via the schema FKs, so one delete
+  // tears down the published bundle. Ownership-scoped: resolveVerifyRun 404s a
+  // run that isn't the caller's before we touch it.
+  deleteRun: verifyProcedure.input(verifyRunIdInputSchema).mutation(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+    await ctx.runModel.delete(run.id);
+    return { id: run.id, success: true };
+  }),
+
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
+
+  listReportSummaries: verifyProcedure.query(async ({ ctx }) => {
+    const runs = await ctx.runModel.query();
+    const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
+
+    return runs.map((run, index) => {
+      const report = reports[index];
+
+      return {
+        report: report
+          ? {
+              createdAt: report.createdAt,
+              failedChecks: report.failedChecks,
+              generatedAt: report.generatedAt,
+              id: report.id,
+              overallConfidence: report.overallConfidence,
+              passedChecks: report.passedChecks,
+              reviewedByUser: report.reviewedByUser,
+              summary: report.summary,
+              totalChecks: report.totalChecks,
+              uncertainChecks: report.uncertainChecks,
+              verdict: report.verdict,
+              verifyRunId: report.verifyRunId,
+            }
+          : null,
+        run,
+      };
+    });
+  }),
 
   listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
     return ctx.resultModel.listByRun(run.id);
+  }),
+
+  updateRun: verifyProcedure.input(updateRunInputSchema).mutation(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+    const updated = await ctx.runModel.update(run.id, { title: input.value.title });
+    return { data: updated, success: true };
   }),
 
   ingestResult: verifyProcedure
@@ -702,7 +773,7 @@ export const verifyRouter = router({
           .orderBy(asc(verifyCheckResults.checkItemIndex)),
       ]);
 
-      // Resolve a displayable URL for each file-backed evidence artifact.
+      // Resolve display metadata for each file-backed evidence artifact.
       let fileService: FileService | null | undefined;
       const getFileService = () => {
         if (fileService !== undefined) return fileService;
@@ -710,24 +781,38 @@ export const verifyRouter = router({
         try {
           fileService = new FileService(ctx.serverDB, run.userId, run.workspaceId ?? undefined);
         } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileUrl]', error);
+          console.error('[verify:getReportBundle:resolveFileMeta]', error);
           fileService = null;
         }
 
         return fileService;
       };
-      const resolveFileUrl = async (fileId: string | null) => {
-        if (!fileId) return null;
+      const resolveFileMeta = async (fileId: string | null) => {
+        if (!fileId) return { fileName: null, fileUrl: null };
 
         try {
           const file = await FileModel.getFileById(ctx.serverDB, fileId);
-          if (!file?.url) return null;
+          if (!file) return { fileName: null, fileUrl: null };
+          if (!file.url) return { fileName: file.name ?? null, fileUrl: null };
 
           const service = getFileService();
-          return service ? await service.getFullFileUrl(file.url) : null;
+          if (!service) return { fileName: file.name ?? null, fileUrl: null };
+
+          try {
+            return {
+              fileName: file.name ?? null,
+              fileUrl: await service.getFullFileUrl(file.url),
+            };
+          } catch (error) {
+            console.error('[verify:getReportBundle:resolveFileMeta]', error);
+            return { fileName: file.name ?? null, fileUrl: null };
+          }
         } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileUrl]', error);
-          return null;
+          console.error('[verify:getReportBundle:resolveFileMeta]', error);
+          return {
+            fileName: null,
+            fileUrl: null,
+          };
         }
       };
 
@@ -741,7 +826,7 @@ export const verifyRouter = router({
           return {
             ...r,
             evidence: await Promise.all(
-              evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
+              evidence.map(async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId)) })),
             ),
           };
         }),

@@ -5,7 +5,7 @@ import https from 'node:https';
 import { URL } from 'node:url';
 
 import type { ProxyTRPCStreamRequestParams } from '@lobechat/electron-client-ipc';
-import type {IpcMainEvent, WebContents } from 'electron';
+import type { IpcMainEvent, WebContents } from 'electron';
 import { ipcMain } from 'electron';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
@@ -13,6 +13,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { defaultProxySettings } from '@/const/store';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import { ControllerModule } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -191,8 +192,9 @@ export default class RemoteServerSyncCtr extends ControllerModule {
     url: URL;
   }) {
     // Prepare headers, cloning and adding Oidc-Auth
-    const requestHeaders: OutgoingHttpHeaders = { ...headers , ['Oidc-Auth']: accessToken,}; // Use OutgoingHttpHeaders
+    const requestHeaders: OutgoingHttpHeaders = { ...headers, ['Oidc-Auth']: accessToken };
     appendVercelCookie(requestHeaders);
+    setDesktopUserAgentHeader(requestHeaders);
 
     // Let node handle Host, Content-Length etc. Remove potentially problematic headers
     delete requestHeaders['host'];

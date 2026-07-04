@@ -12,6 +12,7 @@ import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isDev } from '@/utils/env';
@@ -44,6 +45,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   // Credit mode already expresses cost in credits — showing USD alongside would conflict.
   const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit);
+  const modelCard = useAiInfraStore(aiModelSelectors.getModelCard(model, provider));
 
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
 
@@ -65,12 +67,10 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       justify={'space-between'}
     >
       <Center horizontal gap={4} style={{ fontSize: 12 }}>
-        {heteroName ? (
-          heteroName
-        ) : (
+        {heteroName || (
           <>
             <ModelIcon model={model as string} type={'mono'} />
-            {model}
+            {modelCard?.displayName || model}
           </>
         )}
       </Center>

@@ -5,6 +5,7 @@
   "actionTag.category.skill": "스킬",
   "actionTag.category.tool": "도구",
   "actionTag.tooltip.agentSkill": "요청을 위해 이 에이전트의 문서에서 기술 번들을 로드합니다.",
+  "actionTag.tooltip.clickToView": "자세히 보려면 클릭하세요",
   "actionTag.tooltip.command": "전송 전에 클라이언트 측 슬래시 명령을 실행합니다.",
   "actionTag.tooltip.projectSkill": "슬래시 호출로 전송되어 에이전트의 CLI가 일치하는 프로젝트 스킬을 실행합니다.",
   "actionTag.tooltip.skill": "이번 요청에 사용할 재사용 가능한 스킬 패키지를 불러옵니다.",

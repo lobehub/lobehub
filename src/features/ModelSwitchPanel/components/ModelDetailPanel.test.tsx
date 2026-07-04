@@ -13,6 +13,7 @@ vi.mock('antd-style', () => ({
   createStaticStyles: () => ({
     actionText: 'actionText',
     container: 'container',
+    description: 'description',
     originalPriceText: 'originalPriceText',
     priceValue: 'priceValue',
     row: 'row',
@@ -40,6 +41,11 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
   Icon: () => <span />,
   Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children, ...props }: { children: ReactNode }) => {
+    const { type: _type, ...rest } = props as Record<string, unknown>;
+
+    return <p {...rest}>{children}</p>;
+  },
   Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
     <span>
       {title}
@@ -88,6 +94,7 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.pricing.unit.imageGeneration': 'Image Generation',
   'ModelSwitchPanel.detail.pricing.unit.textInput': 'Input',
   'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
+  'test-model.description': 'Localized model description.',
 };
 
 vi.mock('react-i18next', () => ({
@@ -137,6 +144,7 @@ const discountedTextPricing = {
 const createEnabledList = (
   provider: string,
   pricing: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
 ): EnabledProviderWithModels[] => [
   {
     children: [
@@ -147,6 +155,7 @@ const createEnabledList = (
         id: 'test-model',
         pricing,
         type: 'chat',
+        ...overrides,
       } as any,
     ],
     id: provider,
@@ -156,6 +165,22 @@ const createEnabledList = (
 ];
 
 describe('ModelDetailPanel pricing', () => {
+  it('renders the localized model description when provided', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="test-model"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fallback model description.',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Localized model description.',
+    );
+  });
+
   it('renders branding provider token pricing in credits', () => {
     const { container } = render(
       <ModelDetailPanel
