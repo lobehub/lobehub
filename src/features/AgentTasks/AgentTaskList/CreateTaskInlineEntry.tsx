@@ -6,7 +6,7 @@ import { Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
 import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -84,6 +84,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const editor = useEditor();
 
+  // Persist the in-progress draft per scope so a reload / accidental close
+  // doesn't eat a long prompt. Skipped for the transient subtask composer.
+  const draftStorageKey = useMemo(
+    () => (parentTaskId ? null : `lobehub:task-create-draft:${agentId ?? 'all'}`),
+    [agentId, parentTaskId],
+  );
+  const draftRestoredRef = useRef(false);
+
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
@@ -103,6 +111,57 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (!canCreateTask) return;
     if (autoFocus || isHero) editor?.focus?.();
   }, [autoFocus, canCreateTask, editor, isHero]);
+
+  // Restore a saved draft once the editor is ready; the editor's
+  // onContentChange then syncs the derived `instruction` state.
+  useEffect(() => {
+    if (draftRestoredRef.current || !draftStorageKey || !editor) return;
+    draftRestoredRef.current = true;
+    let raw: string | null;
+    try {
+      raw = localStorage.getItem(draftStorageKey);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as {
+        assigneeAgentId?: string;
+        markdown?: string;
+        priority?: number;
+        visibility?: 'private' | 'public';
+      };
+      if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
+      if (typeof draft.priority === 'number') setPriority(draft.priority);
+      if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
+      if (draft.visibility) setVisibility(draft.visibility);
+    } catch {
+      /* ignore a malformed draft */
+    }
+  }, [draftStorageKey, editor, lockAssignee]);
+
+  // Back the draft to storage on every change. Gated behind the restore pass so
+  // the initial render can't clobber a just-read draft. Write-only on non-empty:
+  // the key is cleared only on a successful submit (below), never here — so a
+  // `setDocument`-timing gap right after restore can't wipe a valid draft.
+  useEffect(() => {
+    if (!draftRestoredRef.current || !draftStorageKey || !editor) return;
+    const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
+    if (!markdown) return;
+    try {
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
+          markdown,
+          priority,
+          visibility,
+        }),
+      );
+    } catch {
+      /* storage unavailable / quota — persistence is best-effort */
+    }
+  }, [assigneeAgentId, draftStorageKey, editor, instruction, lockAssignee, priority, visibility]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -163,6 +222,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       setInstruction('');
       setVisibility('private');
       editor?.cleanDocument?.();
+      if (draftStorageKey) {
+        try {
+          localStorage.removeItem(draftStorageKey);
+        } catch {
+          /* ignore */
+        }
+      }
       onCreated?.({
         agentId: result.assigneeAgentId ?? undefined,
         identifier: result.identifier,
@@ -173,6 +239,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     agentId,
     assigneeAgentId,
     createTask,
+    draftStorageKey,
     editor,
     instruction,
     onCreated,
@@ -213,6 +280,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       <Flexbox
         style={{
           fontSize: isHero ? 16 : 14,
+          // Cap the editor so a long draft scrolls inside the box instead of
+          // growing the composer until it pushes the task list below the fold.
+          maxHeight: isHero ? 360 : 200,
+          overflowY: 'auto',
           padding: isHero ? '20px 24px 4px' : '12px 40px 0 16px',
         }}
       >

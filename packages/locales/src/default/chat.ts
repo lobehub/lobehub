@@ -1023,6 +1023,7 @@ export default {
 
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
+  'createTask.createFailed': 'Failed to create task',
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',

@@ -155,6 +155,7 @@
   "createModal.title": "这个助理要做什么？",
   "createTask.assignee": "负责人",
   "createTask.collapse": "隐藏输入",
+  "createTask.createFailed": "创建任务失败",
   "createTask.expandToInline": "固定到页面",
   "createTask.instructionPlaceholder": "添加描述…",
   "createTask.submit": "创建任务",

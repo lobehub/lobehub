@@ -178,6 +178,15 @@ export class TaskDetailSliceActionImpl {
         await this.internal_refreshTaskDetail(params.parentTaskId);
       }
       return result.data ?? null;
+    } catch {
+      // A failed create must not fail silently — surface the reason here at the
+      // store boundary (both the inline composer and the modal only clear on a
+      // non-null result, so the draft survives) and return null so no caller
+      // hits an unhandled rejection.
+      message.error(
+        t('createTask.createFailed', { defaultValue: 'Failed to create task', ns: 'chat' }),
+      );
+      return null;
     } finally {
       this.#set({ isCreatingTask: false }, false, 'createTask/end');
     }
