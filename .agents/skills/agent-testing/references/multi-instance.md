@@ -11,22 +11,54 @@ Use case driving this: **N git worktrees under one project, each doing different
 work, each running its own Electron dev instance** — so each needs its own Vite
 dev server + its own userData, while reusing the developer's existing login.
 
+## Worktree instance prerequisites (deps + first mount) — validated 2026-07-04
+
+A git worktree starts with **no `node_modules`** (gitignored, not shared). Two traps
+sink an `electron-dev.sh start <id>` on a fresh worktree before it will even mount:
+
+- **`pnpm install` per worktree — do NOT symlink the main checkout's `node_modules`.**
+  Symlinking the primary repo's `node_modules` into the worktree _looks_ like it works
+  but silently pins the **main branch's dependency versions**, which can lag the
+  worktree branch. Real failure: a worktree on `canary` imports `FloatingPanel` from
+  `@lobehub/ui ^5.19.0`, but the symlinked main checkout had `5.18.0` → the renderer
+  crashed at load (`Uncaught SyntaxError: … does not provide an export named
+'FloatingPanel'`) and the app hung on the loading screen (`#root` empty,
+  `__LOBE_STORES` undefined) **even though raw-CDP screenshots still showed a painted
+  frame** from before the crash. Fix: real `pnpm install` in the worktree **root** _and_
+  `apps/desktop` (standalone install, per Step 0.1) before `start`. (`type-check` warns
+  of the same skew: cross-root `packages/*` dual-identity errors when `node_modules` is
+  symlinked across worktree roots.)
+- **First cold Vite load can `ECONNRESET` under resource contention.** Two full
+  Electron+Vite dev stacks at once (main app + a fresh worktree instance) can overwhelm
+  Vite on the cold module storm: the log fills with `Vite dev server fetch failed:
+http://127.0.0.1:<port>/src/… [read ECONNRESET]`, the SPA hangs on the loading screen,
+  `#root` stays at 0 children. **Not a code error** — a clean `electron-dev.sh stop <id>
+&& start <id>` once the install/CPU storm is over mounts cleanly (0 ECONNRESET,
+  `__LOBE_STORES` becomes an object, `#root` fills).
+
+> "Screenshot shows the app but `eval` sees an empty `#root`" → the app never mounted
+> (loading-screen shell), not a target mismatch. Confirm with `eval
+"document.getElementById('root')?.childElementCount"` (0 + a `#loading-screen` = not
+> mounted). And remember `cdp-screenshot.sh` reads **`--port`, not** a `CDP_PORT` env —
+> pass `--port 92xx` for a pool instance or you'll silently shoot the default 9222 (the
+> main app), not your worktree instance.
+
 ## The real bottleneck is NOT "one port"
 
 CDP is single-port, multi-target: one `--remote-debugging-port` exposes every
 `BrowserWindow` as a target. What actually blocks N independent, write-isolated
 app sessions are dev-build singletons. Validated verdicts:
 
-| Singleton | Location | Verdict for N instances |
-| --------- | -------- | ----------------------- |
-| Electron single-instance lock | `App.ts:227` | ✅ **keyed by userData** — distinct userData dirs each get their own lock; all instances run. No code change needed. |
-| Chromium `SingletonLock` | per userData dir | ✅ one per userData dir automatically (observed distinct PIDs per dir). |
-| userData dir `lobehub-desktop-dev` | `pre-app-init.ts:12` | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`. |
-| Vite dev server `strictPort:true` 5173 | `electron.vite.config.ts` | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree). |
-| `electron-server-ipc` unix socket | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins). |
-| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name** | 🔑 requires **app name constant** to decrypt a copied login state. |
-| Global shortcuts / `lobehub://` protocol | OS-global | first/last wins; harmless for headless automation. |
-| Static file server / iMessage bridge | `getPort()` dynamic | ✅ auto-allocated, safe. |
+| Singleton                                | Location                                                         | Verdict for N instances                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Electron single-instance lock            | `App.ts:227`                                                     | ✅ **keyed by userData** — distinct userData dirs each get their own lock; all instances run. No code change needed. |
+| Chromium `SingletonLock`                 | per userData dir                                                 | ✅ one per userData dir automatically (observed distinct PIDs per dir).                                              |
+| userData dir `lobehub-desktop-dev`       | `pre-app-init.ts:12`                                             | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`.                                                     |
+| Vite dev server `strictPort:true` 5173   | `electron.vite.config.ts`                                        | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                        |
+| `electron-server-ipc` unix socket        | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins).        |
+| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 requires **app name constant** to decrypt a copied login state.                                                   |
+| Global shortcuts / `lobehub://` protocol | OS-global                                                        | first/last wins; harmless for headless automation.                                                                   |
+| Static file server / iMessage bridge     | `getPort()` dynamic                                              | ✅ auto-allocated, safe.                                                                                             |
 
 ## The key tension (and its resolution)
 
@@ -59,7 +91,10 @@ branch ships all three:
    ```ts
    app.setName('lobehub-desktop-dev');
    const userDataOverride = process.env.LOBE_DESKTOP_USER_DATA_DIR;
-   app.setPath('userData', userDataOverride || path.join(app.getPath('appData'), 'lobehub-desktop-dev'));
+   app.setPath(
+     'userData',
+     userDataOverride || path.join(app.getPath('appData'), 'lobehub-desktop-dev'),
+   );
    ```
 
 2. **`apps/desktop/src/main/core/App.ts`** — per-instance IPC id so the
@@ -90,10 +125,10 @@ login-bearing items, NOT the multi-GB caches:
 SRC="$HOME/Library/Application Support/lobehub-desktop-dev"
 DST="/tmp/lobe-ud-<id>"
 for f in lobehub-settings.json "Local State" Preferences \
-         Cookies Cookies-journal "Local Storage" IndexedDB \
-         "Session Storage" "Network Persistent State" lobehub-storage; do
+  Cookies Cookies-journal "Local Storage" IndexedDB \
+  "Session Storage" "Network Persistent State" lobehub-storage; do
   [ -e "$SRC/$f" ] && cp -R "$SRC/$f" "$DST/"
-done   # ~27 MB vs the 1.7 GB full profile (Cache/Code Cache/GPUCache skipped)
+done # ~27 MB vs the 1.7 GB full profile (Cache/Code Cache/GPUCache skipped)
 ```
 
 - `lobehub-settings.json` → `encryptedTokens` (OIDC access/refresh, safeStorage).
@@ -186,11 +221,11 @@ project path (the old single-instance script matched every project Electron by
 binary path, so a 2nd `start` tore down the 1st):
 
 ```bash
-electron-dev.sh start 1     # CDP 9223, Vite 5174, userData ud-1 (login copied), IPC id -1
-electron-dev.sh start 2     # CDP 9224, Vite 5175, userData ud-2, IPC id -2
-electron-dev.sh list        # show running pool instances
-electron-dev.sh stop 1      # sibling-safe: kills ONLY instance 1 (KEEP_DATA=1 to keep ud)
-electron-dev.sh stop --all  # stop every instance
+electron-dev.sh start 1    # CDP 9223, Vite 5174, userData ud-1 (login copied), IPC id -1
+electron-dev.sh start 2    # CDP 9224, Vite 5175, userData ud-2, IPC id -2
+electron-dev.sh list       # show running pool instances
+electron-dev.sh stop 1     # sibling-safe: kills ONLY instance 1 (KEEP_DATA=1 to keep ud)
+electron-dev.sh stop --all # stop every instance
 # no id → legacy single-instance behavior (CDP 9222), unchanged
 ```
 
@@ -207,9 +242,9 @@ electron-dev.sh stop --all  # stop every instance
 
 ### Round 1 — concurrency, login reuse, isolation (Model A)
 
-Golden profile `lobehub-desktop-dev` (logged in, user_2gmT…); 3 userData copies
+Golden profile `lobehub-desktop-dev` (logged in, user\_2gmT…); 3 userData copies
 (27 MB each), app name constant. inst1 = `electron-vite dev` (CDP 9223, Vite
-5173), inst2/inst3 = raw electron (CDP 9224/9225) sharing Vite.
+5173\), inst2/inst3 = raw electron (CDP 9224/9225) sharing Vite.
 
 - ✅ **All 3 booted** — no single-instance exit (distinct `SingletonLock` PIDs).
 - ✅ **All 3 signed in** — `isSignedIn:true, user_2gmT…` on all ports (copied
