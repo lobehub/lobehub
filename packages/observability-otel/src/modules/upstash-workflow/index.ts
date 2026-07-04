@@ -7,6 +7,7 @@ export const tracer = trace.getTracer('@lobechat/upstash-workflow', '0.0.1');
 export const ATTR_UPSTASH_WORKFLOW_OPERATION = 'upstash_workflow_operation' as const;
 export const ATTR_UPSTASH_WORKFLOW_STATUS = 'upstash_workflow_status' as const;
 export const ATTR_UPSTASH_WORKFLOW_INTERFACE = 'upstash_workflow_interface' as const;
+export const ATTR_UPSTASH_WORKFLOW_URL = 'upstash_workflow_url' as const;
 export const ATTR_UPSTASH_WORKFLOW_PATH = 'upstash_workflow_path' as const;
 export const ATTR_UPSTASH_WORKFLOW_RETRY_COUNT = 'upstash_workflow_retries' as const;
 export const ATTR_UPSTASH_WORKFLOW_RETRY_DELAY = 'upstash_workflow_retry_delay' as const;
@@ -94,6 +95,7 @@ export const normalizeUpstashWorkflowPath = (url?: string): string | undefined =
  * - `operation` and `status` are present for metric counter events
  * - `url` may be absolute or an already-normalized route path
  * - Per-run identifiers are excluded from metric labels to avoid high-cardinality series
+ * - `upstash_workflow_url` stores the normalized route path, not the absolute URL
  *
  * Returns:
  * - Attribute map accepted by OpenTelemetry metrics APIs
@@ -109,6 +111,7 @@ export const buildUpstashWorkflowMetricAttributes = (
   [ATTR_UPSTASH_WORKFLOW_RETRY_COUNT]: attributes.retries,
   [ATTR_UPSTASH_WORKFLOW_RETRY_DELAY]: attributes.retryDelay,
   [ATTR_UPSTASH_WORKFLOW_STATUS]: attributes.status,
+  [ATTR_UPSTASH_WORKFLOW_URL]: attributes.path ?? normalizeUpstashWorkflowPath(attributes.url),
 });
 
 /**
