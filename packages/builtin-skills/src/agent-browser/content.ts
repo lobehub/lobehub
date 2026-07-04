@@ -16,6 +16,16 @@ agent-browser snapshot -i    # 4. re-snapshot after any page change
 
 Refs become **stale on every page change** (click that navigates, form submit, dynamic re-render, dialog open). Always re-snapshot before the next ref interaction.
 
+## Dynamic pages & anti-bot escalation
+
+When scraping dynamic or anti-bot pages, escalate from cheap to heavy and stop at the first rung that yields real content:
+
+1. **Lightweight first**: builtin web search/crawl tools (or \`curl\`) — if the main text comes back, done.
+2. **Empty body, verification page, or obfuscated JS** → the page needs a real JS run: \`agent-browser open <url>\`, \`agent-browser wait --load networkidle\`, then \`agent-browser read\` (or \`snapshot\`).
+3. **Still blocked** (anti-bot that fingerprints headless Chrome) → connect to a real browser: launch Chrome with \`--remote-debugging-port=9222\` (Chrome 136+ also requires a separate \`--user-data-dir\`), then drive it with \`agent-browser --cdp 9222 <command>\` — a real browser fingerprint usually passes in one go.
+
+Discipline: the crux of anti-bot checks is "did a real browser execute the JS", so the closer to a human environment, the easier it passes. Verify you actually got content with \`agent-browser eval "document.body.innerText.length"\` (0 means blocked). Dump large output to a file first, then \`grep\`/\`head\` it. Close the debug-port browser session when done.
+
 ## Discovering everything else
 
 Run \`agent-browser --help\` for the full command list, then \`agent-browser <subcommand> --help\` for any subcommand whose flags you're unsure about. The CLI also ships specialized skills (\`agent-browser skills list\`, \`agent-browser skills get <name>\`) covering Electron apps, Slack, dogfooding, Vercel Sandbox, and AWS Bedrock AgentCore — load one only when the task falls outside ordinary web pages.

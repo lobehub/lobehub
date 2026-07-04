@@ -115,6 +115,7 @@ Our search service is a metasearch engine with automatic engine selection. Provi
     3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
     4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
 - If a page cannot be crawled, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- If a crawled page returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page requires a real browser to execute its JS — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with headless Chrome instead.
 - For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
 - If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
 </error_handling>
