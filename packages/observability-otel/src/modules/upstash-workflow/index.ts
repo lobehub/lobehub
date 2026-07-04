@@ -168,7 +168,9 @@ export const withOtelMetricsForUpstashWorkflowContext = <
     stepFunction: () => TResult | Promise<TResult>,
   ): Promise<TResult | Promise<TResult>> => {
     try {
-      const result = await originalRun.call(context, stepName, stepFunction);
+      const result = await (originalRun.call(context, stepName, stepFunction) as Promise<
+        TResult | Promise<TResult>
+      >);
       recordUpstashWorkflowEvent({
         ...baseAttributes,
         ...context,
@@ -200,7 +202,7 @@ export const withOtelMetricsForUpstashWorkflowContext = <
       settings: unknown,
     ): Promise<TResult> => {
       try {
-        const result = await originalInvoke.call(context, stepName, settings);
+        const result = await (originalInvoke.call(context, stepName, settings) as Promise<TResult>);
         recordUpstashWorkflowEvent({
           ...baseAttributes,
           ...context,
