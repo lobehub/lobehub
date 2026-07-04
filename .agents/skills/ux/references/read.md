@@ -460,3 +460,62 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 - [ ] Grouping at scale reuses `Accordion` / `GroupedAccordion` (by-project / status / time), not a flat ungrouped dump once the list grows past a screen. _(Natural)_
 - [ ] Search box, inline-rename, and row actions reuse the shared input / editing / action-reveal patterns, not raw `<input>` / `<label>` + hand CSS. _(Certainty)_
 - [ ] Spacing/padding expressed as `Flexbox` / `Block` `gap` / `padding` props (inherits the sidebar rhythm), not hand-picked px constants. _(Natural)_
+## 1.11 A persistent composer above a list must not bury the records・Meaningful・Natural
+
+A list surface with an **always-visible create / compose affordance above the records** (an
+inline "new task" editor, a "what's on your mind" post box, a reply composer over a thread)
+is the _hero_ of the **empty** state — there, teaching + one big input is exactly right
+(§1.1, Grow onboarding). But the moment the list is **populated**, the primary content is
+the **records**, and the composer becomes secondary; it must not out-weigh them. The common
+break: an **auto-growing editor with no `max-height`** whose height tracks its content, so a
+long draft (or a pre-filled template) inflates the box until it fills the viewport and pushes
+the **entire list below the fold** — Center Stage inverted, the user scrolls past their own
+compose draft to reach the records they came to see. Fix it two ways, ideally both: **cap the
+input's height** (a `max-height` + internal scroll so a long draft scrolls _inside_ the box,
+not the page), and **default the composer to collapsed once the list is non-empty** (a
+one-click / focus expand back to the hero size), so the records keep the top of the fold. The
+empty-state hero and the populated-list composer are the **same component in two roles** —
+let the surface pick the role from whether it has data, don't render one size for both.
+
+> ✅ On an empty list the create composer is a tall autofocused hero; once records exist it
+> collapses to a single-line entry (one click / focus re-expands it), and even expanded its
+> editor caps at a few rows with internal scroll — the list stays above the fold.
+> ❌ **全部任务** (`/tasks`) renders `CreateTaskInlineEntry` persistently whenever
+> `!inlineCollapsed` (`AgentTasksPage.tsx:165`), and its Lexical editor grows to content
+> height with **no `max-height` / scroll** (`CreateTaskInlineEntry.tsx:213-231`). A long
+> instruction draft fills \~half the viewport and pushes the "进行中" group and every task
+> **below the fold** — on a populated board the composer dominates the list it sits over. The
+> collapse flag (`taskCreateInlineCollapsed`) exists but defaults to _expanded_ and the editor
+> is uncapped. ✅ Cap the editor height; default to collapsed once `!isEmptyHero`.
+
+**Checklist**
+
+- [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't push the records below the fold. _(Meaningful)_
+- [ ] An auto-growing editor above a list has a `max-height` + internal scroll — a long draft scrolls inside the box, not the page. _(Natural)_
+- [ ] The composer defaults to collapsed / compact once the list has data (one-click / focus re-expand), so the records keep Center Stage. _(Meaningful・Natural)_
+
+## 1.12 A status group's label must be true for every member・Certainty・Meaningful
+
+When a list **groups or labels by status**, the group header _asserts a state_ — every row
+under "In Progress" claims to be actively running. So don't **fold a distinct lifecycle state
+into another** whose label then lies about it: a **scheduled-but-idle** item (a cron task
+waiting for its next fire, a queued job, a snoozed item) collapsed into a "running" / "In
+Progress" group tells the user it's executing _now_ when it's merely _waiting_. This is
+"consistency is semantic" at the label level — the header must be **true for every member**.
+The tell is a status→group map that points two different lifecycle states at one label; the
+row often already shows the real state (a schedule tag, a "next run" pill), which makes the
+group header's contradiction all the more visible. Give the distinct state its **own group /
+label** (ranked where it belongs), or relabel the shared group so it's true for both.
+
+> ✅ A "Scheduled" group (ranked above "Running") holds cron/queued tasks; "In Progress" holds
+> only what's actually executing — each header is true for every row under it.
+> ❌ **全部任务** folds `scheduled → running` in the group map (`listViewOptions.ts:107`) and
+> renders the header as `taskDetail.status.running` = "进行中 / In Progress" (`:232,237`), so a
+> daily-cron task that is **idle until 06:00** sits under "In Progress" — even though its own
+> row reads "每天 06:00 运行". The label claims a state the task isn't in. ✅ A distinct
+> "Scheduled" group; keep "In Progress" for genuinely-running tasks.
+
+**Checklist**
+
+- [ ] A status group/label is true for **every** member — no folding a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts a different one (running/in-progress). _(Certainty)_
+- [ ] The distinct state gets its own group/label (ranked appropriately), or the shared label is neutral enough to be true for both. _(Meaningful)_

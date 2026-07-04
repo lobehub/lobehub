@@ -20,7 +20,8 @@ citing).
 
 **Surface class:** agent task board / issue-tracker list — benchmark against Linear / Asana /
 GitHub Issues (list · kanban · grouping · priority · assignee · **live status** · bulk ops).
-**Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic + CLS)
+**Layers run:** L1 (static / code) ✅ — §1–§4 below. L2 (visual) ✅ — a **re-verify pass on a later
+branch** (user-supplied screenshot of the populated list), see the **§6 addendum**. L3 (dynamic + CLS)
 ⏳ not yet run — see §5.
 
 **Load-bearing files:** `features/AgentTasks/AgentTaskList/{AgentTasksPage,TaskList,KanbanBoard,
@@ -175,3 +176,40 @@ create/clear-filters affordance. _Remedy:_ refresh the list-level status on the 
   - Let a running task complete while the list is open → **confirm gap L⑥** (stale status, no indicator).
   - Fail a context-menu status change / kanban drag / create → **confirm gap L④** (silent revert).
   - **Measure list CLS/LCP** across skeleton→content and the up-to-50 per-row detail fetches (gap L②).
+
+## 6 — L2 visual addendum (2026-07, later branch)
+
+A **re-verify pass** on a later branch, anchored on a user-supplied screenshot of the **populated**
+list (a persistent create composer holding a long draft, above a "进行中 1" status group with a single
+cron task). Two things it establishes that the original L1-only run could not:
+
+**First, the original 🔴 L① is fixed.** `TaskList` now wraps its content in `AsyncBoundary` with
+`error` / `isLoading` / `onRetry`, and `AgentTasksPage.tsx:67-72` keeps the SWR handle and threads
+`error`/`mutate` into it (`TaskList.tsx:300-316`), gating error **ahead of** empty. A failed list
+fetch now shows Retry instead of a permanent skeleton — exactly the remedy L① asked for. **Don't
+regress the call-site read.**
+
+**Second, two gaps only the render exposes** (both landed as new `ux` rules — Read **§1.11** and
+**§1.12**):
+
+- **V1 🟠 — the persistent composer buries the list (Read §1.11, Center Stage).** `AgentTasksPage.tsx:165`
+  renders `CreateTaskInlineEntry` whenever `!inlineCollapsed`, and its Lexical editor grows to content
+  height with **no `max-height` / scroll** (`CreateTaskInlineEntry.tsx:213-231`). A long instruction draft
+  fills \~half the viewport and pushes the "进行中" group + every task **below the fold** — on a populated
+  board the composer out-weighs the records. _Remedy:_ cap the editor height; default to collapsed once
+  `!isEmptyHero`.
+- **V2 🟠 — a scheduled task is mislabeled "进行中 / In Progress" (Read §1.12, consistency-is-semantic).**
+  `listViewOptions.ts:107` folds `scheduled → running` and the group header renders
+  `taskDetail.status.running` (`:232,237`), so a daily-cron task idle until 06:00 sits under "In Progress"
+  though its own row reads "每天 06:00 运行". The group label asserts a state the task isn't in. _Remedy:_
+  a distinct "Scheduled" group ranked above running.
+- **V3 🟡 — the latest-activity sub-line duplicates the task name.** `AgentTaskItem.tsx:209` →
+  `TaskLatestActivity` renders " 主题 #5: <title>" (`TaskLatestActivity.tsx:13-24`); for a recurring task the
+  topic title equals `task.name`, so the row prints the name twice. _Remedy:_ suppress the sub-line when it
+  equals `task.name`, or show last-run time / result instead. (Instance of interface-details duplication —
+  ❌ example, not a new rule.)
+
+Still open from §3 at re-verify (unchanged): L② (client-side sort/group over the 50-cap + per-row detail
+fan-out), L④ (silent create failure — `handleSubmit`'s `if (result)` has no error toast,
+`CreateTaskInlineEntry.tsx:148-170`), L⑤ (create draft in local `useState`, not persisted), L⑥ (in-list
+`Empty` has no CTA / no no-match variant; list-level status not refreshed by the per-row poll).
