@@ -202,6 +202,47 @@ describe('VerifyCheckResultModel', () => {
     expect(await model.listByRun(verifyRunId)).toHaveLength(1);
   });
 
+  it('upsertByCheckItem clears an optional field on null but keeps it on undefined', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+
+    const first = await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'failed',
+      suggestion: 'fix the padding',
+      toulmin: { evidence: 'padding was 4px' },
+      verdict: 'failed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    expect(first.suggestion).toBe('fix the padding');
+
+    // undefined → the conflict UPDATE skips the column, prior value survives
+    await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'passed',
+      verdict: 'passed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    let row = await model.findById(first.id);
+    expect(row?.suggestion).toBe('fix the padding');
+    expect(row?.toulmin).toEqual({ evidence: 'padding was 4px' });
+
+    // explicit null → the column is set to NULL (the full-replace path)
+    await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'passed',
+      suggestion: null,
+      toulmin: null,
+      verdict: 'passed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    row = await model.findById(first.id);
+    expect(row?.suggestion).toBeNull();
+    expect(row?.toulmin).toBeNull();
+  });
+
   it('rejects upserting a colliding check item into another user run', async () => {
     const otherUserId = 'verify-result-other-user';
     const otherOperationId = 'verify-result-other-op';

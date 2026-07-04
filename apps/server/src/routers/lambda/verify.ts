@@ -545,8 +545,12 @@ export const verifyRouter = router({
         confidence: z.number().min(0).max(1).optional(),
         required: z.boolean().optional(),
         status: checkStatusSchema.optional(),
-        suggestion: z.string().optional(),
-        toulmin: toulminSchema.optional(),
+        // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
+        // `null` to CLEAR a prior suggestion/observation — `undefined` would be
+        // dropped from the conflict UPDATE and leave the stale value on the row,
+        // breaking the full-replace guarantee. See the ingest-report caller.
+        suggestion: z.string().nullish(),
+        toulmin: toulminSchema.nullish(),
         verdict: verdictSchema,
         verifierType: verifierTypeSchema.optional(),
         verifyRunId: z.string(),

@@ -1072,8 +1072,12 @@ export function registerVerifyCommand(program: Command) {
             required: c.required ?? true,
             // The case's key observation is recorded as Toulmin evidence; a real
             // remediation hint (if the report provides one) goes to `suggestion`.
-            suggestion: typeof c.suggestion === 'string' ? c.suggestion : undefined,
-            toulmin: typeof observation === 'string' ? { evidence: observation } : undefined,
+            // Absent → explicit `null`, not `undefined`: ingest-report is a full
+            // replace, so a case that dropped its observation/suggestion this
+            // round must CLEAR the prior value on a reused run (undefined would be
+            // skipped by the conflict UPDATE and leave stale text on the row).
+            suggestion: typeof c.suggestion === 'string' ? c.suggestion : null,
+            toulmin: typeof observation === 'string' ? { evidence: observation } : null,
             verdict,
             verifierType: 'agent',
             verifyRunId: runId,
