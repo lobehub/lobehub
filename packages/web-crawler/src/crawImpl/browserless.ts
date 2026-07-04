@@ -74,6 +74,14 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
   const html = await res.text();
   const result = htmlToMarkdown(html, { filterOptions, url });
 
+  // Fallback: extract title from raw HTML if Readability failed (e.g. on truncated SPA pages)
+  if (!result.title) {
+    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    if (titleMatch && titleMatch[1]) {
+      result.title = titleMatch[1].trim();
+    }
+  }
+
   if (
     !!result.content &&
     result.content.length > 100 &&
