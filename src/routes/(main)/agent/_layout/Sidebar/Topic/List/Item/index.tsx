@@ -339,15 +339,20 @@ const TopicItem = memo<TopicItemProps>(
     // Falls back under the full-path line used by by-status grouping.
     const worktreeMeta = getWorktreeMeta(metadata);
     const worktreeMetaNode = worktreeMeta ? (
-      <Flexbox horizontal align={'center'} gap={6} style={{ overflow: 'hidden' }}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={10}
+        style={{ marginBlockStart: 2, overflow: 'hidden' }}
+      >
         {worktreeMeta.worktreeLabel && (
-          <Flexbox horizontal align={'center'} gap={3} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} gap={5} style={{ minWidth: 0 }}>
             <Icon
               icon={GitBranchIcon}
-              size={11}
+              size={13}
               style={{ color: cssVar.colorTextTertiary, flex: 'none' }}
             />
-            <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+            <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextSecondary }}>
               {worktreeMeta.worktreeLabel}
             </Text>
           </Flexbox>
@@ -357,11 +362,11 @@ const TopicItem = memo<TopicItemProps>(
             <Flexbox
               horizontal
               align={'center'}
-              gap={2}
-              style={{ color: cssVar.colorTextDescription, flex: 'none' }}
+              gap={4}
+              style={{ color: cssVar.colorTextSecondary, flex: 'none' }}
             >
-              <Icon icon={GitPullRequestIcon} size={11} style={{ flex: 'none' }} />
-              <Text fontSize={11} style={{ color: 'inherit' }}>
+              <Icon icon={GitPullRequestIcon} size={13} style={{ flex: 'none' }} />
+              <Text fontSize={12} style={{ color: 'inherit' }}>
                 #{worktreeMeta.prNumber}
               </Text>
             </Flexbox>
