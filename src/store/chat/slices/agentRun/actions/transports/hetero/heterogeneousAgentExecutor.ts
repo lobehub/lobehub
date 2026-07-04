@@ -44,6 +44,7 @@ import {
   reconstructUploadFilesFromQueue,
 } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
@@ -1186,6 +1187,12 @@ export const executeHeterogeneousAgent = async (
             // so it's obvious from the topic list that this conversation is
             // blocked on the user, not still streaming.
             writeTopicStatus('waitingForHuman');
+            // Parity with the homogeneous approval paths (client / gateway /
+            // aiAgent): a CC AskUserQuestion now also bumps the dock badge and
+            // bounces the macOS dock. The helper is desktop-guarded and only
+            // requests attention while the window is hidden/unfocused, so it's
+            // a no-op when the user is already looking at the approval.
+            void notifyDesktopHumanApprovalRequired(get, context);
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
           }
