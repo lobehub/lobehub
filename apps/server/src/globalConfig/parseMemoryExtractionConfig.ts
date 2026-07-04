@@ -16,6 +16,8 @@ const MEMORY_LAYERS: GlobalMemoryLayer[] = [
   'preference',
 ];
 
+const DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM = 25;
+
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -23,6 +25,15 @@ const parseTokenLimitEnv = (value?: string) => {
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
 
   return Math.floor(parsed);
+};
+
+const parsePositiveIntegerEnv = (value: string | undefined, fallback: number) => {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+
+  return parsed;
 };
 
 // NOTICE:
@@ -77,6 +88,10 @@ export interface MemoryExtractionPrivateConfig {
     headers?: Record<string, string>;
   };
   whitelistUsers?: string[];
+  workflow?: {
+    /** Maximum active process-user-topics workflow workers across all users. */
+    processUserTopicsParallelism: number;
+  };
 }
 
 const parseGateKeeperAgent = (): MemoryAgentConfig => {
@@ -250,6 +265,10 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
         ? Number(concurrencyRaw)
         : undefined
       : undefined;
+  const processUserTopicsParallelism = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+    DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+  );
 
   const whitelistUsers = process.env.MEMORY_USER_MEMORY_WHITELIST_USERS?.split(',')
     .filter(Boolean)
@@ -317,6 +336,9 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       headers: webhookHeaders,
     },
     whitelistUsers,
+    workflow: {
+      processUserTopicsParallelism,
+    },
   };
 };
 
