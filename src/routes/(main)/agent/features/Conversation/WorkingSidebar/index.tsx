@@ -168,7 +168,11 @@ const AgentWorkingSidebar = memo(() => {
       minWidth={300}
       width={panelWidth}
       onSizeChange={(size) => {
-        if (typeof size?.width === 'number') setPanelWidth(size.width);
+        if (!size?.width) return;
+        // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
+        // the controlled width actually updates (otherwise the panel snaps back).
+        const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
+        if (Number.isFinite(w)) setPanelWidth(w);
       }}
     >
       <Flexbox height={'100%'} width={'100%'}>
