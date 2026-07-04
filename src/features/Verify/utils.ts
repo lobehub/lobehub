@@ -3,7 +3,16 @@ import type { VerifyCheckItem } from '@lobechat/types';
 import type { VerifyStatus } from '@/database/models/agentOperation';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 
-export type DockPhase = 'idle' | 'draft' | 'verifying' | 'failed' | 'repairing' | 'passed';
+export type DockPhase =
+  | 'idle'
+  | 'draft'
+  | 'verifying'
+  | 'failed'
+  // The verifier could not run (infra error) — a terminal, non-pass state that
+  // is NOT a delivery failure. Rendered distinctly so it never reads as "failed".
+  | 'errored'
+  | 'repairing'
+  | 'passed';
 
 /** Map the persisted rollup status to the dock's phase state machine. */
 export const phaseFromStatus = (status: VerifyStatus | null | undefined): DockPhase => {
@@ -19,6 +28,9 @@ export const phaseFromStatus = (status: VerifyStatus | null | undefined): DockPh
     }
     case 'repairing': {
       return 'repairing';
+    }
+    case 'errored': {
+      return 'errored';
     }
     case 'passed':
     case 'delivered': {
@@ -84,6 +96,7 @@ export const phaseCardBackground = (
     }
     case 'draft':
     case 'verifying':
+    case 'errored':
     case 'repairing': {
       return glow(theme.colorWarning);
     }

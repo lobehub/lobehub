@@ -1,4 +1,5 @@
 export default {
+  'badge.errored': 'Check could not run',
   'badge.failed': 'Check failed',
   'badge.passed': 'Check passed',
   'badge.pending': 'Awaiting check',
@@ -125,6 +126,9 @@ export default {
   'reports.verdict.pending': 'No report',
   'reports.verdict.uncertain': 'Uncertain',
 
+  'result.errored.sub':
+    'The delivery checker could not run because of an internal error, so this result was not evaluated. Retry the verification or review it manually.',
+  'result.errored.title': 'Draft result',
   'result.failed.sub':
     'This result is held back. The delivery checker found verification insufficient and triggered a repair.',
   'result.failed.title': 'Draft result',
@@ -142,6 +146,7 @@ export default {
 
   'status.checking': 'Delivery Checker: checking {{passed}}/{{total}}',
   'status.draft': 'Delivery Checker: awaiting confirmation · {{total}} checks',
+  'status.errored': 'Delivery Checker: could not run',
   'status.failed': 'Delivery Checker: failed · repair triggered',
   'status.idle': 'Delivery Checker: not generated',
   'status.passed': 'Delivery Checker: passed {{passed}}/{{total}}',

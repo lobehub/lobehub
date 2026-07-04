@@ -96,6 +96,29 @@ describe('verifyRouter', () => {
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
       expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
     });
+
+    it('records an infra failure as status `errored` with no verdict', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-err' });
+
+      await createCaller().ingestResult({
+        checkItemId: 'check-1',
+        status: 'errored',
+        toulmin: { limitation: 'Agent verifier failed to start.' },
+        verifyRunId: 'run-1',
+      });
+
+      const written = modelMocks.upsertByCheckItem.mock.calls[0][0];
+      expect(written).toMatchObject({ status: 'errored', verifyRunId: 'run-1' });
+      expect(written.verdict).toBeUndefined();
+    });
+
+    it('rejects a result with neither a verdict nor an explicit status', async () => {
+      await expect(
+        createCaller().ingestResult({ checkItemId: 'check-1', verifyRunId: 'run-1' } as any),
+      ).rejects.toThrow();
+      expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteRun', () => {

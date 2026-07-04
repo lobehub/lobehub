@@ -47,7 +47,15 @@ const onFailSchema = z.enum(['manual', 'auto_repair']);
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
 const modelConfigSchema = z.object({ model: z.string(), provider: z.string() });
 const verdictSchema = z.enum(['passed', 'failed', 'uncertain']);
-const checkStatusSchema = z.enum(['pending', 'running', 'passed', 'failed', 'skipped']);
+const checkStatusSchema = z.enum([
+  'pending',
+  'running',
+  'passed',
+  'failed',
+  // Verifier could not run (infra failure) — carries no verdict.
+  'errored',
+  'skipped',
+]);
 const runSourceSchema = z.enum(['agent', 'agent-testing']);
 const evidenceTypeSchema = z.enum([
   'screenshot',
@@ -538,23 +546,32 @@ export const verifyRouter = router({
 
   ingestResult: verifyProcedure
     .input(
-      z.object({
-        checkItemId: z.string(),
-        checkItemIndex: z.number().optional(),
-        checkItemTitle: z.string().optional(),
-        confidence: z.number().min(0).max(1).optional(),
-        required: z.boolean().optional(),
-        status: checkStatusSchema.optional(),
-        // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
-        // `null` to CLEAR a prior suggestion/observation — `undefined` would be
-        // dropped from the conflict UPDATE and leave the stale value on the row,
-        // breaking the full-replace guarantee. See the ingest-report caller.
-        suggestion: z.string().nullish(),
-        toulmin: toulminSchema.nullish(),
-        verdict: verdictSchema,
-        verifierType: verifierTypeSchema.optional(),
-        verifyRunId: z.string(),
-      }),
+      z
+        .object({
+          checkItemId: z.string(),
+          checkItemIndex: z.number().optional(),
+          checkItemTitle: z.string().optional(),
+          confidence: z.number().min(0).max(1).optional(),
+          required: z.boolean().optional(),
+          status: checkStatusSchema.optional(),
+          // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
+          // `null` to CLEAR a prior suggestion/observation — `undefined` would be
+          // dropped from the conflict UPDATE and leave the stale value on the row,
+          // breaking the full-replace guarantee. See the ingest-report caller.
+          suggestion: z.string().nullish(),
+          toulmin: toulminSchema.nullish(),
+          // Optional so an infra failure can be recorded as `status: 'errored'`
+          // with no verdict (the verifier never produced a judgment).
+          verdict: verdictSchema.optional(),
+          verifierType: verifierTypeSchema.optional(),
+          verifyRunId: z.string(),
+        })
+        // A row needs either a verdict (→ derives status) or an explicit status
+        // (e.g. `errored`); otherwise there's nothing to record.
+        .refine((v) => v.verdict !== undefined || v.status !== undefined, {
+          message: 'Either a verdict or an explicit status is required.',
+          path: ['verdict'],
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const run = await resolveVerifyRun(ctx, input.verifyRunId);
@@ -566,7 +583,9 @@ export const verifyRouter = router({
         completedAt: new Date(),
         confidence: input.confidence,
         required: input.required ?? true,
-        status: input.status ?? statusForVerdict(input.verdict),
+        // Prefer an explicit status; else derive from the verdict (the refine
+        // guarantees at least one is present).
+        status: input.status ?? (input.verdict ? statusForVerdict(input.verdict) : 'errored'),
         suggestion: input.suggestion,
         toulmin: input.toulmin,
         verdict: input.verdict,

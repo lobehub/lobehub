@@ -470,7 +470,9 @@ const VERDICT_META: Record<
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
 const isInlineImageEvidence = (evidence: VerifyEvidenceWithUrl) =>
   Boolean(evidence.fileUrl && imageEvidenceTypes.has(evidence.type));
-const terminalRunStatuses = new Set(['delivered', 'failed', 'passed']);
+// `errored` is terminal too (the verifier couldn't run) — stop polling and don't
+// treat it as a live/in-progress status.
+const terminalRunStatuses = new Set(['delivered', 'errored', 'failed', 'passed']);
 const liveStatusLabelKey = {
   planned: 'report.status.planned',
   repairing: 'report.status.repairing',
