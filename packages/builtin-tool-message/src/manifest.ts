@@ -3,7 +3,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier } from './types';
 
-const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat', 'matrix'];
 
 /**
  * Shared schema fragment for the outbound `attachments` array on message-

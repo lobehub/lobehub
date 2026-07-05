@@ -59,6 +59,10 @@ export class BotSliceActionImpl {
     return agentBotProviderService.lineFetchBotInfo(channelAccessToken);
   };
 
+  matrixLogin = async (params: { homeserverUrl: string; password: string; user: string }) => {
+    return agentBotProviderService.matrixLogin(params);
+  };
+
   deleteAllBotProviders = async (agentId: string) => {
     const providers = await agentBotProviderService.getByAgentId(agentId);
     await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));

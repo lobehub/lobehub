@@ -1,0 +1,113 @@
+---
+title: Connect LobeHub to Matrix
+description: >-
+  Learn how to connect a Matrix bot to your LobeHub agent on any homeserver
+  (matrix.org, Element Matrix Services, or a self-hosted Synapse / Dendrite /
+  Conduit), enabling your AI assistant to chat in Matrix rooms and direct
+  messages across the federated network.
+tags:
+  - Matrix
+  - Message Channels
+  - Bot Setup
+  - Integration
+  - Self-hosted
+---
+
+# Connect LobeHub to Matrix
+
+By connecting a Matrix bot to your LobeHub agent, users can interact with the AI assistant from any Matrix client (Element Web/Desktop/Mobile, and others) through direct messages and rooms. Because Matrix is **federated**, a single bot account works across the entire network — whether your users are on `matrix.org`, [Element Matrix Services](https://ems.element.io/) (EMS), a company server, or a personal homelab instance.
+
+The integration speaks the official **Matrix Client-Server API** directly — there is no third-party broker. LobeHub maintains a long-poll `/sync` connection to your homeserver and replies through the same API.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A Matrix **bot account** on any homeserver. You can register a dedicated account (e.g. `@mybot:matrix.org`) on:
+  - The public [matrix.org](https://matrix.org) homeserver (free)
+  - [Element Matrix Services](https://ems.element.io/) (managed hosting)
+  - A self-hosted **Synapse**, **Dendrite**, or **Conduit** server
+- Either an **access token** for that account, **or** its **username + password** (LobeHub can exchange the password for a token for you)
+
+> **Tip:** Use a separate account for the bot rather than your personal one — the bot reads and replies to every message in rooms it has joined.
+
+## Step 1: Get the Bot's Credentials
+
+You need the **Homeserver URL**, the **Bot User ID**, and an **Access Token**. There are two ways to obtain the token.
+
+<Steps>
+  ### Option A — Log in with username + password (easiest)
+
+  Fill in the **Homeserver URL** in LobeHub (Step 2), then use the built-in **Log in & get token** helper. You type the bot's username and password once; LobeHub calls `POST /_matrix/client/v3/login` (`m.login.password`), and fills in the **Access Token** and **Bot User ID** for you. The password is used only for that single request and is **never stored**.
+
+  ### Option B — Paste an existing access token
+
+  If you already have a long-lived access token, paste it directly. In Element you can find it under **Settings → Help & About → Advanced → Access Token**. You will also need to enter the **Bot User ID** (`@mybot:server.org`) manually.
+
+  > **Security:** Access tokens grant full account access. Treat them like passwords — never commit them to source control or share them in screenshots.
+</Steps>
+
+## Step 2: Configure Matrix in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab (the **Integration** entry in the agent sidebar). Click **Matrix** from the platform list.
+
+  ### Fill in the credentials
+
+  1. **Homeserver URL** — the base URL of the homeserver, e.g. `https://matrix.org` or `https://matrix.example.com`. (Required first if you plan to use the login helper.)
+  2. **Access Token** — paste your token, **or** use **Log in & get token** to obtain one from a username + password.
+  3. **Bot User ID** — the bot's full Matrix ID, e.g. `@mybot:matrix.org`. Auto-filled when you use the login helper; type it manually when pasting a token.
+
+  ### Save Configuration
+
+  Click **Save Configuration**. LobeHub encrypts your credentials, calls `GET /_matrix/client/v3/account/whoami` once to verify the token works and that it belongs to the Bot User ID you entered, then starts a `/sync` connection.
+</Steps>
+
+## Step 3: Talk to the Bot
+
+There is **no webhook to wire up** — LobeHub connects out to your homeserver and long-polls `/sync`, so it works behind NAT and on self-hosted servers without inbound ports.
+
+<Steps>
+  ### Invite the bot to a room (or DM it)
+
+  From any Matrix client, **invite** `@mybot:server.org` to a room, or start a **direct message** with it. LobeHub **auto-accepts** room invites for the bot.
+
+  ### Send a message
+
+  Send a message in the room (in a DM the bot replies to everything; in a group, mention the bot or use a watch keyword per your channel settings). Within a few seconds your LobeHub agent should reply.
+
+  ### Run Test Connection (optional)
+
+  Click **Test Connection** in LobeHub's channel settings to re-verify the token and that the bot identity matches. Errors are surfaced with the exact homeserver error message.
+</Steps>
+
+## Configuration Reference
+
+| Field              | Required | Description                                                                                                                                            |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Homeserver URL** | Yes      | Base URL of the homeserver (e.g. `https://matrix.org`). All Client-Server API calls target this origin.                                                |
+| **Access Token**   | Yes      | Long-lived bot access token. Either pasted directly, or obtained from a username + password via the **Log in & get token** helper. Stored encrypted.   |
+| **Bot User ID**    | Yes      | The bot account's full Matrix ID (`@mybot:server.org`). Used as the bot identity, the webhook route segment, and to skip the bot's own echo events.     |
+
+## Feature Notes
+
+- **Markdown** — outbound replies are sent as `m.notice` events with an `org.matrix.custom.html` formatted body, so clients render rich text (bold, lists, code, links). The plain-text `body` is the Markdown fallback.
+- **Message editing** — supported via `m.replace` relations, so streamed step-progress updates edit the same message.
+- **Typing indicator** — the bot sends typing notifications while generating a reply (best-effort).
+- **Reactions** — the bot can add emoji reactions (`m.reaction`); removing a reaction is not supported in this version.
+- **Attachments** — inbound images, files, audio, and video are downloaded on demand from the homeserver's media repository and forwarded to the model. Outbound replies are text-only today.
+- **Direct vs. group** — rooms are treated as DMs when they are marked direct (`m.direct`) or have two members; everything else is treated as a group, governed by your channel's DM / Group access policies.
+- **End-to-end encryption (E2EE)** — **not supported yet.** The bot operates in **unencrypted rooms** only. Create the bot's rooms without encryption, or disable encryption for the rooms it joins.
+- **Delivery** — LobeHub maintains a persistent `/sync` long-poll connection. It only reacts to messages received while online (it does not replay the room backlog on connect).
+
+## Troubleshooting
+
+- **`Failed to authenticate with the homeserver` on Save / Test Connection.** The access token is invalid, expired, or revoked. Re-issue a token (or use **Log in & get token**) and save again.
+- **`Token belongs to @other:server, not @mybot:server`.** The access token's account doesn't match the Bot User ID you entered. Fix the Bot User ID, or paste a token for the right account. The login helper sets both fields consistently.
+- **Bot doesn't respond.** Check that:
+  1. The bot account has **joined** the room (it auto-accepts invites — re-invite if needed).
+  2. The room is **not encrypted** (E2EE is not supported yet).
+  3. In a group, the message **mentions the bot** or matches a configured **watch keyword**, and the room isn't blocked by your **Group access policy**.
+- **`Login failed` when using username + password.** Confirm the **Homeserver URL** is correct (it must be the homeserver's base URL, not a `.well-known` delegation target), and that the account allows password login (some SSO-only servers do not).
+- **Bot reacts to its own messages.** This shouldn't happen — LobeHub skips events sent by the bot's own user ID. If it does, verify the **Bot User ID** exactly matches the account behind the token.

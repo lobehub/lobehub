@@ -39,6 +39,7 @@ Channels allow you to connect your LobeHub agents to external messaging platform
 | [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for private and group chats (requires an active subscription) |
 | [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                    |
 | [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                |
+| [Matrix](/docs/usage/channels/matrix)      | Connect to any Matrix homeserver (matrix.org, Synapse, Dendrite, Conduit) for rooms and DMs   |
 
 ## How It Works
 
@@ -60,6 +61,7 @@ Each channel integration works by linking a bot account on the target platform t
    - [WeChat (微信)](/docs/usage/channels/wechat)
    - [Feishu (飞书)](/docs/usage/channels/feishu)
    - [Lark](/docs/usage/channels/lark)
+   - [Matrix](/docs/usage/channels/matrix)
 
 If you do not see **WeChat** in the channel list, check that your account has an active subscription first.
 
@@ -67,13 +69,13 @@ If you do not see **WeChat** in the channel list, check that your account has an
 
 Text messages are supported across all platforms. Some features vary by platform:
 
-| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat | Feishu  | Lark    |
-| ---------------------- | ------- | ----- | -------- | ------- | --- | ------ | ------- | ------- |
-| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
-| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
-| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
-| Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial |
-| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | No     | Yes     | Yes     |
+| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat | Feishu  | Lark    | Matrix  |
+| ---------------------- | ------- | ----- | -------- | ------- | --- | ------ | ------- | ------- | ------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     | Yes     |
+| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     | Yes     |
+| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     | Yes     |
+| Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial | Partial |
+| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | No     | Yes     | Yes     | Inbound |
 
 ## Allowed Users (global)
 

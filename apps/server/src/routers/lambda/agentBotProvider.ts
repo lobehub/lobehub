@@ -1,4 +1,5 @@
 import { LineApiClient } from '@lobechat/chat-adapter-line';
+import { MatrixApiClient } from '@lobechat/chat-adapter-matrix';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -246,6 +247,40 @@ export const agentBotProviderRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: error instanceof Error ? error.message : 'Failed to fetch bot info from LINE',
+        });
+      }
+    }),
+
+  /**
+   * Exchange a Matrix username + password for a long-lived access token via
+   * `m.login.password`. The password is used transiently here and never
+   * stored — only the resulting access token + bot user ID are returned to
+   * pre-fill the channel form, mirroring the LINE "fetch bot info" flow.
+   */
+  matrixLogin: authedProcedure
+    .input(
+      z.object({
+        homeserverUrl: z.string().min(1),
+        password: z.string().min(1),
+        user: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const res = await MatrixApiClient.login({
+          homeserverUrl: input.homeserverUrl,
+          password: input.password,
+          user: input.user,
+        });
+        if (!res.access_token || !res.user_id) {
+          throw new TRPCError({ code: 'BAD_GATEWAY', message: 'Login returned no access token' });
+        }
+        return { accessToken: res.access_token, deviceId: res.device_id, userId: res.user_id };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to log in to the homeserver',
         });
       }
     }),

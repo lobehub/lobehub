@@ -72,6 +72,10 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
   };
 
+  matrixLogin = async (params: { homeserverUrl: string; password: string; user: string }) => {
+    return lambdaClient.agentBotProvider.matrixLogin.mutate(params);
+  };
+
   wechatGetQrCode = async () => {
     return lambdaClient.agentBotProvider.wechatGetQrCode.mutate();
   };
