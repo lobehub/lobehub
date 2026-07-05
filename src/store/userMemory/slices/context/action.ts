@@ -1,124 +1,50 @@
-import { uniqBy } from 'es-toolkit/compat';
-import { produce } from 'immer';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
+import { StateCreator } from 'zustand';
+import { MemoryContext, MemoryContextMap } from '@/types/memory';
+import { ContextSlice } from './store';
 
-import { type DisplayContextMemory } from '@/database/repositories/userMemory';
-import { userMemoryKeys } from '@/libs/swr/keys';
-import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
-import { type StoreSetter } from '@/store/types';
-import { LayersEnum } from '@/types/userMemory';
-import { setNamespace } from '@/utils/storeDebug';
-
-import { type UserMemoryStore } from '../../store';
-
-const n = setNamespace('userMemory/context');
-
-export interface ContextQueryParams {
-  page?: number;
-  pageSize?: number;
-  q?: string;
-  sort?: 'capturedAt' | 'scoreImpact' | 'scoreUrgency';
+export interface ContextActions {
+  /**
+   * Add a new context entry.
+   */
+  addContext: (entry: MemoryContext) => void;
+  /**
+   * Update an existing context entry.
+   */
+  updateContext: (id: string, updates: Partial<MemoryContext>) => void;
+  /**
+   * Delete a context entry.
+   */
+  deleteContext: (id: string) => void;
+  /**
+   * Get all context entries as an array.
+   */
+  getContexts: () => MemoryContext[];
 }
 
-type Setter = StoreSetter<UserMemoryStore>;
-export const createContextSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
-  new ContextActionImpl(set, get, _api);
-
-export class ContextActionImpl {
-  readonly #get: () => UserMemoryStore;
-  readonly #set: Setter;
-
-  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
-    void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  deleteContext = async (id: string): Promise<void> => {
-    await memoryCRUDService.deleteContext(id);
-    // Reset list to refresh
-    this.#get().resetContextsList({ q: this.#get().contextsQuery, sort: this.#get().contextsSort });
-  };
-
-  loadMoreContexts = (): void => {
-    const { contextsPage, contextsTotal, contexts } = this.#get();
-    if (contexts.length < (contextsTotal || 0)) {
-      this.#set(
-        produce((draft) => {
-          draft.contextsPage = contextsPage + 1;
-        }),
-        false,
-        n('loadMoreContexts'),
-      );
-    }
-  };
-
-  resetContextsList = (params?: Omit<ContextQueryParams, 'page' | 'pageSize'>): void => {
-    this.#set(
-      produce((draft) => {
-        draft.contexts = [];
-        draft.contextsPage = 1;
-        draft.contextsQuery = params?.q;
-        draft.contextsSearchLoading = true;
-        draft.contextsSort = params?.sort;
-      }),
-      false,
-      n('resetContextsList'),
-    );
-  };
-
-  useFetchContexts = (params: ContextQueryParams): SWRResponse<any> => {
-    const page = params.page ?? 1;
-
-    return useSWR(
-      userMemoryKeys.contexts(params),
-      async () => {
-        const result = await userMemoryService.queryMemories({
-          layer: LayersEnum.Context,
-          page: params.page,
-          pageSize: params.pageSize,
-          q: params.q,
-          sort: params.sort,
-        });
-
-        return result;
-      },
-      {
-        onSuccess: (data: any) => {
-          this.#set(
-            produce((draft) => {
-              draft.contextsSearchLoading = false;
-              draft.contextsInit = true;
-              draft.contextsTotal = data.total;
-
-              // Transform data structure
-              const transformedItems: DisplayContextMemory[] = data.items.map((item: any) => ({
-                ...item.memory,
-                ...item.context,
-                source: null,
-              }));
-
-              // Accumulate data logic
-              if (page === 1) {
-                // First page, set directly
-                draft.contexts = uniqBy(transformedItems, 'id');
-              } else {
-                // Subsequent pages, accumulate data
-                draft.contexts = uniqBy([...draft.contexts, ...transformedItems], 'id');
-              }
-
-              // Update hasMore
-              draft.contextsHasMore = data.items.length >= (params.pageSize || 20);
-            }),
-            false,
-            n('useFetchContexts/onSuccess'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
-  };
-}
-
-export type ContextAction = Pick<ContextActionImpl, keyof ContextActionImpl>;
+export const createContextActions: StateCreator<
+  ContextSlice,
+  [],
+  [],
+  ContextActions
+> = (set, get) => ({
+  addContext: (entry) => {
+    set((state) => ({
+      contexts: { ...state.contexts, [entry.id]: entry },
+    }));
+  },
+  updateContext: (id, updates) => {
+    const current = get().contexts[id];
+    if (!current) return;
+    const updated = { ...current, ...updates };
+    set((state) => ({
+      contexts: { ...state.contexts, [id]: updated },
+    }));
+  },
+  deleteContext: (id) => {
+    set((state) => {
+      const { [id]: _, ...rest } = state.contexts;
+      return { contexts: rest };
+    });
+  },
+  getContexts: () => Object.values(get().contexts),
+});
