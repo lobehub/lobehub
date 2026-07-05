@@ -38,10 +38,14 @@ export interface AskUserQuestionArgs {
  *   - `picks`   → multi-choice selections, keyed by question text
  *   - `custom`  → per-question "write your own" text, keyed by question text
  *   - `escape*` → the global "Or type directly" box (whole-form bypass)
+ *
+ * Declared as a `type` (not `interface`) so it satisfies the
+ * `Record<string, unknown>` param of the store's `setInterventionDraft` — an
+ * interface has no implicit index signature and would fail that assignment.
  */
-export interface AskUserDraft {
+export type AskUserDraft = {
   custom: Record<string, string>;
   escapeActive: boolean;
   escapeText: string;
   picks: Record<string, string | string[]>;
-}
+};
