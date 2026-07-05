@@ -185,63 +185,41 @@ export const LobeAgentManifest: BuiltinToolManifest = {
 
     // ==================== Ask User Question ====================
     {
-      description:
-        'Ask the user a clarifying question through a UI-mediated interaction, with either structured form fields or a single freeform input. Use this when intent is ambiguous and a short clarification would materially change the answer. Returns the request in pending state; the user answers in the UI.',
+      description: 'Ask the user one or more clarifying questions with multiple-choice options.',
       humanIntervention: 'always',
       name: LobeAgentApiName.askUserQuestion,
       renderDisplayControl: 'collapsed',
       parameters: {
         properties: {
-          question: {
-            properties: {
-              description: { type: 'string' },
-              fields: {
-                items: {
-                  properties: {
-                    key: { type: 'string' },
-                    kind: {
-                      enum: ['multiselect', 'select', 'text', 'textarea'],
-                      type: 'string',
+          questions: {
+            items: {
+              properties: {
+                header: { type: 'string' },
+                multiSelect: { type: 'boolean' },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: 'string' },
+                      label: { type: 'string' },
                     },
-                    label: { type: 'string' },
-                    options: {
-                      items: {
-                        properties: {
-                          label: { type: 'string' },
-                          value: { type: 'string' },
-                        },
-                        required: ['label', 'value'],
-                        type: 'object',
-                      },
-                      type: 'array',
-                    },
-                    placeholder: { type: 'string' },
-                    required: { type: 'boolean' },
-                    value: {
-                      oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
-                    },
+                    required: ['label', 'description'],
+                    type: 'object',
                   },
-                  required: ['key', 'kind', 'label'],
-                  type: 'object',
+                  maxItems: 4,
+                  minItems: 2,
+                  type: 'array',
                 },
-                type: 'array',
+                question: { type: 'string' },
               },
-              id: { type: 'string' },
-              metadata: {
-                additionalProperties: true,
-                type: 'object',
-              },
-              mode: {
-                enum: ['form', 'freeform'],
-                type: 'string',
-              },
-              prompt: { type: 'string' },
+              required: ['header', 'question', 'options'],
+              type: 'object',
             },
-            required: ['id', 'mode', 'prompt'],
-            type: 'object',
+            maxItems: 4,
+            minItems: 1,
+            type: 'array',
           },
         },
-        required: ['question'],
+        required: ['questions'],
         type: 'object',
       },
     },

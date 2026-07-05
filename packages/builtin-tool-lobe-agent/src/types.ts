@@ -21,9 +21,8 @@ export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAg
 // single import surface while both tools coexist.
 export type {
   AskUserQuestionArgs,
-  InteractionField,
-  InteractionFieldOption,
-  InteractionMode,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
 } from '@lobechat/builtin-tool-user-interaction';
 
 export interface AnalyzeVisualMediaParams {

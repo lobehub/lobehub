@@ -1,43 +1,63 @@
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useConversationStore } from '@/features/Conversation/store';
-import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
-import { useChatStore } from '@/store/chat';
+import { buildSubmitPayload, FREEFORM_PAYLOAD_KEY, isQuestionAnswered, readDraft } from './draft';
+import type { AskUserDraft, AskUserQuestionArgs, AskUserQuestionItem } from './types';
 
-import type { AskUserQuestionArgs, AskUserQuestionItem } from '../../../types';
-import type { AskUserDraft } from './draft';
-import {
-  buildSubmitPayload,
-  COUNTDOWN_MS,
-  DRAFT_PLUGIN_STATE_KEY,
-  FREEFORM_PAYLOAD_KEY,
-  isQuestionAnswered,
-  readDraft,
-} from './draft';
+export interface UseAskUserFormParams {
+  args: AskUserQuestionArgs | undefined;
+  /**
+   * When set, drives an on-screen countdown + a timeout fallback that submits
+   * option 1 of every unanswered question when the clock hits zero. When
+   * `undefined` the countdown + fallback are disabled entirely (`expired` stays
+   * `false`, no timer runs) — used by surfaces with no bridge timeout.
+   */
+  countdownMs?: number;
+  onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
+  /** Raw persisted draft blob read from the host's store (coerced internally). */
+  persistedDraft: unknown;
+  /** Persist the full draft; host wires this to its own store. */
+  writeDraft: (draft: AskUserDraft) => void;
+}
+
+export interface AskUserFormApi {
+  activeQuestion?: AskUserQuestionItem;
+  activeTab: string;
+  custom: Record<string, string>;
+  escapeActive: boolean;
+  escapeText: string;
+  expired: boolean;
+  handleCustomChange: (q: AskUserQuestionItem, value: string) => void;
+  handleEscapeTextChange: (value: string) => void;
+  handleSkip: () => void;
+  handleSubmit: () => void;
+  handleToggle: (q: AskUserQuestionItem, label: string) => void;
+  isMulti: boolean;
+  isSubmitDisabled: boolean;
+  picks: Record<string, string | string[]>;
+  questions: AskUserQuestionItem[];
+  remainingMs: number;
+  setActiveTab: (key: string) => void;
+  setEscapeMode: (next: boolean) => void;
+  submitting: boolean;
+}
 
 /**
- * All state + handlers for the CC AskUserQuestion form. Kept out of the view
- * so `index.tsx` stays a thin render of the returned values.
+ * All state + handlers for the AskUserQuestion form. Kept out of the view so
+ * the per-package `index.tsx` stays a thin render of the returned values.
  *
- * Draft persistence: every mutation mirrors the full form state into the tool
- * message's `pluginState.askUserDraft` (see `setInterventionDraft`) so HMR,
- * remounts, and tab switches resume where the user left off.
+ * Draft persistence is host-owned: the caller passes the raw `persistedDraft`
+ * (read from wherever it stores plugin state) and a `writeDraft` callback, so
+ * this hook never touches any app store directly and stays app-decoupled.
  */
 export const useAskUserForm = ({
   args,
-  messageId,
+  countdownMs,
   onInteractionAction,
-}: BuiltinInterventionProps<AskUserQuestionArgs>) => {
+  persistedDraft,
+  writeDraft,
+}: UseAskUserFormParams): AskUserFormApi => {
   const questions = args?.questions ?? [];
-
-  // Persisted draft — read from the tool message's pluginState so the form
-  // stays where the user left it across unmount / HMR / refresh.
-  const persistedDraft = useConversationStore((s) => {
-    const msg = dataSelectors.getDbMessageById(messageId)(s);
-    return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
-  });
-  const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
 
   // Plain const (not a hook) so it can read `persistedDraft` without tripping
   // exhaustive-deps; consumed only by the once-run useState initializers below.
@@ -54,20 +74,19 @@ export const useAskUserForm = ({
     return String(idx >= 0 ? idx : 0);
   });
 
+  // Countdown is opt-in: only surfaces with a bridge timeout pass `countdownMs`.
+  const countdownEnabled = countdownMs != null;
+
   // Mounted-time deadline; server has its own clock and will return isError if
   // it expires first. Drift of a few seconds is fine.
-  const deadline = useMemo(() => Date.now() + COUNTDOWN_MS, []);
+  const deadline = useMemo(() => Date.now() + (countdownMs ?? 0), [countdownMs]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (!countdownEnabled) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
-  const expired = now >= deadline;
-
-  const writeDraft = useCallback(
-    (next: AskUserDraft) => setInterventionDraft(messageId, next),
-    [messageId, setInterventionDraft],
-  );
+  }, [countdownEnabled]);
+  const expired = countdownEnabled ? now >= deadline : false;
 
   const handleToggle = useCallback(
     (q: AskUserQuestionItem, label: string) => {
@@ -174,7 +193,7 @@ export const useAskUserForm = ({
   const handleSubmit = useCallback(() => {
     if (escapeActive && escapeAvailable) {
       // Escape mode is mutually exclusive with picks — send the text alone
-      // under `__freeform__`. Bridge formatter forwards it to CC verbatim.
+      // under `__freeform__`. Bridge formatter forwards it verbatim.
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
     } else {
       void submitWith(buildSubmitPayload(questions, picks, custom));
