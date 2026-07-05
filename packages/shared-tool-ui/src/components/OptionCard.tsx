@@ -65,7 +65,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface OptionCardProps {
+export interface OptionCardProps {
   description?: string;
   disabled?: boolean;
   index: number;
@@ -75,11 +75,16 @@ interface OptionCardProps {
 }
 
 /**
- * One numbered option in a question. Outlined when picked, neutral otherwise;
+ * One numbered option in a question. Filled when picked, neutral otherwise;
  * a right-side checkmark seals the selection so the state reads cleanly even
  * with the number chip kept neutral.
+ *
+ * Presentational and self-contained — shared across the ask-user surfaces
+ * (Claude Code `AskUserQuestion`, the builtin `user-interaction` /
+ * `lobe-agent` clarification form) so the tiled options read identically
+ * everywhere.
  */
-const OptionCard = memo<OptionCardProps>(
+export const OptionCard = memo<OptionCardProps>(
   ({ index, label, description, selected, disabled, onToggle }) => (
     <Flexbox
       horizontal
@@ -102,6 +107,6 @@ const OptionCard = memo<OptionCardProps>(
   ),
 );
 
-OptionCard.displayName = 'CCAskUserQuestionOption';
+OptionCard.displayName = 'OptionCard';
 
 export default OptionCard;

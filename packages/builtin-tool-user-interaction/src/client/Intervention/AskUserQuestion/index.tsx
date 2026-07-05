@@ -1,15 +1,64 @@
 'use client';
 
+import { OptionCard } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { SendButton } from '@lobehub/editor/react';
 import { Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
 import { ArrowLeft, PenLine } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AskUserQuestionArgs, InteractionField } from '../../../types';
 import { styles } from './style';
+
+/**
+ * Choice fields (`select` / `multiselect`) render their options as a tiled
+ * stack of `OptionCard`s — the same card the Claude Code AskUserQuestion uses —
+ * so every option is visible at a glance instead of hidden behind a dropdown.
+ * `select` behaves like a radio (one pick, re-click to clear); `multiselect`
+ * toggles each option in/out of the array.
+ */
+const ChoiceField = memo<{
+  field: InteractionField;
+  onChange: (key: string, value: string | string[]) => void;
+  value?: string | string[];
+}>(({ field, value, onChange }) => {
+  const multi = field.kind === 'multiselect';
+  const selectedValues = multi
+    ? Array.isArray(value)
+      ? value
+      : []
+    : typeof value === 'string' && value
+      ? [value]
+      : [];
+
+  const handleToggle = (optionValue: string) => {
+    if (multi) {
+      const next = selectedValues.includes(optionValue)
+        ? selectedValues.filter((v) => v !== optionValue)
+        : [...selectedValues, optionValue];
+      onChange(field.key, next);
+    } else {
+      // Radio: re-clicking the current pick clears it (lets an optional field
+      // go back to empty); otherwise select it.
+      onChange(field.key, selectedValues[0] === optionValue ? '' : optionValue);
+    }
+  };
+
+  return (
+    <Flexbox gap={4} role="listbox">
+      {field.options?.map((option, index) => (
+        <OptionCard
+          index={index + 1}
+          key={option.value}
+          label={option.label}
+          selected={selectedValues.includes(option.value)}
+          onToggle={() => handleToggle(option.value)}
+        />
+      ))}
+    </Flexbox>
+  );
+});
 
 const FieldInput = memo<{
   field: InteractionField;
@@ -29,30 +78,9 @@ const FieldInput = memo<{
         />
       );
     }
-    case 'select': {
-      return (
-        <Select
-          options={field.options?.map((o) => ({ label: o.label, value: o.value }))}
-          placeholder={field.placeholder}
-          style={{ width: '100%' }}
-          value={value as string}
-          variant={'filled'}
-          onChange={(v) => onChange(field.key, v as string)}
-        />
-      );
-    }
+    case 'select':
     case 'multiselect': {
-      return (
-        <Select
-          mode="multiple"
-          options={field.options?.map((o) => ({ label: o.label, value: o.value }))}
-          placeholder={field.placeholder}
-          style={{ width: '100%' }}
-          value={value as string[]}
-          variant={'filled'}
-          onChange={(v) => onChange(field.key, v as string[])}
-        />
-      );
+      return <ChoiceField field={field} value={value} onChange={onChange} />;
     }
     default: {
       return (
