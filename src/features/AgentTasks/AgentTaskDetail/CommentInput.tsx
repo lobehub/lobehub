@@ -17,16 +17,7 @@ import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
 
-interface CommentInputProps {
-  /** Called after a comment is successfully submitted (e.g. to collapse an inline input). */
-  onSent?: () => void;
-  placeholder?: string;
-  taskId: string;
-  /** Scope the comment to a specific run (topic) — e.g. a follow-up on a run card. */
-  topicId?: string;
-}
-
-const CommentInput = memo<CommentInputProps>(({ taskId, topicId, placeholder, onSent }) => {
+const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const editor = useEditor();
@@ -65,15 +56,14 @@ const CommentInput = memo<CommentInputProps>(({ taskId, topicId, placeholder, on
 
     setSubmitting(true);
     try {
-      await addComment(taskId, markdown, { editorData: json, topicId });
+      await addComment(taskId, markdown, { editorData: json });
       editor?.cleanDocument?.();
       setHasContent(false);
       setHasAttachments(false);
-      onSent?.();
     } finally {
       setSubmitting(false);
     }
-  }, [canEditTask, taskId, topicId, editor, addComment, submitting, onSent]);
+  }, [canEditTask, taskId, editor, addComment, submitting]);
 
   return (
     <Flexbox className={styles.commentInputCard} gap={6}>
@@ -83,7 +73,7 @@ const CommentInput = memo<CommentInputProps>(({ taskId, topicId, placeholder, on
           <EditorCanvas
             editor={editor}
             floatingToolbar={false}
-            placeholder={placeholder ?? t('taskDetail.commentPlaceholder')}
+            placeholder={t('taskDetail.commentPlaceholder')}
             style={{
               fontSize: 14,
               maxWidth: '100%',

@@ -155,20 +155,36 @@ export class FileService {
     id: string,
     entityType: 'document' | 'file' | 'folder',
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ) => {
-    return lambdaClient.file.transferEntity.mutate({ entityType, id, targetWorkspaceId });
+    return lambdaClient.file.transferEntity.mutate({
+      entityType,
+      id,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 
   copyEntityToWorkspace = async (
     id: string,
     entityType: 'document' | 'file' | 'folder',
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ) => {
-    return lambdaClient.file.copyEntityToWorkspace.mutate({ entityType, id, targetWorkspaceId });
+    return lambdaClient.file.copyEntityToWorkspace.mutate({
+      entityType,
+      id,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 
   publishFileToWorkspace = async (id: string): Promise<void> => {
     await lambdaClient.file.publishFileToWorkspace.mutate({ id });
+  };
+
+  setFileVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await lambdaClient.file.setFileVisibility.mutate({ id, visibility });
   };
 }
 

@@ -69,6 +69,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
@@ -526,6 +527,13 @@ export class MessageModel {
             agentId: messages.agentId,
             targetId: messages.targetId,
 
+            sender: {
+              avatar: users.avatar,
+              fullName: users.fullName,
+              id: users.id,
+              username: users.username,
+            },
+
             tools: messages.tools,
             tool_call_id: messagePlugins.toolCallId,
 
@@ -562,6 +570,7 @@ export class MessageModel {
           .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
           .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
           .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+          .leftJoin(users, eq(users.id, messages.userId))
           .orderBy(asc(messages.createdAt))
           .limit(pageSize)
           .offset(offset),
@@ -626,12 +635,27 @@ export class MessageModel {
       'db.message.queryWithWhere.transform',
       () =>
         result.map(
-          ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+          ({
+            model,
+            provider,
+            translate,
+            ttsId,
+            ttsFile,
+            ttsContentMd5,
+            ttsVoice,
+            sender,
+            ...item
+          }) => {
             const messageQuery = messageQueriesList.find(
               (relation) => relation.messageId === item.id,
             );
             return {
               ...item,
+              // LEFT JOIN → users row is null only when the sender account was
+              // deleted (rare, since `messages.user_id` cascades on user delete).
+              // Collapse a null-id sender to `null` so the client can rely on
+              // `sender?.id` as the presence check.
+              sender: sender?.id ? sender : null,
               chunksList: chunksList
                 .filter((relation) => relation.messageId === item.id)
                 .map((c) => ({

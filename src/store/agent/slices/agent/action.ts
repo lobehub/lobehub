@@ -188,8 +188,9 @@ export class AgentSliceActionImpl {
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
-    return agentService.transferAgent(agentId, targetWorkspaceId);
+    return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {

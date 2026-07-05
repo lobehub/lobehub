@@ -425,6 +425,88 @@ describe('AgentModel', () => {
       expect(result.knowledgeBases).toHaveLength(0);
       expect(result.files).toHaveLength(0);
     });
+
+    it('nulls out a mounted KB / file that the caller can no longer read', async () => {
+      // Workspace: A owns a public KB + public file and mounts them onto a
+      // public agent. B (another member) sees both mounts in the editor.
+      // After A flips both back to `private` via LOBE-11270, the mount rows
+      // should stay (so the UI can render an "unavailable" placeholder), but
+      // the joined entity fields must be nulled so no name / description
+      // leaks and the runtime skips the KB via its `k.id` filter.
+      const wsId = 'agent-knowledge-vis-ws';
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'kv-ws',
+        primaryOwnerId: userId,
+        slug: wsId,
+      });
+
+      await serverDB.insert(knowledgeBases).values({
+        id: 'kb-vis',
+        userId,
+        workspaceId: wsId,
+        name: 'Shared KB',
+        visibility: 'public',
+      });
+      await serverDB.insert(files).values({
+        id: 'file-vis',
+        userId,
+        workspaceId: wsId,
+        name: 'shared.pdf',
+        url: 'https://a.com/shared.pdf',
+        size: 42,
+        fileType: 'application/pdf',
+        visibility: 'public',
+      });
+
+      const agentId = 'agent-vis';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+      await serverDB.insert(agentsKnowledgeBases).values({
+        agentId,
+        knowledgeBaseId: 'kb-vis',
+        userId,
+        workspaceId: wsId,
+        enabled: true,
+      });
+      await serverDB.insert(agentsFiles).values({
+        agentId,
+        fileId: 'file-vis',
+        userId,
+        workspaceId: wsId,
+        enabled: true,
+      });
+
+      const wsMemberModel = new AgentModel(serverDB, userId2, wsId);
+
+      const beforeUnpublish = await wsMemberModel.getAgentAssignedKnowledge(agentId);
+      expect(beforeUnpublish.knowledgeBases[0]?.id).toBe('kb-vis');
+      expect(beforeUnpublish.files[0]?.id).toBe('file-vis');
+
+      // Creator flips both back to private
+      await serverDB
+        .update(knowledgeBases)
+        .set({ visibility: 'private' })
+        .where(eq(knowledgeBases.id, 'kb-vis'));
+      await serverDB.update(files).set({ visibility: 'private' }).where(eq(files.id, 'file-vis'));
+
+      const afterUnpublish = await wsMemberModel.getAgentAssignedKnowledge(agentId);
+      // Mount rows still present (so UI can render an "unavailable" tile) but
+      // the joined KB / file entity is missing — the `leftJoin`'s null side
+      // spreads to nothing, leaving only the mount metadata (`enabled`). UI
+      // checks `!item.id` and the runtime's `k.id` filter naturally skips.
+      expect(afterUnpublish.knowledgeBases).toHaveLength(1);
+      expect(afterUnpublish.knowledgeBases[0]?.id).toBeUndefined();
+      expect(afterUnpublish.knowledgeBases[0]?.name).toBeUndefined();
+      expect(afterUnpublish.knowledgeBases[0]?.enabled).toBe(true);
+      expect(afterUnpublish.files).toHaveLength(1);
+      expect(afterUnpublish.files[0]?.id).toBeUndefined();
+      expect(afterUnpublish.files[0]?.name).toBeUndefined();
+    });
   });
 
   describe('createAgentKnowledgeBase', () => {

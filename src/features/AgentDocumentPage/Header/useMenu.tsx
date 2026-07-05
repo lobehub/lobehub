@@ -6,12 +6,12 @@ import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
-import dayjs from 'dayjs';
 import { Download, Link2, Maximize2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -39,12 +39,13 @@ export const useMenu = ({
   title,
   updatedAt,
 }: UseMenuParams): { menuItems: DropdownItem[] } => {
-  const { t } = useTranslation(['file', 'common', 'chat']);
+  const { i18n, t } = useTranslation(['file', 'common', 'chat']);
   const { message } = App.useApp();
   const { lg = true } = useResponsive();
   const editor = useEditor();
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const dateLocale = i18n.resolvedLanguage || i18n.language;
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -161,7 +162,7 @@ export const useMenu = ({
           label: (
             <span style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
               {t('pageEditor.editedAt', {
-                time: dayjs(updatedAt).format('MMMM D, YYYY [at] h:mm A'),
+                time: formatPageEditorInfoTime(updatedAt, dateLocale),
               })}
             </span>
           ),
@@ -178,6 +179,7 @@ export const useMenu = ({
     documentId,
     editor,
     lg,
+    dateLocale,
     message,
     onDeleted,
     t,

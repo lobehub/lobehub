@@ -2,21 +2,31 @@
 
 import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import { CircleDashed, CircleDot, HandIcon, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { STATUS_META as STATUS_ICON, type StatusKind } from '@/components/StatusIcon';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
 import TaskItem from './TaskItem';
 
-// Task sidebar group keys → canonical status kind + i18n title. `needsInput`
-// (paused + failed tasks awaiting a human) is the `needsAttention` kind.
-const GROUP_META: Record<string, { kind: StatusKind; titleKey: string }> = {
-  backlog: { kind: 'backlog', titleKey: 'taskList.kanban.backlog' },
-  needsInput: { kind: 'needsAttention', titleKey: 'taskList.kanban.needsInput' },
-  running: { kind: 'running', titleKey: 'taskList.kanban.running' },
+const STATUS_META: Record<string, { color: string; icon: LucideIcon; titleKey: string }> = {
+  backlog: {
+    color: cssVar.colorTextQuaternary,
+    icon: CircleDashed,
+    titleKey: 'taskList.kanban.backlog',
+  },
+  needsInput: {
+    color: cssVar.colorInfo,
+    icon: HandIcon,
+    titleKey: 'taskList.kanban.needsInput',
+  },
+  running: {
+    color: cssVar.colorWarning,
+    icon: CircleDot,
+    titleKey: 'taskList.kanban.running',
+  },
 };
 
 interface StatusGroupProps {
@@ -26,9 +36,8 @@ interface StatusGroupProps {
 const StatusGroup = memo<StatusGroupProps>(({ group }) => {
   const { t } = useTranslation('chat');
   const { taskId } = useParams<{ taskId?: string }>();
-  const groupMeta = GROUP_META[group.key];
-  if (!groupMeta) return null;
-  const meta = STATUS_ICON[groupMeta.kind];
+  const meta = STATUS_META[group.key];
+  if (!meta) return null;
 
   return (
     <AccordionItem
@@ -41,7 +50,7 @@ const StatusGroup = memo<StatusGroupProps>(({ group }) => {
             <Icon color={meta.color} icon={meta.icon} size={{ size: 14, strokeWidth: 1.75 }} />
           </Center>
           <Text ellipsis fontSize={13} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-            {t(groupMeta.titleKey as 'taskList.kanban.backlog')}
+            {t(meta.titleKey as 'taskList.kanban.backlog')}
           </Text>
           <Text fontSize={11} type="secondary">
             {group.tasks.length}

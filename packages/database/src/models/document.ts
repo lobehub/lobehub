@@ -267,18 +267,39 @@ export class DocumentModel {
   };
 
   /**
-   * Publish a private document subtree into the workspace. **One-way only** —
-   * once published, other members may already depend on referenced pages, so
-   * we never let it slip back to `private`. The `eq(user_id)` +
-   * `eq(visibility, 'private')` guards keep the operation creator-only and
-   * idempotent against already-public rows.
-   *
-   * Cascades over the whole subtree (rooted at `rootId`) so a folder Page and
-   * every nested child flip in one transaction.
+   * Publish a private document subtree into the workspace. Convenience wrapper
+   * around `setVisibility(rootId, 'public')`; kept as a named method for the
+   * TRPC `publishDocumentToWorkspace` procedure and existing callers.
    *
    * @returns the ids of the documents that were re-published.
    */
   publishToWorkspace = async (rootId: string): Promise<{ documentIds: string[] }> => {
+    return this.setVisibility(rootId, 'public');
+  };
+
+  /**
+   * Flip a document subtree's `visibility`. Bidirectional companion to
+   * `publishToWorkspace`; both directions cascade the whole subtree so the
+   * P1 tree-consistency invariant (private/public do not mix inside one tree)
+   * holds after the transition.
+   *
+   * The `eq(user_id)` + `eq(visibility, fromVisibility)` guards keep the
+   * operation creator-only and idempotent against rows that already sit at the
+   * target visibility. Rows created by other workspace members inside the
+   * subtree (rare — happens if a public tree gets nested workspace edits) are
+   * intentionally left untouched: only the caller's own rows flip.
+   *
+   * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere`
+   * hides those rows from other members immediately; already-loaded content in
+   * their client stays until they refresh. See LOBE-11270 for the collect
+   * decision.
+   */
+  setVisibility = async (
+    rootId: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> => {
+    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+
     return this.db.transaction(async (trx) => {
       const scopedTrx = new DocumentModel(
         trx as LobeChatDatabase,
@@ -293,12 +314,12 @@ export class DocumentModel {
 
       await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ updatedAt: new Date(), visibility: 'public' })
+        .set({ updatedAt: new Date(), visibility })
         .where(
           and(
             inArray(documents.id, ids),
             eq(documents.userId, this.userId),
-            eq(documents.visibility, 'private'),
+            eq(documents.visibility, fromVisibility),
           ),
         );
 
@@ -371,6 +392,7 @@ export class DocumentModel {
     documentId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ documentIds: string[] }> => {
     return this.db.transaction(async (trx) => {
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
@@ -379,6 +401,11 @@ export class DocumentModel {
 
       const ids = subtree.map((d) => d.id);
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      // Visibility only applies when landing in a workspace — personal scope
+      // treats every row as implicitly private. Children mirror the parent's
+      // visibility so the whole subtree flips together.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // Resolve slug conflicts in the target scope
       for (const doc of subtree) {
@@ -400,13 +427,14 @@ export class DocumentModel {
 
       await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ ...ownershipUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
         .where(inArray(documents.id, ids));
 
-      // Move files anchored to these documents
+      // Move files anchored to these documents; their visibility mirrors the
+      // document subtree in workspace scope.
       await (trx as LobeChatDatabase)
         .update(files)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(files.parentId, ids));
 
       return { documentIds: ids };
@@ -421,11 +449,16 @@ export class DocumentModel {
     documentId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ rootId: string }> => {
     return this.db.transaction(async (trx) => {
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scopedTrx.collectSubtree(documentId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Document not found');
+
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // BFS clone: parents are inserted before children so we always know the
       // new parent id by the time we get to the child.
@@ -476,6 +509,7 @@ export class DocumentModel {
             totalLineCount: original.totalLineCount,
             userId: targetUserId,
             workspaceId: targetWorkspaceId,
+            ...visibilityOverride,
           } as NewDocument)
           .returning({ id: documents.id })) as { id: string }[];
 

@@ -344,6 +344,86 @@ describe('DocumentModel.publishToWorkspace', () => {
   });
 });
 
+describe('DocumentModel.setVisibility', () => {
+  it('flips a whole public subtree back to private (owner-only cascade)', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const root = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'unpub-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    const child = await callerA.create({
+      fileType: 'text/plain',
+      parentId: root.id,
+      source: 'inline',
+      sourceType: 'api',
+      title: 'unpub-child',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    await callerA.publishToWorkspace(root.id);
+    for (const id of [root.id, child.id]) {
+      const row = await callerA.findById(id);
+      expect(row?.visibility).toBe('public');
+    }
+
+    const result = await callerA.setVisibility(root.id, 'private');
+    expect(result.documentIds.sort()).toEqual([root.id, child.id].sort());
+
+    for (const id of [root.id, child.id]) {
+      const row = await callerA.findById(id);
+      expect(row?.visibility).toBe('private');
+    }
+  });
+
+  it('refuses to flip another member’s public subtree (ownership scope filter)', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const ownerRoot = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'other-owner-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      visibility: 'public',
+    });
+
+    // B can see the row (it's public), but the user_id guard inside setVisibility
+    // makes the update a no-op. Ownership scope on collectSubtree also finds it.
+    const callerB = new DocumentModel(serverDB, userB, workspaceId);
+    await callerB.setVisibility(ownerRoot.id, 'private');
+
+    const row = await callerA.findById(ownerRoot.id);
+    expect(row?.visibility).toBe('public');
+  });
+
+  it('is idempotent when the subtree already sits at the target visibility', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const root = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'idem-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    await callerA.setVisibility(root.id, 'public');
+
+    const publicRow = await callerA.findById(root.id);
+    expect(publicRow?.visibility).toBe('public');
+
+    // second flip to the same target: guard filters everything, no rows touched
+    const result = await callerA.setVisibility(root.id, 'public');
+    expect(result.documentIds).toEqual([root.id]);
+
+    const stillPublic = await callerA.findById(root.id);
+    expect(stillPublic?.visibility).toBe('public');
+  });
+});
+
 describe('DocumentModel.update — workspace parent-id move guard', () => {
   it('rejects moving a private document under a workspace parent (use publish instead)', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);

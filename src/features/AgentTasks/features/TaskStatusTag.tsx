@@ -2,12 +2,20 @@ import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { Loader2Icon } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleSlash,
+  CircleX,
+  Clock,
+  HandIcon,
+  Loader2Icon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getTaskStatusMeta } from '@/components/StatusIcon';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
@@ -20,24 +28,50 @@ interface StatusMeta {
   labelKey: string;
 }
 
-// Labels stay local; icon + color come from the shared canonical status map so
-// the tag can never drift from the sidebar / kanban glyphs.
-const STATUS_LABELS: Record<TaskStatus, { label: string; labelKey: string }> = {
-  backlog: { label: 'Backlog', labelKey: 'status.backlog' },
-  canceled: { label: 'Canceled', labelKey: 'status.canceled' },
-  completed: { label: 'Completed', labelKey: 'status.completed' },
-  failed: { label: 'Failed', labelKey: 'status.failed' },
-  paused: { label: 'Pending review', labelKey: 'status.paused' },
-  running: { label: 'Running', labelKey: 'status.running' },
-  scheduled: { label: 'Scheduled', labelKey: 'status.scheduled' },
+export const STATUS_META: Record<TaskStatus, StatusMeta> = {
+  backlog: {
+    color: cssVar.colorTextQuaternary,
+    icon: CircleDashed,
+    label: 'Backlog',
+    labelKey: 'status.backlog',
+  },
+  canceled: {
+    color: cssVar.colorTextSecondary,
+    icon: CircleSlash,
+    label: 'Canceled',
+    labelKey: 'status.canceled',
+  },
+  completed: {
+    color: cssVar.colorSuccess,
+    icon: CircleCheck,
+    label: 'Completed',
+    labelKey: 'status.completed',
+  },
+  failed: {
+    color: cssVar.colorError,
+    icon: CircleX,
+    label: 'Failed',
+    labelKey: 'status.failed',
+  },
+  paused: {
+    color: cssVar.colorInfo,
+    icon: HandIcon,
+    label: 'Pending review',
+    labelKey: 'status.paused',
+  },
+  running: {
+    color: cssVar.colorWarning,
+    icon: CircleDot,
+    label: 'Running',
+    labelKey: 'status.running',
+  },
+  scheduled: {
+    color: cssVar.colorWarning,
+    icon: Clock,
+    label: 'Scheduled',
+    labelKey: 'status.scheduled',
+  },
 };
-
-export const STATUS_META: Record<TaskStatus, StatusMeta> = Object.fromEntries(
-  (Object.keys(STATUS_LABELS) as TaskStatus[]).map((status) => [
-    status,
-    { ...getTaskStatusMeta(status), ...STATUS_LABELS[status] },
-  ]),
-) as Record<TaskStatus, StatusMeta>;
 
 export const USER_SELECTABLE_STATUSES: TaskStatus[] = [
   'backlog',

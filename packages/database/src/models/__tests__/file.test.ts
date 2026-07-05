@@ -1973,4 +1973,82 @@ describe('FileModel', () => {
       expect(file?.visibility).toBe('private');
     });
   });
+
+  describe('setVisibility', () => {
+    const wsId = 'visibility-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Visibility WS',
+        slug: 'visibility-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own public file back to private', async () => {
+      await serverDB.insert(files).values({
+        id: 'to-privatize',
+        name: 'x.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-x',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('to-privatize', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'to-privatize'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+
+    it('should be a no-op when the file already sits at the target visibility', async () => {
+      await serverDB.insert(files).values({
+        id: 'already-private',
+        name: 'p.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-p',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+
+      await wsFileModel.setVisibility('already-private', 'private');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+      expect(after?.visibility).toBe('private');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to flip another member’s file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-public-file',
+        name: 'o.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-o',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('others-public-file', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-public-file'),
+      });
+      expect(file?.visibility).toBe('public');
+    });
+  });
 });

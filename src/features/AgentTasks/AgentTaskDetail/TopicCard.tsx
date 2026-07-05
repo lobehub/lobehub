@@ -6,26 +6,21 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
-  Markdown,
-  MaskShadow,
   stopPropagation,
   Tag,
   Text,
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { useSize } from 'ahooks';
 import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
-import CommentInput from './CommentInput';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -37,33 +32,6 @@ const formatDuration = (ms: number): string => {
   return `${hours}h ${minutes % 60}m`;
 };
 
-// The run's last message (`content`) is the raw assistant output — markdown, and
-// often long. Render it as rich text, but keep it a bounded preview in the feed:
-// clamp overflow with a fade and let the whole card open the run drawer for the
-// full message (progressive disclosure). `pointerEvents: none` keeps every click
-// — including on links/code inside the markdown — falling through to the card.
-const RUN_CONTENT_MAX_HEIGHT = 160;
-
-const RunContent = memo<{ content: string }>(({ content }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const size = useSize(ref);
-  const isOverflow = !!size && size.height > RUN_CONTENT_MAX_HEIGHT;
-
-  const markdown = (
-    <Markdown ref={ref} style={{ overflow: 'unset', pointerEvents: 'none' }} variant={'chat'}>
-      {content}
-    </Markdown>
-  );
-
-  return isOverflow ? (
-    <MaskShadow size={32} style={{ maxHeight: RUN_CONTENT_MAX_HEIGHT }}>
-      {markdown}
-    </MaskShadow>
-  ) : (
-    markdown
-  );
-});
-
 interface TopicCardProps {
   activity: TaskDetailActivity;
 }
@@ -72,8 +40,6 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
-  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
 
   const finalDuration =
@@ -178,8 +144,8 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     <Block
       clickable={!!activity.id}
       gap={8}
-      paddingBlock={12}
-      paddingInline={12}
+      paddingBlock={8}
+      paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
       onClick={activity.id ? handleOpen : undefined}
@@ -237,31 +203,9 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       </Flexbox>
 
       {activity.summary && (
-        <Text fontSize={13} style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}>
+        <Text fontSize={13} style={{ color: cssVar.colorTextSecondary, whiteSpace: 'pre-wrap' }}>
           {activity.summary}
         </Text>
-      )}
-      {activity.content && <RunContent content={activity.content} />}
-      {activeTaskId && (
-        <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
-          {commenting ? (
-            <Flexbox style={{ width: '100%' }}>
-              <CommentInput
-                placeholder={t('taskDetail.runFollowUpPlaceholder')}
-                taskId={activeTaskId}
-                topicId={activity.id}
-                onSent={() => setCommenting(false)}
-              />
-            </Flexbox>
-          ) : (
-            <ActionIcon
-              icon={SquarePen}
-              size={'small'}
-              title={t('taskDetail.runFollowUp')}
-              onClick={() => setCommenting(true)}
-            />
-          )}
-        </Flexbox>
       )}
     </Block>
   );

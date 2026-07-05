@@ -395,6 +395,7 @@ export default {
   'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
+  'messages.sentBy': 'Sent by {{name}}',
   'messages.modelCard.credit': 'Credits',
   'messages.modelCard.creditPricing': 'Pricing',
   'messages.modelCard.creditTooltip':
@@ -529,8 +530,6 @@ export default {
     'Other workspace members will be able to use this agent. You will not be able to make it private again.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
-  'resources.publishToWorkspace.confirm':
-    'Other workspace members will be able to see this file. You will not be able to make it private again.',
   'resources.publishToWorkspace.success': 'Published to workspace',
   'resources.publishToWorkspace.error': 'Failed to publish file to workspace',
   'resources.visibility.privateTooltip': 'Only you can see this file',
@@ -928,8 +927,6 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
-  'taskDetail.runFollowUp': 'Ask a follow-up',
-  'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
@@ -1074,7 +1071,7 @@ export default {
   'taskList.assigneeSearch.placeholder': 'Search agent...',
   'taskList.contextMenu.copyConfirm': 'Copy',
   'taskList.contextMenu.copyDescription':
-    'Clone this task (and all its subtasks) into another workspace. Status resets to backlog.',
+    'You can copy to personal or workspaces that have permission to create a task.',
   'taskList.contextMenu.copyFailed': 'Failed to copy task',
   'taskList.contextMenu.copyId': 'Copy ID',
   'taskList.contextMenu.copyIdSuccess': 'ID copied',
@@ -1088,7 +1085,7 @@ export default {
   'taskList.contextMenu.status': 'Status',
   'taskList.contextMenu.transferConfirm': 'Transfer',
   'taskList.contextMenu.transferDescription':
-    'Move this task (and all its subtasks) to another workspace. Identifiers will be re-assigned.',
+    'You can move to personal or workspaces that have permission to create a task.',
   'taskList.contextMenu.transferFailed': 'Failed to transfer task',
   'taskList.contextMenu.transferSuccess': 'Task transferred',
   'taskList.contextMenu.transferTitle': 'Transfer task',

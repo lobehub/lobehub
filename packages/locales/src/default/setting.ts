@@ -2030,7 +2030,7 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.selectPlaceholder':
     'Select workspace or personal account...',
   'workspace.general.transferAgents.modal.selectTarget':
-    'Choose where to move the Agents. They will leave the current space.',
+    'You can move to personal or workspaces that have permission to create an agent.',
   'workspace.general.transferAgents.modal.selected': 'selected',
   'workspace.general.transferAgents.modal.selectedAgent':
     'This Agent will move to {{target}} and leave the current space.',
@@ -2040,6 +2040,13 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.warning':
     'Custom plugins may not be available and multi-agent group associations will be removed.',
   'workspace.general.transferAgents.personalAccount': 'Personal Account',
+  'workspace.general.transferScope.private.desc': 'Only accessible to you',
+  'workspace.general.transferScope.private.label': 'Private',
+  'workspace.general.transferScope.title': 'Access',
+  'workspace.general.transferScope.workspace.desc': 'Shared with all workspace members',
+  'workspace.general.transferScope.workspace.label': 'Workspace',
+  'workspace.general.copyTargetLabel': 'Copy to',
+  'workspace.general.transferTargetLabel': 'Move to',
   'workspace.general.transferAgentGroups.modal.back': 'Back',
   'workspace.general.transferAgentGroups.modal.continue': 'Continue',
   'workspace.general.transferAgentGroups.modal.done': 'Done',
@@ -2051,7 +2058,7 @@ When I am ___, I need ___
   'workspace.general.transferAgentGroups.modal.selectPlaceholder':
     'Select workspace or personal account...',
   'workspace.general.transferAgentGroups.modal.selectTarget':
-    'Choose a workspace or personal account to transfer agent groups to.',
+    'You can move to personal or workspaces that have permission to create an agent group.',
   'workspace.general.transferAgentGroups.modal.selected': 'selected',
   'workspace.general.transferAgentGroups.modal.selectedGroup': 'Agent group to transfer.',
   'workspace.general.transferAgentGroups.modal.success':
@@ -2091,7 +2098,7 @@ When I am ___, I need ___
     'Select Agents to copy. Originals stay where they are.',
   'workspace.general.copyLobeAI.modal.selectPlaceholder': 'Select workspace or personal account...',
   'workspace.general.copyLobeAI.modal.selectTarget':
-    'Choose where to create the copies. The originals stay where they are.',
+    'You can copy to personal or workspaces that have permission to create an agent.',
   'workspace.general.copyLobeAI.modal.success': '{{count}} agent(s) copied',
   'workspace.general.copyLobeAI.modal.title': 'Copy Agents',
   'workspace.general.copyLobeAI.modal.untitledAgent': 'Untitled Agent',
@@ -2121,7 +2128,7 @@ When I am ___, I need ___
   'workspace.general.copyAgentGroups.modal.selectPlaceholder':
     'Select workspace or personal account...',
   'workspace.general.copyAgentGroups.modal.selectTarget':
-    'Choose the target workspace or personal account. Group configuration and members are copied.',
+    'You can copy to personal or workspaces that have permission to create an agent group.',
   'workspace.general.copyAgentGroups.modal.selected': 'selected',
   'workspace.general.copyAgentGroups.modal.selectedGroup': 'Agent group to copy.',
   'workspace.general.copyAgentGroups.modal.success': '{{count}} agent group(s) copied',
@@ -2285,14 +2292,21 @@ When I am ___, I need ___
   'workspace.members.invite.invitationLimitReached':
     'This workspace has reached its pending-invitation limit of {{limit}}. Revoke or wait for unused invitations to expire before sending new ones.',
   'workspace.members.invite.limitReached':
-    'This workspace can have up to {{limit}} members. Remove a member before inviting more.',
+    'This workspace has reached its {{limit}}-member limit. You can still invite viewers, who don’t take a seat.',
   'workspace.members.invite.askOwnerToBuySeats':
     'Ask the workspace owner to purchase more seats before inviting new members.',
   'workspace.members.invite.buySeatsCta': 'Buy seats',
   'workspace.members.invite.seatInsufficient':
-    'Only {{remaining}} seat(s) remaining. Buy more seats to invite {{required}} new member(s).',
+    'Only {{remaining}} seat(s) remaining. Buy more seats to invite {{required}} new member(s), or invite viewers instead (they don’t take a seat).',
   'workspace.members.invite.seatInsufficientNoBuy':
-    'Only {{remaining}} seat(s) remaining. Ask the workspace owner to purchase more seats.',
+    'Only {{remaining}} seat(s) remaining. Ask the workspace owner to purchase more seats, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.freePlanLimitReached':
+    'Your Free workspace has reached its {{limit}}-member limit. Upgrade to Pro to invite more members, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.freePlanSeatInsufficient':
+    'Only {{remaining}} seat(s) remaining on your Free workspace. Upgrade to Pro to invite {{required}} new member(s), or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.freePlanAskOwnerToUpgrade':
+    'This Free workspace can’t invite more members. Ask the workspace owner to upgrade to Pro, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.upgradePlanCta': 'Upgrade plan',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
   'workspace.members.invite.subtitle':

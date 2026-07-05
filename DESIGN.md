@@ -165,33 +165,6 @@ Default control height is 36px (`controlHeight`); use `controlHeightSM` 28px and
 
 Style components with lobe-ui's styling layer: prefer `createStaticStyles` with `cssVar.*` (zero-runtime) and fall back to `createStyles` + `token` only when styles need runtime computation.
 
-## Status Icons
-
-Topic and task surfaces speak **one status-icon language**. There is a single source of truth — `STATUS_META` in `src/components/StatusIcon` — and every surface (sidebar group headers, list rows, kanban, tags, detail) maps its own status enum onto a canonical `StatusKind` and reads icon + color from there. Never redefine a local status→icon map.
-
-The vocabulary is built on the lucide `Circle-*` family so all states read as one set:
-
-| Kind             | Icon           | Color token            | Meaning                                                                           |
-| ---------------- | -------------- | ---------------------- | --------------------------------------------------------------------------------- |
-| `running`        | `CircleDot`    | `colorWarning`         | actively executing (static glyph)                                                 |
-| `scheduled`      | `Clock`        | `colorWarning`         | queued for a future run                                                           |
-| `needsAttention` | `Hand`         | `colorInfo`            | a human is needed (topic `pending`/`waitingForHuman`, task `paused`/`needsInput`) |
-| `paused`         | `PauseCircle`  | `colorTextDescription` | genuinely suspended                                                               |
-| `completed`      | `CircleCheck`  | `colorSuccess`         | finished successfully                                                             |
-| `failed`         | `CircleX`      | `colorError`           | errored                                                                           |
-| `backlog`        | `CircleDashed` | `colorTextQuaternary`  | not started / idle                                                                |
-| `active`         | `CircleDot`    | `colorTextTertiary`    | open topic, not running                                                           |
-| `canceled`       | `CircleSlash`  | `colorTextSecondary`   | canceled                                                                          |
-| `archived`       | `Archive`      | `colorTextDescription` | archived                                                                          |
-| `timeout`        | `CircleAlert`  | `colorWarning`         | timed out                                                                         |
-
-Two rules the map encodes:
-
-- **`running` is two-tier.** Group headers / summaries / count-badges show the **static** `CircleDot`. A row that is executing **right now** shows the **animated** `RingLoadingIcon` (the same CircleDot, spinning) — the one canonical live spinner; don't hand-roll another.
-- **`Hand` means "needs you", never "paused".** `needsAttention` (blue hand) and `paused` (grey pause) are distinct concepts and must not be merged, even though task-land historically labeled the attention state `paused`.
-
-> Migration note: a few topic surfaces still render legacy grey `CheckCircle2` (`completed`) / `TriangleAlert` (`failed`) locally instead of the canonical green-check / red-cross. Converging those two is a deferred follow-up — new code should use `STATUS_META`.
-
 ## Voice & Content
 
 Copy is part of the design — precise, calm, and free of filler. The voice is youthful, friendly, and modern on the surface; professional, reliable, and control-first underneath (reference points: Notion, Figma, Apple, Discord, OpenAI).

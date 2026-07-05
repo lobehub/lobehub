@@ -2,11 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { type ReactNode, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import Sidebar from './Sidebar';
-import type { GenerationLayoutCommonProps } from './types';
+import ImageSidebarContent from './Content';
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as null | string,
+  generationTopics: [] as unknown[],
   updateSystemStatus: vi.fn(),
 }));
 
@@ -48,10 +48,6 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
-vi.mock('@/features/NavPanel', () => ({
-  NavPanelPortal: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/features/NavPanel/SideBarLayout', () => {
   const MockSideBarLayout = ({ body, header }: { body?: ReactNode; header?: ReactNode }) => {
     const [initialBody] = useState(body);
@@ -77,7 +73,6 @@ vi.mock('@/store/global', () => ({
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
     imageTopicViewMode: () => 'list',
-    videoTopicViewMode: () => 'list',
   },
 }));
 
@@ -91,70 +86,48 @@ vi.mock('@/store/user/slices/auth/selectors', () => ({
   },
 }));
 
-vi.mock('./Body/List', () => ({
+vi.mock('@/store/image', () => ({
+  useImageStore: (selector: any) =>
+    selector({
+      generationTopics: mocks.generationTopics,
+      openNewGenerationTopic: vi.fn(),
+      setNewGenerationTopicVisibility: vi.fn(),
+      useFetchGenerationTopics: vi.fn(),
+    }),
+}));
+
+vi.mock('@/store/image/slices/generationTopic/selectors', () => ({
+  generationTopicSelectors: {
+    generationTopics: (s: any) => s.generationTopics,
+  },
+}));
+
+vi.mock('@/routes/(main)/(create)/features/GenerationLayout/Body/List', () => ({
   default: ({ visibility }: { visibility?: 'private' | 'public' }) => (
     <div data-testid={`topic-list-${visibility ?? 'all'}`} />
   ),
 }));
 
-vi.mock('./Header', () => ({
-  default: ({ namespace }: Pick<GenerationLayoutCommonProps, 'namespace'>) => (
-    <div>{namespace} header</div>
-  ),
+vi.mock('@/routes/(main)/(create)/features/GenerationLayout/Header', () => ({
+  default: () => <div>image header</div>,
 }));
 
-const createStore = (generationTopics: any[] = []) => {
-  const storeState = {
-    generationTopics,
-    openNewGenerationTopic: vi.fn(),
-    setNewGenerationTopicVisibility: vi.fn(),
-    useFetchGenerationTopics: vi.fn(),
-  };
-
-  return (selector: any) => selector(storeState);
-};
-
-const createProps = (
-  namespace: 'image' | 'video',
-  generationTopics: any[] = [],
-): GenerationLayoutCommonProps => ({
-  breadcrumb: [{ href: `/${namespace}`, title: namespace }],
-  generationTopicsSelector: (s: any) => s.generationTopics,
-  namespace,
-  navKey: 'image',
-  useStore: createStore(generationTopics),
-  viewModeStatusKey: namespace === 'image' ? 'imageTopicViewMode' : 'videoTopicViewMode',
-});
-
-describe('GenerationLayout Sidebar', () => {
+describe('ImageSidebarContent', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
+    mocks.generationTopics = [];
     mocks.updateSystemStatus.mockClear();
-  });
-
-  it('remounts sidebar content when switching generation namespaces under the shared nav key', () => {
-    const { rerender } = render(<Sidebar {...createProps('video')} />);
-
-    expect(screen.getByTestId('sidebar-body')).toHaveTextContent('topic.title');
-
-    rerender(<Sidebar {...createProps('image')} />);
-
-    expect(screen.getByTestId('sidebar-header')).toHaveTextContent('image header');
-    expect(screen.getByTestId('sidebar-body')).toHaveTextContent('topic.title');
   });
 
   it('splits generation topics into private and workspace roots in workspace mode', () => {
     mocks.activeWorkspaceId = 'workspace-1';
+    mocks.generationTopics = [
+      { id: 'private-topic', title: 'Private', visibility: 'private' },
+      { id: 'public-topic', title: 'Public', visibility: 'public' },
+      { id: 'legacy-topic', title: 'Legacy' },
+    ];
 
-    render(
-      <Sidebar
-        {...createProps('image', [
-          { id: 'private-topic', title: 'Private', visibility: 'private' },
-          { id: 'public-topic', title: 'Public', visibility: 'public' },
-          { id: 'legacy-topic', title: 'Legacy' },
-        ])}
-      />,
-    );
+    render(<ImageSidebarContent />);
 
     expect(screen.getByText('topic.privateTitle 1')).toBeInTheDocument();
     expect(screen.getByText('topic.workspaceTitle 2')).toBeInTheDocument();
@@ -163,14 +136,12 @@ describe('GenerationLayout Sidebar', () => {
   });
 
   it('keeps a single generation topic root in personal mode', () => {
-    render(
-      <Sidebar
-        {...createProps('image', [
-          { id: 'private-topic', title: 'Private', visibility: 'private' },
-          { id: 'public-topic', title: 'Public', visibility: 'public' },
-        ])}
-      />,
-    );
+    mocks.generationTopics = [
+      { id: 'private-topic', title: 'Private', visibility: 'private' },
+      { id: 'public-topic', title: 'Public', visibility: 'public' },
+    ];
+
+    render(<ImageSidebarContent />);
 
     expect(screen.getByText('topic.title 2')).toBeInTheDocument();
     expect(screen.getByTestId('topic-list-all')).toBeInTheDocument();

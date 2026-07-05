@@ -5,35 +5,21 @@ import VideoLayout from './index';
 
 const generationLayoutMock = vi.fn((_props: unknown) => null);
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/routes/(main)/(create)/features/GenerationLayout', () => ({
   default: (props: unknown) => generationLayoutMock(props),
 }));
 
-vi.mock('@/store/video', () => ({
-  useVideoStore: vi.fn(),
-}));
-
-vi.mock('@/store/video/slices/generationTopic/selectors', () => ({
-  generationTopicSelectors: {
-    generationTopics: vi.fn(),
-  },
+vi.mock('./Sidebar', () => ({
+  default: () => <div data-testid="video-sidebar" />,
 }));
 
 describe('VideoLayout', () => {
-  it('uses the generation sidebar nav key shared with image', () => {
+  it('passes a video sidebar to the generation layout', () => {
     render(<VideoLayout />);
 
     expect(generationLayoutMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        namespace: 'video',
-        navKey: 'image',
-        viewModeStatusKey: 'videoTopicViewMode',
+        sidebar: expect.anything(),
       }),
     );
   });

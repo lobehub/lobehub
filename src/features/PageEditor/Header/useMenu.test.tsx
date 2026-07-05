@@ -13,6 +13,10 @@ const permissionMock = vi.hoisted(() => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: {
+      language: 'en-US',
+      resolvedLanguage: 'en-US',
+    },
     t: (key: string) => key,
   }),
 }));

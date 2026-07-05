@@ -1,31 +1,32 @@
 import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { CheckCircle2, Star } from 'lucide-react';
+import {
+  Archive,
+  CheckCircle2,
+  CircleAlert,
+  CircleDot,
+  Loader,
+  type LucideIcon,
+  PauseCircle,
+  Star,
+} from 'lucide-react';
 import { memo } from 'react';
-
-import { STATUS_META, type StatusMeta } from '@/components/StatusIcon';
 
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 
-// Topic status-group id → icon + color, drawn from the shared canonical status
-// map so headers stay in lockstep with task glyphs and per-topic rows. The
-// `pending` bucket (awaiting input / failed / unread completion) is the
-// `needsAttention` kind (blue hand). Two entries stay local: `favorite` is a
-// marker, not a status; `completed` still renders its legacy grey check until
-// the deferred completed/failed convergence lands.
-const LOCAL: Record<string, StatusMeta> = {
+// Map each status-group id to its icon + color, mirroring the per-topic status
+// glyphs in `List/Item`. `pending` collapses the attention-needing states
+// (awaiting input / failed / unread completion) into one group; `favorite` is
+// the synthetic group split out by `buildGroupedTopics`, so it gets a star.
+const STATUS_ICON: Record<string, { color: string; icon: LucideIcon }> = {
+  active: { color: cssVar.colorTextTertiary, icon: CircleDot },
+  archived: { color: cssVar.colorTextDescription, icon: Archive },
   completed: { color: cssVar.colorTextDescription, icon: CheckCircle2 },
-  favorite: { color: cssVar.colorTextTertiary, icon: Star },
-};
-
-const STATUS_ICON: Record<string, StatusMeta> = {
-  active: STATUS_META.active,
-  archived: STATUS_META.archived,
-  paused: STATUS_META.paused,
-  pending: STATUS_META.needsAttention,
-  running: STATUS_META.running,
-  ...LOCAL,
+  favorite: { color: cssVar.colorWarning, icon: Star },
+  paused: { color: cssVar.colorTextDescription, icon: PauseCircle },
+  pending: { color: cssVar.colorWarning, icon: CircleAlert },
+  running: { color: cssVar.colorWarning, icon: Loader },
 };
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeThreadId }) => {
