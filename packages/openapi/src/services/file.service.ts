@@ -1071,7 +1071,6 @@ export class FileUploadService extends BaseService {
         '.gif',
         '.bmp',
         '.webp',
-        '.svg',
         '.mp4',
         '.avi',
         '.mov',
@@ -1086,8 +1085,14 @@ export class FileUploadService extends BaseService {
         '.m4a',
       ];
 
-      const isAllowed = allowedTypes.some((type) => file.type.startsWith(type));
       const fileExtension = file.name.toLowerCase().slice(Math.max(0, file.name.lastIndexOf('.')));
+
+      // Block SVG files explicitly to prevent stored XSS via embedded scripts
+      if (fileExtension === '.svg' || file.type === 'image/svg+xml') {
+        throw this.createBusinessError(`SVG files are not supported due to security restrictions`);
+      }
+
+      const isAllowed = allowedTypes.some((type) => file.type.startsWith(type));
       const isExtensionAllowed = allowedExtensions.includes(fileExtension);
 
       // If file type is not allowed but extension is allowed (handles application/octet-stream cases)
