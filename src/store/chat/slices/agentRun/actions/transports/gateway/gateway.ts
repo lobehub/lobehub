@@ -12,7 +12,11 @@ import type {
 } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
-import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
+import {
+  aiAgentService,
+  type ResumeApprovalParam,
+  type ResumeToolResultParam,
+} from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -392,6 +396,13 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
     /**
+     * Resume a paused op waiting on a human-intervention tool (e.g. lobe-agent
+     * `askUserQuestion`). Forwarded to `aiAgentService.execAgentTask` so the new
+     * server-side op writes the human answer as the tool result and resumes from
+     * `phase: 'tool_result'` WITHOUT re-executing the tool.
+     */
+    resumeToolResult?: ResumeToolResultParam;
+    /**
      * Tool identifiers the user @-mentioned in this message. Forwarded to the
      * server as `selectedToolIds` so the server runtime enables them for this
      * run (mirrors the client runtime's mention → callable-tool wiring). Lets a
@@ -417,6 +428,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      resumeToolResult,
       selectedToolIds,
       tempMessageIds,
     } = params;
@@ -486,6 +498,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        resumeToolResult,
         selectedToolIds,
         trigger: metadata?.trigger,
         userInterventionConfig,

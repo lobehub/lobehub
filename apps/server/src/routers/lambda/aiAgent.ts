@@ -192,6 +192,26 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
+     * lobe-agent `askUserQuestion`). When set, the new op writes the
+     * human-provided answer as the target tool message's result and resumes from
+     * `phase: 'tool_result'` — the tool is NOT re-executed, so the runtime never
+     * overwrites the answer with a fresh "pending" placeholder. Mutually
+     * exclusive with `resumeApproval`.
+     */
+    resumeToolResult: z
+      .object({
+        /** The human-provided tool result (the answer text). */
+        content: z.string(),
+        /** ID of the pending `role='tool'` message this result targets. */
+        parentMessageId: z.string(),
+        /** Optional plugin state to persist on the tool message. */
+        pluginState: z.record(z.unknown()).optional(),
+        /** tool_call_id of the pending tool call being answered. */
+        toolCallId: z.string(),
+      })
+      .optional(),
+    /**
      * Tool identifiers the user @-mentioned in this message. Enabled for this
      * run in addition to the agent's pinned plugins, so a mentioned tool that
      * isn't pinned to the agent (e.g. a custom MCP connector picked from the @
@@ -688,6 +708,7 @@ export const aiAgentRouter = router({
       fileIds,
       parentMessageId,
       resumeApproval,
+      resumeToolResult,
       selectedToolIds,
       trigger,
       userInterventionConfig,
@@ -709,6 +730,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeToolResult,
         selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,

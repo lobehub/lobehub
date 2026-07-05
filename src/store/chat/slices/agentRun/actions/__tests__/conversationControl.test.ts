@@ -1395,6 +1395,217 @@ describe('ConversationControl actions', () => {
         }),
       );
     });
+
+    describe('server-mode branch', () => {
+      it('starts a new Gateway op with resumeToolResult carrying the answer and does NOT run local runtime', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const userMessage = createMockMessage({
+          id: 'user-msg',
+          metadata: { trigger: RequestTrigger.Chat },
+          role: 'user',
+        });
+        const assistantMessage = createMockMessage({
+          id: 'assistant-msg',
+          parentId: userMessage.id,
+          role: 'assistant',
+        });
+        const toolMessage = createMockMessage({
+          groupId: 'group-1',
+          id: 'tool-msg-1',
+          parentId: assistantMessage.id,
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-agent',
+            type: 'default',
+          },
+          role: 'tool',
+          // `tool_call_id` is what the server uses to locate the pending tool
+          // call; the new Gateway op carries it forward via `resumeToolResult`.
+          tool_call_id: 'call_ask',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            activeThreadId: undefined,
+            dbMessagesMap: { [chatKey]: [userMessage, assistantMessage, toolMessage] },
+            messagesMap: { [chatKey]: [userMessage, assistantMessage, toolMessage] },
+          });
+
+          // Presence of an `execServerAgentRuntime` op is one half of the
+          // Gateway-resume signal; the other is `isGatewayModeEnabled`.
+          result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            metadata: { serverOperationId: 'server-op-xyz' },
+            type: 'execServerAgentRuntime',
+          });
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.submitToolInteraction('tool-msg-1', { answer: 'blue' }, undefined, {
+            toolResultContent: 'My favorite color is blue',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: '',
+            parentMessageId: 'tool-msg-1',
+            resumeToolResult: {
+              content: 'My favorite color is blue',
+              parentMessageId: 'tool-msg-1',
+              toolCallId: 'call_ask',
+            },
+          }),
+        );
+        expect(executeClientAgentSpy).not.toHaveBeenCalled();
+
+        // Fallback guard: the paused `execServerAgentRuntime` op is completed.
+        const pausedServerOps = Object.values(result.current.operations).filter(
+          (op: any) => op.type === 'execServerAgentRuntime',
+        );
+        expect(pausedServerOps).toHaveLength(1);
+        expect(pausedServerOps[0]!.status).toBe('completed');
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
+      it('forwards pluginState into resumeToolResult when provided', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-agent',
+            type: 'default',
+          },
+          role: 'tool',
+          tool_call_id: 'call_ask',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            activeThreadId: undefined,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdatePluginState').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+
+        await act(async () => {
+          await result.current.submitToolInteraction('tool-msg-1', { answer: 'blue' }, undefined, {
+            pluginState: { askUserAnswers: { q: 'blue' } },
+            toolResultContent: 'blue',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeToolResult: expect.objectContaining({
+              pluginState: { askUserAnswers: { q: 'blue' } },
+            }),
+          }),
+        );
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
+      it('takes the client path (executeClientAgent) when gateway mode is disabled', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'client-agent';
+        const topicId = 'client-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          groupId: 'group-1',
+          id: 'tool-msg-1',
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-agent',
+            type: 'default',
+          },
+          role: 'tool',
+          tool_call_id: 'call_ask',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            activeThreadId: undefined,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+          agentConfig: createMockResolvedAgentConfig(),
+          context: { phase: 'init' } as any,
+          state: {} as any,
+        });
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.submitToolInteraction('tool-msg-1', { answer: 'blue' }, undefined, {
+            createUserMessage: false,
+            toolResultContent: 'blue',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+        expect(executeClientAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialContext: expect.objectContaining({ phase: 'tool_result' }),
+            parentMessageId: 'tool-msg-1',
+            parentMessageType: 'tool',
+          }),
+        );
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+    });
   });
 
   describe('skipToolInteraction', () => {

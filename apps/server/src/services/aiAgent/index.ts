@@ -321,6 +321,20 @@ interface InternalExecAgentParams extends ExecAgentParams {
     toolCallId: string;
   };
   /**
+   * When present, this execAgent call resumes a previous op that paused on a
+   * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
+   * service writes the human-provided `content` as the target tool message's
+   * result and resumes from `phase: 'tool_result'` — the tool is NOT
+   * re-executed. `parentMessageId` must point at the pending `role='tool'`
+   * message. Mutually exclusive with `resumeApproval`.
+   */
+  resumeToolResult?: {
+    content: string;
+    parentMessageId: string;
+    pluginState?: Record<string, unknown>;
+    toolCallId: string;
+  };
+  /**
    * Tool identifiers the user @-mentioned in this message. Merged into the
    * agent's plugin set for this run (alongside `additionalPluginIds`) so a
    * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
@@ -920,6 +934,7 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      resumeToolResult,
       selectedToolIds,
       suppressUserMessage,
       ephemeralUserMessage,
@@ -1120,7 +1135,7 @@ export class AiAgentService {
     // tRPC router get `resume: true` via the router, but the service-level
     // API allows resumeApproval alone — fold both into a single effective
     // flag so downstream resume branches don't need to know about approval.
-    const effectiveResume = resume || !!resumeApproval;
+    const effectiveResume = resume || !!resumeApproval || !!resumeToolResult;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1228,6 +1243,63 @@ export class AiAgentService {
         decision,
         resumeApproval.parentMessageId,
         resumeApproval.toolCallId,
+      );
+    }
+
+    // 2.7. Human-answer resume: a `humanIntervention: 'always'` tool (e.g.
+    // lobe-agent `askUserQuestion`) paused this run. Write the human-provided
+    // answer as the target tool message's result and mark the intervention
+    // approved so the history fetched below reflects the answer before the
+    // first step runs. Unlike `resumeApproval` (`approved`), we resume from
+    // `phase: 'tool_result'` (see 16c) rather than re-executing the tool — the
+    // answer IS the result. Same validation shape as resumeApproval:
+    // parent must be a pending role='tool' message tied to the tool call.
+    // `resumeApproval` and `resumeToolResult` are mutually exclusive.
+    if (resumeToolResult) {
+      if (!resumeParentMessage) {
+        throw new Error('resumeToolResult requires parentMessageId to point at a tool message');
+      }
+      if (resumeParentMessage.role !== 'tool') {
+        throw new Error(
+          `resumeToolResult.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+        );
+      }
+
+      const resumeToolResultPlugin = await this.messageModel.findMessagePlugin(
+        resumeToolResult.parentMessageId,
+      );
+      if (!resumeToolResultPlugin) {
+        throw new Error(
+          `resumeToolResult: no plugin row for tool message ${resumeToolResult.parentMessageId}`,
+        );
+      }
+      if (
+        resumeToolResultPlugin.toolCallId &&
+        resumeToolResultPlugin.toolCallId !== resumeToolResult.toolCallId
+      ) {
+        throw new Error(
+          `resumeToolResult.toolCallId mismatch for message ${resumeToolResult.parentMessageId}: ` +
+            `stored=${resumeToolResultPlugin.toolCallId}, requested=${resumeToolResult.toolCallId}`,
+        );
+      }
+
+      await this.messageModel.updateToolMessage(resumeToolResult.parentMessageId, {
+        content: resumeToolResult.content,
+      });
+      await this.messageModel.updateMessagePlugin(resumeToolResult.parentMessageId, {
+        intervention: { status: 'approved' },
+      });
+      if (resumeToolResult.pluginState) {
+        await this.messageModel.updatePluginState(
+          resumeToolResult.parentMessageId,
+          resumeToolResult.pluginState,
+        );
+      }
+
+      log(
+        'execAgent: resumeToolResult applied to tool message %s (toolCallId=%s)',
+        resumeToolResult.parentMessageId,
+        resumeToolResult.toolCallId,
       );
     }
 
@@ -3067,6 +3139,27 @@ export class AiAgentService {
           },
         };
       }
+    }
+
+    // 16c. Human-answer resume — resume from the persisted tool result WITHOUT
+    // re-executing the tool. The DB write above (2.7) already set the tool
+    // message content to the human answer, so `allMessages` reflects it. Using
+    // `phase: 'tool_result'` (not `human_approved_tool`) makes the runner
+    // continue the loop from the answered tool call rather than dispatching a
+    // fresh `call_tool` — which would overwrite the answer with a new "pending"
+    // result. Mirrors the client's tool-result-only resume path.
+    if (resumeToolResult) {
+      initialContext = {
+        initialContext: initialContext.initialContext,
+        payload: { parentMessageId: resumeToolResult.parentMessageId } as any,
+        phase: 'tool_result' as const,
+        session: {
+          messageCount: allMessages.length,
+          sessionId: operationId,
+          status: 'idle' as const,
+          stepCount: 0,
+        },
+      };
     }
 
     // 17. Log final operation parameters summary
