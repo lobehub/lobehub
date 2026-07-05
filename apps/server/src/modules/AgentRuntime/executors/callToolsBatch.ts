@@ -14,6 +14,7 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 
+import { isDeviceCapablePlan } from '@/helpers/executionTarget';
 import {
   type DeviceAccessReason,
   isDeviceToolIdentifier,
@@ -204,8 +205,7 @@ export const callToolsBatch =
 
             if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
               const policy = state.metadata?.deviceAccessPolicy as
-                | { canUseDevice: boolean; reason: DeviceAccessReason }
-                | undefined;
+                { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
               logDeviceToolAudit({
                 apiName: chatToolPayload.apiName,
                 botContext: state.metadata?.botContext,
@@ -269,6 +269,9 @@ export const callToolsBatch =
                     ),
                     // Assistant message owning this tool call (≠ source user message).
                     assistantMessageId: payload.parentMessageId,
+                    deviceCapable: state.metadata?.executionPlan
+                      ? isDeviceCapablePlan(state.metadata.executionPlan)
+                      : undefined,
                     documentId: state.metadata?.documentId,
                     execSubAgent: ctx.execSubAgent,
                     executionTimeoutMs: timeoutMs,
@@ -521,8 +524,7 @@ export const callToolsBatch =
     );
     for (const result of toolResults) {
       const discovered = result.data?.state?.activatedTools as
-        | Array<{ identifier: string }>
-        | undefined;
+        Array<{ identifier: string }> | undefined;
       if (discovered?.length) {
         const newActivations = discovered
           .filter((t) => !existingActivationIds.has(t.identifier))

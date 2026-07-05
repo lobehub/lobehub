@@ -14,6 +14,7 @@ import {
 import { type ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { isDeviceCapablePlan } from '@/helpers/executionTarget';
 import {
   type DeviceAccessReason,
   isDeviceToolIdentifier,
@@ -270,6 +271,9 @@ export const callTool =
                 agentVisibility,
                 // Assistant message owning this tool call (≠ source user message).
                 assistantMessageId: payload.parentMessageId,
+                deviceCapable: state.metadata?.executionPlan
+                  ? isDeviceCapablePlan(state.metadata.executionPlan)
+                  : undefined,
                 documentId: state.metadata?.documentId,
                 editingAgentId: state.metadata?.editingAgentId,
                 execSubAgent: ctx.execSubAgent,

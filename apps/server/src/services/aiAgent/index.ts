@@ -3194,8 +3194,9 @@ export class AiAgentService {
       // device-CAPABLE plan rather than `activeDeviceId`: `device-unrouted`
       // runs let the model pick a device mid-run, and this skill set is built
       // once per operation — gating on `activeDeviceId` would hide the skill
-      // forever in those runs. Activation/loading stay gated on the per-step
-      // `activeDeviceId` (refreshed from state metadata after device pick).
+      // forever in those runs. Activation/loading apply the same plan gate via
+      // `ToolExecutionContext.deviceCapable`; only actual command execution is
+      // gated at the device tool layer.
       const skillEngine = new SkillEngine({
         enableChecker: (skill) =>
           shouldEnableBuiltinSkill(skill.identifier, {

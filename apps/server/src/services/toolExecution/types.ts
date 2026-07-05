@@ -143,6 +143,16 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /**
+   * Whether the run's execution plan is device-capable (`device` or
+   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * runtime executors. Device-only skills gate listing/activation/loading on
+   * this consistently, so a `device-unrouted` run can activate them before the
+   * model routes a device; actual command execution stays gated at the device
+   * tool layer. Undefined when the caller carries no execution plan (device
+   * gates then fall back to `activeDeviceId`).
+   */
+  deviceCapable?: boolean;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**

@@ -69,10 +69,11 @@ export const activatorRuntime: ServerRuntimeRegistration = {
     if (context.serverDB && context.userId) {
       const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
       skillsRuntime = new SkillsExecutionRuntime({
-        // Same device gate as the skills runtime: device-only skills are only
-        // activatable when the run executes on a device.
+        // Same device gate as the skills runtime: device-only skills are
+        // activatable in device-capable runs (matching <available_skills>),
+        // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
-          canExecuteOnDevice: !!context.activeDeviceId,
+          canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
         }),
         service: {
           findAll: () => skillModel.findAll(),
