@@ -33,6 +33,8 @@ const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn());
 const mockResolveConnectionMode = vi.hoisted(() => vi.fn());
+const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
+const mockGetBotFeatureBlockedMessage = vi.hoisted(() => vi.fn());
 
 // ─── Module mocks ───
 
@@ -74,10 +76,15 @@ vi.mock('../runtimeStatus', () => ({
   updateBotRuntimeStatus: mockUpdateBotRuntimeStatus,
 }));
 
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureBlockedMessage: mockGetBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
+}));
+
 vi.mock('../../bot/platforms', () => ({
   platformRegistry: {
-    getPlatform: () => ({ id: 'discord' }),
-    listPlatforms: () => [{ id: 'discord' }, { id: 'telegram' }],
+    getPlatform: (platform: string) => ({ id: platform }),
+    listPlatforms: () => [{ id: 'discord' }, { id: 'telegram' }, { id: 'wechat' }],
   },
   resolveConnectionMode: mockResolveConnectionMode,
 }));
@@ -95,6 +102,8 @@ describe('GatewayService', () => {
     mockInitWithEnvKey.mockResolvedValue({});
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockUpdateBotRuntimeStatus.mockResolvedValue({});
+    mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
+    mockGetBotFeatureBlockedMessage.mockReturnValue('This bot channel requires a paid plan.');
     service = new GatewayService();
   });
 
@@ -235,6 +244,42 @@ describe('GatewayService', () => {
       );
       expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'starting' }),
+      );
+    });
+
+    it('disconnects paid-only WeChat providers when the owner is on a free plan', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'free-user',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
+
+      await service.ensureRunning();
+
+      expect(mockIsBotFeatureAccessAllowed).toHaveBeenCalledWith({
+        applicationId: 'wechat-app',
+        platform: 'wechat',
+        userId: 'free-user',
+      });
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'wechat-app',
+          errorMessage: 'This bot channel requires a paid plan.',
+          platform: 'wechat',
+          status: 'failed',
+        }),
       );
     });
 

@@ -92,6 +92,11 @@ const Header = memo<HeaderProps>(
         <Flexbox horizontal align="center" gap={8}>
           {ColorIcon && <ColorIcon size={32} />}
           {platformDef.name}
+          {platformDef.access?.requiredPlan === 'paid' && (
+            <Tag color="gold" size={'small'}>
+              Pro
+            </Tag>
+          )}
           {statusLabel && (
             <Tag color={statusColor} size={'small'}>
               {statusLabel}

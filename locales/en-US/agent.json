@@ -162,6 +162,8 @@
   "channel.messengerPromo.dismiss": "Dismiss",
   "channel.messengerPromo.title": "Skip the setup",
   "channel.openPlatform": "Open Platform",
+  "channel.paidFeature.desc": "{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.",
+  "channel.paidFeature.title": "Paid plan required",
   "channel.platforms": "Platforms",
   "channel.publicKey": "Public Key",
   "channel.publicKeyHint": "Optional. Used to verify interaction requests from Discord.",

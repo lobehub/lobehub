@@ -1,5 +1,6 @@
 'use client';
 
+import { Alert } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -77,6 +78,9 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const [form] = Form.useForm<ChannelFormValues>();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const readOnly = disabled || !canEdit;
+    const paidFeatureBlocked =
+      platformDef.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
+    const writeDisabled = readOnly || paidFeatureBlocked;
 
     const [
       createBotProvider,
@@ -216,7 +220,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
 
     const handleRefreshStatus = useCallback(async () => {
-      if (readOnly) return;
+      if (writeDisabled) return;
       if (!currentConfig?.enabled) return;
       setRefreshingStatus(true);
       try {
@@ -237,7 +241,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setRefreshingStatus(false);
       }
-    }, [agentId, readOnly, currentConfig, mapRuntimeStatusToResult, msg, refreshBotRuntimeStatus]);
+    }, [
+      agentId,
+      writeDisabled,
+      currentConfig,
+      mapRuntimeStatusToResult,
+      msg,
+      refreshBotRuntimeStatus,
+    ]);
 
     // Reset form and status when switching platforms. Must NOT depend on
     // runtimeStatus — otherwise background status refreshes would wipe
@@ -297,7 +308,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [currentConfig, stopConnectPolling, syncRuntimeStatus]);
 
     const handleSave = useCallback(async () => {
-      if (readOnly) return;
+      if (writeDisabled) return;
 
       try {
         await form.validateFields();
@@ -370,12 +381,12 @@ const PlatformDetail = memo<PlatformDetailProps>(
       createBotProvider,
       updateBotProvider,
       connectCurrentBot,
-      readOnly,
+      writeDisabled,
     ]);
 
     const handleExternalAuth = useCallback(
       async (params: { applicationId: string; credentials: Record<string, string> }) => {
-        if (readOnly) return;
+        if (writeDisabled) return;
 
         setSaving(true);
         setSaveResult(undefined);
@@ -423,7 +434,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         createBotProvider,
         updateBotProvider,
         connectCurrentBot,
-        readOnly,
+        writeDisabled,
         msg,
         t,
       ],
@@ -451,7 +462,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {
-        if (readOnly) return;
+        if (writeDisabled) return;
         if (!currentConfig) return;
         try {
           setPendingEnabled(enabled);
@@ -467,11 +478,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
           msg.error(t('channel.updateFailed'));
         }
       },
-      [readOnly, currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
+      [writeDisabled, currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
     );
 
     const handleTestConnection = useCallback(async () => {
-      if (readOnly) return;
+      if (writeDisabled) return;
       if (!currentConfig) {
         msg.warning(t('channel.saveFirstWarning'));
         return;
@@ -493,14 +504,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setTesting(false);
       }
-    }, [readOnly, currentConfig, platformDef.id, testConnection, msg, t]);
+    }, [writeDisabled, currentConfig, platformDef.id, testConnection, msg, t]);
 
     return (
       <ChannelPostSaveContext value={postSaveRegistry}>
         <main className={styles.main}>
           <Header
             currentConfig={currentConfig}
-            disabled={readOnly}
+            disabled={writeDisabled}
             enabledValue={pendingEnabled}
             platformDef={platformDef}
             refreshingStatus={refreshingStatus}
@@ -509,9 +520,18 @@ const PlatformDetail = memo<PlatformDetailProps>(
             onRefreshStatus={handleRefreshStatus}
             onToggleEnable={handleToggleEnable}
           />
+          {paidFeatureBlocked && (
+            <Alert
+              showIcon
+              description={t('channel.paidFeature.desc', { name: platformDef.name })}
+              message={t('channel.paidFeature.title')}
+              style={{ maxWidth: 1024, width: '100%' }}
+              type="info"
+            />
+          )}
           <Body
             currentConfig={currentConfig}
-            disabled={readOnly}
+            disabled={writeDisabled}
             form={form}
             hasConfig={!!currentConfig}
             platformDef={platformDef}
@@ -529,6 +549,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             saving={saving}
             testResult={testResult}
             testing={testing}
+            writeDisabled={writeDisabled}
             onCopied={() => msg.success(t('channel.copied'))}
             onDelete={handleDelete}
             onSave={handleSave}

@@ -11,6 +11,9 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.paidFeature.desc':
+    '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.',
+  'channel.paidFeature.title': 'Paid plan required',
   'channel.comingSoon': 'Coming Soon',
   'channel.comingSoonDesc':
     'We are working on bringing this integration to LobeHub. Stay tuned for updates.',

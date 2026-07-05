@@ -26,6 +26,12 @@ export interface ExtractFilesResult {
  */
 export type ConnectionMode = 'polling' | 'webhook' | 'websocket';
 
+export interface PlatformAccessMeta {
+  allowed?: boolean;
+  blockedMessage?: string;
+  requiredPlan?: 'paid';
+}
+
 // --------------- Field Schema ---------------
 
 /**
@@ -420,6 +426,9 @@ export abstract class ClientFactory {
  * Contains metadata, factory, and validation. All runtime operations go through PlatformClient.
  */
 export interface PlatformDefinition {
+  /** Optional access metadata resolved for the current user by business slots. */
+  access?: PlatformAccessMeta;
+
   /** Factory for creating PlatformClient instances and validating credentials/settings. */
   clientFactory: ClientFactory;
 

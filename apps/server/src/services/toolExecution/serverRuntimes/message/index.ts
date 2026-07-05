@@ -7,6 +7,7 @@ import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
+import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
 import {
   getEnabledMessengerPlatforms,
   getMessengerDiscordConfig,
@@ -195,11 +196,21 @@ export const messageRuntime: ServerRuntimeRegistration = {
       connectBot: async (botId) => {
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
+        await assertBotFeatureAccess({
+          applicationId: bot.applicationId,
+          platform: bot.platform,
+          userId: context.userId!,
+        });
         const gateway = new GatewayService();
         const status = await gateway.startClient(bot.platform, bot.applicationId, context.userId!);
         return { status };
       },
       createBot: async (params) => {
+        await assertBotFeatureAccess({
+          applicationId: params.applicationId,
+          platform: params.platform,
+          userId: context.userId!,
+        });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
         assertBotAccessSettings(settings);
         const result = await providerModel.create({ ...params, settings });
@@ -272,6 +283,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
       toggleBot: async (botId, enabled) => {
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
+        if (enabled) {
+          await assertBotFeatureAccess({
+            applicationId: existing.applicationId,
+            platform: existing.platform,
+            userId: context.userId!,
+          });
+        }
         await providerModel.update(botId, { enabled });
         await invalidateBotAfterUpdate(
           {
@@ -285,6 +303,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
       updateBot: async (botId, params) => {
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
+        await assertBotFeatureAccess({
+          applicationId: existing.applicationId,
+          platform: existing.platform,
+          userId: context.userId!,
+        });
 
         const value: { credentials?: Record<string, string>; settings?: Record<string, unknown> } =
           {};
@@ -331,9 +354,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             applicationId: row.applicationId,
             enterpriseId:
               ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-                | string
-                | null
-                | undefined) ?? null,
+                string | null | undefined) ?? null,
             id: row.id,
             installedAt:
               row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
@@ -383,9 +404,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: row.applicationId,
           enterpriseId:
             ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-              | string
-              | null
-              | undefined) ?? null,
+              string | null | undefined) ?? null,
           id: row.id,
           installedAt:
             row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),

@@ -3,6 +3,10 @@ import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 
+import {
+  getBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed,
+} from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -820,6 +824,21 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ): Promise<boolean> => {
+      if (
+        !(await isBotFeatureAccessAllowed({
+          applicationId,
+          platform,
+          userId,
+        }))
+      ) {
+        try {
+          await thread.post(getBotFeatureBlockedMessage(platform));
+        } catch (error) {
+          log('%s: failed to post paid-feature notice: %O', caller, error);
+        }
+        return false;
+      }
+
       // Owner override. The bot's operator (`settings.userId`) sets the
       // policies for *other* users — locking themselves out of their own
       // bot is a footgun. Without this branch:

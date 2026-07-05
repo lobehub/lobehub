@@ -162,6 +162,8 @@
   "channel.messengerPromo.dismiss": "关闭",
   "channel.messengerPromo.title": "免配置上手",
   "channel.openPlatform": "开放平台",
+  "channel.paidFeature.desc": "{{name}} 仅面向付费 Plan 开放。升级到任意付费 Plan 后即可配置并保持该渠道连接。",
+  "channel.paidFeature.title": "需要付费 Plan",
   "channel.platforms": "平台",
   "channel.publicKey": "公钥",
   "channel.publicKeyHint": "可选。用于验证来自 Discord 的交互请求。",
