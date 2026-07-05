@@ -44,6 +44,7 @@ vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 
 vi.mock('../runGuard', () => ({
   checkGuard: vi.fn().mockResolvedValue({ result: true }),
+  ensureWorkflowStarted: vi.fn().mockResolvedValue({ started: true }),
 }));
 
 const createContext = () => ({
