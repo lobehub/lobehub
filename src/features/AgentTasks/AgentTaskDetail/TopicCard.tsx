@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -74,8 +75,15 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const addComment = useTaskStore((s) => s.addComment);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const { allowed: canEditTask } = usePermission('create_content');
   const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
+  // A descendant run shown in a parent detail belongs to `sourceTaskId`, not the
+  // currently open parent (`activeTaskId`) — file the follow-up on the task that
+  // owns the run so it appears where the run lives. Direct runs fall back to the
+  // active task.
+  const runTaskId = activity.sourceTaskId ?? activeTaskId;
+  const canFollowUp = canEditTask && !!runTaskId;
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -237,7 +245,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
-      {(activity.summary || activity.content || activeTaskId) && (
+      {(activity.summary || activity.content || canFollowUp) && (
         <Flexbox gap={8} paddingInline={4}>
           {activity.summary && (
             <Text
@@ -248,13 +256,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             </Text>
           )}
           {activity.content && <RunContent content={activity.content} />}
-          {activeTaskId &&
+          {canFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>
                 <RunReplyEditor
                   onCancel={() => setCommenting(false)}
                   onSubmit={async (text) => {
-                    await addComment(activeTaskId, text, { topicId: activity.id });
+                    await addComment(runTaskId!, text, { topicId: activity.id });
                     setCommenting(false);
                   }}
                 />
