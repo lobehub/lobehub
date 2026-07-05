@@ -60,9 +60,12 @@ function assertAccessSettingsForTRPC(settings: Record<string, unknown> | undefin
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
     return Promise.all(
-      platformRegistry
-        .listSerializedPlatforms()
-        .map((platform) => withBotPlatformAccessMeta(platform, { userId: ctx.userId })),
+      platformRegistry.listSerializedPlatforms().map((platform) =>
+        withBotPlatformAccessMeta(platform, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      ),
     );
   }),
 
@@ -79,9 +82,11 @@ export const agentBotProviderRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertBotFeatureAccess({
+        action: 'manage',
         applicationId: input.applicationId,
         platform: input.platform,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
 
       const payload = {
@@ -182,9 +187,11 @@ export const agentBotProviderRouter = router({
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
       await assertBotFeatureAccess({
+        action: 'manage',
         applicationId: input.applicationId,
         platform: input.platform,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
 
       const service = new GatewayService();
@@ -211,9 +218,11 @@ export const agentBotProviderRouter = router({
       }
 
       await assertBotFeatureAccess({
+        action: 'manage',
         applicationId,
         platform,
         userId: provider.userId,
+        workspaceId: provider.workspaceId ?? undefined,
       });
 
       // Validate credentials against the platform API
@@ -277,14 +286,24 @@ export const agentBotProviderRouter = router({
     }),
 
   wechatGetQrCode: authedProcedure.mutation(async ({ ctx }) => {
-    await assertBotFeatureAccess({ platform: 'wechat', userId: ctx.userId });
+    await assertBotFeatureAccess({
+      action: 'manage',
+      platform: 'wechat',
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
     return fetchQrCode();
   }),
 
   wechatPollQrStatus: authedProcedure
     .input(z.object({ qrcode: z.string() }))
     .query(async ({ input, ctx }) => {
-      await assertBotFeatureAccess({ platform: 'wechat', userId: ctx.userId });
+      await assertBotFeatureAccess({
+        action: 'manage',
+        platform: 'wechat',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       return pollQrStatus(input.qrcode);
     }),
 
@@ -315,9 +334,11 @@ export const agentBotProviderRouter = router({
 
       if (targetPlatform && !isDisableOnly) {
         await assertBotFeatureAccess({
+          action: 'manage',
           applicationId: targetApplicationId,
           platform: targetPlatform,
           userId: ctx.userId,
+          workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
         });
       }
 

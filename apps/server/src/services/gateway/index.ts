@@ -154,6 +154,7 @@ export class GatewayService {
               applicationId: provider.applicationId,
               platform,
               userId: provider.userId,
+              workspaceId: provider.workspaceId ?? undefined,
             };
             if (!(await isBotFeatureAccessAllowed(accessParams))) {
               skippedConnected++;
@@ -293,9 +294,11 @@ export class GatewayService {
 
       if (provider) {
         await assertBotFeatureAccess({
+          action: 'manage',
           applicationId,
           platform,
           userId: provider.userId,
+          workspaceId: provider.workspaceId ?? undefined,
         });
       }
 
@@ -596,9 +599,11 @@ export class GatewayService {
     }
 
     await assertBotFeatureAccess({
+      action: 'manage',
       applicationId,
       platform,
       userId: provider.userId,
+      workspaceId: provider.workspaceId ?? undefined,
     });
 
     const definition = platformRegistry.getPlatform(platform);

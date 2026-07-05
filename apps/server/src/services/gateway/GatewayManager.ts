@@ -104,9 +104,11 @@ export class GatewayManager {
 
     if (
       !(await isBotFeatureAccessAllowed({
+        action: 'manage',
         applicationId,
         platform,
         userId: provider.userId,
+        workspaceId: provider.workspaceId ?? undefined,
       }))
     ) {
       log('Feature access denied for %s', key);
@@ -173,6 +175,7 @@ export class GatewayManager {
           applicationId,
           platform,
           userId: provider.userId,
+          workspaceId: provider.workspaceId ?? undefined,
         }))
       ) {
         const existing = this.clients.get(key);

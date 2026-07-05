@@ -288,7 +288,9 @@ const PlatformList = memo<PlatformListProps>(
                 )}
                 {platform.access?.requiredPlan === 'paid' && (
                   <Tag color="gold" size={'small'} style={{ marginInlineEnd: 0 }}>
-                    Pro
+                    {platform.access.rolloutMode === 'notice'
+                      ? t('channel.paidFeature.noticeBadge')
+                      : t('channel.paidFeature.badge')}
                   </Tag>
                 )}
                 {runtimeStatus && (

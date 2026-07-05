@@ -14,6 +14,14 @@ export default {
   'channel.paidFeature.desc':
     '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.',
   'channel.paidFeature.title': 'Paid plan required',
+  'channel.paidFeature.badge': 'Pro',
+  'channel.paidFeature.enforce.desc':
+    '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.title': 'Paid plan required',
+  'channel.paidFeature.notice.desc':
+    '{{name}} will soon become a paid feature. Existing connections remain available during the notice period, but creating or reconnecting this channel now requires a paid personal plan or a Pro / Business workspace.',
+  'channel.paidFeature.notice.title': '{{name}} will soon require a paid plan',
+  'channel.paidFeature.noticeBadge': 'Pro soon',
   'channel.comingSoon': 'Coming Soon',
   'channel.comingSoonDesc':
     'We are working on bringing this integration to LobeHub. Stay tuned for updates.',

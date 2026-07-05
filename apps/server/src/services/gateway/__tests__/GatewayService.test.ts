@@ -270,6 +270,7 @@ describe('GatewayService', () => {
         applicationId: 'wechat-app',
         platform: 'wechat',
         userId: 'free-user',
+        workspaceId: undefined,
       });
       expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();

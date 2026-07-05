@@ -30,6 +30,7 @@ export interface PlatformAccessMeta {
   allowed?: boolean;
   blockedMessage?: string;
   requiredPlan?: 'paid';
+  rolloutMode?: 'enforce' | 'notice';
 }
 
 // --------------- Field Schema ---------------

@@ -14,6 +14,7 @@ const mockDeletePairingRequest = vi.hoisted(() => vi.fn());
 const mockReleasePairingClaim = vi.hoisted(() => vi.fn());
 const mockCreateOrGetPairingRequest = vi.hoisted(() => vi.fn());
 const mockGetAgentRuntimeRedisClient = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const mockGetBotFeatureAccessState = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -49,6 +50,10 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
+}));
+
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureAccessState: mockGetBotFeatureAccessState,
 }));
 
 // Stub appEnv so accessing `appEnv.APP_URL` in vitest doesn't trip
@@ -453,6 +458,7 @@ describe('BotMessageRouter', () => {
     mockProviderFindById.mockResolvedValue(undefined);
     mockProviderUpdate.mockResolvedValue(undefined);
     mockGetAgentRuntimeRedisClient.mockReturnValue(null);
+    mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
   });
 
   describe('getWebhookHandler', () => {
@@ -1099,7 +1105,10 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onNewMessage DM catch-all', () => {
-    async function loadDmCatchAllHandler(settings?: Record<string, unknown>) {
+    async function loadDmCatchAllHandler(
+      settings?: Record<string, unknown>,
+      platform = 'telegram',
+    ) {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
@@ -1107,7 +1116,7 @@ describe('BotMessageRouter', () => {
         }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -1165,6 +1174,61 @@ describe('BotMessageRouter', () => {
 
       await handler(thread, message);
 
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('posts a one-time WeChat paid-feature notice and continues handling the DM', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
+        'bot-feature-notice:wechat-pro-required-v1:wechat-user-1',
+        '1',
+      );
+      expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('个人付费 Plan'));
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not repeat the WeChat paid-feature notice after dedupe hits', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      mockStateSetIfNotExists.mockResolvedValue(false);
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi again',
+      };
+
+      await handler(thread, message);
+
+      expect(thread.post).not.toHaveBeenCalled();
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 

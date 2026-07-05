@@ -80,6 +80,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const readOnly = disabled || !canEdit;
     const paidFeatureBlocked =
       platformDef.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
+    const paidFeatureMode = platformDef.access?.rolloutMode ?? 'enforce';
     const writeDisabled = readOnly || paidFeatureBlocked;
 
     const [
@@ -523,10 +524,12 @@ const PlatformDetail = memo<PlatformDetailProps>(
           {paidFeatureBlocked && (
             <Alert
               showIcon
-              description={t('channel.paidFeature.desc', { name: platformDef.name })}
-              message={t('channel.paidFeature.title')}
+              message={t(`channel.paidFeature.${paidFeatureMode}.title`)}
               style={{ maxWidth: 1024, width: '100%' }}
-              type="info"
+              type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
+              description={t(`channel.paidFeature.${paidFeatureMode}.desc`, {
+                name: platformDef.name,
+              })}
             />
           )}
           <Body

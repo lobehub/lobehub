@@ -197,9 +197,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
+          action: 'manage',
           applicationId: bot.applicationId,
           platform: bot.platform,
           userId: context.userId!,
+          workspaceId: bot.workspaceId ?? undefined,
         });
         const gateway = new GatewayService();
         const status = await gateway.startClient(bot.platform, bot.applicationId, context.userId!);
@@ -207,6 +209,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
       createBot: async (params) => {
         await assertBotFeatureAccess({
+          action: 'manage',
           applicationId: params.applicationId,
           platform: params.platform,
           userId: context.userId!,
@@ -285,9 +288,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         if (enabled) {
           await assertBotFeatureAccess({
+            action: 'manage',
             applicationId: existing.applicationId,
             platform: existing.platform,
             userId: context.userId!,
+            workspaceId: existing.workspaceId ?? undefined,
           });
         }
         await providerModel.update(botId, { enabled });
@@ -304,9 +309,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
+          action: 'manage',
           applicationId: existing.applicationId,
           platform: existing.platform,
           userId: context.userId!,
+          workspaceId: existing.workspaceId ?? undefined,
         });
 
         const value: { credentials?: Record<string, string>; settings?: Record<string, unknown> } =

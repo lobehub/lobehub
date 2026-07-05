@@ -3,10 +3,7 @@ import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 
-import {
-  getBotFeatureBlockedMessage,
-  isBotFeatureAccessAllowed,
-} from '@/business/server/bot/featureAccess';
+import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -65,6 +62,8 @@ import {
 } from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
+const WECHAT_PRO_FEATURE_NOTICE =
+  '提示：LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。';
 
 /**
  * Compact summary of a Chat SDK Message's attachments for debug logging.
@@ -807,6 +806,33 @@ export class BotMessageRouter {
       return BotMessageRouter.dispatchTextCommand(sanitized, commands) !== null;
     };
 
+    const notifyFeatureNoticeOnce = async (
+      thread: { post: (t: string) => Promise<unknown> },
+      author: { userId?: string },
+      noticeId: string,
+      caller: string,
+    ): Promise<void> => {
+      if (platform !== 'wechat') return;
+
+      const authorUserId = author.userId?.trim();
+      if (!authorUserId) return;
+
+      const key = `bot-feature-notice:${noticeId}:${authorUserId}`;
+      try {
+        const fresh = await bot.getState().setIfNotExists(key, '1');
+        if (!fresh) return;
+      } catch (error) {
+        log('%s: feature notice dedupe failed, continuing without notice: %O', caller, error);
+        return;
+      }
+
+      try {
+        await thread.post(WECHAT_PRO_FEATURE_NOTICE);
+      } catch (error) {
+        log('%s: failed to post feature notice: %O', caller, error);
+      }
+    };
+
     /**
      * Run all three access gates (global `allowFrom`, group policy, DM policy)
      * and post the appropriate rejection notice in the thread on failure.
@@ -824,19 +850,25 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ): Promise<boolean> => {
-      if (
-        !(await isBotFeatureAccessAllowed({
-          applicationId,
-          platform,
-          userId,
-        }))
-      ) {
+      const featureAccess = await getBotFeatureAccessState({
+        action: 'runtime',
+        applicationId,
+        platform,
+        userId,
+        workspaceId: workspaceId ?? undefined,
+      });
+
+      if (!featureAccess.allowed) {
         try {
-          await thread.post(getBotFeatureBlockedMessage(platform));
+          await thread.post(featureAccess.blockedMessage ?? 'This bot channel is unavailable.');
         } catch (error) {
           log('%s: failed to post paid-feature notice: %O', caller, error);
         }
         return false;
+      }
+
+      if (featureAccess.notice) {
+        await notifyFeatureNoticeOnce(thread, author, featureAccess.notice.id, caller);
       }
 
       // Owner override. The bot's operator (`settings.userId`) sets the

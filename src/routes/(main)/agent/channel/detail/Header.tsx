@@ -94,7 +94,9 @@ const Header = memo<HeaderProps>(
           {platformDef.name}
           {platformDef.access?.requiredPlan === 'paid' && (
             <Tag color="gold" size={'small'}>
-              Pro
+              {platformDef.access.rolloutMode === 'notice'
+                ? t('channel.paidFeature.noticeBadge')
+                : t('channel.paidFeature.badge')}
             </Tag>
           )}
           {statusLabel && (
