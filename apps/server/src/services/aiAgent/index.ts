@@ -649,7 +649,19 @@ export class AiAgentService {
       // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
       // are owned by the workspace, not a userId — use the workspace-scoped
       // update path so the writeback actually lands.
-      const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
+      //
+      // Update the MATCHED entry's path, not `boundCwd`: the lookup above can
+      // match a source entry by its effective (worktree) path, so a selected
+      // worktree reaches here with `boundCwd` = the worktree path while the
+      // recorded entry is keyed by the source path. Upserting on `boundCwd`
+      // would prepend a bare worktree recent and lose the source/worktree
+      // metadata the picker relies on; upsert on the matched source path instead.
+      const updated = upsertWorkspaceScan(
+        workingDirs,
+        cached?.path ?? boundCwd,
+        scanned,
+        Date.now(),
+      );
       if (deviceWorkspaceId) {
         await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
       } else {

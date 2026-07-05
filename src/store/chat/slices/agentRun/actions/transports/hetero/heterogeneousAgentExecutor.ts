@@ -558,8 +558,13 @@ export const executeHeterogeneousAgent = async (
   const getPersistedWorkingDirectoryConfig = (
     topicMetadata: ChatTopicMetadata | undefined,
   ): WorkingDirConfig | undefined =>
-    workingDirectoryConfig ??
+    // Prefer the topic's CURRENT config: while the CLI runs, GitStatus may have
+    // persisted richer branch/PR/CI (`git.github`) onto it. Falling back to the
+    // run-start captured config would drop that enrichment on the completion
+    // write until a status component re-probes. Captured config is only the
+    // fallback for a topic that carries none yet.
     topicMetadata?.workingDirectoryConfig ??
+    workingDirectoryConfig ??
     (workingDirectory === undefined ? undefined : { path: workingDirectory });
   const hasStreamedState = () =>
     sawStreamedEvent ||
