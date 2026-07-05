@@ -65,6 +65,7 @@
   "navigation.tasks": "Tarefas",
   "navigation.topics": "Tópicos",
   "navigation.unpin": "Desfixar",
+  "navigation.verifyReports": "Relatórios de Verificação",
   "notification.finishChatGeneration": "Geração de mensagem pela IA concluída",
   "proxy.auth": "Autenticação necessária",
   "proxy.authDesc": "Se o servidor proxy exigir nome de usuário e senha",

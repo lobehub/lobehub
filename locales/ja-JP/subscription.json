@@ -449,6 +449,7 @@
   "referral.edit.hint": "2〜8文字の英数字またはアンダースコアに対応",
   "referral.edit.placeholder": "紹介コードを入力",
   "referral.edit.save": "保存",
+  "referral.edit.updated": "招待コードが更新されました",
   "referral.errors.alreadyBound": "すでに招待コードが紐付けられています",
   "referral.errors.backfillExpired": "追加入力期間が終了しました。登録から3日以内でないと追加入力はできません",
   "referral.errors.codeExists": "この紹介コードはすでに使用されています。別のコードを選んでください。",

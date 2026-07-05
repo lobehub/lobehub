@@ -65,6 +65,7 @@
   "navigation.tasks": "Görevler",
   "navigation.topics": "Konular",
   "navigation.unpin": "Sabitlemeyi kaldır",
+  "navigation.verifyReports": "Doğrulama Raporları",
   "notification.finishChatGeneration": "Yapay zeka mesaj oluşturma tamamlandı",
   "proxy.auth": "Kimlik Doğrulama Gerekli",
   "proxy.authDesc": "Proxy sunucusu kullanıcı adı ve şifre gerektiriyorsa",

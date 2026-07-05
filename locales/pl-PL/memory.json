@@ -34,6 +34,8 @@
   "context.description": "Opis",
   "context.empty": "Brak dostępnych pamięci kontekstowych",
   "context.source": "Źródło",
+  "detail.notFound.desc": "Ta pamięć mogła zostać usunięta lub nie jest już dostępna.",
+  "detail.notFound.title": "Nie znaleziono pamięci",
   "empty.description": "Odzyskiwanie pamięci to proces stopniowy. Prowadź więcej rozmów, aby wzbogacić treści dostępne do przypomnienia. Spróbuj głębszych interakcji z agentem, aby lepiej uchwycić i zapisać cenne informacje.",
   "empty.search": "Nie znaleziono pasujących wspomnień",
   "empty.title": "Brak wspomnień",

@@ -449,6 +449,7 @@
   "referral.edit.hint": "Hỗ trợ 2-8 ký tự chữ, số hoặc gạch dưới",
   "referral.edit.placeholder": "Nhập mã giới thiệu",
   "referral.edit.save": "Lưu",
+  "referral.edit.updated": "Mã mời đã được cập nhật",
   "referral.errors.alreadyBound": "Bạn đã liên kết mã mời rồi",
   "referral.errors.backfillExpired": "Thời gian bổ sung đã hết hạn. Không thể bổ sung sau 3 ngày kể từ khi đăng ký",
   "referral.errors.codeExists": "Mã giới thiệu này đã được sử dụng, vui lòng chọn mã khác",

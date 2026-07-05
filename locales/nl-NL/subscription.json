@@ -449,6 +449,7 @@
   "referral.edit.hint": "Ondersteunt 2-8 letters, cijfers of underscores",
   "referral.edit.placeholder": "Voer verwijzingscode in",
   "referral.edit.save": "Opslaan",
+  "referral.edit.updated": "Uitnodigingscode bijgewerkt",
   "referral.errors.alreadyBound": "Je hebt al een uitnodigingscode gekoppeld",
   "referral.errors.backfillExpired": "De backfill-periode is verlopen. Je kunt niet meer backfillen na 3 dagen na registratie",
   "referral.errors.codeExists": "Deze code is al in gebruik, kies een andere",

@@ -449,6 +449,7 @@
   "referral.edit.hint": "Допустимо 2–8 символов: буквы, цифры или подчёркивания",
   "referral.edit.placeholder": "Введите реферальный код",
   "referral.edit.save": "Сохранить",
+  "referral.edit.updated": "Код приглашения обновлен",
   "referral.errors.alreadyBound": "Вы уже привязали код приглашения",
   "referral.errors.backfillExpired": "Срок для ввода кода истёк. Нельзя ввести код спустя 3 дня после регистрации",
   "referral.errors.codeExists": "Код уже используется, выберите другой",

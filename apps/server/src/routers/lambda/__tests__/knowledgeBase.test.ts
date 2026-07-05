@@ -62,7 +62,12 @@ describe('knowledgeBaseRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockKnowledgeBaseModelTransferTo).toHaveBeenCalledWith('kb-1', null, 'test-user');
+      expect(mockKnowledgeBaseModelTransferTo).toHaveBeenCalledWith(
+        'kb-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('returns a stable error code when the library no longer exists', async () => {
@@ -96,7 +101,12 @@ describe('knowledgeBaseRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockKnowledgeBaseModelCopyToWorkspace).toHaveBeenCalledWith('kb-1', null, 'test-user');
+      expect(mockKnowledgeBaseModelCopyToWorkspace).toHaveBeenCalledWith(
+        'kb-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('rejects target workspace copy when RBAC denies knowledge base creation', async () => {

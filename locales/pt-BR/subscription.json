@@ -449,6 +449,7 @@
   "referral.edit.hint": "Aceita de 2 a 8 letras, números ou sublinhados",
   "referral.edit.placeholder": "Digite o código de indicação",
   "referral.edit.save": "Salvar",
+  "referral.edit.updated": "Código de convite atualizado",
   "referral.errors.alreadyBound": "Você já vinculou um código de convite",
   "referral.errors.backfillExpired": "O período de preenchimento retroativo expirou. Não é possível preencher após 3 dias do registro",
   "referral.errors.codeExists": "Este código de indicação já está em uso, escolha outro",

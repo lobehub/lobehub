@@ -1,4 +1,5 @@
 {
+  "badge.errored": "检查无法运行",
   "badge.failed": "检查未通过",
   "badge.passed": "检查通过",
   "badge.pending": "待检查",
@@ -110,6 +111,8 @@
   "reports.verdict.passed": "已通过",
   "reports.verdict.pending": "暂无报告",
   "reports.verdict.uncertain": "不确定",
+  "result.errored.sub": "由于内部错误，交付检查器无法运行，因此未评估此结果。请重试验证或手动审核。",
+  "result.errored.title": "草稿结果",
   "result.failed.sub": "本轮结果暂不交付。交付检查器判定验证不充分，已触发修复。",
   "result.failed.title": "结果草稿",
   "result.foot": "这是本轮运行的结果快照，不属于 assistant / user 消息。",
@@ -123,6 +126,7 @@
   "result.title": "验证 #{{round}}",
   "status.checking": "交付检查器：检查中 {{passed}}/{{total}}",
   "status.draft": "交付检查器：待确认 · {{total}} 项检查",
+  "status.errored": "交付检查器：无法运行",
   "status.failed": "交付检查器：未通过 · 已触发修复",
   "status.idle": "交付检查器：未生成",
   "status.passed": "交付检查器：已通过 {{passed}}/{{total}}",
