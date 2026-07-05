@@ -182,6 +182,10 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.claudeQuota.errorRateLimited':
+    'Claude Code quota is temporarily rate limited. Please try again later.',
+  'heteroAgent.claudeQuota.refreshRateLimited':
+    'Quota refresh is temporarily rate limited. Showing the last available data.',
   'heteroAgent.claudeQuota.scopedWeekly': 'Weekly ({{model}})',
   'heteroAgent.claudeQuota.title': 'Claude Code quota',
   'heteroAgent.claudeQuota.tooltip': 'View Claude Code quota',
@@ -209,6 +213,7 @@ export default {
   'heteroAgent.quota.left': '{{percent}}% left',
   'heteroAgent.quota.noData': 'Quota is not available yet.',
   'heteroAgent.quota.refresh': 'Refresh quota',
+  'heteroAgent.quota.refreshFailed': "Couldn't refresh quota. Showing the last available data.",
   'heteroAgent.quota.resetsIn': 'Resets in {{duration}}',
   'heteroAgent.quota.resetsSoon': 'Resets soon',
   'heteroAgent.quota.session': 'Session',
