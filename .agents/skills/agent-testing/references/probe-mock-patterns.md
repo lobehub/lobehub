@@ -245,6 +245,31 @@
 - **Doesn't work**: `window.__LOBE_STORES.page.getState()` — the value is a bound
   hook function exposing only `length`/`name`; state isn't readable from it.
 
+### C1b. ✅ WORKS — expose `setState` via HMR to drive a REAL identity/scope change (login repro)
+
+- **Situation**: verifying behavior on an identity/cache-scope change (e.g. login,
+  `useCacheScope` = `${userId}:${workspaceId}`) on the ALREADY-LOADED app, without a
+  real OAuth flow. Cold-boot repro is timing-flaky under machine load; the faithful,
+  deterministic path is to flip `userId` on the live app.
+- **Doesn't work**: `window.__LOBE_STORES.user()` returns `getState()` (actions but no
+  `setState`); there is no public `setUserId` action to call.
+- **Works**: patch the dev-only exposer `src/store/middleware/expose.ts` (HMR) to also
+  attach `setState`, then drive the store from `eval`:
+  ```ts
+  // expose.ts, temporary — REMOVE after: git checkout -- src/store/middleware/expose.ts
+  const handle = () => store.getState();
+  (handle as any).setState = (store as any).setState;
+  window.__LOBE_STORES[name] = handle as any;
+  ```
+  `expose()` only runs at store creation, so reload the renderer once after the edit so
+  stores re-expose with the handle. Then:
+  ```js
+  var u = window.__LOBE_STORES.user;
+  var c = u().user || {};
+  u.setState({ user: Object.assign({}, c, { id: 'probe_scope_0705' }) }); // → scope flips
+  ```
+  In-memory only (no DB write); a reload restores the real id. Revert the file after.
+
 ### C2. ✅ WORKS — temporary debug global inside the component
 
 - The decisive way to read a component's live props / store / SWR values: add a
@@ -393,15 +418,40 @@
   redirects to `/signin?callbackUrl=...` — the deep-route hard-load runs an
   SSR/middleware auth check the seeded cookie doesn't satisfy, even though `/`
   is authed and the agent is owned by the seeded user.
+
 - **Doesn't work**: hard-loading the deep route directly; repeated deep hard-loads
   can also drop the seeded cookie so even `/` starts bouncing (re-run `web-seed`).
+
 - **Works**: hard-load `/` (authed), confirm by screenshot (not the app-probe auth
   JSON — it false-negatives here, returns `isSignedIn:false` on an authed page),
   then **client-side soft-nav** with no server round-trip:
+
   ```bash
   agent-browser eval "history.pushState({},'','/agent/<id>/docs'); window.dispatchEvent(new PopStateEvent('popstate')); 'nav'" --session lobehub-dev
   ```
+
   react-router picks up the popstate and renders the route in-context with the
   already-hydrated auth. Right-panels that render at a _layout_ level do NOT see a
   child route's `:param` via `useParams()` — read it from `location.pathname` if
   you need it.
+
+- **D11. ✅ WORKS — catch a BRIEF blank/transient frame (sub-second) that screencast misses.**
+  Verifying a momentary full-screen blank (e.g. a React subtree unmounting to `null` for
+  \~150–350ms during a scope change): `Page.startScreencast` only emits frames on a VISUAL
+  CHANGE, so a _static_ blank produces NO frame — you see a time GAP in the manifest, not a
+  blank image. Single timed `cdp-screenshot` also loses the race (its own \~200ms latency
+  overshoots) and `captureScreenshot` can return the prior surface.
+  - **Works — two complementary probes**:
+    1. **DOM proof (deterministic)**: sample `document.getElementById('root').innerText.trim().length`
+       at 150/350/600ms after the trigger via one `eval` returning a Promise. A full unmount
+       drops it to `0`, then it recovers — unambiguous, load-independent. (Fixed vs broken:
+       `6064 → 0 → 5646` vs `6089 → 6002 → 6042` never-0.)
+    2. **Freeze the pixels**: to actually capture the blank image, keep the blank ON SCREEN
+       longer by re-triggering every \~80ms (e.g. flip `userId` to a fresh value each tick so a
+       `key={scope}` gate stays remounted), while firing raw CDP `Page.captureScreenshot` every
+       80ms over the same window. Blank frames come back tiny (\~34KB jpeg) vs content (\~294KB);
+       convert + Read one to confirm. (A raw-CDP forced capture DOES render a static frame; the
+       trick is holding the state, not the capture.)
+  - Byte-size is a reliable auto-flag for near-uniform frames (blank/loading), but two
+    different near-uniform states (dark loading-screen vs blank) can both be small — always
+    Read the frame to tell them apart (Case 1 rule).
