@@ -922,6 +922,14 @@ export class ConversationLifecycleActionImpl {
           // selection (only the client runtime did). Omit when empty.
           selectedToolIds:
             selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+          // Forward @-mentioned agents so the server supervisor can delegate to
+          // them (multi-mention). Mirrors the client runtime's `initialContext`
+          // injection: the server enables the callAgent tool and injects the
+          // mentioned-agents delegation context so the supervisor calls them.
+          // Omit when empty (single-mention takes the client path above and never
+          // reaches here). Non-group only — group @member mentions are handled by
+          // the group orchestration path, not agent-management delegation.
+          mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.

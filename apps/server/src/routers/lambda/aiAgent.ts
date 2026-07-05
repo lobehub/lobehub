@@ -199,6 +199,14 @@ const ExecAgentSchema = z
      * by the user-scoped lookups downstream, so it can't enable others' tools.
      */
     selectedToolIds: z.array(z.string()).optional(),
+    /**
+     * Agents the user @-mentioned in this message (multi-mention). When present
+     * (and non-group), the run enables the callAgent tool and injects the
+     * mentioned-agents delegation context so the supervisor delegates to them
+     * instead of answering itself. Mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected callAgent manifest.
+     */
+    mentionedAgents: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
     /**
@@ -686,6 +694,7 @@ export const aiAgentRouter = router({
       deviceId,
       existingMessageIds = [],
       fileIds,
+      mentionedAgents,
       parentMessageId,
       resumeApproval,
       selectedToolIds,
@@ -703,6 +712,7 @@ export const aiAgentRouter = router({
         deviceId,
         existingMessageIds,
         fileIds,
+        mentionedAgents,
         parentMessageId,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue or a

@@ -41,6 +41,7 @@ import type {
   ExecVirtualSubAgentParams,
   LobeAgentAgencyConfig,
   MessagePluginItem,
+  RuntimeMentionedAgent,
   UserInterventionConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -299,6 +300,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   initialStepCount?: number;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
+  /**
+   * Agents the user @-mentioned in this message (multi-mention). When present
+   * (and non-group), the run enables the callAgent tool and persists the mentioned
+   * agents into the runtime `initialContext` so the context engine injects the
+   * delegation context at step time — making the supervisor delegate to them
+   * instead of answering itself. Mirrors the client runtime's mention wiring.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
   queueRetries?: number;
@@ -921,6 +930,7 @@ export class AiAgentService {
       resume,
       resumeApproval,
       selectedToolIds,
+      mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
@@ -2015,6 +2025,14 @@ export class AiAgentService {
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let composioManifests: LobeToolManifest[] = [];
     let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
+    // When the user @-mentions agents (multi-mention, non-group), enable the
+    // agent-management tool for this run so the supervisor can `callAgent` to
+    // delegate. Mirrors the client runtime, which injects a callAgent manifest.
+    // Single-mention takes a client-only deterministic-router path and never
+    // reaches here. The delegation *context* (which agents were mentioned) is
+    // injected separately via `initialContext.mentionedAgents` below.
+    const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
+
     // `selectedToolIds` are the user's @-mention picks for this turn; merged in
     // (deduped) alongside the agent's pinned plugins and any internal
     // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
@@ -2024,6 +2042,7 @@ export class AiAgentService {
         ...(agentConfig?.plugins ?? []),
         ...(additionalPluginIds || []),
         ...(selectedToolIds || []),
+        ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
       ]),
     ];
 
@@ -3010,6 +3029,20 @@ export class AiAgentService {
               defaultAssigneeAgentId: appContext.defaultTaskAssigneeAgentId,
             }),
           },
+        },
+      };
+    }
+
+    // Persist the @-mentioned agents into the runtime initialContext so the
+    // context engine injects the delegation context on every step (survives the
+    // queue-mode dispatch). `callLlm` bridges this into `agentManagementContext`
+    // for the AgentManagementContextInjector — mirrors the client runtime.
+    if (hasMentionedAgents) {
+      initialContext = {
+        ...initialContext,
+        initialContext: {
+          ...initialContext.initialContext,
+          mentionedAgents,
         },
       };
     }

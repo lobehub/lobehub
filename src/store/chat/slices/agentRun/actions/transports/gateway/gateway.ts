@@ -9,6 +9,7 @@ import type {
   ConversationContext,
   ExecAgentResult,
   MessageMetadata,
+  RuntimeMentionedAgent,
 } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
@@ -400,6 +401,15 @@ export class GatewayActionImpl {
      */
     selectedToolIds?: string[];
     /**
+     * Agents the user @-mentioned in this message (multi-mention). Forwarded to
+     * the server so the supervisor run enables the callAgent tool and injects the
+     * mentioned-agents delegation context — mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected callAgent manifest. Without
+     * this the gateway supervisor never sees the mention and answers itself
+     * instead of delegating.
+     */
+    mentionedAgents?: RuntimeMentionedAgent[];
+    /**
      * Temporary message IDs created during the initial sendMessage phase.
      * These are associated with the new gateway operation so the UI doesn't
      * show a blank loading state while waiting for the first `step_start`
@@ -418,6 +428,7 @@ export class GatewayActionImpl {
       parentOperationId,
       resumeApproval,
       selectedToolIds,
+      mentionedAgents,
       tempMessageIds,
     } = params;
 
@@ -483,6 +494,7 @@ export class GatewayActionImpl {
         },
         deviceId: localDeviceId,
         fileIds,
+        mentionedAgents,
         parentMessageId,
         prompt: message,
         resumeApproval,

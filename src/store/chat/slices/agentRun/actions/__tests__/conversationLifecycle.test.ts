@@ -2058,6 +2058,77 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should forward mentionedAgents to the gateway for multi-mention when gateway mode is enabled', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: [],
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'op-gw-supervisor',
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: '@Agent A @Agent B compare',
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Agent A',
+                        metadata: { id: 'agent-a', type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' ', type: 'text' },
+                      {
+                        label: 'Agent B',
+                        metadata: { id: 'agent-b', type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' compare', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            context: createTestContext(),
+          });
+        });
+
+        // Multi-mention keeps the supervisor on the gateway (unlike single-mention,
+        // which falls through to the client path). The mentioned agents are
+        // forwarded so the server enables callAgent + injects the delegation context.
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            mentionedAgents: [
+              { id: 'agent-a', name: 'Agent A' },
+              { id: 'agent-b', name: 'Agent B' },
+            ],
+          }),
+        );
+      });
+
       it('should NOT inject mentionedAgents into initialContext when in group chat', async () => {
         const { result } = renderHook(() => useChatStore());
 

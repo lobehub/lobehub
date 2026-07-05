@@ -1,4 +1,9 @@
-import type { ExecAgentAppContext, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ExecAgentAppContext,
+  ExecAgentResult,
+  RuntimeMentionedAgent,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -32,6 +37,12 @@ export interface ExecAgentTaskParams {
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  /**
+   * Agents the user @-mentioned in this message (multi-mention). The server
+   * enables the callAgent tool and injects the mentioned-agents delegation
+   * context so the supervisor run delegates to them instead of answering itself.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
