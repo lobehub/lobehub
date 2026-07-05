@@ -67,3 +67,15 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
     processedUsers: userIds.length,
   };
 };
+
+// NOTICE: Serve-side flow control governs this workflow's own step-continuation messages so they
+// carry a flow-control key instead of falling into the shared "$" (unbound) bucket, which floods
+// when steps retry. `triggerPersonaUpdate` sets a per-user key for the *initial* delivery; this
+// static global key bounds concurrent step execution across users. Parallelism is a conservative
+// global cap.
+export const personaUpdateWorkflowOptions = {
+  flowControl: {
+    key: 'memory-user-memory.pipelines.persona.update-write',
+    parallelism: 4,
+  },
+};

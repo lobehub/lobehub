@@ -196,3 +196,18 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
       }
     },
   );
+
+// NOTICE: Serve-side flow control governs a running workflow's own step-continuation messages
+// (the QStash callbacks that advance each `context.run`). Without it, every process-topics step
+// callback is published with NO flow-control key and lands in the shared "$" (unbound) bucket,
+// which floods when steps retry (e.g. the auth-failure retry storm). `triggerProcessTopics`
+// additionally sets a per-user key for the *initial* delivery; serve-side flow control can only
+// use a static (config-time) key, so this global key bounds concurrent step execution and, more
+// importantly, keeps step callbacks out of "$". Parallelism is a conservative global cap — the
+// per-user trigger key (parallelism 20) remains the primary per-user throttle.
+export const processTopicsWorkflowOptions = {
+  flowControl: {
+    key: 'memory-user-memory.pipelines.chat-topic.process-topics',
+    parallelism: 20,
+  },
+};

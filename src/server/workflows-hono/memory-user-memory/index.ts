@@ -4,9 +4,9 @@ import { Hono } from 'hono';
 
 import { createWorkflowQstashClient } from '../qstashClient';
 import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly';
-import { personaUpdateHandler } from './workflows/personaUpdate';
+import { personaUpdateHandler, personaUpdateWorkflowOptions } from './workflows/personaUpdate';
 import { processTopicWorkflow } from './workflows/processTopic';
-import { processTopicsHandler } from './workflows/processTopics';
+import { processTopicsHandler, processTopicsWorkflowOptions } from './workflows/processTopics';
 import { processUsersHandler, processUsersWorkflowOptions } from './workflows/processUsers';
 import {
   processUserTopicsHandler,
@@ -34,7 +34,7 @@ app.post(
     withOtelMetricsForUpstashWorkflows(personaUpdateHandler, {
       url: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
     }),
-    { qstashClient: createWorkflowQstashClient() },
+    { ...personaUpdateWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 
@@ -70,7 +70,7 @@ app.post(
     withOtelMetricsForUpstashWorkflows(processTopicsHandler, {
       url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
     }),
-    { qstashClient: createWorkflowQstashClient() },
+    { ...processTopicsWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 
