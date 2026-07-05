@@ -14,7 +14,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';
 
-import { assertMemoryWorkflowContextAllowed } from './runGuard';
+import { resolveMemoryWorkflowRunGuard } from './runGuard';
 
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
@@ -28,7 +28,16 @@ export const processUserTopicsHandler = async (
   context: WorkflowContext<MemoryExtractionPayloadInput>,
 ) => {
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
-  await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
+
+  // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash
+  // re-enqueue the run, turning a "disable" guard into an infinite retry storm.
+  const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
+  if (guardBlock) {
+    return {
+      message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
+      skipped: true,
+    };
+  }
 
   if (!params.userIds.length) {
     return { message: 'No user ids provided for topic processing.' };
@@ -63,7 +72,6 @@ export const processUserTopicsHandler = async (
       // NOTICE: Cooperative cascading cancellation for the workflow tree.
       // A cancelled root task should stop at user-topic pagination and avoid enqueuing topic batches.
       const stepName = `memory:user-memory:extract:users:${userId}:cancel-check`;
-      await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
       const cancelled = await context.run(stepName, () =>
         getServerDB().then((db) =>
           new AsyncTaskModel(
@@ -89,7 +97,6 @@ export const processUserTopicsHandler = async (
     let topicsFromPayload: string[] | undefined;
     if (params.topicIds && params.topicIds.length > 0) {
       const stepName = `memory:user-memory:extract:users:${userId}:filter-topic-ids`;
-      await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
       topicsFromPayload = await context.run(stepName, async () => {
         const filtered = await executor.filterTopicIdsForUser(
           userId,
@@ -101,7 +108,6 @@ export const processUserTopicsHandler = async (
     }
 
     const listTopicsStepName = `memory:user-memory:extract:users:${userId}:list-topics:${topicCursor?.id || 'root'}`;
-    await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, listTopicsStepName);
     const topicBatch = await context.run<{
       cursor?: ListTopicsForMemoryExtractorCursor;
       ids: string[];
@@ -136,7 +142,6 @@ export const processUserTopicsHandler = async (
       // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
       // URLs would inherit that base and lose the desired /process-topics/workflows prefix.
       const stepName = `memory:user-memory:extract:users:${userId}:process-topics-batch:${batchIndex}`;
-      await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
       await context.run(stepName, () =>
         MemoryExtractionWorkflowService.triggerProcessTopics(
           userId,
@@ -154,7 +159,6 @@ export const processUserTopicsHandler = async (
 
     if (!topicsFromPayload && cursor) {
       const stepName = `memory:user-memory:extract:users:${userId}:topics:${cursor.id}:schedule-next-batch`;
-      await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
       await context.run(stepName, () => {
         // NOTICE: Upstash Workflow only supports serializable data into plain JSON,
         // this causes the Date object to be converted into string when passed as parameter from

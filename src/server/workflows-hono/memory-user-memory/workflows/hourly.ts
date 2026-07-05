@@ -12,7 +12,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { assertMemoryWorkflowContextAllowed } from './runGuard';
+import { resolveMemoryWorkflowRunGuard } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 200;
@@ -27,7 +27,18 @@ export const hourlyWorkflowHandler = async (
   context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
 ) => {
   const { cursor, dryRun } = context.requestPayload || {};
-  await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
+
+  // NOTICE: A run guard match must terminate the workflow by returning, never by throwing.
+  // Throwing before the first step makes Upstash re-enqueue the run, turning a "disable" guard
+  // into an infinite retry storm.
+  const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
+  if (guardBlock) {
+    return {
+      message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
+      processedUsers: 0,
+      skipped: true,
+    };
+  }
 
   const baseUrl = resolveBaseUrl();
   if (!baseUrl) {
@@ -43,7 +54,6 @@ export const hourlyWorkflowHandler = async (
 
   const executor = await MemoryExtractionExecutor.create();
   const listUsersStepName = `memory:user-memory:hourly:list-users:${parsedCursor?.id || 'root'}`;
-  await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, listUsersStepName);
   const userBatch = await context.run(listUsersStepName, () =>
     executor.getUsersForHourlyExtraction(USER_PAGE_SIZE, parsedCursor),
   );
@@ -65,8 +75,6 @@ export const hourlyWorkflowHandler = async (
     await Promise.all(
       batches.map(async (batchUserIds, index) => {
         const stepName = `memory:user-memory:hourly:trigger-users:${index}`;
-        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
-
         return context.run(stepName, () =>
           MemoryExtractionWorkflowService.triggerProcessUsers(
             buildWorkflowPayloadInput(
@@ -86,7 +94,6 @@ export const hourlyWorkflowHandler = async (
 
   if (nextCursor) {
     const stepName = 'memory:user-memory:hourly:schedule-next-page';
-    await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
     await context.run(stepName, () =>
       MemoryExtractionWorkflowService.triggerHourly(
         {

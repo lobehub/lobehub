@@ -3,7 +3,7 @@ import { type WorkflowContext } from '@upstash/workflow';
 import { getRedisConfig } from '@/envs/redis';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { type BaseRedisProvider } from '@/libs/redis/types';
-import { assertWorkflowRunAllowed } from '@/server/workflows/runGuard';
+import { assertWorkflowRunAllowed, WorkflowRunGuardError } from '@/server/workflows/runGuard';
 
 interface MemoryWorkflowGuardInput {
   payload?: unknown;
@@ -91,4 +91,45 @@ export const assertMemoryWorkflowContextAllowed = async (
     workflowPath,
     workflowRunId: getWorkflowRunId(context),
   });
+};
+
+/**
+ * Details of a run guard that blocks a memory workflow.
+ */
+export interface MemoryWorkflowRunGuardBlock {
+  matchedKey: string;
+  reason?: string;
+  scope: string;
+}
+
+/**
+ * Resolves whether a run guard blocks this memory workflow, WITHOUT throwing.
+ *
+ * Use when:
+ * - A memory workflow handler wants to stop a blocked run at its entry.
+ *
+ * Why not throw:
+ * - Upstash Workflow treats an error thrown before the first step as an authorization
+ *   failure and re-enqueues the run. A "disable" guard implemented via throw therefore turns
+ *   into an infinite retry storm instead of stopping work. Handlers must translate a match into
+ *   a graceful `return` (a completed run with no steps → HTTP 2xx → no retry).
+ *
+ * Returns:
+ * - The matched guard details when a guard blocks the run.
+ * - `null` when no guard matches (or Redis fails open).
+ */
+export const resolveMemoryWorkflowRunGuard = async (
+  context: WorkflowContext<unknown>,
+  workflowPath: string,
+): Promise<MemoryWorkflowRunGuardBlock | null> => {
+  try {
+    await assertMemoryWorkflowContextAllowed(context, workflowPath);
+    return null;
+  } catch (error) {
+    if (error instanceof WorkflowRunGuardError) {
+      return { matchedKey: error.matchedKey, reason: error.reason, scope: error.guardScope };
+    }
+    // The underlying guard check fails open on Redis errors, so anything else is unexpected.
+    throw error;
+  }
 };

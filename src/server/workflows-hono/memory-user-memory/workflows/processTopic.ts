@@ -17,10 +17,9 @@ import {
   MemoryExtractionExecutor,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
-import { WorkflowRunGuardError } from '@/server/workflows/runGuard';
 
 import { createWorkflowQstashClient } from '../../qstashClient';
-import { assertMemoryWorkflowContextAllowed } from './runGuard';
+import { resolveMemoryWorkflowRunGuard } from './runGuard';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -48,7 +47,16 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       });
 
       try {
-        await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH);
+        // NOTICE: Return (never throw) on a guard match — a throw before the first step makes
+        // Upstash re-enqueue the run, turning a "disable" guard into an infinite retry storm.
+        const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
+        if (guardBlock) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return {
+            message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
+            skipped: true,
+          };
+        }
 
         const topicId = payload.topicIds[0];
         const userId = payload.userIds[0];
@@ -69,7 +77,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // Check before CEPA extraction so cancelled tasks stop at the earliest safe boundary.
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`;
-          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
           const cancelled = await context.run(stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
@@ -92,7 +99,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           }
 
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa`;
-          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
           await context.run(stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
@@ -115,7 +121,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             // NOTICE: Cooperative cascading cancellation for the workflow tree.
             // Re-check before identity extraction to avoid running sequential identity step after cancel.
             const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`;
-            await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
             const cancelled = await context.run(stepName, () =>
               getServerDB().then((db) =>
                 new AsyncTaskModel(
@@ -139,7 +144,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           }
 
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`;
-          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
           await context.run(stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
@@ -160,7 +164,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
 
         if (payload.asyncTaskId && payload.userInitiated) {
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:progress`;
-          await assertMemoryWorkflowContextAllowed(context, WORKFLOW_PATH, stepName);
           await context.run(stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
@@ -182,7 +185,6 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       } catch (error) {
         // Let Upstash internal aborts bubble through but treat others as non-retry-able
         if (error instanceof WorkflowAbort) throw error;
-        if (error instanceof WorkflowRunGuardError) throw error;
 
         span.recordException(error as Error);
         span.setStatus({
