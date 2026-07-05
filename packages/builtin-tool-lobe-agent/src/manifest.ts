@@ -183,6 +183,69 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Ask User Question ====================
+    {
+      description:
+        'Ask the user a clarifying question through a UI-mediated interaction, with either structured form fields or a single freeform input. Use this when intent is ambiguous and a short clarification would materially change the answer. Returns the request in pending state; the user answers in the UI.',
+      humanIntervention: 'always',
+      name: LobeAgentApiName.askUserQuestion,
+      renderDisplayControl: 'collapsed',
+      parameters: {
+        properties: {
+          question: {
+            properties: {
+              description: { type: 'string' },
+              fields: {
+                items: {
+                  properties: {
+                    key: { type: 'string' },
+                    kind: {
+                      enum: ['multiselect', 'select', 'text', 'textarea'],
+                      type: 'string',
+                    },
+                    label: { type: 'string' },
+                    options: {
+                      items: {
+                        properties: {
+                          label: { type: 'string' },
+                          value: { type: 'string' },
+                        },
+                        required: ['label', 'value'],
+                        type: 'object',
+                      },
+                      type: 'array',
+                    },
+                    placeholder: { type: 'string' },
+                    required: { type: 'boolean' },
+                    value: {
+                      oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+                    },
+                  },
+                  required: ['key', 'kind', 'label'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              id: { type: 'string' },
+              metadata: {
+                additionalProperties: true,
+                type: 'object',
+              },
+              mode: {
+                enum: ['form', 'freeform'],
+                type: 'string',
+              },
+              prompt: { type: 'string' },
+            },
+            required: ['id', 'mode', 'prompt'],
+            type: 'object',
+          },
+        },
+        required: ['question'],
+        type: 'object',
+      },
+    },
+
     // ==================== Sub-Agent ====================
     {
       description:

@@ -213,11 +213,24 @@ Use it only for refs/URLs you cannot inspect directly, or when the active model 
 </visual_analysis>
 `;
 
-// Sections independent of sub-agent dispatch (visual fallback + plan/todo). Kept
-// as a base so contexts where callSubAgent is unavailable can drop the sub-agent
+const askUserQuestionSection = `
+<ask_user_question>
+\`askUserQuestion\` opens a UI-mediated question so the user can clarify their intent before you act.
+
+- Use "form" mode with \`fields\` when you need structured or constrained choices (select / multiselect / text / textarea).
+- Use "freeform" mode for a single open-ended response.
+- Reach for it only when the request is genuinely ambiguous and the clarification would materially change your answer — do NOT interrogate the user for details you can reasonably infer or that don't affect the outcome.
+- Ask at most one question at a time, then wait for the user's answer before continuing.
+- Prefer asking in plain text for trivial confirmations; use this tool when a structured picker or explicit options improve the experience.
+</ask_user_question>
+`;
+
+// Sections independent of sub-agent dispatch (visual fallback + ask-user + plan/todo).
+// Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
 // guidance without leaving dangling references to a tool the model can't call.
 const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
 ${visualAnalysisSection}
+${askUserQuestionSection}
 ${planTodoSection}`;
 
 /** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
