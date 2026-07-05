@@ -18,6 +18,13 @@ const MEMORY_LAYERS: GlobalMemoryLayer[] = [
 
 const DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM = 25;
 
+// NOTICE: Hard per-user, per-run fan-out ceiling. A single user with a large backlog of
+// un-extracted topics must never enqueue an unbounded flood of process-topic runs (we have seen a
+// single user back up 650k+ QStash messages). flowControl only caps concurrency, not queue depth,
+// so this count cap is the actual backlog guard. Remaining topics stay "un-extracted" and are
+// picked up by later hourly runs, so the cap self-drains without dropping data.
+const DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN = 100;
+
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -89,6 +96,8 @@ export interface MemoryExtractionPrivateConfig {
   };
   whitelistUsers?: string[];
   workflow?: {
+    /** Hard cap on topics fanned out per user per run; guards against QStash backlog storms. */
+    maxTopicsPerUserPerRun: number;
     /** Maximum active process-user-topics workflow workers across all users. */
     processUserTopicsParallelism: number;
   };
@@ -269,6 +278,10 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     process.env.MEMORY_USER_MEMORY_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
     DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
   );
+  const maxTopicsPerUserPerRun = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+    DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+  );
 
   const whitelistUsers = process.env.MEMORY_USER_MEMORY_WHITELIST_USERS?.split(',')
     .filter(Boolean)
@@ -337,6 +350,7 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     },
     whitelistUsers,
     workflow: {
+      maxTopicsPerUserPerRun,
       processUserTopicsParallelism,
     },
   };

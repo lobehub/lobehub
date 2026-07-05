@@ -24,6 +24,11 @@ const PROCESS_USER_TOPICS_FLOW_CONTROL_KEY =
 
 const { upstashWorkflowExtraHeaders, workflow } = parseMemoryExtractionConfig();
 
+// NOTICE: Hard per-user, per-run fan-out ceiling. flowControl only bounds concurrency, not queue
+// depth, so this count cap is what actually prevents one heavy user from backing up a massive
+// QStash fan-out. Remaining un-extracted topics resume on later hourly runs, so it self-drains.
+const MAX_TOPICS_PER_USER_PER_RUN = workflow?.maxTopicsPerUserPerRun ?? 100;
+
 export const processUserTopicsHandler = async (
   context: WorkflowContext<MemoryExtractionPayloadInput>,
 ) => {
@@ -43,7 +48,12 @@ export const processUserTopicsHandler = async (
 
   const executor = await MemoryExtractionExecutor.create();
 
-  const scheduleNextPage = async (userId: string, cursorCreatedAt: Date, cursorId: string) => {
+  const scheduleNextPage = async (
+    userId: string,
+    cursorCreatedAt: Date,
+    cursorId: string,
+    fanoutCount: number,
+  ) => {
     await MemoryExtractionWorkflowService.triggerProcessUserTopics(
       {
         ...buildWorkflowPayloadInput({
@@ -53,6 +63,8 @@ export const processUserTopicsHandler = async (
             id: cursorId,
             userId,
           },
+          // Carry the running fan-out count so the per-user ceiling spans the whole page chain.
+          topicFanoutCount: fanoutCount,
           topicIds: [],
           userId,
           userIds: [userId],
@@ -141,10 +153,20 @@ export const processUserTopicsHandler = async (
 
     const cursor = 'cursor' in topicBatch ? topicBatch.cursor : undefined;
 
-    for (const [batchIndex, topicIds] of chunk(ids, TOPIC_BATCH_SIZE).entries()) {
-      // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last path
-      // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
-      // URLs would inherit that base and lose the desired /process-topics/workflows prefix.
+    // NOTICE: Enforce the hard per-user, per-run fan-out ceiling on the paginated discovery path.
+    // Explicit topicIds requests (topicsFromPayload) are user-intended and never capped. The count
+    // rides in the payload across pages; any topics beyond the ceiling stay un-extracted and are
+    // picked up by later hourly runs, so no data is dropped.
+    const fanoutCount = params.topicFanoutCount;
+    const remainingBudget = topicsFromPayload
+      ? ids.length
+      : Math.max(0, MAX_TOPICS_PER_USER_PER_RUN - fanoutCount);
+    const idsToProcess = topicsFromPayload ? ids : ids.slice(0, remainingBudget);
+
+    for (const [batchIndex, topicIds] of chunk(idsToProcess, TOPIC_BATCH_SIZE).entries()) {
+      // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last
+      // path segment with the workflowId. If we invoked directly from /process-user-topics, child
+      // workflow URLs would inherit that base and lose the desired /process-topics prefix.
       const stepName = `memory:user-memory:extract:users:${userId}:process-topics-batch:${batchIndex}`;
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
@@ -164,7 +186,10 @@ export const processUserTopicsHandler = async (
       );
     }
 
-    if (!topicsFromPayload && cursor) {
+    const nextFanoutCount = fanoutCount + idsToProcess.length;
+
+    // Stop paginating once the per-user ceiling is reached; the remainder resumes next hourly run.
+    if (!topicsFromPayload && cursor && nextFanoutCount < MAX_TOPICS_PER_USER_PER_RUN) {
       const stepName = `memory:user-memory:extract:users:${userId}:topics:${cursor.id}:schedule-next-batch`;
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
@@ -178,7 +203,7 @@ export const processUserTopicsHandler = async (
           throw new Error('Invalid cursor date when scheduling next topic page');
         }
 
-        return scheduleNextPage(userId, createdAt, cursor.id);
+        return scheduleNextPage(userId, createdAt, cursor.id, nextFanoutCount);
       });
     }
   }

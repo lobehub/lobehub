@@ -142,6 +142,7 @@ export interface MemoryExtractionNormalizedPayload {
   sources: MemorySourceType[];
   to?: Date;
   topicCursor?: TopicWorkflowCursor;
+  topicFanoutCount: number;
   topicIds: string[];
   userCursor?: MemoryExtractionWorkflowCursor;
   userId?: string;
@@ -169,6 +170,9 @@ export const memoryExtractionPayloadSchema = z.object({
       userId: z.string(),
     })
     .optional(),
+  // Running count of topics already fanned out for this user in the current pagination chain.
+  // Used by process-user-topics to enforce a hard per-user, per-run fan-out ceiling.
+  topicFanoutCount: z.coerce.number().int().nonnegative().optional(),
   topicIds: z.array(z.string()).optional(),
   userCursor: z
     .object({
@@ -225,6 +229,7 @@ export const normalizeMemoryExtractionPayload = (
     sources: normalizeSources(parsed.sources),
     to: parsed.toDate,
     topicCursor: parsed.topicCursor,
+    topicFanoutCount: parsed.topicFanoutCount ?? 0,
     topicIds: Array.from(new Set(parsed.topicIds || [])).filter(Boolean),
     userCursor: parsed.userCursor,
     userId: parsed.userId ?? parsed.userIds?.[0],
@@ -263,6 +268,7 @@ export const buildWorkflowPayloadInput = (
   sources: payload.sources,
   toDate: payload.to,
   topicCursor: payload.topicCursor,
+  topicFanoutCount: payload.topicFanoutCount,
   topicIds: payload.topicIds,
   userCursor: payload.userCursor,
   userId: payload.userId ?? payload.userIds[0],
@@ -2708,6 +2714,7 @@ export class MemoryExtractionExecutor {
 const WORKFLOW_PATHS = {
   hourly: '/api/workflows/memory-user-memory/call-cron-hourly-analysis',
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
+  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
@@ -2827,6 +2834,31 @@ export class MemoryExtractionWorkflowService {
         // the per-batch topic concurrency to preserve the same per-user topic budget.
         parallelism: 20,
       },
+      headers: options?.extraHeaders,
+      url,
+    });
+  }
+
+  static triggerProcessTopic(
+    userId: string,
+    payload: MemoryExtractionPayloadInput,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
+    if (!payload.baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.topic, payload.baseUrl);
+    return this.getClient().trigger({
+      body: payload,
+      // NOTICE: fire-and-forget fan-out (replaces the old context.invoke). The per-user key bounds
+      // how many process-topic runs a single user can start concurrently, so one heavy user can't
+      // monopolize extraction. Serve-side flow control (processTopicWorkflowOptions) additionally
+      // keeps this workflow's own step-continuation messages out of the shared "$" (unbound) bucket.
+      flowControl: {
+        key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}`,
+        parallelism: 5,
+      } satisfies FlowControl,
       headers: options?.extraHeaders,
       url,
     });

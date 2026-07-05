@@ -1,11 +1,11 @@
 import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
-import { serve, serveMany } from '@upstash/workflow/hono';
+import { serve } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
 import { createWorkflowQstashClient } from '../qstashClient';
 import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly';
 import { personaUpdateHandler, personaUpdateWorkflowOptions } from './workflows/personaUpdate';
-import { processTopicWorkflow } from './workflows/processTopic';
+import { processTopicHandler, processTopicWorkflowOptions } from './workflows/processTopic';
 import { processTopicsHandler, processTopicsWorkflowOptions } from './workflows/processTopics';
 import { processUsersHandler, processUsersWorkflowOptions } from './workflows/processUsers';
 import {
@@ -74,14 +74,13 @@ app.post(
   ),
 );
 
-// NOTICE: Must use serveMany here. The `context.invoke(processTopicWorkflow)` call in
-// process-topics rewrites the URL last segment to the workflowId ("process-topic"). serveMany
-// multiplexes by that final segment to dispatch to the right workflow.
 app.post(
   '/pipelines/chat-topic/process-topic',
-  serveMany(
-    { 'process-topic': processTopicWorkflow },
-    { qstashClient: createWorkflowQstashClient() },
+  serve(
+    withOtelMetricsForUpstashWorkflows(processTopicHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+    }),
+    { ...processTopicWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 
