@@ -17,10 +17,20 @@ vi.mock('@/envs/redis', () => ({
 
 vi.mock('@/server/workflows/runGuard', () => ({
   assertWorkflowRunAllowed: mocks.assertWorkflowRunAllowed,
+  WorkflowRunGuardError: class WorkflowRunGuardError extends Error {
+    guardScope = 'workflow';
+    matchedKey = 'workflow-run-guard:test';
+    reason = 'maintenance';
+  },
 }));
 
-const { assertMemoryWorkflowContextAllowed, assertMemoryWorkflowRunAllowed } =
-  await import('../runGuard');
+const { checkGuard } = await import('../runGuard');
+
+const createContext = (payload: unknown, workflowRunId = 'wfr_context') => ({
+  requestPayload: payload,
+  run: vi.fn((_name: string, callback: () => unknown) => callback()),
+  workflowRunId,
+});
 
 describe('memory workflow run guard helper', () => {
   beforeEach(() => {
@@ -32,47 +42,50 @@ describe('memory workflow run guard helper', () => {
     mocks.assertWorkflowRunAllowed.mockResolvedValue(undefined);
   });
 
-  it('builds a memory workflow guard scope', async () => {
+  it('runs the Redis guard lookup inside a workflow step', async () => {
     const redis = { get: vi.fn() };
     mocks.initializeRedis.mockResolvedValue(redis);
+    const context = createContext({ userId: 'user-1', userIds: ['user-1'] });
 
-    await assertMemoryWorkflowRunAllowed({
-      payload: {
-        userId: 'user-1',
-        userIds: ['user-1'],
-      },
-      stepName: 'memory:user-memory:extract:cepa',
-      workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-      workflowRunId: 'wfr_1',
-    });
+    await expect(
+      checkGuard(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+      ),
+    ).resolves.toEqual({ result: true });
 
+    expect(context.run).toHaveBeenCalledWith(
+      'memory:user-memory:run-guard:api/workflows/memory-user-memory/pipelines/chat-topic/process-topic:entry',
+      expect.any(Function),
+    );
     expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledWith(
       redis,
       expect.objectContaining({
-        stepName: 'memory:user-memory:extract:cepa',
+        stepName: undefined,
         userId: 'user-1',
         workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-        workflowRunId: 'wfr_1',
+        workflowRunId: 'wfr_context',
       }),
     );
-    expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledTimes(1);
   });
 
-  it('uses workflowRunId from workflow context when available', async () => {
+  it('includes step scope when checking a step boundary', async () => {
     const redis = { get: vi.fn() };
     mocks.initializeRedis.mockResolvedValue(redis);
+    const context = createContext({ userIds: ['user-2'] });
 
-    await assertMemoryWorkflowContextAllowed(
-      {
-        requestPayload: {
-          userIds: ['user-2'],
-        },
-        workflowRunId: 'wfr_context',
-      } as never,
+    await checkGuard(
+      context as never,
       'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-      'memory:user-memory:extract:get-users',
+      {
+        stepName: 'memory:user-memory:extract:get-users',
+      },
     );
 
+    expect(context.run).toHaveBeenCalledWith(
+      'memory:user-memory:run-guard:api/workflows/memory-user-memory/pipelines/chat-topic/process-users:memory:user-memory:extract:get-users',
+      expect.any(Function),
+    );
     expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledWith(
       redis,
       expect.objectContaining({
@@ -81,16 +94,18 @@ describe('memory workflow run guard helper', () => {
         workflowRunId: 'wfr_context',
       }),
     );
-    expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledTimes(1);
   });
 
   it('passes null Redis when Redis is disabled', async () => {
     mocks.isRedisEnabled.mockReturnValue(false);
+    const context = createContext({ userId: 'user-1' });
 
-    await assertMemoryWorkflowRunAllowed({
-      payload: { userId: 'user-1' },
-      workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-    });
+    await expect(
+      checkGuard(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+      ),
+    ).resolves.toEqual({ result: true });
 
     expect(mocks.initializeRedis).not.toHaveBeenCalled();
     expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledWith(
@@ -102,14 +117,14 @@ describe('memory workflow run guard helper', () => {
   it('ignores malformed user ids from unknown payloads', async () => {
     const redis = { get: vi.fn() };
     mocks.initializeRedis.mockResolvedValue(redis);
+    const context = createContext({ userId: 123, userIds: [false, 'user-from-array'] });
 
-    await assertMemoryWorkflowRunAllowed({
-      payload: {
-        userId: 123,
-        userIds: [false, 'user-from-array'],
-      },
-      workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-    });
+    await expect(
+      checkGuard(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+      ),
+    ).resolves.toEqual({ result: true });
 
     expect(mocks.assertWorkflowRunAllowed).toHaveBeenCalledWith(
       redis,
@@ -117,15 +132,55 @@ describe('memory workflow run guard helper', () => {
     );
   });
 
-  it('propagates guard rejections', async () => {
+  it('propagates unexpected guard rejections', async () => {
     const error = new Error('blocked');
     mocks.assertWorkflowRunAllowed.mockRejectedValue(error);
+    const context = createContext({ userId: 'user-1' });
 
     await expect(
-      assertMemoryWorkflowRunAllowed({
-        payload: { userId: 'user-1' },
-        workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-      }),
+      checkGuard(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+      ),
     ).rejects.toBe(error);
+  });
+
+  it('converts workflow guard rejections into block details and a response', async () => {
+    const { WorkflowRunGuardError } = await import('@/server/workflows/runGuard');
+    mocks.assertWorkflowRunAllowed.mockRejectedValue(
+      new WorkflowRunGuardError({
+        match: {
+          key: 'workflow-run-guard:test',
+          scope: 'global',
+          value: { reason: 'maintenance' },
+        },
+        scope: {
+          workflowPath: 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+        },
+      }),
+    );
+    const context = createContext({ userId: 'user-1' });
+
+    await expect(
+      checkGuard(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+        {
+          response: { processedUsers: 0 },
+        },
+      ),
+    ).resolves.toEqual({
+      block: {
+        matchedKey: 'workflow-run-guard:test',
+        reason: 'maintenance',
+        scope: 'workflow',
+      },
+      response: {
+        message: 'Memory workflow disabled by run guard (maintenance); skipping.',
+        processedUsers: 0,
+        skipped: true,
+      },
+      result: false,
+    });
   });
 });

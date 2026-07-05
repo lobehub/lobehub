@@ -19,7 +19,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { createWorkflowQstashClient } from '../../qstashClient';
-import { resolveMemoryWorkflowRunGuard } from './runGuard';
+import { checkGuard } from './runGuard';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -49,13 +49,10 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       try {
         // NOTICE: Return (never throw) on a guard match — a throw before the first step makes
         // Upstash re-enqueue the run, turning a "disable" guard into an infinite retry storm.
-        const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
-        if (guardBlock) {
+        const entryGuard = await checkGuard(context, WORKFLOW_PATH);
+        if (!entryGuard.result) {
           span.setStatus({ code: SpanStatusCode.OK });
-          return {
-            message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
-            skipped: true,
-          };
+          return entryGuard.response;
         }
 
         const topicId = payload.topicIds[0];
@@ -77,6 +74,12 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // Check before CEPA extraction so cancelled tasks stop at the earliest safe boundary.
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           const cancelled = await context.run(stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
@@ -99,6 +102,12 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           }
 
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           await context.run(stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
@@ -121,6 +130,12 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             // NOTICE: Cooperative cascading cancellation for the workflow tree.
             // Re-check before identity extraction to avoid running sequential identity step after cancel.
             const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`;
+            const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+            if (!guard.result) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return guard.response;
+            }
+
             const cancelled = await context.run(stepName, () =>
               getServerDB().then((db) =>
                 new AsyncTaskModel(
@@ -144,6 +159,12 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           }
 
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           await context.run(stepName, () =>
             executor.extractTopic({
               asyncTaskId: payload.asyncTaskId,
@@ -164,6 +185,12 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
 
         if (payload.asyncTaskId && payload.userInitiated) {
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:progress`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           await context.run(stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(

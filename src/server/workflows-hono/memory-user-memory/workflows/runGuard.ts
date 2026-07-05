@@ -5,16 +5,6 @@ import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { type BaseRedisProvider } from '@/libs/redis/types';
 import { assertWorkflowRunAllowed, WorkflowRunGuardError } from '@/server/workflows/runGuard';
 
-interface MemoryWorkflowGuardInput {
-  payload?: unknown;
-  stepName?: string;
-  workflowPath: string;
-  workflowRunId?: string;
-}
-
-const getWorkflowRunId = (context: WorkflowContext<unknown>): string | undefined =>
-  (context as unknown as { workflowRunId?: string }).workflowRunId;
-
 const getRedis = async (): Promise<BaseRedisProvider | null> => {
   const config = getRedisConfig();
   if (!isRedisEnabled(config)) return null;
@@ -34,102 +24,157 @@ const getPayloadUserId = (payload: unknown): string | undefined => {
   return userIds.find((id): id is string => typeof id === 'string' && id.length > 0);
 };
 
-/**
- * Checks whether a memory workflow run may continue for the provided scope.
- *
- * Use when:
- * - Memory workflow handlers start or reach an expensive step boundary.
- * - Redis failures should inherit the shared run guard fail-open behavior.
- *
- * Expects:
- * - `workflowPath` identifies the current memory workflow route.
- * - `payload` may include `userId` or `userIds` for user-level guard checks.
- *
- * Returns:
- * - Resolves when no guard blocks the workflow.
- * - Rejects with the shared guard error when a matching guard exists.
- */
-export const assertMemoryWorkflowRunAllowed = async ({
-  payload,
-  stepName,
-  workflowPath,
-  workflowRunId,
-}: MemoryWorkflowGuardInput): Promise<void> => {
-  const redis = await getRedis();
-
-  await assertWorkflowRunAllowed(redis, {
-    stepName,
-    userId: getPayloadUserId(payload),
-    workflowPath,
-    workflowRunId,
-  });
-};
-
-/**
- * Checks whether a memory workflow context may continue for a route or step.
- *
- * Use when:
- * - A Hono Upstash workflow handler has a concrete {@link WorkflowContext}.
- * - The caller wants to include the current workflow run id when available.
- *
- * Expects:
- * - `workflowPath` is the route path serving the current workflow.
- * - `stepName` is passed before the matching `context.run` or `context.invoke` call.
- *
- * Returns:
- * - Resolves when no guard blocks the workflow.
- * - Rejects with the shared guard error when a matching guard exists.
- */
-export const assertMemoryWorkflowContextAllowed = async (
-  context: WorkflowContext<unknown>,
-  workflowPath: string,
-  stepName?: string,
-): Promise<void> => {
-  await assertMemoryWorkflowRunAllowed({
-    payload: context.requestPayload,
-    stepName,
-    workflowPath,
-    workflowRunId: getWorkflowRunId(context),
-  });
-};
+const getWorkflowRunId = (context: WorkflowContext<unknown>): string | undefined =>
+  (context as unknown as { workflowRunId?: string }).workflowRunId;
 
 /**
  * Details of a run guard that blocks a memory workflow.
  */
 export interface MemoryWorkflowRunGuardBlock {
+  /**
+   * Redis key that matched the current workflow scope.
+   */
   matchedKey: string;
+
+  /**
+   * Human-readable operator reason stored with the guard.
+   */
   reason?: string;
+
+  /**
+   * Logical guard scope that matched.
+   */
   scope: string;
 }
 
 /**
- * Resolves whether a run guard blocks this memory workflow, WITHOUT throwing.
+ * Extra response fields for a blocked memory workflow.
+ */
+type MemoryWorkflowRunGuardResponseExtra = Record<string, unknown>;
+
+/**
+ * Response returned when a memory workflow run guard blocks execution.
+ *
+ * @param TExtra Additional fields expected by the current workflow response shape.
+ */
+export type MemoryWorkflowRunGuardResponse<TExtra extends MemoryWorkflowRunGuardResponseExtra> = {
+  /**
+   * Human-readable skip message.
+   */
+  message: string;
+
+  /**
+   * Whether this workflow stopped because of a guard.
+   */
+  skipped: true;
+} & TExtra;
+
+/**
+ * Result of a memory workflow run guard check.
+ *
+ * @param TExtra Additional fields expected by the current workflow response shape.
+ */
+export type MemoryWorkflowRunGuardCheck<TExtra extends MemoryWorkflowRunGuardResponseExtra> =
+  | {
+      /**
+       * Whether workflow execution may continue.
+       */
+      result: true;
+    }
+  | {
+      /**
+       * Matched guard details for observability or custom handling.
+       */
+      block: MemoryWorkflowRunGuardBlock;
+
+      /**
+       * Whether workflow execution may continue.
+       */
+      result: false;
+
+      /**
+       * Handler-specific response to return immediately.
+       */
+      response: MemoryWorkflowRunGuardResponse<TExtra>;
+    };
+
+/**
+ * Options for checking a memory workflow run guard.
+ *
+ * @param TExtra Additional fields expected by the current workflow response shape.
+ */
+export interface MemoryWorkflowRunGuardCheckOptions<
+  TExtra extends MemoryWorkflowRunGuardResponseExtra,
+> {
+  /**
+   * Extra fields merged into the blocked response.
+   */
+  response?: TExtra;
+
+  /**
+   * Step name guarded before the matching workflow operation.
+   */
+  stepName?: string;
+}
+
+const createBlockedResponse = <TExtra extends MemoryWorkflowRunGuardResponseExtra>(
+  block: MemoryWorkflowRunGuardBlock,
+  extra?: TExtra,
+): MemoryWorkflowRunGuardResponse<TExtra> => ({
+  ...(extra ?? ({} as TExtra)),
+  message: `Memory workflow disabled by run guard (${block.reason ?? block.scope}); skipping.`,
+  skipped: true,
+});
+
+/**
+ * Checks a memory workflow run guard as one explicit Upstash workflow step.
  *
  * Use when:
- * - A memory workflow handler wants to stop a blocked run at its entry.
+ * - A workflow handler wants a lightweight guard check before continuing.
+ * - Redis-backed guard state must be read inside `context.run`.
+ * - Redis failures should inherit the shared run guard fail-open behavior.
  *
- * Why not throw:
- * - Upstash Workflow treats an error thrown before the first step as an authorization
- *   failure and re-enqueues the run. A "disable" guard implemented via throw therefore turns
- *   into an infinite retry storm instead of stopping work. Handlers must translate a match into
- *   a graceful `return` (a completed run with no steps → HTTP 2xx → no retry).
+ * Expects:
+ * - `context` is the active Upstash workflow context.
+ * - `workflowPath` identifies the current memory workflow route.
+ * - `stepName` is only provided for step-boundary checks.
  *
  * Returns:
- * - The matched guard details when a guard blocks the run.
- * - `null` when no guard matches (or Redis fails open).
+ * - `result: true` when no guard matches.
+ * - `result: false` and a workflow-shaped response when blocked.
  */
-export const resolveMemoryWorkflowRunGuard = async (
+export const checkGuard = async <
+  TExtra extends MemoryWorkflowRunGuardResponseExtra = MemoryWorkflowRunGuardResponseExtra,
+>(
   context: WorkflowContext<unknown>,
   workflowPath: string,
-): Promise<MemoryWorkflowRunGuardBlock | null> => {
-  try {
-    await assertMemoryWorkflowContextAllowed(context, workflowPath);
-    return null;
-  } catch (error) {
-    if (error instanceof WorkflowRunGuardError) {
-      return { matchedKey: error.matchedKey, reason: error.reason, scope: error.guardScope };
-    }
-    // The underlying guard check fails open on Redis errors, so anything else is unexpected.
-    throw error;
-  }
+  options: MemoryWorkflowRunGuardCheckOptions<TExtra> = {},
+): Promise<MemoryWorkflowRunGuardCheck<TExtra>> => {
+  const { response, stepName } = options;
+  const block = await context.run<MemoryWorkflowRunGuardBlock | null>(
+    `memory:user-memory:run-guard:${workflowPath}:${stepName ?? 'entry'}`,
+    async () => {
+      const redis = await getRedis();
+
+      try {
+        await assertWorkflowRunAllowed(redis, {
+          stepName,
+          userId: getPayloadUserId(context.requestPayload),
+          workflowPath,
+          workflowRunId: getWorkflowRunId(context),
+        });
+        return null;
+      } catch (error) {
+        if (error instanceof WorkflowRunGuardError) {
+          return { matchedKey: error.matchedKey, reason: error.reason, scope: error.guardScope };
+        }
+        // The underlying guard check fails open on Redis errors, so anything else is unexpected.
+        throw error;
+      }
+    },
+  );
+
+  return block
+    ? { block, response: createBlockedResponse(block, response), result: false }
+    : { result: true };
 };

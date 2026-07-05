@@ -7,7 +7,7 @@ import {
   UserPersonaService,
 } from '@/server/services/memory/userMemory/persona/service';
 
-import { resolveMemoryWorkflowRunGuard } from './runGuard';
+import { checkGuard } from './runGuard';
 
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/persona/update-writing';
 
@@ -18,16 +18,19 @@ const workflowPayloadSchema = z.object({
 export const personaUpdateHandler = async (context: WorkflowContext) => {
   // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash
   // re-enqueue the run, turning a "disable" guard into an infinite retry storm.
-  const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
-  if (guardBlock) {
-    return {
-      message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
-      processedUsers: 0,
-      skipped: true,
-    };
-  }
+  const entryGuard = await checkGuard(context, WORKFLOW_PATH, {
+    response: { processedUsers: 0 },
+  });
+  if (!entryGuard.result) return entryGuard.response;
 
-  const payload = await context.run('memory:pipelines:persona:update-writing:parse-payload', () =>
+  const parsePayloadStepName = 'memory:pipelines:persona:update-writing:parse-payload';
+  const parsePayloadGuard = await checkGuard(context, WORKFLOW_PATH, {
+    response: { processedUsers: 0 },
+    stepName: parsePayloadStepName,
+  });
+  if (!parsePayloadGuard.result) return parsePayloadGuard.response;
+
+  const payload = await context.run(parsePayloadStepName, () =>
     workflowPayloadSchema.parse(context.requestPayload || {}),
   );
   const db = await getServerDB();
@@ -39,20 +42,25 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
 
   const service = new UserPersonaService(db);
 
-  await Promise.all(
-    userIds.map(async (userId) =>
-      context.run(`memory:pipelines:persona:update-writing:users:${userId}`, async () => {
-        const jobInput = await buildUserPersonaJobInput(db, userId);
-        const result = await service.composeWriting({ ...jobInput, userId });
-        return {
-          diffId: result.diff?.id,
-          documentId: result.document.id,
-          userId,
-          version: result.document.version,
-        };
-      }),
-    ),
-  );
+  for (const userId of userIds) {
+    const stepName = `memory:pipelines:persona:update-writing:users:${userId}`;
+    const guard = await checkGuard(context, WORKFLOW_PATH, {
+      response: { processedUsers: 0 },
+      stepName,
+    });
+    if (!guard.result) return guard.response;
+
+    await context.run(stepName, async () => {
+      const jobInput = await buildUserPersonaJobInput(db, userId);
+      const result = await service.composeWriting({ ...jobInput, userId });
+      return {
+        diffId: result.diff?.id,
+        documentId: result.document.id,
+        userId,
+        version: result.document.version,
+      };
+    });
+  }
 
   return {
     message: 'User persona processed via workflow.',

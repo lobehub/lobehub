@@ -17,7 +17,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { processTopicWorkflow } from './processTopic';
-import { resolveMemoryWorkflowRunGuard } from './runGuard';
+import { checkGuard } from './runGuard';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topics';
@@ -50,16 +50,12 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
       try {
         // NOTICE: Return (never throw) on a guard match — a throw before the first step makes
         // Upstash re-enqueue the run, turning a "disable" guard into an infinite retry storm.
-        const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
-        if (guardBlock) {
+        const entryGuard = await checkGuard(context, WORKFLOW_PATH, {
+          response: { processedTopics: 0, processedUsers: 0 },
+        });
+        if (!entryGuard.result) {
           span.setStatus({ code: SpanStatusCode.OK });
-
-          return {
-            message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
-            processedTopics: 0,
-            processedUsers: 0,
-            skipped: true,
-          };
+          return entryGuard.response;
         }
 
         if (!payload.userIds.length) {
@@ -95,6 +91,15 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // If cancelled, stop before fan-out into per-topic child workflows.
           const stepName = `memory:user-memory:extract:users:${userId}:cancel-check`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, {
+            response: { processedTopics: 0, processedUsers: 0 },
+            stepName,
+          });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           const cancelled = await context.run(stepName, () =>
             getServerDB().then((db) =>
               new AsyncTaskModel(
@@ -116,6 +121,15 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
         // Delegate per-topic extraction to dedicated workflow for better isolation.
         for (const [index, topicId] of payload.topicIds.entries()) {
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:invoke:${index}`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, {
+            response: { processedTopics: 0, processedUsers: 0 },
+            stepName,
+          });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
           await context.invoke(stepName, {
             body: {
               ...payload,
@@ -142,6 +156,15 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
 
         // Trigger user persona update after topic processing using the workflow client.
         const personaUpdateStepName = `memory:user-memory:users:${userId}`;
+        const personaUpdateGuard = await checkGuard(context, WORKFLOW_PATH, {
+          response: { processedTopics: 0, processedUsers: 0 },
+          stepName: personaUpdateStepName,
+        });
+        if (!personaUpdateGuard.result) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return personaUpdateGuard.response;
+        }
+
         await context.run(personaUpdateStepName, async () => {
           await MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
             extraHeaders: upstashWorkflowExtraHeaders,

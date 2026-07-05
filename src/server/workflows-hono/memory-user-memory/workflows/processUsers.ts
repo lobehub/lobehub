@@ -12,7 +12,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { resolveMemoryWorkflowRunGuard } from './runGuard';
+import { checkGuard } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 50;
@@ -29,13 +29,8 @@ export const processUsersHandler = async (
 
   // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash
   // re-enqueue the run, turning a "disable" guard into an infinite retry storm.
-  const guardBlock = await resolveMemoryWorkflowRunGuard(context, WORKFLOW_PATH);
-  if (guardBlock) {
-    return {
-      message: `Memory workflow disabled by run guard (${guardBlock.reason ?? guardBlock.scope}); skipping.`,
-      skipped: true,
-    };
-  }
+  const entryGuard = await checkGuard(context, WORKFLOW_PATH);
+  if (!entryGuard.result) return entryGuard.response;
 
   if (params.sources.length === 0) {
     return { message: 'No sources provided, skip memory extraction.' };
@@ -44,6 +39,9 @@ export const processUsersHandler = async (
     // NOTICE: Cooperative cascading cancellation for the workflow tree.
     // If root task has cancelRequestedAt, this stage stops scheduling child workflows.
     const stepName = 'memory:user-memory:extract:cancel-check:root';
+    const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+    if (!guard.result) return guard.response;
+
     const cancelled = await context.run(stepName, () =>
       getServerDB().then((db) =>
         new AsyncTaskModel(
@@ -68,6 +66,9 @@ export const processUsersHandler = async (
     : undefined;
 
   const getUsersStepName = 'memory:user-memory:extract:get-users';
+  const getUsersGuard = await checkGuard(context, WORKFLOW_PATH, { stepName: getUsersStepName });
+  if (!getUsersGuard.result) return getUsersGuard.response;
+
   const userBatch = await context.run(getUsersStepName, () =>
     params.userIds.length > 0
       ? { ids: params.userIds }
@@ -82,25 +83,29 @@ export const processUsersHandler = async (
   const cursor = 'cursor' in userBatch ? userBatch.cursor : undefined;
 
   const batches = chunk(ids, USER_BATCH_SIZE);
-  await Promise.all(
-    batches.map(async (userIds) => {
-      const stepName = 'memory:user-memory:extract:users:process-topic-batches';
-      return context.run(stepName, () =>
-        MemoryExtractionWorkflowService.triggerProcessUserTopics(
-          {
-            ...buildWorkflowPayloadInput(params),
-            topicCursor: undefined,
-            userId: userIds[0],
-            userIds,
-          },
-          { extraHeaders: upstashWorkflowExtraHeaders },
-        ),
-      );
-    }),
-  );
+  for (const [index, userIds] of batches.entries()) {
+    const stepName = `memory:user-memory:extract:users:process-topic-batches:${index}`;
+    const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+    if (!guard.result) return guard.response;
+
+    await context.run(stepName, () =>
+      MemoryExtractionWorkflowService.triggerProcessUserTopics(
+        {
+          ...buildWorkflowPayloadInput(params),
+          topicCursor: undefined,
+          userId: userIds[0],
+          userIds,
+        },
+        { extraHeaders: upstashWorkflowExtraHeaders },
+      ),
+    );
+  }
 
   if (params.userIds.length === 0 && cursor) {
     const stepName = 'memory:user-memory:extract:users:schedule-next-user-batch';
+    const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+    if (!guard.result) return guard.response;
+
     await context.run(stepName, () =>
       MemoryExtractionWorkflowService.triggerProcessUsers(
         {
