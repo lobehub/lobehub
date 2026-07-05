@@ -58,6 +58,22 @@ vi.mock('antd-style', () => ({
   useResponsive: () => ({ lg: true }),
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => undefined,
+}));
+
+vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
+  useAuthorInfo: () => undefined,
+}));
+
+vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
+  useDocumentTransferMenuItem: () => null,
+}));
+
+vi.mock('@/features/VisibilityConfirmContent', () => ({
+  default: () => null,
+}));
+
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: 'create_content' | 'edit_own_content') => ({
     allowed: permissionMock[action],
@@ -67,6 +83,27 @@ vi.mock('@/hooks/usePermission', () => ({
 
 vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/page', () => ({
+  pageSelectors: {
+    getDocumentById: (_id: string) => (_s: unknown) => undefined,
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      publishPageToWorkspace: vi.fn(),
+      setPageVisibility: vi.fn(),
+    }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: {
+    userId: () => undefined,
+  },
 }));
 
 vi.mock('@/store/document/slices/editor', () => ({
