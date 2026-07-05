@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "积分余额即将用尽",
   "notification.item.image_generation_completed": "图片生成完成",
   "notification.item.storage_overage_cap_reached": "存储按量付费上限已触达",
+  "notification.item.subscription_payment_failed": "订阅续费扣款失败",
   "notification.item.video_generation_completed": "视频生成完成",
   "notification.item.workspace_member_invited": "工作区邀请",
   "notification.item.workspace_member_joined": "新成员加入",

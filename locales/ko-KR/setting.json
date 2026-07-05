@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "크레딧 잔액이 부족합니다",
   "notification.item.image_generation_completed": "이미지 생성 완료",
   "notification.item.storage_overage_cap_reached": "스토리지 초과 사용 한도 도달",
+  "notification.item.subscription_payment_failed": "구독 갱신 결제가 실패했습니다",
   "notification.item.video_generation_completed": "동영상 생성 완료",
   "notification.item.workspace_member_invited": "워크스페이스 초대",
   "notification.item.workspace_member_joined": "새 멤버가 가입했습니다",

@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Le solde de crédit est faible",
   "notification.item.image_generation_completed": "Génération d’image terminée",
   "notification.item.storage_overage_cap_reached": "Plafond de dépassement de stockage atteint",
+  "notification.item.subscription_payment_failed": "Le paiement du renouvellement de l'abonnement a échoué",
   "notification.item.video_generation_completed": "Génération de vidéo terminée",
   "notification.item.workspace_member_invited": "Invitation à l'espace de travail",
   "notification.item.workspace_member_joined": "Nouveau membre ajouté",

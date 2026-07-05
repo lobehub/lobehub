@@ -548,6 +548,7 @@ export default {
   'notification.item.credit_balance_low': 'Credit balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
+  'notification.item.subscription_payment_failed': 'Subscription renewal payment failed',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',

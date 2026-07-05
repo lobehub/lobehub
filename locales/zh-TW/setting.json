@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "信用餘額即將不足",
   "notification.item.image_generation_completed": "圖片生成完成",
   "notification.item.storage_overage_cap_reached": "已達到存儲按需付費上限",
+  "notification.item.subscription_payment_failed": "訂閱續約付款失敗",
   "notification.item.video_generation_completed": "影片生成完成",
   "notification.item.workspace_member_invited": "工作區邀請",
   "notification.item.workspace_member_joined": "新成員加入",

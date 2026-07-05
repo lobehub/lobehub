@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "クレジット残高が少なくなっています",
   "notification.item.image_generation_completed": "画像生成が完了しました",
   "notification.item.storage_overage_cap_reached": "ストレージの従量課金上限に到達しました",
+  "notification.item.subscription_payment_failed": "サブスクリプション更新の支払いに失敗しました",
   "notification.item.video_generation_completed": "動画生成が完了しました",
   "notification.item.workspace_member_invited": "ワークスペースへの招待",
   "notification.item.workspace_member_joined": "新しいメンバーが参加しました",

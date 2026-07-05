@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Saldo crediti in esaurimento",
   "notification.item.image_generation_completed": "Generazione immagine completata",
   "notification.item.storage_overage_cap_reached": "Raggiunto il limite di spesa per l'archiviazione",
+  "notification.item.subscription_payment_failed": "Il pagamento per il rinnovo dell'abbonamento non è riuscito",
   "notification.item.video_generation_completed": "Generazione video completata",
   "notification.item.workspace_member_invited": "Invito al workspace",
   "notification.item.workspace_member_joined": "Nuovo membro aggiunto",

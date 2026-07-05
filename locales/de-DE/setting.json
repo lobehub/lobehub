@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Guthabenstand niedrig",
   "notification.item.image_generation_completed": "Bilderstellung abgeschlossen",
   "notification.item.storage_overage_cap_reached": "Speicher-Pay-as-you-go-Limit erreicht",
+  "notification.item.subscription_payment_failed": "Die Zahlung für die Abonnementverlängerung ist fehlgeschlagen",
   "notification.item.video_generation_completed": "Videoerstellung abgeschlossen",
   "notification.item.workspace_member_invited": "Arbeitsbereichseinladung",
   "notification.item.workspace_member_joined": "Neues Mitglied beigetreten",

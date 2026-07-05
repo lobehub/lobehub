@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Kredietsaldo raakt bijna op",
   "notification.item.image_generation_completed": "Afbeeldingsgeneratie voltooid",
   "notification.item.storage_overage_cap_reached": "Opslaglimiet bereikt",
+  "notification.item.subscription_payment_failed": "Betaling voor verlenging van abonnement mislukt",
   "notification.item.video_generation_completed": "Videogeneratie voltooid",
   "notification.item.workspace_member_invited": "Werkruimte-uitnodiging",
   "notification.item.workspace_member_joined": "Nieuw lid toegevoegd",

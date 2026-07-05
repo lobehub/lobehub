@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Кредитный баланс на исходе",
   "notification.item.image_generation_completed": "Генерация изображения завершена",
   "notification.item.storage_overage_cap_reached": "Достигнут лимит оплаты за превышение хранилища",
+  "notification.item.subscription_payment_failed": "Не удалось выполнить оплату за продление подписки",
   "notification.item.video_generation_completed": "Генерация видео завершена",
   "notification.item.workspace_member_invited": "Приглашение в рабочую область",
   "notification.item.workspace_member_joined": "Новый участник присоединился",

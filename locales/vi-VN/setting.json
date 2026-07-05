@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "Số dư tín dụng sắp hết",
   "notification.item.image_generation_completed": "Tạo ảnh hoàn tất",
   "notification.item.storage_overage_cap_reached": "Đã đạt giới hạn chi tiêu lưu trữ",
+  "notification.item.subscription_payment_failed": "Thanh toán gia hạn đăng ký không thành công",
   "notification.item.video_generation_completed": "Tạo video hoàn tất",
   "notification.item.workspace_member_invited": "Lời mời tham gia không gian làm việc",
   "notification.item.workspace_member_joined": "Thành viên mới đã tham gia",

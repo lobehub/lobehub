@@ -498,6 +498,7 @@
   "notification.item.credit_balance_low": "موجودی اعتبار در حال کاهش است",
   "notification.item.image_generation_completed": "تولید تصویر با موفقیت انجام شد",
   "notification.item.storage_overage_cap_reached": "حد پرداخت اضافی ذخیره‌سازی رسید",
+  "notification.item.subscription_payment_failed": "پرداخت تمدید اشتراک ناموفق بود",
   "notification.item.video_generation_completed": "تولید ویدئو با موفقیت انجام شد",
   "notification.item.workspace_member_invited": "دعوت به فضای کاری",
   "notification.item.workspace_member_joined": "عضو جدید اضافه شد",
