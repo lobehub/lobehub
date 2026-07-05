@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -229,6 +229,47 @@ describe('ClaudeCodeQuotaMenu', () => {
     await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('heteroAgent.claudeQuota.errorRateLimited')).toBeTruthy();
     expect(screen.queryByText('heteroAgent.quota.left:92')).toBeNull();
+  });
+
+  it('ignores stale request loading updates after switching Claude Code credential source', async () => {
+    const requests: Array<(snapshot: ClaudeCodeQuotaSnapshot) => void> = [];
+    mockService.getClaudeCodeQuota.mockImplementation(
+      () =>
+        new Promise<ClaudeCodeQuotaSnapshot>((resolve) => {
+          requests.push(resolve);
+        }),
+    );
+
+    const { rerender } = render(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-a' }} />);
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+
+    rerender(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-b' }} />);
+
+    await waitFor(() => expect(requests).toHaveLength(2));
+
+    await act(async () => {
+      requests[0](
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        }),
+      );
+    });
+
+    expect(screen.getAllByTestId('skeleton')).toHaveLength(3);
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      requests[1](
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 20, windowMinutes: 300 },
+        }),
+      );
+    });
+
+    expect(await screen.findByText('heteroAgent.quota.left:80')).toBeTruthy();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('renders the empty state when the snapshot has no windows', async () => {

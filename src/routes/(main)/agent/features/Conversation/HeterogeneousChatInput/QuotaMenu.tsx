@@ -176,6 +176,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   const [now, setNow] = useState(() => Date.now());
   const lastTransientErrorAtRef = useRef(0);
   const quotaRef = useRef<S | null>(null);
+  const requestIdRef = useRef(0);
   const sourceKeyRef = useRef(sourceKey);
 
   const hasQuotaDataForSnapshot = useCallback(
@@ -192,9 +193,20 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     setQuota(nextQuota);
   }, []);
 
+  const isCurrentRequest = useCallback(
+    (requestId: number, requestSourceKey: string) =>
+      requestId === requestIdRef.current && requestSourceKey === sourceKeyRef.current,
+    [],
+  );
+
   const applyQuotaResult = useCallback(
-    (nextQuota: S, options: LoadQuotaOptions = {}, requestSourceKey = sourceKeyRef.current) => {
-      if (requestSourceKey !== sourceKeyRef.current) return;
+    (
+      nextQuota: S,
+      options: LoadQuotaOptions = {},
+      requestId = requestIdRef.current,
+      requestSourceKey = sourceKeyRef.current,
+    ) => {
+      if (!isCurrentRequest(requestId, requestSourceKey)) return;
 
       if (nextQuota.status === 'error') {
         lastTransientErrorAtRef.current = Date.now();
@@ -210,27 +222,31 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       setRefreshError(null);
       setQuotaSnapshot(nextQuota);
     },
-    [hasQuotaDataForSnapshot, setQuotaSnapshot],
+    [hasQuotaDataForSnapshot, isCurrentRequest, setQuotaSnapshot],
   );
 
   const loadQuota = useCallback(
     async (options: LoadQuotaOptions = {}) => {
       const requestSourceKey = sourceKeyRef.current;
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
 
       setRefreshError(null);
       setLoading(true);
 
       try {
         const nextQuota = await fetchQuota();
-        applyQuotaResult(nextQuota, options, requestSourceKey);
+        applyQuotaResult(nextQuota, options, requestId, requestSourceKey);
       } catch (error) {
         console.error('Failed to fetch agent quota:', error);
-        applyQuotaResult(createErrorSnapshot(error), options, requestSourceKey);
+        applyQuotaResult(createErrorSnapshot(error), options, requestId, requestSourceKey);
       } finally {
-        setLoading(false);
+        if (isCurrentRequest(requestId, requestSourceKey)) {
+          setLoading(false);
+        }
       }
     },
-    [applyQuotaResult, createErrorSnapshot, fetchQuota],
+    [applyQuotaResult, createErrorSnapshot, fetchQuota, isCurrentRequest],
   );
 
   useEffect(() => {
