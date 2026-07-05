@@ -12,7 +12,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 200;
@@ -26,6 +26,8 @@ const resolveBaseUrl = () => webhook.baseUrl || appEnv.INTERNAL_APP_URL || appEn
 export const hourlyWorkflowHandler = async (
   context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
 ) => {
+  await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
   const { cursor, dryRun } = context.requestPayload || {};
 
   // NOTICE: A run guard match must terminate the workflow by returning, never by throwing.

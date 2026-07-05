@@ -126,6 +126,18 @@ const createBlockedResponse = <TExtra extends MemoryWorkflowRunGuardResponseExtr
   skipped: true,
 });
 
+// NOTICE: Upstash retries/DLQs a workflow if it throws before the first persisted step.
+// Keep this no-op as the first entry action so later guard/config failures are normal steps.
+export const ensureWorkflowStarted = (
+  context: WorkflowContext<unknown>,
+  workflowPath: string,
+): Promise<{ started: true }> =>
+  Promise.resolve(
+    context.run(`memory:user-memory:workflow-started:${workflowPath}`, () => ({
+      started: true as const,
+    })),
+  );
+
 /**
  * Checks a memory workflow run guard as one explicit Upstash workflow step.
  *

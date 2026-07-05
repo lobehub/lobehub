@@ -14,7 +14,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
@@ -32,6 +32,8 @@ const MAX_TOPICS_PER_USER_PER_RUN = workflow?.maxTopicsPerUserPerRun ?? 100;
 export const processUserTopicsHandler = async (
   context: WorkflowContext<MemoryExtractionPayloadInput>,
 ) => {
+  await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
   // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash

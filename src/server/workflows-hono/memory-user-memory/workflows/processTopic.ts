@@ -16,7 +16,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -32,6 +32,8 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
   upstashWorkflowTracer.startActiveSpan(
     'workflow:memory-user-memory:process-topic',
     async (span) => {
+      await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
       const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
       span.setAttributes({

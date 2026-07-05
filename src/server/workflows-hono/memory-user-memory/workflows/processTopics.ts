@@ -17,7 +17,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topics';
@@ -34,6 +34,8 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
   upstashWorkflowTracer.startActiveSpan(
     'workflow:memory-user-memory:process-topics',
     async (span) => {
+      await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
       const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
       span.setAttributes({

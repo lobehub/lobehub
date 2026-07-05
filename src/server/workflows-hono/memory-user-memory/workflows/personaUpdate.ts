@@ -7,7 +7,7 @@ import {
   UserPersonaService,
 } from '@/server/services/memory/userMemory/persona/service';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/persona/update-writing';
 
@@ -16,6 +16,8 @@ const workflowPayloadSchema = z.object({
 });
 
 export const personaUpdateHandler = async (context: WorkflowContext) => {
+  await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
   // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash
   // re-enqueue the run, turning a "disable" guard into an infinite retry storm.
   const entryGuard = await checkGuard(context, WORKFLOW_PATH, {

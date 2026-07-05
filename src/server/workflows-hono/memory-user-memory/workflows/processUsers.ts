@@ -12,7 +12,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { checkGuard } from './runGuard';
+import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 50;
@@ -25,6 +25,8 @@ const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 export const processUsersHandler = async (
   context: WorkflowContext<MemoryExtractionPayloadInput>,
 ) => {
+  await ensureWorkflowStarted(context, WORKFLOW_PATH);
+
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
   // NOTICE: Return (never throw) on a guard match — a throw before the first step makes Upstash

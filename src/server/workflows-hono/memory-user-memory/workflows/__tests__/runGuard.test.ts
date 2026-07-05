@@ -24,7 +24,7 @@ vi.mock('@/server/workflows/runGuard', () => ({
   },
 }));
 
-const { checkGuard } = await import('../runGuard');
+const { checkGuard, ensureWorkflowStarted } = await import('../runGuard');
 
 const createContext = (payload: unknown, workflowRunId = 'wfr_context') => ({
   requestPayload: payload,
@@ -40,6 +40,22 @@ describe('memory workflow run guard helper', () => {
     mocks.isRedisEnabled.mockReturnValue(true);
     mocks.initializeRedis.mockResolvedValue({ get: vi.fn() });
     mocks.assertWorkflowRunAllowed.mockResolvedValue(undefined);
+  });
+
+  it('records an initial no-op step before entry guard work can fail', async () => {
+    const context = createContext({ userId: 'user-1' });
+
+    await expect(
+      ensureWorkflowStarted(
+        context as never,
+        'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+      ),
+    ).resolves.toEqual({ started: true });
+
+    expect(context.run).toHaveBeenCalledWith(
+      'memory:user-memory:workflow-started:api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+      expect.any(Function),
+    );
   });
 
   it('runs the Redis guard lookup inside a workflow step', async () => {

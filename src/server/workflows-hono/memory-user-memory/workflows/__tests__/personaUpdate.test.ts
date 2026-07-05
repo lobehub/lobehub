@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   checkGuard: vi.fn(),
+  ensureWorkflowStarted: vi.fn(),
 }));
 
 vi.mock('@/database/server', () => ({
@@ -15,6 +16,7 @@ vi.mock('@/server/services/memory/userMemory/persona/service', () => ({
 
 vi.mock('../runGuard', () => ({
   checkGuard: mocks.checkGuard,
+  ensureWorkflowStarted: mocks.ensureWorkflowStarted,
 }));
 
 const { personaUpdateHandler } = await import('../personaUpdate');
@@ -22,9 +24,11 @@ const { personaUpdateHandler } = await import('../personaUpdate');
 describe('personaUpdateHandler run guard', () => {
   beforeEach(() => {
     mocks.checkGuard.mockReset();
+    mocks.ensureWorkflowStarted.mockReset();
+    mocks.ensureWorkflowStarted.mockResolvedValue({ started: true });
   });
 
-  it('checks the run guard before parsing payload', async () => {
+  it('starts the workflow before checking the run guard or parsing payload', async () => {
     /**
      * @example
      * await expect(personaUpdateHandler(context)).resolves.toMatchObject({ skipped: true });
@@ -56,6 +60,10 @@ describe('personaUpdateHandler run guard', () => {
     });
 
     expect(context.run).not.toHaveBeenCalled();
+    expect(mocks.ensureWorkflowStarted).toHaveBeenCalledWith(
+      context,
+      'api/workflows/memory-user-memory/pipelines/persona/update-writing',
+    );
     expect(mocks.checkGuard).toHaveBeenCalledWith(
       context,
       'api/workflows/memory-user-memory/pipelines/persona/update-writing',
