@@ -152,6 +152,21 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2);
   });
 
+  it('renders an error snapshot when the quota request rejects', async () => {
+    const error = new Error('network failed');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockService.getClaudeCodeQuota.mockRejectedValueOnce(error);
+
+    try {
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('network failed')).toBeTruthy();
+      expect(consoleError).toHaveBeenCalledWith('Failed to fetch agent quota:', error);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('keeps the previous quota data when an automatic stale refresh is rate-limited', async () => {
     const staleUpdatedAt = Date.now() - 61_000;
 
