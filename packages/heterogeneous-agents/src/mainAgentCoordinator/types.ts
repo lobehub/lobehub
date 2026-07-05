@@ -79,20 +79,6 @@ export interface MainAgentRunState {
    * host-seeded first turn (which never opens via `newStep`, so can't fork).
    */
   currentMainMessageId: string | undefined;
-  /**
-   * True while the CURRENT turn was opened as a signal/reactive turn (parented
-   * off a tool via `lastToolMsgIdEver`, spine deliberately NOT advanced). The
-   * writer tags a turn `signal` at `stream_start`, BEFORE it knows the turn will
-   * use tools. A signal turn that then emits a `tool_use` is really back on the
-   * main chain — `reduceToolsChunk` advances the spine onto it so the NEXT
-   * normal turn chains off THIS turn instead of re-mounting on the pre-signal
-   * spine. Without this, the wire forks (`spine → {signal-turn-with-tools,
-   * next-normal-turn}`) and the read side, which picks the earliest continuation
-   * at a fork, walks into the signal branch and drops the post-fork tail — the
-   * "trace 和回复对不上 + 中间截断" render bug. Consumed on the first tool batch;
-   * reset per turn in `openTurn`.
-   */
-  currentTurnIsSignal: boolean;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
   /**
@@ -138,7 +124,6 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   accReasoning: '',
   currentAssistantId: seedAssistantId,
   currentMainMessageId: undefined,
-  currentTurnIsSignal: false,
   ended: false,
   lastSpineMessageId: seedAssistantId,
   lastTextSnapshotSeq: 0,

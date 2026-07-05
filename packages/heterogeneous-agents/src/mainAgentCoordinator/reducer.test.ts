@@ -235,6 +235,33 @@ describe('main agent reducer', () => {
     expect(state.lastSpineMessageId).toBe('msg_4');
   });
 
+  // ─── The promotion must survive a cold / non-sticky serverless replica ───
+  // `refreshMainStateFromDb` rehydrates `currentAssistantId` + `lastSpineMessageId`
+  // but NOT any per-turn "opened as signal" bookkeeping. A replica that resumes
+  // mid-signal-turn (SIG open, still toolless in the DB so the recovered spine is
+  // the PRE-signal assistant) then receives SIG's `tools_calling` + the next
+  // `newStep` in one batch. Promotion must still fire, or the same-batch normal
+  // turn forks off the stale spine again — recreating the tail-drop for
+  // non-sticky ingestion. Deriving the promotion from `currentAssistantId`
+  // (not an in-memory flag) is what makes this hold.
+  it('promotes on a rehydrated cold replica with no in-memory signal flag', () => {
+    // State as projected by refreshMainStateFromDb: SIG is the open turn, the
+    // recovered spine is the pre-signal assistant (they differ).
+    const rehydrated: MainAgentRunState = {
+      ...createMainAgentRunState('SEED'),
+      currentAssistantId: 'SIG',
+      lastSpineMessageId: 'SPINE0',
+      lastToolMsgIdEver: 'toolPre',
+    };
+    const ctx = makeCtx();
+
+    let r = reduceMainAgent(rehydrated, toolsEvent([tool('t1')]), ctx); // SIG's tool_use
+    expect(r.state.lastSpineMessageId).toBe('SIG'); // promoted despite no flag
+
+    r = reduceMainAgent(r.state, newStepEvent(), ctx); // the next normal turn
+    expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
+  });
+
   it('falls back to the current assistant only before any tool exists', () => {
     const { steps } = run([textEvent('hi'), newStepEvent()]); // no tool ever seen
     expect(ofKind(steps[1], 'createAssistant')[0]).toMatchObject({
