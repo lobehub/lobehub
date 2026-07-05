@@ -15,6 +15,7 @@ import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +24,7 @@ import { useChatStore } from '@/store/chat/store';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
+import { resolveHeteroResume } from '../transports/hetero/heteroResume';
 
 // ─── Mocks ───
 
@@ -1380,6 +1382,100 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         },
         workingDirectory: '/Users/me/repo',
         workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
+    });
+
+    // ────────────────────────────────────────────────────
+    // Per-cwd session id lifecycle — executor keying primitive
+    // ────────────────────────────────────────────────────
+    it('keeps a per-cwd session id across cwds and resumes when a cwd recurs', async () => {
+      // The executor keys sessions by the cwd it is handed (CC stores sessions
+      // per-cwd). Runs one topic across cwd A → cwd B → back to A, driving the
+      // REAL executor completion write + REAL resolveHeteroResume with real
+      // evolving metadata; only the CLI/IPC is stubbed. Asserts a cwd change
+      // never loses or misroutes a prior session id, and a recurring cwd resumes
+      // its own session. (A worktree switch keeps the source cwd, so it stays on
+      // one session — this guards the primitive that also backs multi-repo runs.)
+      const cwdA = '/Users/me/repo';
+      const cwdB = '/Users/me/other-repo';
+
+      // A single topic whose metadata evolves across runs, like the real store:
+      // updateTopicMetadata shallow-merges and getTopicMetadataById reads it back.
+      let topicMeta: ChatTopicMetadata = {};
+      const store = createMockStore({
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+      });
+      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+        topicMeta = { ...topicMeta, ...patch };
+        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+      });
+      const get = vi.fn(() => store);
+
+      // Drive one full CC turn: spawn → init(session id) + result → complete.
+      // Returns the resumeSessionId the CLI was actually spawned with this turn.
+      const runTurn = async (
+        workingDirectory: string,
+        resumeSessionId: string | undefined,
+        agentSessionId: string,
+      ): Promise<string | undefined> => {
+        let resolveSendPrompt: () => void = () => {};
+        mockSendPrompt.mockReturnValue(new Promise<void>((r) => (resolveSendPrompt = r)));
+        mockStartSession.mockImplementation(async (params: any) => {
+          ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
+          return { sessionId: 'ipc-sess-1' };
+        });
+
+        const spawnedAt = mockStartSession.mock.calls.length;
+        const executorPromise = executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          resumeSessionId,
+          workingDirectory,
+        });
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit(agentSessionId));
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await flush();
+        await executorPromise;
+        await flush();
+        return mockStartSession.mock.calls[spawnedAt]?.[0]?.resumeSessionId;
+      };
+
+      // ── Turn 1: worktree A, no prior session → fresh spawn ──
+      const resumeForA1 = resolveHeteroResume(topicMeta, cwdA).resumeSessionId;
+      expect(resumeForA1).toBeUndefined();
+      const spawnedA1 = await runTurn(cwdA, resumeForA1, 'cc-session-A');
+      expect(spawnedA1).toBeUndefined(); // no --resume on a fresh cwd
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({ [cwdA]: 'cc-session-A' });
+      expect(topicMeta.workingDirectory).toBe(cwdA);
+
+      // ── Switch to worktree B and send: must NOT resume A's session in B ──
+      const decisionB = resolveHeteroResume(topicMeta, cwdB);
+      expect(decisionB).toEqual({
+        cwdChanged: true,
+        reason: 'cwd_changed',
+        resumeSessionId: undefined,
+      });
+      const spawnedB = await runTurn(cwdB, decisionB.resumeSessionId, 'cc-session-B');
+      expect(spawnedB).toBeUndefined(); // fresh session in B, not A's id
+      // A's session id survives; B's is added alongside.
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({
+        [cwdA]: 'cc-session-A',
+        [cwdB]: 'cc-session-B',
+      });
+      expect(topicMeta.workingDirectory).toBe(cwdB);
+
+      // ── Switch back to worktree A and send: A's session is found + resumed ──
+      const decisionA2 = resolveHeteroResume(topicMeta, cwdA);
+      expect(decisionA2).toEqual({ cwdChanged: false, resumeSessionId: 'cc-session-A' });
+      const spawnedA2 = await runTurn(cwdA, decisionA2.resumeSessionId, 'cc-session-A');
+      expect(spawnedA2).toBe('cc-session-A'); // CLI actually --resumes A's session
+      // Nothing lost by the detour: both worktrees keep their own session id.
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({
+        [cwdA]: 'cc-session-A',
+        [cwdB]: 'cc-session-B',
       });
     });
 

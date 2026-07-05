@@ -20,7 +20,7 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
@@ -582,8 +582,16 @@ export class ConversationLifecycleActionImpl {
             legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
           })
         : undefined;
+    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
+    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
+    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
+    // sessionId consistent and never drops the conversation context. The active
+    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
+    // record. Non-hetero runtimes keep the effective (worktree) path.
+    const resolveWorkingDirPath =
+      runtimeType === 'hetero' ? getWorkingDirSourcePath : getWorkingDirEffectivePath;
     const workingDirectory =
-      getWorkingDirEffectivePath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
       existingTopic?.metadata?.workingDirectory ??
       agentWorkingDirectory;
     const workingDirectoryConfig =
