@@ -10,6 +10,7 @@ import {
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
+  HistoricalWebSearchResultFilter,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
@@ -211,8 +212,7 @@ export class MessagesEngine {
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
-      | string
-      | undefined;
+      string | undefined;
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -405,6 +405,8 @@ export class MessagesEngine {
       new AgentCouncilFlattenProcessor(),
       // Group message flatten
       new GroupMessageFlattenProcessor(),
+      // Historical web search raw results are large, current-turn-only context.
+      new HistoricalWebSearchResultFilter(),
       // Tasks message flatten
       new TasksFlattenProcessor(),
       // Task message processing
