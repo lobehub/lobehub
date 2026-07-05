@@ -116,7 +116,7 @@ bun run check [files...] [--lint] [--test] [--type]
 - NEVER run `bun run test` — the full suite takes \~10 minutes.
 - Prefer `vi.spyOn` over `vi.mock`
 - Manual fallback when you need unusual flags or a single tool: `bunx vitest run --silent='passed-only' '[file-path]'` from the owning package directory, `bun run type-check` for types.
-- The implementation lives in `.agents/scripts/check/` as a reusable engine. A superproject that vendors this repo as a submodule can ship its own `check` entry that mounts this repo's pipelines — when working from such a superproject, run its `bun run check` from the superproject root instead.
+- The implementation lives in `.agents/scripts/check/` as a reusable engine. A superproject that vendors this repo as a submodule can ship its own `check` entry that mounts this repo's pipelines; when this repo is checked out as such a submodule, `bun run check` here detects that and delegates to the superproject's entry automatically.
 
 ### i18n
 
