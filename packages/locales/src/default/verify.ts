@@ -59,6 +59,9 @@ export default {
   'report.error.description':
     'The report could not be loaded. Check your connection and try again.',
   'report.error.title': 'Unable to load report',
+  'report.evidence.category.file': 'File',
+  'report.evidence.category.image': 'Image',
+  'report.evidence.category.video': 'Video',
   'report.evidence.count': '{{count}} evidence',
   'report.evidence.inlineFallback': 'Inline evidence {{index}}',
   'report.evidence.openDetail': 'Open {{name}}',
