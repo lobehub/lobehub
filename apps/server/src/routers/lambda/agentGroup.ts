@@ -308,6 +308,7 @@ export const agentGroupRouter = router({
     .input(
       z.object({
         groupId: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -368,6 +369,7 @@ export const agentGroupRouter = router({
         input.groupId,
         input.targetWorkspaceId,
         ctx.userId,
+        input.targetVisibility,
       );
     }),
 

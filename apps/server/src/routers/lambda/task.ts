@@ -1278,6 +1278,7 @@ export const taskRouter = router({
   transferTask: taskProcedureWrite
     .input(
       z.object({
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
         taskId: z.string(),
       }),
@@ -1332,12 +1333,18 @@ export const taskRouter = router({
         }
       }
 
-      return ctx.taskModel.transferTo(task.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.taskModel.transferTo(
+        task.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   copyTaskToWorkspace: taskProcedureWrite
     .input(
       z.object({
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
         taskId: z.string(),
       }),
@@ -1367,6 +1374,11 @@ export const taskRouter = router({
         }
       }
 
-      return ctx.taskModel.copyToWorkspace(task.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.taskModel.copyToWorkspace(
+        task.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 });

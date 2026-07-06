@@ -12,6 +12,7 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { usePermission } from '@/hooks/usePermission';
@@ -38,12 +39,12 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
   const { message } = App.useApp();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
-  const [resolveSelectedResourceIds, selectAllState] = useResourceManagerStore((s) => [
-    s.resolveSelectedResourceIds,
-    s.selectAllState,
-  ]);
+  const [resolveSelectedResourceIds, selectAllState, listVisibility] = useResourceManagerStore(
+    (s) => [s.resolveSelectedResourceIds, s.selectAllState, s.listVisibility],
+  );
   const addFilesToKnowledgeBase = useKnowledgeBaseStore((s) => s.addFilesToKnowledgeBase);
   const knowledgeBases = useKnowledgeBaseListContext();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
 
   const menuItems = useMemo<DropdownItem[]>(() => {
@@ -76,8 +77,20 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
       return items;
     }
 
-    // Filter out current knowledge base and create submenu items
-    const availableKnowledgeBases = knowledgeBases.filter((kb) => kb.id !== libraryId);
+    // Filter out current knowledge base and constrain by visibility scope in
+    // workspace mode: the top-level list is already scoped by `listVisibility`,
+    // so all selected files share that scope and can only join KBs of the
+    // matching visibility. Personal mode (no active workspace) skips the filter.
+    const targetKbVisibility: 'private' | 'public' | null = activeWorkspaceId
+      ? listVisibility === 'private'
+        ? 'private'
+        : 'public'
+      : null;
+    const availableKnowledgeBases = knowledgeBases.filter((kb) => {
+      if (kb.id === libraryId) return false;
+      if (targetKbVisibility) return kb.visibility === targetKbVisibility;
+      return true;
+    });
 
     const addToKnowledgeBaseSubmenu: DropdownItem[] = availableKnowledgeBases.map((kb) => ({
       disabled: selectCount === 0,
@@ -194,6 +207,8 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     message,
     knowledgeBases,
     canEditResources,
+    listVisibility,
+    activeWorkspaceId,
   ]);
 
   return (

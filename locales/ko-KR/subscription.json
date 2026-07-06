@@ -449,6 +449,7 @@
   "referral.edit.hint": "2~8자의 영문, 숫자 또는 밑줄(_)만 사용 가능",
   "referral.edit.placeholder": "추천 코드를 입력하세요",
   "referral.edit.save": "저장",
+  "referral.edit.updated": "초대 코드가 업데이트되었습니다",
   "referral.errors.alreadyBound": "이미 초대 코드를 등록하셨습니다",
   "referral.errors.backfillExpired": "소급 입력 기간이 만료되었습니다. 가입 후 3일 이내에만 입력할 수 있습니다",
   "referral.errors.codeExists": "이미 사용 중인 추천 코드입니다. 다른 코드를 선택해 주세요.",

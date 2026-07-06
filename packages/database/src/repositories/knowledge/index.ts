@@ -1,10 +1,10 @@
-import type { QueryFileListParams } from '@lobechat/types';
+import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles } from '../../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -29,6 +29,7 @@ export interface KnowledgeItem {
    */
   sourceType: 'file' | 'document';
   updatedAt: Date;
+  uploader?: FileUploader | null;
   url?: string;
   /** Workspace creator id (used by UI to decide if current user owns the row). */
   userId?: string | null;
@@ -197,6 +198,14 @@ export class KnowledgeRepo {
         slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
+        uploader: row.uploader_id
+          ? {
+              avatar: row.uploader_avatar,
+              fullName: row.uploader_full_name,
+              id: row.uploader_id,
+              username: row.uploader_username,
+            }
+          : null,
         url: row.url,
         userId: row.user_id,
         visibility: row.visibility,
@@ -230,10 +239,16 @@ export class KnowledgeRepo {
         COALESCE(d.metadata, f.metadata) as metadata,
         f.user_id,
         f.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
         ON f.id = d.file_id
+      LEFT JOIN ${users} u
+        ON f.user_id = u.id
       WHERE ${this.fileOwnershipSql('f')}
         AND NOT EXISTS (
           SELECT 1 FROM ${knowledgeBaseFiles}
@@ -260,8 +275,22 @@ export class KnowledgeRepo {
         metadata,
         user_id,
         visibility,
+        uploader_id,
+        uploader_full_name,
+        uploader_username,
+        uploader_avatar,
         'document' as source_type
-      FROM ${documents}
+      FROM (
+        SELECT
+          documents.*,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar
+        FROM ${documents}
+        LEFT JOIN ${users} u
+          ON documents.user_id = u.id
+      ) documents
       WHERE ${this.documentOwnershipSql('documents')}
         AND source_type != ${'file'}
         AND knowledge_base_id IS NULL
@@ -316,6 +345,14 @@ export class KnowledgeRepo {
         slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
+        uploader: row.uploader_id
+          ? {
+              avatar: row.uploader_avatar,
+              fullName: row.uploader_full_name,
+              id: row.uploader_id,
+              username: row.uploader_username,
+            }
+          : null,
         url: row.url,
         userId: row.user_id,
         visibility: row.visibility,
@@ -501,6 +538,10 @@ export class KnowledgeRepo {
           COALESCE(d.metadata, f.metadata) as metadata,
           f.user_id,
           f.visibility,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar,
           'file' as source_type
         FROM ${files} f
         INNER JOIN ${knowledgeBaseFiles} kbf
@@ -508,6 +549,8 @@ export class KnowledgeRepo {
           AND kbf.knowledge_base_id = ${knowledgeBaseId}
         LEFT JOIN ${documents} d
           ON f.id = d.file_id
+        LEFT JOIN ${users} u
+          ON f.user_id = u.id
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
@@ -543,10 +586,16 @@ export class KnowledgeRepo {
         COALESCE(d.metadata, f.metadata) as metadata,
         f.user_id,
         f.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
         ON f.id = d.file_id
+      LEFT JOIN ${users} u
+        ON f.user_id = u.id
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }
@@ -624,6 +673,10 @@ export class KnowledgeRepo {
             NULL::jsonb as metadata,
             NULL::text as user_id,
             NULL::text as visibility,
+            NULL::text as uploader_id,
+            NULL::text as uploader_full_name,
+            NULL::text as uploader_username,
+            NULL::text as uploader_avatar,
             NULL::text as source_type
           WHERE false
         `;
@@ -697,6 +750,10 @@ export class KnowledgeRepo {
               NULL::jsonb as metadata,
               NULL::text as user_id,
               NULL::text as visibility,
+              NULL::text as uploader_id,
+              NULL::text as uploader_full_name,
+              NULL::text as uploader_username,
+              NULL::text as uploader_avatar,
               NULL::text as source_type
             WHERE false
           `;
@@ -727,33 +784,45 @@ export class KnowledgeRepo {
           d.metadata,
           d.user_id,
           d.visibility,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar,
           'document' as source_type
         FROM ${documents} d
+        LEFT JOIN ${users} u
+          ON d.user_id = u.id
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
 
     return sql`
       SELECT
-        id,
-        file_id,
-        id as document_id,
-        COALESCE(title, filename, 'Untitled') as name,
-        file_type,
-        total_char_count as size,
-        source as url,
-        created_at,
-        updated_at,
+        documents.id,
+        documents.file_id,
+        documents.id as document_id,
+        COALESCE(documents.title, documents.filename, 'Untitled') as name,
+        documents.file_type,
+        documents.total_char_count as size,
+        documents.source as url,
+        documents.created_at,
+        documents.updated_at,
         NULL as chunk_task_id,
         NULL as embedding_task_id,
-        editor_data,
-        content,
-        slug,
-        metadata,
-        user_id,
-        visibility,
+        documents.editor_data,
+        documents.content,
+        documents.slug,
+        documents.metadata,
+        documents.user_id,
+        documents.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'document' as source_type
       FROM ${documents}
+      LEFT JOIN ${users} u
+        ON documents.user_id = u.id
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }

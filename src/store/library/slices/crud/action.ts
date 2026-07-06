@@ -64,6 +64,14 @@ export class KnowledgeBaseCrudActionImpl {
     await this.#get().refreshKnowledgeBaseList();
   };
 
+  setKnowledgeBaseVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<void> => {
+    await knowledgeBaseService.setKnowledgeBaseVisibility(id, visibility);
+    await this.#get().refreshKnowledgeBaseList();
+  };
+
   updateKnowledgeBase = async (id: string, value: CreateKnowledgeBaseParams): Promise<void> => {
     this.#get().internal_toggleKnowledgeBaseLoading(id, true);
     await knowledgeBaseService.updateKnowledgeBaseList(id, value);

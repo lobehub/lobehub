@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 
 import {
@@ -88,11 +89,20 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   const activeTopic = currentActiveTopic(s);
   if (!activeTopic) return;
 
-  if (isDesktop) return activeTopic.metadata?.workingDirectory;
+  if (isDesktop) {
+    return (
+      getWorkingDirEffectivePath(activeTopic.metadata?.workingDirectoryConfig) ??
+      activeTopic.metadata?.workingDirectory
+    );
+  }
 
   // Web: return primary repo from repos list, or workingDirectory if set directly
   const meta = activeTopic.metadata;
-  return meta?.repos?.[0] ?? meta?.workingDirectory;
+  return (
+    meta?.repos?.[0] ??
+    getWorkingDirEffectivePath(meta?.workingDirectoryConfig) ??
+    meta?.workingDirectory
+  );
 };
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;

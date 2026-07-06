@@ -7,6 +7,8 @@ import { useLocation } from 'react-router';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import PageSidebarContent from '@/features/Pages/PageLayout/SidebarContent';
 import WorkspaceSettingsSideBarContent from '@/features/WorkspaceSetting/SideBar/Content';
+import ImageSidebarContent from '@/routes/(main)/(create)/image/_layout/Sidebar/Content';
+import VideoSidebarContent from '@/routes/(main)/(create)/video/_layout/Sidebar/Content';
 import AgentSidebarContent from '@/routes/(main)/agent/_layout/Sidebar/Content';
 import CommunitySidebarContent from '@/routes/(main)/community/_layout/Sidebar/Content';
 import EvalSidebarContent from '@/routes/(main)/eval/_layout/Sidebar/Content';
@@ -56,6 +58,8 @@ const RESOURCE_NAV_KEY = 'resource';
 const MEMORY_NAV_KEY = 'memory';
 const EVAL_NAV_KEY = 'eval';
 const PAGE_NAV_KEY = 'page';
+const IMAGE_NAV_KEY = 'image';
+const VIDEO_NAV_KEY = 'video';
 
 const DEDICATED_ROUTE_NAV_SEGMENTS = new Set([
   'community',
@@ -169,6 +173,20 @@ const NavPanel = memo(() => {
           node: <PageSidebarContent />,
         }
       : null;
+  const imageFallback =
+    mainRouteSegment === 'image'
+      ? {
+          key: IMAGE_NAV_KEY,
+          node: <ImageSidebarContent />,
+        }
+      : null;
+  const videoFallback =
+    mainRouteSegment === 'video'
+      ? {
+          key: VIDEO_NAV_KEY,
+          node: <VideoSidebarContent />,
+        }
+      : null;
   const routeFallback =
     agentFallback ||
     groupFallback ||
@@ -178,7 +196,9 @@ const NavPanel = memo(() => {
     resourceFallback ||
     memoryFallback ||
     evalFallback ||
-    pageFallback;
+    pageFallback ||
+    imageFallback ||
+    videoFallback;
   const hasDedicatedRouteNavPanel = DEDICATED_ROUTE_NAV_SEGMENTS.has(mainRouteSegment ?? '');
   const isStaleHomeSnapshot =
     panelContent?.key === FALLBACK_NAV_KEY && hasDedicatedRouteNavPanel && !isHomeRoute;

@@ -20,11 +20,13 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -235,6 +237,7 @@ export class ConversationLifecycleActionImpl {
     metadata,
     onlyAddUserMessage,
     context,
+    contextSelections,
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
@@ -289,6 +292,7 @@ export class ConversationLifecycleActionImpl {
       messages: inputMessages,
       parentId: inputParentId,
       pageSelections,
+      contextSelections,
     });
 
     // /compact — directly compress context without sending any message
@@ -380,9 +384,13 @@ export class ConversationLifecycleActionImpl {
       ? await materializeLocalSystemToolSnapshots(localFileReferences)
       : [];
     const userMessageMetadata =
-      metadata || pageSelections?.length || localSystemToolSnapshots.length
+      metadata ||
+      contextSelections?.length ||
+      pageSelections?.length ||
+      localSystemToolSnapshots.length
         ? {
             ...metadata,
+            ...(contextSelections?.length ? { contextSelections } : undefined),
             ...(pageSelections?.length ? { pageSelections } : undefined),
             ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
           }
@@ -449,7 +457,11 @@ export class ConversationLifecycleActionImpl {
     }
 
     if (onlyAddUserMessage) {
-      await this.#get().addUserMessage({ message, fileList: fileIdList });
+      await this.#get().addUserMessage({
+        message,
+        fileList: fileIdList,
+        metadata: userMessageMetadata,
+      });
 
       return;
     }
@@ -565,14 +577,38 @@ export class ConversationLifecycleActionImpl {
       ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const agentState = getAgentStoreState();
     const agentWorkingDirectory =
       runtimeType === 'hetero' && heterogeneousProvider
-        ? agentByIdSelectors.getAgentWorkingDirectoryById(
-            agentId,
-            currentDeviceId,
-          )(getAgentStoreState())
+        ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
         : undefined;
-    const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
+    const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
+    const agentWorkingDirectoryConfig =
+      runtimeType === 'hetero' && heterogeneousProvider
+        ? resolveAgentWorkingDirectoryConfig({
+            agencyConfig,
+            currentDeviceId,
+            fallback: agentWorkingDirectory,
+            legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+          })
+        : undefined;
+    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
+    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
+    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
+    // sessionId consistent and never drops the conversation context. The active
+    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
+    // record. Non-hetero runtimes keep the effective (worktree) path.
+    const resolveWorkingDirPath =
+      runtimeType === 'hetero' ? getWorkingDirSourcePath : getWorkingDirEffectivePath;
+    const workingDirectory =
+      resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      existingTopic?.metadata?.workingDirectory ??
+      agentWorkingDirectory;
+    const workingDirectoryConfig =
+      existingTopic?.metadata?.workingDirectoryConfig ??
+      (existingTopic?.metadata?.workingDirectory
+        ? { path: existingTopic.metadata.workingDirectory }
+        : agentWorkingDirectoryConfig);
     const pendingTopicRepos =
       runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
         ? getPendingTopicRepos(operationContext.agentId)
@@ -581,9 +617,16 @@ export class ConversationLifecycleActionImpl {
     // until the server topic replaces `tmp_topic_*`.
     const optimisticTopicMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
-        ? { repos: pendingTopicRepos, workingDirectory: pendingTopicRepos[0] }
+        ? {
+            repos: pendingTopicRepos,
+            workingDirectory: pendingTopicRepos[0],
+            workingDirectoryConfig: { path: pendingTopicRepos[0], repoType: 'github' },
+          }
         : workingDirectory
-          ? { workingDirectory }
+          ? {
+              workingDirectory,
+              ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+            }
           : undefined;
 
     const optimisticTopic: OptimisticTopicPlaceholder | undefined =
@@ -715,7 +758,12 @@ export class ConversationLifecycleActionImpl {
             newAssistantMessage: { provider: heterogeneousProvider.type },
             newTopic: !operationContext.topicId
               ? {
-                  metadata: workingDirectory ? { workingDirectory } : undefined,
+                  metadata: workingDirectory
+                    ? {
+                        workingDirectory,
+                        ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+                      }
+                    : undefined,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -725,6 +773,7 @@ export class ConversationLifecycleActionImpl {
               editorData,
               files: fileIdList,
               metadata: userMessageMetadata,
+              contextSelections,
               pageSelections,
               parentId,
             },
@@ -830,9 +879,12 @@ export class ConversationLifecycleActionImpl {
       // branch returns early (line 498) and never reaches that clear.
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
-      if (heteroData.topicId && !optimisticTopicResolved) {
-        this.#get().internal_updateTopicLoading(heteroData.topicId, true);
-      }
+      // Sidebar "running" spinner for hetero runs is driven off the persisted
+      // `topic.status === 'running'` (written by the executor's writeTopicStatus,
+      // and bucketed by resolveStatusBucket) — no separate client-only
+      // `topicLoadingIds` overlay, which used to desync: it cleared on the
+      // linear sendPrompt path (below) while `status` stayed 'running' when the
+      // executor's onComplete stalled, leaving the topic spinning after finish.
 
       // Start heterogeneous agent execution
       const { operationId: heteroOpId } = this.#get().startOperation({
@@ -852,6 +904,13 @@ export class ConversationLifecycleActionImpl {
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
+        const persistedMetadata = userMsg?.metadata as MessageMetadata | undefined;
+        const effectiveContextSelections = contextSelections?.length
+          ? contextSelections
+          : persistedMetadata?.contextSelections;
+        const effectivePageSelections = pageSelections?.length
+          ? pageSelections
+          : persistedMetadata?.pageSelections;
 
         // Read heterogeneous-agent session id from topic metadata for multi-turn
         // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
@@ -871,12 +930,15 @@ export class ConversationLifecycleActionImpl {
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
+          contextSelections: effectiveContextSelections,
           heterogeneousProvider,
           imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,
+          pageSelections: effectivePageSelections,
           resumeSessionId,
           workingDirectory,
+          workingDirectoryConfig,
         });
       } catch (e) {
         console.error('[HeterogeneousAgent] Execution failed:', e);
@@ -886,8 +948,6 @@ export class ConversationLifecycleActionImpl {
         });
       }
 
-      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, false);
-
       return {
         assistantMessageId: heteroData.assistantMessageId,
         userMessageId: heteroData.userMessageId,
@@ -895,7 +955,15 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (runtimeType === 'gateway') {
+    // A single-agent @mention (`directMentionRoute`) is the exception: the current
+    // agent acts as a pure deterministic router and never runs an LLM turn itself, so
+    // there is nothing to execute on the gateway. We let it fall through to the client
+    // message-persistence path below, where `#executeDirectMentionRoute` emits the
+    // callAgent tool call and dispatches the *target* agent via
+    // `dispatchNonHeteroSubAgent` — which re-selects the runtime and runs the target on
+    // the gateway when gateway mode is enabled. Routing the supervisor through the
+    // gateway here would drop the mention entirely (execAgentTask carries no mention data).
+    if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
@@ -914,6 +982,14 @@ export class ConversationLifecycleActionImpl {
           // selection (only the client runtime did). Omit when empty.
           selectedToolIds:
             selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+          // Forward @-mentioned agents so the server supervisor can delegate to
+          // them (multi-mention). Mirrors the client runtime's `initialContext`
+          // injection: the server enables the callAgent tool and injects the
+          // mentioned-agents delegation context so the supervisor calls them.
+          // Omit when empty (single-mention takes the client path above and never
+          // reaches here). Non-group only — group @member mentions are handled by
+          // the group orchestration path, not agent-management delegation.
+          mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.
@@ -1010,6 +1086,7 @@ export class ConversationLifecycleActionImpl {
             editorData,
             files: fileIdList,
             metadata: userMessageMetadata,
+            contextSelections,
             pageSelections,
             parentId,
           },

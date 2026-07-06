@@ -16,9 +16,11 @@ interface VirtualizedFileListProps {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   data: FileListItem[];
   hasMore: boolean;
+  showUploader?: boolean;
   virtuosoRef: RefObject<VirtuosoHandle | null>;
 }
 
@@ -26,6 +28,7 @@ const VirtualizedFileList = ({
   columnWidths,
   data,
   hasMore,
+  showUploader = true,
   virtuosoRef,
 }: VirtualizedFileListProps) => {
   const {
@@ -39,6 +42,7 @@ const VirtualizedFileList = ({
     columnWidths,
     dataLength: data.length,
     hasMore,
+    showUploader,
   });
   const dataRef = useRef<FileListItem[]>(data);
   const lastSelectedIndexRef = useRef<number | null>(null);
@@ -103,6 +107,7 @@ const VirtualizedFileList = ({
               columnWidths={columnWidths}
               index={index}
               key={item.id}
+              showUploader={showUploader}
               selected={isExplorerItemSelected({
                 id: item.id,
                 selectAllState,
@@ -113,7 +118,7 @@ const VirtualizedFileList = ({
             />
           );
         },
-        [columnWidths, handleSelectionChange, selectAllState, selectedFileIds],
+        [columnWidths, handleSelectionChange, selectAllState, selectedFileIds, showUploader],
       )}
     />
   );

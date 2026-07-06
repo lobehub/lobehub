@@ -390,7 +390,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
   const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
@@ -418,11 +417,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipIcon = <Icon icon={SparklesIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
   } else if (executionTarget === 'local') {
-    chipIcon = currentDevice ? (
-      getDeviceIcon(currentDevice.platform)
-    ) : (
-      <Icon icon={LaptopIcon} size={14} />
-    );
+    // 本机始终使用通用的本地电脑图标，不区分具体平台
+    chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
     chipIcon = getDeviceIcon(boundDevice?.platform);
@@ -522,19 +518,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
-          tag={t('heteroAgent.executionTarget.local')}
-          icon={
-            currentDevice ? (
-              getDeviceIcon(currentDevice.platform)
-            ) : (
-              <Icon icon={LaptopIcon} size={14} />
-            )
-          }
-          label={
-            currentDevice?.friendlyName ||
-            currentDevice?.hostname ||
-            t('heteroAgent.executionTarget.local')
-          }
+          icon={<Icon icon={LaptopIcon} size={14} />}
+          // 本机统一显示「本地设备」，不再带具体设备名称
+          label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local')}
         />
       ) : null}

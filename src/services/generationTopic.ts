@@ -25,6 +25,10 @@ export class ServerService {
   async deleteTopic(id: string): Promise<GenerationTopicItem | undefined> {
     return lambdaClient.generationTopic.deleteTopic.mutate({ id });
   }
+
+  async setTopicVisibility(id: string, visibility: 'private' | 'public'): Promise<void> {
+    await lambdaClient.generationTopic.setTopicVisibility.mutate({ id, visibility });
+  }
 }
 
 export const generationTopicService = new ServerService();

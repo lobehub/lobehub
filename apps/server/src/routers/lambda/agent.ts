@@ -405,6 +405,7 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -466,7 +467,12 @@ export const agentRouter = router({
         });
       }
 
-      return ctx.agentModel.transferAgent(input.agentId, input.targetWorkspaceId, ctx.userId);
+      return ctx.agentModel.transferAgent(
+        input.agentId,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   updateAgentConfig: agentProcedure

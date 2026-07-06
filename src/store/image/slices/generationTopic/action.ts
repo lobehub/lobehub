@@ -170,6 +170,25 @@ export class GenerationTopicActionImpl {
     );
   };
 
+  /**
+   * Flip a generation topic's workspace visibility. Calls the backend and
+   * refreshes the topic list so the row hops between the "Private" and
+   * "Workspace" buckets (or disappears for non-creators on private).
+   */
+  setGenerationTopicVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<void> => {
+    this.#get().internal_updateGenerationTopicLoading(id, true);
+
+    try {
+      await generationTopicService.setTopicVisibility(id, visibility);
+      await this.#get().refreshGenerationTopics();
+    } finally {
+      this.#get().internal_updateGenerationTopicLoading(id, false);
+    }
+  };
+
   internal_updateGenerationTopic = async (id: string, data: UpdateTopicValue): Promise<void> => {
     // 1. Optimistic update
     this.#get().internal_dispatchGenerationTopic({ type: 'updateTopic', id, value: data });

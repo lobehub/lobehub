@@ -640,9 +640,10 @@ export class AgentDocumentsService {
   async listDocuments(
     agentId: string,
     sourceType?: AgentDocumentListSourceType,
-    options?: { includeArchivedToolResults?: boolean; parentId?: string },
+    options?: { excludeWeb?: boolean; includeArchivedToolResults?: boolean; parentId?: string },
   ) {
     const docs = await this.agentDocumentModel.listByAgent(agentId, {
+      excludeWeb: options?.excludeWeb,
       parentId: options?.parentId,
       sourceType,
     });

@@ -1,5 +1,4 @@
-import { Client } from '@upstash/qstash';
-
+import { OtelQstashClient } from '@/libs/qstash';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
@@ -9,7 +8,7 @@ const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 // a shared QStash client. See:
 // https://upstash.com/docs/workflow/troubleshooting/vercel#step-2-pass-header-when-triggering
 export const createWorkflowQstashClient = () =>
-  new Client({
+  new OtelQstashClient({
     headers: { ...upstashWorkflowExtraHeaders },
     token: process.env.QSTASH_TOKEN!,
   });

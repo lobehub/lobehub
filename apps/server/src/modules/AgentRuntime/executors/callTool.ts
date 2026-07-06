@@ -14,6 +14,7 @@ import {
 import { type ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { isDeviceCapablePlan } from '@/helpers/executionTarget';
 import {
   type DeviceAccessReason,
   isDeviceToolIdentifier,
@@ -270,6 +271,9 @@ export const callTool =
                 agentVisibility,
                 // Assistant message owning this tool call (≠ source user message).
                 assistantMessageId: payload.parentMessageId,
+                deviceCapable: state.metadata?.executionPlan
+                  ? isDeviceCapablePlan(state.metadata.executionPlan)
+                  : undefined,
                 documentId: state.metadata?.documentId,
                 editingAgentId: state.metadata?.editingAgentId,
                 execSubAgent: ctx.execSubAgent,
@@ -282,11 +286,12 @@ export const callTool =
                 projectSkills: (state.metadata?.operationSkillSet?.skills ?? [])
                   .filter(
                     (skill: { location?: string; source?: string }) =>
-                      skill.source === 'project' && !!skill.location,
+                      (skill.source === 'project' || skill.source === 'device') && !!skill.location,
                   )
-                  .map((skill: { location: string; name: string }) => ({
+                  .map((skill: { location: string; name: string; source?: string }) => ({
                     location: skill.location,
                     name: skill.name,
+                    source: skill.source === 'device' ? 'device' : 'project',
                   })),
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,

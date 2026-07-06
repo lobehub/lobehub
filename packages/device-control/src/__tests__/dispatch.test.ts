@@ -8,9 +8,13 @@ import { executeDeviceRpc } from '../dispatch';
 import type { DeviceControlDeps } from '../types';
 
 let root: string;
+let deviceHome: string;
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'device-control-'));
+  deviceHome = await mkdtemp(path.join(tmpdir(), 'device-control-home-'));
+  vi.stubEnv('HOME', deviceHome);
+
   await mkdir(path.join(root, '.agents', 'skills', 'spa-routes'), { recursive: true });
   await writeFile(
     path.join(root, '.agents', 'skills', 'spa-routes', 'SKILL.md'),
@@ -20,7 +24,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  vi.unstubAllEnvs();
   await rm(root, { force: true, recursive: true });
+  await rm(deviceHome, { force: true, recursive: true });
 });
 
 const makeDeps = (): DeviceControlDeps => ({
@@ -64,6 +70,41 @@ describe('executeDeviceRpc', () => {
       source: string | null;
     };
     expect(result.source).toBe('.agents/skills');
+  });
+
+  it('merges project and device skills with project taking name precedence', async () => {
+    const deviceSkillRoot = path.join(deviceHome, '.agents', 'skills');
+
+    await mkdir(path.join(deviceSkillRoot, 'device-writer'), { recursive: true });
+    await writeFile(
+      path.join(deviceSkillRoot, 'device-writer', 'SKILL.md'),
+      '---\nname: device-writer\ndescription: Device writer\n---\nbody',
+    );
+    await mkdir(path.join(deviceSkillRoot, 'spa-routes'), { recursive: true });
+    await writeFile(
+      path.join(deviceSkillRoot, 'spa-routes', 'SKILL.md'),
+      '---\nname: spa-routes\ndescription: Device duplicate\n---\nbody',
+    );
+
+    try {
+      const deps = makeDeps();
+      const result = (await executeDeviceRpc('listProjectSkills', { scope: root }, deps)) as {
+        skills: { name: string; previewRoot: string; scope: 'device' | 'project' }[];
+      };
+
+      expect(result.skills.map((skill) => `${skill.name}:${skill.scope}`)).toEqual([
+        'device-writer:device',
+        'spa-routes:project',
+      ]);
+      expect(result.skills.find((skill) => skill.name === 'device-writer')?.previewRoot).toBe(
+        deviceSkillRoot,
+      );
+      expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
+      expect(deps.approveProjectRoot).toHaveBeenCalledWith(deviceSkillRoot);
+    } finally {
+      await rm(path.join(deviceSkillRoot, 'device-writer'), { force: true, recursive: true });
+      await rm(path.join(deviceSkillRoot, 'spa-routes'), { force: true, recursive: true });
+    }
   });
 
   it('parses folded skill descriptions from frontmatter', async () => {

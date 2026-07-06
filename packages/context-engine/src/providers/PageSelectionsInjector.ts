@@ -1,5 +1,5 @@
-import { formatPageSelections } from '@lobechat/prompts';
-import type { PageSelection } from '@lobechat/types';
+import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
+import type { ContextSelection, PageSelection } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseEveryUserContentProvider } from '../base/BaseEveryUserContentProvider';
@@ -41,7 +41,24 @@ export class PageSelectionsInjector extends BaseEveryUserContentProvider {
       return null;
     }
 
-    // Check if message has pageSelections in metadata
+    const contextSelections = message.metadata?.contextSelections as ContextSelection[] | undefined;
+
+    if (contextSelections && contextSelections.length > 0) {
+      const formattedSelections = formatContextSelections(contextSelections);
+
+      if (!formattedSelections) return null;
+
+      log(
+        `Building generic context selections for message at index ${index} with ${contextSelections.length} selections`,
+      );
+
+      return {
+        content: formattedSelections,
+        contextType: 'user_context_selections',
+      };
+    }
+
+    // Check if message has legacy pageSelections in metadata
     const pageSelections = message.metadata?.pageSelections as PageSelection[] | undefined;
 
     if (!pageSelections || pageSelections.length === 0) {

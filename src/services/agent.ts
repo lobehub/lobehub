@@ -293,8 +293,13 @@ class AgentService {
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
-    return lambdaClient.agent.transferAgent.mutate({ agentId, targetWorkspaceId });
+    return lambdaClient.agent.transferAgent.mutate({
+      agentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 }
 

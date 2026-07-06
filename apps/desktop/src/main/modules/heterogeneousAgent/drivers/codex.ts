@@ -30,14 +30,16 @@ export const codexDriver: HeterogeneousAgentDriver = {
     imageList,
     prompt,
     resumeSessionId,
+    systemContext,
   }: HeterogeneousAgentBuildPlanParams) {
     const optionArgs = await buildCodexOptionArgs({ args, helpers, imageList });
+    const stdinPayload = [systemContext, prompt].filter(Boolean).join('\n\n');
 
     return {
       args: resumeSessionId
         ? ['exec', 'resume', ...optionArgs, resumeSessionId, '-']
         : ['exec', ...optionArgs],
-      stdinPayload: prompt,
+      stdinPayload,
     };
   },
 };

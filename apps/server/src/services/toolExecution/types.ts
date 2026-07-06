@@ -143,6 +143,16 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /**
+   * Whether the run's execution plan is device-capable (`device` or
+   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * runtime executors. Device-only skills gate listing/activation/loading on
+   * this consistently, so a `device-unrouted` run can activate them before the
+   * model routes a device; actual command execution stays gated at the device
+   * tool layer. Undefined when the caller carries no execution plan (device
+   * gates then fall back to `activeDeviceId`).
+   */
+  deviceCapable?: boolean;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**
@@ -176,11 +186,11 @@ export interface ToolExecutionContext {
   /** Agent runtime operation ID for structured tool outcome identity. */
   operationId?: string;
   /**
-   * Project-level skills (name + absolute SKILL.md path) discovered on the
-   * device filesystem. Used by the Skills runtime to load them on demand via
-   * the device gateway. Derived from the operation's skill set.
+   * Filesystem skills (name + absolute SKILL.md path) discovered on the
+   * execution device. Used by the Skills runtime to load them on demand via the
+   * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string }[];
+  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */

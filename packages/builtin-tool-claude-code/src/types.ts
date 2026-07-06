@@ -260,32 +260,15 @@ export interface SendMessageResult {
 }
 
 /**
- * One option on an AskUserQuestion question — `label` is what the user picks,
- * `description` is the supporting text shown alongside.
+ * AskUserQuestion data model now lives in `@lobechat/shared-tool-ui/ask-user`
+ * and is consumed identically by the builtin `user-interaction` / `lobe-agent`
+ * surfaces. Re-exported here so CC's existing import sites keep resolving.
  */
-export interface AskUserQuestionOption {
-  description: string;
-  label: string;
-}
-
-/**
- * One question in an `AskUserQuestion` invocation — header is short (≤12
- * chars per CC's contract), `options` is 2-4 entries, `multiSelect` is opt-in.
- */
-export interface AskUserQuestionItem {
-  header: string;
-  multiSelect?: boolean;
-  options: AskUserQuestionOption[];
-  question: string;
-}
-
-/**
- * `AskUserQuestion` tool arguments — mirrors CC's own schema verbatim so the
- * model's existing prompts work unchanged. 1-4 questions per call.
- */
-export interface AskUserQuestionArgs {
-  questions: AskUserQuestionItem[];
-}
+export type {
+  AskUserQuestionArgs,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
+} from '@lobechat/shared-tool-ui/ask-user';
 
 /**
  * Arguments for CC's built-in `WebSearch` tool. CC issues a web search via

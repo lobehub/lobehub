@@ -29,7 +29,12 @@ import {
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 interface TaskListProps {
-  /** The list SWR result — `undefined` until the first fetch settles (the settled signal). */
+  /**
+   * Settled signal — truthy once the current scope's list has loaded into the
+   * store, `undefined` while unsettled. Derived from the store's
+   * `isTaskListInit` (not raw SWR `data`) so it resets in lockstep with `tasks`
+   * on a scope/visibility switch and never disagrees with the empty signal.
+   */
   data?: unknown;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
@@ -298,8 +303,8 @@ const TaskList = memo<TaskListProps>((props) => {
     );
 
   // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
-  // Retry block instead of the "no tasks" empty (LOBE-11181). `data` is the SWR
-  // result — undefined until the first fetch settles.
+  // Retry block instead of the "no tasks" empty (LOBE-11181). `data` is the
+  // store-derived settled signal — see the `data` prop doc above.
   return (
     <AsyncBoundary
       data={data}

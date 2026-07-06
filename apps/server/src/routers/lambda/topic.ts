@@ -31,6 +31,7 @@ import {
   resolveContext,
 } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
+import { workingDirConfigSchema } from './workingDirSchema';
 
 const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -647,6 +648,7 @@ export const topicRouter = router({
         metadata: z.object({
           boundDeviceId: z.string().optional(),
           heteroSessionId: z.string().optional(),
+          heteroSessionIdByWorkingDirectory: z.record(z.string()).optional(),
           model: z.string().optional(),
           onboardingFeedback: z
             .object({
@@ -693,6 +695,7 @@ export const topicRouter = router({
             .optional(),
           repos: z.array(z.string()).optional(),
           workingDirectory: z.string().optional(),
+          workingDirectoryConfig: workingDirConfigSchema.optional(),
         }),
       }),
     )

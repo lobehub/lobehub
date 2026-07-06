@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
@@ -514,7 +513,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('visible_output_end', () => {
-    it('clears visible loading without completing the operation', async () => {
+    it('marks visible loading done without completing the operation or clearing topic loading', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -530,25 +529,11 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
-    });
-
-    it('keeps topic loading when another message is queued in the same context', async () => {
-      const store = createMockStore();
-      (store as any).queuedMessages = {
-        [messageMapKey({ agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any)]: [
-          { content: 'next' },
-        ],
-      };
-      const handler = createHandler(store);
-
-      handler(makeEvent('visible_output_end'));
-      await flush();
-
-      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
-        visibleLoadingDone: true,
-      });
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+      // Sidebar "running" spinner is driven off `topic.status === 'running'`
+      // (persisted, reset at the terminal) for gateway/hetero runs — not the
+      // client-only `topicLoadingIds` overlay — so visible_output_end no longer
+      // clears it early.
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalled();
     });
   });
 

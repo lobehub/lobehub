@@ -449,6 +449,7 @@
   "referral.edit.hint": "Supporta 2-8 lettere, numeri o underscore",
   "referral.edit.placeholder": "Inserisci codice invito",
   "referral.edit.save": "Salva",
+  "referral.edit.updated": "Codice di invito aggiornato",
   "referral.errors.alreadyBound": "Hai già associato un codice invito",
   "referral.errors.backfillExpired": "Il periodo di recupero è scaduto. Non è possibile recuperare dopo 3 giorni dalla registrazione",
   "referral.errors.codeExists": "Questo codice invito è già in uso, scegline un altro",

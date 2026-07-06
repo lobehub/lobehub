@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { useAgentStore } from '@/store/agent';
@@ -124,8 +123,12 @@ const ChatList = memo<ChatListProps>(
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
     useFetchAgentConfig(isLogin, context.agentId);
 
-    // Fetch conversation context data when a conversation is visible (skip for share pages)
-    useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
+    // Fetch conversation context data when a conversation is visible (skip for share pages).
+    // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
+    // mount discarded its result (nothing in the message list renders documents),
+    // yet it pulled the full unbounded list into the homepage batch. The surfaces
+    // that actually render documents (working sidebar / doc page) fetch on their
+    // own mount; the slash menu fetches the slim `non-web` variant.
     useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
     useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 

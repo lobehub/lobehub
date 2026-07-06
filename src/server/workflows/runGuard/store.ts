@@ -70,14 +70,17 @@ const parseGuardValue = (raw: string | null): WorkflowRunGuardValue | undefined 
  * - Rejects with {@link WorkflowRunGuardError} when the first matching guard blocks execution.
  */
 export const assertWorkflowRunAllowed = async (
-  redis: Pick<BaseRedisProvider, 'get'> | null,
+  redis: Pick<BaseRedisProvider, 'mget'> | null,
   scope: WorkflowRunGuardCheckScope,
 ): Promise<void> => {
   if (!redis) return;
 
   try {
-    for (const candidate of buildWorkflowRunGuardKeys(scope)) {
-      const value = parseGuardValue(await redis.get(candidate.key));
+    const candidates = buildWorkflowRunGuardKeys(scope);
+    const values = await redis.mget(...candidates.map((candidate) => candidate.key));
+
+    for (const [index, candidate] of candidates.entries()) {
+      const value = parseGuardValue(values[index] ?? null);
       if (!value) continue;
 
       const match: WorkflowRunGuardMatch = {

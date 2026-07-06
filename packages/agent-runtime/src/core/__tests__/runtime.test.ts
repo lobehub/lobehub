@@ -338,6 +338,70 @@ describe('AgentRuntime', () => {
           'Tool not found: unknown_tool',
         );
       });
+
+      // A resume that carries a seeded assistant placeholder must stash it on
+      // state so the follow-up call_llm reuses it — otherwise the placeholder is
+      // orphaned as an empty assistant sibling. See the tools-activator op-split.
+      it('should stash the resume-seeded assistantMessageId as pendingAssistantMessageId', async () => {
+        const agent = new MockAgent();
+        agent.tools = {
+          calculator: vi.fn().mockResolvedValue({ result: 42 }),
+        };
+
+        const runtime = new AgentRuntime(agent);
+        const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+
+        const result = await runtime.step(state, {
+          operationId: 'test-session',
+          phase: 'human_approved_tool',
+          payload: {
+            approvedToolCall: {
+              id: 'call_123',
+              apiName: 'calculator',
+              identifier: 'calculator',
+              arguments: '{"expression": "2+2"}',
+              type: 'default',
+            },
+            assistantMessageId: 'msg_seeded_placeholder',
+            parentMessageId: 'tool-msg-1',
+            skipCreateToolMessage: true,
+          },
+          session: {
+            sessionId: 'test-session',
+            messageCount: 0,
+            status: 'idle',
+            stepCount: 0,
+          },
+        } as any);
+
+        expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
+      });
+
+      // Consume-once: once a call_llm step runs it has filled (or replaced) the
+      // seeded placeholder, so the seed must be cleared before the next step —
+      // otherwise a later assistant turn would reuse the id and overwrite it.
+      it('should clear pendingAssistantMessageId after a call_llm step', async () => {
+        const agent = new MockAgent();
+        const callLlmExecutor = vi.fn(async (_instruction: any, state: AgentState) => ({
+          events: [],
+          newState: structuredClone(state),
+        }));
+
+        const runtime = new AgentRuntime(agent, {
+          executors: { call_llm: callLlmExecutor },
+        });
+        const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+        state.pendingAssistantMessageId = 'msg_seeded_placeholder';
+
+        // MockAgent.runner returns a call_llm instruction for the tool_result phase.
+        const result = await runtime.step(
+          state,
+          createTestContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        );
+
+        expect(callLlmExecutor).toHaveBeenCalled();
+        expect(result.newState.pendingAssistantMessageId).toBeUndefined();
+      });
     });
 
     describe('human interaction executors', () => {

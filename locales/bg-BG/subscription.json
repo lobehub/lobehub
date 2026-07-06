@@ -449,6 +449,7 @@
   "referral.edit.hint": "Позволени са 2–8 букви, цифри или долни черти",
   "referral.edit.placeholder": "Въведете код за покана",
   "referral.edit.save": "Запази",
+  "referral.edit.updated": "Кодът за покана е актуализиран",
   "referral.errors.alreadyBound": "Вече сте свързали поканен код",
   "referral.errors.backfillExpired": "Периодът за попълване е изтекъл. Не можете да попълните след 3 дни от регистрацията",
   "referral.errors.codeExists": "Този код за покана вече се използва, моля изберете друг",

@@ -1,236 +1,97 @@
 'use client';
 
+import {
+  type AskUserDraft,
+  type AskUserQuestionArgs,
+  AskUserQuestionView,
+  DRAFT_PLUGIN_STATE_KEY,
+  useAskUserForm,
+} from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { SendButton } from '@lobehub/editor/react';
-import { Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { ArrowLeft, PenLine } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AskUserQuestionArgs, InteractionField } from '../../../types';
-import { styles } from './style';
+import { useConversationStore } from '@/features/Conversation/store';
+import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
+import { useChatStore } from '@/store/chat';
 
-const FieldInput = memo<{
-  field: InteractionField;
-  onChange: (key: string, value: string | string[]) => void;
-  onPressEnter?: () => void;
-  value?: string | string[];
-}>(({ field, value, onChange, onPressEnter }) => {
-  switch (field.kind) {
-    case 'textarea': {
-      return (
-        <TextArea
-          autoSize={{ maxRows: 6, minRows: 2 }}
-          placeholder={field.placeholder}
-          value={value as string}
-          variant={'filled'}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-    }
-    case 'select': {
-      return (
-        <Select
-          options={field.options?.map((o) => ({ label: o.label, value: o.value }))}
-          placeholder={field.placeholder}
-          style={{ width: '100%' }}
-          value={value as string}
-          variant={'filled'}
-          onChange={(v) => onChange(field.key, v as string)}
-        />
-      );
-    }
-    case 'multiselect': {
-      return (
-        <Select
-          mode="multiple"
-          options={field.options?.map((o) => ({ label: o.label, value: o.value }))}
-          placeholder={field.placeholder}
-          style={{ width: '100%' }}
-          value={value as string[]}
-          variant={'filled'}
-          onChange={(v) => onChange(field.key, v as string[])}
-        />
-      );
-    }
-    default: {
-      return (
-        <Input
-          placeholder={field.placeholder}
-          value={value as string}
-          variant={'filled'}
-          onChange={(e) => onChange(field.key, e.target.value)}
-          onPressEnter={onPressEnter}
-        />
-      );
-    }
-  }
-});
+/**
+ * Builtin `askUserQuestion` intervention — the same multi-question form the
+ * Claude Code surface uses, wired to the shared `useAskUserForm` +
+ * `AskUserQuestionView` (`@lobechat/shared-tool-ui/ask-user`).
+ *
+ * Unlike Claude Code there is no bridge timeout here, so `countdownMs` is
+ * omitted (no countdown, no timeout fallback). This wrapper owns the two
+ * app-coupled bits: draft persistence (via the conversation + chat stores) and
+ * i18n (generic `askUserQuestion.*` keys).
+ *
+ * When the card is shown read-only (`interactionMode !== 'custom'`, e.g. a
+ * resolved / historical message), it renders a compact summary of the questions
+ * instead of the interactive form.
+ */
+const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
+  const { t } = useTranslation('tool');
+  const { actionsPortalTarget, args, interactionMode, messageId, onInteractionAction } = props;
 
-const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>(
-  ({ args, interactionMode, onInteractionAction }) => {
-    const { t } = useTranslation('ui');
-    const { question } = args;
-    const isCustom = interactionMode === 'custom';
+  const persistedDraft = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
+  });
+  const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
+  const writeDraft = useCallback(
+    (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
+    [messageId, setInterventionDraft],
+  );
 
-    const initialValues: Record<string, string | string[]> = {};
-    if (question.fields) {
-      for (const field of question.fields) {
-        if (field.value !== undefined) initialValues[field.key] = field.value;
-      }
-    }
+  const form = useAskUserForm({
+    args,
+    onInteractionAction,
+    persistedDraft,
+    writeDraft,
+  });
 
-    const [formData, setFormData] = useState<Record<string, string | string[]>>(initialValues);
-    const [submitting, setSubmitting] = useState(false);
-    const [escapeActive, setEscapeActive] = useState(false);
-    const [escapeText, setEscapeText] = useState('');
-    const escapeContainerRef = useRef<HTMLDivElement>(null);
-    const formContainerRef = useRef<HTMLDivElement>(null);
-
-    const handleFieldChange = useCallback((key: string, value: string | string[]) => {
-      setFormData((prev) => ({ ...prev, [key]: value }));
-    }, []);
-
-    const handleSubmit = useCallback(async () => {
-      if (!onInteractionAction) return;
-      setSubmitting(true);
-      try {
-        if (escapeActive) {
-          await onInteractionAction({ payload: { __freeform__: escapeText }, type: 'submit' });
-        } else {
-          await onInteractionAction({ payload: formData, type: 'submit' });
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setSubmitting(false);
-      }
-    }, [escapeActive, escapeText, formData, onInteractionAction]);
-
-    const handleSkip = useCallback(async () => {
-      if (!onInteractionAction) return;
-      await onInteractionAction({ type: 'skip' });
-    }, [onInteractionAction]);
-
-    const handleEscapeToggle = useCallback(() => {
-      setEscapeActive((prev) => !prev);
-    }, []);
-
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        if (escapeActive) {
-          const textarea =
-            escapeContainerRef.current?.querySelector<HTMLTextAreaElement>('textarea');
-          textarea?.focus();
-        } else {
-          const firstInput =
-            formContainerRef.current?.querySelector<HTMLElement>('input, textarea');
-          firstInput?.focus();
-        }
-      }, 0);
-      return () => clearTimeout(timer);
-    }, [escapeActive]);
-
-    const isFreeform = !question.fields || question.fields.length === 0;
-    const shouldShowEscapeAction = !isFreeform;
-
-    const isSubmitDisabled = escapeActive
-      ? !escapeText.trim()
-      : isFreeform
-        ? !formData['__freeform__']
-        : (question.fields?.some((f) => f.required && !formData[f.key]) ?? false);
-
-    if (!isCustom) {
-      return (
-        <Flexbox gap={8}>
-          <Text>{question.prompt}</Text>
-          {question.fields && question.fields.length > 0 && (
-            <ul style={{ margin: 0, paddingLeft: 20 }}>
-              {question.fields.map((field) => (
-                <li key={field.key}>
-                  {field.label}
-                  {field.required && ' *'}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Flexbox>
-      );
-    }
-
+  // Read-only surfaces (resolved / historical messages) show a compact summary
+  // of what was asked instead of the interactive form.
+  if (interactionMode !== 'custom') {
+    const questions = args?.questions ?? [];
     return (
-      <Flexbox gap={12}>
-        <Text style={{ fontWeight: 500 }}>{question.prompt}</Text>
-        {question.description && (
-          <Text style={{ fontSize: 13 }} type="secondary">
-            {question.description}
-          </Text>
-        )}
-        {isFreeform ? (
-          <TextArea
-            autoSize={{ maxRows: 6, minRows: 3 }}
-            placeholder={question.description || ''}
-            value={formData['__freeform__'] as string}
-            variant={'filled'}
-            onChange={(e) => handleFieldChange('__freeform__', e.target.value)}
-          />
-        ) : (
-          <>
-            {!escapeActive ? (
-              <Flexbox gap={16} ref={formContainerRef}>
-                {question.fields!.map((field) => (
-                  <Flexbox gap={6} key={field.key}>
-                    <Text style={{ fontSize: 13 }}>
-                      {field.label}
-                      {field.required && <span style={{ color: 'red' }}> *</span>}
-                    </Text>
-                    <FieldInput
-                      field={field}
-                      value={formData[field.key]}
-                      onChange={handleFieldChange}
-                      onPressEnter={() => {
-                        if (!isSubmitDisabled) handleSubmit();
-                      }}
-                    />
-                  </Flexbox>
-                ))}
-              </Flexbox>
-            ) : (
-              <TextArea
-                autoSize={{ maxRows: 6, minRows: 3 }}
-                value={escapeText}
-                variant={'filled'}
-                onChange={(e) => setEscapeText(e.target.value)}
-              />
-            )}
-          </>
-        )}
-        <Flexbox horizontal gap={8} justify={'space-between'}>
-          <Flexbox horizontal gap={8} justify="flex-start">
-            {escapeActive && shouldShowEscapeAction ? (
-              <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
-                <Icon icon={ArrowLeft} /> {t('form.otherBack')}
+      <Flexbox gap={8}>
+        {questions.map((q, idx) => (
+          <Flexbox gap={2} key={`${q.question}-${idx}`}>
+            {q.header && (
+              <Text fontSize={12} type="secondary">
+                {q.header}
               </Text>
-            ) : (
-              <>
-                <Text className={styles.escapeLink} type="secondary" onClick={handleSkip}>
-                  {t('form.skip')}
-                </Text>
-                {shouldShowEscapeAction && (
-                  <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
-                    {t('form.other')} <Icon icon={PenLine} />
-                  </Text>
-                )}
-              </>
             )}
+            <Text>{q.question}</Text>
           </Flexbox>
-          <SendButton disabled={isSubmitDisabled} loading={submitting} onClick={handleSubmit} />
-        </Flexbox>
+        ))}
       </Flexbox>
     );
-  },
-);
+  }
+
+  const labels = {
+    customPlaceholder: t('askUserQuestion.customOption.placeholder'),
+    escapeBack: t('askUserQuestion.escape.back'),
+    escapeEnter: t('askUserQuestion.escape.enter'),
+    escapePlaceholder: t('askUserQuestion.escape.placeholder'),
+    multiSelectTag: t('askUserQuestion.multiSelectTag'),
+    skip: t('askUserQuestion.skip'),
+    submit: t('askUserQuestion.submit'),
+    timeExpired: '',
+    timeRemaining: () => '',
+  };
+
+  return (
+    <AskUserQuestionView
+      {...form}
+      actionsPortalTarget={actionsPortalTarget}
+      labels={labels}
+      showCountdown={false}
+    />
+  );
+});
 
 AskUserQuestionIntervention.displayName = 'AskUserQuestionIntervention';
 

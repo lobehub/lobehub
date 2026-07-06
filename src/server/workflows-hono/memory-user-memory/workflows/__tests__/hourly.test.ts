@@ -36,7 +36,8 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
 }));
 
 vi.mock('../runGuard', () => ({
-  assertMemoryWorkflowContextAllowed: vi.fn(),
+  checkGuard: vi.fn().mockResolvedValue({ result: true }),
+  ensureWorkflowStarted: vi.fn().mockResolvedValue({ started: true }),
 }));
 
 describe('hourlyWorkflowHandler', () => {

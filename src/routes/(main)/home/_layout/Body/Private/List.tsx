@@ -17,11 +17,16 @@ import Group from '../Agent/List/Group';
 import SessionList from '../Agent/List/List';
 import CreatePrivateButton from './CreatePrivateButton';
 
+interface PrivateListProps {
+  hideCreateButton?: boolean;
+  onMoreClick?: () => void;
+}
+
 // Renders only the workspace-private bucket: private folders followed by
 // private ungrouped agents/chat groups. The server already filters out
 // items the viewer can't see (other members' private rows), so this list
 // is always the viewer's own.
-const PrivateList = memo(() => {
+const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) => {
   const { t } = useTranslation('chat');
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
@@ -38,10 +43,14 @@ const PrivateList = memo(() => {
   const hasGroups = privateGroups.length > 0;
   const hasUngrouped = privateUngrouped.length > 0;
   const hasMore = privateUngroupedCount > privateAgentPageSize;
+  // `openAllAgentsDrawer` targets the Home-owned drawer; compact reusers
+  // (e.g. the agent-detail switcher) pass their own navigation handler.
+  const handleMoreClick = onMoreClick ?? openAllAgentsDrawer;
 
   // Empty state still surfaces the create-button so a fresh user has an
   // obvious affordance for their first private agent.
   if (!hasGroups && !hasUngrouped) {
+    if (hideCreateButton) return null;
     return (
       <Flexbox gap={1} paddingBlock={1}>
         <CreatePrivateButton />
@@ -54,9 +63,9 @@ const PrivateList = memo(() => {
       {hasGroups && <Group dataSource={privateGroups} />}
       {hasUngrouped && <SessionList dataSource={privateUngrouped} />}
       {hasMore && (
-        <NavItem icon={MoreHorizontal} title={t('input.more')} onClick={openAllAgentsDrawer} />
+        <NavItem icon={MoreHorizontal} title={t('input.more')} onClick={handleMoreClick} />
       )}
-      <CreatePrivateButton />
+      {!hideCreateButton && <CreatePrivateButton />}
     </Flexbox>
   );
 });

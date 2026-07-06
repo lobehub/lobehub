@@ -4,7 +4,8 @@
   "private": true,
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./workspace": "./src/workspace.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

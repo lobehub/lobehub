@@ -27,6 +27,7 @@
   "generation.status.generating": "Oluşturuluyor...",
   "generation.validation.endFrameRequiresStartFrame": "Bitiş karesi, başlangıç karesi olmadan kullanılamaz. Lütfen önce bir başlangıç karesi ayarlayın.",
   "topic.createNew": "Yeni Konu Oluştur",
+  "topic.createdBy": "{{name}} tarafından oluşturuldu",
   "topic.deleteConfirm": "Video Konusunu Sil",
   "topic.deleteConfirmDesc": "Bu video konusunu silmek üzeresiniz. Bu işlem geri alınamaz.",
   "topic.privateTitle": "Özel",

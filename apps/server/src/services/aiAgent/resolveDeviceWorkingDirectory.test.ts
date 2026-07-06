@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveDeviceWorkingDirectory } from './resolveDeviceWorkingDirectory';
+import {
+  resolveDeviceWorkingDirectory,
+  resolveDeviceWorkingDirectoryConfig,
+} from './resolveDeviceWorkingDirectory';
 
 describe('resolveDeviceWorkingDirectory', () => {
   it('prefers the existing topic override above everything else', () => {
@@ -42,7 +45,11 @@ describe('resolveDeviceWorkingDirectory', () => {
         deviceDefaultCwd: '/default',
         deviceId: 'device-1',
         workingDirByDevice: {
-          'device-1': { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+          'device-1': {
+            git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+            path: '/repo',
+            repoType: 'git',
+          },
         },
       }),
     ).toBe('/repo-fix');
@@ -95,5 +102,41 @@ describe('resolveDeviceWorkingDirectory', () => {
         workingDirByDevice: null,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('resolveDeviceWorkingDirectoryConfig', () => {
+  it('keeps topic rich config above all other sources', () => {
+    const topicWorkingDirectoryConfig = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+
+    expect(
+      resolveDeviceWorkingDirectoryConfig({
+        deviceDefaultCwd: '/default',
+        deviceId: 'device-1',
+        topicWorkingDirectory: '/repo-fix',
+        topicWorkingDirectoryConfig,
+        workingDirByDevice: { 'device-1': '/agent' },
+      }),
+    ).toEqual(topicWorkingDirectoryConfig);
+  });
+
+  it('returns the agent rich entry for new-topic backfill', () => {
+    const agentChoice = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+
+    expect(
+      resolveDeviceWorkingDirectoryConfig({
+        deviceDefaultCwd: '/default',
+        deviceId: 'device-1',
+        workingDirByDevice: { 'device-1': agentChoice },
+      }),
+    ).toEqual(agentChoice);
   });
 });

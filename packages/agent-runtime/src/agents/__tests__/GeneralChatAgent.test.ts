@@ -746,6 +746,44 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    // Resume-seeded placeholder reuse: when an operation resumes by executing a
+    // tool first (e.g. the tools activator auto-approved via human_approved_tool),
+    // the seeded assistant placeholder is stashed on state.pendingAssistantMessageId.
+    // The first call_llm after the tool result must carry it so the LLM turn fills
+    // that placeholder instead of creating a new message and orphaning the seed.
+    it('should reuse the seeded assistant placeholder for the first call_llm after a tool result', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: '', tools: [] },
+          { role: 'tool', content: 'Successfully activated tools', tool_call_id: 'call-1' },
+        ] as any,
+        pendingAssistantMessageId: 'msg_seeded_placeholder',
+      });
+
+      const context = createMockContext('tool_result', { parentMessageId: 'tool-msg-1' });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          assistantMessageId: 'msg_seeded_placeholder',
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-1',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+
     it('should return compress_context before continuing to LLM when tool results exceed window', async () => {
       const agent = createCompressionAgent();
 
@@ -1876,6 +1914,49 @@ describe('GeneralChatAgent', () => {
           tools: state.tools,
         },
       });
+    });
+
+    // High-context tool-first resume: when the first post-tool turn compresses
+    // before running, the seeded placeholder must still be reused after
+    // compression rather than orphaned by createAssistantMessage.
+    it('should reuse the seeded assistant placeholder instead of forcing a new message', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const compressedMessages = [
+        { content: 'Compressed summary', id: 'group-1', role: 'compressedGroup' },
+        { content: 'Latest user follow-up', role: 'user' },
+      ] as any;
+
+      const state = createMockState({
+        pendingAssistantMessageId: 'msg_seeded_placeholder',
+        tools: [{ name: 'search' }] as any,
+      });
+
+      const context = createMockContext('compression_result', {
+        compressedMessages,
+        parentMessageId: 'tool-msg-1',
+        skipped: false,
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          assistantMessageId: 'msg_seeded_placeholder',
+          messages: compressedMessages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-1',
+          provider: 'openai',
+          tools: state.tools,
+        },
+      });
+      // Must not also force a brand-new message when reusing the placeholder.
+      expect((result as any).payload.createAssistantMessage).toBeUndefined();
     });
   });
 

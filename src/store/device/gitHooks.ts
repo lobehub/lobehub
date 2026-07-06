@@ -1,13 +1,34 @@
 import { isDesktop } from '@lobechat/const';
 import type {
+  GitWorkingTreePatch,
+  SubmoduleWorkingTreePatches,
+} from '@lobechat/electron-client-ipc';
+import type {
   DeviceGitAheadBehind,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { deviceKeys } from '@/libs/swr/keys';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { deviceKeys, localFileKeys } from '@/libs/swr/keys';
 import { type GitBranchSummary, type GitLinkedPRSummary, gitService } from '@/services/git';
+
+export type ReviewMode = 'unstaged' | 'branch';
+
+const UNSTAGED_REVIEW_REFRESH_INTERVAL = 10 * 1000;
+const BRANCH_REVIEW_REFRESH_INTERVAL = 30 * 1000;
+
+export interface ReviewPatchesData {
+  baseRef?: string;
+  headRef?: string;
+  mode: ReviewMode;
+  patches: GitWorkingTreePatch[];
+  /**
+   * Per-submodule patch groups. Undefined when the parent has no dirty
+   * submodules (unstaged) or no submodule pointer differences (branch).
+   */
+  submodules?: SubmoduleWorkingTreePatches[];
+}
 
 /**
  * Git read hooks for a working directory, transport-agnostic: the fetcher goes
@@ -18,6 +39,93 @@ import { type GitBranchSummary, type GitLinkedPRSummary, gitService } from '@/se
  */
 const isEnabled = (deviceId: string | undefined, path: string | undefined): path is string =>
   !!path && (!!deviceId || isDesktop);
+
+const fetchUnstagedReviewPatches = async (
+  dirPath: string,
+  deviceId: string | undefined,
+): Promise<ReviewPatchesData> => {
+  const result = await gitService.getGitWorkingTreePatches({ deviceId, path: dirPath });
+  return { mode: 'unstaged', patches: result?.patches ?? [], submodules: result?.submodules };
+};
+
+const fetchBranchReviewPatches = async (
+  dirPath: string,
+  baseRef: string | undefined,
+  deviceId: string | undefined,
+): Promise<ReviewPatchesData> => {
+  const result = await gitService.getGitBranchDiff({ baseRef, deviceId, path: dirPath });
+  return {
+    baseRef: result?.baseRef,
+    headRef: result?.headRef,
+    mode: 'branch',
+    patches: result?.patches ?? [],
+    submodules: result?.submodules,
+  };
+};
+
+export const getReviewRefreshInterval = (mode: ReviewMode, active: boolean) => {
+  if (!active) return 0;
+  return mode === 'branch' ? BRANCH_REVIEW_REFRESH_INTERVAL : UNSTAGED_REVIEW_REFRESH_INTERVAL;
+};
+
+interface GitReviewCacheParams {
+  baseRef?: string;
+  deviceId?: string;
+  dirPath?: string;
+  mode: ReviewMode;
+}
+
+export const getGitReviewPatchesKey = ({
+  baseRef,
+  deviceId,
+  dirPath,
+  mode,
+}: GitReviewCacheParams) =>
+  dirPath ? deviceKeys.gitReviewPatches(deviceId ?? 'local', dirPath, mode, baseRef ?? '') : null;
+
+export const invalidateGitReviewCaches = async ({
+  baseRef,
+  deviceId,
+  dirPath,
+  mode,
+}: GitReviewCacheParams) => {
+  if (!dirPath) return;
+
+  const cacheDeviceId = deviceId ?? 'local';
+  await Promise.all([
+    mutate(deviceKeys.gitReviewPatches(cacheDeviceId, dirPath, mode, baseRef ?? '')),
+    mutate(deviceKeys.gitWorkingTreeStatus(cacheDeviceId, dirPath)),
+    mutate(deviceKeys.gitAheadBehind(cacheDeviceId, dirPath)),
+    mutate(localFileKeys.gitWorkingTreeFiles(deviceId, dirPath)),
+  ]);
+};
+
+export const useReviewPatches = (
+  dirPath: string | undefined,
+  mode: ReviewMode,
+  baseRef?: string,
+  deviceId?: string,
+  active = true,
+) => {
+  const enabled = active && Boolean(dirPath);
+  const key = enabled ? getGitReviewPatchesKey({ baseRef, deviceId, dirPath, mode }) : null;
+
+  return useClientDataSWR<ReviewPatchesData>(
+    key,
+    () =>
+      mode === 'branch'
+        ? fetchBranchReviewPatches(dirPath!, baseRef, deviceId)
+        : fetchUnstagedReviewPatches(dirPath!, deviceId),
+    {
+      focusThrottleInterval: mode === 'branch' ? 30 * 1000 : 5 * 1000,
+      refreshInterval: getReviewRefreshInterval(mode, active),
+      refreshWhenHidden: false,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      shouldRetryOnError: false,
+    },
+  );
+};
 
 /**
  * Current branch + detached state. A cheap local git read, so use a short
@@ -88,3 +196,24 @@ export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string
     () => gitService.listGitWorktrees({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
+
+/**
+ * Lazy-loaded list of remote branches under `refs/remotes/origin/*`.
+ * Disabled until the Review base-ref picker opens.
+ */
+export const useGitRemoteBranches = (
+  dirPath: string | undefined,
+  enabled: boolean,
+  deviceId?: string,
+) => {
+  const key =
+    enabled && dirPath ? deviceKeys.gitRemoteBranches(deviceId ?? 'local', dirPath) : null;
+  return useClientDataSWR(
+    key,
+    () => gitService.listGitRemoteBranches({ deviceId, path: dirPath! }),
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    },
+  );
+};

@@ -5,12 +5,22 @@ export interface GitBranchInfo {
   detached?: boolean;
 }
 
+export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
 export interface GitLinkedPullRequest {
+  ciStatus?: GitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
   number: number;
+  reviewDecision?: string;
   state: string;
   title: string;
   url: string;
 }
+
+export type GitLinkedPullRequestLookupStatus = 'ok' | 'gh-missing' | 'error';
 
 export interface GitLinkedPullRequestResult {
   /** Additional open PRs targeting the same head branch, beyond the primary one */
@@ -18,7 +28,7 @@ export interface GitLinkedPullRequestResult {
   /** Null when no open PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
-  status: 'ok' | 'gh-missing' | 'error';
+  status: GitLinkedPullRequestLookupStatus;
 }
 
 export interface GitBranchListItem {

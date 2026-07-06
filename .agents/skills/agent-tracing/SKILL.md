@@ -1,6 +1,6 @@
 ---
 name: agent-tracing
-description: 'Agent tracing CLI for execution snapshots. Use for agent-tracing, traces, snapshots, LLM call inspection, context engine data, agent step analysis, or execution debugging.'
+description: 'Agent tracing CLI for execution snapshots. Use for agent-tracing, traces, snapshots, LLM call inspection, context engine data, agent step analysis, execution debugging, or pulling remote/production traces ("拉线上 tracing") by operation id.'
 user-invocable: false
 ---
 
@@ -41,7 +41,36 @@ packages/agent-tracing/
 - Completed snapshots: `.agent-tracing/{ISO-timestamp}_{traceId-short}.json`
 - Latest symlink: `.agent-tracing/latest.json`
 - In-progress partials: `.agent-tracing/_partial/{operationId}.json`
+- Downloaded remote snapshots: `.agent-tracing/_remote/{operationId}.json`
 - `FileSnapshotStore` resolves from `process.cwd()` — **run CLI from the repo root**
+
+## Remote Traces (Production / Staging)
+
+Server deployments also upload completed snapshots to object storage (zstd-compressed; the key is stored in `agent_operations.trace_s3_key`). `agent-tracing inspect <operationId>` transparently downloads, decompresses, and caches them — no manual S3 access needed.
+
+1. **Find the operation id** from a business id (users usually hand you a topic id):
+
+   ```sql
+   SELECT id, trace_s3_key FROM agent_operations WHERE topic_id = 'tpc_xxx';
+   ```
+
+   `trace_s3_key IS NULL` means no snapshot was recorded; a non-null key can still 404 in storage (retention/TTL).
+
+2. **Configure the base URL** — the bucket's public domain plus the `/agent-traces` prefix — either way:
+
+   - env var: `TRACING_BASE_URL=https://<bucket-public-domain>/agent-traces`
+   - file: `.agent-tracing/.env` in the repo root containing the same `TRACING_BASE_URL=...` line
+
+   The deployment-specific value is private to each deployment and intentionally not recorded in this repo.
+
+3. **Inspect by operation id** — auto-detected by the `op_..._agt_..._tpc_...` shape; the snapshot is cached to `.agent-tracing/_remote/<opId>.json` and every `inspect` flag works the same as for local traces:
+
+   ```bash
+   agent-tracing inspect op_xxx_agt_xxx_tpc_xxx_xxxx    # step tree of a production run
+   agent-tracing inspect op_xxx_agt_xxx_tpc_xxx_xxxx -T # tool injection (enabledToolIds, manifests)
+   ```
+
+Implementation: `packages/agent-tracing/src/store/remote-store.ts` (URL is built from the operation id as `{base}/{agentId}/{topicId}/{opId}.json.zst`).
 
 ## CLI Commands
 
@@ -112,7 +141,7 @@ agent-tracing partial clean
 | `--step <n>`      | `-s`  | Target a specific step                                                                            | —            |
 | `--messages`      | `-m`  | Messages context (CE input → params → LLM payload)                                                | —            |
 | `--tools`         | `-t`  | Tool calls & results (what agent invoked)                                                         | —            |
-| `--events`        | `-e`  | Raw events (llm_start, llm_result, etc.)                                                          | —            |
+| `--events`        | `-e`  | Raw events (llm\_start, llm\_result, etc.)                                                        | —            |
 | `--context`       | `-c`  | Runtime context & payload (raw)                                                                   | —            |
 | `--system-role`   | `-r`  | Full system role content                                                                          | 0            |
 | `--env`           |       | Environment context                                                                               | 0            |
@@ -168,12 +197,7 @@ interface ExecutionSnapshot {
   startedAt: number;
   completedAt?: number;
   completionReason?:
-    | 'done'
-    | 'error'
-    | 'interrupted'
-    | 'max_steps'
-    | 'cost_limit'
-    | 'waiting_for_human';
+    'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
   totalSteps: number;
   totalTokens: number;
   totalCost: number;

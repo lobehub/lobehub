@@ -142,6 +142,8 @@ interface SendPromptParams {
   operationId: string;
   prompt: string;
   sessionId: string;
+  /** Extra context injected before the user prompt without mutating the prompt text. */
+  systemContext?: string;
 }
 
 interface CancelSessionParams {
@@ -834,8 +836,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private async buildStreamJsonInput(
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
+    systemContext?: string,
   ): Promise<string> {
     const blocks: AgentContentBlock[] = [];
+    if (systemContext && systemContext.length > 0)
+      blocks.push({ text: systemContext, type: 'text' });
     if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
     blocks.push(...this.toImageContentBlocks(imageList));
 
@@ -958,13 +963,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         args: session.args,
         helpers: {
           buildClaudeStreamJsonInput: (prompt, imageList) =>
-            this.buildStreamJsonInput(prompt, imageList),
+            this.buildStreamJsonInput(prompt, imageList, params.systemContext),
           resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
         },
         imageList: params.imageList ?? [],
         mcpConfigPath: intervention?.tmpConfigPath,
         prompt: params.prompt,
         resumeSessionId: session.agentSessionId,
+        systemContext: params.systemContext,
       });
 
       // Fall back to the user's Desktop so the process never inherits

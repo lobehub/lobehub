@@ -300,6 +300,119 @@ describe('AgentModel.transferAgent', () => {
     expect(comment.workspaceId).toBe(wsId2);
   });
 
+  it('should cascade targetVisibility to moved tasks and their child rows', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Personal Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'task-vis',
+      identifier: 'T-vis',
+      instruction: 'Do the thing',
+      seq: 1,
+      // Row starts at the schema default `visibility='public'`, which is
+      // ignored in personal scope but honored once moved into a workspace.
+    });
+    await serverDB.insert(tasks).values({
+      createdByUserId: userId,
+      id: 'task-vis-blocker',
+      identifier: 'T-vis-blocker',
+      instruction: 'Blocker',
+      seq: 2,
+    });
+    await serverDB.insert(taskDependencies).values({
+      dependsOnId: 'task-vis-blocker',
+      taskId: 'task-vis',
+      type: 'blocks',
+      userId,
+    });
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'text/plain',
+      id: 'task-vis-doc',
+      source: 'test',
+      sourceType: 'file',
+      title: 'Doc',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-vis-doc',
+      taskId: 'task-vis',
+      userId,
+    });
+    await serverDB.insert(topics).values({ id: 'task-vis-topic', userId });
+    await serverDB.insert(taskTopics).values({
+      seq: 1,
+      status: 'completed',
+      taskId: 'task-vis',
+      topicId: 'task-vis-topic',
+      userId,
+    });
+    await serverDB.insert(taskComments).values({
+      authorAgentId: agent.id,
+      content: 'Comment',
+      id: 'task-vis-comment',
+      taskId: 'task-vis',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, 'task-vis'));
+    expect(task.workspaceId).toBe(wsId1);
+    expect(task.visibility).toBe('private');
+
+    const [dep] = await serverDB
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.taskId, 'task-vis'));
+    expect(dep.visibility).toBe('private');
+
+    const [doc] = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'task-vis'));
+    expect(doc.visibility).toBe('private');
+
+    const [topic] = await serverDB
+      .select()
+      .from(taskTopics)
+      .where(eq(taskTopics.taskId, 'task-vis'));
+    expect(topic.visibility).toBe('private');
+
+    const [comment] = await serverDB
+      .select()
+      .from(taskComments)
+      .where(eq(taskComments.taskId, 'task-vis'));
+    expect(comment.visibility).toBe('private');
+  });
+
+  it('should not touch visibility when moving to personal scope', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'WS Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'task-personal',
+      identifier: 'T-personal',
+      instruction: 'Task',
+      seq: 1,
+      visibility: 'public',
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, null, userId, 'private');
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, 'task-personal'));
+    expect(task.workspaceId).toBeNull();
+    // targetVisibility is a no-op when the destination is personal scope.
+    expect(task.visibility).toBe('public');
+  });
+
   it('should remove chat group associations', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Agent' });

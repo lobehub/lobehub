@@ -155,8 +155,13 @@ class ChatGroupService {
   transferGroup = (
     groupId: string,
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ groupId: string } | null> => {
-    return lambdaClient.group.transferGroup.mutate({ groupId, targetWorkspaceId });
+    return lambdaClient.group.transferGroup.mutate({
+      groupId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 }
 

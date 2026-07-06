@@ -1,4 +1,4 @@
-import { TraceEventType } from '@lobechat/types';
+import { type MessageMetadata, TraceEventType } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 
@@ -66,9 +66,11 @@ export class MessagePublicApiActionImpl {
   addUserMessage = async ({
     message,
     fileList,
+    metadata,
   }: {
     message: string;
     fileList?: string[];
+    metadata?: MessageMetadata;
   }): Promise<void> => {
     const {
       optimisticCreateMessage,
@@ -91,6 +93,7 @@ export class MessagePublicApiActionImpl {
       threadId: activeThreadId,
       groupId: activeGroupId,
       parentId,
+      ...(metadata ? { metadata } : {}),
     });
 
     if (result) {

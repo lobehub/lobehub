@@ -1,5 +1,5 @@
 export { default as CheckerDock } from './CheckerDock';
-export { useVerifyReportSummaries, useVerifyResults, useVerifyState } from './hooks';
+export { useVerifyReportSummariesInfinite, useVerifyResults, useVerifyState } from './hooks';
 export { default as ReportViewer } from './ReportViewer';
 export { default as RunResult } from './RunResult';
 export { countResults, isDraftUnconfirmed, phaseFromStatus } from './utils';

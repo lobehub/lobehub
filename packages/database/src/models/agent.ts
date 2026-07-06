@@ -1,4 +1,4 @@
-import { getAgentPersistConfig } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
@@ -36,6 +36,33 @@ import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`) must never
+ * carry. Its `persist` config only stores `model`/`provider`/`chatConfig` — title, avatar,
+ * systemRole, etc. are rendered from i18n / the static systemRoleTemplate at runtime, never
+ * from this row.
+ *
+ * Before PR #16420, `lobe-agent-management`'s self-management prompt could make the builder
+ * mistake an ambiguous "update this" request for editing itself instead of the target agent.
+ * Depending on caller (browser client tool executor vs. gateway server runtime in
+ * `apps/server/src/services/toolExecution/serverRuntimes/agentBuilder.ts`), these fields can
+ * arrive through *either* `AgentModel.update()` or `updateConfig()` — e.g. the gateway's
+ * `updatePrompt` writes `systemRole` via `update()`, while the browser client's meta editor
+ * writes `title`/`avatar`/etc. via `updateConfig()`. So both methods must strip the full list,
+ * not just the fields each historically happened to receive. Clients on builds older than
+ * PR #16420 can still hit this path, so enforce it here (the single write chokepoint)
+ * regardless of caller.
+ */
+const AGENT_BUILDER_PROTECTED_FIELDS = [
+  'title',
+  'description',
+  'avatar',
+  'backgroundColor',
+  'tags',
+  'marketIdentifier',
+  'systemRole',
+] as const;
 
 export class AgentModel {
   private userId: string;
@@ -478,21 +505,47 @@ export class AgentModel {
   };
 
   getAgentAssignedKnowledge = async (id: string) => {
-    // Run both queries in parallel for better performance
-    // Include userId check to ensure user can only access their own agent's knowledge
+    // The junction tables carry the mount (created by whoever wired the agent
+    // to the KB / file); the ownership() predicates below match the caller's
+    // own mount rows within the same workspace.
+    //
+    // The joined `knowledgeBases` / `files` rows also need a visibility guard
+    // in the `leftJoin` ON clause: without it, a KB or file that was later
+    // flipped back to `private` via `setVisibility` (LOBE-11270) would keep
+    // leaking its name / description into every mounted-agent view across the
+    // workspace. Enforcing the guard on the ON clause (rather than WHERE)
+    // keeps the mount row in the result but nulls out the referenced entity —
+    // callers can then treat `id === null` as "unavailable" and render a
+    // placeholder in the editor list, while `resolveAgentKnowledgeBaseIds` in
+    // the runtime naturally skips such rows via its `k.id` filter.
     const [knowledgeBaseResult, fileResult] = await Promise.all([
       this.db
         .select({ enabled: agentsKnowledgeBases.enabled, knowledgeBases })
         .from(agentsKnowledgeBases)
         .where(and(eq(agentsKnowledgeBases.agentId, id), this.agentsKnowledgeBasesOwnership()))
         .orderBy(desc(agentsKnowledgeBases.createdAt))
-        .leftJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId)),
+        .leftJoin(
+          knowledgeBases,
+          and(
+            eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              knowledgeBases,
+            ),
+          ),
+        ),
       this.db
         .select({ enabled: agentsFiles.enabled, files })
         .from(agentsFiles)
         .where(and(eq(agentsFiles.agentId, id), this.agentsFilesOwnership()))
         .orderBy(desc(agentsFiles.createdAt))
-        .leftJoin(files, eq(files.id, agentsFiles.fileId)),
+        .leftJoin(
+          files,
+          and(
+            eq(files.id, agentsFiles.fileId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+          ),
+        ),
     ]);
 
     return {
@@ -707,10 +760,36 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
+    const sanitizedData = await this.stripAgentBuilderProtectedFields(agentId, data);
+
     return this.db
       .update(agents)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...sanitizedData, updatedAt: new Date() })
       .where(and(eq(agents.id, agentId), this.ownership()));
+  };
+
+  /**
+   * Strip fields the Agent Builder's own row must never carry (see
+   * {@link AGENT_BUILDER_PROTECTED_FIELDS}). Only looks up the target row's `slug` when the
+   * incoming patch actually touches a protected field, so normal updates pay no extra query.
+   */
+  private stripAgentBuilderProtectedFields = async <T extends Record<string, any>>(
+    agentId: string,
+    data: T,
+    protectedFields: readonly string[] = AGENT_BUILDER_PROTECTED_FIELDS,
+  ): Promise<T> => {
+    if (!protectedFields.some((field) => field in data)) return data;
+
+    const agent = await this.db.query.agents.findFirst({
+      columns: { slug: true },
+      where: and(eq(agents.id, agentId), this.ownership()),
+    });
+
+    if (agent?.slug !== BUILTIN_AGENT_SLUGS.agentBuilder) return data;
+
+    const sanitized = { ...data };
+    for (const field of protectedFields) delete sanitized[field];
+    return sanitized;
   };
 
   /**
@@ -817,6 +896,13 @@ export class AgentModel {
     // Build data to be merged, excluding params (processed separately)
 
     const { params: _params, ...restData } = data;
+
+    // See AGENT_BUILDER_PROTECTED_FIELDS: some callers (e.g. the browser client's meta
+    // editor) route title/avatar/etc. through updateConfig() rather than update().
+    if (agent.slug === BUILTIN_AGENT_SLUGS.agentBuilder) {
+      for (const field of AGENT_BUILDER_PROTECTED_FIELDS) delete restData[field];
+    }
+
     const mergedValue = merge(agent, restData);
 
     // Apply the processed parameters
@@ -995,11 +1081,16 @@ export class AgentModel {
   /**
    * Transfer an agent and all its associated data to a different workspace or personal account.
    * Runs in a single transaction to ensure atomicity.
+   *
+   * When moving into a workspace, `targetVisibility` picks the resulting scope
+   * within that workspace (`private` = only the target user sees it,
+   * `public` = every member does). Ignored when moving to a personal account.
    */
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
     return this.db.transaction(async (trx) => {
       // 1. Verify agent exists and belongs to current scope
@@ -1079,11 +1170,16 @@ export class AgentModel {
         }
       }
 
-      // 4. Update the agent record
+      // 4. Update the agent record.
+      //    Only apply visibility when moving into a workspace — visibility is
+      //    a no-op in personal scope where every row is implicitly private.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       await trx
         .update(agents)
         .set({
           ...ownershipUpdate,
+          ...visibilityUpdate,
           agencyConfig: nextAgencyConfig,
           slug,
           updatedAt: new Date(),
@@ -1142,12 +1238,18 @@ export class AgentModel {
       // 12. Update tasks assigned to or created by this agent. The scheduled
       // task dispatcher uses `createdByUserId` as the execution owner, so tasks
       // must move with the agent instead of staying under the old owner.
+      // Visibility is cascaded to tasks and child rows so a `private` transfer
+      // does not leak previously-personal task data to every workspace member:
+      // personal rows keep the schema default (`visibility='public'`) but ignore
+      // it, whereas workspace rows honor it — without this cascade a `private`
+      // transfer would silently downgrade to workspace-public.
       const movedTasks = await trx
         .update(tasks)
         .set({
           createdByUserId: targetUserId,
           updatedAt: new Date(),
           workspaceId: targetWorkspaceId,
+          ...visibilityUpdate,
         })
         .where(or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)))
         .returning({ id: tasks.id });
@@ -1156,19 +1258,19 @@ export class AgentModel {
       if (movedTaskIds.length > 0) {
         await trx
           .update(taskDependencies)
-          .set(ownershipUpdate)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskDependencies.taskId, movedTaskIds));
         await trx
           .update(taskDocuments)
-          .set(ownershipUpdate)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskDocuments.taskId, movedTaskIds));
         await trx
           .update(taskTopics)
-          .set(ownershipUpdate)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskTopics.taskId, movedTaskIds));
         await trx
           .update(taskComments)
-          .set(ownershipUpdate)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskComments.taskId, movedTaskIds));
         await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
       }

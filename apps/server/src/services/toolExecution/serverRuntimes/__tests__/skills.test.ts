@@ -155,4 +155,35 @@ describe('skillsRuntime', () => {
       }),
     );
   });
+
+  // Regression guard for the device-gating fix: builtin skills must be filtered
+  // with canExecuteOnDevice derived from the run's activeDeviceId, not the
+  // compile-time isDesktop constant (always false on the server).
+  it('gates device-only builtin skills on activeDeviceId presence', async () => {
+    const { filterBuiltinSkills } = await import('@/helpers/skillFilters');
+    const { skillsRuntime } = await import('../skills');
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
+      canExecuteOnDevice: false,
+    });
+
+    await skillsRuntime.factory({
+      activeDeviceId: 'device-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
+      canExecuteOnDevice: true,
+    });
+  });
 });

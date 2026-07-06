@@ -61,12 +61,20 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  // Keep the SWR handle so a failed list fetch surfaces error + Retry instead of
-  // a permanent skeleton (the store only flips `isTaskListInit` on success — see
-  // LOBE-11181). `data` (undefined until first success) is the settled signal.
-  const { data, error, isLoading, mutate } = useFetchTaskList(
+  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
+  const { error, isLoading, mutate } = useFetchTaskList(
     agentId ? { agentId } : { allAgents: true },
   );
+  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
+  // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
+  // resets `tasks` + `isTaskListInit` together (`scopeChangeResetState`), but
+  // SWR still holds cached `data` for the target key — so keying `hasSettled`
+  // off SWR `data` made it `true` while `tasks` was empty and flashed the "no
+  // tasks" empty during the refetch. `isTaskListInit` flips true only on the
+  // current scope's success and resets in lockstep with `tasks`, so the settled
+  // signal never disagrees with the emptiness signal. Still resets to false on a
+  // failed first load, so we surface loading only while there's no error (below).
+  const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
@@ -164,9 +172,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         >
           {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} />}
           <TaskList
-            data={data}
+            data={isTaskListInit || undefined}
             error={error}
-            isLoading={isLoading}
+            isLoading={isLoading || (!isTaskListInit && !error)}
             options={viewOptions}
             routeScope={routeScope}
             onRetry={() => mutate()}

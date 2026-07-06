@@ -111,6 +111,12 @@ export interface TaskTopicHandoff {
    * about the brief delivery itself, written by the lifecycle service.
    */
   briefDecision?: BriefDecision;
+  /**
+   * Raw last assistant message of the run, captured on completion (LOBE-11396).
+   * Shown on the run card alongside the LLM-synthesized `summary` so the feed
+   * surfaces the actual run output, not only the summary.
+   */
+  content?: string;
   keyFindings?: string[];
   nextAction?: string;
   summary?: string;

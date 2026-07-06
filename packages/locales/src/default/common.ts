@@ -286,6 +286,7 @@ export default {
   'cmdk.video': 'AI Video',
 
   'confirm': 'Confirm',
+  'continue': 'Continue',
   'contact': 'Contact Us',
   'copy': 'Copy',
   'copyFail': 'Copy failed',
@@ -475,8 +476,25 @@ export default {
   'releaseNotes': 'Version Details',
   'rename': 'Rename',
   'reset': 'Reset',
+  'resourceUnavailable': 'This resource is unavailable or you no longer have access',
   'restoreToInput': 'Restore to input',
   'restoreToInputSuccess': 'Restored to input',
+  'makePrivate': 'Make private',
+  'makePrivate.confirm.title': 'Make this private?',
+  'makePrivate.confirm.ok': 'Make private',
+  'makePrivate.success': 'Made private',
+  'makePrivate.error': 'Failed to make private',
+  'visibilityConfirm.irreversible': ' (irreversible)',
+  'visibilityConfirm.makePrivate.itemAccess': 'Other workspace members lose access immediately',
+  'visibilityConfirm.makePrivate.itemReferences':
+    'Existing message attachments and references will show as unavailable',
+  'visibilityConfirm.makePrivate.itemLoaded':
+    'Content others have already loaded can’t be pulled back',
+  'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
+  'visibilityConfirm.publish.itemReversible':
+    'You can switch it back to private later from the same menu',
+  'visibilityConfirm.publish.itemLoaded':
+    'After switching back, content others have already loaded can’t be pulled back',
   'retry': 'Retry',
   'run': 'Run',
   'save': 'Save',

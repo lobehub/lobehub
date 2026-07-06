@@ -201,7 +201,21 @@ export class DocumentService {
    * the new visibility on the next refresh.
    */
   async publishToWorkspace(documentId: string): Promise<{ documentIds: string[] }> {
-    const result = await this.documentModel.publishToWorkspace(documentId);
+    return this.setVisibility(documentId, 'public');
+  }
+
+  /**
+   * Flip a document subtree's `visibility`. Thin wrapper around
+   * `DocumentModel.setVisibility`, plus a side-effect notification so any
+   * other workspace member with the page open (referencing chip, editor
+   * placeholder, etc.) sees the new visibility on the next refresh — same
+   * pattern as `publishToWorkspace`.
+   */
+  async setVisibility(
+    documentId: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> {
+    const result = await this.documentModel.setVisibility(documentId, visibility);
 
     if (this.workspaceId) {
       void publishResourceEvent(

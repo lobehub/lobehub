@@ -54,16 +54,17 @@ export interface SkillRuntimeService {
 }
 
 /**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`). The runtime only needs the name to
- * match an `activateSkill`/`readReference` call and the absolute SKILL.md path
- * to read its content. The directory tree is enumerated lazily on activation
- * via `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
+ * A project- or device-level skill discovered on the execution device
+ * filesystem. The runtime only needs the name to match an
+ * `activateSkill`/`readReference` call and the absolute SKILL.md path to read
+ * its content. The directory tree is enumerated lazily on activation via
+ * `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
  */
 export interface ProjectSkillRuntimeItem {
   /** Absolute path to the skill's SKILL.md on the device. */
   location: string;
   name: string;
+  source?: 'device' | 'project';
 }
 
 /**
@@ -87,7 +88,7 @@ export interface SkillsExecutionRuntimeOptions {
   builtinSkills?: BuiltinSkill[];
   /** Reads project skill files from the device (local-system over the gateway). */
   deviceFileAccess?: DeviceFileAccess;
-  /** Project skills discovered on the device filesystem. */
+  /** Filesystem skills discovered on the execution device. */
   projectSkills?: ProjectSkillRuntimeItem[];
   service: SkillRuntimeService;
 }
@@ -132,7 +133,7 @@ const findByNameCI = <T extends { name: string }>(items: T[], target: string): T
 };
 
 /**
- * Hint appended to activated project-skill content so the model knows how to
+ * Hint appended to activated filesystem-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
  * the tree here — the model has `local-system.globFiles` available and can
  * call it on demand, which keeps the op-param payload small.
@@ -140,7 +141,7 @@ const findByNameCI = <T extends { name: string }>(items: T[], target: string): T
 const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
   `## Skill resources
 
-This project skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
+This filesystem skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
   private builtinSkills: BuiltinSkill[];
@@ -258,13 +259,14 @@ export class SkillsExecutionRuntime {
     const { id, path } = args;
 
     try {
-      // Project skills resolve references relative to the SKILL.md directory,
-      // read through the device file access (local-system over the gateway).
+      // Project/device skills resolve references relative to the SKILL.md
+      // directory, read through device file access (local-system over the
+      // gateway).
       const projectSkill = findByNameCI(this.projectSkills, id);
       if (projectSkill) {
         if (!this.deviceFileAccess) {
           return {
-            content: `Project skill "${id}" cannot be read: no device file access available.`,
+            content: `Filesystem skill "${id}" cannot be read: no device file access available.`,
             success: false,
           };
         }
@@ -291,7 +293,7 @@ export class SkillsExecutionRuntime {
         );
         if (!allowed.has(normalized)) {
           return {
-            content: `Resource not found in project skill "${id}": "${path}"`,
+            content: `Resource not found in filesystem skill "${id}": "${path}"`,
             success: false,
           };
         }
@@ -374,12 +376,12 @@ export class SkillsExecutionRuntime {
   async activateSkill(args: ActivateSkillParams): Promise<BuiltinServerRuntimeOutput> {
     const { name } = args;
 
-    // Project skills (filesystem SKILL.md) take precedence over db/builtin.
+    // Filesystem skills (project/device SKILL.md) take precedence over db/builtin.
     const projectSkill = findByNameCI(this.projectSkills, name);
     if (projectSkill) {
       if (!this.deviceFileAccess) {
         return {
-          content: `Project skill "${name}" cannot be loaded: no device file access available.`,
+          content: `Filesystem skill "${name}" cannot be loaded: no device file access available.`,
           success: false,
         };
       }
@@ -402,13 +404,13 @@ export class SkillsExecutionRuntime {
             hasResources: false,
             location: projectSkill.location,
             name,
-            source: 'project',
+            source: projectSkill.source ?? 'project',
           },
           success: true,
         };
       } catch (e) {
         return {
-          content: `Failed to load project skill "${name}": ${(e as Error).message}`,
+          content: `Failed to load filesystem skill "${name}": ${(e as Error).message}`,
           success: false,
         };
       }

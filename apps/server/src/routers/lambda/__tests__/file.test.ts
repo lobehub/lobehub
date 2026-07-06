@@ -832,7 +832,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
 
@@ -855,6 +860,7 @@ describe('fileRouter', () => {
         'file-1',
         'workspace-target',
         'test-user',
+        undefined,
       );
     });
 
@@ -897,7 +903,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith('file-1', null, 'test-user');
+      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith(
+        'file-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('should copy document resources via documentModel', async () => {
@@ -918,7 +929,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
   });

@@ -1,8 +1,9 @@
+import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { removeDraft } from '../draftStorage';
 import { addInputHistory } from '../inputHistoryStorage';
@@ -58,6 +59,18 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     const editor = get().editor;
     if (!editor) return;
     if (get().sendButtonProps?.disabled) return;
+
+    // Drop any pending AI input-completion ghost before serializing the message.
+    // The suggestion is materialized as real placeholder nodes inside the
+    // document, so sending without clearing would emit the ghost text too —
+    // Enter and the send button must submit only what the user actually typed.
+    // Escape is the plugin's reject path and clears those nodes synchronously.
+    const autoCompleteEnabled =
+      (get().feature?.inputCompletion ?? true) &&
+      systemAgentSelectors.inputCompletion(useUserStore.getState()).enabled;
+    if (autoCompleteEnabled) {
+      editor.dispatchCommand(KEY_ESCAPE_COMMAND, new KeyboardEvent('keydown', { key: 'Escape' }));
+    }
 
     const onSend = get().onSend;
     const historyEnabled = !!onSend && (get().feature?.inputHistory ?? true);

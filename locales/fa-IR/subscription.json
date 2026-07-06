@@ -449,6 +449,7 @@
   "referral.edit.hint": "از ۲ تا ۸ حرف، عدد یا زیرخط پشتیبانی می‌شود",
   "referral.edit.placeholder": "کد دعوت را وارد کنید",
   "referral.edit.save": "ذخیره",
+  "referral.edit.updated": "کد دعوت به‌روزرسانی شد",
   "referral.errors.alreadyBound": "شما قبلاً یک کد دعوت را وارد کرده‌اید",
   "referral.errors.backfillExpired": "مهلت تکمیل گذشته است. پس از ۳ روز از ثبت‌نام امکان تکمیل وجود ندارد",
   "referral.errors.codeExists": "این کد دعوت قبلاً استفاده شده است، لطفاً کد دیگری انتخاب کنید",

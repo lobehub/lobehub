@@ -10,6 +10,7 @@ import {
   useExplorerSelectionSummary,
 } from '../hooks/useExplorerSelection';
 import ColumnResizeHandle from './ColumnResizeHandle';
+import { getListViewMinWidth } from './ListItem/constants';
 import ListViewSelectAllHint from './ListViewSelectAllHint';
 import { styles } from './styles';
 
@@ -18,12 +19,19 @@ interface ListViewHeaderProps {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   data: FileListItem[];
   hasMore: boolean;
+  showUploader?: boolean;
 }
 
-const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) => {
+const ListViewHeader = ({
+  columnWidths,
+  data,
+  hasMore,
+  showUploader = true,
+}: ListViewHeaderProps) => {
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
   const { handleSelectAll, handleSelectAllResources } = useExplorerSelectionActions(data);
@@ -52,6 +60,7 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
           fontSize: 12,
+          minWidth: getListViewMinWidth(showUploader),
         }}
       >
         <Center height={40} style={{ paddingInline: 4 }}>
@@ -103,6 +112,23 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
             onResize={(width) => updateColumnWidth('date', width)}
           />
         </Flexbox>
+        {showUploader && (
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.uploader}
+          >
+            {t('FileManager.title.uploader')}
+            <ColumnResizeHandle
+              column="uploader"
+              currentWidth={columnWidths.uploader}
+              maxWidth={300}
+              minWidth={120}
+              onResize={(width) => updateColumnWidth('uploader', width)}
+            />
+          </Flexbox>
+        )}
         <Flexbox
           className={styles.headerItem}
           justify={'center'}
@@ -124,6 +150,7 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
         selectAllState={selectAllState}
         selectedCount={selectedCount}
         showSelectAllHint={showSelectAllHint}
+        showUploader={showUploader}
         total={total}
         onSelectAllResources={handleSelectAllResources}
       />

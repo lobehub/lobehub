@@ -449,6 +449,7 @@
   "referral.edit.hint": "يدعم 2-8 أحرف أو أرقام أو شرطات سفلية",
   "referral.edit.placeholder": "أدخل رمز الإحالة",
   "referral.edit.save": "حفظ",
+  "referral.edit.updated": "تم تحديث رمز الدعوة",
   "referral.errors.alreadyBound": "لقد قمت بربط رمز الدعوة مسبقًا",
   "referral.errors.backfillExpired": "انتهت فترة الإكمال. لا يمكن الإكمال بعد 3 أيام من التسجيل",
   "referral.errors.codeExists": "رمز الإحالة مستخدم بالفعل، يرجى اختيار رمز آخر",

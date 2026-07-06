@@ -449,6 +449,7 @@
   "referral.edit.hint": "2 à 8 lettres, chiffres ou underscores autorisés",
   "referral.edit.placeholder": "Saisir le code de parrainage",
   "referral.edit.save": "Enregistrer",
+  "referral.edit.updated": "Code d'invitation mis à jour",
   "referral.errors.alreadyBound": "Vous avez déjà lié un code d'invitation",
   "referral.errors.backfillExpired": "La période de rattrapage est expirée. Impossible de saisir un code après 3 jours suivant l'inscription",
   "referral.errors.codeExists": "Ce code est déjà utilisé, veuillez en choisir un autre",

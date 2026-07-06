@@ -134,10 +134,19 @@ export const threadKeys = {
 
 // ---- recent -------------------------------------------------------------
 export const recentKeys = {
-  /** Home "all recents" drawer list, keyed by open state. */
-  allDrawer: def('recent:allDrawer', (open: boolean) => ['recent:allDrawer', open]),
-  /** Home recents list, keyed by login + limit. */
-  list: def('recent:list', (isLogin: boolean, limit: number) => ['recent:list', isLogin, limit]),
+  /** Home "all recents" drawer list, keyed by open state and identity scope. */
+  allDrawer: def('recent:allDrawer', (open: boolean, scope: string) => [
+    'recent:allDrawer',
+    open,
+    scope,
+  ]),
+  /** Home recents list, keyed by login + limit + identity scope. */
+  list: def('recent:list', (isLogin: boolean, limit: number, scope: string) => [
+    'recent:list',
+    isLogin,
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -663,7 +672,15 @@ export const verifyKeys = {
     'verify:reportBundle',
     verifyRunId,
   ]),
-  reportSummaries: def('verify:reportSummaries', () => ['verify:reportSummaries']),
+  reportSummaries: def(
+    'verify:reportSummaries',
+    (workspaceId?: string | null, q?: string, cursor?: string) => [
+      'verify:reportSummaries',
+      workspaceId ?? '',
+      q ?? '',
+      cursor ?? '',
+    ],
+  ),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [

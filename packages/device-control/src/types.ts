@@ -8,6 +8,9 @@
 
 // ─── Workspace scan ───
 
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
 export interface ProjectSkillItem {
   description?: string;
   /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
@@ -17,10 +20,14 @@ export interface ProjectSkillItem {
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope: ProjectSkillScope;
   /** Directory containing the SKILL.md. */
   skillDir: string;
   /** Source directory the skill was discovered in. */
-  source: '.agents/skills' | '.claude/skills';
+  source: ProjectSkillSource;
 }
 
 export interface InitWorkspaceParams {
@@ -47,8 +54,8 @@ export interface ListProjectSkillsParams {
 export interface ListProjectSkillsResult {
   root: string;
   skills: ProjectSkillItem[];
-  /** Source directory actually scanned (after fallback resolution). */
-  source: ProjectSkillItem['source'] | null;
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
 }
 
 export interface StatPathResult {
@@ -85,9 +92,7 @@ export interface LocalFilePreviewUnsupported {
 }
 
 export type LocalFilePreview =
-  | LocalFilePreviewImage
-  | LocalFilePreviewText
-  | LocalFilePreviewUnsupported;
+  LocalFilePreviewImage | LocalFilePreviewText | LocalFilePreviewUnsupported;
 
 export interface LocalFilePreviewResult {
   error?: string;

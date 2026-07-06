@@ -11,6 +11,7 @@ import type {
   DeviceGitCheckoutResult,
   DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
+  DeviceGitLinkedPullRequestLookupStatus,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
@@ -32,6 +33,7 @@ export interface GitLinkedPRSummary {
   extraCount?: number;
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
 }
 
 /**
@@ -104,7 +106,7 @@ class GitService {
       : electronGitService.deleteGitBranch({ branch, path });
   }
 
-  /** Remove a detached worktree from a working directory's repository. */
+  /** Remove a worktree from a working directory's repository. */
   removeGitWorktree({
     deviceId,
     path,
@@ -186,6 +188,7 @@ class GitService {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
+      pullRequestStatus: pr.status,
     };
   }
 

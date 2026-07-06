@@ -58,6 +58,7 @@
   "FileManager.title.createdAt": "创建时间",
   "FileManager.title.size": "大小",
   "FileManager.title.title": "文件",
+  "FileManager.title.uploader": "上传者",
   "FileManager.total.allSelectedCount": "已选中全部 {{count}} 项。",
   "FileManager.total.allSelectedFallback": "已选中全部结果。",
   "FileManager.total.fileCount": "共 {{count}} 项",

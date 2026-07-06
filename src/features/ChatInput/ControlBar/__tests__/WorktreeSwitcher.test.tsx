@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,9 @@ vi.mock('@/services/git', () => ({
 
 vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="icon" />,
+  Input: ({ value, onChange, placeholder }: any) => (
+    <input placeholder={placeholder} value={value} onChange={onChange} />
+  ),
   Tooltip: ({ children }: { children: ReactNode }) => (
     <span data-testid="worktree-tooltip">{children}</span>
   ),
@@ -48,6 +51,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </div>
   ),
+  toast: { error: messageErrorMock, info: vi.fn(), success: messageSuccessMock },
 }));
 
 vi.mock('antd-style', () => ({
@@ -98,8 +102,9 @@ describe('WorktreeSwitcher', () => {
       />,
     );
 
-    expect(screen.getByTestId('worktree-dropdown-trigger').firstElementChild?.tagName).toBe('DIV');
-    expect(screen.getByTestId('worktree-tooltip')).toBeTruthy();
+    const trigger = screen.getByTestId('worktree-dropdown-trigger');
+    expect(trigger.firstElementChild?.tagName).toBe('DIV');
+    expect(within(trigger).getByTestId('worktree-tooltip')).toBeTruthy();
   });
 
   it('renders dirty stats and omits clean labels in the worktree list', () => {
@@ -173,7 +178,7 @@ describe('WorktreeSwitcher', () => {
     expect(screen.getByText('/tmp/project-scratch')).toBeTruthy();
   });
 
-  it('confirms and removes a detached non-current worktree', async () => {
+  it('confirms and removes a non-current worktree', async () => {
     const onWorktreesChange = vi.fn();
     render(
       <WorktreeSwitcher
@@ -208,23 +213,113 @@ describe('WorktreeSwitcher', () => {
       />,
     );
 
-    expect(screen.getAllByLabelText('workingDirectory.removeWorktreeAction')).toHaveLength(1);
+    // both the detached and the branch worktree are removable; only the current one is not
+    const removeButtons = screen.getAllByLabelText('workingDirectory.removeWorktreeAction');
+    expect(removeButtons).toHaveLength(2);
 
-    fireEvent.click(screen.getByLabelText('workingDirectory.removeWorktreeAction'));
+    fireEvent.click(removeButtons[0]);
 
     expect(commitMock).not.toHaveBeenCalled();
     expect(confirmModalMock).toHaveBeenCalledTimes(1);
 
-    await confirmModalMock.mock.calls[0][0].onOk();
+    // onOk returns synchronously (non-blocking) — the removal runs in the
+    // background, so assert against the eventual side effects rather than the
+    // resolved value.
+    confirmModalMock.mock.calls[0][0].onOk();
 
     expect(removeGitWorktreeMock).toHaveBeenCalledWith({
       deviceId: 'device-1',
       path: '/repo',
       worktreePath: '/repo-detached',
     });
-    expect(onWorktreesChange).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onWorktreesChange).toHaveBeenCalled();
+    });
     expect(messageSuccessMock).toHaveBeenCalledWith('workingDirectory.removeWorktreeSuccess');
     expect(messageErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an error toast without rolling into success when removal fails', async () => {
+    removeGitWorktreeMock.mockResolvedValue({
+      error: 'fatal: worktree contains modified or untracked files',
+      success: false,
+    });
+    const onWorktreesChange = vi.fn();
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        deviceId="device-1"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            branch: 'feat/current',
+            current: true,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'canary',
+            current: false,
+            path: '/repo-canary',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+        onWorktreesChange={onWorktreesChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('workingDirectory.removeWorktreeAction'));
+    confirmModalMock.mock.calls[0][0].onOk();
+
+    await waitFor(() => {
+      expect(messageErrorMock).toHaveBeenCalledWith(
+        'fatal: worktree contains modified or untracked files',
+      );
+    });
+    expect(messageSuccessMock).not.toHaveBeenCalled();
+    expect(onWorktreesChange).not.toHaveBeenCalled();
+  });
+
+  it('never offers to remove the source worktree even when it is not current', () => {
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        deviceId="device-1"
+        path="/repo-canary"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            // The main/source worktree — listed as non-current because the agent
+            // runs on a linked worktree. `git worktree remove` would always fail.
+            branch: 'main',
+            current: false,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'canary',
+            current: true,
+            path: '/repo-canary',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'feature',
+            current: false,
+            path: '/repo-feature',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    // Only the linked branch worktree is removable; the source and the current
+    // worktree are both excluded.
+    expect(screen.getAllByLabelText('workingDirectory.removeWorktreeAction')).toHaveLength(1);
   });
 
   it('commits the selected worktree path as the working directory', () => {

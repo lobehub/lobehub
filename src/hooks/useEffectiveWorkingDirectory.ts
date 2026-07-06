@@ -39,6 +39,9 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const deviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(targetDeviceId));
@@ -54,5 +57,6 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
     fallback,
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
+    topicWorkingDirectoryConfig,
   });
 };

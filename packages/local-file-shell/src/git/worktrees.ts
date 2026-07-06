@@ -147,8 +147,7 @@ export const removeGitWorktree = async (payload: {
   const worktree = await findListedWorktree(dirPath, worktreePath);
   if (!worktree) return { error: 'Worktree not found', success: false };
   if (worktree.current) return { error: 'Cannot remove the current worktree', success: false };
-  if (!worktree.detached)
-    return { error: 'Only detached worktrees can be removed', success: false };
+  if (worktree.bare) return { error: 'Cannot remove the bare worktree', success: false };
 
   try {
     await execFileAsync('git', ['worktree', 'remove', worktree.path], {

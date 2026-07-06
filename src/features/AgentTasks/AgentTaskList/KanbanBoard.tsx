@@ -88,12 +88,18 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   const { allowed: canEditTask } = usePermission('create_content');
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  // Surface a failed group fetch as error + Retry instead of a permanent
-  // skeleton board (LOBE-11181). `data` (undefined until first success) is the
-  // settled signal.
-  const { data, error, isLoading, mutate } = useFetchTaskGroupList(
+  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
+  const { error, isLoading, mutate } = useFetchTaskGroupList(
     agentId ? { agentId } : { allAgents: true },
   );
+  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
+  // per-key `data`. On a scope or visibility switch the store resets
+  // `taskGroups` + `isTaskGroupListInit` together (`scopeChangeResetState`)
+  // while SWR still holds cached `data` for the target key — keying `hasSettled`
+  // off SWR `data` flashed the "no tasks" empty board during the refetch.
+  // `isTaskGroupListInit` resets in lockstep with `taskGroups`, so the settled
+  // signal never disagrees with the emptiness signal.
+  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -283,12 +289,12 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   // undefined until the first fetch settles.
   return (
     <AsyncBoundary
-      data={data}
+      data={isTaskGroupListInit || undefined}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
       isEmpty={totalTasks === 0}
-      isLoading={isLoading}
+      isLoading={isLoading || (!isTaskGroupListInit && !error)}
       loading={skeletonBoard}
       onRetry={() => mutate()}
     >

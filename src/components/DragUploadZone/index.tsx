@@ -13,6 +13,7 @@ import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload'
 const BLOCK_SIZE = 48;
 const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
 const OVERLAY_INSET = 28;
+const OVERLAY_BORDER_INSET = 10;
 
 const DEFAULT_TONE = {
   iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
@@ -37,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding-block: 32px 24px;
+    padding-block: 24px;
     padding-inline: 28px;
   `,
   desc: css`
@@ -49,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusSM};
   `,
   iconGroup: css`
-    margin-block-start: -32px;
+    margin-block-start: 0;
   `,
   overlay: css`
     pointer-events: none;
@@ -69,7 +70,8 @@ const styles = createStaticStyles(({ css }) => ({
   overlayContent: css`
     position: relative;
 
-    min-width: min(640px, 72vw);
+    box-sizing: border-box;
+    width: min(460px, 72vw);
     padding: ${OVERLAY_INSET}px;
     border-radius: 16px;
 
@@ -81,7 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
       content: '';
 
       position: absolute;
-      inset: ${OVERLAY_INSET}px;
+      inset: ${OVERLAY_BORDER_INSET}px;
 
       border: 1.5px dashed #fff;
       border-radius: ${cssVar.borderRadiusLG};

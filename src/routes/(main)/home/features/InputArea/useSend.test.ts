@@ -28,7 +28,7 @@ const chatState = vi.hoisted(() => ({
 }));
 
 const fileState = vi.hoisted(() => ({
-  chatContextSelections: [],
+  chatContextSelections: [] as any[],
   chatUploadFileList: [],
   clearChatContextSelections: clearChatContextSelectionsMock,
   clearChatUploadFileList: clearChatUploadFileListMock,
@@ -37,7 +37,7 @@ const fileState = vi.hoisted(() => ({
 const homeState = vi.hoisted(() => ({
   agentGroups: [],
   homeInputLoading: false,
-  inputActiveMode: null,
+  inputActiveMode: null as any,
   isAgentListInit: true,
   pinnedAgents: [],
   privateAgentGroups: [],
@@ -142,6 +142,9 @@ describe('Home InputArea useSend', () => {
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
+    fileState.chatContextSelections = [];
+    fileState.chatUploadFileList = [];
+    homeState.inputActiveMode = null;
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
@@ -202,5 +205,48 @@ describe('Home InputArea useSend', () => {
     expect(sentPayload.message).toBe('看下 Bug #14153 + #14112 Agent 手机端不同步/不显示');
     expect(sentPayload.editorData).toBeUndefined();
     expect(homeDailyBriefState.advance).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes context selections through starter agent mode sends', async () => {
+    homeState.inputActiveMode = 'agent';
+    fileState.chatContextSelections = [
+      {
+        content: 'const selected = true;',
+        filePath: 'src/example.ts',
+        id: 'code-selection',
+        lineRange: { endLine: 12, startLine: 10 },
+        preview: 'src/example.ts:10-12',
+        source: 'code',
+        title: 'src/example.ts:10-12',
+        workingDirectory: '/repo',
+      },
+    ];
+
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => 'use this selection',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(homeState.sendAsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextSelections: [
+          expect.objectContaining({
+            content: 'const selected = true;',
+            filePath: 'src/example.ts',
+            lineRange: { endLine: 12, startLine: 10 },
+            source: 'code',
+          }),
+        ],
+        message: 'use this selection',
+      }),
+    );
+    expect(clearChatContextSelectionsMock).toHaveBeenCalledTimes(1);
   });
 });

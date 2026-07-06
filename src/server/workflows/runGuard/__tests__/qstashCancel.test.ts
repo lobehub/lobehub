@@ -1,206 +1,145 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cancelWorkflowRunsByGuardPolicy } from '../qstashCancel';
 
 describe('workflow run guard qstash cancel', () => {
-  /**
-   * @example
-   * cancelWorkflowRunsByGuardPolicy(client, {
-   *   appUrl: 'https://app.lobehub.com',
-   *   workflowPath: 'api/workflows/memory-user-memory',
-   * })
-   * // cancels RUN_STARTED workflow ids whose URL starts with the workflow prefix
-   */
-  it('resolves matching run ids from logs and cancels by id', async () => {
-    const client = {
-      cancel: vi.fn().mockResolvedValue({ cancelled: 2 }),
-      logs: vi.fn().mockResolvedValue({
-        runs: [
-          {
-            workflowRunId: 'wfr_1',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-          },
-          {
-            workflowRunId: 'wfr_2',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
-          },
-          {
-            workflowRunId: 'wfr_other',
-            workflowState: 'RUN_STARTED',
-            workflowUrl: 'https://app.lobehub.com/api/workflows/agent-eval-run/execute-test-case',
-          },
-        ],
+  const originalQstashToken = process.env.QSTASH_TOKEN;
+  const originalQstashUrl = process.env.QSTASH_URL;
+
+  beforeEach(() => {
+    process.env.QSTASH_TOKEN = 'test-token';
+    delete process.env.QSTASH_URL;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ cancelled: 12 }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
       }),
-    };
+    );
+  });
 
-    await expect(
-      cancelWorkflowRunsByGuardPolicy(
-        client as unknown as Parameters<typeof cancelWorkflowRunsByGuardPolicy>[0],
-        {
-          appUrl: 'https://app.lobehub.com',
-          workflowPath: 'api/workflows/memory-user-memory',
-        },
-      ),
-    ).resolves.toEqual({
-      cancelled: 2,
-      matchedRunIds: ['wfr_1', 'wfr_2'],
-      workflowUrlPrefix: 'https://app.lobehub.com/api/workflows/memory-user-memory',
-    });
+  afterEach(() => {
+    if (originalQstashToken === undefined) delete process.env.QSTASH_TOKEN;
+    else process.env.QSTASH_TOKEN = originalQstashToken;
 
-    expect(client.logs).toHaveBeenCalledWith({ count: 100, state: 'RUN_STARTED' });
-    expect(client.cancel).toHaveBeenCalledWith({ ids: ['wfr_1', 'wfr_2'] });
+    if (originalQstashUrl === undefined) delete process.env.QSTASH_URL;
+    else process.env.QSTASH_URL = originalQstashUrl;
+
+    vi.restoreAllMocks();
   });
 
   /**
    * @example
-   * cancelWorkflowRunsByGuardPolicy(client, {
-   *   appUrl: 'https://app.lobehub.com/',
-   *   workflowPath: '/api/workflows/memory-user-memory/',
+   * cancelWorkflowRunsByGuardPolicy({
+   *   appUrl: 'https://app.lobehub.com',
+   *   workflowPath: 'api/workflows/memory-user-memory',
    * })
-   * // deduplicates matching workflow run ids before cancellation
+   * // cancels pending and active workflows whose URL starts with the workflow prefix
    */
-  it('normalizes the URL prefix and deduplicates matched run ids', async () => {
-    const client = {
-      cancel: vi.fn().mockResolvedValue({ cancelled: 1 }),
-      logs: vi.fn().mockResolvedValue({
-        runs: [
-          {
-            workflowRunId: 'wfr_1',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-          },
-          {
-            workflowRunId: 'wfr_1',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
-          },
-          {
-            workflowRunId: 'wfr_other',
-            workflowState: 'RUN_STARTED',
-            workflowUrl: 'https://app.lobehub.com/api/workflows/agent-eval-run/execute-test-case',
-          },
-        ],
+  it('cancels workflows using the REST URL-prefix body shape expected by QStash', async () => {
+    await expect(
+      cancelWorkflowRunsByGuardPolicy({
+        appUrl: 'https://app.lobehub.com',
+        workflowPath: 'api/workflows/memory-user-memory',
       }),
-    };
+    ).resolves.toEqual({
+      cancelled: 12,
+      workflowUrlPrefix: 'https://app.lobehub.com/api/workflows/memory-user-memory',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      new URL('/v2/workflows/runs', 'https://qstash.upstash.io'),
+      {
+        body: JSON.stringify({
+          workflowUrl: ['https://app.lobehub.com/api/workflows/memory-user-memory'],
+        }),
+        headers: {
+          'Authorization': 'Bearer test-token',
+          'Content-Type': 'application/json',
+        },
+        method: 'DELETE',
+      },
+    );
+  });
+
+  /**
+   * @example
+   * cancelWorkflowRunsByGuardPolicy({
+   *   appUrl: 'https://app.lobehub.com/',
+   *   workflowPath: '/api/workflows/memory-user-memory/?cursor=1#hash',
+   * })
+   * // normalizes the URL prefix before cancellation
+   */
+  it('normalizes the workflow URL prefix before cancellation', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ cancelled: 1 }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }),
+    );
 
     await expect(
-      cancelWorkflowRunsByGuardPolicy(
-        client as unknown as Parameters<typeof cancelWorkflowRunsByGuardPolicy>[0],
-        {
-          appUrl: 'https://app.lobehub.com/',
-          workflowPath: '/api/workflows/memory-user-memory/',
-        },
-      ),
+      cancelWorkflowRunsByGuardPolicy({
+        appUrl: 'https://app.lobehub.com/',
+        workflowPath: '/api/workflows/memory-user-memory/?cursor=1#hash',
+      }),
     ).resolves.toEqual({
       cancelled: 1,
-      matchedRunIds: ['wfr_1'],
       workflowUrlPrefix: 'https://app.lobehub.com/api/workflows/memory-user-memory',
     });
 
-    expect(client.cancel).toHaveBeenCalledWith({ ids: ['wfr_1'] });
-  });
-
-  /**
-   * @example
-   * cancelWorkflowRunsByGuardPolicy(client, {
-   *   appUrl: 'https://app.lobehub.com',
-   *   workflowPath: 'api/workflows/memory-user-memory/pipelines/process-topic',
-   * })
-   * // does not cancel sibling routes with the same string prefix
-   */
-  it('matches workflow URL prefixes on path segment boundaries', async () => {
-    const client = {
-      cancel: vi.fn().mockResolvedValue({ cancelled: 2 }),
-      logs: vi.fn().mockResolvedValue({
-        runs: [
-          {
-            workflowRunId: 'wfr_exact',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/process-topic',
-          },
-          {
-            workflowRunId: 'wfr_child',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/process-topic/child',
-          },
-          {
-            workflowRunId: 'wfr_query',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/process-topic?cursor=1',
-          },
-          {
-            workflowRunId: 'wfr_sibling',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/process-topics',
-          },
-          {
-            workflowRunId: 'wfr_v2',
-            workflowState: 'RUN_STARTED',
-            workflowUrl:
-              'https://app.lobehub.com/api/workflows/memory-user-memory-v2/pipelines/process-topic',
-          },
-        ],
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      new URL('/v2/workflows/runs', 'https://qstash.upstash.io'),
+      expect.objectContaining({
+        body: JSON.stringify({
+          workflowUrl: ['https://app.lobehub.com/api/workflows/memory-user-memory'],
+        }),
       }),
-    };
-
-    await expect(
-      cancelWorkflowRunsByGuardPolicy(
-        client as unknown as Parameters<typeof cancelWorkflowRunsByGuardPolicy>[0],
-        {
-          appUrl: 'https://app.lobehub.com',
-          workflowPath: 'api/workflows/memory-user-memory/pipelines/process-topic',
-        },
-      ),
-    ).resolves.toEqual({
-      cancelled: 2,
-      matchedRunIds: ['wfr_exact', 'wfr_child', 'wfr_query'],
-      workflowUrlPrefix:
-        'https://app.lobehub.com/api/workflows/memory-user-memory/pipelines/process-topic',
-    });
-
-    expect(client.cancel).toHaveBeenCalledWith({
-      ids: ['wfr_exact', 'wfr_child', 'wfr_query'],
-    });
+    );
   });
 
   /**
    * @example
-   * cancelWorkflowRunsByGuardPolicy(client, {
+   * cancelWorkflowRunsByGuardPolicy({
    *   appUrl: 'https://app.lobehub.com',
    *   workflowPath: 'api/workflows/memory-user-memory',
    * })
-   * // returns zero and does not call cancel when logs have no matches
+   * // returns the SDK cancellation count, including zero
    */
-  it('returns zero when no started runs match', async () => {
-    const client = {
-      cancel: vi.fn(),
-      logs: vi.fn().mockResolvedValue({ runs: [] }),
-    };
+  it('returns zero when QStash reports no cancelled workflows', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ cancelled: 0 }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }),
+    );
 
     await expect(
-      cancelWorkflowRunsByGuardPolicy(
-        client as unknown as Parameters<typeof cancelWorkflowRunsByGuardPolicy>[0],
-        {
-          appUrl: 'https://app.lobehub.com',
-          workflowPath: 'api/workflows/memory-user-memory',
-        },
-      ),
+      cancelWorkflowRunsByGuardPolicy({
+        appUrl: 'https://app.lobehub.com',
+        workflowPath: 'api/workflows/memory-user-memory',
+      }),
     ).resolves.toEqual({
       cancelled: 0,
-      matchedRunIds: [],
       workflowUrlPrefix: 'https://app.lobehub.com/api/workflows/memory-user-memory',
     });
+  });
 
-    expect(client.cancel).not.toHaveBeenCalled();
+  /**
+   * @example
+   * cancelWorkflowRunsByGuardPolicy({
+   *   appUrl: 'https://app.lobehub.com',
+   *   workflowPath: 'api/workflows/memory-user-memory',
+   * })
+   * // throws when QSTASH_TOKEN is not configured
+   */
+  it('throws when QSTASH_TOKEN is missing', async () => {
+    delete process.env.QSTASH_TOKEN;
+
+    await expect(
+      cancelWorkflowRunsByGuardPolicy({
+        appUrl: 'https://app.lobehub.com',
+        workflowPath: 'api/workflows/memory-user-memory',
+      }),
+    ).rejects.toThrow('QSTASH_TOKEN is required to cancel workflow runs');
   });
 });

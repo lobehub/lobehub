@@ -449,6 +449,7 @@
   "referral.edit.hint": "2-8 harf, rakam veya alt çizgi desteklenir",
   "referral.edit.placeholder": "Referans kodunu girin",
   "referral.edit.save": "Kaydet",
+  "referral.edit.updated": "Davet kodu güncellendi",
   "referral.errors.alreadyBound": "Davet kodu zaten bağlandı",
   "referral.errors.backfillExpired": "Geriye dönük giriş süresi doldu. Kayıttan sonra 3 gün içinde giriş yapılabilir",
   "referral.errors.codeExists": "Bu referans kodu zaten kullanılıyor, lütfen başka bir tane seçin",

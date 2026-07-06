@@ -645,9 +645,13 @@ export class GeneralChatAgent implements Agent {
           return { reason: 'queued_message_interrupt', type: 'finish' };
         }
 
-        // No pending tools, continue to call LLM with tool results
+        // No pending tools, continue to call LLM with tool results.
+        // When this operation resumed by executing a tool first (e.g. the tools
+        // activator), reuse the placeholder seeded for that resume so this turn
+        // fills it instead of orphaning it (undefined for normal turns).
         return this.toLLMCall(
           {
+            assistantMessageId: state.pendingAssistantMessageId,
             messages: state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
@@ -683,9 +687,13 @@ export class GeneralChatAgent implements Agent {
           return { reason: 'queued_message_interrupt', type: 'finish' };
         }
 
-        // No pending tools, continue to call LLM with tool results
+        // No pending tools, continue to call LLM with tool results.
+        // When this operation resumed by executing a tool first (e.g. the tools
+        // activator), reuse the placeholder seeded for that resume so this turn
+        // fills it instead of orphaning it (undefined for normal turns).
         return this.toLLMCall(
           {
+            assistantMessageId: state.pendingAssistantMessageId,
             messages: state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
@@ -750,13 +758,24 @@ export class GeneralChatAgent implements Agent {
         // Context compression completed, continue to call LLM
         const compressionPayload = context.payload as GeneralAgentCompressionResultPayload;
 
-        // If compression was skipped (no messages to compress), just call LLM
-        // Otherwise, messages have been updated with compressed content
-        // Pass parentMessageId and createAssistantMessage=true to force new message creation
+        // A tool-first resume seeds an assistant placeholder that the first
+        // post-tool LLM turn must fill. When that turn is large enough to
+        // compress first, the compress_context step (not a call_llm) leaves the
+        // seed unconsumed, so it reaches here still set — reuse it instead of
+        // forcing a new message, otherwise the placeholder is orphaned for
+        // exactly the high-context cases that trigger compression.
+        //
+        // If compression was skipped (no messages to compress), just call LLM.
+        // Otherwise, messages have been updated with compressed content, and a
+        // normal turn forces a fresh assistant message.
+        const seededAssistantMessageId = state.pendingAssistantMessageId;
+
         return {
           payload: {
-            // Force create new assistant message after compression
-            createAssistantMessage: true,
+            ...(seededAssistantMessageId
+              ? { assistantMessageId: seededAssistantMessageId }
+              : // Force create new assistant message after compression
+                { createAssistantMessage: true }),
             messages: compressionPayload.compressedMessages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId: compressionPayload.parentMessageId,

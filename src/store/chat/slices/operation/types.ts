@@ -350,11 +350,16 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
       ...(acc?.pageSelections ?? []),
       ...(message.metadata.pageSelections ?? []),
     ];
+    const contextSelections = [
+      ...(acc?.contextSelections ?? []),
+      ...(message.metadata.contextSelections ?? []),
+    ];
 
     return {
       ...acc,
       ...message.metadata,
       ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+      ...(contextSelections.length ? { contextSelections } : undefined),
       ...(pageSelections.length ? { pageSelections } : undefined),
     };
   }, undefined);

@@ -6,21 +6,27 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
+  Markdown,
+  MaskShadow,
   stopPropagation,
   Tag,
   Text,
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
+import { useSize } from 'ahooks';
 import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
+import RunReplyEditor from './RunReplyEditor';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -32,6 +38,33 @@ const formatDuration = (ms: number): string => {
   return `${hours}h ${minutes % 60}m`;
 };
 
+// The run's last message (`content`) is the raw assistant output — markdown, and
+// often long. Render it as rich text, but keep it a bounded preview in the feed:
+// clamp overflow with a fade and let the whole card open the run drawer for the
+// full message (progressive disclosure). `pointerEvents: none` keeps every click
+// — including on links/code inside the markdown — falling through to the card.
+const RUN_CONTENT_MAX_HEIGHT = 160;
+
+const RunContent = memo<{ content: string }>(({ content }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const size = useSize(ref);
+  const isOverflow = !!size && size.height > RUN_CONTENT_MAX_HEIGHT;
+
+  const markdown = (
+    <Markdown ref={ref} style={{ overflow: 'unset', pointerEvents: 'none' }} variant={'chat'}>
+      {content}
+    </Markdown>
+  );
+
+  return isOverflow ? (
+    <MaskShadow size={32} style={{ maxHeight: RUN_CONTENT_MAX_HEIGHT }}>
+      {markdown}
+    </MaskShadow>
+  ) : (
+    markdown
+  );
+});
+
 interface TopicCardProps {
   activity: TaskDetailActivity;
 }
@@ -40,7 +73,17 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const addComment = useTaskStore((s) => s.addComment);
+  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const { allowed: canEditTask } = usePermission('create_content');
+  const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
+  // A descendant run shown in a parent detail belongs to `sourceTaskId`, not the
+  // currently open parent (`activeTaskId`) — file the follow-up on the task that
+  // owns the run so it appears where the run lives. Direct runs fall back to the
+  // active task.
+  const runTaskId = activity.sourceTaskId ?? activeTaskId;
+  const canFollowUp = canEditTask && !!runTaskId;
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -202,10 +245,39 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
-      {activity.summary && (
-        <Text fontSize={13} style={{ color: cssVar.colorTextSecondary, whiteSpace: 'pre-wrap' }}>
-          {activity.summary}
-        </Text>
+      {(activity.summary || activity.content || canFollowUp) && (
+        <Flexbox gap={8} paddingInline={4}>
+          {activity.summary && (
+            <Text
+              fontSize={13}
+              style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}
+            >
+              {activity.summary}
+            </Text>
+          )}
+          {activity.content && <RunContent content={activity.content} />}
+          {canFollowUp &&
+            (commenting ? (
+              <Flexbox onClick={stopPropagation}>
+                <RunReplyEditor
+                  onCancel={() => setCommenting(false)}
+                  onSubmit={async (text) => {
+                    await addComment(runTaskId!, text, { topicId: activity.id });
+                    setCommenting(false);
+                  }}
+                />
+              </Flexbox>
+            ) : (
+              <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
+                <ActionIcon
+                  icon={SquarePen}
+                  size={'small'}
+                  title={t('taskDetail.runFollowUp')}
+                  onClick={() => setCommenting(true)}
+                />
+              </Flexbox>
+            ))}
+        </Flexbox>
       )}
     </Block>
   );

@@ -449,6 +449,7 @@
   "referral.edit.hint": "Obsługuje 2–8 liter, cyfr lub podkreśleń",
   "referral.edit.placeholder": "Wprowadź kod polecający",
   "referral.edit.save": "Zapisz",
+  "referral.edit.updated": "Kod zaproszenia zaktualizowany",
   "referral.errors.alreadyBound": "Kod zaproszenia został już powiązany",
   "referral.errors.backfillExpired": "Okres uzupełnienia minął. Nie można uzupełnić po 3 dniach od rejestracji",
   "referral.errors.codeExists": "Ten kod polecający jest już używany, wybierz inny",

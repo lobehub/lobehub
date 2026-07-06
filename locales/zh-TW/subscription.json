@@ -449,6 +449,7 @@
   "referral.edit.hint": "支援 2-8 位英文字母、數字或底線",
   "referral.edit.placeholder": "輸入推薦碼",
   "referral.edit.save": "儲存",
+  "referral.edit.updated": "邀請碼已更新",
   "referral.errors.alreadyBound": "您已綁定邀請碼",
   "referral.errors.backfillExpired": "補填期限已過。註冊後超過 3 天無法補填",
   "referral.errors.codeExists": "此推薦碼已被使用，請選擇其他碼",

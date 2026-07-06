@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,10 +47,20 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <svg />,
   // Render the popover content unconditionally so window rows are assertable
   // without driving the open/close interaction.
-  Popover: ({ children, content }: { children?: ReactNode; content?: ReactNode }) => (
+  Popover: ({
+    children,
+    content,
+    onOpenChange,
+  }: {
+    children?: ReactNode;
+    content?: ReactNode;
+    onOpenChange?: (open: boolean) => void;
+  }) => (
     <div>
       <div data-testid="popover-content">{content}</div>
-      {children}
+      <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
+        {children}
+      </div>
     </div>
   ),
   Skeleton: { Button: () => <div data-testid="skeleton" /> },
@@ -83,7 +93,8 @@ const codexSnapshot = (overrides: Partial<CodexQuotaSnapshot> = {}): CodexQuotaS
 });
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mockService.getClaudeCodeQuota.mockReset();
+  mockService.getCodexQuota.mockReset();
 });
 
 describe('ClaudeCodeQuotaMenu', () => {
@@ -127,17 +138,153 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(screen.queryByText('raw main-process message')).toBeNull();
   });
 
-  it('shows the raw error for error snapshots and refetches on refresh', async () => {
+  it('shows a friendly rate-limit message for first-load 429 errors', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
-      claudeSnapshot({ error: 'usage API returned 429', status: 'error' }),
+      claudeSnapshot({ error: 'Anthropic usage API returned 429', status: 'error' }),
     );
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findByText('usage API returned 429')).toBeTruthy();
+    expect(await screen.findByText('heteroAgent.claudeQuota.errorRateLimited')).toBeTruthy();
+    expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
 
     fireEvent.click(screen.getByTestId('refresh'));
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders an error snapshot when the quota request rejects', async () => {
+    const error = new Error('network failed');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockService.getClaudeCodeQuota.mockRejectedValueOnce(error);
+
+    try {
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('network failed')).toBeTruthy();
+      expect(consoleError).toHaveBeenCalledWith('Failed to fetch agent quota:', error);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('keeps the previous quota data when an automatic stale refresh is rate-limited', async () => {
+    const staleUpdatedAt = Date.now() - 61_000;
+
+    mockService.getClaudeCodeQuota
+      .mockResolvedValueOnce(
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+          updatedAt: staleUpdatedAt,
+        }),
+      )
+      .mockResolvedValueOnce(
+        claudeSnapshot({ error: 'Anthropic usage API returned 429', status: 'error' }),
+      )
+      .mockResolvedValueOnce(
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 20, windowMinutes: 300 },
+        }),
+      );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('quota-trigger'));
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.refreshRateLimited')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('quota-trigger'));
+
+    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps stale data and shows a friendly prompt when manual refresh is rate-limited', async () => {
+    mockService.getClaudeCodeQuota
+      .mockResolvedValueOnce(
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        claudeSnapshot({ error: 'Anthropic usage API returned 429', status: 'error' }),
+      );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('refresh'));
+
+    await screen.findByText('heteroAgent.claudeQuota.refreshRateLimited');
+    expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.queryByText('Anthropic usage API returned 429')).toBeNull();
+  });
+
+  it('does not preserve quota data after switching Claude Code credential source', async () => {
+    mockService.getClaudeCodeQuota
+      .mockResolvedValueOnce(
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        claudeSnapshot({ error: 'Anthropic usage API returned 429', status: 'error' }),
+      );
+
+    const { rerender } = render(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-a' }} />);
+
+    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+
+    rerender(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-b' }} />);
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('heteroAgent.claudeQuota.errorRateLimited')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.left:92')).toBeNull();
+  });
+
+  it('ignores stale request loading updates after switching Claude Code credential source', async () => {
+    const requests: Array<(snapshot: ClaudeCodeQuotaSnapshot) => void> = [];
+    mockService.getClaudeCodeQuota.mockImplementation(
+      () =>
+        new Promise<ClaudeCodeQuotaSnapshot>((resolve) => {
+          requests.push(resolve);
+        }),
+    );
+
+    const { rerender } = render(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-a' }} />);
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+
+    rerender(<ClaudeCodeQuotaMenu env={{ CLAUDE_CONFIG_DIR: '/profile-b' }} />);
+
+    await waitFor(() => expect(requests).toHaveLength(2));
+
+    await act(async () => {
+      requests[0](
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        }),
+      );
+    });
+
+    expect(screen.getAllByTestId('skeleton')).toHaveLength(3);
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      requests[1](
+        claudeSnapshot({
+          session: { resetsAt: null, usedPercent: 20, windowMinutes: 300 },
+        }),
+      );
+    });
+
+    expect(await screen.findByText('heteroAgent.quota.left:80')).toBeTruthy();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('renders the empty state when the snapshot has no windows', async () => {

@@ -207,6 +207,36 @@ describe('chatMessage actions', () => {
         threadId: undefined,
       });
     });
+
+    it('should pass user message metadata when provided', async () => {
+      const message = 'Test user message with selected code';
+      const metadata = {
+        contextSelections: [
+          {
+            content: 'const answer = 42;',
+            filePath: 'src/example.ts',
+            id: 'selection-1',
+            source: 'code' as const,
+          },
+        ],
+      };
+      useChatStore.setState({ activeAgentId: mockState.activeAgentId });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.addUserMessage({ message, metadata });
+      });
+
+      expect(messageService.createMessage).toHaveBeenCalledWith({
+        content: message,
+        files: undefined,
+        role: 'user',
+        agentId: mockState.activeAgentId,
+        metadata,
+        topicId: mockState.activeTopicId,
+        threadId: undefined,
+      });
+    });
   });
 
   describe('deleteMessage', () => {

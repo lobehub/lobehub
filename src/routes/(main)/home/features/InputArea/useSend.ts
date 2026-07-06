@@ -2,6 +2,7 @@ import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
+import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
@@ -90,19 +91,21 @@ export const useSend = () => {
       if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       try {
+        const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
+
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent({ editorData, message });
+            await sendAsAgent({ contextSelections, editorData, message, pageSelections });
             break;
           }
 
           case 'group': {
-            await sendAsGroup({ editorData, message });
+            await sendAsGroup({ contextSelections, editorData, message, pageSelections });
             break;
           }
 
           case 'write': {
-            await sendAsWrite({ editorData, message });
+            await sendAsWrite({ contextSelections, editorData, message, pageSelections });
             break;
           }
 
@@ -122,6 +125,7 @@ export const useSend = () => {
 
             sendMessage({
               context: { agentId: activeAgentId, isolatedTopic: true },
+              contextSelections,
               contexts: contextList,
               editorData,
               files: fileList,
@@ -129,6 +133,7 @@ export const useSend = () => {
               onTopicCreated: (topicId) => {
                 router.replace(AGENT_CHAT_TOPIC_URL(activeAgentId, topicId, false));
               },
+              pageSelections,
             });
 
             router.push(AGENT_CHAT_URL(activeAgentId, false));

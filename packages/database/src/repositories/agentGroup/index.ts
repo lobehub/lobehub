@@ -27,6 +27,11 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 interface CopyAgentGroupToWorkspaceOptions {
   includeConversationHistory?: boolean;
   newTitle?: string;
+  /**
+   * Visibility of the copied group + its member agents within the target
+   * workspace. Ignored when copying to a personal account.
+   */
+  targetVisibility?: 'private' | 'public';
 }
 
 export interface SupervisorAgentConfig {
@@ -108,6 +113,7 @@ export class AgentGroupRepository {
     targetWorkspaceId: string | null,
     targetUserId: string,
     fallbackTitle: string,
+    targetVisibility?: 'private' | 'public',
   ): NewAgent => ({
     agencyConfig: source?.agencyConfig,
     avatar: source?.avatar,
@@ -129,6 +135,7 @@ export class AgentGroupRepository {
     tts: source?.tts,
     userId: targetUserId,
     virtual: source?.virtual ?? true,
+    ...(targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
     workspaceId: targetWorkspaceId,
   });
 
@@ -746,6 +753,7 @@ export class AgentGroupRepository {
     groupId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ groupId: string } | null> {
     const sourceGroup = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, groupId), this.groupOwnership()),
@@ -764,10 +772,15 @@ export class AgentGroupRepository {
         userId: targetUserId,
         workspaceId: targetWorkspaceId,
       };
+      // Only apply visibility when the destination is a workspace —
+      // in personal scope every row is implicitly private and the
+      // field is ignored.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       await trx
         .update(chatGroups)
-        .set({ ...ownershipUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
         .where(eq(chatGroups.id, groupId));
 
       await trx
@@ -787,7 +800,7 @@ export class AgentGroupRepository {
 
         await trx
           .update(agents)
-          .set({ ...ownershipUpdate, updatedAt: new Date() })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
           .where(inArray(agents.id, agentIds));
       }
 
@@ -847,6 +860,11 @@ export class AgentGroupRepository {
     const sourceSupervisor = groupAgentsWithDetails.find((row) => row.role === 'supervisor');
     const sourceMembers = groupAgentsWithDetails.filter((row) => row.role !== 'supervisor');
 
+    // Only apply visibility when copying INTO a workspace — in personal
+    // scope visibility is a no-op and the DB defaults win.
+    const targetVisibility =
+      targetWorkspaceId && options.targetVisibility ? options.targetVisibility : undefined;
+
     return this.db.transaction(async (trx) => {
       const [newGroup] = await trx
         .insert(chatGroups)
@@ -860,6 +878,7 @@ export class AgentGroupRepository {
           pinned: sourceGroup.pinned,
           title: options.newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
           userId: targetUserId,
+          ...(targetVisibility ? { visibility: targetVisibility } : {}),
           workspaceId: targetWorkspaceId,
         })
         .returning();
@@ -872,6 +891,7 @@ export class AgentGroupRepository {
             targetWorkspaceId,
             targetUserId,
             'Supervisor',
+            targetVisibility,
           ),
         )
         .returning();
@@ -882,7 +902,13 @@ export class AgentGroupRepository {
           .insert(agents)
           .values(
             sourceMembers.map((member) =>
-              this.buildCopiedAgent(member.agent, targetWorkspaceId, targetUserId, 'Agent'),
+              this.buildCopiedAgent(
+                member.agent,
+                targetWorkspaceId,
+                targetUserId,
+                'Agent',
+                targetVisibility,
+              ),
             ),
           )
           .returning({ id: agents.id });

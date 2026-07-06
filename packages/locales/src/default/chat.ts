@@ -182,6 +182,10 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.claudeQuota.errorRateLimited':
+    'Claude Code quota is temporarily rate limited. Please try again later.',
+  'heteroAgent.claudeQuota.refreshRateLimited':
+    'Quota refresh is temporarily rate limited. Showing the last available data.',
   'heteroAgent.claudeQuota.scopedWeekly': 'Weekly ({{model}})',
   'heteroAgent.claudeQuota.title': 'Claude Code quota',
   'heteroAgent.claudeQuota.tooltip': 'View Claude Code quota',
@@ -209,6 +213,7 @@ export default {
   'heteroAgent.quota.left': '{{percent}}% left',
   'heteroAgent.quota.noData': 'Quota is not available yet.',
   'heteroAgent.quota.refresh': 'Refresh quota',
+  'heteroAgent.quota.refreshFailed': "Couldn't refresh quota. Showing the last available data.",
   'heteroAgent.quota.resetsIn': 'Resets in {{duration}}',
   'heteroAgent.quota.resetsSoon': 'Resets soon',
   'heteroAgent.quota.session': 'Session',
@@ -260,7 +265,7 @@ export default {
   'heteroAgent.executionTarget.gatewayDesc':
     'Run through the device gateway so other clients can follow progress',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
-  'heteroAgent.executionTarget.local': 'This device',
+  'heteroAgent.executionTarget.local': 'Local device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':
@@ -928,6 +933,8 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
+  'taskDetail.runFollowUp': 'Ask a follow-up',
+  'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
@@ -1023,6 +1030,7 @@ export default {
 
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
+  'createTask.createFailed': 'Failed to create task',
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
@@ -1385,6 +1393,7 @@ export default {
   'workingPanel.skills.rename.placeholder': 'Skill name',
   'workingPanel.skills.rename.title': 'Rename skill',
   'workingPanel.skills.section.agent': 'Agent skills',
+  'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',
@@ -1401,6 +1410,7 @@ export default {
   'workingPanel.review.baseRef.loading': 'Loading branches…',
   'workingPanel.review.baseRef.reset': 'Reset to default branch',
   'workingPanel.review.baseRef.unresolved': 'Pick a base branch',
+  'workingPanel.review.addSelectionToContext.success': 'Added selected lines to context',
   'workingPanel.review.binary': 'Binary file — diff not shown',
   'workingPanel.review.collapseAll': 'Collapse all',
   'workingPanel.review.copied': 'Path copied',
@@ -1431,6 +1441,8 @@ export default {
   'workingPanel.review.textDiff.enable': 'Enable inline text diff',
   'workingPanel.review.title': 'Review',
   'workingPanel.review.tooLarge': 'File is too large to diff inline',
+  'workingPanel.review.tree.hide': 'Hide file tree',
+  'workingPanel.review.tree.show': 'Show file tree',
   'workingPanel.review.unstaged': 'Unstaged',
   'workingPanel.review.viewMode.split': 'Switch to split view',
   'workingPanel.review.viewMode.unified': 'Switch to unified view',

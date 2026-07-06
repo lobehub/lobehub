@@ -229,10 +229,7 @@ describe('HeterogeneousAgentCtr', () => {
           _file: string,
           _args: string[],
           optionsOrCallback: unknown,
-          callback?: (
-            error: Error | null,
-            result: { stderr: string; stdout: string },
-          ) => void,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
         ) => {
           const resolvedCallback =
             typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
@@ -287,7 +284,10 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
-      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
+      sendPromptOverrides: Partial<{
+        imageList: Array<{ id: string; url: string }>;
+        systemContext: string;
+      }> = {},
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
@@ -331,6 +331,19 @@ describe('HeterogeneousAgentCtr', () => {
         },
         type: 'user',
       });
+    });
+
+    it('places system context before the user prompt in stream-json content blocks', async () => {
+      const { writes } = await runSendPrompt('user task', {}, [], {
+        systemContext: 'selected code context',
+      });
+
+      expect(writes).toHaveLength(1);
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([
+        { text: 'selected code context', type: 'text' },
+        { text: 'user task', type: 'text' },
+      ]);
     });
 
     it.each([
@@ -449,7 +462,10 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
-      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
+      sendPromptOverrides: Partial<{
+        imageList: Array<{ id: string; url: string }>;
+        systemContext: string;
+      }> = {},
       storeGet?: (key: string, defaultValue?: any) => any,
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
@@ -646,6 +662,14 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
+    });
+
+    it('places system context before the user prompt in codex stdin', async () => {
+      const { writes } = await runSendPrompt('user task', {}, [], {
+        systemContext: 'selected code context',
+      });
+
+      expect(writes).toEqual(['selected code context\n\nuser task']);
     });
 
     it('materializes image attachments into local files and forwards them via --image', async () => {

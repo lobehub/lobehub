@@ -94,9 +94,12 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
 
-    it('should throw on error and reset isCreatingTask', async () => {
+    it('should reject and reset isCreatingTask on error (callers own the error path)', async () => {
       vi.mocked(taskService.create).mockRejectedValue(new Error('fail'));
 
+      // createTask keeps its rejecting contract so callers that rely on `catch`
+      // (e.g. the recommend-template flow) don't fall through to a false success;
+      // the composer callers add their own catch + toast (V4).
       await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).rejects.toThrow(
         'fail',
       );

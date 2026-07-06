@@ -1179,6 +1179,7 @@ export class TaskModel {
     taskId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ taskIds: string[] }> {
     return this.db.transaction(async (trx) => {
       const scoped = new TaskModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
@@ -1186,6 +1187,11 @@ export class TaskModel {
       if (subtree.length === 0) throw new Error('Task not found');
 
       const ids = subtree.map((t) => t.id);
+
+      // Visibility only applies when landing in a workspace. In personal scope
+      // every row is implicitly private and the field is ignored.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // Reallocate identifier + seq in target scope to avoid collisions.
       const baseSeq = await this.nextSeqIn(
@@ -1208,23 +1214,26 @@ export class TaskModel {
             seq,
             updatedAt: new Date(),
             workspaceId: targetWorkspaceId,
+            ...visibilityUpdate,
           })
           .where(eq(tasks.id, task.id));
       }
 
-      // Update child tables that key off taskId.
+      // Update child tables that key off taskId. Child rows mirror the parent
+      // task's visibility (see schema comments on task_deps / task_docs /
+      // task_comments) so cascade the new visibility here too.
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
       await (trx as LobeChatDatabase)
         .update(taskDependencies)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskDependencies.taskId, ids));
       await (trx as LobeChatDatabase)
         .update(taskDocuments)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskDocuments.taskId, ids));
       await (trx as LobeChatDatabase)
         .update(taskComments)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskComments.taskId, ids));
 
       return { taskIds: ids };
@@ -1241,11 +1250,16 @@ export class TaskModel {
     taskId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ rootId: string }> {
     return this.db.transaction(async (trx) => {
       const scoped = new TaskModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scoped.collectTaskSubtree(taskId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Task not found');
+
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // BFS clone — parent inserted before children, so we always know the
       // new parentTaskId by the time we reach the child.
@@ -1299,6 +1313,7 @@ export class TaskModel {
             status: 'backlog',
             totalTopics: 0,
             workspaceId: targetWorkspaceId,
+            ...visibilityOverride,
           } as NewTask)
           .returning({ id: tasks.id })) as { id: string }[];
 

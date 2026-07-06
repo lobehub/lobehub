@@ -1,19 +1,24 @@
+import type { WorkingDirConfig, WorkingDirGithubState } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
 import { electronSystemService } from '@/services/electron/system';
-import { gitService } from '@/services/git';
+import { type GitLinkedPRSummary, gitService } from '@/services/git';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
   useFetchGitLinkedPR,
-  useFetchGitWorkingTreeStatus,
   useFetchGitWorktrees,
+  useReviewPatches,
 } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -146,6 +151,16 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
+const toGithubMetadata = (prData?: GitLinkedPRSummary): WorkingDirGithubState | undefined => {
+  if (!prData) return undefined;
+
+  return {
+    ...(prData.extraCount === undefined ? {} : { extraPullRequestCount: prData.extraCount }),
+    pullRequest: prData.pullRequest ?? null,
+    pullRequestStatus: prData.pullRequestStatus ?? (prData.ghMissing ? 'gh-missing' : 'ok'),
+  };
+};
+
 interface GitStatusProps {
   /** When set, git status / branch switch / pull / push all run against this
    * remote device via RPC. Omit for the local machine (talks over IPC). */
@@ -166,15 +181,22 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   const branch = branchData?.branch;
   const detached = branchData?.detached;
   const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(deviceId, path, branch, isGithub);
-  const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
-    deviceId,
+  const { data: reviewPatches, mutate: mutateReviewPatches } = useReviewPatches(
     path,
+    'unstaged',
+    undefined,
+    deviceId,
   );
   const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
   const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(deviceId, path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const activeTopicMetadata = useChatStore((s) =>
+    s.activeTopicId ? topicSelectors.getTopicById(s.activeTopicId)(s)?.metadata : undefined,
+  );
+  const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
@@ -199,11 +221,11 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
     await Promise.all([
       mutateBranch(),
       mutatePR(),
-      mutateWorkingStatus(),
+      mutateReviewPatches(),
       mutateAheadBehind(),
       mutateWorktrees(),
     ]);
-  }, [mutateBranch, mutatePR, mutateWorkingStatus, mutateAheadBehind, mutateWorktrees]);
+  }, [mutateBranch, mutatePR, mutateReviewPatches, mutateAheadBehind, mutateWorktrees]);
 
   // Flip the displayed branch instantly on checkout. No revalidate here — the
   // switcher's onAfterCheckout reconciles once the checkout lands. The linked-PR
@@ -216,6 +238,53 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
     [mutateBranch],
   );
 
+  useEffect(() => {
+    if (!activeTopicId || !activeTopicMetadata || !isGithub || !branch || detached || !prData) {
+      return;
+    }
+
+    const currentConfig = activeTopicMetadata.workingDirectoryConfig;
+    const currentWorkingDirectory =
+      getWorkingDirEffectivePath(currentConfig) ?? activeTopicMetadata.workingDirectory;
+    if (currentWorkingDirectory !== path) return;
+
+    const github = toGithubMetadata(prData);
+    if (!github) return;
+
+    const source = currentConfig?.path ?? sourcePath ?? path;
+    const isWorktree = source !== path;
+    const git: NonNullable<WorkingDirConfig['git']> = {
+      ...currentConfig?.git,
+      branch,
+      github,
+      isWorktree,
+    };
+    if (detached === undefined) delete git.detached;
+    else git.detached = detached;
+    if (isWorktree) git.activeWorktree = path;
+    else delete git.activeWorktree;
+
+    const nextConfig: WorkingDirConfig = {
+      ...currentConfig,
+      git,
+      path: source,
+      repoType: 'github',
+    };
+
+    if (isEqual(currentConfig, nextConfig)) return;
+    void updateTopicMetadata(activeTopicId, { workingDirectoryConfig: nextConfig });
+  }, [
+    activeTopicId,
+    activeTopicMetadata,
+    branch,
+    detached,
+    isGithub,
+    path,
+    prData,
+    sourcePath,
+    updateTopicMetadata,
+  ]);
+
   const syncBusy = pulling || pushing;
 
   const handlePull = useCallback(async () => {
@@ -225,13 +294,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       const result = await gitService.pullGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('workingDirectory.pullNoop'));
+          toast.info(t('workingDirectory.pullNoop'));
         } else {
-          message.success(t('workingDirectory.pullSuccess'));
+          toast.success(t('workingDirectory.pullSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('workingDirectory.pullFailed'));
+        toast.error(result.error || t('workingDirectory.pullFailed'));
       }
     } finally {
       setPulling(false);
@@ -245,18 +314,35 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       const result = await gitService.pushGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('workingDirectory.pushNoop'));
+          toast.info(t('workingDirectory.pushNoop'));
         } else {
-          message.success(t('workingDirectory.pushSuccess'));
+          toast.success(t('workingDirectory.pushSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('workingDirectory.pushFailed'));
+        toast.error(result.error || t('workingDirectory.pushFailed'));
       }
     } finally {
       setPushing(false);
     }
   }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
+
+  const diffStats = useMemo(() => {
+    const patches = [
+      ...(reviewPatches?.patches ?? []),
+      ...(reviewPatches?.submodules ?? []).flatMap((submodule) => submodule.patches),
+    ];
+    return patches.reduce(
+      (acc, patch) => {
+        acc.additions += patch.additions ?? 0;
+        acc.deletions += patch.deletions ?? 0;
+        acc.files += 1;
+        return acc;
+      },
+      { additions: 0, deletions: 0, files: 0 },
+    );
+  }, [reviewPatches?.patches, reviewPatches?.submodules]);
+  const hasChanges = diffStats.files > 0;
 
   if (!branch) return null;
 
@@ -273,13 +359,11 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       ? t('workingDirectory.ghMissing')
       : undefined;
 
-  const hasChanges = !!workingStatus && !workingStatus.clean;
-
   const diffStatTooltip = hasChanges
-    ? t('workingDirectory.diffStatTooltip', {
-        added: workingStatus!.added,
-        deleted: workingStatus!.deleted,
-        modified: workingStatus!.modified,
+    ? t('workingDirectory.diffLineStatTooltip', {
+        added: diffStats.additions,
+        deleted: diffStats.deletions,
+        files: diffStats.files,
       })
     : undefined;
 
@@ -326,8 +410,9 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       onAfterCheckout={() => {
         void mutateBranch();
         void mutatePR();
-        void mutateWorkingStatus();
+        void mutateReviewPatches();
         void mutateAheadBehind();
+        void mutateWorktrees();
       }}
     >
       <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
@@ -383,18 +468,18 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   );
 
   const diffNode = (() => {
-    if (!hasChanges || !workingStatus) return null;
+    if (!hasChanges) return null;
     const diffButton = (
       <div className={styles.trigger} role="button" onClick={handleToggleReview}>
         <span className={styles.diffStat}>
-          {workingStatus.added > 0 && (
-            <span className={styles.diffStatAdded}>+{workingStatus.added}</span>
+          {diffStats.additions > 0 && (
+            <span className={styles.diffStatAdded}>+{diffStats.additions}</span>
           )}
-          {workingStatus.modified > 0 && (
-            <span className={styles.diffStatModified}>±{workingStatus.modified}</span>
+          {diffStats.deletions > 0 && (
+            <span className={styles.diffStatDeleted}>-{diffStats.deletions}</span>
           )}
-          {workingStatus.deleted > 0 && (
-            <span className={styles.diffStatDeleted}>-{workingStatus.deleted}</span>
+          {diffStats.additions === 0 && diffStats.deletions === 0 && diffStats.files > 0 && (
+            <span className={styles.diffStatModified}>±{diffStats.files}</span>
           )}
         </span>
       </div>

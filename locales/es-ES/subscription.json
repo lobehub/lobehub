@@ -449,6 +449,7 @@
   "referral.edit.hint": "Soporta 2-8 letras, números o guiones bajos",
   "referral.edit.placeholder": "Introduce el código de referido",
   "referral.edit.save": "Guardar",
+  "referral.edit.updated": "Código de invitación actualizado",
   "referral.errors.alreadyBound": "Ya has vinculado un código de invitación",
   "referral.errors.backfillExpired": "El período de recuperación ha expirado. No se puede recuperar después de 3 días desde el registro",
   "referral.errors.codeExists": "Este código ya está en uso, por favor elige otro",

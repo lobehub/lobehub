@@ -12,7 +12,7 @@ export interface ActivateSkillParams {
   name: string;
 }
 
-export type ActivateSkillSource = 'agent' | 'builtin' | 'project' | 'user';
+export type ActivateSkillSource = 'agent' | 'builtin' | 'device' | 'project' | 'user';
 
 export interface ActivateSkillState {
   description?: string;

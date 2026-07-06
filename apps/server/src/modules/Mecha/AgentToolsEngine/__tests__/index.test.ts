@@ -6,6 +6,7 @@ import { LobeAgentApiName, LobeAgentManifest } from '@lobechat/builtin-tool-lobe
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SkillsApiName, SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -317,6 +318,34 @@ describe('createServerAgentToolsEngine', () => {
     );
     // ...but callSubAgent is stripped so a nested sub-agent cannot recurse.
     expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('rewrites lobe-skills exec descriptions when manifestContext.executionEnv is device-unrouted', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: {
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason: 'bound-device-offline',
+      },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    // lobe-skills is always-on, so the resolved manifest is what the model sees.
+    const skills = result.enabledManifests.find((m) => m.identifier === SkillsManifest.identifier);
+    const runCommand = skills?.api.find((a) => a.name === SkillsApiName.runCommand);
+    expect(runCommand?.description).toContain('local device but it is offline');
+    // without a manifest context the static description has no offline warning
+    expect(
+      SkillsManifest.api.find((a) => a.name === SkillsApiName.runCommand)?.description,
+    ).not.toContain('offline');
   });
 
   it('hides lobe-agent callSubAgent inside a group run (scope=group)', () => {

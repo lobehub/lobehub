@@ -449,6 +449,7 @@
   "referral.edit.hint": "Erlaubt 2–8 Buchstaben, Zahlen oder Unterstriche",
   "referral.edit.placeholder": "Empfehlungscode eingeben",
   "referral.edit.save": "Speichern",
+  "referral.edit.updated": "Einladungscode aktualisiert",
   "referral.errors.alreadyBound": "Du hast bereits einen Einladungscode eingegeben",
   "referral.errors.backfillExpired": "Der Nachtragezeitraum ist abgelaufen. Nach 3 Tagen nach der Registrierung ist kein Nachtrag mehr möglich",
   "referral.errors.codeExists": "Dieser Empfehlungscode ist bereits vergeben, bitte wählen Sie einen anderen",

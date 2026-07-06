@@ -57,6 +57,8 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     updatedAt: item.updatedAt,
 
+    uploader: item.uploader ?? null,
+
     // File-specific fields
     url: item.url,
 

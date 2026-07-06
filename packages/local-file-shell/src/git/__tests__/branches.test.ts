@@ -144,17 +144,22 @@ describe('removeGitWorktree', () => {
     );
   });
 
-  it('refuses to remove a branch worktree', async () => {
+  it('removes a branch worktree', async () => {
     git(repo, 'branch', 'feature');
     const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-branch-'));
     cleanup.push(worktreeParent);
     const linked = path.join(worktreeParent, 'linked');
     git(repo, 'worktree', 'add', linked, 'feature');
+    const linkedRealPath = await realpath(linked);
 
     expect(await removeGitWorktree({ path: repo, worktreePath: linked })).toEqual({
-      error: 'Only detached worktrees can be removed',
-      success: false,
+      success: true,
     });
+
+    expect(existsSync(linkedRealPath)).toBe(false);
+    expect((await listGitWorktrees(repo)).map((worktree) => worktree.path)).not.toContain(
+      linkedRealPath,
+    );
   });
 
   it('refuses to remove the current worktree', async () => {
