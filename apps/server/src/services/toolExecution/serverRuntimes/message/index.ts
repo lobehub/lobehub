@@ -140,7 +140,14 @@ export const messageRuntime: ServerRuntimeRegistration = {
     }
 
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const providerModel = new AgentBotProviderModel(context.serverDB, context.userId, gateKeeper);
+    // Mirror the TRPC router (agentBotProviderProcedure): workspace runs scope
+    // bot rows and paid-feature checks to the workspace, not the personal plan.
+    const providerModel = new AgentBotProviderModel(
+      context.serverDB,
+      context.userId,
+      gateKeeper,
+      context.workspaceId ?? undefined,
+    );
 
     const service = new MessageDispatcherService({
       discord: async () => {
@@ -254,6 +261,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: params.applicationId,
           platform: params.platform,
           userId: context.userId!,
+          workspaceId: context.workspaceId ?? undefined,
         });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
         assertBotAccessSettings(settings);

@@ -1264,6 +1264,44 @@ describe('BotMessageRouter', () => {
       expect(thread.post.mock.calls[0][0]).not.toContain('付费');
     });
 
+    it('posts the enforce-mode denial only to senders that pass the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: false,
+        blockedMessage: '微信渠道现已升级为付费功能。',
+        requiredPlan: 'paid',
+        rolloutMode: 'enforce',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      // A stranger blocked by the allowlist gets the regular rejection, not
+      // the paid-block copy — plan state must not leak past the gates.
+      await handler(thread, {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+
+      // An allowlisted sender passes the gates and then receives the denial.
+      thread.post.mockClear();
+      await handler(thread, {
+        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
+        text: 'hi again',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('付费');
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
     it('should block DM messages blocked by the allowlist and notify the sender', async () => {
       const handler = await loadDmCatchAllHandler({
         allowFrom: 'bob-id',

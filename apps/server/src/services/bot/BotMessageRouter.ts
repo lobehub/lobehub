@@ -864,20 +864,23 @@ export class BotMessageRouter {
         workspaceId: workspaceId ?? undefined,
       });
 
-      if (!featureAccess.allowed) {
-        try {
-          await thread.post(featureAccess.blockedMessage ?? 'This bot channel is unavailable.');
-        } catch (error) {
-          log('%s: failed to post paid-feature notice: %O', caller, error);
+      // Plan state must not leak to senders/groups the bot is configured to
+      // ignore: both the enforce-mode denial and the rollout notice are only
+      // posted after every gate below passes — rejected callers get the
+      // regular rejection copy (or silence) instead.
+      const finishFeatureAccess = async (): Promise<boolean> => {
+        if (!featureAccess.allowed) {
+          try {
+            await thread.post(featureAccess.blockedMessage ?? 'This bot channel is unavailable.');
+          } catch (error) {
+            log('%s: failed to post paid-feature notice: %O', caller, error);
+          }
+          return false;
         }
-        return false;
-      }
-
-      // Posted only after every gate below passes — a sender or group the
-      // bot is configured not to answer must not receive a plan notice.
-      const maybeNotifyFeatureNotice = async (): Promise<void> => {
-        if (!featureAccess.notice) return;
-        await notifyFeatureNoticeOnce(thread, author, featureAccess.notice.id, caller);
+        if (featureAccess.notice) {
+          await notifyFeatureNoticeOnce(thread, author, featureAccess.notice.id, caller);
+        }
+        return true;
       };
 
       // Owner override. The bot's operator (`settings.userId`) sets the
@@ -894,8 +897,7 @@ export class BotMessageRouter {
       // implicit-merge of `settings.userId` into `extractUserAllowlist`,
       // which already treats the operator as always-allowed.
       if (operatorUserId && author.userId === operatorUserId) {
-        await maybeNotifyFeatureNotice();
-        return true;
+        return finishFeatureAccess();
       }
       // Pairing redefines what `allowFrom` means: it's the *post-approval*
       // list (managed by `/approve`), not a hard identity gate. A stranger
@@ -934,8 +936,7 @@ export class BotMessageRouter {
       }
       const dmDecision = passesDmPolicy(thread, { author });
       if (dmDecision === 'allow') {
-        await maybeNotifyFeatureNotice();
-        return true;
+        return finishFeatureAccess();
       }
       log(
         '%s: DM gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
