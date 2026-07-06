@@ -335,19 +335,6 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Persist the topic's status. Optimistically patches the in-memory map so
-   * the sidebar reflects the change immediately; persistence runs
-   * fire-and-forget so a transient network blip never tears down the agent
-   * run that owns the write.
-   *
-   * Pass `agentId`/`groupId` when the call originates from an agent run
-   * rather than the active UI — without them, the lookup falls back to the
-   * currently active agent, and a status write arriving after the user has
-   * switched agents lands in the wrong bucket. The DB write is unconditional
-   * so even if no bucket is loaded for this topic, the next refetch picks
-   * up the persisted status.
-   */
-  /**
    * Optimistic `updateTopicStatus` writes that a topic-list refetch must not
    * clobber. A refetch whose server query ran BEFORE a status write can land
    * AFTER the optimistic dispatch and revert the row — e.g. a run-end 'unread'
@@ -382,16 +369,30 @@ export class ChatTopicActionImpl {
     // still in the bucket — they only ever leave it via replaceTopicId (send
     // resolved) or deleteTopic (rollback), never via a fetch.
     if (currentItems && currentItems.length > 0) {
-      const fetchedIds = new Set(next.map((item) => item.id));
-      const optimisticRows = currentItems.filter(
-        (item) => item.id.startsWith('tmp_topic_') && !fetchedIds.has(item.id),
-      );
-      if (optimisticRows.length > 0) next = [...optimisticRows, ...next];
+      const optimisticRows = currentItems.filter((item) => item.id.startsWith('tmp_topic_'));
+      if (optimisticRows.length > 0) {
+        const fetchedIds = new Set(next.map((item) => item.id));
+        const surviving = optimisticRows.filter((item) => !fetchedIds.has(item.id));
+        if (surviving.length > 0) next = [...surviving, ...next];
+      }
     }
 
     return next;
   };
 
+  /**
+   * Persist the topic's status. Optimistically patches the in-memory map so
+   * the sidebar reflects the change immediately; persistence runs
+   * fire-and-forget so a transient network blip never tears down the agent
+   * run that owns the write.
+   *
+   * Pass `agentId`/`groupId` when the call originates from an agent run
+   * rather than the active UI — without them, the lookup falls back to the
+   * currently active agent, and a status write arriving after the user has
+   * switched agents lands in the wrong bucket. The DB write is unconditional
+   * so even if no bucket is loaded for this topic, the next refetch picks
+   * up the persisted status.
+   */
   updateTopicStatus = async (params: {
     agentId?: string;
     groupId?: string;
@@ -864,8 +865,11 @@ export class ChatTopicActionImpl {
         topicService.searchTopics(keywords, agentId, groupId),
       {
         onSuccess: (data) => {
+          // Search rows render the same status icon as the sidebar — pin
+          // pending status writes here too (no tmp-row re-prepend: optimistic
+          // rows don't belong in search results).
           this.#set(
-            { searchTopics: data, isSearchingTopic: false },
+            { searchTopics: this.#reconcileFetchedTopics(data), isSearchingTopic: false },
             false,
             n('useSearchTopics(success)', { keywords }),
           );

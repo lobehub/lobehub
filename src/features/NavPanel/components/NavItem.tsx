@@ -105,13 +105,16 @@ const NavItem = memo<NavItemProps>(
         }
       : {};
 
-    const mergedStyle = {
-      ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
-      // `disabled` only blocks the click by itself — dim the row so the
-      // blocked state is visible instead of a silently dead button.
-      ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
-      ...style,
-    };
+    const mergedStyle =
+      href || disabled || style
+        ? {
+            ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
+            // `disabled` only blocks the click by itself — dim the row so the
+            // blocked state is visible instead of a silently dead button.
+            ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
+            ...style,
+          }
+        : undefined;
 
     const Content = (
       <Block

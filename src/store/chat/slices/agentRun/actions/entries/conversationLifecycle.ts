@@ -1024,10 +1024,11 @@ export class ConversationLifecycleActionImpl {
           // run-end topicLoadingIds clears), so release the migrated creation
           // owner now — with no release left downstream, the sidebar spinner
           // would stick forever after the run completes.
+          // No `optimisticTopicResolved = true` here: the gateway branch
+          // returns before the client-mode code that reads it.
           if (optimisticTopic && optimisticTopicActive) {
             this.#get().internal_updateTopicLoading(result.topicId, false);
             optimisticTopicActive = false;
-            optimisticTopicResolved = true;
           }
           void sendRunLifecycle
             .afterUserMessagePersisted({
