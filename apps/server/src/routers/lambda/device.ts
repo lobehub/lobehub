@@ -735,7 +735,13 @@ export const deviceRouter = router({
           platform: d.platform ?? live?.platform ?? null,
           registered: true,
           scope,
-          workingDirs: d.workingDirs ?? [],
+          // Strip the heavy `workspace` scan (AGENTS.md + project skills, up to
+          // ~30KB per dir) from the list payload. It's a server-owned cache for
+          // the agent runtime (restored from the DB row on run start, never from
+          // this response) and no client UI renders it from the list — skills are
+          // re-derived live via `device.listProjectSkills`. Keep `workspaceScannedAt`
+          // (a cheap number) so clients can still show scan freshness.
+          workingDirs: (d.workingDirs ?? []).map(({ workspace: _workspace, ...rest }) => rest),
         };
       });
 

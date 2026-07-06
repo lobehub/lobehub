@@ -9,6 +9,13 @@ export const agentDocumentSWRKeys = {
    * under that key, which drops those fields.
    */
   documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
+  /**
+   * Hot-path variant that excludes unbounded `sourceType: 'web'` clips. Shares
+   * the `agent:documentsList` prefix so `invalidateDocumentMutation` revalidates
+   * it (and the full list) together via a prefix matcher. Used by consumers that
+   * never render web docs (slash menu / skills) so the homepage batch stays slim.
+   */
+  documentsNonWebList: (agentId: string) => ['agent:documentsList', agentId, 'non-web'] as const,
   documentChatTopic: (agentId: string, documentId: string) =>
     ['agent:documentChatTopic', agentId, documentId] as const,
   readDocument: (agentId: string, id: string) => ['agent:documentEditor', agentId, id] as const,
