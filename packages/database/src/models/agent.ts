@@ -38,26 +38,31 @@ import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
- * Identity fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`)
- * must never carry. Its `persist` config only stores `model`/`provider`/`chatConfig` — title,
- * avatar, etc. are rendered from i18n at runtime, never from this row.
+ * Fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`) must never
+ * carry. Its `persist` config only stores `model`/`provider`/`chatConfig` — title, avatar,
+ * systemRole, etc. are rendered from i18n / the static systemRoleTemplate at runtime, never
+ * from this row.
  *
  * Before PR #16420, `lobe-agent-management`'s self-management prompt could make the builder
- * mistake an ambiguous "update this" request for editing itself instead of the target agent,
- * writing these fields into its own row. Clients on builds older than that PR can still hit
- * this path, so enforce it here (the single write chokepoint) regardless of caller.
+ * mistake an ambiguous "update this" request for editing itself instead of the target agent.
+ * Depending on caller (browser client tool executor vs. gateway server runtime in
+ * `apps/server/src/services/toolExecution/serverRuntimes/agentBuilder.ts`), these fields can
+ * arrive through *either* `AgentModel.update()` or `updateConfig()` — e.g. the gateway's
+ * `updatePrompt` writes `systemRole` via `update()`, while the browser client's meta editor
+ * writes `title`/`avatar`/etc. via `updateConfig()`. So both methods must strip the full list,
+ * not just the fields each historically happened to receive. Clients on builds older than
+ * PR #16420 can still hit this path, so enforce it here (the single write chokepoint)
+ * regardless of caller.
  */
-const AGENT_BUILDER_PROTECTED_META_FIELDS = [
+const AGENT_BUILDER_PROTECTED_FIELDS = [
   'title',
   'description',
   'avatar',
   'backgroundColor',
   'tags',
   'marketIdentifier',
+  'systemRole',
 ] as const;
-
-/** Same rationale as {@link AGENT_BUILDER_PROTECTED_META_FIELDS}, for the `updateConfig` path. */
-const AGENT_BUILDER_PROTECTED_CONFIG_FIELDS = ['systemRole'] as const;
 
 export class AgentModel {
   private userId: string;
@@ -755,11 +760,7 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
-    const sanitizedData = await this.stripAgentBuilderProtectedFields(
-      agentId,
-      data,
-      AGENT_BUILDER_PROTECTED_META_FIELDS,
-    );
+    const sanitizedData = await this.stripAgentBuilderProtectedFields(agentId, data);
 
     return this.db
       .update(agents)
@@ -769,14 +770,13 @@ export class AgentModel {
 
   /**
    * Strip fields the Agent Builder's own row must never carry (see
-   * {@link AGENT_BUILDER_PROTECTED_META_FIELDS}). Only looks up the target row's `slug`
-   * when the incoming patch actually touches a protected field, so normal updates pay no
-   * extra query.
+   * {@link AGENT_BUILDER_PROTECTED_FIELDS}). Only looks up the target row's `slug` when the
+   * incoming patch actually touches a protected field, so normal updates pay no extra query.
    */
   private stripAgentBuilderProtectedFields = async <T extends Record<string, any>>(
     agentId: string,
     data: T,
-    protectedFields: readonly string[],
+    protectedFields: readonly string[] = AGENT_BUILDER_PROTECTED_FIELDS,
   ): Promise<T> => {
     if (!protectedFields.some((field) => field in data)) return data;
 
@@ -897,10 +897,10 @@ export class AgentModel {
 
     const { params: _params, ...restData } = data;
 
-    // See AGENT_BUILDER_PROTECTED_CONFIG_FIELDS: the builder's own row must never
-    // persist a custom systemRole (it always renders from its static systemRoleTemplate).
+    // See AGENT_BUILDER_PROTECTED_FIELDS: some callers (e.g. the browser client's meta
+    // editor) route title/avatar/etc. through updateConfig() rather than update().
     if (agent.slug === BUILTIN_AGENT_SLUGS.agentBuilder) {
-      for (const field of AGENT_BUILDER_PROTECTED_CONFIG_FIELDS) delete restData[field];
+      for (const field of AGENT_BUILDER_PROTECTED_FIELDS) delete restData[field];
     }
 
     const mergedValue = merge(agent, restData);
