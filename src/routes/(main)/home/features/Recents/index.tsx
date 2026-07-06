@@ -45,7 +45,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const isLogin = useUserStore(authSelectors.isLogin);
   // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
-  // instead of a permanent skeleton (LOBE-11079).
+  // instead of a permanent skeleton.
   const { error, isRevalidating, mutate } = useInitRecents();
 
   const activeWorkspaceId = useActiveWorkspaceId();

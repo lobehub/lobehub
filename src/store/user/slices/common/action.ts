@@ -108,7 +108,7 @@ export class CommonActionImpl {
       {
         onError: (error) => {
           // Record the init failure so gated tabs (Advanced / ServiceModel) can
-          // render error + Retry instead of a permanent skeleton (LOBE-11118/11139).
+          // render error + Retry instead of a permanent skeleton.
           this.#set({ isUserStateInitError: error }, false, n('initUserState/error'));
           options?.onError?.(error);
         },

@@ -125,7 +125,7 @@ const SkillList = memo<SkillListProps>(
     useFetchInstalledPlugins();
     // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
     // of a fake-empty list (each hook syncs into the store only on success —
-    // LOBE-11124).
+    //
     const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
     const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
     const agentSkillsSWR = useFetchAgentSkills(true);
@@ -342,7 +342,7 @@ const SkillList = memo<SkillListProps>(
       customMCPs.length > 0;
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
-    // empty (error gated ahead of empty — LOBE-11124).
+    // empty (error gated ahead of empty).
     if (skillsError && !hasAnySkills) {
       return (
         <Center className={styles.container} paddingBlock={48}>

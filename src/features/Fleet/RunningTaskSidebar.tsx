@@ -284,7 +284,7 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
         </Button>
         {error && columns.length === 0 ? (
           // A failed poll must read as a failure with Reload, never as the fake
-          // "no running tasks" empty (LOBE-11167).
+          // "no running tasks" empty.
           <AsyncError error={error} variant={'inline'} onRetry={onReload} />
         ) : isLoading && columns.length === 0 ? (
           Array.from({ length: 3 }).map((_, index) => <SidebarTaskSkeleton key={index} />)

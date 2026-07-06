@@ -97,7 +97,7 @@ const Page = memo(() => {
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
-    // (LOBE-11139).
+    //
     if (isUserStateInitError)
       return (
         <AsyncError

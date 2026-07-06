@@ -510,7 +510,7 @@ export class TaskService {
       task = { ...task, error: null };
     }
 
-    // Brief hidden (LOBE-11393): the task detail activity feed no longer carries
+    // Brief hidden: the task detail activity feed no longer carries
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
@@ -736,7 +736,7 @@ export class TaskService {
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
-          // Raw last assistant message of the run (LOBE-11396), shown alongside
+          // Raw last assistant message of the run, shown alongside
           // the synthesized summary on the run card.
           content: handoff?.content,
           id: t.topicId ?? undefined,
@@ -753,7 +753,7 @@ export class TaskService {
           type: 'topic' as const,
         };
       }),
-      // Brief activities intentionally omitted (LOBE-11393) — see the fetch note above.
+      // Brief activities intentionally omitted — see the fetch note above.
       ...comments.map((c) => {
         const ids = commentFileIdsMap[c.id] ?? [];
         const files = ids.map((id) => fileById.get(id)).filter((f) => !!f);

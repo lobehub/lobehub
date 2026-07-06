@@ -69,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  *
  * Uniform placeholder rendered wherever a cross-user reference resolves to a
  * resource the current viewer no longer has access to — typically because the
- * creator flipped it back to `private` via `setVisibility` (LOBE-11270). Kept
+ * creator flipped it back to `private` via `setVisibility`. Kept
  * intentionally low-emphasis so message threads don't scream at readers who
  * didn't do anything wrong.
  */

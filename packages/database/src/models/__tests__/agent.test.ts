@@ -429,7 +429,7 @@ describe('AgentModel', () => {
     it('nulls out a mounted KB / file that the caller can no longer read', async () => {
       // Workspace: A owns a public KB + public file and mounts them onto a
       // public agent. B (another member) sees both mounts in the editor.
-      // After A flips both back to `private` via LOBE-11270, the mount rows
+      // After A flips both back to `private`, the mount rows
       // should stay (so the UI can render an "unavailable" placeholder), but
       // the joined entity fields must be nulled so no name / description
       // leaks and the runtime skips the KB via its `k.id` filter.

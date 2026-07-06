@@ -239,7 +239,7 @@ export class KnowledgeBaseModel {
    *
    * Unpublishing is safe by design — this column only gates KB list
    * enumeration; other members lose the sidebar entry immediately, while
-   * downstream RAG paths handle a missing/unreachable KB per LOBE-11270.
+   * downstream RAG paths handle a missing/unreachable KB.
    */
   setVisibility = async (id: string, visibility: 'private' | 'public') => {
     const fromVisibility = visibility === 'public' ? 'private' : 'public';

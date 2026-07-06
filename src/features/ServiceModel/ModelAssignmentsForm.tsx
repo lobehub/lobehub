@@ -72,7 +72,6 @@ const ModelAssignmentsForm = memo(() => {
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
-    // (LOBE-11118).
     if (isUserStateInitError)
       return (
         <AsyncError

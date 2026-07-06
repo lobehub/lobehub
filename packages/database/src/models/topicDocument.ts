@@ -65,7 +65,7 @@ export class TopicDocumentModel {
    * visibility guard on the joined `documents` row, a private document
    * previously shared into a workspace-visible topic would leak back to
    * every workspace member after its creator flipped it to `private` via
-   * `setVisibility` (LOBE-11270). Apply `buildWorkspaceWhere` on `documents`
+   * `setVisibility`. Apply `buildWorkspaceWhere` on `documents`
    * so the join drops rows the current viewer can no longer read — they
    * simply disappear from the sidebar list.
    */

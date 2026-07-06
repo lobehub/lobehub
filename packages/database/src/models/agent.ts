@@ -484,7 +484,7 @@ export class AgentModel {
     //
     // The joined `knowledgeBases` / `files` rows also need a visibility guard
     // in the `leftJoin` ON clause: without it, a KB or file that was later
-    // flipped back to `private` via `setVisibility` (LOBE-11270) would keep
+    // flipped back to `private` via `setVisibility` would keep
     // leaking its name / description into every mounted-agent view across the
     // workspace. Enforcing the guard on the ON clause (rather than WHERE)
     // keeps the mount row in the result but nulls out the referenced entity —

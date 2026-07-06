@@ -44,7 +44,7 @@ export const useRunningTopics = () => {
 
   // Only a first-load failure (no data yet) is a hard error worth a failed
   // state; a background poll error while we still hold columns keeps the stale
-  // list instead of flapping to "no running tasks" (LOBE-11167).
+  // list instead of flapping to "no running tasks".
   const hasHardError = Boolean(error) && data === undefined;
 
   const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);

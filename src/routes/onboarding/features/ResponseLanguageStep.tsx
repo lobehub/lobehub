@@ -45,7 +45,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       // (`commonStepsCompleted` keys off `responseLanguage`), so it must be able
       // to fail: on error reset the navigating lock so the user can retry
       // instead of being stuck with both buttons permanently disabled
-      // (LOBE-11154).
+      //
       await setSettings({ general: { responseLanguage: value } });
       await onNext();
     } catch {

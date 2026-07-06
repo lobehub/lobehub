@@ -21,7 +21,7 @@ interface AutoSaveHintProps {
  * AutoSaveHint - Unified save status indicator for editors
  *
  * Displays real-time save status for document/config changes. The `failed`
- * state (LOBE-11078 write-side) renders an error tag with an inline Retry so a
+ * state renders an error tag with an inline Retry so a
  * silent save failure can never masquerade as "Latest version loaded".
  */
 const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTime, onRetry }) => {

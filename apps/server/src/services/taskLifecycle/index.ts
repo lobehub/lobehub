@@ -136,7 +136,7 @@ export class TaskLifecycleService {
         );
       }
 
-      // 2b. Persist the raw last message as the run card's result (LOBE-11396).
+      // 2b. Persist the raw last message as the run card's result.
       //     Done independently of (and after) generateHandoff via a jsonb_set
       //     patch, so `handoff.content` is written even when the summary LLM in
       //     step 2 throws — otherwise a completed run would show no result.

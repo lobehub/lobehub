@@ -93,7 +93,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
 
-    it('persists the run last message independently of handoff summary (LOBE-11396)', async () => {
+    it('persists the run last message independently of handoff summary', async () => {
       const task = baseTask({ automationMode: 'heartbeat' });
       findById.mockResolvedValue(task);
       // Model the summary path as a no-op (e.g. its LLM call failed and was

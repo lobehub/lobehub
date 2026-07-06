@@ -291,8 +291,7 @@ export class DocumentModel {
    *
    * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere`
    * hides those rows from other members immediately; already-loaded content in
-   * their client stays until they refresh. See LOBE-11270 for the collect
-   * decision.
+   * their client stays until they refresh.
    */
   setVisibility = async (
     rootId: string,

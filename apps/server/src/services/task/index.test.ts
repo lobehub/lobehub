@@ -557,7 +557,7 @@ describe('TaskService', () => {
       ]);
     });
 
-    it('should build activities sorted by time ascending and exclude briefs (LOBE-11393)', async () => {
+    it('should build activities sorted by time ascending and exclude briefs', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -622,7 +622,7 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
 
-      // Brief (Jan 1) is intentionally excluded from the feed (LOBE-11393), even
+      // Brief (Jan 1) is intentionally excluded from the feed, even
       // though one exists for the task; only comment (Jan 2) + topic (Jan 3) remain.
       expect(result?.activities).toHaveLength(2);
       expect(result?.activities?.some((a) => a.type === 'brief')).toBe(false);
@@ -630,7 +630,7 @@ describe('TaskService', () => {
       expect(result?.activities?.[1].type).toBe('topic');
     });
 
-    it('exposes the run last message (handoff.content) alongside the summary (LOBE-11396)', async () => {
+    it('exposes the run last message (handoff.content) alongside the summary', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,

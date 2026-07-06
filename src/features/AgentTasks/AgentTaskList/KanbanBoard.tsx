@@ -285,7 +285,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   );
 
   // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
-  // instead of the "no tasks" empty (LOBE-11181). `data` is the SWR result —
+  // instead of the "no tasks" empty. `data` is the SWR result —
   // undefined until the first fetch settles.
   return (
     <AsyncBoundary

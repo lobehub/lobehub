@@ -138,7 +138,7 @@ const rowIconClass = (tone: Tone) => {
  * `VisibilityConfirmContent`
  *
  * Shared body for the two mirrored confirm dialogs that guard workspace
- * visibility transitions (LOBE-11270):
+ * visibility transitions:
  * - `makePrivate` — destructive, public → private
  * - `publish` — constructive, private → public (bidirectional counterpart)
  *
