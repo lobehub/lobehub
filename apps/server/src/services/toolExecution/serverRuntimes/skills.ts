@@ -264,7 +264,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         },
         {
           apiName: LocalSystemApiName.runCommand,
-          arguments: JSON.stringify({ command, ...(cwd && { cwd }) }),
+          // `timeout` is the device-side shell observation window (default
+          // 30s, clamped at the device's MAX_OBSERVATION_TIMEOUT_MS) — without
+          // it a long script returns early while still running.
+          arguments: JSON.stringify({
+            command,
+            ...(cwd && { cwd }),
+            ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
+          }),
           identifier: LocalSystemIdentifier,
         },
         device.executionTimeoutMs,
@@ -287,12 +294,19 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         );
       }
 
+      // The device shell reports success for any delivered observation, even
+      // when the command exited non-zero (the exit status only lives in
+      // exitCode) — derive success from the exit status instead. A missing
+      // exitCode means the command is still running past the observation
+      // window; keep that non-failing (the script keeps running on the
+      // device), matching the legacy desktop behavior.
+      const exitCode = state.exitCode ?? 0;
       return {
         executionEnv: 'device',
-        exitCode: state.exitCode ?? 0,
+        exitCode,
         output: state.stdout ?? response.content ?? '',
         stderr: state.stderr,
-        success: true,
+        success: exitCode === 0,
       };
     } catch (error) {
       log('Error executing script on device: %O', error);

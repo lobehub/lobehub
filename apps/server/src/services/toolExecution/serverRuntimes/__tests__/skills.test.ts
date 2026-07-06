@@ -303,6 +303,67 @@ describe('skillsRuntime', () => {
         undefined,
       );
     });
+
+    // The device shell observation reports success: true for any delivered
+    // observation — the actual exit status only lives in exitCode.
+    it('reports failure when the script exits non-zero despite a successful observation', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: '',
+        state: { exitCode: 2, stderr: 'boom', stdout: '', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'exit 2',
+        description: 'failing script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.state).toMatchObject({ executionEnv: 'device', exitCode: 2 });
+      expect(result.content).toContain('boom');
+    });
+
+    it('forwards executionTimeoutMs as the shell observation timeout in the runCommand args', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        executionTimeoutMs: 300_000,
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      await runtime.execScript({
+        activatedSkills: [],
+        command: 'sleep 60',
+        description: 'long script',
+      });
+
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({ command: 'sleep 60', timeout: 300_000 }),
+        }),
+        300_000,
+      );
+    });
   });
 
   // Regression guard for the device-gating fix: builtin skills must be filtered
