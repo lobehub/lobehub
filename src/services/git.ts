@@ -122,7 +122,12 @@ class GitService {
       : electronGitService.removeGitWorktree({ path, worktreePath });
   }
 
-  /** Add a linked worktree on a fresh branch to a working directory's repository. */
+  /**
+   * Add a linked worktree on a fresh branch to a working directory's repository.
+   * A remote device derives the target path server-side from `path` + `branch`
+   * (never trusting a client-supplied absolute path), so `worktreePath` is only
+   * forwarded on the local IPC route where this machine owns the filesystem.
+   */
   addGitWorktree({
     branch,
     deviceId,
@@ -135,7 +140,7 @@ class GitService {
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
     return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, worktreePath })
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
       : electronGitService.addGitWorktree({ branch, path, worktreePath });
   }
 

@@ -1,5 +1,6 @@
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type { DeviceChannel, DeviceListItem, DeviceScope, WorkingDirEntry } from '@lobechat/types';
+import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -309,6 +310,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
         worktreePath: input.worktreePath,
       }),
     ),
@@ -316,6 +318,11 @@ export const deviceRouter = router({
   /**
    * Add a linked worktree on a fresh branch in a directory's repository on a
    * remote device, via the device's `addGitWorktree` RPC.
+   *
+   * The target directory is derived here from the trusted `path` + `branch`
+   * (a `<repo>-<branch>` sibling) rather than accepted from the request, so a
+   * crafted web call can't ask the device to check out at an arbitrary absolute
+   * path — the branch is folded to `-` in the folder name, so it can't traverse.
    */
   addGitWorktree: deviceProcedure
     .input(
@@ -323,7 +330,6 @@ export const deviceRouter = router({
         branch: z.string(),
         deviceId: z.string(),
         path: z.string(),
-        worktreePath: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -332,7 +338,8 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
-        worktreePath: input.worktreePath,
+        workspaceId: ctx.workspaceId,
+        worktreePath: deriveWorktreePath(input.path, input.branch),
       }),
     ),
 

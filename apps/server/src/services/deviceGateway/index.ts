@@ -432,15 +432,16 @@ export class DeviceGateway {
     path: string;
     timeout?: number;
     userId: string;
+    workspaceId?: string;
     worktreePath: string;
   }): Promise<DeviceGitRemoveWorktreeResult> {
-    const { userId, deviceId, path, worktreePath, timeout = 30_000 } = params;
+    const { userId, deviceId, path, worktreePath, workspaceId, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) return { error: 'Device gateway not configured', success: false };
 
     try {
       const result = await client.invokeRpc<DeviceGitRemoveWorktreeResult>(
-        { deviceId, timeout, userId },
+        { deviceId, timeout, userId, workspaceId },
         { method: 'removeGitWorktree', params: { path, worktreePath } },
       );
 
@@ -466,15 +467,16 @@ export class DeviceGateway {
     path: string;
     timeout?: number;
     userId: string;
+    workspaceId?: string;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
-    const { userId, deviceId, branch, path, worktreePath, timeout = 30_000 } = params;
+    const { userId, deviceId, branch, path, worktreePath, workspaceId, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) return { error: 'Device gateway not configured', success: false };
 
     try {
       const result = await client.invokeRpc<DeviceGitAddWorktreeResult>(
-        { deviceId, timeout, userId },
+        { deviceId, timeout, userId, workspaceId },
         { method: 'addGitWorktree', params: { branch, path, worktreePath } },
       );
 

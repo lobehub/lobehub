@@ -1,4 +1,8 @@
-import type { DeviceGitWorktreeListItem, WorkingDirEntry } from '@lobechat/types';
+import {
+  deriveWorktreePath,
+  type DeviceGitWorktreeListItem,
+  type WorkingDirEntry,
+} from '@lobechat/types';
 import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
@@ -355,27 +359,6 @@ const getPathName = (path: string): string =>
 
 const normalizeDisplayPath = (path: string): string =>
   path.replaceAll('\\', '/').replace(/\/+$/, '');
-
-/**
- * Derive the target directory for a new worktree: a sibling of the source repo
- * named `<repoName>-<branch>` (e.g. `/code/lobehub` + `feat/x` →
- * `/code/lobehub-feat-x`), matching the convention agents already use for their
- * linked worktrees. Preserves the source path's separator so Windows paths stay
- * intact, and folds ref-illegal characters in the branch to `-` for the folder.
- */
-export const deriveWorktreePath = (sourcePath: string, branch: string): string => {
-  const sep = sourcePath.includes('\\') && !sourcePath.includes('/') ? '\\' : '/';
-  const trimmed = sourcePath.replace(/[/\\]+$/, '');
-  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
-  const parent = cut >= 0 ? trimmed.slice(0, cut) : '';
-  const repoName = (cut >= 0 ? trimmed.slice(cut + 1) : trimmed) || 'repo';
-  const suffix = branch
-    .trim()
-    .replaceAll(/[\s~^:?*[\]\\/]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
-  const folder = suffix ? `${repoName}-${suffix}` : repoName;
-  return parent ? `${parent}${sep}${folder}` : folder;
-};
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
 
