@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Nicht übermittelte Änderungen: {{count}} Datei",
   "workingDirectory.uncommittedChanges_other": "Nicht übermittelte Änderungen: {{count}} Dateien",
   "workingDirectory.undo": "Rückgängig machen",
-  "workingDirectory.worktreeCount": "{{count}} Worktrees",
-  "workingDirectory.worktreeSwitchDescription": "Das aktuelle Arbeitsverzeichnis der Unterhaltung wechseln",
+  "workingDirectory.worktreeSearchPlaceholder": "Arbeitsbäume durchsuchen",
   "workingDirectory.worktreeUnavailable": "nicht verfügbar",
   "workingDirectory.worktreesEmpty": "Keine Worktrees gefunden",
-  "workingDirectory.worktreesHeading": "Worktrees"
+  "workingDirectory.worktreesHeading": "Worktrees",
+  "workingDirectory.worktreesNoMatch": "Keine passenden Arbeitsbäume gefunden"
 }

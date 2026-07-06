@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "تغییرات ثبت نشده: {{count}} فایل",
   "workingDirectory.uncommittedChanges_other": "تغییرات ثبت نشده: {{count}} فایل‌ها",
   "workingDirectory.undo": "بازگرداندن",
-  "workingDirectory.worktreeCount": "{{count}} ورک‌تری",
-  "workingDirectory.worktreeSwitchDescription": "تغییر دایرکتوری کاری مکالمه فعلی",
+  "workingDirectory.worktreeSearchPlaceholder": "جستجوی شاخه‌های کاری",
   "workingDirectory.worktreeUnavailable": "در دسترس نیست",
   "workingDirectory.worktreesEmpty": "هیچ ورک‌تری یافت نشد",
-  "workingDirectory.worktreesHeading": "ورک‌تری‌ها"
+  "workingDirectory.worktreesHeading": "ورک‌تری‌ها",
+  "workingDirectory.worktreesNoMatch": "هیچ شاخه کاری مطابق یافت نشد"
 }

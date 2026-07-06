@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Modifications non validées : {{count}} fichier",
   "workingDirectory.uncommittedChanges_other": "Modifications non validées : {{count}} fichiers",
   "workingDirectory.undo": "Annuler",
-  "workingDirectory.worktreeCount": "{{count}} worktrees",
-  "workingDirectory.worktreeSwitchDescription": "Changer le répertoire de travail de la conversation actuelle",
+  "workingDirectory.worktreeSearchPlaceholder": "Rechercher des arbres de travail",
   "workingDirectory.worktreeUnavailable": "indisponible",
   "workingDirectory.worktreesEmpty": "Aucun worktree trouvé",
-  "workingDirectory.worktreesHeading": "Worktrees"
+  "workingDirectory.worktreesHeading": "Worktrees",
+  "workingDirectory.worktreesNoMatch": "Aucun arbre de travail correspondant"
 }

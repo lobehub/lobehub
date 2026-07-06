@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Thay đổi chưa được cam kết: {{count}} tệp",
   "workingDirectory.uncommittedChanges_other": "Thay đổi chưa được cam kết: {{count}} tệp",
   "workingDirectory.undo": "Hoàn tác",
-  "workingDirectory.worktreeCount": "{{count}} worktree",
-  "workingDirectory.worktreeSwitchDescription": "Chuyển đổi thư mục làm việc hiện tại của cuộc hội thoại",
+  "workingDirectory.worktreeSearchPlaceholder": "Tìm kiếm các worktree",
   "workingDirectory.worktreeUnavailable": "không khả dụng",
   "workingDirectory.worktreesEmpty": "Không tìm thấy worktree nào",
-  "workingDirectory.worktreesHeading": "Worktree"
+  "workingDirectory.worktreesHeading": "Worktree",
+  "workingDirectory.worktreesNoMatch": "Không có worktree nào phù hợp"
 }

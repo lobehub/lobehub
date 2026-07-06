@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Niezatwierdzone zmiany: {{count}} plik",
   "workingDirectory.uncommittedChanges_other": "Niezatwierdzone zmiany: {{count}} pliki",
   "workingDirectory.undo": "Cofnij",
-  "workingDirectory.worktreeCount": "{{count}} obszary robocze",
-  "workingDirectory.worktreeSwitchDescription": "Przełącz bieżący katalog roboczy rozmowy",
+  "workingDirectory.worktreeSearchPlaceholder": "Szukaj obszarów roboczych",
   "workingDirectory.worktreeUnavailable": "niedostępny",
   "workingDirectory.worktreesEmpty": "Nie znaleziono obszarów roboczych",
-  "workingDirectory.worktreesHeading": "Obszary robocze"
+  "workingDirectory.worktreesHeading": "Obszary robocze",
+  "workingDirectory.worktreesNoMatch": "Brak pasujących obszarów roboczych"
 }

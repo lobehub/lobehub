@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Kaydedilmemiş değişiklikler: {{count}} dosya",
   "workingDirectory.uncommittedChanges_other": "Kaydedilmemiş değişiklikler: {{count}} dosya",
   "workingDirectory.undo": "Geri al",
-  "workingDirectory.worktreeCount": "{{count}} çalışma ağacı",
-  "workingDirectory.worktreeSwitchDescription": "Mevcut konuşma çalışma dizinini değiştir",
+  "workingDirectory.worktreeSearchPlaceholder": "Çalışma ağaçlarını ara",
   "workingDirectory.worktreeUnavailable": "kullanılamıyor",
   "workingDirectory.worktreesEmpty": "Çalışma ağacı bulunamadı",
-  "workingDirectory.worktreesHeading": "Çalışma Ağaçları"
+  "workingDirectory.worktreesHeading": "Çalışma Ağaçları",
+  "workingDirectory.worktreesNoMatch": "Eşleşen çalışma ağacı yok"
 }

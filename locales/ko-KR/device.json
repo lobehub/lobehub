@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "커밋되지 않은 변경 사항: {{count}}개의 파일",
   "workingDirectory.uncommittedChanges_other": "커밋되지 않은 변경 사항: {{count}}개의 파일",
   "workingDirectory.undo": "실행 취소",
-  "workingDirectory.worktreeCount": "{{count}}개의 작업 트리",
-  "workingDirectory.worktreeSwitchDescription": "현재 대화 작업 디렉토리를 전환합니다",
+  "workingDirectory.worktreeSearchPlaceholder": "워크트리 검색",
   "workingDirectory.worktreeUnavailable": "사용 불가",
   "workingDirectory.worktreesEmpty": "작업 트리가 없습니다",
-  "workingDirectory.worktreesHeading": "작업 트리"
+  "workingDirectory.worktreesHeading": "작업 트리",
+  "workingDirectory.worktreesNoMatch": "일치하는 워크트리가 없습니다"
 }

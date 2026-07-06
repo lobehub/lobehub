@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "未提交的更改：{{count}} 個檔案",
   "workingDirectory.uncommittedChanges_other": "未提交的更改：{{count}} 個檔案",
   "workingDirectory.undo": "復原",
-  "workingDirectory.worktreeCount": "{{count}} 個工作樹",
-  "workingDirectory.worktreeSwitchDescription": "切換目前對話的工作目錄",
+  "workingDirectory.worktreeSearchPlaceholder": "搜尋工作樹",
   "workingDirectory.worktreeUnavailable": "不可用",
   "workingDirectory.worktreesEmpty": "未找到工作樹",
-  "workingDirectory.worktreesHeading": "工作樹"
+  "workingDirectory.worktreesHeading": "工作樹",
+  "workingDirectory.worktreesNoMatch": "沒有符合的工作樹"
 }

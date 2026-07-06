@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Alterações não comitadas: {{count}} arquivo",
   "workingDirectory.uncommittedChanges_other": "Alterações não comitadas: {{count}} arquivos",
   "workingDirectory.undo": "Desfazer",
-  "workingDirectory.worktreeCount": "{{count}} worktrees",
-  "workingDirectory.worktreeSwitchDescription": "Alterar o diretório de trabalho da conversa atual",
+  "workingDirectory.worktreeSearchPlaceholder": "Pesquisar worktrees",
   "workingDirectory.worktreeUnavailable": "indisponível",
   "workingDirectory.worktreesEmpty": "Nenhum worktree encontrado",
-  "workingDirectory.worktreesHeading": "Worktrees"
+  "workingDirectory.worktreesHeading": "Worktrees",
+  "workingDirectory.worktreesNoMatch": "Nenhum worktree correspondente"
 }

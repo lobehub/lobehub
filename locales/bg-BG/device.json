@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Непотвърдени промени: {{count}} файл",
   "workingDirectory.uncommittedChanges_other": "Непотвърдени промени: {{count}} файла",
   "workingDirectory.undo": "Отмени",
-  "workingDirectory.worktreeCount": "{{count}} работни дървета",
-  "workingDirectory.worktreeSwitchDescription": "Превключете текущата директория за работа по разговори",
+  "workingDirectory.worktreeSearchPlaceholder": "Търсене на работни дървета",
   "workingDirectory.worktreeUnavailable": "недостъпно",
   "workingDirectory.worktreesEmpty": "Не са намерени работни дървета",
-  "workingDirectory.worktreesHeading": "Работни дървета"
+  "workingDirectory.worktreesHeading": "Работни дървета",
+  "workingDirectory.worktreesNoMatch": "Няма съвпадащи работни дървета"
 }

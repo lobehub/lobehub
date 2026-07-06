@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "未コミットの変更: {{count}} ファイル",
   "workingDirectory.uncommittedChanges_other": "未コミットの変更: {{count}} ファイル",
   "workingDirectory.undo": "元に戻す",
-  "workingDirectory.worktreeCount": "{{count}} 個のワークツリー",
-  "workingDirectory.worktreeSwitchDescription": "現在の会話の作業ディレクトリを切り替えます",
+  "workingDirectory.worktreeSearchPlaceholder": "ワークツリーを検索",
   "workingDirectory.worktreeUnavailable": "利用不可",
   "workingDirectory.worktreesEmpty": "ワークツリーが見つかりません",
-  "workingDirectory.worktreesHeading": "ワークツリー"
+  "workingDirectory.worktreesHeading": "ワークツリー",
+  "workingDirectory.worktreesNoMatch": "一致するワークツリーがありません"
 }

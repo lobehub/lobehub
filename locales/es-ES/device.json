@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Cambios sin confirmar: {{count}} archivo",
   "workingDirectory.uncommittedChanges_other": "Cambios sin confirmar: {{count}} archivos",
   "workingDirectory.undo": "Deshacer",
-  "workingDirectory.worktreeCount": "{{count}} worktrees",
-  "workingDirectory.worktreeSwitchDescription": "Cambiar el directorio de trabajo de la conversación actual",
+  "workingDirectory.worktreeSearchPlaceholder": "Buscar áreas de trabajo",
   "workingDirectory.worktreeUnavailable": "no disponible",
   "workingDirectory.worktreesEmpty": "No se encontraron worktrees",
-  "workingDirectory.worktreesHeading": "Worktrees"
+  "workingDirectory.worktreesHeading": "Worktrees",
+  "workingDirectory.worktreesNoMatch": "No hay áreas de trabajo coincidentes"
 }

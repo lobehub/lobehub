@@ -104,7 +104,7 @@
   "credits.memberBudget.title": "成员预算管控",
   "credits.memberBudget.unlimited": "不限制",
   "credits.memberBudget.unlimitedMemberHint": "请先设置所有成员规则，再为单个成员添加不限制覆盖。",
-  "credits.memberBudget.upgradeCta": "查看 Plans",
+  "credits.memberBudget.upgradeCta": "查看套餐",
   "credits.memberBudget.upgradeHint": "升级到付费 Plan 即可为每位成员设置消费上限，避免预算意外超支。",
   "credits.memberBudget.userPanel.exhaustedDesc": "请联系工作区管理员调整您的额度。",
   "credits.memberBudget.userPanel.exhaustedOwnerDesc": "前往积分设置调整成员预算。",

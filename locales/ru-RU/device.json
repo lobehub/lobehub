@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Несохраненные изменения: {{count}} файл",
   "workingDirectory.uncommittedChanges_other": "Несохраненные изменения: {{count}} файлов",
   "workingDirectory.undo": "Отменить",
-  "workingDirectory.worktreeCount": "{{count}} рабочих деревьев",
-  "workingDirectory.worktreeSwitchDescription": "Переключить текущий рабочий каталог обсуждения",
+  "workingDirectory.worktreeSearchPlaceholder": "Поиск рабочих деревьев",
   "workingDirectory.worktreeUnavailable": "недоступно",
   "workingDirectory.worktreesEmpty": "Рабочие деревья не найдены",
-  "workingDirectory.worktreesHeading": "Рабочие деревья"
+  "workingDirectory.worktreesHeading": "Рабочие деревья",
+  "workingDirectory.worktreesNoMatch": "Нет совпадающих рабочих деревьев"
 }

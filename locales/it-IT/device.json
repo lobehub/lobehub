@@ -79,9 +79,9 @@
   "workingDirectory.uncommittedChanges_one": "Modifiche non confermate: {{count}} file",
   "workingDirectory.uncommittedChanges_other": "Modifiche non confermate: {{count}} file",
   "workingDirectory.undo": "Annulla",
-  "workingDirectory.worktreeCount": "{{count}} worktree",
-  "workingDirectory.worktreeSwitchDescription": "Cambia la directory di lavoro della conversazione corrente",
+  "workingDirectory.worktreeSearchPlaceholder": "Cerca worktree",
   "workingDirectory.worktreeUnavailable": "non disponibile",
   "workingDirectory.worktreesEmpty": "Nessun worktree trovato",
-  "workingDirectory.worktreesHeading": "Worktree"
+  "workingDirectory.worktreesHeading": "Worktree",
+  "workingDirectory.worktreesNoMatch": "Nessun worktree corrispondente"
 }
