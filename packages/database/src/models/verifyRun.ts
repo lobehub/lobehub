@@ -1,5 +1,5 @@
 import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, lt, or } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -22,6 +22,25 @@ export interface VerifyRunState {
   verifyRunId: string | null;
   verifyStatus: VerifyRunStatus | null;
 }
+
+/**
+ * Opaque list cursor = `${createdAt ISO}__${id}`. Both parts are metacharacter-
+ * free (ISO timestamp + uuid), so a plain `__` delimiter round-trips safely.
+ */
+const encodeCursor = (createdAt: Date, id: string): string => `${createdAt.toISOString()}__${id}`;
+
+const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null => {
+  if (!cursor) return null;
+  const idx = cursor.lastIndexOf('__');
+  if (idx <= 0) return null;
+  const createdAt = new Date(cursor.slice(0, idx));
+  const id = cursor.slice(idx + 2);
+  if (Number.isNaN(createdAt.getTime()) || !id) return null;
+  return { createdAt, id };
+};
+
+/** Escape LIKE/ILIKE metacharacters (`\ % _`) so user input matches literally. */
+const escapeLike = (value: string): string => value.replaceAll(/[\\%_]/g, (c) => `\\${c}`);
 
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run
@@ -110,6 +129,56 @@ export class VerifyRunModel {
       orderBy: [desc(verifyRuns.createdAt)],
       where: this.ownership(),
     });
+  };
+
+  /**
+   * Cursor-paginated page of verification sessions, newest first, optionally
+   * filtered by a title search. Ordered by `(createdAt, id)` descending and
+   * paged on that composite key so rows sharing a `createdAt` (e.g. a batch
+   * ingest) can't be dropped or duplicated at a page boundary — a plain
+   * `createdAt`-only cursor would.
+   *
+   * Fetches `limit + 1` to detect a further page without a second COUNT query:
+   * `nextCursor` is `null` on the last page, otherwise the encoded cursor of the
+   * last returned row.
+   */
+  queryPage = async ({
+    cursor,
+    limit = 30,
+    q,
+  }: { cursor?: string; limit?: number; q?: string } = {}): Promise<{
+    items: VerifyRunItem[];
+    nextCursor: string | null;
+  }> => {
+    const conditions = [this.ownership()];
+
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      // (createdAt, id) < (cursor.createdAt, cursor.id) in descending order.
+      conditions.push(
+        or(
+          lt(verifyRuns.createdAt, decoded.createdAt),
+          and(eq(verifyRuns.createdAt, decoded.createdAt), lt(verifyRuns.id, decoded.id)),
+        )!,
+      );
+    }
+
+    const search = q?.trim();
+    // Escape LIKE metacharacters so a user typing `%`/`_` searches literally.
+    if (search) conditions.push(ilike(verifyRuns.title, `%${escapeLike(search)}%`));
+
+    const rows = await this.db.query.verifyRuns.findMany({
+      limit: limit + 1,
+      orderBy: [desc(verifyRuns.createdAt), desc(verifyRuns.id)],
+      where: and(...conditions),
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items.at(-1);
+    const nextCursor = hasMore && last ? encodeCursor(last.createdAt, last.id) : null;
+
+    return { items, nextCursor };
   };
 
   /** The verification session bound to an Agent Run, or undefined when none yet. */

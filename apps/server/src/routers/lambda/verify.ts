@@ -118,6 +118,17 @@ const updateRunInputSchema = verifyRunIdInputSchema.extend({
   }),
 });
 
+// Cursor-paginated report list. `cursor` is the opaque token from the previous
+// page's `nextCursor`; `q` filters by title (server-side, so it hits the whole
+// history, not just the loaded page).
+const listReportSummariesInputSchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    q: z.string().optional(),
+  })
+  .optional();
+
 const uploadEvidenceInputSchema = z
   .object({
     capturedBy: evidenceCapturedBySchema.optional(),
@@ -498,34 +509,42 @@ export const verifyRouter = router({
 
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
-  listReportSummaries: verifyProcedure.query(async ({ ctx }) => {
-    const runs = await ctx.runModel.query();
-    const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
+  listReportSummaries: verifyProcedure
+    .input(listReportSummariesInputSchema)
+    .query(async ({ ctx, input }) => {
+      const { items: runs, nextCursor } = await ctx.runModel.queryPage({
+        cursor: input?.cursor,
+        limit: input?.limit,
+        q: input?.q,
+      });
+      const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
 
-    return runs.map((run, index) => {
-      const report = reports[index];
+      const items = runs.map((run, index) => {
+        const report = reports[index];
 
-      return {
-        report: report
-          ? {
-              createdAt: report.createdAt,
-              failedChecks: report.failedChecks,
-              generatedAt: report.generatedAt,
-              id: report.id,
-              overallConfidence: report.overallConfidence,
-              passedChecks: report.passedChecks,
-              reviewedByUser: report.reviewedByUser,
-              summary: report.summary,
-              totalChecks: report.totalChecks,
-              uncertainChecks: report.uncertainChecks,
-              verdict: report.verdict,
-              verifyRunId: report.verifyRunId,
-            }
-          : null,
-        run,
-      };
-    });
-  }),
+        return {
+          report: report
+            ? {
+                createdAt: report.createdAt,
+                failedChecks: report.failedChecks,
+                generatedAt: report.generatedAt,
+                id: report.id,
+                overallConfidence: report.overallConfidence,
+                passedChecks: report.passedChecks,
+                reviewedByUser: report.reviewedByUser,
+                summary: report.summary,
+                totalChecks: report.totalChecks,
+                uncertainChecks: report.uncertainChecks,
+                verdict: report.verdict,
+                verifyRunId: report.verifyRunId,
+              }
+            : null,
+          run,
+        };
+      });
+
+      return { items, nextCursor };
+    }),
 
   listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);

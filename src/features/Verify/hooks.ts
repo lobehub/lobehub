@@ -1,7 +1,14 @@
+import { useCallback, useEffect } from 'react';
+import useSWRInfinite from 'swr/infinite';
+
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
+import type { VerifyReportSummaryPage } from '@/services/verify';
 import { verifyService } from '@/services/verify';
+
+const VERIFY_REPORT_PAGE_SIZE = 30;
 
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
@@ -21,11 +28,62 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     verifyService.getReportBundle(verifyRunId!),
   );
 
-/** Current user's recent verification sessions with report rollup fields. */
-export const useVerifyReportSummaries = (enabled = true) =>
-  useClientDataSWR(enabled ? verifyKeys.reportSummaries() : null, () =>
-    verifyService.listReportSummaries(),
+/**
+ * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
+ * server-side title search (spanning the whole history, not just loaded pages);
+ * changing it collapses back to the first page.
+ */
+export const useVerifyReportSummariesInfinite = (q: string) => {
+  const workspaceId = useActiveWorkspaceId();
+
+  const getKey = useCallback(
+    (_index: number, previous: VerifyReportSummaryPage | null) => {
+      // Stop paging once the previous page reported no further cursor.
+      if (previous && previous.nextCursor === null) return null;
+      return verifyKeys.reportSummaries(workspaceId, q, previous?.nextCursor ?? undefined);
+    },
+    [q, workspaceId],
   );
+
+  const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
+    getKey,
+    ([, , query, cursor]: readonly [string, string, string, string]) =>
+      verifyService.listReportSummaries({
+        cursor: cursor || undefined,
+        limit: VERIFY_REPORT_PAGE_SIZE,
+        q: query || undefined,
+      }),
+    { revalidateFirstPage: false },
+  );
+
+  // A new search term starts a fresh key series; collapse size back to 1 so we
+  // don't cascade-fetch as many pages as the previous query had loaded.
+  useEffect(() => {
+    setSize(1);
+  }, [q, setSize]);
+
+  const loadMore = useCallback(() => {
+    void setSize((s) => s + 1);
+  }, [setSize]);
+  const reload = useCallback(() => {
+    void mutate();
+  }, [mutate]);
+
+  const items = data?.flatMap((page) => page.items) ?? [];
+  const hasMore = data ? data.at(-1)?.nextCursor != null : true;
+  const isLoadingMore = isLoading || (size > 0 && !!data && typeof data[size - 1] === 'undefined');
+
+  return {
+    error,
+    hasMore,
+    isLoadingInitial: isLoading,
+    isLoadingMore,
+    isValidating,
+    items,
+    loadMore,
+    reload,
+  };
+};
 
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
 export const useVerifierTracing = (tracingId: string | null | undefined) =>
