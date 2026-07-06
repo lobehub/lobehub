@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest';
+
+import { resolveRunActiveDeviceId } from '../resolveRunActiveDeviceId';
+
+describe('resolveRunActiveDeviceId', () => {
+  it('passes the id through when the plan routed a device', () => {
+    expect(
+      resolveRunActiveDeviceId({
+        activeDeviceId: 'device-1',
+        executionPlan: { deviceId: 'device-1', kind: 'device' },
+      }),
+    ).toBe('device-1');
+  });
+
+  it('swallows a preset/stale id when the plan is not device-capable', () => {
+    for (const kind of ['sandbox', 'none']) {
+      expect(
+        resolveRunActiveDeviceId({
+          activeDeviceId: 'device-1',
+          executionPlan: { kind },
+        }),
+      ).toBeUndefined();
+    }
+  });
+
+  it('swallows the id when the device access policy denies the sender', () => {
+    expect(
+      resolveRunActiveDeviceId({
+        activeDeviceId: 'device-1',
+        deviceAccessPolicy: { canUseDevice: false, reason: 'external-bot' },
+        executionPlan: { deviceId: 'device-1', kind: 'device' },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('falls back to the policy-only gate when no plan exists (old/resumed operations)', () => {
+    expect(resolveRunActiveDeviceId({ activeDeviceId: 'device-1' })).toBe('device-1');
+    expect(resolveRunActiveDeviceId(undefined)).toBeUndefined();
+  });
+});

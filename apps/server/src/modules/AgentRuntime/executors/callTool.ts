@@ -43,6 +43,7 @@ import {
   markPersistFatal,
 } from '../messagePersistErrors';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
+import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
 
 export const callTool =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -260,7 +261,10 @@ export const callTool =
           execution = await executeToolWithRetry(
             () =>
               toolExecutionService.executeTool(chatToolPayload, {
-                activeDeviceId: state.metadata?.activeDeviceId,
+                // Plan/policy-filtered: a preset or stale metadata id must not route
+                // tool execution (e.g. skills execScript) onto a device the resolved
+                // plan didn't authorize.
+                activeDeviceId: resolveRunActiveDeviceId(state.metadata),
                 agentId: toolCallAgentId,
                 agentMember: buildServerAgentMemberRunner(
                   ctx,

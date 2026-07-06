@@ -549,11 +549,13 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
 
-    // `activeDeviceId` is set by the aiAgent ONLY when the execution plan
-    // routed a device (`plan.kind === 'device'`), so its presence is the
-    // device-branch switch: execScript then runs on the device instead of the
-    // cloud sandbox. `device-unrouted` runs carry no activeDeviceId and keep
-    // the sandbox path (with the unrouted disclosure in the manifest).
+    // `activeDeviceId` presence is the device-branch switch: execScript then
+    // runs on the device instead of the cloud sandbox. The executors filter
+    // the raw metadata id through `resolveRunActiveDeviceId` (plan/policy
+    // gate) before it reaches this context, so a preset or stale id cannot
+    // route execution onto a device the resolved plan didn't authorize;
+    // `device-unrouted` runs keep the sandbox path (with the unrouted
+    // disclosure in the manifest).
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const device: SkillDeviceExecution | undefined = context.activeDeviceId
       ? {
