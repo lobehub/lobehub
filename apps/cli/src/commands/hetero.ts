@@ -7,6 +7,7 @@ import path from 'node:path';
 
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
+import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
   AgentContentBlock,
   AgentImageSource,
@@ -813,11 +814,20 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // Point CC at the lobe_cc AskUserQuestion MCP server we just mounted.
     ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
   ];
+  // Resolve the CLI binary once, up front, and reuse it for both the initial
+  // run and the resume-retry. For the default bare command (`codex`/`claude`)
+  // this finds the validated binary — including the Codex.app bundled CLI when
+  // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
+  // ENOENT on a stale global install. Custom commands are used verbatim.
+  const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);
+  const commandEnv = resolvedCommand.pathEnv ? { PATH: resolvedCommand.pathEnv } : undefined;
+
   const first = await runOneAgent(
     {
       agentType: options.type,
-      command: options.command,
+      command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
+      env: commandEnv,
       extraArgs,
       operationId,
       prompt: resolved.prompt,
@@ -847,8 +857,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     result = await runOneAgent(
       {
         agentType: options.type,
-        command: options.command,
+        command: resolvedCommand.command,
         cwd: options.cwd || process.cwd(),
+        env: commandEnv,
         extraArgs,
         operationId,
         prompt: resolved.prompt,

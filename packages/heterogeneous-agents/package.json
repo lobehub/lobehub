@@ -8,6 +8,7 @@
     "./askUser": "./src/askUser/index.ts",
     "./client": "./src/client/index.ts",
     "./protocol": "./src/protocol/index.ts",
+    "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",
     "./spawn": "./src/spawn/index.ts"
   },
   "main": "./src/index.ts",
