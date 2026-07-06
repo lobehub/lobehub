@@ -1,18 +1,13 @@
-import type { WorkingDirConfig, WorkingDirGithubState } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
 import { electronSystemService } from '@/services/electron/system';
-import { type GitLinkedPRSummary, gitService } from '@/services/git';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { gitService } from '@/services/git';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
@@ -151,16 +146,6 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
-const toGithubMetadata = (prData?: GitLinkedPRSummary): WorkingDirGithubState | undefined => {
-  if (!prData) return undefined;
-
-  return {
-    ...(prData.extraCount === undefined ? {} : { extraPullRequestCount: prData.extraCount }),
-    pullRequest: prData.pullRequest ?? null,
-    pullRequestStatus: prData.pullRequestStatus ?? (prData.ghMissing ? 'gh-missing' : 'ok'),
-  };
-};
-
 interface GitStatusProps {
   /** When set, git status / branch switch / pull / push all run against this
    * remote device via RPC. Omit for the local machine (talks over IPC). */
@@ -192,11 +177,6 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const activeTopicMetadata = useChatStore((s) =>
-    s.activeTopicId ? topicSelectors.getTopicById(s.activeTopicId)(s)?.metadata : undefined,
-  );
-  const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
@@ -237,53 +217,6 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
     },
     [mutateBranch],
   );
-
-  useEffect(() => {
-    if (!activeTopicId || !activeTopicMetadata || !isGithub || !branch || detached || !prData) {
-      return;
-    }
-
-    const currentConfig = activeTopicMetadata.workingDirectoryConfig;
-    const currentWorkingDirectory =
-      getWorkingDirEffectivePath(currentConfig) ?? activeTopicMetadata.workingDirectory;
-    if (currentWorkingDirectory !== path) return;
-
-    const github = toGithubMetadata(prData);
-    if (!github) return;
-
-    const source = currentConfig?.path ?? sourcePath ?? path;
-    const isWorktree = source !== path;
-    const git: NonNullable<WorkingDirConfig['git']> = {
-      ...currentConfig?.git,
-      branch,
-      github,
-      isWorktree,
-    };
-    if (detached === undefined) delete git.detached;
-    else git.detached = detached;
-    if (isWorktree) git.activeWorktree = path;
-    else delete git.activeWorktree;
-
-    const nextConfig: WorkingDirConfig = {
-      ...currentConfig,
-      git,
-      path: source,
-      repoType: 'github',
-    };
-
-    if (isEqual(currentConfig, nextConfig)) return;
-    void updateTopicMetadata(activeTopicId, { workingDirectoryConfig: nextConfig });
-  }, [
-    activeTopicId,
-    activeTopicMetadata,
-    branch,
-    detached,
-    isGithub,
-    path,
-    prData,
-    sourcePath,
-    updateTopicMetadata,
-  ]);
 
   const syncBusy = pulling || pushing;
 

@@ -5,6 +5,7 @@ import debug from 'debug';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -182,6 +183,12 @@ export const buildRunLifecycle = (
       if (adapter.runScope !== 'top_level') return;
       const { isCreateNewTopic, topicId, assistantMessageId } = event;
       if (!topicId) return;
+
+      // Snapshot the working directory's live branch + linked PR onto the topic.
+      // Anchored HERE (send) rather than in the ControlBar's mount effect so that
+      // merely opening a topic never re-stamps its historical branch/PR. Slow gh
+      // leg → fire-and-forget; it only patches topic metadata, idempotently.
+      void snapshotTopicWorkingDirGit(get, { agentId, topicId }).catch(() => {});
 
       // Dev-only fast path: slice the first user message instead of calling the
       // LLM. Only honored in non-production builds. Relocated verbatim.
