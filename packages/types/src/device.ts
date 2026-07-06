@@ -157,10 +157,16 @@ export const deriveWorktreePath = (sourcePath: string, branch: string): string =
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   const parent = cut >= 0 ? trimmed.slice(0, cut) : '';
   const repoName = (cut >= 0 ? trimmed.slice(cut + 1) : trimmed) || 'repo';
-  const suffix = branch
-    .trim()
-    .replaceAll(/[\s~^:?*[\]\\/]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+  // Fold ref-illegal chars to '-', then strip leading/trailing '-' with a linear
+  // scan rather than /^-+|-+$/ — that anchored quantifier is a polynomial-ReDoS
+  // shape on a long crafted branch (flagged by CodeQL) and this runs per request
+  // on the server.
+  const folded = branch.trim().replaceAll(/[\s~^:?*[\]\\/]+/g, '-');
+  let start = 0;
+  let end = folded.length;
+  while (start < end && folded[start] === '-') start += 1;
+  while (end > start && folded[end - 1] === '-') end -= 1;
+  const suffix = folded.slice(start, end);
   const folder = suffix ? `${repoName}-${suffix}` : repoName;
   return parent ? `${parent}${sep}${folder}` : folder;
 };
