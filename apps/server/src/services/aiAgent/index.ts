@@ -2031,10 +2031,20 @@ export class AiAgentService {
           // `aiAgent` import. Only this cloud-CLI branch needs it.
           const { spawnHeteroSandbox } =
             await import('@/server/services/heterogeneousAgent/sandboxRunner');
+          // The sandbox authenticates its nested `lh` calls with this JWT. The
+          // narrow `hetero-operation` token (used for the device-dispatch path
+          // above) is rejected by `oidcAuth`, so CC capabilities that hit
+          // user-scoped endpoints — e.g. uploading a `Read`-on-image result to
+          // the file store for thumbnail echo — would 401 and silently drop.
+          // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
+          // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
+          // so it outlives a multi-hour run.
+          const sandboxJwt = await signUserJWT(this.userId, '4h');
           spawnHeteroSandbox({
             ...heteroParams,
             agentType: heteroType as 'claude-code' | 'codex',
             args: heteroExecArgs,
+            jwt: sandboxJwt,
             marketService: this.marketService,
           }).catch(async (err) => {
             // Fire-and-forget: execAgent has already returned `autoStarted`, and
