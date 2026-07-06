@@ -1,0 +1,109 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { zipSync } from 'fflate';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { prepareSkillDirectory } from '../skillDirectory';
+
+let cacheRoot: string;
+
+const buildZip = (entries: Record<string, string>) =>
+  zipSync(
+    Object.fromEntries(
+      Object.entries(entries).map(([name, content]) => [name, new TextEncoder().encode(content)]),
+    ),
+  );
+
+const okResponse = (zip: Uint8Array) =>
+  ({
+    arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength),
+    ok: true,
+  }) as Response;
+
+beforeEach(async () => {
+  cacheRoot = await mkdtemp(path.join(tmpdir(), 'skill-dir-'));
+});
+
+afterEach(async () => {
+  await rm(cacheRoot, { force: true, recursive: true });
+});
+
+describe('prepareSkillDirectory', () => {
+  it('downloads, extracts and marks the directory prepared', async () => {
+    const zip = buildZip({ 'SKILL.md': '# skill', 'scripts/run.sh': 'echo hi' });
+    const fetchSkillArchive = vi.fn(async () => okResponse(zip));
+
+    const result = await prepareSkillDirectory(
+      { url: 'https://example.com/skill.zip', zipHash: 'hash-1' },
+      { fetchSkillArchive, skillCacheRoot: cacheRoot },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.extractedDir).toBe(path.join(cacheRoot, 'extracted', 'hash-1'));
+    await expect(readFile(path.join(result.extractedDir, 'SKILL.md'), 'utf8')).resolves.toBe(
+      '# skill',
+    );
+    await expect(
+      readFile(path.join(result.extractedDir, 'scripts', 'run.sh'), 'utf8'),
+    ).resolves.toBe('echo hi');
+    const marker = JSON.parse(await readFile(path.join(result.extractedDir, '.prepared'), 'utf8'));
+    expect(marker.zipHash).toBe('hash-1');
+  });
+
+  it('is idempotent on zipHash: second call skips the download', async () => {
+    const zip = buildZip({ 'SKILL.md': '# skill' });
+    const fetchSkillArchive = vi.fn(async () => okResponse(zip));
+    const deps = { fetchSkillArchive, skillCacheRoot: cacheRoot };
+
+    await prepareSkillDirectory({ url: 'https://example.com/a.zip', zipHash: 'hash-1' }, deps);
+    const second = await prepareSkillDirectory(
+      { url: 'https://example.com/a.zip', zipHash: 'hash-1' },
+      deps,
+    );
+
+    expect(second.success).toBe(true);
+    expect(fetchSkillArchive).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-downloads when forceRefresh is set', async () => {
+    const zip = buildZip({ 'SKILL.md': '# skill' });
+    const fetchSkillArchive = vi.fn(async () => okResponse(zip));
+    const deps = { fetchSkillArchive, skillCacheRoot: cacheRoot };
+
+    await prepareSkillDirectory({ url: 'https://example.com/a.zip', zipHash: 'hash-1' }, deps);
+    await prepareSkillDirectory(
+      { forceRefresh: true, url: 'https://example.com/a.zip', zipHash: 'hash-1' },
+      deps,
+    );
+
+    expect(fetchSkillArchive).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects archives with path traversal entries', async () => {
+    const zip = buildZip({ '../evil.txt': 'pwned' });
+
+    const result = await prepareSkillDirectory(
+      { url: 'https://example.com/evil.zip', zipHash: 'hash-evil' },
+      { fetchSkillArchive: async () => okResponse(zip), skillCacheRoot: cacheRoot },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Unsafe file path');
+  });
+
+  it('returns a failure result when the download fails', async () => {
+    const result = await prepareSkillDirectory(
+      { url: 'https://example.com/missing.zip', zipHash: 'hash-404' },
+      {
+        fetchSkillArchive: async () =>
+          ({ ok: false, status: 404, statusText: 'Not Found' }) as Response,
+        skillCacheRoot: cacheRoot,
+      },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('404');
+  });
+});

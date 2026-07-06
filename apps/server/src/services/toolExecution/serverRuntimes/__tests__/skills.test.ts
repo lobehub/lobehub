@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   return {
     checkHash: vi.fn(),
     createSandboxService: vi.fn(() => sandboxService),
+    executeToolCall: vi.fn(),
     fileService: {
       getFullFileUrl: vi.fn(),
     },
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
     getAgentSkills: vi.fn(),
     getUserSettings: vi.fn(),
     marketService: {},
+    prepareSkillDirectory: vi.fn(),
     readResource: vi.fn(),
     sandboxService,
   };
@@ -88,6 +90,17 @@ vi.mock('@/server/services/skill/resource', () => ({
   SkillResourceService: vi.fn(() => ({
     readResource: mocks.readResource,
   })),
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    executeToolCall: mocks.executeToolCall,
+    prepareSkillDirectory: mocks.prepareSkillDirectory,
+  },
+}));
+
+vi.mock('../resolveWorkspaceScope', () => ({
+  resolveRunWorkspaceId: vi.fn(async () => undefined),
 }));
 
 describe('skillsRuntime', () => {
@@ -154,6 +167,142 @@ describe('skillsRuntime', () => {
         },
       }),
     );
+  });
+
+  it('tags sandbox exec results with executionEnv for plugin-state observability', async () => {
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await runtime.execScript({
+      activatedSkills: [],
+      command: 'echo hi',
+      description: 'plain command',
+    });
+
+    expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+  });
+
+  // Regression guard for the server/gateway migration: when the execution plan
+  // routed a device (activeDeviceId present), execScript must run ON the device
+  // — prepare the skill archives via the prepareSkillDirectory RPC and execute
+  // through local-system over the gateway — never in the cloud sandbox.
+  describe('device execution branch', () => {
+    it('prepares archives on the device and runs the command with cwd = extracted dir', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+        success: true,
+      });
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'device' });
+      expect(mocks.prepareSkillDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'device-1',
+          url: 'https://files.example.com/user-skill.zip',
+          userId: 'user-1',
+          zipHash: 'zip-hash-1',
+        }),
+      );
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-1', userId: 'user-1' }),
+        expect.objectContaining({
+          apiName: 'runCommand',
+          arguments: JSON.stringify({
+            command: 'python scripts/run.py',
+            cwd: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+          }),
+          identifier: 'lobe-local-system',
+        }),
+        undefined,
+      );
+      expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('fails explicitly (no sandbox fallback) when the device cannot prepare a skill', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Unknown device RPC method: prepareSkillDirectory',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Unknown device RPC method');
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('runs without a skill dir (workingDirectory cwd) when no archive exists', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+        workingDirectory: '/Users/me/project',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'builtin-skill-id', name: 'builtin-skill' }],
+        command: 'echo hi',
+        description: 'no archive',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mocks.prepareSkillDirectory).not.toHaveBeenCalled();
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({ command: 'echo hi', cwd: '/Users/me/project' }),
+        }),
+        undefined,
+      );
+    });
   });
 
   // Regression guard for the device-gating fix: builtin skills must be filtered

@@ -204,6 +204,50 @@ export class DeviceGateway {
   }
 
   /**
+   * Prepare a skill archive on the device: download the presigned zip and
+   * extract it into the device-local cache (idempotent by `zipHash`). Runs on
+   * the generic device RPC relay like `initWorkspace`, but unlike the
+   * read-oriented helpers, failures are RETURNED with their reason instead of
+   * collapsing to `undefined` — the skills exec path must tell the model why
+   * the device can't run the skill (offline, outdated client, download
+   * failure) rather than silently degrading to the sandbox.
+   */
+  async prepareSkillDirectory(params: {
+    deviceId: string;
+    forceRefresh?: boolean;
+    timeout?: number;
+    url: string;
+    userId: string;
+    workspaceId?: string;
+    zipHash: string;
+  }): Promise<{ error?: string; extractedDir?: string; success: boolean }> {
+    const { deviceId, forceRefresh, timeout = 60_000, url, userId, workspaceId, zipHash } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device Gateway is not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<{
+        error?: string;
+        extractedDir: string;
+        success: boolean;
+      }>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'prepareSkillDirectory', params: { forceRefresh, url, zipHash } },
+      );
+
+      if (!result.success || !result.data) {
+        return { error: result.error || 'prepareSkillDirectory failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('prepareSkillDirectory: error for deviceId=%s — %s', deviceId, message);
+      return { error: message, success: false };
+    }
+  }
+
+  /**
    * Generic helper for the granular git read RPCs (branch / PR / working-tree /
    * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
    * device is offline, or the call fails — callers treat that as "unknown".

@@ -16,6 +16,7 @@
   "dependencies": {
     "@lobechat/local-file-shell": "workspace:*",
     "fast-glob": "^3.3.3",
+    "fflate": "^0.8.3",
     "gray-matter": "^4.0.3"
   },
   "devDependencies": {

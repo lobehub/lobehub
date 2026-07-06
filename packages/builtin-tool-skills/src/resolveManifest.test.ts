@@ -26,21 +26,29 @@ describe('resolveSkillsManifest', () => {
     },
   );
 
-  it('prefixes exec APIs with the fallback framing when a device is online', () => {
+  // Device runs execute execScript ON the device (serverRuntimes/skills.ts
+  // device branch) — the description must say so, and the sandbox-only APIs
+  // (runCommand / exportFile) are dropped, restoring the original desktop
+  // manifest shape.
+  it('declares device execution and hides sandbox-only APIs when a device is routed', () => {
     const result = resolveSkillsManifest({ executionEnv: 'device' })!;
 
-    for (const name of EXEC_APIS) {
-      const description = apiByName(result, name).description;
-      expect(description).toMatch(/^Fallback execution environment: an isolated cloud sandbox/);
-      expect(description).toContain('GITHUB_TOKEN');
-      // the original mechanics stay after the preamble
-      expect(description).toContain(apiByName(SkillsManifest, name).description);
-    }
+    const description = apiByName(result, SkillsApiName.execScript).description;
+    expect(description).toMatch(/^Execution environment: the user's selected device/);
+    expect(description).toContain('NOT injected');
+    // the original mechanics stay after the preamble
+    expect(description).toContain(apiByName(SkillsManifest, SkillsApiName.execScript).description);
+
+    const apiNames = result.api.map((a) => a.name);
+    expect(apiNames).not.toContain(SkillsApiName.runCommand);
+    expect(apiNames).not.toContain(SkillsApiName.exportFile);
+    expect(apiNames).toContain(SkillsApiName.activateSkill);
+    expect(apiNames).toContain(SkillsApiName.readReference);
+
     // cross-tool arbitration rides the tool systemRole, not the descriptions
     expect(result.systemRole).toContain(systemPrompt);
-    expect(result.systemRole).toContain(
-      'Default shell execution to `lobe-local-system` runCommand',
-    );
+    expect(result.systemRole).toContain('`execScript` runs skill scripts on the device');
+    expect(result.systemRole).toContain('`lobe-local-system` runCommand');
   });
 
   it.each(['bound-device-offline', 'no-online-device'] as const)(
@@ -109,7 +117,7 @@ describe('resolveSkillsManifest', () => {
     expect(result.systemRole).toBe(systemPrompt);
   });
 
-  it.each(['device', 'device-unrouted', 'sandbox'] as const)(
+  it.each(['device-unrouted', 'sandbox'] as const)(
     'keeps non-exec APIs, api shape, and humanIntervention intact for %s',
     (executionEnv) => {
       const result = resolveSkillsManifest({ executionEnv })!;
@@ -124,6 +132,16 @@ describe('resolveSkillsManifest', () => {
       expect(result.identifier).toBe(SkillsManifest.identifier);
     },
   );
+
+  it('keeps non-exec APIs and humanIntervention intact for device', () => {
+    const result = resolveSkillsManifest({ executionEnv: 'device' })!;
+
+    for (const name of NON_EXEC_APIS) {
+      expect(apiByName(result, name)).toBe(apiByName(SkillsManifest, name));
+    }
+    expect(apiByName(result, SkillsApiName.execScript).humanIntervention).toBe('required');
+    expect(result.identifier).toBe(SkillsManifest.identifier);
+  });
 
   it('does not mutate the static manifest', () => {
     const staticDescriptions = SkillsManifest.api.map((a) => a.description);

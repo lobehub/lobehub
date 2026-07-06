@@ -56,6 +56,11 @@ export interface RunCommandOptions {
 }
 
 export interface CommandResult {
+  /**
+   * Where the command actually ran. Flows into the tool call's plugin state so
+   * execution-target degradation is observable in the product UI.
+   */
+  executionEnv?: 'device' | 'sandbox';
   exitCode: number;
   output: string;
   stderr?: string;

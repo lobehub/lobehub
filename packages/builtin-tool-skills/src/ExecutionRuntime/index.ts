@@ -504,6 +504,7 @@ export class SkillsExecutionRuntime {
       content,
       state: {
         command,
+        ...(result.executionEnv && { executionEnv: result.executionEnv }),
         exitCode: result.exitCode,
         success: result.success,
       },

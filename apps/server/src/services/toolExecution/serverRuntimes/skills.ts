@@ -29,6 +29,7 @@ import { createSandboxService, normalizeSandboxCommandResult } from '@/server/se
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -37,6 +38,30 @@ interface UserSettingsWithMarketToken {
   market?: {
     accessToken?: string;
   };
+}
+
+/**
+ * Device-execution wiring for the exec APIs, present only when the run's
+ * execution plan routed a device (`plan.kind === 'device'` — the aiAgent sets
+ * `context.activeDeviceId` from exactly that condition). When present,
+ * `execScript` runs ON the device instead of the cloud sandbox: skill archives
+ * are prepared device-side via the `prepareSkillDirectory` RPC and the command
+ * executes through the local-system tool over the device gateway.
+ */
+interface SkillDeviceExecution {
+  deviceId: string;
+  executionTimeoutMs?: number;
+  operationId?: string;
+  /** Lazily resolved workspace principal — see `resolveRunWorkspaceId`. */
+  resolveWorkspaceId: () => Promise<string | undefined>;
+  /** cwd fallback when no activated skill ships an archive. */
+  workingDirectory?: string;
+}
+
+interface ActivatedSkillArchive {
+  name: string;
+  url: string;
+  zipHash: string;
 }
 
 class SkillServerRuntimeService implements SkillRuntimeService {
@@ -48,8 +73,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private serverDB: LobeChatDatabase;
   private topicId?: string;
   private userId: string;
+  private device?: SkillDeviceExecution;
 
   constructor(options: {
+    device?: SkillDeviceExecution;
     fileModel: FileModel;
     fileService: FileService;
     marketService: MarketService;
@@ -67,6 +94,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
     this.userId = options.userId;
+    this.device = options.device;
   }
 
   findAll = (): Promise<{ data: SkillListItem[]; total: number }> => {
@@ -96,7 +124,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
     const lhResult = await preprocessLhCommand(options.command, this.userId);
     if (lhResult.error) {
-      return { exitCode: 1, output: '', stderr: lhResult.error, success: false };
+      return {
+        executionEnv: 'sandbox',
+        exitCode: 1,
+        output: '',
+        stderr: lhResult.error,
+        success: false,
+      };
     }
 
     try {
@@ -113,6 +147,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
           stderr: response.error?.message || 'Command execution failed',
@@ -120,15 +155,148 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         };
       }
 
-      return normalizeSandboxCommandResult(response);
+      return { ...normalizeSandboxCommandResult(response), executionEnv: 'sandbox' };
     } catch (error) {
       log('Error running command: %O', error);
       return {
+        executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
         stderr: (error as Error).message || 'Command execution failed',
         success: false,
       };
+    }
+  };
+
+  /**
+   * Resolve the presigned zip URLs (+ content hashes) of the activated skills
+   * that have a persisted archive, preserving activation order. Shared by the
+   * sandbox path (needs name → url) and the device path (needs the zipHash as
+   * the device-cache idempotency key).
+   */
+  private resolveActivatedSkillArchives = async (
+    activatedSkills?: ExecScriptActivatedSkill[],
+  ): Promise<ActivatedSkillArchive[]> => {
+    const archives: ActivatedSkillArchive[] = [];
+    if (!activatedSkills?.length) return archives;
+
+    for (const activatedSkill of activatedSkills) {
+      if (!activatedSkill.name) continue;
+
+      const skill = await this.skillModel.findByName(activatedSkill.name);
+
+      if (!skill) {
+        log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);
+        continue;
+      }
+
+      if (!skill.zipFileHash) continue;
+
+      const fileInfo = await this.fileModel.checkHash(skill.zipFileHash);
+      if (!fileInfo.isExist || !fileInfo.url) continue;
+
+      const fullUrl = await this.fileService.getFullFileUrl(fileInfo.url);
+      if (fullUrl) {
+        archives.push({ name: skill.name, url: fullUrl, zipHash: skill.zipFileHash });
+        log('Resolved zipUrl for skill %s', skill.name);
+      }
+    }
+
+    return archives;
+  };
+
+  /**
+   * Run execScript ON the routed device: prepare every activated skill archive
+   * device-side (idempotent by zipHash), then execute the command through the
+   * local-system tool over the device gateway with cwd = the extracted skill
+   * directory.
+   *
+   * Failures return an explicit error and NEVER fall back to the sandbox — a
+   * silent sandbox run against a user who chose their device is exactly the
+   * regression this path fixes. Typical failure: an older desktop build that
+   * doesn't know the `prepareSkillDirectory` RPC yet.
+   */
+  private execScriptOnDevice = async (
+    command: string,
+    activatedSkills?: ExecScriptActivatedSkill[],
+  ): Promise<CommandResult> => {
+    const device = this.device!;
+    const fail = (stderr: string): CommandResult => ({
+      executionEnv: 'device',
+      exitCode: 1,
+      output: '',
+      stderr,
+      success: false,
+    });
+
+    try {
+      const archives = await this.resolveActivatedSkillArchives(activatedSkills);
+      const workspaceId = await device.resolveWorkspaceId();
+
+      // Prepare all activated archives; the LAST one (most recently activated)
+      // wins as cwd — mirrors the sandbox provider's resolveExecScriptSkillName.
+      let runDir: string | undefined;
+      for (const archive of archives) {
+        const prepared = await deviceGateway.prepareSkillDirectory({
+          deviceId: device.deviceId,
+          url: archive.url,
+          userId: this.userId,
+          workspaceId,
+          zipHash: archive.zipHash,
+        });
+
+        if (!prepared.success || !prepared.extractedDir) {
+          return fail(
+            `Failed to prepare skill "${archive.name}" on the user's device: ${prepared.error ?? 'unknown error'}. ` +
+              'Do not retry elsewhere — report this to the user (their LobeHub app may need an update).',
+          );
+        }
+        runDir = prepared.extractedDir;
+      }
+
+      const cwd = runDir ?? device.workingDirectory;
+      const response = await deviceGateway.executeToolCall(
+        {
+          deviceId: device.deviceId,
+          operationId: device.operationId,
+          userId: this.userId,
+          workspaceId,
+        },
+        {
+          apiName: LocalSystemApiName.runCommand,
+          arguments: JSON.stringify({ command, ...(cwd && { cwd }) }),
+          identifier: LocalSystemIdentifier,
+        },
+        device.executionTimeoutMs,
+      );
+
+      log('execScript device response: %O', response);
+
+      const state = (response.state ?? {}) as {
+        exitCode?: number;
+        stderr?: string;
+        stdout?: string;
+      };
+
+      if (!response.success) {
+        return fail(
+          state.stderr ||
+            response.error ||
+            response.content ||
+            'Command execution failed on the device',
+        );
+      }
+
+      return {
+        executionEnv: 'device',
+        exitCode: state.exitCode ?? 0,
+        output: state.stdout ?? response.content ?? '',
+        stderr: state.stderr,
+        success: true,
+      };
+    } catch (error) {
+      log('Error executing script on device: %O', error);
+      return fail((error as Error).message || 'Command execution failed on the device');
     }
   };
 
@@ -141,6 +309,12 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   ): Promise<CommandResult> => {
     const { activatedSkills, description } = options;
 
+    // Execution target follows the run's plan: a routed device wins over the
+    // sandbox (restores the pre-gateway desktop behavior).
+    if (this.device) {
+      return this.execScriptOnDevice(command, activatedSkills);
+    }
+
     if (!this.topicId) {
       throw new Error('topicId is required for execScript');
     }
@@ -152,35 +326,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         description,
       };
 
-      if (activatedSkills?.length) {
-        const skillZipUrls: Record<string, string> = {};
-
-        for (const activatedSkill of activatedSkills) {
-          if (!activatedSkill.name) continue;
-
-          const skill = await this.skillModel.findByName(activatedSkill.name);
-
-          if (!skill) {
-            log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);
-            continue;
-          }
-
-          if (!skill.zipFileHash) continue;
-
-          const fileInfo = await this.fileModel.checkHash(skill.zipFileHash);
-          if (!fileInfo.isExist || !fileInfo.url) continue;
-
-          const fullUrl = await this.fileService.getFullFileUrl(fileInfo.url);
-          if (fullUrl) {
-            skillZipUrls[skill.name] = fullUrl;
-            log('Resolved zipUrl for skill %s', skill.name);
-          }
-        }
-
-        if (Object.keys(skillZipUrls).length > 0) {
-          enhancedParams.skillZipUrls = skillZipUrls;
-          log('Added skillZipUrls to execScript params: %O', Object.keys(skillZipUrls));
-        }
+      const archives = await this.resolveActivatedSkillArchives(activatedSkills);
+      if (archives.length > 0) {
+        enhancedParams.skillZipUrls = Object.fromEntries(archives.map((a) => [a.name, a.url]));
+        log(
+          'Added skillZipUrls to execScript params: %O',
+          archives.map((a) => a.name),
+        );
       }
 
       const sandboxService = createSandboxService({
@@ -196,6 +348,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
           stderr: response.error?.message || 'Command execution failed',
@@ -203,10 +356,11 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         };
       }
 
-      return normalizeSandboxCommandResult(response);
+      return { ...normalizeSandboxCommandResult(response), executionEnv: 'sandbox' };
     } catch (error) {
       log('Error executing script: %O', error);
       return {
+        executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
         stderr: (error as Error).message || 'Command execution failed',
@@ -289,7 +443,26 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
 
+    // `activeDeviceId` is set by the aiAgent ONLY when the execution plan
+    // routed a device (`plan.kind === 'device'`), so its presence is the
+    // device-branch switch: execScript then runs on the device instead of the
+    // cloud sandbox. `device-unrouted` runs carry no activeDeviceId and keep
+    // the sandbox path (with the unrouted disclosure in the manifest).
+    let workspaceIdPromise: Promise<string | undefined> | undefined;
+    const device: SkillDeviceExecution | undefined = context.activeDeviceId
+      ? {
+          deviceId: context.activeDeviceId,
+          executionTimeoutMs: context.executionTimeoutMs,
+          operationId: context.operationId,
+          // Same lazy workspace-principal recovery as the local-system runtime,
+          // so workspace devices are addressed under the right gateway pool.
+          resolveWorkspaceId: () => (workspaceIdPromise ??= resolveRunWorkspaceId(context)),
+          workingDirectory: context.workingDirectory,
+        }
+      : undefined;
+
     const service = new SkillServerRuntimeService({
+      device,
       fileModel,
       fileService,
       marketService,

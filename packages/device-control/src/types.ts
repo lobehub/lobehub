@@ -133,6 +133,36 @@ export interface ProjectFileSearchResult {
   source: 'git' | 'glob';
 }
 
+// ─── Skill directory ───
+
+export interface PrepareSkillDirectoryParams {
+  forceRefresh?: boolean;
+  /** Presigned download URL of the skill zip archive. */
+  url: string;
+  /** Content hash of the archive — the idempotency key for the local cache. */
+  zipHash: string;
+}
+
+export interface PrepareSkillDirectoryResult {
+  error?: string;
+  /** Device-local directory the archive was extracted into. */
+  extractedDir: string;
+  success: boolean;
+  zipPath: string;
+}
+
+/**
+ * Host hooks for the skill-archive cache. Both are optional: the CLI daemon
+ * runs on the portable defaults; the desktop injects both so the gateway RPC
+ * path shares the cache (and proxy-aware fetch) with its renderer-IPC path.
+ */
+export interface SkillDirectoryDeps {
+  /** Fetch used to download skill archives. Desktop injects Electron's `net` fetch (proxy-aware); defaults to global `fetch`. */
+  fetchSkillArchive?: (url: string) => Promise<Response>;
+  /** Skill zip cache root. Desktop: `<appStoragePath>/file-storage/skills`; defaults to `~/.lobehub/skills`. */
+  skillCacheRoot?: string;
+}
+
 /**
  * The subset of platform hooks the workspace-scan helpers need. Kept narrow so
  * the desktop's local-IPC `WorkspaceCtr` can reuse `initWorkspace` /
@@ -156,7 +186,7 @@ export interface WorkspaceScanDeps {
  * - The CLI uses the portable defaults exported from this package
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
-export interface DeviceControlDeps extends WorkspaceScanDeps {
+export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
