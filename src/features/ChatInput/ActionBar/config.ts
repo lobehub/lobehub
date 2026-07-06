@@ -8,7 +8,6 @@ import ModelLabel from './ModelLabel';
 import Params from './Params';
 import Plus from './Plus';
 import PromptTransform from './PromptTransform';
-import SaveTopic from './SaveTopic';
 import Search from './Search';
 import ContextWindow from './Token';
 import Tools from './Tools';
@@ -28,7 +27,6 @@ export const actionMap = {
   modelLabel: ModelLabel,
   params: Params,
   promptTransform: PromptTransform,
-  saveTopic: SaveTopic,
   search: Search,
   temperature: Params,
   tools: Tools,
