@@ -212,7 +212,10 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     expect(mockCreateOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         initialContext: expect.objectContaining({
-          payload: expect.objectContaining({ parentMessageId: 'tool-msg-1' }),
+          payload: expect.objectContaining({
+            assistantMessageId: 'assistant-msg-new',
+            parentMessageId: 'tool-msg-1',
+          }),
           phase: 'tool_result',
         }),
       }),

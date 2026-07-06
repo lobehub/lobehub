@@ -3240,7 +3240,10 @@ export class AiAgentService {
     if (resumeToolResult) {
       initialContext = {
         initialContext: initialContext.initialContext,
-        payload: { parentMessageId: resumeToolResult.parentMessageId } as any,
+        payload: {
+          assistantMessageId: assistantMessageRecord.id,
+          parentMessageId: resumeToolResult.parentMessageId,
+        } as any,
         phase: 'tool_result' as const,
         session: {
           messageCount: allMessages.length,

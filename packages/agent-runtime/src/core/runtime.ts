@@ -137,6 +137,15 @@ export class AgentRuntime {
           type: 'call_tool',
         };
       } else {
+        if (runtimeContext.phase === 'tool_result') {
+          const toolResultPayload = runtimeContext.payload as {
+            assistantMessageId?: string;
+          };
+          if (toolResultPayload.assistantMessageId) {
+            newState.pendingAssistantMessageId = toolResultPayload.assistantMessageId;
+          }
+        }
+
         // Standard flow: Plan -> Execute
         rawInstructions = await this.agent.runner(runtimeContext, newState);
       }
