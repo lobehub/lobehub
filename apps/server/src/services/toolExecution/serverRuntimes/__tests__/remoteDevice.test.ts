@@ -284,5 +284,36 @@ describe('remoteDeviceRuntime', () => {
         expect.objectContaining({ deviceId: 'd-ws', online: true, scope: 'workspace' }),
       ]);
     });
+
+    it('tags gateway-only devices online in the serverDB-less fallback so they survive the online filter', async () => {
+      // Regression guard: the raw gateway pool has no `online` field, but the
+      // gateway only returns live-connected devices. The serverDB-less fallback
+      // must add `online: true`, otherwise the runtime's `.filter(d => d.online)`
+      // drops every device and the agent reports "no online device".
+      const context: ToolExecutionContext = {
+        toolManifestMap: {},
+        userId: 'user-1',
+      };
+
+      // Mirror the real gateway payload: NO `online` field.
+      mockQueryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'd-gateway',
+          hostname: 'laptop',
+          lastSeen: '2024-01-01',
+          platform: 'darwin',
+        },
+      ]);
+
+      const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
+      const result = await runtime.listOnlineDevices();
+
+      expect(mockQueryDeviceList).toHaveBeenCalledWith('user-1', undefined);
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content);
+      expect(parsed).toEqual([
+        expect.objectContaining({ deviceId: 'd-gateway', online: true, scope: 'personal' }),
+      ]);
+    });
   });
 });
