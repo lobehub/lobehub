@@ -498,6 +498,9 @@ export class SkillsExecutionRuntime {
       stdout: result.output,
       success: result.success,
       exitCode: result.exitCode,
+      // Surfaces the still-running message with a pollable handle when the
+      // command outlived the observation window (exitCode undefined).
+      shellId: result.shellId,
     });
 
     return {
@@ -506,6 +509,7 @@ export class SkillsExecutionRuntime {
         command,
         ...(result.executionEnv && { executionEnv: result.executionEnv }),
         exitCode: result.exitCode,
+        ...(result.shellId && { shellId: result.shellId }),
         success: result.success,
       },
       success: result.success,

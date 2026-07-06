@@ -81,6 +81,20 @@ describe('prepareSkillDirectory', () => {
     expect(fetchSkillArchive).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects zipHash values that are not plain content-hash tokens', async () => {
+    const fetchSkillArchive = vi.fn();
+
+    const result = await prepareSkillDirectory(
+      { url: 'https://example.com/a.zip', zipHash: '../../../etc' },
+      { fetchSkillArchive, skillCacheRoot: cacheRoot },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid zipHash');
+    expect(result.extractedDir).toBe('');
+    expect(fetchSkillArchive).not.toHaveBeenCalled();
+  });
+
   it('rejects archives with path traversal entries', async () => {
     const zip = buildZip({ '../evil.txt': 'pwned' });
 

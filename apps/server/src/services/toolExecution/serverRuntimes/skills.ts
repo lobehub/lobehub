@@ -52,11 +52,27 @@ interface SkillDeviceExecution {
   deviceId: string;
   executionTimeoutMs?: number;
   operationId?: string;
+  /**
+   * Filesystem skills already living on the device (project/device SKILL.md).
+   * execScript resolves their SKILL.md directory as cwd, mirroring the
+   * prepared-archive skills.
+   */
+  projectSkills?: { location: string; name: string }[];
   /** Lazily resolved workspace principal — see `resolveRunWorkspaceId`. */
   resolveWorkspaceId: () => Promise<string | undefined>;
-  /** cwd fallback when no activated skill ships an archive. */
+  /** cwd fallback when no activated skill resolves to a directory. */
   workingDirectory?: string;
 }
+
+/**
+ * Cross-platform dirname for device paths, which may use either separator
+ * depending on the device OS (mirrors `getDirname` in the builtin-tool-skills
+ * ExecutionRuntime — server-side `path.dirname` would mishandle `\`).
+ */
+const deviceDirname = (filePath: string): string => {
+  const idx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return idx === -1 ? '' : filePath.slice(0, idx);
+};
 
 interface ActivatedSkillArchive {
   name: string;
@@ -250,12 +266,31 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
     try {
       const archives = await this.resolveActivatedSkillArchives(activatedSkills);
+      const archiveByName = new Map(archives.map((a) => [a.name.toLowerCase(), a]));
       const workspaceId = await device.resolveWorkspaceId();
 
-      // Prepare all activated archives; the LAST one (most recently activated)
-      // wins as cwd — mirrors the sandbox provider's resolveExecScriptSkillName.
+      // Resolve each activated skill to a device directory in activation
+      // order; the LAST resolvable one wins as cwd — mirrors the sandbox
+      // provider's resolveExecScriptSkillName. Filesystem (project/device)
+      // skills already live on the device, so their SKILL.md directory is the
+      // cwd directly; archive-backed skills are prepared device-side first
+      // (idempotent by zipHash).
       let runDir: string | undefined;
-      for (const archive of archives) {
+      for (const activated of activatedSkills ?? []) {
+        if (!activated.name) continue;
+        const lowerName = activated.name.toLowerCase();
+
+        // Filesystem skills take precedence on name collision, matching
+        // `activateSkill` in the ExecutionRuntime.
+        const projectSkill = device.projectSkills?.find((s) => s.name.toLowerCase() === lowerName);
+        if (projectSkill) {
+          runDir = deviceDirname(projectSkill.location) || runDir;
+          continue;
+        }
+
+        const archive = archiveByName.get(lowerName);
+        if (!archive) continue;
+
         const prepared = await deviceGateway.prepareSkillDirectory({
           deviceId: device.deviceId,
           url: archive.url,
@@ -307,6 +342,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       log('execScript device response: %O', response);
 
       const state = (response.state ?? {}) as {
+        commandId?: string;
         exitCode?: number;
         stderr?: string;
         stdout?: string;
@@ -323,17 +359,19 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       // The device shell reports success for any delivered observation, even
       // when the command exited non-zero (the exit status only lives in
-      // exitCode) — derive success from the exit status instead. A missing
+      // exitCode) — derive success from the exit status instead. An undefined
       // exitCode means the command is still running past the observation
-      // window; keep that non-failing (the script keeps running on the
-      // device), matching the legacy desktop behavior.
-      const exitCode = state.exitCode ?? 0;
+      // window: pass it through with the shell handle so the formatter
+      // reports a running command (pollable via local-system.getCommandOutput)
+      // instead of pretending completion.
+      const exitCode = state.exitCode;
       return {
         executionEnv: 'device',
         exitCode,
         output: state.stdout ?? response.content ?? '',
+        shellId: state.commandId,
         stderr: state.stderr,
-        success: exitCode === 0,
+        success: exitCode === undefined || exitCode === 0,
       };
     } catch (error) {
       log('Error executing script on device: %O', error);
@@ -514,6 +552,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           deviceId: context.activeDeviceId,
           executionTimeoutMs: context.executionTimeoutMs,
           operationId: context.operationId,
+          projectSkills: context.projectSkills,
           // Same lazy workspace-principal recovery as the local-system runtime,
           // so workspace devices are addressed under the right gateway pool.
           resolveWorkspaceId: () => (workspaceIdPromise ??= resolveRunWorkspaceId(context)),

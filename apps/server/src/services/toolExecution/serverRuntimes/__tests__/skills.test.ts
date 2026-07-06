@@ -338,6 +338,90 @@ describe('skillsRuntime', () => {
       );
     });
 
+    // Filesystem (project/device) skills have no DB archive — their SKILL.md
+    // directory on the device is the cwd, and the last activated skill wins
+    // over earlier archive-backed ones.
+    it('uses the project skill directory as cwd, winning over earlier archives', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+        success: true,
+      });
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        projectSkills: [
+          { location: '/ws/.agents/skills/foo/SKILL.md', name: 'foo', source: 'project' },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [
+          { id: 'user-skill-id', name: 'user-skill' },
+          { id: 'foo-id', name: 'foo' },
+        ],
+        command: 'python scripts/run.py',
+        description: 'Run project skill script',
+      });
+
+      expect(result.success).toBe(true);
+      // The archive-backed skill is still prepared (activated earlier)...
+      expect(mocks.prepareSkillDirectory).toHaveBeenCalledTimes(1);
+      // ...but the project skill activated last wins the cwd.
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({
+            command: 'python scripts/run.py',
+            cwd: '/ws/.agents/skills/foo',
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // A command that outlives the shell observation window comes back with no
+    // exitCode — it must surface as still running (with a pollable shell_id),
+    // not as a successful completion.
+    it('reports a still-running command instead of pretending completion', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'Command is still running after the wait window.',
+        state: { commandId: 'shell-9', stdout: '', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'sleep 600',
+        description: 'long script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'device', shellId: 'shell-9' });
+      expect(result.state).not.toHaveProperty('exitCode', 0);
+      expect(result.content).toContain('still running');
+      expect(result.content).toContain('shell-9');
+      expect(result.content).not.toContain('completed successfully');
+    });
+
     // The device shell observation reports success: true for any delivered
     // observation — the actual exit status only lives in exitCode.
     it('reports failure when the script exits non-zero despite a successful observation', async () => {

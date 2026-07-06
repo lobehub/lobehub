@@ -34,6 +34,19 @@ export const prepareSkillDirectory = async (
 ): Promise<PrepareSkillDirectoryResult> => {
   const { forceRefresh, url, zipHash } = params;
 
+  // `zipHash` arrives over the device RPC channel and keys filesystem paths —
+  // including a recursive rm of the extraction dir on refresh — so reject
+  // anything that isn't a plain content-hash-like token before deriving any
+  // path (defense in depth alongside the zip-slip guard below).
+  if (!/^[\w-]+$/.test(zipHash)) {
+    return {
+      error: `Invalid zipHash: expected a content hash, got "${zipHash}"`,
+      extractedDir: '',
+      success: false,
+      zipPath: '',
+    };
+  }
+
   const cacheRoot = deps.skillCacheRoot ?? defaultSkillCacheRoot();
   const extractedDir = path.join(cacheRoot, 'extracted', zipHash);
   const markerPath = path.join(extractedDir, '.prepared');

@@ -61,8 +61,17 @@ export interface CommandResult {
    * execution-target degradation is observable in the product UI.
    */
   executionEnv?: 'device' | 'sandbox';
-  exitCode: number;
+  /**
+   * Undefined means the command was still running when the observation window
+   * elapsed — the formatter reports it as still running instead of completed.
+   */
+  exitCode?: number;
   output: string;
+  /**
+   * Shell handle for a still-running command, pollable via
+   * `local-system.getCommandOutput`.
+   */
+  shellId?: string;
   stderr?: string;
   success: boolean;
 }
