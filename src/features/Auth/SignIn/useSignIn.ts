@@ -17,7 +17,16 @@ import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
-type Step = 'email' | 'password';
+type Step = 'email' | 'password' | 'emailSent';
+
+type SentEmailType = 'magicLink' | 'resetPassword';
+
+interface SentEmailInfo {
+  email: string;
+  // Where "use a different email" should return the user to
+  returnStep: Extract<Step, 'email' | 'password'>;
+  type: SentEmailType;
+}
 
 interface SignInFormValues {
   email: string;
@@ -42,9 +51,13 @@ export const useSignIn = () => {
   );
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
+  // Locks the email-dispatch actions (magic link / password reset / resend) so a
+  // slow network can't be double-clicked into multiple emails.
+  const [sending, setSending] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
+  const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
   const [lastAuthProvider] = useState(() => {
     try {
@@ -62,7 +75,8 @@ export const useSignIn = () => {
     if (emailParam) form.setFieldValue('email', emailParam);
   }, [searchParams, form]);
 
-  const handleSendMagicLink = async (targetEmail?: string) => {
+  const handleSendMagicLink = async (targetEmail?: string): Promise<boolean> => {
+    if (sending) return false;
     try {
       const emailValue =
         targetEmail ||
@@ -70,8 +84,9 @@ export const useSignIn = () => {
           .validateFields(['email'])
           .then((v) => v.email as string)
           .catch(() => null));
-      if (!emailValue) return;
+      if (!emailValue) return false;
 
+      setSending(true);
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const { error } = await signIn.magicLink({
         callbackURL: callbackUrl,
@@ -81,14 +96,21 @@ export const useSignIn = () => {
       });
       if (error) {
         message.error(error.message || t('betterAuth.signin.magicLinkError'));
-        return;
+        return false;
       }
-      message.success(t('betterAuth.signin.magicLinkSent'));
+      // Success is a forward step, not a fleeting toast: land on a persistent
+      // "check your inbox" screen (ux Act §3.5).
+      setSentInfo({ email: emailValue, returnStep: 'email', type: 'magicLink' });
+      setStep('emailSent');
+      return true;
     } catch (error) {
       if (!(error as any)?.errorFields) {
         console.error('Magic link error:', error);
         message.error(t('betterAuth.signin.magicLinkError'));
       }
+      return false;
+    } finally {
+      setSending(false);
     }
   };
 
@@ -205,7 +227,15 @@ export const useSignIn = () => {
       );
 
       if (result.error && result.error.status !== 403) {
-        message.error(result.error.message || t('betterAuth.signin.error'));
+        // Wrong password is the most common sign-in failure. Keep the error
+        // pinned inline on the field (persistent, with retry context) rather
+        // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
+        form.setFields([
+          {
+            errors: [result.error.message || t('betterAuth.signin.error')],
+            name: 'password',
+          },
+        ]);
       }
     } catch (error) {
       console.error('Sign in error:', error);
@@ -286,16 +316,53 @@ export const useSignIn = () => {
     });
   };
 
-  const handleForgotPassword = async () => {
+  // Fire the password-reset email. Returns true on success. Shared by the
+  // "forgot password" entry and the resend action on the sent screen.
+  const dispatchPasswordReset = async (targetEmail: string): Promise<boolean> => {
+    if (sending) return false;
+    setSending(true);
     try {
       await requestPasswordReset({
-        email,
-        redirectTo: `/reset-password?email=${encodeURIComponent(email)}`,
+        email: targetEmail,
+        redirectTo: `/reset-password?email=${encodeURIComponent(targetEmail)}`,
       });
-      message.success(t('betterAuth.signin.forgotPasswordSent'));
+      return true;
     } catch {
       message.error(t('betterAuth.signin.forgotPasswordError'));
+      return false;
+    } finally {
+      setSending(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email || sending) return;
+    // Capture where the user came from so "use a different email" can return
+    // them to the password step (they may still want to try their password).
+    const returnStep: SentEmailInfo['returnStep'] = step === 'password' ? 'password' : 'email';
+    const ok = await dispatchPasswordReset(email);
+    if (!ok) return;
+    setSentInfo({ email, returnStep, type: 'resetPassword' });
+    setStep('emailSent');
+  };
+
+  const handleResendEmail = async () => {
+    if (!sentInfo || sending) return;
+    const ok =
+      sentInfo.type === 'magicLink'
+        ? await handleSendMagicLink(sentInfo.email)
+        : await dispatchPasswordReset(sentInfo.email);
+    if (ok) message.success(t('betterAuth.signin.emailSent.resent'));
+  };
+
+  const handleBackFromSent = () => {
+    const target = sentInfo?.returnStep ?? 'email';
+    setSentInfo(null);
+    if (target === 'password') {
+      setStep('password');
+      return;
+    }
+    handleBackToEmail();
   };
 
   const resolvedProviders = enableBusinessFeatures ? ssoProviders : oAuthSSOProviders;
@@ -311,16 +378,20 @@ export const useSignIn = () => {
     disableEmailPassword,
     email,
     form,
+    handleBackFromSent,
     handleBackToEmail,
     handleCheckUser,
     handleForgotPassword,
     handleGoToSignup,
+    handleResendEmail,
     handleSignIn,
     handleSocialSignIn,
     isSocialOnly,
     lastAuthProvider,
     loading,
     oAuthSSOProviders: sortedProviders,
+    sending,
+    sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
     socialLoading,
     step,

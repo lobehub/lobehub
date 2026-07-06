@@ -65,13 +65,14 @@ vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
 }));
 
 let mockEnableBusinessFeatures = false;
+let mockEnableMagicLink = false;
 vi.mock('@/features/AuthShell', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {
         disableEmailPassword: false,
         enableBusinessFeatures: mockEnableBusinessFeatures,
-        enableMagicLink: false,
+        enableMagicLink: mockEnableMagicLink,
         oAuthSSOProviders: ['google', 'github'],
       },
       serverConfigInit: true,
@@ -81,6 +82,7 @@ vi.mock('@/features/AuthShell', () => ({
 const mockSetFieldValue = vi.fn();
 const mockGetFieldValue = vi.fn();
 const mockValidateFields = vi.fn();
+const mockSetFields = vi.fn();
 const mockSubmit = vi.fn();
 vi.mock('antd', async () => {
   const actual: any = await vi.importActual('antd');
@@ -91,6 +93,7 @@ vi.mock('antd', async () => {
       useForm: () => [
         {
           getFieldValue: mockGetFieldValue,
+          setFields: mockSetFields,
           setFieldValue: mockSetFieldValue,
           submit: mockSubmit,
           validateFields: mockValidateFields,
@@ -112,6 +115,7 @@ describe('useSignIn', () => {
     mockLocalStorage.clear();
     mockSearchParamsGet.mockReturnValue(null);
     mockEnableBusinessFeatures = false;
+    mockEnableMagicLink = false;
     mockBusinessSignin.ssoProviders = [];
     mockBusinessSignin.getAdditionalData.mockResolvedValue({});
     mockBusinessSignin.preSocialSigninCheck.mockResolvedValue(true);
@@ -292,7 +296,7 @@ describe('useSignIn', () => {
       },
     );
 
-    it('should show error on sign in failure', async () => {
+    it('should surface sign in failure as an inline password error', async () => {
       mockSignInEmail.mockResolvedValue({
         error: { message: 'Invalid credentials', status: 401 },
       });
@@ -312,7 +316,11 @@ describe('useSignIn', () => {
         await result.current.handleSignIn({ password: 'wrong' });
       });
 
-      expect(mockMessageError).toHaveBeenCalledWith('Invalid credentials');
+      // Error is pinned inline on the password field, not shown as a toast
+      expect(mockSetFields).toHaveBeenCalledWith([
+        { errors: ['Invalid credentials'], name: 'password' },
+      ]);
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it('should redirect to verify-email on 403', async () => {
@@ -471,7 +479,7 @@ describe('useSignIn', () => {
   });
 
   describe('handleForgotPassword', () => {
-    it('should call requestPasswordReset and show success', async () => {
+    it('should call requestPasswordReset and land on the email-sent state', async () => {
       mockRequestPasswordReset.mockResolvedValue(undefined);
 
       mockFetch.mockResolvedValueOnce({
@@ -493,19 +501,124 @@ describe('useSignIn', () => {
       expect(mockRequestPasswordReset).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'user@example.com' }),
       );
-      expect(mockMessageSuccess).toHaveBeenCalled();
+      // Success is a persistent landing state, not a fleeting toast
+      expect(result.current.step).toBe('emailSent');
+      expect(result.current.sentInfo).toEqual(
+        expect.objectContaining({ email: 'user@example.com', type: 'resetPassword' }),
+      );
     });
 
-    it('should show error on failure', async () => {
-      mockRequestPasswordReset.mockRejectedValue(new Error('fail'));
-
+    it('should no-op when no email has been resolved yet', async () => {
       const { result } = renderHook(() => useSignIn());
 
       await act(async () => {
         await result.current.handleForgotPassword();
       });
 
+      expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+      expect(result.current.step).toBe('email');
+    });
+
+    it('should show error on failure', async () => {
+      mockRequestPasswordReset.mockRejectedValue(new Error('fail'));
+
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      await act(async () => {
+        await result.current.handleForgotPassword();
+      });
+
       expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.step).toBe('password');
+    });
+  });
+
+  describe('magic link', () => {
+    it('should land on email-sent state when a passwordless user triggers magic link', async () => {
+      mockEnableMagicLink = true;
+      mockSignInMagicLink.mockResolvedValue({ error: null });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: false }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      expect(mockSignInMagicLink).toHaveBeenCalledTimes(1);
+      expect(result.current.step).toBe('emailSent');
+      expect(result.current.sentInfo).toEqual(
+        expect.objectContaining({ email: 'user@example.com', type: 'magicLink' }),
+      );
+    });
+  });
+
+  describe('handleResendEmail', () => {
+    it('should resend the password reset email and confirm', async () => {
+      mockRequestPasswordReset.mockResolvedValue(undefined);
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+      await act(async () => {
+        await result.current.handleForgotPassword();
+      });
+
+      mockRequestPasswordReset.mockClear();
+
+      await act(async () => {
+        await result.current.handleResendEmail();
+      });
+
+      expect(mockRequestPasswordReset).toHaveBeenCalledTimes(1);
+      expect(mockMessageSuccess).toHaveBeenCalled();
+      expect(result.current.step).toBe('emailSent');
+    });
+  });
+
+  describe('handleBackFromSent', () => {
+    it('should return to the password step after a reset email', async () => {
+      mockRequestPasswordReset.mockResolvedValue(undefined);
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+      await act(async () => {
+        await result.current.handleForgotPassword();
+      });
+
+      expect(result.current.step).toBe('emailSent');
+
+      act(() => {
+        result.current.handleBackFromSent();
+      });
+
+      expect(result.current.step).toBe('password');
+      expect(result.current.sentInfo).toBeNull();
     });
   });
 
