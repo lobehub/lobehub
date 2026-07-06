@@ -51,12 +51,15 @@ import { RequestTrigger } from '@lobechat/types';
 import { type FlowControl } from '@upstash/qstash';
 import type { Client } from '@upstash/workflow';
 import debug from 'debug';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
-import { AsyncTaskModel } from '@/database/models/asyncTask';
+import {
+  AsyncTaskModel,
+  initHourlyUserMemoryExtractionMetadata,
+} from '@/database/models/asyncTask';
 import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
 import { type ListUsersForMemoryExtractorCursor } from '@/database/models/user';
@@ -65,6 +68,7 @@ import type { UserMemoryHybridSearchAggregatedResult } from '@/database/models/u
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { OtelWorkflowClient } from '@/libs/qstash';
@@ -79,6 +83,7 @@ import {
   AsyncTaskErrorType,
   AsyncTaskStatus,
   type AsyncTaskStructuredErrorItem,
+  AsyncTaskType,
 } from '@/types/asyncTask';
 import { type GlobalMemoryLayer } from '@/types/serverConfig';
 import { type ProviderConfig } from '@/types/user/settings';
@@ -123,6 +128,7 @@ export interface MemoryExtractionHourlyWorkflowPayload {
   baseUrl?: string;
   cursor?: MemoryExtractionWorkflowCursor;
   dryRun?: boolean;
+  hourlyTaskId?: string;
 }
 
 export interface MemoryExtractionNormalizedPayload {
@@ -131,6 +137,7 @@ export interface MemoryExtractionNormalizedPayload {
   forceAll: boolean;
   forceTopics: boolean;
   from?: Date;
+  hourlyTaskId?: string;
   identityCursor: number;
   layers: LayersEnum[];
   /**
@@ -157,6 +164,7 @@ export const memoryExtractionPayloadSchema = z.object({
   forceAll: z.boolean().optional(),
   forceTopics: z.boolean().optional(),
   fromDate: z.coerce.date().optional(),
+  hourlyTaskId: z.string().uuid().optional(),
   identityCursor: z.coerce.number().int().nonnegative().optional(),
   layers: z.array(z.nativeEnum(LayersEnum)).optional(),
   mode: z.enum(['workflow', 'direct']).optional(),
@@ -222,6 +230,7 @@ export const normalizeMemoryExtractionPayload = (
     forceAll: parsed.forceAll ?? false,
     forceTopics: parsed.forceTopics ?? false,
     from: parsed.fromDate,
+    hourlyTaskId: parsed.hourlyTaskId,
     identityCursor: parsed.identityCursor ?? 0,
     layers: normalizeLayers(parsed.layers),
     mode: parsed.mode ?? 'workflow',
@@ -261,6 +270,7 @@ export const buildWorkflowPayloadInput = (
   forceAll: payload.forceAll,
   forceTopics: payload.forceTopics,
   fromDate: payload.from,
+  hourlyTaskId: payload.hourlyTaskId,
   identityCursor: payload.identityCursor,
   layers: payload.layers,
   mode: payload.mode,
@@ -2738,6 +2748,9 @@ const getProcessUserTopicsFlowControl = (): FlowControl => {
   };
 };
 
+const buildHourlyChildWorkflowRunId = (entryWorkflowRunId: string) =>
+  `memory-user-memory-hourly-${entryWorkflowRunId.replaceAll(/[^\w-]/g, '_')}`;
+
 const getWorkflowUrl = (path: string, baseUrl: string) => {
   const url = new URL(path, baseUrl);
 
@@ -2787,14 +2800,119 @@ export class MemoryExtractionWorkflowService {
 
   static triggerHourly(
     payload: MemoryExtractionHourlyWorkflowPayload,
-    options?: { extraHeaders?: Record<string, string> },
+    options?: { extraHeaders?: Record<string, string>; workflowRunId?: string },
   ) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.hourly, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      headers: options?.extraHeaders,
+      url,
+      workflowRunId: options?.workflowRunId,
+    });
+  }
+
+  /**
+   * Creates a batch-level async task and triggers hourly memory extraction.
+   *
+   * Use when:
+   * - Starting the hourly user-memory extraction workflow from cron or an operator action
+   * - Tracking the root workflow run id for later cooperative cancellation
+   *
+   * Expects:
+   * - `payload.baseUrl` is present for workflow URL construction
+   * - `MEMORY_EXTRACTION_HOURLY_TASK_USER_ID` identifies the service-account task owner
+   *
+   * Returns:
+   * - The created async task id and root Upstash workflow run id
+   */
+  static async triggerHourlyTracked(
+    payload: MemoryExtractionHourlyWorkflowPayload,
+    options?: { entryWorkflowRunId?: string; extraHeaders?: Record<string, string> },
+  ) {
+    if (!payload.baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const userId = process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID;
+    if (!userId) {
+      throw new Error(
+        'MEMORY_EXTRACTION_HOURLY_TASK_USER_ID is required for tracked hourly extraction',
+      );
+    }
+
+    const db = await getServerDB();
+    const startedAt = new Date().toISOString();
+    const childWorkflowRunId = options?.entryWorkflowRunId
+      ? buildHourlyChildWorkflowRunId(options.entryWorkflowRunId)
+      : undefined;
+    const existingTask = options?.entryWorkflowRunId
+      ? await db.query.asyncTasks.findFirst({
+          where: and(
+            eq(asyncTasks.type, AsyncTaskType.UserMemoryExtractionHourly),
+            eq(asyncTasks.userId, userId),
+            sql`${asyncTasks.metadata} #>> '{control,upstash,entryWorkflowRunId}' = ${options.entryWorkflowRunId}`,
+          ),
+        })
+      : undefined;
+    const asyncTaskModel = new AsyncTaskModel(db, userId);
+    const taskId =
+      existingTask?.id ??
+      (await asyncTaskModel.create({
+        metadata: initHourlyUserMemoryExtractionMetadata({
+          control: options?.entryWorkflowRunId
+            ? {
+                upstash: {
+                  entryWorkflowRunId: options.entryWorkflowRunId,
+                  workflowRunIds: [
+                    options.entryWorkflowRunId,
+                    ...(childWorkflowRunId ? [childWorkflowRunId] : []),
+                  ],
+                },
+              }
+            : undefined,
+          cursor: payload.cursor,
+          startedAt,
+        }),
+        status: AsyncTaskStatus.Pending,
+        type: AsyncTaskType.UserMemoryExtractionHourly,
+      }));
+    let workflowRunId: string;
+    try {
+      ({ workflowRunId } = await this.triggerHourly(
+        { ...payload, hourlyTaskId: taskId },
+        { extraHeaders: options?.extraHeaders, workflowRunId: childWorkflowRunId },
+      ));
+    } catch (error) {
+      const statusCode =
+        (error as { status?: number; statusCode?: number }).status ??
+        (error as { statusCode?: number }).statusCode;
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      if (
+        existingTask &&
+        childWorkflowRunId &&
+        (statusCode === 409 || message.includes('already'))
+      ) {
+        await asyncTaskModel.appendUserMemoryWorkflowRunIds(taskId, [childWorkflowRunId]);
+        return { taskId, workflowRunId: childWorkflowRunId };
+      }
+
+      await asyncTaskModel.update(taskId, {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.TaskTriggerError,
+          'Failed to schedule hourly memory extraction workflow',
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+      throw error;
+    }
+
+    await asyncTaskModel.appendUserMemoryWorkflowRunIds(taskId, [workflowRunId]);
+
+    return { taskId, workflowRunId };
   }
 
   static triggerProcessUserTopics(
@@ -2867,7 +2985,7 @@ export class MemoryExtractionWorkflowService {
   static triggerPersonaUpdate(
     userId: string,
     baseUrl: string,
-    options?: { extraHeaders?: Record<string, string> },
+    options?: { extraHeaders?: Record<string, string>; hourlyTaskId?: string },
   ) {
     if (!baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
@@ -2875,7 +2993,7 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
     return this.getClient().trigger({
-      body: { userIds: [userId] },
+      body: { hourlyTaskId: options?.hourlyTaskId, userIds: [userId] },
       flowControl: {
         key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
         parallelism: 1,

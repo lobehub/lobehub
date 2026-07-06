@@ -17,6 +17,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
+import { isHourlyMemoryExtractionCancelled } from './utils';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -67,8 +68,6 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
           return { message: 'Source not supported in topic workflow.' };
         }
 
-        const executor = await MemoryExtractionExecutor.create();
-
         if (payload.asyncTaskId) {
           // NOTICE: Cooperative cascading cancellation for the workflow tree.
           // Check before CEPA extraction so cancelled tasks stop at the earliest safe boundary.
@@ -93,6 +92,30 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return { message: 'Memory extraction task cancellation requested, skip topic.' };
           }
         }
+
+        {
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:hourly-before`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, {
+            stepName,
+          });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
+          const hourlyCancelled = await context.run(stepName, () =>
+            isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+          );
+          if (hourlyCancelled) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return {
+              message: 'Hourly memory extraction task cancellation requested, skip topic.',
+              skipped: true,
+            };
+          }
+        }
+
+        const executor = await MemoryExtractionExecutor.create();
 
         {
           let layers = CEPA_LAYERS;
@@ -125,6 +148,29 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
           );
         }
         {
+          {
+            const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:hourly-identity`;
+            const guard = await checkGuard(context, WORKFLOW_PATH, {
+              stepName,
+            });
+            if (!guard.result) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return guard.response;
+            }
+
+            const hourlyCancelled = await context.run(stepName, () =>
+              isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+            );
+            if (hourlyCancelled) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return {
+                message:
+                  'Hourly memory extraction task cancellation requested, skip identity extraction.',
+                skipped: true,
+              };
+            }
+          }
+
           if (payload.asyncTaskId) {
             // NOTICE: Cooperative cascading cancellation for the workflow tree.
             // Re-check before identity extraction to avoid running sequential identity step after cancel.

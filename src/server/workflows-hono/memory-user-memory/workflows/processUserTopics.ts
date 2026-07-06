@@ -15,6 +15,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
+import { appendHourlyWorkflowRunId, isHourlyMemoryExtractionCancelled } from './utils';
 
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
@@ -48,7 +49,11 @@ export const processUserTopicsHandler = async (
     return { message: 'No supported sources requested, skip topic processing.' };
   }
 
-  const executor = await MemoryExtractionExecutor.create();
+  let executor: Awaited<ReturnType<typeof MemoryExtractionExecutor.create>> | undefined;
+  const getExecutor = async () => {
+    executor ??= await MemoryExtractionExecutor.create();
+    return executor;
+  };
 
   const scheduleNextPage = async (
     userId: string,
@@ -56,7 +61,7 @@ export const processUserTopicsHandler = async (
     cursorId: string,
     fanoutCount: number,
   ) => {
-    await MemoryExtractionWorkflowService.triggerProcessUserTopics(
+    return MemoryExtractionWorkflowService.triggerProcessUserTopics(
       {
         ...buildWorkflowPayloadInput({
           ...params,
@@ -98,6 +103,25 @@ export const processUserTopicsHandler = async (
       }
     }
 
+    const hourlyCancellationStepName = `memory:user-memory:extract:users:${userId}:cancel-check:hourly`;
+    const hourlyCancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+      stepName: hourlyCancellationStepName,
+    });
+    if (!hourlyCancellationGuard.result) return hourlyCancellationGuard.response;
+
+    const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+      isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
+    );
+    if (hourlyCancelled) {
+      return {
+        message: 'Hourly memory extraction task cancellation requested, skip user topic fan-out.',
+        processedUsers: 0,
+        skipped: true,
+      };
+    }
+
+    const activeExecutor = await getExecutor();
+
     const topicCursor =
       params.topicCursor && params.topicCursor.userId === userId
         ? {
@@ -113,7 +137,7 @@ export const processUserTopicsHandler = async (
       if (!guard.result) return guard.response;
 
       topicsFromPayload = await context.run(stepName, async () => {
-        const filtered = await executor.filterTopicIdsForUser(
+        const filtered = await activeExecutor.filterTopicIdsForUser(
           userId,
           params.topicIds,
           params.workspaceId,
@@ -134,7 +158,7 @@ export const processUserTopicsHandler = async (
     }>(listTopicsStepName, () =>
       topicsFromPayload && topicsFromPayload.length > 0
         ? Promise.resolve({ ids: topicsFromPayload })
-        : executor.getTopicsForUser(
+        : activeExecutor.getTopicsForUser(
             {
               cursor: topicCursor,
               forceAll: params.forceAll,
@@ -173,7 +197,7 @@ export const processUserTopicsHandler = async (
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      await context.run(stepName, () =>
+      const result = await context.run(stepName, () =>
         MemoryExtractionWorkflowService.triggerProcessTopics(
           userId,
           {
@@ -186,17 +210,38 @@ export const processUserTopicsHandler = async (
           { extraHeaders: upstashWorkflowExtraHeaders },
         ),
       );
+      await appendHourlyWorkflowRunId(params.hourlyTaskId, result.workflowRunId);
     }
 
     const nextFanoutCount = fanoutCount + idsToProcess.length;
 
     // Stop paginating once the per-user ceiling is reached; the remainder resumes next hourly run.
     if (!topicsFromPayload && cursor && nextFanoutCount < MAX_TOPICS_PER_USER_PER_RUN) {
+      const hourlyNextPageCancellationStepName = `memory:user-memory:extract:users:${userId}:cancel-check:hourly-next-page`;
+      const hourlyNextPageCancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+        stepName: hourlyNextPageCancellationStepName,
+      });
+      if (!hourlyNextPageCancellationGuard.result) {
+        return hourlyNextPageCancellationGuard.response;
+      }
+
+      const hourlyNextPageCancelled = await context.run(hourlyNextPageCancellationStepName, () =>
+        isHourlyMemoryExtractionCancelled(params.hourlyTaskId),
+      );
+      if (hourlyNextPageCancelled) {
+        return {
+          message:
+            'Hourly memory extraction task cancellation requested, skip next user topics page.',
+          processedUsers: 1,
+          skipped: true,
+        };
+      }
+
       const stepName = `memory:user-memory:extract:users:${userId}:topics:${cursor.id}:schedule-next-batch`;
       const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
       if (!guard.result) return guard.response;
 
-      await context.run(stepName, () => {
+      const result = await context.run(stepName, () => {
         // NOTICE: Upstash Workflow only supports serializable data into plain JSON,
         // this causes the Date object to be converted into string when passed as parameter from
         // context to child workflow. So we need to convert it back to Date object here.
@@ -207,6 +252,7 @@ export const processUserTopicsHandler = async (
 
         return scheduleNextPage(userId, createdAt, cursor.id, nextFanoutCount);
       });
+      await appendHourlyWorkflowRunId(params.hourlyTaskId, result.workflowRunId);
     }
   }
 
