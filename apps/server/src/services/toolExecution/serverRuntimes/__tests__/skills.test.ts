@@ -245,7 +245,7 @@ describe('skillsRuntime', () => {
 
     it('fails explicitly (no sandbox fallback) when the device cannot prepare a skill', async () => {
       mocks.prepareSkillDirectory.mockResolvedValue({
-        error: 'Unknown device RPC method: prepareSkillDirectory',
+        error: 'Failed to download skill archive: 404 Not Found',
         success: false,
       });
 
@@ -265,9 +265,43 @@ describe('skillsRuntime', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.content).toContain('Unknown device RPC method');
+      expect(result.content).toContain('404 Not Found');
       expect(mocks.executeToolCall).not.toHaveBeenCalled();
       expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    // Version-skew window: an old client build replies with the dispatcher's
+    // deterministic unknown-method error — the ONE prepare failure that falls
+    // back to the sandbox, with an explicit disclosure note for the model.
+    it('falls back to the sandbox (with a disclosure note) when the client predates the RPC', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Unknown device RPC method: prepareSkillDirectory',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+      expect(result.content).toContain('update their LobeHub app');
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+        'execScript',
+        expect.objectContaining({ command: 'python scripts/run.py' }),
+      );
     });
 
     it('runs without a skill dir (workingDirectory cwd) when no archive exists', async () => {

@@ -64,6 +64,23 @@ interface ActivatedSkillArchive {
   zipHash: string;
 }
 
+/**
+ * Sentinel returned by `execScriptOnDevice` when the routed device runs a
+ * client build that predates the `prepareSkillDirectory` RPC (shipped with
+ * this feature). The device dispatcher replies deterministically with an
+ * unknown-method error, so this is a reliable capability probe — distinct
+ * from network failures/timeouts, which must NOT trigger a fallback.
+ */
+const LEGACY_DEVICE_CLIENT = Symbol('legacy-device-client');
+
+/**
+ * Appended to the sandbox result on a legacy-client fallback so the model
+ * discloses the degradation — the manifest already told it the command would
+ * run on the user's device.
+ */
+const LEGACY_FALLBACK_NOTE =
+  "Note: the user's device client is outdated and does not support on-device skill execution, so this command ran in the cloud sandbox instead. Tell the user to update their LobeHub app to run skills on their device.";
+
 class SkillServerRuntimeService implements SkillRuntimeService {
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
@@ -213,13 +230,15 @@ class SkillServerRuntimeService implements SkillRuntimeService {
    *
    * Failures return an explicit error and NEVER fall back to the sandbox — a
    * silent sandbox run against a user who chose their device is exactly the
-   * regression this path fixes. Typical failure: an older desktop build that
-   * doesn't know the `prepareSkillDirectory` RPC yet.
+   * regression this path fixes. Single exception: an older client build that
+   * doesn't know the `prepareSkillDirectory` RPC yet (version-skew window)
+   * returns the `LEGACY_DEVICE_CLIENT` sentinel, and the caller runs the
+   * sandbox path with an explicit disclosure note instead.
    */
   private execScriptOnDevice = async (
     command: string,
     activatedSkills?: ExecScriptActivatedSkill[],
-  ): Promise<CommandResult> => {
+  ): Promise<CommandResult | typeof LEGACY_DEVICE_CLIENT> => {
     const device = this.device!;
     const fail = (stderr: string): CommandResult => ({
       executionEnv: 'device',
@@ -246,6 +265,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         });
 
         if (!prepared.success || !prepared.extractedDir) {
+          // The device dispatcher's deterministic reply for a method it does
+          // not know — the client predates this RPC, hand back to the caller
+          // for the sandbox fallback.
+          if (prepared.error?.includes('Unknown device RPC method')) {
+            log('Device %s predates prepareSkillDirectory, falling back', device.deviceId);
+            return LEGACY_DEVICE_CLIENT;
+          }
+
           return fail(
             `Failed to prepare skill "${archive.name}" on the user's device: ${prepared.error ?? 'unknown error'}. ` +
               'Do not retry elsewhere — report this to the user (their LobeHub app may need an update).',
@@ -321,13 +348,32 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       description: string;
     },
   ): Promise<CommandResult> => {
-    const { activatedSkills, description } = options;
-
     // Execution target follows the run's plan: a routed device wins over the
     // sandbox (restores the pre-gateway desktop behavior).
     if (this.device) {
-      return this.execScriptOnDevice(command, activatedSkills);
+      const deviceResult = await this.execScriptOnDevice(command, options.activatedSkills);
+      if (deviceResult !== LEGACY_DEVICE_CLIENT) return deviceResult;
+
+      // Version-skew fallback: the client predates the RPC. Run the sandbox
+      // path but disclose the degradation in stderr so the model relays it.
+      const sandboxResult = await this.execScriptInSandbox(command, options);
+      return {
+        ...sandboxResult,
+        stderr: [sandboxResult.stderr, LEGACY_FALLBACK_NOTE].filter(Boolean).join('\n'),
+      };
     }
+
+    return this.execScriptInSandbox(command, options);
+  };
+
+  private execScriptInSandbox = async (
+    command: string,
+    options: {
+      activatedSkills?: ExecScriptActivatedSkill[];
+      description: string;
+    },
+  ): Promise<CommandResult> => {
+    const { activatedSkills, description } = options;
 
     if (!this.topicId) {
       throw new Error('topicId is required for execScript');
