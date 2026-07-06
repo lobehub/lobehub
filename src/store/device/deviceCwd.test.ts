@@ -33,12 +33,20 @@ describe('nextWorkingDirs', () => {
 
   it('stores active worktree metadata on the source entry without duplicating the source', () => {
     const result = nextWorkingDirs(
-      { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      {
+        git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+        path: '/repo',
+        repoType: 'git',
+      },
       [entry('/repo', 'git'), entry('/other')],
     );
 
     expect(result).toEqual([
-      { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+      {
+        git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+        path: '/repo',
+        repoType: 'git',
+      },
       entry('/other'),
     ]);
   });

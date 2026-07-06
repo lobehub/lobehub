@@ -630,6 +630,61 @@ describe('TaskService', () => {
       expect(result?.activities?.[1].type).toBe('topic');
     });
 
+    it('exposes the run last message (handoff.content) alongside the summary (LOBE-11396)', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const topics = [
+        {
+          createdAt: new Date('2024-01-03T00:00:00Z'),
+          handoff: {
+            content: 'The raw last assistant message shown as the run result.',
+            summary: 'A short synthesized summary.',
+            title: 'Topic A',
+          },
+          seq: 1,
+          status: 'completed',
+          topicId: 'topic-1',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      const topicActivity = result?.activities?.find((a) => a.type === 'topic');
+      expect(topicActivity?.summary).toBe('A short synthesized summary.');
+      expect(topicActivity?.content).toBe(
+        'The raw last assistant message shown as the run result.',
+      );
+    });
+
     it('should resolve author info for activities', async () => {
       const task = {
         assigneeAgentId: 'agt_assignee',

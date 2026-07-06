@@ -13,6 +13,7 @@ import { aiModelRouter } from '../lambda/aiModel';
 import { aiProviderRouter } from '../lambda/aiProvider';
 import { briefRouter } from '../lambda/brief';
 import { chunkRouter } from '../lambda/chunk';
+import { composioRouter } from '../lambda/composio';
 import { configRouter } from '../lambda/config';
 import { deviceRouter } from '../lambda/device';
 import { documentRouter } from '../lambda/document';
@@ -40,6 +41,7 @@ export const mobileRouter = router({
   aiModel: aiModelRouter,
   aiProvider: aiProviderRouter,
   chunk: chunkRouter,
+  composio: composioRouter,
   config: configRouter,
   device: deviceRouter,
   document: documentRouter,

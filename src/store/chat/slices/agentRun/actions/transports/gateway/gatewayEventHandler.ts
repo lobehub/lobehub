@@ -24,7 +24,6 @@ import type {
 } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -585,10 +584,11 @@ export const createGatewayEventHandler = (
           // means visible output is done; the operation still waits for
           // agent_runtime_end to preserve terminal side-effect ordering.
           get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
-          const hasQueuedMessage =
-            (get().queuedMessages?.[messageMapKey(context)]?.length ?? 0) > 0;
-          if (context.topicId && !hasQueuedMessage)
-            get().internal_updateTopicLoading(context.topicId, false);
+          // The sidebar "running" spinner is driven off `topic.status === 'running'`
+          // (persisted, reset at the terminal) for gateway/hetero runs — no
+          // client-only `topicLoadingIds` early-clear here, so the topic keeps
+          // spinning through the post-visible-output terminal side-effects until
+          // the run actually completes.
         });
         break;
       }

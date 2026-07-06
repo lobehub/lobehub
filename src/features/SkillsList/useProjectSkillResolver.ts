@@ -12,10 +12,9 @@ export interface ResolvedProjectSkill {
   description?: string;
   name: string;
   /**
-   * Opens the skill's `SKILL.md` in the right-hand portal. Only present when the
-   * skill is reachable by the local viewer — a remote device's filesystem can't
-   * be previewed (matches the Files tab / working-sidebar behavior), so those
-   * tags stay non-clickable.
+   * Opens the skill's `SKILL.md` in the right-hand portal. Present whenever the
+   * skill resolves — local reads go over IPC, a bound device over RPC (matches
+   * the Files tab / working-sidebar behavior).
    */
   open?: () => void;
 }
@@ -71,10 +70,11 @@ export const useProjectSkillResolver = (
       return {
         description: item.description,
         name: item.name,
-        // A remote device's SKILL.md isn't reachable by the local viewer.
-        open: remoteDeviceId ? undefined : () => onOpenSkill(item),
+        // Preview opens in every mode now — onOpenSkill reads over IPC locally
+        // and over RPC for a bound device (like the Files tab).
+        open: () => onOpenSkill(item),
       };
     },
-    [items, onOpenSkill, remoteDeviceId],
+    [items, onOpenSkill],
   );
 };

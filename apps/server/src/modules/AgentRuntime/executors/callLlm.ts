@@ -752,6 +752,18 @@ export const callLlm =
           // into op metadata, mirroring agentConfig/botContext — no per-step DB
           // lookup here.
           agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
+          // Bridge the @-mentioned agents (persisted into the runtime
+          // initialContext by AiAgentService.execAgent) into the agent-management
+          // context so AgentManagementContextInjector injects the delegation
+          // block, prompting the supervisor to `callAgent` the mentioned agents.
+          // Mirrors the client's contextEngineering bridge; scoped to mention
+          // runs only (undefined otherwise) so ordinary runs are unaffected.
+          agentManagementContext: (state as any).initialContext?.initialContext?.mentionedAgents
+            ?.length
+            ? {
+                mentionedAgents: (state as any).initialContext.initialContext.mentionedAgents,
+              }
+            : undefined,
           additionalVariables: {
             ...state.metadata?.deviceSystemInfo,
             ...lobehubSkillVariables,

@@ -1,4 +1,11 @@
-import type { ChatTopic, ChatTopicStatus, GroupedTopic, TimeGroupId } from '@lobechat/types';
+import type {
+  ChatTopic,
+  ChatTopicMetadata,
+  ChatTopicStatus,
+  GroupedTopic,
+  TimeGroupId,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -106,7 +113,33 @@ const getProjectName = (dir: string): string => {
   return segments.at(-1) || dir;
 };
 
-const normalizeWorkingDirectory = (dir: string): string => dir.replace(/[/\\]+$/, '').trim();
+const normalizeWorkingDirectory = (dir: string): string => dir.trim().replace(/[/\\]+$/, '');
+
+const normalizeOptionalWorkingDirectory = (dir: string | undefined): string | undefined => {
+  if (!dir) return undefined;
+  const normalized = normalizeWorkingDirectory(dir);
+  return normalized || undefined;
+};
+
+export const getTopicMetadataWorkingDirectorySourcePath = (
+  metadata?: ChatTopicMetadata,
+): string | undefined =>
+  normalizeOptionalWorkingDirectory(
+    getWorkingDirSourcePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+  );
+
+export const getTopicMetadataWorkingDirectoryEffectivePath = (
+  metadata?: ChatTopicMetadata,
+): string | undefined =>
+  normalizeOptionalWorkingDirectory(
+    getWorkingDirEffectivePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+  );
+
+export const getTopicWorkingDirectorySourcePath = (topic: ChatTopic): string | undefined =>
+  getTopicMetadataWorkingDirectorySourcePath(topic.metadata);
+
+export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string | undefined =>
+  getTopicMetadataWorkingDirectoryEffectivePath(topic.metadata);
 
 export const groupTopicsByProject = (
   topics: ChatTopic[],
@@ -117,8 +150,7 @@ export const groupTopicsByProject = (
   const groupsMap = new Map<string, { children: ChatTopic[]; path: string }>();
 
   for (const topic of topics) {
-    const raw = topic.metadata?.workingDirectory;
-    const normalized = raw ? normalizeWorkingDirectory(raw) : '';
+    const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
     const id = normalized ? `${PROJECT_GROUP_PREFIX}${normalized}` : NO_PROJECT_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
@@ -157,12 +189,7 @@ export const groupTopicsByProject = (
 // the sidebar surfaces "needs attention" in one place. The remaining buckets map
 // 1:1 to a status. The group `id` resolves its title via `groupTitle.byStatus.<id>`.
 export type TopicStatusBucket =
-  | 'pending'
-  | 'running'
-  | 'active'
-  | 'paused'
-  | 'completed'
-  | 'archived';
+  'pending' | 'running' | 'active' | 'paused' | 'completed' | 'archived';
 
 // Fixed priority order: `pending` (needs attention) comes first, then running,
 // then active; the remaining states fall below. Topics without a status are

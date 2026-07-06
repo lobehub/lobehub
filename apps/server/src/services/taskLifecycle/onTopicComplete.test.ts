@@ -67,6 +67,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(true);
     // Avoid generateHandoff side effects by skipping when lastAssistantContent is undefined
     (service as any).taskTopicModel.updateStatus = updateTopicStatus;
+    (service as any).taskTopicModel.updateHandoffContent = vi.fn().mockResolvedValue(undefined);
     (service as any).briefModel.create = createBrief;
     (service as any).briefModel.hasUnresolvedUrgentByTask = vi.fn().mockResolvedValue(false);
   });
@@ -90,6 +91,30 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: null });
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+    });
+
+    it('persists the run last message independently of handoff summary (LOBE-11396)', async () => {
+      const task = baseTask({ automationMode: 'heartbeat' });
+      findById.mockResolvedValue(task);
+      // Model the summary path as a no-op (e.g. its LLM call failed and was
+      // swallowed) — the raw last message must still be persisted for the card.
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const updateHandoffContent = (service as any).taskTopicModel.updateHandoffContent;
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'the raw last assistant message',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateHandoffContent).toHaveBeenCalledWith(
+        'task-1',
+        'topic-1',
+        'the raw last assistant message',
+      );
     });
 
     it('schedule-mode task → status="scheduled"', async () => {

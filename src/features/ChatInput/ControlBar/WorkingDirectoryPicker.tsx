@@ -320,6 +320,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const recents = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const deviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(targetDeviceId));
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
   const legacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );
@@ -332,6 +335,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     deviceDefaultCwd,
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
+    topicWorkingDirectoryConfig,
   });
 
   // Reset only makes sense when an agent-level override exists. The device-wide

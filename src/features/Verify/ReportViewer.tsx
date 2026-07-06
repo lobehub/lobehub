@@ -1,6 +1,6 @@
 'use client';
 
-import type { VerifyRunContext } from '@lobechat/types';
+import type { VerifyEvidenceType, VerifyRunContext } from '@lobechat/types';
 import {
   Block,
   Center,
@@ -22,8 +22,9 @@ import {
   CircleHelp,
   Clock3,
   FileText,
-  Paperclip,
+  Image as ImageIcon,
   RefreshCw,
+  Video,
   X,
 } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -140,7 +141,7 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block: 20px 12px;
     padding-block: 12px;
 
-    background: color-mix(in srgb, ${cssVar.colorBgLayout} 88%, transparent);
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
     backdrop-filter: blur(8px);
   `,
   chip: css`
@@ -466,8 +467,20 @@ const VERDICT_META: Record<
 };
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
-const isInlineImageEvidence = (evidence: VerifyEvidenceWithUrl) =>
-  Boolean(evidence.fileUrl && imageEvidenceTypes.has(evidence.type));
+/** Media that renders/plays inline in the check body (image + video), no click-to-open. */
+const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
+  Boolean(evidence.fileUrl && (imageEvidenceTypes.has(evidence.type) || evidence.type === 'video'));
+
+/** Coarse attachment bucket for the type marker: image / video / everything else. */
+type EvidenceCategory = 'file' | 'image' | 'video';
+const evidenceCategory = (type: VerifyEvidenceType): EvidenceCategory =>
+  type === 'video' ? 'video' : imageEvidenceTypes.has(type) ? 'image' : 'file';
+const CATEGORY_ICON: Record<EvidenceCategory, typeof FileText> = {
+  file: FileText,
+  image: ImageIcon,
+  video: Video,
+};
+const CATEGORY_ORDER: EvidenceCategory[] = ['image', 'video', 'file'];
 // `errored` is terminal too (the verifier couldn't run) — stop polling and don't
 // treat it as a live/in-progress status.
 const terminalRunStatuses = new Set(['delivered', 'errored', 'failed', 'passed']);
@@ -539,13 +552,13 @@ const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
     const { t } = useTranslation('verify');
     const label = evidenceDisplayName(e, t, index);
     const description = e.description && e.description !== label ? e.description : null;
-    // Images speak for themselves — the raw filename header is visual noise, so
-    // only keep a meaningful caption (description) for image/gif evidence.
-    const isImage = isInlineImageEvidence(e);
+    // Inline media (image/gif/video) speaks for itself — the raw filename header
+    // is visual noise, so only keep a meaningful caption (description) for it.
+    const isMedia = isInlineEvidence(e);
 
     return (
       <Flexbox gap={6}>
-        {!isImage && (
+        {!isMedia && (
           <Text strong fontSize={13}>
             {label}
           </Text>
@@ -599,7 +612,7 @@ const EvidenceFileButton = memo<{
       onClick={onClick}
     >
       <span className={styles.evidenceFileIcon}>
-        <Icon icon={Paperclip} size={13} />
+        <Icon icon={CATEGORY_ICON[evidenceCategory(evidence.type)]} size={13} />
       </span>
       <span className={styles.evidenceFileBody}>
         <span className={styles.evidenceFileName}>{name}</span>
@@ -646,6 +659,13 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
     const verdict = checkVerdict(result);
     const meta = VERDICT_META[verdict];
     const evidenceCount = result.evidence.length;
+    const categoryCounts = result.evidence.reduce(
+      (acc, e) => {
+        acc[evidenceCategory(e.type)] += 1;
+        return acc;
+      },
+      { file: 0, image: 0, video: 0 } as Record<EvidenceCategory, number>,
+    );
     const hasBody =
       Boolean(result.toulmin?.evidence) || Boolean(result.suggestion) || evidenceCount > 0;
     const selectedEvidenceIndex = selectedEvidenceId
@@ -668,14 +688,17 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
             {result.checkItemTitle || result.checkItemId}
           </span>
           <span className={styles.rowSide}>
-            {evidenceCount > 0 && (
-              <span
-                className={styles.evChip}
-                title={t('report.evidence.count', { count: evidenceCount })}
-              >
-                <Icon icon={Paperclip} size={12} />
-                {evidenceCount}
-              </span>
+            {CATEGORY_ORDER.map((cat) =>
+              categoryCounts[cat] > 0 ? (
+                <span
+                  className={styles.evChip}
+                  key={cat}
+                  title={`${t(`report.evidence.category.${cat}`)} × ${categoryCounts[cat]}`}
+                >
+                  <Icon icon={CATEGORY_ICON[cat]} size={12} />
+                  {categoryCounts[cat]}
+                </span>
+              ) : null,
             )}
             {!result.required && (
               <span className={styles.softTag}>{t('report.check.optional')}</span>
@@ -695,7 +718,7 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
               <>
                 <div className={styles.evidenceList}>
                   {result.evidence.map((e, index) =>
-                    isInlineImageEvidence(e) ? (
+                    isInlineEvidence(e) ? (
                       <EvidenceItem evidence={e} index={index + 1} key={e.id} />
                     ) : (
                       <EvidenceFileButton
@@ -920,7 +943,7 @@ const ReportViewer = memo(() => {
           <div className={styles.checks}>
             {visible.map((r) => (
               <CheckRow
-                defaultOpen={checkVerdict(r) === 'failed' || r.evidence.some(isInlineImageEvidence)}
+                defaultOpen={checkVerdict(r) === 'failed' || r.evidence.some(isInlineEvidence)}
                 key={r.id}
                 result={r}
               />

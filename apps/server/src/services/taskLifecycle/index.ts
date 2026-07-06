@@ -125,7 +125,7 @@ export class TaskLifecycleService {
       // 1. Update topic status
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
 
-      // 2. Generate handoff summary + topic title
+      // 2. Generate handoff summary + topic title (best-effort LLM synthesis).
       if (topicId && lastAssistantContent) {
         await this.generateHandoff(
           taskId,
@@ -134,6 +134,18 @@ export class TaskLifecycleService {
           lastAssistantContent,
           currentTask,
         );
+      }
+
+      // 2b. Persist the raw last message as the run card's result (LOBE-11396).
+      //     Done independently of (and after) generateHandoff via a jsonb_set
+      //     patch, so `handoff.content` is written even when the summary LLM in
+      //     step 2 throws — otherwise a completed run would show no result.
+      if (topicId && lastAssistantContent) {
+        try {
+          await this.taskTopicModel.updateHandoffContent(taskId, topicId, lastAssistantContent);
+        } catch (e) {
+          console.warn('[TaskLifecycle] persisting run last message failed:', e);
+        }
       }
 
       // 3. Delivery acceptance now runs through Verify: the verify
@@ -440,7 +452,9 @@ export class TaskLifecycleService {
         await this.topicModel.update(topicId, { title: handoff.title });
       }
 
-      // Store handoff in task_topics dedicated fields
+      // Store handoff in task_topics dedicated fields. `handoff.content` (the raw
+      // last message) is persisted separately in onTopicComplete so it survives
+      // even when this LLM synthesis throws.
       await this.taskTopicModel.updateHandoff(taskId, topicId, handoff);
 
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);

@@ -2,7 +2,14 @@ import type { ChatTopic } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { groupTopicsByStatus, groupTopicsByTime, groupTopicsByUpdatedTime } from './topic';
+import {
+  getTopicWorkingDirectoryEffectivePath,
+  getTopicWorkingDirectorySourcePath,
+  groupTopicsByProject,
+  groupTopicsByStatus,
+  groupTopicsByTime,
+  groupTopicsByUpdatedTime,
+} from './topic';
 
 // Mock current date to ensure consistent test results
 const NOW = '2024-01-15T12:00:00Z';
@@ -212,6 +219,58 @@ describe('groupTopicsByUpdatedTime', () => {
 
     // By updatedAt: grouped under yesterday
     expect(byUpdated[0].id).toBe('yesterday');
+  });
+});
+
+describe('working directory topic helpers', () => {
+  const createTopic = (
+    id: string,
+    metadata: ChatTopic['metadata'],
+    updatedAt: number = 0,
+  ): ChatTopic => ({
+    createdAt: updatedAt,
+    id,
+    metadata,
+    title: id,
+    updatedAt,
+  });
+
+  it('preserves source and effective paths for worktree topics', () => {
+    const topic = createTopic('worktree', {
+      workingDirectory: '/repo-fix',
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+        path: '/repo',
+        repoType: 'git',
+      },
+    });
+
+    expect(getTopicWorkingDirectorySourcePath(topic)).toBe('/repo');
+    expect(getTopicWorkingDirectoryEffectivePath(topic)).toBe('/repo-fix');
+  });
+
+  it('groups worktree topics under the source project', () => {
+    const topics = [
+      createTopic(
+        'worktree',
+        {
+          workingDirectory: '/repo-fix',
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+            path: '/repo',
+            repoType: 'git',
+          },
+        },
+        2,
+      ),
+      createTopic('source', { workingDirectory: '/repo' }, 1),
+    ];
+
+    const result = groupTopicsByProject(topics, 'updatedAt');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: 'project:/repo', title: 'repo' });
+    expect(result[0].children.map((topic) => topic.id)).toEqual(['worktree', 'source']);
   });
 });
 

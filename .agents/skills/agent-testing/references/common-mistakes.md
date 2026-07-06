@@ -205,6 +205,31 @@ background process holds), build whatever fixture data the surface needs (create
 throwaway git repo, `git worktree add` a second tree, point a fresh conversation's
 working directory at it, etc.), capture the real rendered screenshot/GIF, verify
 it by opening the PNG, and publish the `/verify` report. Only surface a
-plan-approval question when the *product decision* is ambiguous (what to test),
-never for *environment mechanics* (how to render it). Env obstacles are the
+plan-approval question when the _product decision_ is ambiguous (what to test),
+never for _environment mechanics_ (how to render it). Env obstacles are the
 skill's job to solve and then iterate back into these logs.
+
+---
+
+## Case 9 — Self-judging a screenshot as "too costly" and asking the user to picture the result
+
+**Wrong approach**: after a small user-facing UI change (a padding tweak), skipping
+the rendered screenshot with "it's a trivial style change; restarting Electron to
+screenshot costs more than the change is worth — tell me if you want one." I decided
+the cost/benefit for the user and shipped a diff they had to picture in their head.
+
+**Why it's wrong**: whether a verification artifact is "worth it" is **not mine to
+decide**. The measuring stick is _whether the user can conveniently inspect the
+product_, not how much effort _I_ spend rendering it. Making the user guess the visual
+effect from a code diff is the actually-expensive outcome.
+
+**What it breaks**: the user can't check the deliverable, loses trust, and has to push
+back (" 成本高不高不是你自己说了算，而是用户是否方便检查产物作为衡量标准。你让用户猜效果
+这个成本才高，别瞎揣测和偷懒 ") — burning a round to get the screenshot I should have
+produced up front.
+
+**Correct approach**: for ANY user-facing change (even one line of padding/color),
+default to rendering it and attaching the screenshot to the verify report as a record
+point — open the PNG to confirm, publish. Never offer the screenshot as an opt-in
+("want me to screenshot?"); just produce it. Env/restart cost is the skill's job to
+absorb, not a reason to shift the checking burden onto the user.

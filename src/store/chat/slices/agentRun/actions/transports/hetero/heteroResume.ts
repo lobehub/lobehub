@@ -1,5 +1,7 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 
+import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
+
 export type HeteroResumeBlockedReason = 'cwd_changed' | 'missing_bound_cwd';
 
 export interface HeteroResumeDecision {
@@ -17,11 +19,12 @@ export interface HeteroResumeDecision {
  * per-cwd under `~/.claude/projects/<encoded-cwd>/`, so resuming from a
  * different cwd blows up with "No conversation found with session ID".
  *
- * Strict rule: only resume when the topic's bound `workingDirectory` is
- * present AND equals the current cwd. Legacy topics (sessionId present,
- * workingDirectory missing) are reset — we have no way to verify them,
- * and silently passing a stale id is exactly what caused the original
- * failure.
+ * New topics keep a per-cwd session map so switching between worktrees can
+ * restore that worktree's own CLI context. Legacy single-session topics still
+ * resume only when the topic's bound `workingDirectory` is present AND equals
+ * the current cwd. Legacy topics with no workingDirectory are reset — we have
+ * no way to verify them, and silently passing a stale id is exactly what caused
+ * the original failure.
  */
 export const resolveHeteroResume = (
   metadata: ChatTopicMetadata | undefined,
@@ -30,6 +33,14 @@ export const resolveHeteroResume = (
   const savedSessionId = metadata?.heteroSessionId;
   const savedCwd = metadata?.workingDirectory;
   const cwd = currentWorkingDirectory ?? '';
+  const scopedSessionId = getHeteroSessionIdForWorkingDirectory(metadata, cwd);
+
+  if (scopedSessionId) {
+    return {
+      cwdChanged: false,
+      resumeSessionId: scopedSessionId,
+    };
+  }
 
   if (!savedSessionId) {
     return {

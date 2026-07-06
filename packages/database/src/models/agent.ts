@@ -1,4 +1,4 @@
-import { getAgentPersistConfig } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
@@ -36,6 +36,33 @@ import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`) must never
+ * carry. Its `persist` config only stores `model`/`provider`/`chatConfig` — title, avatar,
+ * systemRole, etc. are rendered from i18n / the static systemRoleTemplate at runtime, never
+ * from this row.
+ *
+ * Before PR #16420, `lobe-agent-management`'s self-management prompt could make the builder
+ * mistake an ambiguous "update this" request for editing itself instead of the target agent.
+ * Depending on caller (browser client tool executor vs. gateway server runtime in
+ * `apps/server/src/services/toolExecution/serverRuntimes/agentBuilder.ts`), these fields can
+ * arrive through *either* `AgentModel.update()` or `updateConfig()` — e.g. the gateway's
+ * `updatePrompt` writes `systemRole` via `update()`, while the browser client's meta editor
+ * writes `title`/`avatar`/etc. via `updateConfig()`. So both methods must strip the full list,
+ * not just the fields each historically happened to receive. Clients on builds older than
+ * PR #16420 can still hit this path, so enforce it here (the single write chokepoint)
+ * regardless of caller.
+ */
+const AGENT_BUILDER_PROTECTED_FIELDS = [
+  'title',
+  'description',
+  'avatar',
+  'backgroundColor',
+  'tags',
+  'marketIdentifier',
+  'systemRole',
+] as const;
 
 export class AgentModel {
   private userId: string;
@@ -733,10 +760,36 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
+    const sanitizedData = await this.stripAgentBuilderProtectedFields(agentId, data);
+
     return this.db
       .update(agents)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...sanitizedData, updatedAt: new Date() })
       .where(and(eq(agents.id, agentId), this.ownership()));
+  };
+
+  /**
+   * Strip fields the Agent Builder's own row must never carry (see
+   * {@link AGENT_BUILDER_PROTECTED_FIELDS}). Only looks up the target row's `slug` when the
+   * incoming patch actually touches a protected field, so normal updates pay no extra query.
+   */
+  private stripAgentBuilderProtectedFields = async <T extends Record<string, any>>(
+    agentId: string,
+    data: T,
+    protectedFields: readonly string[] = AGENT_BUILDER_PROTECTED_FIELDS,
+  ): Promise<T> => {
+    if (!protectedFields.some((field) => field in data)) return data;
+
+    const agent = await this.db.query.agents.findFirst({
+      columns: { slug: true },
+      where: and(eq(agents.id, agentId), this.ownership()),
+    });
+
+    if (agent?.slug !== BUILTIN_AGENT_SLUGS.agentBuilder) return data;
+
+    const sanitized = { ...data };
+    for (const field of protectedFields) delete sanitized[field];
+    return sanitized;
   };
 
   /**
@@ -843,6 +896,13 @@ export class AgentModel {
     // Build data to be merged, excluding params (processed separately)
 
     const { params: _params, ...restData } = data;
+
+    // See AGENT_BUILDER_PROTECTED_FIELDS: some callers (e.g. the browser client's meta
+    // editor) route title/avatar/etc. through updateConfig() rather than update().
+    if (agent.slug === BUILTIN_AGENT_SLUGS.agentBuilder) {
+      for (const field of AGENT_BUILDER_PROTECTED_FIELDS) delete restData[field];
+    }
+
     const mergedValue = merge(agent, restData);
 
     // Apply the processed parameters

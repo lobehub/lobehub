@@ -3,10 +3,9 @@
 import { Flexbox, Text, TextArea } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import type { AskUserQuestionItem } from '../../../types';
-import OptionCard from './OptionCard';
+import { OptionCard } from '../components';
+import type { AskUserQuestionItem } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Per-question "write your own" input — sits as the last row in the option
@@ -42,9 +41,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface QuestionPanelProps {
   /** The picked option label(s) for this question, if any. */
   answer: string | string[] | undefined;
+  /** Placeholder for the trailing "write your own" free-text row. */
+  customPlaceholder: string;
   /** The free-text "write your own" value for this question. */
   customValue: string;
   disabled: boolean;
+  /** Tag shown next to the header when the question is multi-select. */
+  multiSelectTag: string;
   onCustomChange: (q: AskUserQuestionItem, value: string) => void;
   onToggle: (q: AskUserQuestionItem, label: string) => void;
   question: AskUserQuestionItem;
@@ -53,10 +56,21 @@ interface QuestionPanelProps {
 /**
  * A single question: its header/title, the numbered options, and a trailing
  * free-text box so the user can answer in their own words instead of picking.
+ *
+ * Presentational and i18n-free — the two visible strings come in as props so
+ * the panel stays app-decoupled and reusable across surfaces.
  */
-const QuestionPanel = memo<QuestionPanelProps>(
-  ({ question, answer, customValue, disabled, onToggle, onCustomChange }) => {
-    const { t } = useTranslation('tool');
+export const QuestionPanel = memo<QuestionPanelProps>(
+  ({
+    question,
+    answer,
+    customValue,
+    customPlaceholder,
+    disabled,
+    multiSelectTag,
+    onToggle,
+    onCustomChange,
+  }) => {
     const isOptionSelected = (label: string): boolean =>
       question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
 
@@ -66,7 +80,7 @@ const QuestionPanel = memo<QuestionPanelProps>(
           {question.header && <Text type="secondary">{question.header}</Text>}
           {question.multiSelect && (
             <Text fontSize={12} type="secondary">
-              {t('claudeCode.askUserQuestion.multiSelectTag')}
+              {multiSelectTag}
             </Text>
           )}
         </Flexbox>
@@ -91,7 +105,7 @@ const QuestionPanel = memo<QuestionPanelProps>(
             <TextArea
               autoSize={{ maxRows: 4, minRows: 1 }}
               disabled={disabled}
-              placeholder={t('claudeCode.askUserQuestion.customOption.placeholder')}
+              placeholder={customPlaceholder}
               style={{ flex: 1 }}
               value={customValue}
               variant="filled"
@@ -104,6 +118,6 @@ const QuestionPanel = memo<QuestionPanelProps>(
   },
 );
 
-QuestionPanel.displayName = 'CCAskUserQuestionPanel';
+QuestionPanel.displayName = 'AskUserQuestionPanel';
 
 export default QuestionPanel;

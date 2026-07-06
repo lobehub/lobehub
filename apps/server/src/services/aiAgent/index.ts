@@ -41,10 +41,17 @@ import type {
   ExecVirtualSubAgentParams,
   LobeAgentAgencyConfig,
   MessagePluginItem,
+  RuntimeMentionedAgent,
   UserInterventionConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
-import { buildHeteroExecArgs, RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
+import {
+  buildHeteroExecArgs,
+  getWorkingDirEffectivePath,
+  RequestTrigger,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -126,7 +133,10 @@ import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
-import { resolveDeviceWorkingDirectory } from './resolveDeviceWorkingDirectory';
+import {
+  resolveDeviceWorkingDirectory,
+  resolveDeviceWorkingDirectoryConfig,
+} from './resolveDeviceWorkingDirectory';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -299,6 +309,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   initialStepCount?: number;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
+  /**
+   * Agents the user @-mentioned in this message (multi-mention). When present
+   * (and non-group), the run enables the callAgent tool and persists the mentioned
+   * agents into the runtime `initialContext` so the context engine injects the
+   * delegation context at step time — making the supervisor delegate to them
+   * instead of answering itself. Mirrors the client runtime's mention wiring.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
   queueRetries?: number;
@@ -318,6 +336,20 @@ interface InternalExecAgentParams extends ExecAgentParams {
     decision: 'approved' | 'rejected' | 'rejected_continue';
     parentMessageId: string;
     rejectionReason?: string;
+    toolCallId: string;
+  };
+  /**
+   * When present, this execAgent call resumes a previous op that paused on a
+   * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
+   * service writes the human-provided `content` as the target tool message's
+   * result and resumes from `phase: 'tool_result'` — the tool is NOT
+   * re-executed. `parentMessageId` must point at the pending `role='tool'`
+   * message. Mutually exclusive with `resumeApproval`.
+   */
+  resumeToolResult?: {
+    content: string;
+    parentMessageId: string;
+    pluginState?: Record<string, unknown>;
     toolCallId: string;
   };
   /**
@@ -605,12 +637,15 @@ export class AiAgentService {
         deviceDefaultCwd: device.defaultCwd,
         deviceId: activeDeviceId,
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
+        topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agencyConfig?.workingDirByDevice,
       });
       if (!boundCwd) return { workspace: empty };
 
       const workingDirs = device.workingDirs ?? [];
-      const cached = workingDirs.find((dir) => dir.path === boundCwd);
+      const cached = workingDirs.find(
+        (dir) => dir.path === boundCwd || getWorkingDirEffectivePath(dir) === boundCwd,
+      );
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
@@ -637,7 +672,19 @@ export class AiAgentService {
       // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
       // are owned by the workspace, not a userId — use the workspace-scoped
       // update path so the writeback actually lands.
-      const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
+      //
+      // Update the MATCHED entry's path, not `boundCwd`: the lookup above can
+      // match a source entry by its effective (worktree) path, so a selected
+      // worktree reaches here with `boundCwd` = the worktree path while the
+      // recorded entry is keyed by the source path. Upserting on `boundCwd`
+      // would prepend a bare worktree recent and lose the source/worktree
+      // metadata the picker relies on; upsert on the matched source path instead.
+      const updated = upsertWorkspaceScan(
+        workingDirs,
+        cached?.path ?? boundCwd,
+        scanned,
+        Date.now(),
+      );
       if (deviceWorkspaceId) {
         await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
       } else {
@@ -920,7 +967,9 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      resumeToolResult,
       selectedToolIds,
+      mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
@@ -1120,7 +1169,7 @@ export class AiAgentService {
     // tRPC router get `resume: true` via the router, but the service-level
     // API allows resumeApproval alone — fold both into a single effective
     // flag so downstream resume branches don't need to know about approval.
-    const effectiveResume = resume || !!resumeApproval;
+    const effectiveResume = resume || !!resumeApproval || !!resumeToolResult;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1231,6 +1280,63 @@ export class AiAgentService {
       );
     }
 
+    // 2.7. Human-answer resume: a `humanIntervention: 'always'` tool (e.g.
+    // lobe-agent `askUserQuestion`) paused this run. Write the human-provided
+    // answer as the target tool message's result and mark the intervention
+    // approved so the history fetched below reflects the answer before the
+    // first step runs. Unlike `resumeApproval` (`approved`), we resume from
+    // `phase: 'tool_result'` (see 16c) rather than re-executing the tool — the
+    // answer IS the result. Same validation shape as resumeApproval:
+    // parent must be a pending role='tool' message tied to the tool call.
+    // `resumeApproval` and `resumeToolResult` are mutually exclusive.
+    if (resumeToolResult) {
+      if (!resumeParentMessage) {
+        throw new Error('resumeToolResult requires parentMessageId to point at a tool message');
+      }
+      if (resumeParentMessage.role !== 'tool') {
+        throw new Error(
+          `resumeToolResult.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+        );
+      }
+
+      const resumeToolResultPlugin = await this.messageModel.findMessagePlugin(
+        resumeToolResult.parentMessageId,
+      );
+      if (!resumeToolResultPlugin) {
+        throw new Error(
+          `resumeToolResult: no plugin row for tool message ${resumeToolResult.parentMessageId}`,
+        );
+      }
+      if (
+        resumeToolResultPlugin.toolCallId &&
+        resumeToolResultPlugin.toolCallId !== resumeToolResult.toolCallId
+      ) {
+        throw new Error(
+          `resumeToolResult.toolCallId mismatch for message ${resumeToolResult.parentMessageId}: ` +
+            `stored=${resumeToolResultPlugin.toolCallId}, requested=${resumeToolResult.toolCallId}`,
+        );
+      }
+
+      await this.messageModel.updateToolMessage(resumeToolResult.parentMessageId, {
+        content: resumeToolResult.content,
+      });
+      await this.messageModel.updateMessagePlugin(resumeToolResult.parentMessageId, {
+        intervention: { status: 'approved' },
+      });
+      if (resumeToolResult.pluginState) {
+        await this.messageModel.updatePluginState(
+          resumeToolResult.parentMessageId,
+          resumeToolResult.pluginState,
+        );
+      }
+
+      log(
+        'execAgent: resumeToolResult applied to tool message %s (toolCallId=%s)',
+        resumeToolResult.parentMessageId,
+        resumeToolResult.toolCallId,
+      );
+    }
+
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     const isNewTopic = !topicId;
@@ -1253,6 +1359,9 @@ export class AiAgentService {
               ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
               ...(initialTopicMeta?.workingDirectory && {
                 workingDirectory: initialTopicMeta.workingDirectory,
+              }),
+              ...(initialTopicMeta?.workingDirectoryConfig && {
+                workingDirectoryConfig: initialTopicMeta.workingDirectoryConfig,
               }),
             }
           : undefined;
@@ -1847,20 +1956,26 @@ export class AiAgentService {
           const dispatchWorkspaceId = await this.resolveDeviceWorkspaceId(dispatchDeviceId);
           // Resolve via the shared precedence helper so dispatch, workspace-init,
           // and the new-topic backfill below all agree on the cwd.
-          const deviceCwd = resolveDeviceWorkingDirectory({
+          const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
             deviceDefaultCwd: boundDevice?.defaultCwd,
             deviceId: dispatchDeviceId,
             initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
+            initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
             topicWorkingDirectory: topic?.metadata?.workingDirectory,
+            topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
             workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
           });
+          const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
 
           // A brand-new topic has no pinned cwd yet: the directory was only
           // recorded at agent level (`workingDirByDevice`) when no topic existed.
           // Persist the resolved cwd onto the topic so the sidebar groups it
           // under the right project and the next turn reuses the same directory.
           if (isNewTopic && deviceCwd && deviceCwd !== topic?.metadata?.workingDirectory) {
-            await this.topicModel.updateMetadata(topicId, { workingDirectory: deviceCwd });
+            await this.topicModel.updateMetadata(topicId, {
+              workingDirectory: deviceCwd,
+              ...(deviceCwdConfig ? { workingDirectoryConfig: deviceCwdConfig } : {}),
+            });
           }
 
           // A device is the user's own persistent machine — build a
@@ -2015,6 +2130,14 @@ export class AiAgentService {
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let composioManifests: LobeToolManifest[] = [];
     let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
+    // When the user @-mentions agents (multi-mention, non-group), enable the
+    // agent-management tool for this run so the supervisor can `callAgent` to
+    // delegate. Mirrors the client runtime, which injects a callAgent manifest.
+    // Single-mention takes a client-only deterministic-router path and never
+    // reaches here. The delegation *context* (which agents were mentioned) is
+    // injected separately via `initialContext.mentionedAgents` below.
+    const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
+
     // `selectedToolIds` are the user's @-mention picks for this turn; merged in
     // (deduped) alongside the agent's pinned plugins and any internal
     // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
@@ -2024,6 +2147,7 @@ export class AiAgentService {
         ...(agentConfig?.plugins ?? []),
         ...(additionalPluginIds || []),
         ...(selectedToolIds || []),
+        ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
       ]),
     ];
 
@@ -3014,6 +3138,20 @@ export class AiAgentService {
       };
     }
 
+    // Persist the @-mentioned agents into the runtime initialContext so the
+    // context engine injects the delegation context on every step (survives the
+    // queue-mode dispatch). `callLlm` bridges this into `agentManagementContext`
+    // for the AgentManagementContextInjector — mirrors the client runtime.
+    if (hasMentionedAgents) {
+      initialContext = {
+        ...initialContext,
+        initialContext: {
+          ...initialContext.initialContext,
+          mentionedAgents,
+        },
+      };
+    }
+
     // 16b. Human-approval resume — override initialContext based on the
     // user's decision. The DB write above has already persisted the
     // intervention status, so `allMessages` reflects the decision for the
@@ -3067,6 +3205,27 @@ export class AiAgentService {
           },
         };
       }
+    }
+
+    // 16c. Human-answer resume — resume from the persisted tool result WITHOUT
+    // re-executing the tool. The DB write above (2.7) already set the tool
+    // message content to the human answer, so `allMessages` reflects it. Using
+    // `phase: 'tool_result'` (not `human_approved_tool`) makes the runner
+    // continue the loop from the answered tool call rather than dispatching a
+    // fresh `call_tool` — which would overwrite the answer with a new "pending"
+    // result. Mirrors the client's tool-result-only resume path.
+    if (resumeToolResult) {
+      initialContext = {
+        initialContext: initialContext.initialContext,
+        payload: { parentMessageId: resumeToolResult.parentMessageId } as any,
+        phase: 'tool_result' as const,
+        session: {
+          messageCount: allMessages.length,
+          sessionId: operationId,
+          status: 'idle' as const,
+          stepCount: 0,
+        },
+      };
     }
 
     // 17. Log final operation parameters summary

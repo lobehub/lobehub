@@ -738,7 +738,11 @@ describe('GatewayActionImpl', () => {
         message: 'Create a project topic',
         optimisticTopic: {
           id: 'tmp-topic',
-          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          metadata: {
+            repos: [selectedRepo],
+            workingDirectory: selectedRepo,
+            workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
+          },
           title: 'Create a project topic',
         },
       });
@@ -749,7 +753,11 @@ describe('GatewayActionImpl', () => {
         nextId: 'topic-1',
         previousId: 'tmp-topic',
         value: {
-          metadata: { repos: [selectedRepo], workingDirectory: selectedRepo },
+          metadata: {
+            repos: [selectedRepo],
+            workingDirectory: selectedRepo,
+            workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
+          },
           sessionId: 'agent-1',
           title: 'Create a project topic',
         },

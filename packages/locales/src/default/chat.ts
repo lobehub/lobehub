@@ -182,6 +182,10 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.claudeQuota.errorRateLimited':
+    'Claude Code quota is temporarily rate limited. Please try again later.',
+  'heteroAgent.claudeQuota.refreshRateLimited':
+    'Quota refresh is temporarily rate limited. Showing the last available data.',
   'heteroAgent.claudeQuota.scopedWeekly': 'Weekly ({{model}})',
   'heteroAgent.claudeQuota.title': 'Claude Code quota',
   'heteroAgent.claudeQuota.tooltip': 'View Claude Code quota',
@@ -209,6 +213,7 @@ export default {
   'heteroAgent.quota.left': '{{percent}}% left',
   'heteroAgent.quota.noData': 'Quota is not available yet.',
   'heteroAgent.quota.refresh': 'Refresh quota',
+  'heteroAgent.quota.refreshFailed': "Couldn't refresh quota. Showing the last available data.",
   'heteroAgent.quota.resetsIn': 'Resets in {{duration}}',
   'heteroAgent.quota.resetsSoon': 'Resets soon',
   'heteroAgent.quota.session': 'Session',
@@ -395,7 +400,6 @@ export default {
   'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
-  'messages.sentBy': 'Sent by {{name}}',
   'messages.modelCard.credit': 'Credits',
   'messages.modelCard.creditPricing': 'Pricing',
   'messages.modelCard.creditTooltip':
@@ -530,6 +534,8 @@ export default {
     'Other workspace members will be able to use this agent. You will not be able to make it private again.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
+  'resources.publishToWorkspace.confirm':
+    'Other workspace members will be able to see this file. You will not be able to make it private again.',
   'resources.publishToWorkspace.success': 'Published to workspace',
   'resources.publishToWorkspace.error': 'Failed to publish file to workspace',
   'resources.visibility.privateTooltip': 'Only you can see this file',
@@ -927,6 +933,8 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
+  'taskDetail.runFollowUp': 'Ask a follow-up',
+  'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
@@ -1071,7 +1079,7 @@ export default {
   'taskList.assigneeSearch.placeholder': 'Search agent...',
   'taskList.contextMenu.copyConfirm': 'Copy',
   'taskList.contextMenu.copyDescription':
-    'You can copy to personal or workspaces that have permission to create a task.',
+    'Clone this task (and all its subtasks) into another workspace. Status resets to backlog.',
   'taskList.contextMenu.copyFailed': 'Failed to copy task',
   'taskList.contextMenu.copyId': 'Copy ID',
   'taskList.contextMenu.copyIdSuccess': 'ID copied',
@@ -1085,7 +1093,7 @@ export default {
   'taskList.contextMenu.status': 'Status',
   'taskList.contextMenu.transferConfirm': 'Transfer',
   'taskList.contextMenu.transferDescription':
-    'You can move to personal or workspaces that have permission to create a task.',
+    'Move this task (and all its subtasks) to another workspace. Identifiers will be re-assigned.',
   'taskList.contextMenu.transferFailed': 'Failed to transfer task',
   'taskList.contextMenu.transferSuccess': 'Task transferred',
   'taskList.contextMenu.transferTitle': 'Transfer task',

@@ -813,6 +813,73 @@ describe('AgentModel', () => {
 
       expect(result?.title).toBe('Original Title');
     });
+
+    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, {
+        avatar: 'hacked-avatar',
+        backgroundColor: 'hacked-color',
+        description: 'hacked description',
+        marketIdentifier: 'hacked-market-id',
+        model: 'gpt-4', // non-protected field should still be applied
+        tags: ['hacked'],
+        title: 'Hacked Builder Title',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBeNull();
+      expect(result?.description).toBeNull();
+      expect(result?.avatar).toBeNull();
+      expect(result?.backgroundColor).toBeNull();
+      expect(result?.marketIdentifier).toBeNull();
+      expect(result?.tags).toEqual([]);
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should strip systemRole when the gateway updatePrompt path writes it via update()', async () => {
+      // Mirrors apps/server/.../serverRuntimes/agentBuilder.ts's updatePrompt, which calls
+      // agentModel.update(agentId, { editorData: null, systemRole }) directly.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, {
+        editorData: null,
+        systemRole: 'You are now a pirate.',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.systemRole).toBeNull();
+    });
+
+    it('should not strip identity fields for a regular agent whose slug happens to differ', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-custom-agent', userId, title: 'Original' })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, { title: 'Updated Title' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBe('Updated Title');
+    });
   });
 
   describe('touchUpdatedAt', () => {
@@ -1118,6 +1185,59 @@ describe('AgentModel', () => {
       });
 
       expect(result?.title).toBe('Original Title');
+    });
+
+    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        model: 'gpt-4', // non-protected field should still be applied
+        systemRole: 'You are now a pirate.',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.systemRole).toBeNull();
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it("should strip identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
+      // Mirrors the browser client path: agentService.updateAgentMeta() sends
+      // title/avatar/etc. through the updateAgentConfig mutation, which calls
+      // agentModel.updateConfig() rather than update().
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        avatar: 'hacked-avatar',
+        backgroundColor: 'hacked-color',
+        description: 'hacked description',
+        marketIdentifier: 'hacked-market-id',
+        model: 'gpt-4', // non-protected field should still be applied
+        tags: ['hacked'],
+        title: 'Hacked Builder Title',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBeNull();
+      expect(result?.description).toBeNull();
+      expect(result?.avatar).toBeNull();
+      expect(result?.backgroundColor).toBeNull();
+      expect(result?.marketIdentifier).toBeNull();
+      expect(result?.tags).toEqual([]);
+      expect(result?.model).toBe('gpt-4');
     });
   });
 

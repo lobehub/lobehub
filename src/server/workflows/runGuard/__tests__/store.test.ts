@@ -10,6 +10,7 @@ import {
 const redis = {
   del: vi.fn(),
   get: vi.fn(),
+  mget: vi.fn(),
   scan: vi.fn(),
   set: vi.fn(),
   ttl: vi.fn(),
@@ -63,12 +64,15 @@ describe('workflow run guard store', () => {
     });
   });
 
-  it('throws WorkflowRunGuardError on the first matching key', async () => {
-    redis.get.mockImplementation(async (key: string) =>
-      key === 'workflow:run-guard:path:api/workflows/memory-user-memory'
-        ? JSON.stringify({ reason: 'blocked' })
-        : null,
-    );
+  it('checks all guard candidates with one mget and throws on the first matching key', async () => {
+    redis.mget.mockResolvedValue([
+      null,
+      null,
+      null,
+      JSON.stringify({ reason: 'blocked' }),
+      JSON.stringify({ reason: 'later match' }),
+      null,
+    ]);
 
     await expect(
       assertWorkflowRunAllowed(redis as unknown as Parameters<typeof assertWorkflowRunAllowed>[0], {
@@ -79,10 +83,21 @@ describe('workflow run guard store', () => {
       name: 'WorkflowRunGuardError',
       reason: 'blocked',
     });
+    expect(redis.mget).toHaveBeenCalledTimes(1);
+    expect(redis.mget).toHaveBeenCalledWith(
+      'workflow:run-guard:global',
+      'workflow:run-guard:path:api',
+      'workflow:run-guard:path:api/workflows',
+      'workflow:run-guard:path:api/workflows/memory-user-memory',
+      'workflow:run-guard:path:api/workflows/memory-user-memory/pipelines',
+      'workflow:run-guard:path:api/workflows/memory-user-memory/pipelines/chat-topic',
+      'workflow:run-guard:path:api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+    );
+    expect(redis.get).not.toHaveBeenCalled();
   });
 
   it('ignores malformed guard values during execution checks', async () => {
-    redis.get.mockResolvedValue('{broken');
+    redis.mget.mockResolvedValue(['{broken']);
 
     await expect(
       assertWorkflowRunAllowed(redis as unknown as Parameters<typeof assertWorkflowRunAllowed>[0], {
@@ -92,7 +107,7 @@ describe('workflow run guard store', () => {
   });
 
   it('ignores array guard values during execution checks', async () => {
-    redis.get.mockResolvedValue('[]');
+    redis.mget.mockResolvedValue(['[]']);
 
     await expect(
       assertWorkflowRunAllowed(redis as unknown as Parameters<typeof assertWorkflowRunAllowed>[0], {
@@ -101,8 +116,8 @@ describe('workflow run guard store', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('fails open when Redis get throws during execution checks', async () => {
-    redis.get.mockRejectedValue(new Error('redis unavailable'));
+  it('fails open when Redis mget throws during execution checks', async () => {
+    redis.mget.mockRejectedValue(new Error('redis unavailable'));
 
     await expect(
       assertWorkflowRunAllowed(redis as unknown as Parameters<typeof assertWorkflowRunAllowed>[0], {

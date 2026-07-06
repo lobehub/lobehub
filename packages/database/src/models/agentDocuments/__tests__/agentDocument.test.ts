@@ -799,6 +799,11 @@ describe('AgentDocumentModel', () => {
 
       const webOnly = await agentDocumentModel.listByAgent(agentId, { sourceType: 'web' });
       expect(webOnly.map((item) => item.filename)).toEqual(['web-page']);
+
+      // `excludeWeb` drops the unbounded web-clip docs for hot-path consumers
+      // (slash menu / skills) that never render them.
+      const nonWeb = await agentDocumentModel.listByAgent(agentId, { excludeWeb: true });
+      expect(nonWeb.map((item) => item.filename)).toEqual(['file.md']);
     });
 
     it('should return only skill-managed docs for skill registry assembly', async () => {

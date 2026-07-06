@@ -4,11 +4,17 @@ export * from './branding';
 export * from './llm';
 export * from './url';
 
-const isDev = process.env.NODE_ENV === 'development';
-
 export const ENABLE_BUSINESS_FEATURES = false;
 
-export const AGENT_ONBOARDING_ENABLED = isDev;
+/**
+ * Master switch for the conversational agent-onboarding flow.
+ *
+ * Soft-disabled: kept in the codebase but permanently off, so onboarding always
+ * falls back to the classic form flow (`deriveOnboardingBranchPath`) and the
+ * agent-mode switch stays hidden (`ModeSwitch`). Flip back to `isDev` (or a real
+ * flag) to revive it.
+ */
+export const AGENT_ONBOARDING_ENABLED = false;
 
 export const OFFICIAL_PROVIDER_DISABLE_ERROR = 'The official provider cannot be disabled.';
 

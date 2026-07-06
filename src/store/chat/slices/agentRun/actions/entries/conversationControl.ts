@@ -450,7 +450,7 @@ export class ConversationControlActionImpl {
     this.#emitRunResumed(effectiveContext, {
       operationId,
       parentMessageId: toolMessageId,
-      runtimeType: 'client',
+      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
     });
 
     // 1. Mark intervention as approved and set tool result to user's response
@@ -474,6 +474,52 @@ export class ConversationControlActionImpl {
         options.pluginState,
         optimisticContext,
       );
+    }
+
+    // 1.5. Server-mode: start a **new** Gateway op carrying the human answer as
+    // the tool result via `resumeToolResult`. The server writes the answer as
+    // the pending tool message's content, marks intervention approved, and
+    // resumes from `phase: 'tool_result'` (NO re-execution). The synthetic user
+    // message (2b) is not needed — the server continues from the answered tool
+    // call. Mirrors approveToolCalling's gateway branch.
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
+      const toolCallId = toolMessage.tool_call_id;
+      if (!toolCallId) {
+        console.warn(
+          '[submitToolInteraction][server] tool message missing tool_call_id; skipping resume',
+        );
+        completeOperation(operationId);
+        return;
+      }
+      const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
+      // Snapshot paused op IDs before the resume call; retire them only after
+      // executeGatewayAgent succeeds so a transient failure leaves the running
+      // marker intact and `#shouldUseGatewayResume` still flags Gateway mode.
+      const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+      try {
+        await this.#get().executeGatewayAgent({
+          context: effectiveContext,
+          message: '',
+          metadata: requestMetadata,
+          parentMessageId: toolMessageId,
+          resumeToolResult: {
+            content: toolContent,
+            parentMessageId: toolMessageId,
+            toolCallId,
+            ...(options?.pluginState ? { pluginState: options.pluginState } : {}),
+          },
+        });
+        this.#completeOpsById(pausedOpIds);
+        completeOperation(operationId);
+      } catch (error) {
+        const err = error as Error;
+        console.error('[submitToolInteraction][server] Gateway resume failed:', err);
+        this.#get().failOperation(operationId, {
+          type: 'submitToolInteraction',
+          message: err.message || 'Unknown error',
+        });
+      }
+      return;
     }
 
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });

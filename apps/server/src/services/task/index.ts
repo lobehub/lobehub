@@ -736,6 +736,9 @@ export class TaskService {
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
+          // Raw last assistant message of the run (LOBE-11396), shown alongside
+          // the synthesized summary on the run card.
+          content: handoff?.content,
           id: t.topicId ?? undefined,
           operationId: t.operationId ?? null,
           runningOperation: t.metadata?.runningOperation ?? null,
