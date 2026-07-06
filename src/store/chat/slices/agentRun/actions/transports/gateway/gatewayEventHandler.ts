@@ -584,11 +584,11 @@ export const createGatewayEventHandler = (
           // means visible output is done; the operation still waits for
           // agent_runtime_end to preserve terminal side-effect ordering.
           get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
-          // The sidebar "running" spinner is driven off `topic.status === 'running'`
-          // (persisted, reset at the terminal) for gateway/hetero runs — no
-          // client-only `topicLoadingIds` early-clear here, so the topic keeps
-          // spinning through the post-visible-output terminal side-effects until
-          // the run actually completes.
+          // From here the sidebar item stops showing the running spinner (the
+          // answer is visibly complete) and — when the user isn't viewing the
+          // topic — shows the unread dot instead, ahead of markTopicUnread's
+          // persisted 'unread' at the terminal. See `isRunningTailUnread` in
+          // the sidebar topic Item.
         });
         break;
       }

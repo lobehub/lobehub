@@ -70,9 +70,17 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           // Only update if the merged value is different from current (excluding updatedAt).
           // Compare against a plain snapshot, not the raw draft proxy — see message/reducer.ts.
           if (!isEqual(current(currentTopic), mergedTopic)) {
-            // TODO: updatedAt type needs to be changed to Date later
-            // @ts-ignore
-            draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
+            // Status flips (running/unread/read bookkeeping) are not user activity —
+            // bumping updatedAt here reorders the updatedAt-sorted sidebar on every
+            // run end / topic read, and the bump reverts on the next refetch (the
+            // server orders by latest-message time), so rows visibly jump around.
+            const isStatusOnlyWrite = Object.keys(value).every((key) => key === 'status');
+
+            draftState[topicIndex] = isStatusOnlyWrite
+              ? mergedTopic
+              : // TODO: updatedAt type needs to be changed to Date later
+                // @ts-ignore
+                { ...mergedTopic, updatedAt: new Date() };
           }
         }
       });

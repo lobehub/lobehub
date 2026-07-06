@@ -293,7 +293,16 @@ const TopicItem = memo<TopicItemProps>(
         </Flexbox>
       ) : undefined;
 
-    const hasUnread = id && isUnreadCompleted;
+    // Post-visible-output tail: the run is still doing terminal bookkeeping
+    // (unread persist, title summary), but the user-visible answer is complete
+    // — #16518 intentionally masks the running icon here. Surface the unread
+    // dot right away instead of a blank icon gap until markTopicUnread's
+    // persisted 'unread' lands. Skipped while the user is viewing the topic,
+    // matching markTopicUnread's own guard.
+    const isRunningTailUnread =
+      isRunning && hasLocalRunningRuntime && !isRuntimeVisiblyRunning && !isTopicActive;
+
+    const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
     const unreadIcon = (
       <span className={styles.unreadWrapper}>
         <span className={styles.unreadRipple} />

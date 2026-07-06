@@ -347,6 +347,51 @@ export class ChatTopicActionImpl {
    * so even if no bucket is loaded for this topic, the next refetch picks
    * up the persisted status.
    */
+  /**
+   * Optimistic `updateTopicStatus` writes that a topic-list refetch must not
+   * clobber. A refetch whose server query ran BEFORE a status write can land
+   * AFTER the optimistic dispatch and revert the row — e.g. a run-end 'unread'
+   * reverting to 'running', leaving the sidebar spinning forever on a finished
+   * topic. Fetched rows are reconciled against this map: a row still carrying
+   * the pre-write status gets the pending status re-applied; a row already
+   * reflecting it confirms propagation and drops the pin. TTL-bounded so a
+   * failed persist or a legit cross-device status change can't be suppressed
+   * indefinitely.
+   */
+  #pendingTopicStatusWrites = new Map<string, { expiresAt: number; status: ChatTopicStatus }>();
+
+  #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
+    let next = items;
+
+    if (this.#pendingTopicStatusWrites.size > 0) {
+      next = next.map((item) => {
+        const pending = this.#pendingTopicStatusWrites.get(item.id);
+        if (!pending) return item;
+        if (pending.expiresAt <= Date.now() || item.status === pending.status) {
+          this.#pendingTopicStatusWrites.delete(item.id);
+          return item;
+        }
+        return { ...item, status: pending.status };
+      });
+    }
+
+    // In-flight first-send optimistic rows (`tmp_topic_*`) are client-only, so
+    // any refetch landing mid-send (e.g. the fire-and-forget refreshTopic after
+    // a previous run's topic creation or terminal) would wipe them from the
+    // sidebar until the server returns the real topicId. Re-prepend the ones
+    // still in the bucket — they only ever leave it via replaceTopicId (send
+    // resolved) or deleteTopic (rollback), never via a fetch.
+    if (currentItems && currentItems.length > 0) {
+      const fetchedIds = new Set(next.map((item) => item.id));
+      const optimisticRows = currentItems.filter(
+        (item) => item.id.startsWith('tmp_topic_') && !fetchedIds.has(item.id),
+      );
+      if (optimisticRows.length > 0) next = [...optimisticRows, ...next];
+    }
+
+    return next;
+  };
+
   updateTopicStatus = async (params: {
     agentId?: string;
     groupId?: string;
@@ -364,6 +409,8 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
+
     // Scope on the payload routes the write to the owning bucket inside
     // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
     // write below still ensures the status sticks across the next refetch.
@@ -377,6 +424,8 @@ export class ChatTopicActionImpl {
 
     await topicService.updateTopic(topicId, { status }).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
+      // The DB never got the write — stop pinning it over fetched rows.
+      this.#pendingTopicStatusWrites.delete(topicId);
     });
   };
 
@@ -472,9 +521,10 @@ export class ChatTopicActionImpl {
         onData: (result) => {
           if (!hasValidContainer) return;
 
-          const { items: topics, total: totalCount } = result;
+          const { total: totalCount } = result;
 
           const currentData = this.#get().topicDataMap[containerKey];
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
 
           const isRefreshingExpandedList =
             !!currentData &&
@@ -579,9 +629,10 @@ export class ChatTopicActionImpl {
       {
         onData: (result) => {
           if (!hasValidAgent) return;
-          const { items: topics, total: totalCount } = result;
+          const { total: totalCount } = result;
 
           const currentData = this.#get().agentTopicsViewMap[containerKey];
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
 
           // Preserve appended pages on refresh — same convention as
           // `useFetchTopics` so the user keeps their scroll position after
@@ -1201,9 +1252,15 @@ export class ChatTopicActionImpl {
       total: number;
     },
   ): void => {
-    const { items, total, pageSize, currentPage = 0, append = false, groupId } = params;
+    const { total, pageSize, currentPage = 0, append = false, groupId } = params;
     const key = topicMapKey({ agentId, groupId });
     const currentData = this.#get().topicDataMap[key];
+    // Append mode keeps the existing items (optimistic rows included) in front,
+    // so only pass them for reconciliation on full replacement.
+    const items = this.#reconcileFetchedTopics(
+      params.items,
+      append ? undefined : currentData?.items,
+    );
 
     const nextItems = append ? [...(currentData?.items || []), ...items] : items;
 
