@@ -18,6 +18,7 @@ import {
 
 import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
+import { operationSelectors } from '../operation/selectors';
 import { type TopicData } from './initialState';
 
 // Helper selector: get current topic data based on session context
@@ -106,6 +107,23 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
 };
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
+
+/**
+ * Whether a send from the new-topic view is still in flight — no active topic
+ * yet, while the running send owns creation of the real topic (the `_new`
+ * context only holds optimistic tmp_* messages until then). While true,
+ * `openNewTopicOrSaveTopic` is a no-op, so its entry buttons should be
+ * disabled to make the blocked window visible instead of silently ignoring
+ * the click.
+ */
+const isNewTopicSendInFlight = (s: ChatStoreState): boolean =>
+  !s.activeTopicId &&
+  operationSelectors.isInputLoadingByContext({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  })(s);
 const isUndefinedTopics = (s: ChatStoreState) => !currentTopics(s);
 const isInSearchMode = (s: ChatStoreState) => s.inSearchingMode;
 const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
@@ -266,6 +284,7 @@ export const topicSelectors = {
   isExpandingPageSize,
   isInSearchMode,
   isLoadingMoreTopics,
+  isNewTopicSendInFlight,
   isSearchingTopic,
   isUndefinedTopics,
   loadMoreTopicsError,

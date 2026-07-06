@@ -10,6 +10,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -21,6 +22,8 @@ const SaveTopic = memo(() => {
     !!s.activeTopicId,
     s.openNewTopicOrSaveTopic,
   ]);
+  const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
+  const disabled = !canCreateContent || isNewTopicSendInFlight;
 
   const mobile = useIsMobile();
 
@@ -35,18 +38,18 @@ const SaveTopic = memo(() => {
   const desc = t(hasTopic ? 'topic.openNewTopic' : 'topic.saveCurrentMessages');
 
   const handleMutate = useCallback(() => {
-    if (!canCreateContent) return;
+    if (disabled) return;
 
     mutate();
-  }, [canCreateContent, mutate]);
+  }, [disabled, mutate]);
 
   const handleConfirmOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!canCreateContent) return;
+      if (disabled) return;
 
       setConfirmOpened(nextOpen);
     },
-    [canCreateContent],
+    [disabled],
   );
 
   if (mobile) {
@@ -71,7 +74,7 @@ const SaveTopic = memo(() => {
           <div>
             <ActionIcon
               aria-label={desc}
-              disabled={!canCreateContent}
+              disabled={disabled}
               icon={icon}
               loading={isValidating}
               onClick={() => handleConfirmOpenChange(true)}
@@ -84,7 +87,7 @@ const SaveTopic = memo(() => {
     return (
       <ActionIcon
         aria-label={desc}
-        disabled={!canCreateContent}
+        disabled={disabled}
         icon={icon}
         loading={isValidating}
         size={{ blockSize: 32, size: 16, strokeWidth: 2.3 }}

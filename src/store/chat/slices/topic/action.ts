@@ -32,7 +32,6 @@ import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { operationSelectors } from '../operation/selectors';
 import { type TopicData } from './initialState';
 import { type ChatTopicDispatch } from './reducer';
 import { topicReducer } from './reducer';
@@ -107,15 +106,9 @@ export class ChatTopicActionImpl {
       // creates the real topic). Saving here would archive those tmp ids into
       // a spurious "Default Topic" and race the in-flight topic creation,
       // leaving the real topic's loading state stuck until reload. Skip:
-      // the running send owns topic creation.
-      const state = this.#get();
-      const isSendInFlight = operationSelectors.isInputLoadingByContext({
-        agentId: state.activeAgentId,
-        groupId: state.activeGroupId,
-        threadId: state.activeThreadId,
-        topicId: state.activeTopicId,
-      })(state);
-      if (isSendInFlight) return;
+      // the running send owns topic creation. Entry buttons are disabled via
+      // the same selector, so this guard only backstops hotkey/command paths.
+      if (topicSelectors.isNewTopicSendInFlight(this.#get())) return;
 
       await saveToTopic();
       refreshMessages();
