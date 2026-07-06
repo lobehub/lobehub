@@ -845,6 +845,13 @@ export class ConversationLifecycleActionImpl {
           clearNewKey: true,
           skipRefreshMessage: true,
         });
+        // Same as the gateway branch: resolveOptimisticTopic migrated the
+        // optimistic topic's loading owner onto the real id; the hetero run
+        // spinner is owned by persisted `status === 'running'`, so release the
+        // creation owner here or the sidebar spinner sticks forever.
+        if (optimisticTopic && optimisticTopicResolved) {
+          this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+        }
       }
 
       // Clean up temp messages
@@ -1001,6 +1008,18 @@ export class ConversationLifecycleActionImpl {
         // the new topic, so the shared hook reads the persisted conversation from
         // the store and titles it. Fire-and-forget.
         if (result.topicId) {
+          // executeGatewayAgent resolved the optimistic topic row via
+          // internal_replaceTopicId, which migrates its topicLoadingIds owner
+          // onto the real topic id. From here the run spinner is owned by the
+          // persisted `status === 'running'` (#16745 removed the transports'
+          // run-end topicLoadingIds clears), so release the migrated creation
+          // owner now — with no release left downstream, the sidebar spinner
+          // would stick forever after the run completes.
+          if (optimisticTopic && optimisticTopicActive) {
+            this.#get().internal_updateTopicLoading(result.topicId, false);
+            optimisticTopicActive = false;
+            optimisticTopicResolved = true;
+          }
           void sendRunLifecycle
             .afterUserMessagePersisted({
               assistantMessageId: result.assistantMessageId,
