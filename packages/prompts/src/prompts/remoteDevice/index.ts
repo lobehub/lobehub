@@ -1,4 +1,6 @@
 export interface DeviceItem {
+  /** Already activated for this session — Local System runs on it; no activation needed. */
+  active?: boolean;
   /** Raw machine hostname; rendered alongside `name` when an alias differs. */
   hostname?: string;
   id: string;
@@ -17,6 +19,7 @@ export const devicePrompt = (device: DeviceItem) => {
     attrs.push(`hostname="${device.hostname}"`);
   }
   attrs.push(`os="${device.os}"`);
+  if (device.active) attrs.push(`active="true"`);
   if (device.scope) attrs.push(`scope="${device.scope}"`);
   if (device.lastSeen) attrs.push(`last-seen="${device.lastSeen}"`);
   return `  <device ${attrs.join(' ')} />`;

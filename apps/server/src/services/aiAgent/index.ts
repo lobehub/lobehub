@@ -2826,7 +2826,7 @@ export class AiAgentService {
     if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
       toolManifestMap[RemoteDeviceManifest.identifier] = {
         ...toolManifestMap[RemoteDeviceManifest.identifier],
-        systemRole: generateSystemPrompt(onlineDevices),
+        systemRole: generateSystemPrompt(onlineDevices, activeDeviceId),
       };
     }
 
