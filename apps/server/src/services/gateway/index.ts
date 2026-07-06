@@ -165,9 +165,10 @@ export class GatewayService {
               }
               await updateBotRuntimeStatus({
                 applicationId: provider.applicationId,
-                errorMessage: getBotFeatureBlockedMessage(platform, {
-                  workspaceId: provider.workspaceId ?? undefined,
-                }),
+                errorMessage: getBotFeatureBlockedMessage(
+                  platform,
+                  provider.workspaceId ? 'workspace' : 'personal',
+                ),
                 platform,
                 status: BOT_RUNTIME_STATUSES.failed,
               });
