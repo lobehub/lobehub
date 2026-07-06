@@ -498,6 +498,9 @@ export class SkillsExecutionRuntime {
       stdout: result.output,
       success: result.success,
       exitCode: result.exitCode,
+      // Renders the saved-output paths when the shell truncated the inline
+      // stream — without them the full output is unreachable.
+      outputFiles: result.outputFiles,
       // Surfaces the still-running message with a pollable handle when the
       // command outlived the observation window (exitCode undefined).
       shellId: result.shellId,
@@ -509,6 +512,7 @@ export class SkillsExecutionRuntime {
         command,
         ...(result.executionEnv && { executionEnv: result.executionEnv }),
         exitCode: result.exitCode,
+        ...(result.outputFiles && { outputFiles: result.outputFiles }),
         ...(result.shellId && { shellId: result.shellId }),
         success: result.success,
       },

@@ -68,6 +68,15 @@ export interface CommandResult {
   exitCode?: number;
   output: string;
   /**
+   * Saved-output file handles reported by the shell when stdout/stderr exceed
+   * the inline preview (device runs save the full stream to disk) — the only
+   * retrieval path for output the preview truncated.
+   */
+  outputFiles?: {
+    stderr?: { path: string; size?: number; truncated?: boolean };
+    stdout?: { path: string; size?: number; truncated?: boolean };
+  };
+  /**
    * Shell handle for a still-running command, pollable via
    * `local-system.getCommandOutput`.
    */

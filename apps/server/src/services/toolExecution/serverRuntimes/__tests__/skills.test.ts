@@ -513,6 +513,87 @@ describe('skillsRuntime', () => {
         300_000,
       );
     });
+
+    // Large streams are truncated to a preview device-side with the full
+    // output saved to disk — dropping state.outputFiles would lose the only
+    // retrieval path for the truncated output.
+    it('carries saved-output file paths through for truncated device output', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'preview…',
+        state: {
+          exitCode: 0,
+          outputFiles: {
+            stdout: {
+              path: '/tmp/lobe-shell/shell-1.stdout.log',
+              size: 5_242_880,
+              truncated: true,
+            },
+          },
+          stdout: 'preview…',
+          success: true,
+        },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'cat big.log',
+        description: 'noisy script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('/tmp/lobe-shell/shell-1.stdout.log');
+      expect(result.state).toMatchObject({
+        outputFiles: { stdout: expect.objectContaining({ truncated: true }) },
+      });
+    });
+
+    // The device manifest hides the sandbox-only APIs, but the builtin
+    // executor dispatches any method on the runtime regardless of the
+    // manifest — a prompt-following or hallucinated call must be refused at
+    // execution time, not silently run in the sandbox.
+    it('refuses the sandbox runCommand while a device is routed', async () => {
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.runCommand({ command: 'ls' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('lobe-local-system');
+      expect(mocks.createSandboxService).not.toHaveBeenCalled();
+    });
+
+    it('refuses the sandbox exportFile while a device is routed', async () => {
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.exportFile({ filename: 'out.csv', path: '/tmp/out.csv' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("already on the user's machine");
+      expect(mocks.sandboxService.exportAndUploadFile).not.toHaveBeenCalled();
+    });
   });
 
   // Regression guard for the device-gating fix: builtin skills must be filtered

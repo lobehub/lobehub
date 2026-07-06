@@ -150,6 +150,21 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   };
 
   runCommand = async (options: { command: string }): Promise<CommandResult> => {
+    // The device manifest hides this sandbox API (`DEVICE_HIDDEN_API_NAMES` in
+    // `resolveManifest`), but the builtin executor dispatches any method that
+    // exists on this runtime regardless of the manifest — enforce the same
+    // decision at execution time so a prompt-following or hallucinated call
+    // can't silently run in the sandbox while the user expects their device.
+    if (this.device) {
+      return {
+        exitCode: 1,
+        output: '',
+        stderr:
+          'runCommand targets the cloud sandbox and is unavailable while a local device is routed. Use execScript for skill scripts, or lobe-local-system runCommand for other shell commands on the device.',
+        success: false,
+      };
+    }
+
     if (!this.topicId) {
       throw new Error('topicId is required for runCommand');
     }
@@ -345,6 +360,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         commandId?: string;
         error?: string;
         exitCode?: number;
+        outputFiles?: CommandResult['outputFiles'];
         stderr?: string;
         stdout?: string;
         success?: boolean;
@@ -377,6 +393,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         executionEnv: 'device',
         exitCode,
         output: state.stdout ?? response.content ?? '',
+        // Large streams are truncated to a preview device-side with the full
+        // output saved to disk — the paths are the only retrieval handle.
+        outputFiles: state.outputFiles,
         shellId: state.commandId,
         stderr: state.stderr,
         success: exitCode === undefined || exitCode === 0,
@@ -476,6 +495,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   };
 
   exportFile = async (path: string, filename: string): Promise<ExportFileResult> => {
+    // Same manifest-hidden guard as `runCommand`: the message reaches the
+    // model through the ExecutionRuntime catch ("Failed to export file: ...").
+    if (this.device) {
+      throw new Error(
+        "exportFile pulls artifacts out of the cloud sandbox and is unavailable while a local device is routed — files created on the device are already on the user's machine.",
+      );
+    }
+
     if (!this.topicId) {
       throw new Error('topicId is required for exportFile');
     }
