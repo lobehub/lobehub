@@ -626,9 +626,11 @@ describe('ClaudeCodeAdapter', () => {
     // CC's `Read` on images returns a `tool_result` whose `content` is an
     // `image` block (base64). The generic mapper had no branch for it so
     // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
-    // spinner. Minimal fix: emit a placeholder so the tool ends in completed
-    // state. Image echo (thumbnails) is deferred.
-    it('renders image blocks as a non-empty placeholder', () => {
+    // spinner ( minimal fix: emit an `[Image: …]` content placeholder).
+    //  keeps that placeholder as the human-readable fallback AND
+    // preserves the base64 body on `pluginState.images` so the runtime
+    // pipeline can upload it and the UI can echo a thumbnail.
+    it('renders image blocks as a non-empty placeholder and preserves base64 on pluginState.images', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
       adapter.adapt({
@@ -663,6 +665,9 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.toolCallId).toBe('r1');
       expect(result!.data.content).toBe('[Image: image/png]');
       expect(result!.data.isError).toBe(false);
+      expect(result!.data.pluginState.images).toEqual([
+        { data: 'AAAA', mediaType: 'image/png' },
+      ]);
 
       const end = events.find((e) => e.type === 'tool_end');
       expect(end).toBeDefined();
@@ -696,6 +701,31 @@ describe('ClaudeCodeAdapter', () => {
 
       const result = events.find((e) => e.type === 'tool_result');
       expect(result!.data.content).toBe('[Image: image]');
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image' }]);
+    });
+
+    it('does not set pluginState.images for a text-only tool_result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x.ts' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'plain text', tool_use_id: 'r1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('plain text');
+      expect(result!.data.pluginState).toBeUndefined();
     });
   });
 

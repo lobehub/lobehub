@@ -41,6 +41,7 @@ import type {
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
+  HeterogeneousToolResultImage,
   StreamChunkData,
   SubagentEventContext,
   SubagentSpawnMetadata,
@@ -1167,6 +1168,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.hasUnhandledUserInput = true;
       }
 
+      // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
+      // gather their base64 bodies here (in the SAME pass that builds the
+      // human-readable content) so the runtime pipeline can upload them and the
+      // UI can echo a thumbnail — see `pluginState.images` below.
+      const images: HeterogeneousToolResultImage[] = [];
       const resultContent =
         typeof block.content === 'string'
           ? block.content
@@ -1180,11 +1186,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                   // the UI's StatusIndicator stuck on the spinner ().
                   if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
                   // `Read` on images yields `{type: 'image', source: {...}}` blocks
-                  // with no text. Drop a minimal placeholder so the tool message
-                  // has non-empty content (); richer image echo is a
-                  // follow-up that needs structured ToolResultData.
+                  // with no text. Keep the `[Image: …]` placeholder as the
+                  // content fallback () and preserve the base64 body on
+                  // `pluginState.images` for rich echo ().
                   if (c?.type === 'image') {
                     const mediaType = c.source?.media_type || 'image';
+                    if (c.source?.type === 'base64' && typeof c.source.data === 'string') {
+                      images.push({ data: c.source.data, mediaType });
+                    }
                     return `[Image: ${mediaType}]`;
                   }
                   return c.text || c.content || '';
@@ -1222,7 +1231,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
           : undefined;
 
-      const pluginState = todoWritePluginState ?? taskPluginState;
+      // Images are mutually exclusive with Todo/Task results in practice (a
+      // `Read` is neither), but merge defensively so a future producer that
+      // carries both doesn't clobber one. `data` is still raw base64 here; the
+      // runtime pipeline uploads and rewrites these entries before persistence.
+      let pluginState: Record<string, any> | undefined = todoWritePluginState ?? taskPluginState;
+      if (images.length > 0) {
+        pluginState = { ...pluginState, images };
+      }
 
       // Emit tool_result for executor to persist content to tool message
       events.push(

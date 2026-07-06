@@ -13,7 +13,11 @@
  * that producers have no business pulling in).
  */
 export type { UsageData } from '../types';
-export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
+export {
+  AgentStreamPipeline,
+  type AgentStreamPipelineOptions,
+  type UploadHeterogeneousImage,
+} from './agentStreamPipeline';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
