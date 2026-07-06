@@ -681,9 +681,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   flush(): HeterogeneousAgentEvent[] {
-    // Close any still-open tools (shouldn't happen in normal flow, but be safe)
+    // A still-pending tool never produced a result (the CLI ended / was cancelled
+    // mid-tool), so mark it UNSUCCESSFUL — mirrors Codex's drain and stops a
+    // side-effect hook (e.g. worktree detection) from treating an unfinished
+    // `git worktree add` as a success.
     const events = [...this.pendingToolCalls].map((id) =>
-      this.makeEvent('tool_end', this.buildToolEndData(id, true)),
+      this.makeEvent('tool_end', this.buildToolEndData(id, false)),
     );
     this.pendingToolCalls.clear();
     return events;

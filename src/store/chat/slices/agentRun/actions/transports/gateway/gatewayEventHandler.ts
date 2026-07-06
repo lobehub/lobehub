@@ -106,7 +106,10 @@ const readToolPayload = (
  * tool packages can react before their own mutations dispatch (e.g.
  * optimistic UI). Fires for both client- and server-runtime tools.
  */
-const dispatchOnBeforeCall = async (data: ToolStartData | undefined): Promise<void> => {
+const dispatchOnBeforeCall = async (
+  data: ToolStartData | undefined,
+  topicId?: string,
+): Promise<void> => {
   const payload = data?.toolCalling as ChatToolPayloadLike | undefined;
   const identity = readToolPayload(payload);
   if (!identity) return;
@@ -115,7 +118,7 @@ const dispatchOnBeforeCall = async (data: ToolStartData | undefined): Promise<vo
   const executor = getExecutor(identity.identifier);
   if (!executor?.onBeforeCall) return;
 
-  await executor.onBeforeCall(identity);
+  await executor.onBeforeCall({ ...identity, topicId });
 };
 
 /**
@@ -140,7 +143,10 @@ const unwrapToolPayload = (raw: unknown): ChatToolPayloadLike | undefined => {
  * tool packages can react to their own mutations (e.g. invalidate store
  * caches) regardless of whether the tool ran client- or server-side.
  */
-const dispatchOnAfterCall = async (data: ToolEndData | undefined): Promise<void> => {
+const dispatchOnAfterCall = async (
+  data: ToolEndData | undefined,
+  topicId?: string,
+): Promise<void> => {
   const identity = readToolPayload(unwrapToolPayload(data?.payload));
   if (!identity) return;
 
@@ -151,6 +157,7 @@ const dispatchOnAfterCall = async (data: ToolEndData | undefined): Promise<void>
   await executor.onAfterCall({
     ...identity,
     result: (data?.result ?? {}) as BuiltinToolResult,
+    topicId,
   });
 };
 
@@ -598,7 +605,7 @@ export const createGatewayEventHandler = (
         // Loading is already active from stream_start (not cleared by stream_end).
         const data = event.data as ToolStartData | undefined;
         enqueue(async () => {
-          await dispatchOnBeforeCall(data).catch(console.error);
+          await dispatchOnBeforeCall(data, context.topicId ?? undefined).catch(console.error);
         });
         break;
       }
@@ -664,7 +671,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           await Promise.all([
             fetchAndReplaceMessages(get, context).catch(console.error),
-            dispatchOnAfterCall(data).catch(console.error),
+            dispatchOnAfterCall(data, context.topicId ?? undefined).catch(console.error),
           ]);
         });
         break;

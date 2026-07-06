@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applyWorktreeAddFromToolCall, parseWorktreeAddPath } from '../worktreeDetection';
+import { parseWorktreeAddPath, recordWorktreeAdd } from '../worktreeDetection';
 
 const chatMocks = vi.hoisted(() => ({
-  activeTopicId: undefined as string | undefined,
   topics: {} as Record<string, { metadata?: Record<string, any> }>,
   updateTopicMetadata: vi.fn(),
 }));
@@ -19,78 +18,67 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 describe('parseWorktreeAddPath', () => {
-  const cmd = (command: unknown) => ({ command });
-
   it('resolves a relative path against the source cwd', () => {
-    expect(parseWorktreeAddPath(cmd('git worktree add ../wt'), '/repo')).toBe('/wt');
-    expect(parseWorktreeAddPath(cmd('git worktree add wt'), '/repo')).toBe('/repo/wt');
+    expect(parseWorktreeAddPath('git worktree add ../wt', '/repo')).toBe('/wt');
+    expect(parseWorktreeAddPath('git worktree add wt', '/repo')).toBe('/repo/wt');
   });
 
   it('keeps an absolute path as-is', () => {
-    expect(parseWorktreeAddPath(cmd('git worktree add /tmp/wt'), '/repo')).toBe('/tmp/wt');
+    expect(parseWorktreeAddPath('git worktree add /tmp/wt', '/repo')).toBe('/tmp/wt');
   });
 
   it('skips flags and their values', () => {
-    expect(parseWorktreeAddPath(cmd('git worktree add -b feature ../feat'), '/repo')).toBe('/feat');
-    expect(parseWorktreeAddPath(cmd('git worktree add --detach /tmp/wt'), '/repo')).toBe('/tmp/wt');
+    expect(parseWorktreeAddPath('git worktree add -b feature ../feat', '/repo')).toBe('/feat');
+    expect(parseWorktreeAddPath('git worktree add --detach /tmp/wt', '/repo')).toBe('/tmp/wt');
   });
 
   it('stops at a shell separator', () => {
-    expect(parseWorktreeAddPath(cmd('cd /repo && git worktree add wt && cd wt'), '/repo')).toBe(
+    expect(parseWorktreeAddPath('cd /repo && git worktree add wt && cd wt', '/repo')).toBe(
       '/repo/wt',
     );
   });
 
-  it('joins an argv-array command (Codex shell shape)', () => {
-    expect(parseWorktreeAddPath(cmd(['git', 'worktree', 'add', '/tmp/wt']), '/repo')).toBe(
-      '/tmp/wt',
+  it('preserves argv boundaries for the array form — a path with spaces stays intact', () => {
+    expect(parseWorktreeAddPath(['git', 'worktree', 'add', '/tmp/my wt'], '/repo')).toBe(
+      '/tmp/my wt',
     );
+    expect(parseWorktreeAddPath(['git', 'worktree', 'add', 'my wt'], '/repo')).toBe('/repo/my wt');
   });
 
-  it('reads only `command`, never `content` (writeFile is safe)', () => {
-    expect(
-      parseWorktreeAddPath({ content: 'run: git worktree add /wt', file_path: 'a.md' }, '/repo'),
-    ).toBeUndefined();
-  });
-
-  it('requires an actual git invocation — not the words in another command (P2)', () => {
-    expect(parseWorktreeAddPath(cmd('echo git worktree add ../wt'), '/repo')).toBeUndefined();
-    expect(parseWorktreeAddPath(cmd('rg "git worktree add" .'), '/repo')).toBeUndefined();
-    expect(parseWorktreeAddPath(cmd('grep -r "worktree add" src'), '/repo')).toBeUndefined();
+  it('requires an actual git invocation — not the words in another command', () => {
+    expect(parseWorktreeAddPath('echo git worktree add ../wt', '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('rg "git worktree add" .', '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('grep -r "worktree add" src', '/repo')).toBeUndefined();
   });
 
   it('accepts wrappers and git global options', () => {
-    expect(parseWorktreeAddPath(cmd('sudo git worktree add /wt'), '/repo')).toBe('/wt');
-    expect(parseWorktreeAddPath(cmd('git -C /elsewhere worktree add wt'), '/repo')).toBe(
+    expect(parseWorktreeAddPath('sudo git worktree add /wt', '/repo')).toBe('/wt');
+    expect(parseWorktreeAddPath('git -C /elsewhere worktree add wt', '/repo')).toBe(
       '/elsewhere/wt',
     );
-    expect(parseWorktreeAddPath(cmd('git -c core.hooksPath=/x worktree add /wt'), '/repo')).toBe(
-      '/wt',
-    );
+    expect(parseWorktreeAddPath('git -c core.hooksPath=/x worktree add /wt', '/repo')).toBe('/wt');
   });
 
   it('returns undefined for non-worktree-add calls', () => {
-    expect(parseWorktreeAddPath(cmd('git status'), '/repo')).toBeUndefined();
-    expect(parseWorktreeAddPath(cmd('git worktree list'), '/repo')).toBeUndefined();
-    expect(parseWorktreeAddPath({ file_path: '/x' }, '/repo')).toBeUndefined();
-    expect(parseWorktreeAddPath(undefined, '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('git status', '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('git worktree list', '/repo')).toBeUndefined();
   });
 });
 
+const PR_TOPIC = {
+  metadata: { workingDirectoryConfig: { path: '/repo', repoType: 'github' } },
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
-  chatMocks.activeTopicId = undefined;
   chatMocks.topics = {};
 });
 
-describe('applyWorktreeAddFromToolCall', () => {
-  it('records the new worktree onto the active topic', async () => {
-    chatMocks.activeTopicId = 't1';
-    chatMocks.topics = {
-      t1: { metadata: { workingDirectoryConfig: { path: '/repo', repoType: 'github' } } },
-    };
+describe('recordWorktreeAdd', () => {
+  it('records the new worktree onto the given (run) topic', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
 
-    await applyWorktreeAddFromToolCall({ command: 'git worktree add ../wt' });
+    await recordWorktreeAdd({ command: 'git worktree add ../wt', topicId: 't1' });
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
@@ -101,21 +89,21 @@ describe('applyWorktreeAddFromToolCall', () => {
     });
   });
 
-  it('does nothing when there is no active topic', async () => {
-    chatMocks.activeTopicId = undefined;
-    await applyWorktreeAddFromToolCall({ command: 'git worktree add /wt' });
-    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  it('targets the passed topicId, not the active one', async () => {
+    chatMocks.topics = { other: PR_TOPIC, t1: PR_TOPIC };
+
+    await recordWorktreeAdd({ command: 'git worktree add /wt', topicId: 'other' });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('other', expect.anything());
   });
 
   it('does nothing when the worktree resolves to the source path', async () => {
-    chatMocks.activeTopicId = 't1';
     chatMocks.topics = { t1: { metadata: { workingDirectoryConfig: { path: '/repo' } } } };
-    await applyWorktreeAddFromToolCall({ command: 'git worktree add /repo' });
+    await recordWorktreeAdd({ command: 'git worktree add /repo', topicId: 't1' });
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
   });
 
   it('is idempotent when the active worktree is already set', async () => {
-    chatMocks.activeTopicId = 't1';
     chatMocks.topics = {
       t1: {
         metadata: {
@@ -126,14 +114,13 @@ describe('applyWorktreeAddFromToolCall', () => {
         },
       },
     };
-    await applyWorktreeAddFromToolCall({ command: 'git worktree add /wt' });
+    await recordWorktreeAdd({ command: 'git worktree add /wt', topicId: 't1' });
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
   });
 
   it('does nothing for a non-worktree command', async () => {
-    chatMocks.activeTopicId = 't1';
-    chatMocks.topics = { t1: { metadata: { workingDirectoryConfig: { path: '/repo' } } } };
-    await applyWorktreeAddFromToolCall({ command: 'ls -la' });
+    chatMocks.topics = { t1: PR_TOPIC };
+    await recordWorktreeAdd({ command: 'ls -la', topicId: 't1' });
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
   });
 });

@@ -1725,6 +1725,10 @@ describe('ClaudeCodeAdapter', () => {
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('tool_end');
       expect(events[0].data.toolCallId).toBe('t1');
+      // A pending tool that never produced a result must NOT report success —
+      // otherwise side-effect hooks would treat an unfinished tool as completed.
+      expect(events[0].data.isSuccess).toBe(false);
+      expect(events[0].data.result).toMatchObject({ success: false });
     });
 
     it('returns empty array when no pending tools', () => {

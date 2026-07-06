@@ -1,7 +1,7 @@
 import type { ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
-import { applyWorktreeAddFromToolCall } from './worktreeDetection';
+import { recordWorktreeAdd } from './worktreeDetection';
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
@@ -19,20 +19,52 @@ import { applyWorktreeAddFromToolCall } from './worktreeDetection';
  */
 const EMPTY_API_ENUM = {} as Record<string, string>;
 
+/**
+ * Pull the command out of a shell tool's parsed params. Only reads `command`/`cmd`
+ * — never `content` — so a file-write tool can't be mistaken for a shell command.
+ * Returns the raw value (string OR the argv-array form) so the detector can keep
+ * argument boundaries.
+ */
+const readShellCommand = (params: unknown): string | string[] | undefined => {
+  if (!params || typeof params !== 'object') return undefined;
+  const raw = (params as { cmd?: unknown; command?: unknown }).command ?? (params as any).cmd;
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw) && raw.every((t) => typeof t === 'string')) return raw as string[];
+  return undefined;
+};
+
 class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
   protected readonly apiEnum = EMPTY_API_ENUM;
 
-  constructor(readonly identifier: string) {
+  /**
+   * @param identifier   The CLI adapter's tool identifier (`claude-code` / `codex`).
+   * @param shellApiNames The adapter's shell / run-command tool api name(s). Side
+   *   effects are constrained to THIS tool first, then handled uniformly — we don't
+   *   sniff every tool call's params.
+   */
+  constructor(
+    readonly identifier: string,
+    private readonly shellApiNames: ReadonlySet<string>,
+  ) {
     super();
   }
 
-  onAfterCall = async ({ params, result }: ToolAfterCallContext): Promise<void> => {
-    if (!result.success) return;
-    // Only a successful `git worktree add` matches; every other tool call (and
-    // non-shell tool) falls through cheaply inside the detector.
-    await applyWorktreeAddFromToolCall(params);
+  onAfterCall = async ({
+    apiName,
+    params,
+    result,
+    topicId,
+  }: ToolAfterCallContext): Promise<void> => {
+    // Constrain to a SUCCESSFUL run of the shell tool bound to a run topic.
+    if (!result.success || !topicId || !this.shellApiNames.has(apiName)) return;
+
+    const command = readShellCommand(params);
+    if (command === undefined) return;
+
+    await recordWorktreeAdd({ command, topicId });
   };
 }
 
-export const claudeCodeExecutor = new HeteroCliExecutor('claude-code');
-export const codexExecutor = new HeteroCliExecutor('codex');
+// CC's shell tool is `Bash`; Codex's is `command_execution`.
+export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']));
+export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));

@@ -934,6 +934,14 @@ export interface ToolHookContext {
    * Useful for correlating before/after hooks against the same call.
    */
   toolCallId?: string;
+  /**
+   * Topic id of the run this tool call belongs to (the bound operation's topic),
+   * threaded from the event handler's conversation context. Prefer this over the
+   * globally-active topic so a hook's side effects land on the run's own topic
+   * even if the user has navigated away mid-run. Undefined when the run has no
+   * topic yet.
+   */
+  topicId?: string;
 }
 
 export interface ToolBeforeCallContext extends ToolHookContext {}
