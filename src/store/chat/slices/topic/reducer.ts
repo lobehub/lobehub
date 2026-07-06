@@ -76,11 +76,13 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
             // server orders by latest-message time), so rows visibly jump around.
             const isStatusOnlyWrite = Object.keys(value).every((key) => key === 'status');
 
-            draftState[topicIndex] = isStatusOnlyWrite
-              ? mergedTopic
-              : // TODO: updatedAt type needs to be changed to Date later
-                // @ts-ignore
-                { ...mergedTopic, updatedAt: new Date() };
+            if (isStatusOnlyWrite) {
+              draftState[topicIndex] = mergedTopic;
+            } else {
+              // TODO: updatedAt type needs to be changed to Date later
+              // @ts-ignore
+              draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
+            }
           }
         }
       });
