@@ -19,6 +19,7 @@ import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
+import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -39,10 +40,19 @@ import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
 
+const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
+const STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE = 500;
+
 type CronTopicsGroupWithJobInfo = {
   cronJob: unknown;
   cronJobId: string;
   topics: ChatTopic[];
+};
+
+type RunningTopicForWatchdog = Omit<ChatTopic, 'updatedAt'> & {
+  agentId?: string | null;
+  groupId?: string | null;
+  updatedAt: Date | number | string;
 };
 
 /**
@@ -80,6 +90,8 @@ export class ChatTopicActionImpl {
   // started and our continuation is stale — drop it rather than let it
   // clobber the newer topic (see ).
   #switchTopicEpoch = 0;
+
+  #staleRunningTopicCleanupInFlight = false;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -428,6 +440,94 @@ export class ChatTopicActionImpl {
       // The DB never got the write — stop pinning it over fetched rows.
       this.#pendingTopicStatusWrites.delete(topicId);
     });
+  };
+
+  #getTopicUpdatedAt = (topic: RunningTopicForWatchdog): number | undefined => {
+    const timestamp =
+      typeof topic.updatedAt === 'number' ? topic.updatedAt : new Date(topic.updatedAt).getTime();
+
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  };
+
+  #hasAliveOperationForTopic = (topicId: string): boolean => {
+    const operations = Object.values(this.#get().operations);
+
+    return operations.some((operation) => {
+      if (operation.status !== 'running') return false;
+      if (operation.metadata.isAborting) return false;
+      if (operation.abortController.signal.aborted) return false;
+
+      return operation.context.topicId === topicId;
+    });
+  };
+
+  #clearStaleRunningOperationMetadata = async (topic: RunningTopicForWatchdog): Promise<void> => {
+    if (!topic.metadata?.runningOperation) return;
+
+    const key = topicMapKey({
+      agentId: topic.agentId ?? undefined,
+      groupId: topic.groupId ?? undefined,
+    });
+    const currentTopic = this.#get().topicDataMap[key]?.items.find((item) => item.id === topic.id);
+    const metadata = currentTopic?.metadata ?? topic.metadata;
+
+    this.#get().internal_dispatchTopic({
+      agentId: topic.agentId ?? undefined,
+      groupId: topic.groupId ?? undefined,
+      id: topic.id,
+      type: 'updateTopic',
+      value: { metadata: { ...metadata, runningOperation: null } },
+    });
+
+    await topicService.updateTopicMetadata(topic.id, { runningOperation: null }).catch((err) => {
+      console.error('[cleanupStaleRunningTopics] clear runningOperation failed:', err);
+    });
+  };
+
+  cleanupStaleRunningTopics = async (): Promise<number> => {
+    if (this.#staleRunningTopicCleanupInFlight) return 0;
+
+    this.#staleRunningTopicCleanupInFlight = true;
+
+    try {
+      const runningTopics = (await topicService.queryTopics({
+        pageSize: STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE,
+        statuses: ['running'],
+      })) as RunningTopicForWatchdog[];
+
+      const now = Date.now();
+      const staleTopics = runningTopics.filter((topic) => {
+        const updatedAt = this.#getTopicUpdatedAt(topic);
+        if (!updatedAt) return false;
+        if (now - updatedAt <= STALE_RUNNING_TOPIC_TIMEOUT) return false;
+
+        return !this.#hasAliveOperationForTopic(topic.id);
+      });
+
+      await Promise.all(
+        staleTopics.map(async (topic) => {
+          await this.updateTopicStatus({
+            agentId: topic.agentId ?? undefined,
+            groupId: topic.groupId ?? undefined,
+            status: 'active',
+            topicId: topic.id,
+          });
+
+          await this.#clearStaleRunningOperationMetadata(topic);
+        }),
+      );
+
+      if (staleTopics.length > 0) {
+        void getHomeStoreState().refreshAgentList?.();
+      }
+
+      return staleTopics.length;
+    } catch (err) {
+      console.error('[cleanupStaleRunningTopics] failed:', err);
+      return 0;
+    } finally {
+      this.#staleRunningTopicCleanupInFlight = false;
+    }
   };
 
   autoRenameTopicTitle = async (id: string): Promise<void> => {
@@ -911,7 +1011,7 @@ export class ChatTopicActionImpl {
     }
 
     this.#set(
-      { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
+      { activeTopicId: id || (null as any), activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );

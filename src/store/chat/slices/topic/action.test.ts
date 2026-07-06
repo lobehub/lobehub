@@ -37,10 +37,12 @@ vi.mock('@/services/topic', () => ({
     cloneTopic: vi.fn(),
     createTopic: vi.fn(),
     updateTopicFavorite: vi.fn(),
+    updateTopicMetadata: vi.fn(),
     updateTopicTitle: vi.fn(),
     updateTopic: vi.fn(),
     batchRemoveTopics: vi.fn(),
     getTopics: vi.fn(),
+    queryTopics: vi.fn(),
     searchTopics: vi.fn(),
   },
 }));
@@ -1472,6 +1474,113 @@ describe('topic action', () => {
 
       expect(useChatStore.getState().topicLoadingIds).not.toContain(topicId);
       expect(useChatStore.getState().topicLoadingIdCounts[topicId]).toBeUndefined();
+    });
+  });
+
+  describe('cleanupStaleRunningTopics', () => {
+    it('should mark stale running topics active when no alive operation exists', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'server-op-1',
+          },
+        },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
+      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      let cleaned = 0;
+      await act(async () => {
+        cleaned = await result.current.cleanupStaleRunningTopics();
+      });
+
+      expect(cleaned).toBe(1);
+      expect(topicService.queryTopics).toHaveBeenCalledWith({
+        pageSize: 500,
+        statuses: ['running'],
+      });
+      expect(topicService.updateTopic).toHaveBeenCalledWith(topicId, { status: 'active' });
+      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith(topicId, {
+        runningOperation: null,
+      });
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
+    });
+
+    it('should keep stale running topics when an alive operation exists', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        sessionId: agentId,
+        status: 'running',
+        title: 'Still running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+        });
+
+        result.current.startOperation({
+          context: { agentId, topicId },
+          type: 'execHeterogeneousAgent',
+        });
+      });
+
+      let cleaned = 0;
+      await act(async () => {
+        cleaned = await result.current.cleanupStaleRunningTopics();
+      });
+
+      expect(cleaned).toBe(0);
+      expect(topicService.updateTopic).not.toHaveBeenCalledWith(topicId, { status: 'active' });
     });
   });
   describe('updateTopicLoading', () => {

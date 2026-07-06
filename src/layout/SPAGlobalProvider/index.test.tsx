@@ -154,6 +154,10 @@ vi.mock('@/layout/GlobalProvider/StoreInitialization', () => ({
   default: () => null,
 }));
 
+vi.mock('@/layout/GlobalProvider/TopicStatusWatchdog', () => ({
+  default: () => null,
+}));
+
 vi.mock('@/store/serverConfig/Provider', async () => {
   const React = await import('react');
 
