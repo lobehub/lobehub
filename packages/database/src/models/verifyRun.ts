@@ -1,5 +1,5 @@
 import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
-import { and, desc, eq, ilike, isNull, lt, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -138,6 +138,14 @@ export class VerifyRunModel {
    * ingest) can't be dropped or duplicated at a page boundary — a plain
    * `createdAt`-only cursor would.
    *
+   * `createdAt` is compared/ordered at **millisecond** precision
+   * (`date_trunc('milliseconds', …)`) to match the cursor, which round-trips
+   * through a JS `Date` / ISO string and so only carries milliseconds. The DB
+   * column is `timestamptz` and can hold microseconds; comparing the raw column
+   * against the truncated cursor would make same-millisecond rows match neither
+   * the `eq` tiebreaker nor the `lt` bound, silently dropping them. Truncating
+   * both sides keeps the keyset lossless.
+   *
    * Fetches `limit + 1` to detect a further page without a second COUNT query:
    * `nextCursor` is `null` on the last page, otherwise the encoded cursor of the
    * last returned row.
@@ -152,13 +160,16 @@ export class VerifyRunModel {
   }> => {
     const conditions = [this.ownership()];
 
+    // Millisecond-truncated createdAt — the precision the cursor round-trips at.
+    const createdAtMs = sql`date_trunc('milliseconds', ${verifyRuns.createdAt})`;
+
     const decoded = decodeCursor(cursor);
     if (decoded) {
       // (createdAt, id) < (cursor.createdAt, cursor.id) in descending order.
       conditions.push(
         or(
-          lt(verifyRuns.createdAt, decoded.createdAt),
-          and(eq(verifyRuns.createdAt, decoded.createdAt), lt(verifyRuns.id, decoded.id)),
+          lt(createdAtMs, decoded.createdAt),
+          and(eq(createdAtMs, decoded.createdAt), lt(verifyRuns.id, decoded.id)),
         )!,
       );
     }
@@ -169,7 +180,7 @@ export class VerifyRunModel {
 
     const rows = await this.db.query.verifyRuns.findMany({
       limit: limit + 1,
-      orderBy: [desc(verifyRuns.createdAt), desc(verifyRuns.id)],
+      orderBy: [desc(createdAtMs), desc(verifyRuns.id)],
       where: and(...conditions),
     });
 

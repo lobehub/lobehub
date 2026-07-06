@@ -222,6 +222,19 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  loadMoreError: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 10px;
+    padding-inline: 12px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 type Glyph = 'ok' | 'bad' | 'unsure' | 'running';
@@ -589,6 +602,15 @@ const ReportListPanel = memo(() => {
               <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
               {isLoadingMore ? (
                 <SkeletonList rows={2} style={{ paddingBlock: 6, paddingInline: 8 }} />
+              ) : error ? (
+                // A later page failed (page 1 already rendered above): offer an
+                // inline retry instead of a silently stuck bottom skeleton.
+                <div className={styles.loadMoreError}>
+                  <span>{t('workspace.loadMoreError')}</span>
+                  <button className={styles.clearBtn} type={'button'} onClick={() => reload()}>
+                    {t('workspace.retry')}
+                  </button>
+                </div>
               ) : null}
             </div>
           )}

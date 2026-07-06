@@ -182,6 +182,7 @@ export default {
   'workspace.listEmptyTitle': 'No reports yet',
   'workspace.loadError': 'Something went wrong while loading your reports.',
   'workspace.loadErrorTitle': 'Couldn’t load reports',
+  'workspace.loadMoreError': 'Couldn’t load more reports',
   'workspace.renameEmpty': 'Report title cannot be empty',
   'workspace.renameError': 'Failed to rename report',
   'workspace.renameSuccess': 'Report renamed',
