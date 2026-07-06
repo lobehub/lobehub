@@ -41,10 +41,15 @@ export async function getBotFeatureAccessState(
 
 export async function assertBotFeatureAccess(params: BotFeatureAccessParams): Promise<void> {
   if (await isBotFeatureAccessAllowed(params)) return;
-  throw new BotFeatureAccessError(getBotFeatureBlockedMessage(params.platform));
+  throw new BotFeatureAccessError(
+    getBotFeatureBlockedMessage(params.platform, { workspaceId: params.workspaceId }),
+  );
 }
 
-export function getBotFeatureBlockedMessage(_platform: string): string {
+export function getBotFeatureBlockedMessage(
+  _platform: string,
+  _context?: { workspaceId?: string },
+): string {
   return 'This bot channel is not available for your current plan.';
 }
 
