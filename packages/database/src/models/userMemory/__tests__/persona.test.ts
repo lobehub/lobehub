@@ -67,6 +67,36 @@ describe('UserPersonaModel', () => {
     expect(persisted).toHaveLength(1);
   });
 
+  it('returns the existing document without updating unchanged persona content', async () => {
+    const { document: created } = await personaModel.upsertPersona({
+      memoryIds: ['mem-1'],
+      persona: '# stable persona',
+      sourceIds: ['src-1'],
+      tagline: 'Stable',
+    });
+    const existingDiffs = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+
+    const { diff, document } = await personaModel.upsertPersona({
+      memoryIds: ['mem-1'],
+      persona: '# stable persona',
+      sourceIds: ['src-1'],
+      tagline: 'Stable',
+    });
+
+    expect(diff).toBeUndefined();
+    expect(document.id).toBe(created.id);
+    expect(document.version).toBe(1);
+    expect(document.updatedAt).toEqual(created.updatedAt);
+    expect(document.accessedAt).toEqual(created.accessedAt);
+
+    const persisted = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+    expect(persisted).toHaveLength(existingDiffs.length);
+  });
+
   it('skips diff insert when no diff content supplied', async () => {
     const { diff } = await personaModel.upsertPersona({
       persona: '# only persona',

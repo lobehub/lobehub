@@ -1,4 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm';
+import isEqual from 'fast-deep-equal';
 
 import type {
   NewUserPersonaDocument,
@@ -93,22 +94,36 @@ export class UserPersonaModel {
         ),
       });
       const nextVersion = (existing?.version ?? 0) + 1;
+      const nextMemoryIds = params.memoryIds ?? existing?.memoryIds ?? undefined;
+      const nextMetadata = params.metadata ?? existing?.metadata ?? undefined;
+      const nextProfile = params.profile ?? 'default';
+      const nextSourceIds = params.sourceIds ?? existing?.sourceIds ?? undefined;
+      const nextTagline = params.tagline ?? existing?.tagline ?? undefined;
 
       const baseDocument: Omit<NewUserPersonaDocument, 'id' | 'userId'> = {
         capturedAt: params.capturedAt,
-        memoryIds: params.memoryIds ?? undefined,
-        metadata: params.metadata ?? undefined,
+        memoryIds: nextMemoryIds,
+        metadata: nextMetadata,
         persona: params.persona,
-        profile: params.profile ?? 'default',
-        sourceIds: params.sourceIds ?? undefined,
-        tagline: params.tagline ?? undefined,
+        profile: nextProfile,
+        sourceIds: nextSourceIds,
+        tagline: nextTagline,
         version: nextVersion,
       };
 
       let document: UserPersonaDocument;
 
       if (existing) {
-        [document] = await tx
+        const hasDocumentChanges =
+          existing.persona !== params.persona ||
+          existing.tagline !== (nextTagline ?? null) ||
+          !isEqual(existing.memoryIds, nextMemoryIds ?? null) ||
+          !isEqual(existing.sourceIds, nextSourceIds ?? null) ||
+          !isEqual(existing.metadata, nextMetadata ?? null);
+
+        if (!hasDocumentChanges) return { document: existing };
+
+        const [updated] = await tx
           .update(userPersonaDocuments)
           .set({ ...baseDocument, updatedAt: new Date() })
           .where(
@@ -117,7 +132,30 @@ export class UserPersonaModel {
               eq(userPersonaDocuments.userId, this.userId),
             ),
           )
-          .returning();
+          .returning({
+            accessedAt: userPersonaDocuments.accessedAt,
+            capturedAt: userPersonaDocuments.capturedAt,
+            createdAt: userPersonaDocuments.createdAt,
+            id: userPersonaDocuments.id,
+            updatedAt: userPersonaDocuments.updatedAt,
+            version: userPersonaDocuments.version,
+          });
+
+        document = {
+          ...existing,
+          accessedAt: updated.accessedAt,
+          capturedAt: updated.capturedAt,
+          createdAt: updated.createdAt,
+          id: updated.id,
+          memoryIds: nextMemoryIds ?? null,
+          metadata: nextMetadata ?? null,
+          persona: params.persona,
+          profile: nextProfile,
+          sourceIds: nextSourceIds ?? null,
+          tagline: nextTagline ?? null,
+          updatedAt: updated.updatedAt,
+          version: updated.version,
+        };
       } else {
         [document] = await tx
           .insert(userPersonaDocuments)
