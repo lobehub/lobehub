@@ -233,3 +233,25 @@ default to rendering it and attaching the screenshot to the verify report as a r
 point — open the PNG to confirm, publish. Never offer the screenshot as an opt-in
 ("want me to screenshot?"); just produce it. Env/restart cost is the skill's job to
 absorb, not a reason to shift the checking burden onto the user.
+
+---
+
+## Case 10 — Reporting a UI-touching change with only CLI transcripts and no screenshot
+
+**Wrong approach**: when a change includes visible UI copy/badges/alerts, treating
+the run as purely backend/service validation and publishing only command-output
+evidence, then calling it a complete agent-testing report.
+
+**Why it's wrong**: CLI transcripts prove code paths and tests passed, but they do
+not let the reviewer inspect the actual rendered UI. If the feature changed a
+channel page alert or badge, the report needs at least one screenshot evidence item
+for that visible state.
+
+**What it breaks**: the user opens the report expecting visual proof and asks
+"没截图吗？", because the report cannot show whether the UI looks correct.
+
+**Correct approach**: if any UI surface changed, include a visual case in the same
+verify run. Either drive the real app UI with agent-browser/Electron/Web and attach
+a screenshot, or explicitly mark the UI screenshot case blocked with the measured
+environment blocker. Do not present a UI-touching report as complete with only CLI
+evidence.
