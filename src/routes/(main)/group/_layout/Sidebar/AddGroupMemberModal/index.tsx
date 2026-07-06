@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -91,23 +90,13 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     return (
       <ImperativeModal
         allowFullscreen
+        okButtonProps={{ disabled: isConfirmDisabled, loading: isAdding }}
+        okText={`${t('memberSelection.addMember')} (${selectedAgentIds.length})`}
         open={open}
         title={t('memberSelection.addMember')}
         width={800}
-        footer={
-          <Flexbox horizontal gap={8} justify="end">
-            <Button onClick={handleCancel}>{t('cancel', { ns: 'common' })}</Button>
-            <Button
-              disabled={isConfirmDisabled}
-              loading={isAdding}
-              type="primary"
-              onClick={handleConfirm}
-            >
-              {t('memberSelection.addMember')} ({selectedAgentIds.length})
-            </Button>
-          </Flexbox>
-        }
         onCancel={handleCancel}
+        onOk={handleConfirm}
       >
         <Flexbox horizontal className={styles.container} gap={8}>
           {/* Left Column - Available Agents */}
