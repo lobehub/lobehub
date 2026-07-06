@@ -84,6 +84,21 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 18px;
     white-space: normal;
   `,
+  prLink: css`
+    cursor: pointer;
+
+    margin-inline: -6px;
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 6px;
+
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
 }));
 
 interface CiVisual {
@@ -188,8 +203,8 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
         (() => {
           const prState = getPullRequestState(pullRequest);
           const prVisual = PR_STATE_VISUAL[prState];
-          return (
-            <div className={styles.row}>
+          const prInner = (
+            <>
               <Icon
                 className={styles.rowIcon}
                 icon={prVisual.icon}
@@ -203,7 +218,21 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
                 {pullRequest.title ? ` · ${pullRequest.title}` : ''}
                 <span style={{ color: cssVar.colorTextTertiary }}>{` #${pullRequest.number}`}</span>
               </span>
-            </div>
+            </>
+          );
+          // Clickable when a url is persisted — opens the PR on GitHub in the
+          // system browser; older snapshots without a url stay a plain row.
+          return pullRequest.url ? (
+            <a
+              className={`${styles.row} ${styles.prLink}`}
+              href={pullRequest.url}
+              rel={'noreferrer'}
+              target={'_blank'}
+            >
+              {prInner}
+            </a>
+          ) : (
+            <div className={styles.row}>{prInner}</div>
           );
         })()}
 
