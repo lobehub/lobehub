@@ -59,6 +59,7 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 vi.mock('@/services/agentBotProvider', () => ({
   agentBotProviderService: {
+    getRuntimeStatus: vi.fn(async () => ({ status: 'connected' })),
     wechatGetQrCode: vi.fn(),
     wechatPollQrStatus: vi.fn(),
   },
@@ -329,6 +330,49 @@ describe('Agent channel permission gates', () => {
 
     expect(screen.getByRole('switch')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.refreshStatus' })).toBeDisabled();
+  });
+
+  it('keeps the enable switch usable to turn off a paid-blocked channel that is still enabled', () => {
+    render(
+      <PlatformDetail
+        agentId="agent-id"
+        currentConfig={currentConfig}
+        platformDef={{
+          ...platformDef,
+          access: {
+            allowed: false,
+            requiredPlan: 'paid',
+            rolloutMode: 'enforce',
+          },
+          id: 'wechat',
+          name: 'WeChat',
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('switch')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'channel.refreshStatus' })).toBeDisabled();
+  });
+
+  it('blocks re-enabling a paid-blocked channel once it is disabled', () => {
+    render(
+      <PlatformDetail
+        agentId="agent-id"
+        currentConfig={{ ...currentConfig, enabled: false }}
+        platformDef={{
+          ...platformDef,
+          access: {
+            allowed: false,
+            requiredPlan: 'paid',
+            rolloutMode: 'enforce',
+          },
+          id: 'wechat',
+          name: 'WeChat',
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('switch')).toBeDisabled();
   });
 
   it('renders the paid-feature alert with the platform name and spacing below the header divider', () => {

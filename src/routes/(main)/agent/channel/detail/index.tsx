@@ -88,6 +88,9 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const paidFeatureMode = platformDef.access?.rolloutMode ?? 'enforce';
     const paidFeatureScope = activeWorkspaceId ? 'workspace' : 'personal';
     const writeDisabled = readOnly || paidFeatureBlocked;
+    // The server allows disable-only updates on paid-blocked channels, so an
+    // already-enabled channel can still be turned off (but not re-enabled).
+    const toggleDisabled = readOnly || (paidFeatureBlocked && !currentConfig?.enabled);
 
     const [
       createBotProvider,
@@ -469,7 +472,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {
-        if (writeDisabled) return;
+        if (enabled ? writeDisabled : readOnly) return;
         if (!currentConfig) return;
         try {
           setPendingEnabled(enabled);
@@ -485,7 +488,16 @@ const PlatformDetail = memo<PlatformDetailProps>(
           msg.error(t('channel.updateFailed'));
         }
       },
-      [writeDisabled, currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
+      [
+        writeDisabled,
+        readOnly,
+        currentConfig,
+        agentId,
+        updateBotProvider,
+        connectCurrentBot,
+        msg,
+        t,
+      ],
     );
 
     const handleTestConnection = useCallback(async () => {
@@ -527,6 +539,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             platformDef={platformDef}
             refreshingStatus={refreshingStatus}
             runtimeStatus={observedStatus}
+            toggleDisabled={toggleDisabled}
             toggleLoading={toggleLoading}
             onRefreshStatus={handleRefreshStatus}
             onToggleEnable={handleToggleEnable}
