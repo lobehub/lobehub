@@ -1,6 +1,9 @@
 import debug from 'debug';
 
-import { isBotFeatureAccessAllowed } from '@/business/server/bot/featureAccess';
+import {
+  getBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed,
+} from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -13,6 +16,8 @@ import {
   type PlatformDefinition,
   resolveBotProviderConfig,
 } from '@/server/services/bot/platforms';
+
+import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 
 const log = debug('lobe-server:bot-gateway');
 
@@ -183,6 +188,18 @@ export class GatewayManager {
           await existing.stop();
           this.clients.delete(key);
         }
+        // Keep the cached runtime snapshot in sync with the stop — otherwise
+        // the channel UI keeps reporting a connected bot that was just
+        // paid-gated. Mirrors the external-gateway and cron sync paths.
+        await updateBotRuntimeStatus({
+          applicationId,
+          errorMessage: getBotFeatureBlockedMessage(
+            platform,
+            provider.workspaceId ? 'workspace' : 'personal',
+          ),
+          platform,
+          status: BOT_RUNTIME_STATUSES.failed,
+        });
         log('Sync: feature access denied for %s', key);
         continue;
       }

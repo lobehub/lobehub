@@ -72,8 +72,10 @@ function createGatewayBot(
 async function ensureBotFeatureAccess(
   platform: string,
   provider: { applicationId: string; userId: string; workspaceId?: string | null },
+  action: 'manage' | 'runtime',
 ): Promise<boolean> {
   const allowed = await isBotFeatureAccessAllowed({
+    action,
     applicationId: provider.applicationId,
     platform,
     userId: provider.userId,
@@ -141,7 +143,10 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         continue;
       }
 
-      if (!(await ensureBotFeatureAccess(item.platform, provider))) {
+      // Queued connects are user-initiated reconnects (startClient), so they
+      // take the manage-mode gate; the provider loop below only keeps
+      // already-running listeners alive and stays on the runtime gate.
+      if (!(await ensureBotFeatureAccess(item.platform, provider, 'manage'))) {
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
@@ -225,7 +230,7 @@ export async function gatewayCron(c: Context): Promise<Response> {
         continue;
       }
 
-      if (!(await ensureBotFeatureAccess(platform.id, provider))) continue;
+      if (!(await ensureBotFeatureAccess(platform.id, provider, 'runtime'))) continue;
 
       platformTotal++;
       total++;

@@ -9,6 +9,7 @@ const mockFindEnabledByPlatformAndAppId = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
+const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -28,7 +29,13 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureBlockedMessage: vi.fn(() => 'blocked'),
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
+}));
+
+vi.mock('../runtimeStatus', () => ({
+  BOT_RUNTIME_STATUSES: { failed: 'failed' },
+  updateBotRuntimeStatus: mockUpdateBotRuntimeStatus,
 }));
 
 // Fake platform definition for testing
@@ -136,6 +143,11 @@ describe('GatewayManager', () => {
       await (manager as any).syncPlatform('fakeplatform');
 
       expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+      // The cached runtime snapshot must reflect the stop, or the channel UI
+      // keeps showing a connected bot.
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: 'app-1', status: 'failed' }),
+      );
     });
 
     it('should skip already running bots', async () => {
