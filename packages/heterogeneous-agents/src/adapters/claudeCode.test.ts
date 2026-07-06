@@ -445,6 +445,47 @@ describe('ClaudeCodeAdapter', () => {
       expect(end!.data.toolCallId).toBe('t1');
     });
 
+    it('aligns tool_end with the server shape — carries payload + result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { command: 'git worktree add ../wt' },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'Preparing worktree', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const end = events.find((e) => e.type === 'tool_end');
+      // Payload mirrors tool_start's `{ toolCalling }` so `onAfterCall` can resolve
+      // the executor by identifier and read the command args; result gives success.
+      expect(end!.data.payload).toEqual({
+        toolCalling: {
+          apiName: 'Bash',
+          arguments: JSON.stringify({ command: 'git worktree add ../wt' }),
+          id: 't1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      });
+      expect(end!.data.result).toMatchObject({ content: 'Preparing worktree', success: true });
+    });
+
     it('handles array-shaped tool_result content', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });

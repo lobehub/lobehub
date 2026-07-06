@@ -556,6 +556,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private mainToolInputsById = new Map<string, Record<string, any>>();
   /**
+   * `tool_use.id → ToolCallPayload`, so `tool_end` can re-attach the same
+   * `{ toolCalling }` payload the server ships — aligning the hetero event
+   * stream with the gateway/server one so renderer `onAfterCall` hooks fire
+   * identically regardless of runtime.
+   */
+  private toolPayloadById = new Map<string, ToolCallPayload>();
+  /**
    * Set of parent tool_use ids whose spawn metadata has already been
    * announced on a subagent event. Guarantees `spawnMetadata` appears
    * exactly once per subagent run — on the first subagent event for that
@@ -676,7 +683,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   flush(): HeterogeneousAgentEvent[] {
     // Close any still-open tools (shouldn't happen in normal flow, but be safe)
     const events = [...this.pendingToolCalls].map((id) =>
-      this.makeEvent('tool_end', { isSuccess: true, toolCallId: id }),
+      this.makeEvent('tool_end', this.buildToolEndData(id, true)),
     );
     this.pendingToolCalls.clear();
     return events;
@@ -814,14 +821,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
           // Cache EVERY main-agent tool_use input so the subagent-spawn
           // handler (`emitToolChunk`) can look up the parent's args on
           // first subagent event regardless of which spawn-tool name CC
@@ -1015,14 +1027,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
           if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
@@ -1133,6 +1150,33 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   /**
+   * Build `tool_end` event data aligned with the server/gateway shape: alongside
+   * `{ isSuccess, toolCallId }`, re-attach the tool's `{ toolCalling }` payload
+   * (from `toolPayloadById`) and a `result` mirroring a `BuiltinToolResult`. This
+   * is what lets the renderer's `onAfterCall` dispatch resolve the executor (by
+   * `identifier`) and observe the result — otherwise hetero tool_end carried no
+   * payload/result and `onAfterCall` was a silent no-op for CLI runs.
+   */
+  private buildToolEndData(
+    toolCallId: string,
+    isSuccess: boolean,
+    opts?: { content?: string; state?: unknown; subagent?: SubagentEventContext },
+  ): Record<string, any> {
+    const data: Record<string, any> = { isSuccess, toolCallId };
+    if (opts?.subagent) data.subagent = opts.subagent;
+
+    const toolCalling = this.toolPayloadById.get(toolCallId);
+    if (toolCalling) data.payload = { toolCalling };
+
+    data.result = {
+      content: opts?.content ?? '',
+      success: isSuccess,
+      ...(opts?.state ? { state: opts.state } : {}),
+    };
+    return data;
+  }
+
+  /**
    * Handle user events — these contain tool_result blocks.
    * NOTE: In Claude Code, tool results are emitted as `type: 'user'` events
    * (representing the synthetic user turn that feeds results back to the LLM).
@@ -1239,11 +1283,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       if (this.pendingToolCalls.has(toolCallId)) {
         this.pendingToolCalls.delete(toolCallId);
         events.push(
-          this.makeEvent('tool_end', {
-            isSuccess: !block.is_error,
-            subagent: subagentCtx,
-            toolCallId,
-          }),
+          this.makeEvent(
+            'tool_end',
+            this.buildToolEndData(toolCallId, !block.is_error, {
+              content: resultContent,
+              state: pluginState,
+              subagent: subagentCtx,
+            }),
+          ),
         );
       }
     }

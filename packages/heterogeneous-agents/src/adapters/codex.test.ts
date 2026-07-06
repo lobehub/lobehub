@@ -427,6 +427,36 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('aligns tool_end with the server shape — carries payload + result', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({
+      item: {
+        command: 'git worktree add /wt',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    const completed = adapter.adapt({
+      item: {
+        aggregated_output: 'Preparing worktree',
+        command: 'git worktree add /wt',
+        exit_code: 0,
+        id: 'item_1',
+        status: 'completed',
+        type: 'command_execution',
+      },
+      type: 'item.completed',
+    });
+
+    const end = completed.find((e) => e.type === 'tool_end');
+    expect(end!.data.payload).toMatchObject({
+      toolCalling: { apiName: 'command_execution', id: 'item_1', identifier: 'codex' },
+    });
+    expect(end!.data.result).toMatchObject({ success: true });
+  });
+
   it('maps command execution items into tool lifecycle events', () => {
     const adapter = new CodexAdapter();
 
