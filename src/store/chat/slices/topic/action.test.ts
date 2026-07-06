@@ -132,6 +132,26 @@ describe('topic action', () => {
 
       expect(saveToTopicSpy).toHaveBeenCalled();
     });
+
+    it('should skip saveToTopic when a send is still in flight in the new-topic context', async () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'session', activeTopicId: undefined });
+        // Simulate an in-flight send from the new-topic view (topic not created yet)
+        result.current.startOperation({
+          type: 'sendMessage',
+          context: { agentId: 'session', topicId: null },
+        });
+      });
+
+      const saveToTopicSpy = vi.spyOn(result.current, 'saveToTopic');
+
+      await act(async () => {
+        await result.current.openNewTopicOrSaveTopic();
+      });
+
+      expect(saveToTopicSpy).not.toHaveBeenCalled();
+    });
   });
   describe('saveToTopic', () => {
     it('should not create a topic if there are no messages', async () => {
