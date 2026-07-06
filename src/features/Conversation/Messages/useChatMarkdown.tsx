@@ -71,19 +71,22 @@ export const useChatMarkdown = ({
         enableStream,
         rehypePlugins,
         remarkPlugins,
-        showFootnotes:
-          !!citations && citations.length > 0 && citations.every((item) => item.title !== item.url),
+        showFootnotes: !citations?.length || citations.every((item) => item.title !== item.url),
       }) satisfies Partial<MarkdownProps>,
     [animated, citations, components, enableStream],
   );
 
-  const drawer = drawerContent ? (
-    <HtmlPreviewDrawer
-      content={drawerContent}
-      open={!!drawerContent}
-      onClose={() => setDrawerContent(null)}
-    />
-  ) : null;
+  const drawer = useMemo(
+    () =>
+      drawerContent ? (
+        <HtmlPreviewDrawer
+          content={drawerContent}
+          open={!!drawerContent}
+          onClose={() => setDrawerContent(null)}
+        />
+      ) : null,
+    [drawerContent],
+  );
 
   return useMemo(() => ({ drawer, markdownProps }), [drawer, markdownProps]);
 };
