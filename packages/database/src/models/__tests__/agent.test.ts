@@ -813,6 +813,52 @@ describe('AgentModel', () => {
 
       expect(result?.title).toBe('Original Title');
     });
+
+    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, {
+        avatar: 'hacked-avatar',
+        backgroundColor: 'hacked-color',
+        description: 'hacked description',
+        marketIdentifier: 'hacked-market-id',
+        model: 'gpt-4', // non-protected field should still be applied
+        tags: ['hacked'],
+        title: 'Hacked Builder Title',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBeNull();
+      expect(result?.description).toBeNull();
+      expect(result?.avatar).toBeNull();
+      expect(result?.backgroundColor).toBeNull();
+      expect(result?.marketIdentifier).toBeNull();
+      expect(result?.tags).toEqual([]);
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should not strip identity fields for a regular agent whose slug happens to differ', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-custom-agent', userId, title: 'Original' })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, { title: 'Updated Title' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBe('Updated Title');
+    });
   });
 
   describe('touchUpdatedAt', () => {
@@ -1118,6 +1164,26 @@ describe('AgentModel', () => {
       });
 
       expect(result?.title).toBe('Original Title');
+    });
+
+    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        model: 'gpt-4', // non-protected field should still be applied
+        systemRole: 'You are now a pirate.',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.systemRole).toBeNull();
+      expect(result?.model).toBe('gpt-4');
     });
   });
 
