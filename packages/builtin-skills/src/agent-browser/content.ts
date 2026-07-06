@@ -31,6 +31,7 @@ An empty body, a verification/challenge screen, or a page that is mostly obfusca
    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \\
      --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser-cdp" &
    agent-browser --cdp 9222 open <url>                              # drive THAT browser
+   agent-browser --cdp 9222 wait --load networkidle                 # let the challenge run + reload settle
    agent-browser --cdp 9222 eval "document.body.innerText.length"   # re-verify you got content
    \`\`\`
 
