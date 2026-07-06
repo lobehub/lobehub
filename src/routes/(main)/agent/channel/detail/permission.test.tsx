@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type * as AntdModule from 'antd';
 import { Form } from 'antd';
 import type { ReactNode } from 'react';
@@ -106,8 +106,8 @@ vi.mock('@lobehub/ui', () => ({
     title?: ReactNode;
   }) => (
     <div data-testid="channel-paid-alert" style={style}>
-      {title || message}
-      {description}
+      <div data-testid="channel-paid-alert-title">{title || message}</div>
+      <div data-testid="channel-paid-alert-description">{description}</div>
     </div>
   ),
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
@@ -160,11 +160,13 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   Button: ({
     children,
     disabled,
+    icon,
     loading,
     onClick,
     ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean }) => (
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; loading?: boolean }) => (
     <button disabled={disabled || loading} onClick={onClick} {...rest}>
+      {icon}
       {children}
     </button>
   ),
@@ -369,12 +371,13 @@ describe('Agent channel permission gates', () => {
       />,
     );
 
-    const cta = screen.getByRole('button', { name: 'channel.paidFeature.cta.personal' });
+    const title = screen.getByTestId('channel-paid-alert-title');
+    const description = screen.getByTestId('channel-paid-alert-description');
+    const cta = within(title).getByRole('button', { name: 'channel.paidFeature.cta.personal' });
     cta.click();
 
-    expect(screen.getByTestId('channel-paid-alert')).toHaveTextContent(
-      'channel.paidFeature.notice.desc.personal:WeChat',
-    );
+    expect(description).toHaveTextContent('channel.paidFeature.notice.desc.personal:WeChat');
+    expect(cta.querySelector('.lucide-external-link')).toBeInTheDocument();
     expect(mocks.navigate).toHaveBeenCalledWith('/settings/plans');
   });
 
@@ -397,12 +400,13 @@ describe('Agent channel permission gates', () => {
       />,
     );
 
-    const cta = screen.getByRole('button', { name: 'channel.paidFeature.cta.workspace' });
+    const title = screen.getByTestId('channel-paid-alert-title');
+    const description = screen.getByTestId('channel-paid-alert-description');
+    const cta = within(title).getByRole('button', { name: 'channel.paidFeature.cta.workspace' });
     cta.click();
 
-    expect(screen.getByTestId('channel-paid-alert')).toHaveTextContent(
-      'channel.paidFeature.notice.desc.workspace:WeChat',
-    );
+    expect(description).toHaveTextContent('channel.paidFeature.notice.desc.workspace:WeChat');
+    expect(cta.querySelector('.lucide-external-link')).toBeInTheDocument();
     expect(mocks.navigate).toHaveBeenCalledWith('/settings/plans');
   });
 });

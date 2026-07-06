@@ -4,6 +4,7 @@ import { Alert, Flexbox } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { ExternalLink } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -535,21 +536,26 @@ const PlatformDetail = memo<PlatformDetailProps>(
               showIcon
               style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
               type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
-              description={
-                <Flexbox align={'flex-start'} gap={12}>
+              description={t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
+                name: platformDef.name,
+              })}
+              message={
+                <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
                   <span>
-                    {t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
+                    {t(`channel.paidFeature.${paidFeatureMode}.title`, {
                       name: platformDef.name,
                     })}
                   </span>
-                  <Button size={'small'} type={'primary'} onClick={handlePaidFeatureUpgrade}>
+                  <Button
+                    icon={<ExternalLink size={14} />}
+                    size={'small'}
+                    type={'primary'}
+                    onClick={handlePaidFeatureUpgrade}
+                  >
                     {t(`channel.paidFeature.cta.${paidFeatureScope}`)}
                   </Button>
                 </Flexbox>
               }
-              message={t(`channel.paidFeature.${paidFeatureMode}.title`, {
-                name: platformDef.name,
-              })}
             />
           )}
           <Body
