@@ -918,15 +918,18 @@ export const callLlm =
         processedMessages = llmPayload.messages;
       }
 
-      // Never dispatch an empty messages array. Upstream APIs (anthropic /
-      // deepseek) reject it at the request boundary with a 400 `messages: at
-      // least one message is required`, which surfaces as an opaque
-      // UpstreamHttpError and burns a round-trip. If the context pipeline
-      // emptied the array (e.g. every message filtered out), fail fast with a
-      // locatable internal error instead of sending a doomed request.
-      if (processedMessages.length === 0) {
+      // A turn must carry at least one non-system message. Anthropic-compatible
+      // providers (anthropic / deepseek) move `role: system` into a separate
+      // top-level field, so a system-only array dispatches `messages: []` and
+      // the upstream rejects it with a 400 `messages: at least one message is
+      // required` (surfaced as an opaque UpstreamHttpError); for other providers
+      // a system-only turn has nothing to respond to. Either way the context
+      // pipeline dropped everything real — fail fast with a locatable internal
+      // error instead of a doomed round-trip. Attributed here (agent-runtime),
+      // not the provider layer, since it's our own pipeline that emptied it.
+      if (!processedMessages.some((message) => message.role !== 'system')) {
         throw new Error(
-          `call_llm produced an empty messages array for ${provider}/${model} ` +
+          `call_llm produced no non-system messages for ${provider}/${model} ` +
             `(topic=${state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
         );
       }

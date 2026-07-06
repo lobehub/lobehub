@@ -31,20 +31,6 @@ describe('buildDeepSeekAnthropicPayload — completion budget', () => {
     ).rejects.toBeInstanceOf(ContextExceededPreFlightError);
   });
 
-  // Anthropic moves `system` into its own top-level field, so a system-only
-  // turn leaves `messages: []` and the upstream rejects it with `400 messages:
-  // at least one message is required`. buildDefaultAnthropicPayload must fail
-  // fast rather than dispatch it (a length check in call_llm can't catch this —
-  // the array is non-empty until system extraction).
-  it('throws when only a system message remains after anthropic system extraction', async () => {
-    await expect(
-      buildDeepSeekAnthropicPayload({
-        messages: [{ content: 'You are a helpful assistant.', role: 'system' }],
-        model: 'deepseek-v4-pro',
-      } as any),
-    ).rejects.toThrow(/empty messages array/);
-  });
-
   // A normal small prompt must still produce a usable payload (no regression /
   // no spurious pre-flight throw for the common case).
   it('produces a payload with a positive max_tokens for a small prompt', async () => {
