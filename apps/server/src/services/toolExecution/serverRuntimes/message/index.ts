@@ -7,7 +7,7 @@ import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
-import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
+import { assertBotFeatureAccess, BotFeatureAccessError } from '@/business/server/bot/featureAccess';
 import {
   getEnabledMessengerPlatforms,
   getMessengerDiscordConfig,
@@ -101,10 +101,16 @@ const maybeSynthesizeTelegramInstall = async (
 
 /**
  * Resolves credentials for the given platform from the user's configured bot providers.
+ *
+ * Every outbound platform service is built through here, so this is also the
+ * runtime paid-feature gate: an enabled provider whose plan no longer covers
+ * the channel must not keep sending through the Message tool while the
+ * inbound/gateway paths are already denied.
  */
 const resolveCredentials = async (
   providerModel: AgentBotProviderModel,
   platform: string,
+  userId: string,
 ): Promise<{ applicationId: string; credentials: Record<string, string> }> => {
   const providers = await providerModel.query({ platform });
   const enabled = providers.find((p) => p.enabled);
@@ -114,6 +120,13 @@ const resolveCredentials = async (
         `Please configure a ${platform} integration in your bot settings.`,
     );
   }
+  await assertBotFeatureAccess({
+    action: 'runtime',
+    applicationId: enabled.applicationId,
+    platform,
+    userId,
+    workspaceId: enabled.workspaceId ?? undefined,
+  });
   return { applicationId: enabled.applicationId, credentials: enabled.credentials };
 };
 
@@ -131,18 +144,26 @@ export const messageRuntime: ServerRuntimeRegistration = {
 
     const service = new MessageDispatcherService({
       discord: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'discord');
+        const { credentials } = await resolveCredentials(providerModel, 'discord', context.userId!);
         return new DiscordMessageService(new DiscordApi(credentials.botToken));
       },
       feishu: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'feishu');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'feishu',
+          context.userId!,
+        );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
           'feishu',
         );
       },
       imessage: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'imessage');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'imessage',
+          context.userId!,
+        );
         return new ImessageMessageService(
           new ImessageDesktopBridgeApi({
             applicationId,
@@ -152,39 +173,59 @@ export const messageRuntime: ServerRuntimeRegistration = {
         );
       },
       lark: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'lark');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'lark',
+          context.userId!,
+        );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
           'lark',
         );
       },
       qq: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'qq');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'qq',
+          context.userId!,
+        );
         return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
       },
       slack: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'slack');
+        const { credentials } = await resolveCredentials(providerModel, 'slack', context.userId!);
         return new SlackMessageService(new SlackApi(credentials.botToken));
       },
       telegram: async () => {
         // Per-agent provider takes precedence; fall back to the env-backed
         // singleton so the synthetic telegram:singleton install actually works.
         try {
-          const { credentials } = await resolveCredentials(providerModel, 'telegram');
+          const { credentials } = await resolveCredentials(
+            providerModel,
+            'telegram',
+            context.userId!,
+          );
           return new TelegramMessageService(new TelegramApi(credentials.botToken));
-        } catch {
+        } catch (error) {
+          // A paid-gate denial is not a "provider missing" condition — falling
+          // back to the env singleton here would bypass the feature gate.
+          if (error instanceof BotFeatureAccessError) throw error;
           const envConfig = await getMessengerTelegramConfig();
           if (!envConfig) {
             throw new Error(
               'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
                 'Please configure a telegram integration in your bot settings.',
+              { cause: error },
             );
           }
           return new TelegramMessageService(new TelegramApi(envConfig.botToken));
         }
       },
       wechat: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'wechat');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'wechat',
+          context.userId!,
+        );
         return new WechatMessageService(
           new WechatApiClient(credentials.botToken, credentials.botId),
           applicationId,
