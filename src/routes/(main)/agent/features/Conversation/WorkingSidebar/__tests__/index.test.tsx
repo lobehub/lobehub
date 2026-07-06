@@ -83,6 +83,11 @@ vi.mock('@/store/global/selectors', () => ({
   },
 }));
 vi.mock('@/store/electron', () => ({ useElectronStore: () => undefined }));
+vi.mock('@/store/chat', () => ({ useChatStore: () => undefined }));
+
+vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
+  useBusinessWorkingSidebarTabs: () => [],
+}));
 
 vi.mock('@/features/ChatInput/ControlBar/useRepoType', () => ({
   useRepoType: () => reviewState.repoType,
