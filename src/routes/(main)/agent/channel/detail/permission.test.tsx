@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
+import type * as AntdModule from 'antd';
 import { Form } from 'antd';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -11,12 +12,68 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 import Body from './Body';
 import Footer from './Footer';
 import Header from './Header';
+import PlatformDetail from './index';
+
+const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: null as string | null,
+  navigate: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => <span>{i18nKey}</span>,
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, string>) =>
+      options?.name ? `${key}:${options.name}` : key,
   }),
+}));
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof AntdModule>();
+
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        message: {
+          error: vi.fn(),
+          success: vi.fn(),
+          warning: vi.fn(),
+        },
+      }),
+    },
+  };
+});
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: true }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
+}));
+
+vi.mock('@/services/agentBotProvider', () => ({
+  agentBotProviderService: {
+    wechatGetQrCode: vi.fn(),
+    wechatPollQrStatus: vi.fn(),
+  },
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      connectBot: vi.fn(),
+      createBotProvider: vi.fn(),
+      deleteBotProvider: vi.fn(),
+      refreshBotRuntimeStatus: vi.fn(),
+      testConnection: vi.fn(),
+      updateBotProvider: vi.fn(),
+    }),
 }));
 
 vi.mock('@/hooks/useAppOrigin', () => ({
@@ -37,8 +94,21 @@ vi.mock('@lobehub/ui', () => ({
       {title}
     </button>
   ),
-  Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
-    <div>{title || message}</div>
+  Alert: ({
+    description,
+    message,
+    style,
+    title,
+  }: {
+    description?: ReactNode;
+    message?: ReactNode;
+    style?: React.CSSProperties;
+    title?: ReactNode;
+  }) => (
+    <div data-testid="channel-paid-alert" style={style}>
+      {title || message}
+      {description}
+    </div>
   ),
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
@@ -211,6 +281,7 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
       platformDef={platformDef}
       saving={false}
       testing={false}
+      writeDisabled={disabled}
       onCopied={vi.fn()}
       onDelete={vi.fn()}
       onSave={vi.fn()}
@@ -220,6 +291,11 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
 };
 
 describe('Agent channel permission gates', () => {
+  beforeEach(() => {
+    mocks.activeWorkspaceId = null;
+    mocks.navigate.mockClear();
+  });
+
   it('renders channel credentials as read-only when editing is denied', () => {
     render(<BodyHarness disabled />);
 
@@ -251,5 +327,82 @@ describe('Agent channel permission gates', () => {
 
     expect(screen.getByRole('switch')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.refreshStatus' })).toBeDisabled();
+  });
+
+  it('renders the paid-feature alert with the platform name and spacing below the header divider', () => {
+    render(
+      <PlatformDetail
+        agentId="agent-id"
+        platformDef={{
+          ...platformDef,
+          access: {
+            allowed: false,
+            requiredPlan: 'paid',
+            rolloutMode: 'notice',
+          },
+          id: 'wechat',
+          name: 'WeChat',
+        }}
+      />,
+    );
+
+    const alert = screen.getByTestId('channel-paid-alert');
+    expect(alert).toHaveTextContent('channel.paidFeature.notice.title:WeChat');
+    expect(alert).toHaveTextContent('channel.paidFeature.notice.desc.personal:WeChat');
+    expect(alert).toHaveStyle({ marginBlockStart: '16px' });
+  });
+
+  it('renders personal upgrade guidance and navigates to personal plans', async () => {
+    render(
+      <PlatformDetail
+        agentId="agent-id"
+        platformDef={{
+          ...platformDef,
+          access: {
+            allowed: false,
+            requiredPlan: 'paid',
+            rolloutMode: 'notice',
+          },
+          id: 'wechat',
+          name: 'WeChat',
+        }}
+      />,
+    );
+
+    const cta = screen.getByRole('button', { name: 'channel.paidFeature.cta.personal' });
+    cta.click();
+
+    expect(screen.getByTestId('channel-paid-alert')).toHaveTextContent(
+      'channel.paidFeature.notice.desc.personal:WeChat',
+    );
+    expect(mocks.navigate).toHaveBeenCalledWith('/settings/plans');
+  });
+
+  it('renders workspace upgrade guidance and navigates to workspace plans', async () => {
+    mocks.activeWorkspaceId = 'workspace-1';
+
+    render(
+      <PlatformDetail
+        agentId="agent-id"
+        platformDef={{
+          ...platformDef,
+          access: {
+            allowed: false,
+            requiredPlan: 'paid',
+            rolloutMode: 'notice',
+          },
+          id: 'wechat',
+          name: 'WeChat',
+        }}
+      />,
+    );
+
+    const cta = screen.getByRole('button', { name: 'channel.paidFeature.cta.workspace' });
+    cta.click();
+
+    expect(screen.getByTestId('channel-paid-alert')).toHaveTextContent(
+      'channel.paidFeature.notice.desc.workspace:WeChat',
+    );
+    expect(mocks.navigate).toHaveBeenCalledWith('/settings/plans');
   });
 });

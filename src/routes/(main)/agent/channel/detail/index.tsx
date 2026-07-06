@@ -1,12 +1,14 @@
 'use client';
 
-import { Alert } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
@@ -74,13 +76,16 @@ interface PlatformDetailProps {
 const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, disabled, runtimeStatus }) => {
     const { t } = useTranslation('agent');
+    const navigate = useWorkspaceAwareNavigate();
     const { message: msg } = App.useApp();
     const [form] = Form.useForm<ChannelFormValues>();
     const { allowed: canEdit } = usePermission('edit_own_content');
+    const activeWorkspaceId = useActiveWorkspaceId();
     const readOnly = disabled || !canEdit;
     const paidFeatureBlocked =
       platformDef.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
     const paidFeatureMode = platformDef.access?.rolloutMode ?? 'enforce';
+    const paidFeatureScope = activeWorkspaceId ? 'workspace' : 'personal';
     const writeDisabled = readOnly || paidFeatureBlocked;
 
     const [
@@ -507,6 +512,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
       }
     }, [writeDisabled, currentConfig, platformDef.id, testConnection, msg, t]);
 
+    const handlePaidFeatureUpgrade = useCallback(() => {
+      navigate('/settings/plans');
+    }, [navigate]);
+
     return (
       <ChannelPostSaveContext value={postSaveRegistry}>
         <main className={styles.main}>
@@ -524,10 +533,21 @@ const PlatformDetail = memo<PlatformDetailProps>(
           {paidFeatureBlocked && (
             <Alert
               showIcon
-              message={t(`channel.paidFeature.${paidFeatureMode}.title`)}
-              style={{ maxWidth: 1024, width: '100%' }}
+              style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
               type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
-              description={t(`channel.paidFeature.${paidFeatureMode}.desc`, {
+              description={
+                <Flexbox align={'flex-start'} gap={12}>
+                  <span>
+                    {t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
+                      name: platformDef.name,
+                    })}
+                  </span>
+                  <Button size={'small'} type={'primary'} onClick={handlePaidFeatureUpgrade}>
+                    {t(`channel.paidFeature.cta.${paidFeatureScope}`)}
+                  </Button>
+                </Flexbox>
+              }
+              message={t(`channel.paidFeature.${paidFeatureMode}.title`, {
                 name: platformDef.name,
               })}
             />
