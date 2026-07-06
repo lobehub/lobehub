@@ -37,12 +37,36 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
+const env = vi.hoisted(() => ({
+  currentDeviceId: undefined as string | undefined,
+  targetDeviceId: undefined as string | undefined,
+}));
+
 vi.mock('@/store/electron', () => ({
-  getElectronStoreState: () => ({ gatewayDeviceInfo: undefined }),
+  getElectronStoreState: () => ({
+    gatewayDeviceInfo: env.currentDeviceId ? { deviceId: env.currentDeviceId } : undefined,
+  }),
 }));
 
 vi.mock('@/helpers/agentWorkingDirectory', () => ({
-  resolveTargetDeviceId: () => undefined,
+  resolveTargetDeviceId: () => env.targetDeviceId,
+}));
+
+const deviceMocks = vi.hoisted(() => ({
+  workingDirs: [] as { path: string; repoType?: string }[],
+}));
+
+vi.mock('@/store/device', () => ({
+  deviceSelectors: {
+    getDeviceWorkingDirs: () => () => deviceMocks.workingDirs,
+  },
+  getDeviceStoreState: () => ({}),
+}));
+
+const electronGitMocks = vi.hoisted(() => ({ detectRepoType: vi.fn() }));
+
+vi.mock('@/services/electron/git', () => ({
+  electronGitService: { detectRepoType: electronGitMocks.detectRepoType },
 }));
 
 const topicMocks = vi.hoisted(() => ({ getTopicById: vi.fn() }));
@@ -81,6 +105,10 @@ const makeGet = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockConstEnv.isDesktop = true;
+  env.currentDeviceId = undefined;
+  env.targetDeviceId = undefined;
+  deviceMocks.workingDirs = [];
+  electronGitMocks.detectRepoType.mockResolvedValue(undefined);
   gitMocks.getGitBranch.mockResolvedValue({ branch: 'fix/remote-review', detached: false });
   gitMocks.getLinkedPullRequest.mockResolvedValue({ pullRequest: PR, pullRequestStatus: 'ok' });
 });
@@ -103,6 +131,58 @@ describe('snapshotTopicWorkingDirGit', () => {
         repoType: 'github',
       },
     });
+  });
+
+  it('snapshots a legacy workingDirectory-only topic (repoType from device workingDirs)', async () => {
+    // Older topics persist only `workingDirectory` with no `workingDirectoryConfig`;
+    // the repo type must come from the device, not the (absent) stored config.
+    topicMocks.getTopicById.mockReturnValue({ metadata: { workingDirectory: '/repo' } });
+    deviceMocks.workingDirs = [{ path: '/repo', repoType: 'github' }];
+    const { get, updateTopicMetadata } = makeGet();
+
+    await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
+
+    expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'fix/remote-review',
+          github: { pullRequest: PR, pullRequestStatus: 'ok' },
+          isWorktree: false,
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('resolves repoType via a local filesystem probe when the device cache misses', async () => {
+    env.currentDeviceId = 'dev-1';
+    env.targetDeviceId = 'dev-1';
+    deviceMocks.workingDirs = [];
+    electronGitMocks.detectRepoType.mockResolvedValue('github');
+    topicMocks.getTopicById.mockReturnValue({ metadata: { workingDirectory: '/repo' } });
+    const { get, updateTopicMetadata } = makeGet();
+
+    await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
+
+    expect(electronGitMocks.detectRepoType).toHaveBeenCalledWith('/repo');
+    expect(updateTopicMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        workingDirectoryConfig: expect.objectContaining({ repoType: 'github' }),
+      }),
+    );
+  });
+
+  it('does nothing for a legacy topic whose device repoType is non-github', async () => {
+    topicMocks.getTopicById.mockReturnValue({ metadata: { workingDirectory: '/repo' } });
+    deviceMocks.workingDirs = [{ path: '/repo', repoType: 'git' }];
+    const { get, updateTopicMetadata } = makeGet();
+
+    await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
+
+    expect(gitMocks.getGitBranch).not.toHaveBeenCalled();
+    expect(updateTopicMetadata).not.toHaveBeenCalled();
   });
 
   it('does nothing for a non-github repo', async () => {

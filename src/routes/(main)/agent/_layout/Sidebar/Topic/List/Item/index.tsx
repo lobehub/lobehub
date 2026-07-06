@@ -464,7 +464,7 @@ const TopicItem = memo<TopicItemProps>(
           <Popover
             arrow={false}
             content={<MetaHoverCard metadata={metadata} title={title} />}
-            mouseEnterDelay={0.4}
+            mouseEnterDelay={0.8}
             placement={'right'}
             styles={META_HOVER_CARD_STYLES}
             trigger={'hover'}
