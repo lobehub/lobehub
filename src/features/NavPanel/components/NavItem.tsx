@@ -109,7 +109,7 @@ const NavItem = memo<NavItemProps>(
       ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
       // `disabled` only blocks the click by itself — dim the row so the
       // blocked state is visible instead of a silently dead button.
-      ...(disabled ? { cursor: 'not-allowed', opacity: 0.45 } : undefined),
+      ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
       ...style,
     };
 
