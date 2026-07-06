@@ -918,6 +918,19 @@ export const callLlm =
         processedMessages = llmPayload.messages;
       }
 
+      // Never dispatch an empty messages array. Upstream APIs (anthropic /
+      // deepseek) reject it at the request boundary with a 400 `messages: at
+      // least one message is required`, which surfaces as an opaque
+      // UpstreamHttpError and burns a round-trip. If the context pipeline
+      // emptied the array (e.g. every message filtered out), fail fast with a
+      // locatable internal error instead of sending a doomed request.
+      if (processedMessages.length === 0) {
+        throw new Error(
+          `call_llm produced an empty messages array for ${provider}/${model} ` +
+            `(topic=${state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
+        );
+      }
+
       // Initialize ModelRuntime (read user's keyVaults from database)
       const modelRuntime = await initModelRuntimeFromDB(
         ctx.serverDB,
