@@ -1234,6 +1234,36 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
+    it('does not post the paid-feature notice to senders rejected by the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // Only the rejection is posted — no plan notice leaks to blocked senders.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+    });
+
     it('should block DM messages blocked by the allowlist and notify the sender', async () => {
       const handler = await loadDmCatchAllHandler({
         allowFrom: 'bob-id',

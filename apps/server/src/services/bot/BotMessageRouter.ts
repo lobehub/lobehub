@@ -64,6 +64,8 @@ import {
 const log = debug('lobe-server:bot:message-router');
 const WECHAT_PRO_FEATURE_NOTICE =
   '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。';
+const WECHAT_PRO_FEATURE_NOTICE_WORKSPACE =
+  '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要将所属工作区升级到付费 Plan。';
 
 /**
  * Compact summary of a Chat SDK Message's attachments for debug logging.
@@ -827,7 +829,11 @@ export class BotMessageRouter {
       }
 
       try {
-        await thread.post(WECHAT_PRO_FEATURE_NOTICE);
+        // Workspace-owned channels upgrade at the workspace, not the owner's
+        // personal plan — keep the notice copy consistent with the channel UI.
+        await thread.post(
+          workspaceId ? WECHAT_PRO_FEATURE_NOTICE_WORKSPACE : WECHAT_PRO_FEATURE_NOTICE,
+        );
       } catch (error) {
         log('%s: failed to post feature notice: %O', caller, error);
       }
@@ -867,9 +873,12 @@ export class BotMessageRouter {
         return false;
       }
 
-      if (featureAccess.notice) {
+      // Posted only after every gate below passes — a sender or group the
+      // bot is configured not to answer must not receive a plan notice.
+      const maybeNotifyFeatureNotice = async (): Promise<void> => {
+        if (!featureAccess.notice) return;
         await notifyFeatureNoticeOnce(thread, author, featureAccess.notice.id, caller);
-      }
+      };
 
       // Owner override. The bot's operator (`settings.userId`) sets the
       // policies for *other* users — locking themselves out of their own
@@ -885,6 +894,7 @@ export class BotMessageRouter {
       // implicit-merge of `settings.userId` into `extractUserAllowlist`,
       // which already treats the operator as always-allowed.
       if (operatorUserId && author.userId === operatorUserId) {
+        await maybeNotifyFeatureNotice();
         return true;
       }
       // Pairing redefines what `allowFrom` means: it's the *post-approval*
@@ -923,7 +933,10 @@ export class BotMessageRouter {
         return false;
       }
       const dmDecision = passesDmPolicy(thread, { author });
-      if (dmDecision === 'allow') return true;
+      if (dmDecision === 'allow') {
+        await maybeNotifyFeatureNotice();
+        return true;
+      }
       log(
         '%s: DM gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
         caller,
