@@ -276,6 +276,13 @@ interface AgentDocumentsGroupProps {
   activeFilter?: ResourceFilter;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
+  /**
+   * Gate the (unbounded) document-list fetch. Defaults to `true`. The working
+   * sidebar passes `false` while its panel is collapsed so entering a
+   * conversation no longer pulls the full list into the initial batch — it
+   * fetches only once the user actually opens the resources panel.
+   */
+  enabled?: boolean;
   openMode?: DocumentOpenMode;
   showFilterTabs?: boolean;
   showLocalProjectSkills?: boolean;
@@ -287,6 +294,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
   ({
     activeFilter: controlledFilter,
     deviceId,
+    enabled = true,
     openMode,
     showFilterTabs = true,
     showLocalProjectSkills = false,
@@ -340,8 +348,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       error,
       isLoading,
       mutate,
-    } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
-      agentDocumentService.listDocuments({ agentId: agentId! }),
+    } = useClientDataSWR(
+      enabled && agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
+      () => agentDocumentService.listDocuments({ agentId: agentId! }),
     );
 
     const webData = useMemo(

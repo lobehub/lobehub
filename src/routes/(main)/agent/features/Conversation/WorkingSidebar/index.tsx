@@ -87,6 +87,10 @@ const TWO_PANE_MIN_WIDTH = 560;
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation(['chat', 'setting']);
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
+  // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
+  // the resources pane's document fetch so a collapsed sidebar doesn't pull the
+  // full agent-document list into the conversation's initial batch.
+  const showRightPanel = useGlobalStore((s) => s.status.showRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -253,7 +257,10 @@ const AgentWorkingSidebar = memo(() => {
             width={'100%'}
           >
             <ProgressSection />
-            <ResourcesSection deviceId={remoteDeviceId} />
+            <ResourcesSection
+              deviceId={remoteDeviceId}
+              enabled={showRightPanel && activeTab === 'resources'}
+            />
           </Flexbox>
         </Flexbox>
       </Flexbox>
