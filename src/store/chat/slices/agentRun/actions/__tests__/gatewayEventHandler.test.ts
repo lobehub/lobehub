@@ -680,6 +680,7 @@ describe('createGatewayEventHandler', () => {
         params: { identifier: 'T-3' },
         result: { content: 'Task deleted', success: true },
         toolCallId: 'tc-1',
+        topicId: 'topic-1',
       });
     });
 
@@ -750,6 +751,7 @@ describe('createGatewayEventHandler', () => {
         identifier: 'lobe-task',
         params: { identifier: 'T-5', name: 'renamed' },
         toolCallId: 'tc-3',
+        topicId: 'topic-1',
       });
     });
   });
