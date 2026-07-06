@@ -10,8 +10,8 @@ export const AgentBrowserSkill: BuiltinSkill = {
   description:
     'Browser automation CLI for AI agents (agent-browser v0.31.1). Use when tasks involve website or ' +
     'Electron interaction such as navigation, form filling, clicking, screenshot capture, scraping data, ' +
-    'login flows, and end-to-end app testing. First choice for JS-rendered or anti-bot pages ' +
-    '(crawl returns empty body / verification page) — activate instead of scripting a bypass.',
+    'login flows, and end-to-end app testing. For JS-rendered or anti-bot pages (crawl returns ' +
+    'empty body / verification page), prefer this skill over driving Chrome by hand or scripting a bypass.',
   identifier: AgentBrowserIdentifier,
   name: 'agent-browser',
   source: 'builtin',
