@@ -3,8 +3,14 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { isInvalidBranchRef } from './branches';
 import { getGitWorkingTreeStatus } from './info';
-import type { GitRemoveWorktreeResult, GitWorkingTreeStatus, GitWorktreeListItem } from './types';
+import type {
+  GitAddWorktreeResult,
+  GitRemoveWorktreeResult,
+  GitWorkingTreeStatus,
+  GitWorktreeListItem,
+} from './types';
 
 const execFileAsync = promisify(execFile);
 
@@ -158,5 +164,36 @@ export const removeGitWorktree = async (payload: {
   } catch (error: any) {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     return { error: stderr || 'git worktree remove failed', success: false };
+  }
+};
+
+/**
+ * Add a linked worktree checked out on a fresh branch, mirroring the branch
+ * switcher's "create branch" flow (`git worktree add -b <branch> <path>`). The
+ * new branch forks from the repo's current HEAD; the caller supplies the target
+ * directory (an absolute sibling path the renderer derives from the source
+ * repo). Returns the created path on success so the UI can switch into it.
+ */
+export const addGitWorktree = async (payload: {
+  branch: string;
+  path: string;
+  worktreePath: string;
+}): Promise<GitAddWorktreeResult> => {
+  const { path: dirPath, branch, worktreePath } = payload;
+  if (!dirPath?.trim()) return { error: 'Working directory is required', success: false };
+  if (!branch?.trim()) return { error: 'Branch name is required', success: false };
+  if (!worktreePath?.trim()) return { error: 'Worktree path is required', success: false };
+  if (isInvalidBranchRef(branch))
+    return { error: `Invalid branch name: ${branch}`, success: false };
+
+  try {
+    await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
+      cwd: dirPath,
+      timeout: 30_000,
+    });
+    return { success: true, worktreePath };
+  } catch (error: any) {
+    const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+    return { error: stderr || 'git worktree add failed', success: false };
   }
 };

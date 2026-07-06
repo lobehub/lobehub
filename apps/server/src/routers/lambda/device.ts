@@ -314,6 +314,29 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Add a linked worktree on a fresh branch in a directory's repository on a
+   * remote device, via the device's `addGitWorktree` RPC.
+   */
+  addGitWorktree: deviceProcedure
+    .input(
+      z.object({
+        branch: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+        worktreePath: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.addGitWorktree({
+        branch: input.branch,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        worktreePath: input.worktreePath,
+      }),
+    ),
+
+  /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */

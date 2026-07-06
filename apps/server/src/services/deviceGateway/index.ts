@@ -11,6 +11,7 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchDiffPatches,
   DeviceGitBranchInfo,
@@ -452,6 +453,40 @@ export class DeviceGateway {
     } catch (error) {
       log('removeGitWorktree: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Remove worktree failed', success: false };
+    }
+  }
+
+  /**
+   * Add a linked worktree on a fresh branch in a directory's repository on a
+   * remote device via the `addGitWorktree` device RPC.
+   */
+  async addGitWorktree(params: {
+    branch: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    worktreePath: string;
+  }): Promise<DeviceGitAddWorktreeResult> {
+    const { userId, deviceId, branch, path, worktreePath, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitAddWorktreeResult>(
+        { deviceId, timeout, userId },
+        { method: 'addGitWorktree', params: { branch, path, worktreePath } },
+      );
+
+      if (!result.success || !result.data) {
+        log('addGitWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Add worktree failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('addGitWorktree: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Add worktree failed', success: false };
     }
   }
 

@@ -412,6 +412,14 @@ export interface DeviceGitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
+}
+
 /**
  * Repo-relative paths of dirty working-tree files for a directory on a remote
  * device, returned by the `getGitWorkingTreeFiles` device RPC. Powers the Files

@@ -20,6 +20,10 @@ export default {
   'workingDirectory.clean': 'clean',
   'workingDirectory.createBranchAction': 'Checkout new branch…',
   'workingDirectory.createBranchTitle': 'Create new branch',
+  'workingDirectory.createWorktreeAction': 'Create worktree…',
+  'workingDirectory.createWorktreeFailed': 'Create worktree failed',
+  'workingDirectory.createWorktreeSubmit': 'Create',
+  'workingDirectory.createWorktreeTitle': 'Create new worktree',
   'workingDirectory.current': 'Current working directory',
   'workingDirectory.defaultBadge': 'Default',
   'workingDirectory.deleteBranchAction': 'Delete branch',
@@ -38,6 +42,7 @@ export default {
   'workingDirectory.ghMissing':
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',
+  'workingDirectory.newWorktreeLocation': 'Will be created at {{path}}',
   'workingDirectory.noMatch': 'No matching directories',
   'workingDirectory.noRecent': 'No directories yet',
   'workingDirectory.notSet': 'Click to set working directory',

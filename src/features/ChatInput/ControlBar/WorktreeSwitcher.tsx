@@ -13,6 +13,7 @@ import {
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
+  FolderPlusIcon,
   GitForkIcon,
   LoaderCircleIcon,
   RefreshCwIcon,
@@ -24,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
 
+import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -234,6 +236,32 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     padding: 6px;
   `,
+  createItemWrapper: css`
+    padding: 6px;
+    border-block-start: 1px solid ${cssVar.colorSplit};
+  `,
+  createItem: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: 8px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  createItemIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
+  `,
   name: css`
     overflow: hidden;
     flex: 0 1 auto;
@@ -327,6 +355,27 @@ const getPathName = (path: string): string =>
 
 const normalizeDisplayPath = (path: string): string =>
   path.replaceAll('\\', '/').replace(/\/+$/, '');
+
+/**
+ * Derive the target directory for a new worktree: a sibling of the source repo
+ * named `<repoName>-<branch>` (e.g. `/code/lobehub` + `feat/x` →
+ * `/code/lobehub-feat-x`), matching the convention agents already use for their
+ * linked worktrees. Preserves the source path's separator so Windows paths stay
+ * intact, and folds ref-illegal characters in the branch to `-` for the folder.
+ */
+export const deriveWorktreePath = (sourcePath: string, branch: string): string => {
+  const sep = sourcePath.includes('\\') && !sourcePath.includes('/') ? '\\' : '/';
+  const trimmed = sourcePath.replace(/[/\\]+$/, '');
+  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  const parent = cut >= 0 ? trimmed.slice(0, cut) : '';
+  const repoName = (cut >= 0 ? trimmed.slice(cut + 1) : trimmed) || 'repo';
+  const suffix = branch
+    .trim()
+    .replaceAll(/[\s~^:?*[\]\\/]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '');
+  const folder = suffix ? `${repoName}-${suffix}` : repoName;
+  return parent ? `${parent}${sep}${folder}` : folder;
+};
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
 
@@ -551,6 +600,37 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
       [deviceId, onWorktreesChange, path, t, tCommon],
     );
 
+    // Create a worktree on a fresh branch (mirrors the branch switcher's "create
+    // branch" flow), then switch the working directory into it. Returns an error
+    // message for inline display in the modal, or undefined on success.
+    const handleCreateWorktree = useCallback(
+      async (branch: string): Promise<string | undefined> => {
+        const worktreePath = deriveWorktreePath(sourcePath, branch);
+        const result = await gitService.addGitWorktree({ branch, deviceId, path, worktreePath });
+        if (!result.success) return result.error || t('workingDirectory.createWorktreeFailed');
+
+        // Point the conversation at the freshly created worktree, then reconcile
+        // the list so the new row (now `current`) appears.
+        const createdPath = result.worktreePath ?? worktreePath;
+        await commit({
+          git: { activeWorktree: createdPath },
+          path: sourcePath,
+          repoType: isGithub ? 'github' : 'git',
+        });
+        await onWorktreesChange?.();
+        return undefined;
+      },
+      [commit, deviceId, isGithub, onWorktreesChange, path, sourcePath, t],
+    );
+
+    const openCreateWorktree = useCallback(() => {
+      setOpen(false);
+      openCreateWorktreeModal({
+        onSubmit: handleCreateWorktree,
+        resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
+      });
+    }, [handleCreateWorktree, sourcePath]);
+
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would
     // otherwise read as "nothing selected".
@@ -696,6 +776,17 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       );
                     })
                   )}
+                </div>
+
+                <div className={styles.createItemWrapper}>
+                  <DropdownMenuItem
+                    className={styles.createItem}
+                    closeOnClick={false}
+                    onClick={openCreateWorktree}
+                  >
+                    <Icon className={styles.createItemIcon} icon={FolderPlusIcon} size={14} />
+                    <div>{t('workingDirectory.createWorktreeAction')}</div>
+                  </DropdownMenuItem>
                 </div>
               </div>
             </DropdownMenuPopup>

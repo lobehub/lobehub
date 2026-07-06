@@ -6,6 +6,7 @@ import type {
   GitWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 import type {
+  DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
@@ -119,6 +120,23 @@ class GitService {
     return deviceId
       ? lambdaClient.device.removeGitWorktree.mutate({ deviceId, path, worktreePath })
       : electronGitService.removeGitWorktree({ path, worktreePath });
+  }
+
+  /** Add a linked worktree on a fresh branch to a working directory's repository. */
+  addGitWorktree({
+    branch,
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitAddWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, worktreePath })
+      : electronGitService.addGitWorktree({ branch, path, worktreePath });
   }
 
   /** Pull (`--ff-only`) the current branch of a working directory. */

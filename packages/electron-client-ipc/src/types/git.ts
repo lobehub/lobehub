@@ -221,6 +221,13 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+export interface GitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
+}
+
 export interface GitPullResult {
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */

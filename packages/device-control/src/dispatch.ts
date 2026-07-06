@@ -1,4 +1,5 @@
 import {
+  addGitWorktree,
   checkoutGitBranch,
   deleteGitBranch,
   getGitAheadBehind,
@@ -61,6 +62,7 @@ export const DEVICE_RPC_METHODS = [
   'renameGitBranch',
   'deleteGitBranch',
   'removeGitWorktree',
+  'addGitWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -175,6 +177,10 @@ export const executeDeviceRpc = async (
 
     case 'removeGitWorktree': {
       return removeGitWorktree(params as { path: string; worktreePath: string });
+    }
+
+    case 'addGitWorktree': {
+      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
     }
 
     case 'pullGitBranch': {
