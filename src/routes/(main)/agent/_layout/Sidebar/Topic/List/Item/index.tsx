@@ -8,6 +8,7 @@ import {
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,6 +46,19 @@ const rippleAnim = keyframes`
     opacity: 0;
   }
 `;
+
+// Base UI Popover plays an opacity/scale enter+exit transition driven by these
+// CSS vars on the positioner. Zero them so the meta hover card appears instantly
+// instead of easing in — the hover-intent delay (`mouseEnterDelay`) still gates
+// when it shows. `styles.root` maps to the positioner (inline style → wins over
+// the library's default without a specificity fight).
+const META_HOVER_CARD_STYLES = {
+  content: { padding: 12 },
+  root: {
+    '--lobe-popover-animation-duration': '0ms',
+    '--lobe-popover-animation-duration-exit': '0ms',
+  } as CSSProperties,
+};
 
 const styles = createStaticStyles(({ css }) => ({
   unreadWrapper: css`
@@ -452,7 +466,7 @@ const TopicItem = memo<TopicItemProps>(
             content={<MetaHoverCard metadata={metadata} title={title} />}
             mouseEnterDelay={0.4}
             placement={'right'}
-            styles={{ content: { padding: 12 } }}
+            styles={META_HOVER_CARD_STYLES}
             trigger={'hover'}
           >
             <div>{navItem}</div>
