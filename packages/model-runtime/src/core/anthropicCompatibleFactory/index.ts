@@ -191,9 +191,22 @@ export const buildDefaultAnthropicPayload = async (
     postMessages.pop();
   }
 
+  // Anthropic keeps `system` in its own top-level field, so a system-only turn
+  // (or one whose only message was an assistant prefill just popped above)
+  // leaves `messages` empty — the upstream then rejects it with
+  // `400 messages: at least one message is required`. A length check upstream in
+  // call_llm can't catch this: the array is non-empty there and only becomes
+  // empty after system extraction here. Fail fast with a locatable error rather
+  // than dispatch a doomed request. Reachable even for an empty user turn, since
+  // a system prompt is always injected.
+  if (postMessages.length === 0) {
+    throw new Error(
+      `Anthropic payload for model "${model}" has an empty messages array after system extraction — refusing to dispatch`,
+    );
+  }
+
   let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
-    | AnthropicTools[]
-    | undefined;
+    AnthropicTools[] | undefined;
 
   if (enabledSearch) {
     const webSearchTool = buildSearchTool();

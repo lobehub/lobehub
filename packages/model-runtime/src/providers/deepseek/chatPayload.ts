@@ -108,9 +108,12 @@ export const buildDeepSeekAnthropicPayload = async (
     // completion; with a prompt that on its own fits the 1M window, that fixed
     // reservation tipped the total over the limit and produced a "phantom"
     // ExceededContextWindow. resolveSafeMaxTokens shrinks the reservation to the
-    // remaining room (and only throws a clean pre-flight error when the prompt
-    // itself already overflows the window). Estimate against the messages we
-    // actually send (anthropic-normalized).
+    // remaining room, and fails fast with a structured ContextExceededPreFlight
+    // error when the prompt leaves less than ~1k tokens for completion (below
+    // deepseek-v4's default thinking budget → effectively context-full) — which
+    // is more actionable (fork_topic / larger-ctx suggestions) than either a
+    // doomed upstream 400 or a truncated stub completion. Estimate against the
+    // messages we actually send (anthropic-normalized).
     resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekChatModels) ??
     (await getModelPropertyWithFallback<number | undefined>(
       payload.model,
