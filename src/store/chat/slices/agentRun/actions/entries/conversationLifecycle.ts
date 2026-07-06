@@ -845,13 +845,12 @@ export class ConversationLifecycleActionImpl {
           clearNewKey: true,
           skipRefreshMessage: true,
         });
-        // Same as the gateway branch: resolveOptimisticTopic migrated the
-        // optimistic topic's loading owner onto the real id; the hetero run
-        // spinner is owned by persisted `status === 'running'`, so release the
-        // creation owner here or the sidebar spinner sticks forever.
-        if (optimisticTopic && optimisticTopicResolved) {
-          this.#get().internal_updateTopicLoading(heteroData.topicId, false);
-        }
+        // resolveOptimisticTopic migrated the optimistic topic's loading owner
+        // onto the real id; it is released in the executor `finally` below —
+        // NOT here — because the persisted `status === 'running'` (the run
+        // spinner's other driver) is only written after startSession resolves,
+        // so releasing before the executor takes over would blank the sidebar
+        // spinner during a slow CLI startup.
       }
 
       // Clean up temp messages
@@ -953,6 +952,16 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'HeterogeneousAgentError',
         });
+      } finally {
+        // Release the creation owner migrated by resolveOptimisticTopic (run
+        // end no longer clears topicLoadingIds since #16745, so without this
+        // the sidebar spinner sticks forever). Held until the run settles so
+        // the spinner stays continuous through the pre-`running` startup gap;
+        // it can't mask `waitingForHuman` — the sidebar item renders that
+        // state with higher priority than the running icon.
+        if (optimisticTopic && optimisticTopicResolved && heteroData.topicId) {
+          this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+        }
       }
 
       return {

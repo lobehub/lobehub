@@ -649,6 +649,95 @@ describe('ConversationLifecycle actions', () => {
         expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopicId);
       });
 
+      it('should hold the migrated topicLoadingIds owner through a hetero new-topic run and release it at the end', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              topicId: newTopicId,
+            }),
+            createMockMessage({
+              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              role: 'assistant',
+              topicId: newTopicId,
+            }),
+          ],
+          topicId: newTopicId,
+          topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        let resolveExecutor!: () => void;
+        executeHeterogeneousAgentMock.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolveExecutor = resolve;
+          }),
+        );
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'hello',
+          });
+        });
+
+        await waitFor(() => expect(executeHeterogeneousAgentMock).toHaveBeenCalled());
+
+        // The executor only writes the persisted `status === 'running'` (the
+        // run spinner's other driver) after startSession resolves — the
+        // migrated creation owner must stay held while the executor starts up,
+        // or the sidebar spinner blanks during a slow CLI startup.
+        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
+
+        await act(async () => {
+          resolveExecutor();
+          await sendPromise;
+          // Let the fire-and-forget afterUserMessagePersisted title task settle
+          // inside this test instead of leaking into the next one.
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+      });
+
       it('should keep a gateway optimistic topic in its pending repo project group', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
