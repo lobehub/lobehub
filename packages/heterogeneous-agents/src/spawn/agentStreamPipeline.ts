@@ -1,5 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
+import { type UploadedImageOutcome, rewriteImagePlaceholders } from '../imageEcho';
 import { createAdapter } from '../registry';
 import type {
   AgentEventAdapter,
@@ -138,6 +139,11 @@ export class AgentStreamPipeline {
    * an authenticated file-store client), so the heavy base64 never reaches the
    * persistence sinks. Uploads that fail — or that have no injected uploader —
    * drop the image entry; the `[Image: …]` text placeholder is the fallback.
+   *
+   * On success it also rewrites the matching `[Image: …]` placeholder in the
+   * tool_result `content` into a markdown image, so a downstream model handed
+   * this history (e.g. a summarizer, or continuing the topic on another model)
+   * knows an image is here and where — not just an opaque token.
    */
   private async uploadResultImages(events: HeterogeneousAgentEvent[]): Promise<void> {
     for (const event of events) {
@@ -147,24 +153,42 @@ export class AgentStreamPipeline {
       if (!images?.length) continue;
 
       const uploaded: HeterogeneousToolResultImage[] = [];
+      // One entry per original image, in emission order, so the content
+      // placeholders can be rewritten position-for-position (a failed upload
+      // leaves its `url` unset → its placeholder is kept).
+      const outcomes: UploadedImageOutcome[] = [];
       for (const image of images) {
         // Already an uploaded reference (or nothing to upload) — pass through.
         if (!image.data || image.fileId) {
           uploaded.push(image);
+          outcomes.push({ mediaType: image.mediaType, url: image.url });
           continue;
         }
-        if (!this.uploadImage) continue;
+        if (!this.uploadImage) {
+          outcomes.push({ mediaType: image.mediaType });
+          continue;
+        }
         try {
           const ref = await this.uploadImage({ data: image.data, mediaType: image.mediaType });
           // `undefined` → uploader declined; drop the entry rather than persist base64.
-          if (ref) uploaded.push({ fileId: ref.fileId, mediaType: image.mediaType, url: ref.url });
+          if (ref) {
+            uploaded.push({ fileId: ref.fileId, mediaType: image.mediaType, url: ref.url });
+            outcomes.push({ mediaType: image.mediaType, url: ref.url });
+          } else {
+            outcomes.push({ mediaType: image.mediaType });
+          }
         } catch {
           // Degrade to the `[Image: …]` placeholder rather than failing the stream.
+          outcomes.push({ mediaType: image.mediaType });
         }
       }
 
       if (uploaded.length > 0) pluginState!.images = uploaded;
       else delete pluginState!.images;
+
+      if (typeof event.data?.content === 'string') {
+        event.data.content = rewriteImagePlaceholders(event.data.content, outcomes);
+      }
     }
   }
 

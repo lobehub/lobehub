@@ -49,6 +49,9 @@ const ccReadImage = (toolCallId = 'r1') =>
 const imagesOf = (events: { data?: any; type: string }[]) =>
   events.find((e) => e.type === 'tool_result')?.data?.pluginState?.images;
 
+const contentOf = (events: { data?: any; type: string }[]) =>
+  events.find((e) => e.type === 'tool_result')?.data?.content;
+
 describe('AgentStreamPipeline', () => {
   it('runs JSONL → adapter → toStreamEvent and stamps operationId', async () => {
     const pipeline = new AgentStreamPipeline({
@@ -193,6 +196,9 @@ describe('AgentStreamPipeline', () => {
       ]);
       // Base64 body must never survive into the persisted event.
       expect(imagesOf(events)![0]).not.toHaveProperty('data');
+      // The `[Image: …]` placeholder is rewritten to a markdown image so a
+      // downstream model knows an image is here (and where).
+      expect(contentOf(events)).toBe('![image/png](https://cdn/x.png)');
     });
 
     it('drops the image when no uploader is injected (base64 never persisted)', async () => {

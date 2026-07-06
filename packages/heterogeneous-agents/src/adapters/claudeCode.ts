@@ -49,6 +49,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { imagePlaceholder } from '../imageEcho';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -1194,7 +1195,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                     if (c.source?.type === 'base64' && typeof c.source.data === 'string') {
                       images.push({ data: c.source.data, mediaType });
                     }
-                    return `[Image: ${mediaType}]`;
+                    return imagePlaceholder(mediaType);
                   }
                   return c.text || c.content || '';
                 })
