@@ -1,6 +1,3 @@
-/**
- * This file contains the root router of Lobe Chat tRPC-backend
- */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
@@ -81,88 +78,11 @@ import { userMemoryRouter } from './userMemory';
 import { verifyRouter } from './verify';
 import { videoRouter } from './video';
 import { webBrowsingRouter } from './webBrowsing';
-
-export const lambdaRouter = router({
-  agent: agentRouter,
-  agentBotProvider: agentBotProviderRouter,
-  agentNotify: agentNotifyRouter,
-  botMessage: botMessageRouter,
-  agentDocument: agentDocumentRouter,
-  agentEval: agentEvalRouter,
-  agentEvalExternal: agentEvalExternalRouter,
-  agentSkills: agentSkillsRouter,
-  agentSignal: agentSignalRouter,
-  task: taskRouter,
-  changelog: changelogRouter,
-  brief: briefRouter,
-  aiAgent: aiAgentRouter,
-  aiChat: aiChatRouter,
-  aiModel: aiModelRouter,
-  aiProvider: aiProviderRouter,
-  apiKey: apiKeyRouter,
-  asr: asrRouter,
-  chunk: chunkRouter,
-  comfyui: comfyuiRouter,
-  config: configRouter,
-  connector: connectorRouter,
-  device: deviceRouter,
-  document: documentRouter,
-  exporter: exporterRouter,
-  file: fileRouter,
-  followUpAction: followUpActionRouter,
-  generation: generationRouter,
-  generationBatch: generationBatchRouter,
-  generationTopic: generationTopicRouter,
-  group: agentGroupRouter,
-  healthcheck: publicProcedure.query(() => "i'm live!"),
-  home: homeRouter,
-  image: imageRouter,
-  importer: importerRouter,
-  composio: composioRouter,
-
-  klavis: klavisRouter,
-  knowledge: knowledgeRouter,
-  knowledgeBase: knowledgeBaseRouter,
-  llmGenerationTracing: llmGenerationTracingRouter,
-  market: marketRouter,
-  message: messageRouter,
-  messenger: messengerRouter,
-  notebook: notebookRouter,
-  notification: notificationRouter,
-  oauthDeviceFlow: oauthDeviceFlowRouter,
-  plugin: pluginRouter,
-  pushToken: pushTokenRouter,
-  ragEval: ragEvalRouter,
-  recent: recentRouter,
-  search: searchRouter,
-  session: sessionRouter,
-  sessionGroup: sessionGroupRouter,
-  share: shareRouter,
-  thread: threadRouter,
-  topic: topicRouter,
-  upload: uploadRouter,
-  usage: usageRouter,
-  user: userRouter,
-  userMemories: userMemoriesRouter,
-  userMemory: userMemoryRouter,
-  verify: verifyRouter,
-  video: videoRouter,
-  webBrowsing: webBrowsingRouter,
-  workspace: workspaceRouter,
-  workspaceAuditLog: workspaceAuditLogRouter,
-  workspaceCreds: workspaceCredsRouter,
-  workspaceCredits: workspaceCreditsRouter,
-  workspaceData: workspaceDataRouter,
-  workspaceMember: workspaceMemberRouter,
-  workspaceUsage: workspaceUsageRouter,
-  accountDeletion: accountDeletionRouter,
-  pageShare: pageShareRouter,
-  referral: referralRouter,
-  spend: spendRouter,
-  storageOverage: storageOverageRouter,
-  subscription: subscriptionRouter,
-  taskTemplate: taskTemplateRouter,
-  topUp: topUpRouter,
-});
-
-export type LambdaRouter = typeof lambdaRouter;
++import { adminRolesRouter } from './adminRoles';
+ 
+ export const lambdaRouter = router({
+   agent: agentRouter,
+@@
+   webBrowsing: webBrowsingRouter,
++  adminRoles: adminRolesRouter,
+   workspace: workspaceRouter,
