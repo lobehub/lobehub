@@ -56,17 +56,10 @@ export type AgentSignalFeedbackDomainTarget = 'memory' | 'none' | 'prompt' | 'sk
 export type AgentSignalFeedbackPhase1DomainTarget = 'memory' | 'prompt' | 'skill';
 
 export type AgentSignalSkillIntentExplicitness =
-  | 'explicit_action'
-  | 'implicit_strong_learning'
-  | 'non_skill_preference'
-  | 'weak_positive';
+  'explicit_action' | 'implicit_strong_learning' | 'non_skill_preference' | 'weak_positive';
 
 export type AgentSignalSkillActionIntent =
-  | 'consolidate'
-  | 'create'
-  | 'maintain'
-  | 'noop'
-  | 'refine';
+  'consolidate' | 'create' | 'maintain' | 'noop' | 'refine';
 
 export type AgentSignalSkillIntentRoute = 'accumulate' | 'direct_decision' | 'non_skill';
 
@@ -262,10 +255,7 @@ export interface AgentSignalPolicySignalPayloadMap {
     operationId: string;
     outcome: 'failed' | 'resolved' | 'succeeded';
     reason:
-      | 'execution-failed'
-      | 'repeated-repair'
-      | 'successful-resolution'
-      | 'unexpected-tool-result';
+      'execution-failed' | 'repeated-repair' | 'successful-resolution' | 'unexpected-tool-result';
     serializedContext?: string;
     topicId?: string;
   };
@@ -317,11 +307,7 @@ export interface AgentSignalPolicyActionPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle]: {
     agentId?: string;
-    /**
-     * Assistant message that completed the turn. When present (deferred
-     * completion-stage synthesis) the skill seed anchors here instead of under
-     * the user message, so it is not a floating mainline root.
-     */
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
     assistantMessageId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
@@ -336,6 +322,8 @@ export interface AgentSignalPolicyActionPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    assistantMessageId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
@@ -421,9 +409,7 @@ export type ActionNudgeHandle = AgentSignalPolicyActionVariant<'action.nudge.han
 
 /** Sources that can trigger the memory-nudge policy. */
 export type MemoryNudgePolicySource =
-  | SourceAgentExecutionCompleted
-  | SourceRuntimeAfterStep
-  | SourceRuntimeBeforeStep;
+  SourceAgentExecutionCompleted | SourceRuntimeAfterStep | SourceRuntimeBeforeStep;
 
 /** Sources that can trigger self-reflection analysis. */
 export type SelfReflectionPolicySource = SourceAgentExecutionCompleted | SourceAgentExecutionFailed;

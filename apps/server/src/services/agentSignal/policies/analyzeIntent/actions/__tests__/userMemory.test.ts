@@ -3,7 +3,11 @@ import { LayersEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeProcessorContext } from '../../../../runtime/context';
-import { defineUserMemoryActionHandler, resolveMemoryActionTargetFromState } from '../userMemory';
+import {
+  buildUserMemoryActionAgentSignalMarker,
+  defineUserMemoryActionHandler,
+  resolveMemoryActionTargetFromState,
+} from '../userMemory';
 
 const memoryActionRunner = vi.fn();
 
@@ -74,9 +78,9 @@ describe('defineUserMemoryActionHandler', () => {
     expect(context.runtimeState.touchGuardState).toHaveBeenCalledTimes(1);
   });
 
-  it('anchors the memory-agent thread on the user message id when no assistant boundary exists', async () => {
+  it('isolates the memory-agent thread on the user message id when no assistant boundary exists', async () => {
     // Non-clientRuntimeComplete source: sourceId has no `:completion:` segment,
-    // so assistantMessageId is absent. The run must still anchor a child thread
+    // so assistantMessageId is absent. The run must still create a child thread
     // under the triggering user message instead of leaking into the main topic.
     memoryActionRunner.mockResolvedValue({ status: 'applied' });
 
@@ -88,7 +92,7 @@ describe('defineUserMemoryActionHandler', () => {
 
     await handler.handle(
       {
-        actionId: 'act_memory_fallback_anchor',
+        actionId: 'act_memory_fallback_thread',
         actionType: 'action.user-memory.handle',
         chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
         payload: {
@@ -334,6 +338,40 @@ describe('defineUserMemoryActionHandler', () => {
     expect(second?.status).toBe('applied');
     expect(touchGuardState).toHaveBeenCalledTimes(1);
     expect(memoryActionRunner).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('buildUserMemoryActionAgentSignalMarker', () => {
+  it('keeps the user message as trigger without using it as the receipt anchor', () => {
+    const marker = buildUserMemoryActionAgentSignalMarker({
+      messageId: 'msg_user_1',
+      sourceId: 'source_1:memory:msg_user_1',
+      topicId: 'topic_1',
+    });
+
+    expect(marker).toEqual({
+      kind: 'memory',
+      sourceId: 'source_1:memory:msg_user_1',
+      topicId: 'topic_1',
+      triggerMessageId: 'msg_user_1',
+    });
+  });
+
+  it('uses the assistant message as anchor while preserving the user trigger', () => {
+    const marker = buildUserMemoryActionAgentSignalMarker({
+      assistantMessageId: 'msg_assistant_1',
+      messageId: 'msg_user_1',
+      sourceId: 'source_1:memory:msg_user_1',
+      topicId: 'topic_1',
+    });
+
+    expect(marker).toEqual({
+      anchorMessageId: 'msg_assistant_1',
+      kind: 'memory',
+      sourceId: 'source_1:memory:msg_user_1',
+      topicId: 'topic_1',
+      triggerMessageId: 'msg_user_1',
+    });
   });
 });
 

@@ -65,6 +65,31 @@ const toSkippedResult = (actionId: string, detail: string, startedAt: number): E
 const isSkillManagementAction = (action: BaseAction): action is ActionSkillManagementHandle =>
   action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle;
 
+interface BuildSkillManagementAgentSignalMarkerInput {
+  agentId: string;
+  assistantMessageId?: string;
+  messageId?: string;
+  sourceId: string;
+  topicId?: string;
+}
+
+export const buildSkillManagementAgentSignalMarker = ({
+  agentId,
+  assistantMessageId,
+  messageId,
+  sourceId,
+  topicId,
+}: BuildSkillManagementAgentSignalMarkerInput): AgentSignalOperationMarker => ({
+  agentId,
+  // Preserve the split: user feedback is the trigger; only a known assistant
+  // reply is a durable receipt anchor. UI fallback happens in the chat list.
+  ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
+  kind: 'skill',
+  sourceId,
+  ...(messageId ? { triggerMessageId: messageId } : {}),
+  ...(topicId ? { topicId } : {}),
+});
+
 /**
  * Renders the same-turn skill feedback into the agent prompt. The builtin
  * skill-management agent's systemRole carries the behavioural instructions; this
@@ -155,13 +180,11 @@ export const executeSkillManagementAction = async (
     const sourceId = idempotencyKey ?? action.actionId;
     const { assistantMessageId, messageId, topicId } = action.payload;
 
-    // Anchor the skill seed under the completed assistant turn when the synthesis
-    // ran deferred at `agent.execution.completed` (skill delayed to turn
-    // completion so evidence carries the full trajectory); fall back to the user
-    // message for the legacy inbound dispatch. Anchoring to the assistant message
-    // keeps the seed inside the assistant group instead of surfacing as a
-    // floating `parent_id=null` mainline root.
-    const anchorMessageId = assistantMessageId ?? messageId;
+    // Keep child-thread isolation separate from receipt anchoring. The receipt
+    // marker only anchors to an assistant message; the fallback here prevents
+    // async skill-management messages from flattening into the main topic when a
+    // legacy inbound dispatch has no completed assistant boundary yet.
+    const sourceMessageId = assistantMessageId ?? messageId;
 
     const prompt = buildSkillFeedbackPrompt({
       agentId,
@@ -176,14 +199,13 @@ export const executeSkillManagementAction = async (
     // The run executes under the builtin skill-management slug, so attribute the
     // receipt to the reviewed user agent via `marker.agentId` (the operation's
     // own agentId is the builtin agent).
-    const marker: AgentSignalOperationMarker = {
+    const marker = buildSkillManagementAgentSignalMarker({
       agentId,
-      kind: 'skill',
+      ...(assistantMessageId ? { assistantMessageId } : {}),
+      ...(messageId ? { messageId } : {}),
       sourceId,
-      ...(anchorMessageId ? { anchorMessageId } : {}),
-      ...(messageId ? { triggerMessageId: messageId } : {}),
       ...(topicId ? { topicId } : {}),
-    };
+    });
 
     const dispatch = options.dispatch ?? enqueueSelfIterationRun;
     await dispatch({
@@ -192,7 +214,7 @@ export const executeSkillManagementAction = async (
       marker,
       prompt,
       slug: BUILTIN_AGENT_SLUGS.skillManagement,
-      ...(anchorMessageId ? { sourceMessageId: anchorMessageId } : {}),
+      ...(sourceMessageId ? { sourceMessageId } : {}),
       threadTitle: 'Agent Signal Skill',
       ...(topicId ? { topicId } : {}),
       userId: options.userId,

@@ -105,6 +105,28 @@ const isUserMemoryAction = (action: BaseAction): action is ActionUserMemoryHandl
   return action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle;
 };
 
+interface BuildUserMemoryActionAgentSignalMarkerInput {
+  assistantMessageId?: string;
+  messageId?: string;
+  sourceId: string;
+  topicId?: string;
+}
+
+export const buildUserMemoryActionAgentSignalMarker = ({
+  assistantMessageId,
+  messageId,
+  sourceId,
+  topicId,
+}: BuildUserMemoryActionAgentSignalMarkerInput): AgentSignalOperationMarker => ({
+  // Preserve the split: user feedback is the trigger; only a known assistant
+  // reply is a durable receipt anchor. UI fallback happens in the chat list.
+  ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
+  kind: 'memory',
+  sourceId,
+  ...(topicId ? { topicId } : {}),
+  ...(messageId ? { triggerMessageId: messageId } : {}),
+});
+
 const createInitialContext = (operationId: string): AgentRuntimeContext => {
   return {
     payload: { message: [] },
@@ -384,6 +406,12 @@ export const handleUserMemoryAction = async (
       action.payload.feedbackHint === 'satisfied' || action.payload.feedbackHint === 'not_satisfied'
         ? action.payload.feedbackHint
         : undefined;
+    const assistantMessageId =
+      typeof action.payload.assistantMessageId === 'string'
+        ? action.payload.assistantMessageId
+        : undefined;
+    const messageId =
+      typeof action.payload.messageId === 'string' ? action.payload.messageId : undefined;
     const runnerInput = {
       agentId: typeof action.payload.agentId === 'string' ? action.payload.agentId : undefined,
       conflictPolicy:
@@ -402,7 +430,7 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The message to anchor the memory-agent child thread under, so its
+      // The message to attach the memory-agent child thread to, so its
       // messages stay isolated from the main topic instead of being flattened
       // into it. Prefer the assistant message that completed the turn (set by
       // planUserMemory via extractAssistantMessageIdFromSourceId — only present
@@ -411,22 +439,17 @@ export const handleUserMemoryAction = async (
       // carry no assistant boundary, so fall back to the triggering user
       // message id; without this fallback no thread is created and the run
       // leaks into the active conversation.
-      sourceMessageId:
-        typeof action.payload.assistantMessageId === 'string'
-          ? action.payload.assistantMessageId
-          : typeof action.payload.messageId === 'string'
-            ? action.payload.messageId
-            : undefined,
+      sourceMessageId: assistantMessageId ?? messageId,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     // Stamp the run so the completion path can project the memory receipt (the
     // memory write is now enqueued async, not resolved synchronously here).
-    const marker: AgentSignalOperationMarker = {
-      kind: 'memory',
-      ...(runnerInput.sourceMessageId ? { anchorMessageId: runnerInput.sourceMessageId } : {}),
+    const marker = buildUserMemoryActionAgentSignalMarker({
+      ...(assistantMessageId ? { assistantMessageId } : {}),
+      ...(messageId ? { messageId } : {}),
       sourceId: idempotencyKey ?? action.actionId,
       ...(runnerInput.topicId ? { topicId: runnerInput.topicId } : {}),
-    };
+    });
     const runner =
       options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options, { marker }));
     let memoryActionResult: MemoryAgentActionResult | undefined;

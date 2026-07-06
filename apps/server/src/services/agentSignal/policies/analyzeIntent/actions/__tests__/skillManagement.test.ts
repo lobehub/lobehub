@@ -59,11 +59,12 @@ describe('defineSkillManagementActionHandler', () => {
     expect(dispatched.slug).toBe('skill-management');
     expect(dispatched.agentId).toBe('agent_1');
     expect(dispatched.topicId).toBe('topic_1');
-    expect(dispatched.marker).toMatchObject({
+    expect(dispatched.marker).toEqual({
       agentId: 'agent_1',
       kind: 'skill',
       sourceId: 'source_1:skill:msg_1',
       topicId: 'topic_1',
+      triggerMessageId: 'msg_1',
     });
     expect(typeof dispatched.prompt).toBe('string');
     expect(dispatched.prompt).toContain(skillAction.payload.message);
@@ -86,6 +87,38 @@ describe('defineSkillManagementActionHandler', () => {
 
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0][0].workspaceId).toBe('ws_1');
+  });
+
+  it('anchors the skill receipt to the completed assistant message when known', async () => {
+    dispatch.mockResolvedValue({ operationId: 'op_1', topicId: 'topic_1' });
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      dispatch,
+      selfIterationEnabled: true,
+      userId: 'user_1',
+    });
+
+    await handler.handle(
+      {
+        ...skillAction,
+        payload: {
+          ...skillAction.payload,
+          assistantMessageId: 'msg_assistant_1',
+        },
+      },
+      createContext(),
+    );
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0].marker).toEqual({
+      agentId: 'agent_1',
+      anchorMessageId: 'msg_assistant_1',
+      kind: 'skill',
+      sourceId: 'source_1:skill:msg_1',
+      topicId: 'topic_1',
+      triggerMessageId: 'msg_1',
+    });
   });
 
   it('skips when self-iteration is disabled (no dispatch)', async () => {
