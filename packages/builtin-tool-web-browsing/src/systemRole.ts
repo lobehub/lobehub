@@ -17,7 +17,6 @@ export const systemPrompt = (
 </workflow>
 
 <tool_selection_guidelines>
-- Dynamic or anti-bot pages need a real browser, not a crawler. If the target page is JS-rendered (SPA, infinite scroll, content loaded after page load) or bot-protected (Cloudflare or similar challenge), or a previous crawl of it returned an empty body / verification page, skip the crawl tools: activate the agent-browser skill (listed in available_skills when present) and fetch the page with it instead.
 - For general information queries: Use search with the most relevant search categories (e.g., 'general').
 - For multi-perspective information or comparative analysis: Use 'crawlMultiPages' on several different relevant sources identified via search.
 - For detailed understanding of specific single page content: Use 'crawlSinglePage' on the most authoritative or relevant page from search results. Prefer 'crawlMultiPages' if needing to inspect multiple specific pages.
