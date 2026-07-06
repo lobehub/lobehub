@@ -2454,6 +2454,8 @@ export class AiAgentService {
         // a local device that is offline and exec silently lands in the sandbox.
         manifestContext: {
           executionEnv: executionPlan.kind,
+          executionEnvUnroutedReason:
+            executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
           isSubAgent: appContext?.isSubAgent,
           scope: appContext?.scope ?? undefined,
         },

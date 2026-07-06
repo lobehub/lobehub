@@ -25,9 +25,10 @@ const EXEC_API_NAMES = new Set<string>([
  * - `device`: a local device is online — the sandbox is the FALLBACK.
  *   Credential fact: `injectCredsToSandbox` only injects into the sandbox;
  *   devices deliberately get nothing.
- * - `device-unrouted`: the user chose their local device but it is offline —
- *   the model must disclose the degradation instead of silently running
- *   machine-specific commands in the sandbox.
+ * - `device-unrouted`: the user chose local-device execution but no device is
+ *   routed this run — the model must disclose that instead of silently
+ *   running machine-specific commands in the sandbox. Wording varies by
+ *   unrouted reason (see `resolveUnroutedTexts`).
  * - `sandbox`: explicit sandbox target — current semantics, just made
  *   unambiguous that it is not the user's machine.
  *
@@ -39,7 +40,7 @@ const EXEC_ENV_PREAMBLES: Partial<
   'device':
     "Fallback execution environment: an isolated cloud sandbox, not the user's machine (LobeHub-managed credentials injected, e.g. `GITHUB_TOKEN`).",
   'device-unrouted':
-    'Fallback execution environment: an isolated cloud sandbox. The user chose their local device but it is offline — say so before running commands that assume their machine.',
+    'Fallback execution environment: an isolated cloud sandbox. The user chose local-device execution but no device is routed this run — say so before running commands that assume their machine.',
   'sandbox': "Execution environment: an isolated cloud sandbox, not the user's machine.",
 };
 
@@ -55,7 +56,43 @@ const EXEC_ENV_FACTS: Partial<
 > = {
   'device':
     'A local device is online. Default shell execution to `lobe-local-system` runCommand; use the skills exec APIs only when the local run lacks a required tool, the task needs LobeHub-managed credentials, or the task needs isolation.',
-  'device-unrouted': 'Bound device offline; shell commands execute in the cloud sandbox this run.',
+  'device-unrouted':
+    'No local device is routed; shell commands execute in the cloud sandbox this run.',
+};
+
+/**
+ * `device-unrouted` covers four reasons (`ExecutionPlanUnroutedReason`) that
+ * split into two truths: the device the user counts on is OFFLINE
+ * (`bound-device-offline` / `no-online-device`), vs a device is still
+ * SELECTABLE (`no-bound-device` / `ambiguous-online-devices` — the
+ * remote-device picker is active, so the prompt must steer toward selecting
+ * one rather than declaring the device dead). Reason absent → keep the
+ * neutral defaults above, which are true for all four.
+ */
+const resolveUnroutedTexts = (
+  reason: BuiltinToolResolveContext['executionEnvUnroutedReason'],
+): { fact?: string; preamble?: string } => {
+  switch (reason) {
+    case 'bound-device-offline':
+    case 'no-online-device': {
+      return {
+        fact: 'Bound device offline; shell commands execute in the cloud sandbox this run.',
+        preamble:
+          'Fallback execution environment: an isolated cloud sandbox. The user chose their local device but it is offline — say so before running commands that assume their machine.',
+      };
+    }
+    case 'ambiguous-online-devices':
+    case 'no-bound-device': {
+      return {
+        fact: "No local device is selected yet (devices may be online). If the task needs the user's machine, select a device via the remote-device tool first; until then, shell commands execute in the cloud sandbox.",
+        preamble:
+          "Fallback execution environment: an isolated cloud sandbox. No local device is selected yet — if the task needs the user's machine, select an online device first instead of running machine-specific commands here.",
+      };
+    }
+    default: {
+      return {};
+    }
+  }
 };
 
 /**
@@ -64,10 +101,15 @@ const EXEC_ENV_FACTS: Partial<
  * execution plan (see `BuiltinToolResolveContext.executionEnv`).
  */
 export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
-  const preamble = context.executionEnv && EXEC_ENV_PREAMBLES[context.executionEnv];
-  if (!preamble) return SkillsManifest;
+  const basePreamble = context.executionEnv && EXEC_ENV_PREAMBLES[context.executionEnv];
+  if (!basePreamble) return SkillsManifest;
 
-  const fact = context.executionEnv && EXEC_ENV_FACTS[context.executionEnv];
+  const unrouted =
+    context.executionEnv === 'device-unrouted'
+      ? resolveUnroutedTexts(context.executionEnvUnroutedReason)
+      : {};
+  const preamble = unrouted.preamble ?? basePreamble;
+  const fact = unrouted.fact ?? (context.executionEnv && EXEC_ENV_FACTS[context.executionEnv]);
 
   return {
     ...SkillsManifest,

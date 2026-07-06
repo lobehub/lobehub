@@ -256,6 +256,15 @@ export interface BuiltinToolResolveContext {
    */
   executionEnv?: 'device' | 'device-unrouted' | 'local' | 'none' | 'sandbox';
   /**
+   * Why a `device-unrouted` plan failed to route, mirroring
+   * `ExecutionPlanUnroutedReason` (`src/helpers/executionTarget.ts`). Only set
+   * when `executionEnv` is `device-unrouted`. Offline reasons and
+   * still-selectable reasons (unbound / several devices online, where the
+   * remote-device picker is active) need different prompt wording.
+   */
+  executionEnvUnroutedReason?:
+    'ambiguous-online-devices' | 'bound-device-offline' | 'no-bound-device' | 'no-online-device';
+  /**
    * True when running inside a sub-agent execution. A nested sub-agent must not
    * be able to dispatch further sub-agents.
    */

@@ -324,7 +324,10 @@ describe('createServerAgentToolsEngine', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [] },
-      manifestContext: { executionEnv: 'device-unrouted' },
+      manifestContext: {
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason: 'bound-device-offline',
+      },
       model: 'deepseek-chat',
       provider: 'deepseek',
     });

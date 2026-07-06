@@ -8,8 +8,10 @@ import { SkillsApiName } from './types';
 const EXEC_APIS = [SkillsApiName.runCommand, SkillsApiName.execScript, SkillsApiName.exportFile];
 const NON_EXEC_APIS = [SkillsApiName.activateSkill, SkillsApiName.readReference];
 
-const apiByName = (manifest: { api: { description: string; name: string }[] }, name: string) =>
-  manifest.api.find((a) => a.name === name)!;
+const apiByName = (
+  manifest: { api: { description: string; humanIntervention?: unknown; name: string }[] },
+  name: string,
+) => manifest.api.find((a) => a.name === name)!;
 
 describe('resolveSkillsManifest', () => {
   it('returns the static manifest reference when no executionEnv is set', () => {
@@ -41,18 +43,57 @@ describe('resolveSkillsManifest', () => {
     );
   });
 
-  it('warns about the offline device and appends the environment fact when device-unrouted', () => {
+  it.each(['bound-device-offline', 'no-online-device'] as const)(
+    'warns about the offline device when device-unrouted for %s',
+    (executionEnvUnroutedReason) => {
+      const result = resolveSkillsManifest({
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason,
+      })!;
+
+      for (const name of EXEC_APIS) {
+        const description = apiByName(result, name).description;
+        expect(description).toMatch(/^Fallback execution environment: an isolated cloud sandbox/);
+        expect(description).toContain('local device but it is offline');
+      }
+      // the offline fact rides the tool systemRole into the prompt
+      expect(result.systemRole).toContain(systemPrompt);
+      expect(result.systemRole).toContain(
+        'Bound device offline; shell commands execute in the cloud sandbox this run.',
+      );
+    },
+  );
+
+  it.each(['no-bound-device', 'ambiguous-online-devices'] as const)(
+    'steers toward device selection when device-unrouted for %s',
+    (executionEnvUnroutedReason) => {
+      const result = resolveSkillsManifest({
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason,
+      })!;
+
+      for (const name of EXEC_APIS) {
+        const description = apiByName(result, name).description;
+        expect(description).toMatch(/^Fallback execution environment: an isolated cloud sandbox/);
+        expect(description).toContain('No local device is selected yet');
+        expect(description).not.toContain('offline');
+      }
+      expect(result.systemRole).toContain(systemPrompt);
+      expect(result.systemRole).toContain('select a device via the remote-device tool');
+      expect(result.systemRole).not.toContain('Bound device offline');
+    },
+  );
+
+  it('keeps reason-neutral wording when device-unrouted has no reason', () => {
     const result = resolveSkillsManifest({ executionEnv: 'device-unrouted' })!;
 
     for (const name of EXEC_APIS) {
       const description = apiByName(result, name).description;
-      expect(description).toMatch(/^Fallback execution environment: an isolated cloud sandbox/);
-      expect(description).toContain('local device but it is offline');
+      expect(description).toContain('no device is routed this run');
+      expect(description).not.toContain('offline');
     }
-    // the offline fact rides the tool systemRole into the prompt
-    expect(result.systemRole).toContain(systemPrompt);
     expect(result.systemRole).toContain(
-      'Bound device offline; shell commands execute in the cloud sandbox this run.',
+      'No local device is routed; shell commands execute in the cloud sandbox this run.',
     );
   });
 
