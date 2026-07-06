@@ -83,6 +83,7 @@ const mockSetFieldValue = vi.fn();
 const mockGetFieldValue = vi.fn();
 const mockValidateFields = vi.fn();
 const mockSetFields = vi.fn();
+const mockResetFields = vi.fn();
 const mockSubmit = vi.fn();
 vi.mock('antd', async () => {
   const actual: any = await vi.importActual('antd');
@@ -93,6 +94,7 @@ vi.mock('antd', async () => {
       useForm: () => [
         {
           getFieldValue: mockGetFieldValue,
+          resetFields: mockResetFields,
           setFields: mockSetFields,
           setFieldValue: mockSetFieldValue,
           submit: mockSubmit,
@@ -475,6 +477,9 @@ describe('useSignIn', () => {
       expect(result.current.step).toBe('email');
       expect(result.current.email).toBe('');
       expect(result.current.isSocialOnly).toBe(false);
+      // The shared form's password (+ any inline error) must be cleared so the
+      // next email doesn't remount pre-filled with the previous account's value.
+      expect(mockResetFields).toHaveBeenCalledWith(['password']);
     });
   });
 
@@ -595,7 +600,7 @@ describe('useSignIn', () => {
   });
 
   describe('handleBackFromSent', () => {
-    it('should return to the password step after a reset email', async () => {
+    it('should return to the email entry (not the password step) after a reset email', async () => {
       mockRequestPasswordReset.mockResolvedValue(undefined);
       mockFetch.mockResolvedValueOnce({
         json: async () => ({ exists: true, hasPassword: true }),
@@ -617,8 +622,12 @@ describe('useSignIn', () => {
         result.current.handleBackFromSent();
       });
 
-      expect(result.current.step).toBe('password');
+      // "Use a different email" must land on the email entry so the label
+      // matches the action, and reset the shared password field.
+      expect(result.current.step).toBe('email');
+      expect(result.current.email).toBe('');
       expect(result.current.sentInfo).toBeNull();
+      expect(mockResetFields).toHaveBeenCalledWith(['password']);
     });
   });
 

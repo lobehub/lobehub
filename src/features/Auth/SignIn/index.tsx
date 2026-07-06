@@ -65,6 +65,7 @@ const SignIn = () => {
       socialLoading={socialLoading}
       onCheckUser={handleCheckUser}
       onGoToSignup={handleGoToSignup}
+      onResetEmail={handleBackToEmail}
       onSetPassword={handleForgotPassword}
       onSocialSignIn={handleSocialSignIn}
     />

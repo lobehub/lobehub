@@ -23,8 +23,6 @@ type SentEmailType = 'magicLink' | 'resetPassword';
 
 interface SentEmailInfo {
   email: string;
-  // Where "use a different email" should return the user to
-  returnStep: Extract<Step, 'email' | 'password'>;
   type: SentEmailType;
 }
 
@@ -100,7 +98,7 @@ export const useSignIn = () => {
       }
       // Success is a forward step, not a fleeting toast: land on a persistent
       // "check your inbox" screen (ux Act §3.5).
-      setSentInfo({ email: emailValue, returnStep: 'email', type: 'magicLink' });
+      setSentInfo({ email: emailValue, type: 'magicLink' });
       setStep('emailSent');
       return true;
     } catch (error) {
@@ -299,6 +297,10 @@ export const useSignIn = () => {
     setStep('email');
     setEmail('');
     setIsSocialOnly(false);
+    // Drop the previous account's password + any inline error. The form
+    // instance is shared across steps and defaults to preserve, so without this
+    // the next email's password step remounts pre-filled with the stale value.
+    form.resetFields(['password']);
   };
 
   const handleGoToSignup = () => {
@@ -337,12 +339,9 @@ export const useSignIn = () => {
 
   const handleForgotPassword = async () => {
     if (!email || sending) return;
-    // Capture where the user came from so "use a different email" can return
-    // them to the password step (they may still want to try their password).
-    const returnStep: SentEmailInfo['returnStep'] = step === 'password' ? 'password' : 'email';
     const ok = await dispatchPasswordReset(email);
     if (!ok) return;
-    setSentInfo({ email, returnStep, type: 'resetPassword' });
+    setSentInfo({ email, type: 'resetPassword' });
     setStep('emailSent');
   };
 
@@ -355,13 +354,10 @@ export const useSignIn = () => {
     if (ok) message.success(t('betterAuth.signin.emailSent.resent'));
   };
 
+  // "Use a different email" — always drop back to the email entry so the label
+  // matches the action (returning to the password step would keep the same email).
   const handleBackFromSent = () => {
-    const target = sentInfo?.returnStep ?? 'email';
     setSentInfo(null);
-    if (target === 'password') {
-      setStep('password');
-      return;
-    }
     handleBackToEmail();
   };
 

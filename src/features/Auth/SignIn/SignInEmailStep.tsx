@@ -39,6 +39,7 @@ export interface SignInEmailStepProps {
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
   onGoToSignup: () => void;
+  onResetEmail: () => void;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
   serverConfigInit: boolean;
@@ -56,6 +57,7 @@ export const SignInEmailStep = ({
   socialLoading,
   onCheckUser,
   onGoToSignup,
+  onResetEmail,
   onSetPassword,
   onSocialSignIn,
 }: SignInEmailStepProps) => {
@@ -188,6 +190,24 @@ export const SignInEmailStep = ({
             </>
           }
         />
+      )}
+      {isSocialOnly && (
+        <Text align={'center'} fontSize={13} style={{ marginTop: 12 }} type={'secondary'}>
+          <a
+            className={styles.inlineLink}
+            role="button"
+            tabIndex={0}
+            onClick={onResetEmail}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onResetEmail();
+              }
+            }}
+          >
+            {t('betterAuth.signin.emailSent.changeEmail')}
+          </a>
+        </Text>
       )}
       <AuthAgreement />
       {showEmailForm && (
