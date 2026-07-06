@@ -343,14 +343,22 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       const state = (response.state ?? {}) as {
         commandId?: string;
+        error?: string;
         exitCode?: number;
         stderr?: string;
         stdout?: string;
+        success?: boolean;
       };
 
-      if (!response.success) {
+      // `response.success` is the delivery envelope only: the device-side
+      // ComputerRuntime reports service failures (spawn error, shell lost,
+      // missing params) as `success: true` with `state.success: false` and no
+      // exitCode (`errorOutput`) — without this check they'd fall through to
+      // the still-running branch below and read as a successful run.
+      if (!response.success || state.success === false) {
         return fail(
           state.stderr ||
+            state.error ||
             response.error ||
             response.content ||
             'Command execution failed on the device',

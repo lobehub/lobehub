@@ -422,6 +422,37 @@ describe('skillsRuntime', () => {
       expect(result.content).not.toContain('completed successfully');
     });
 
+    // The device ComputerRuntime reports service failures (spawn error, shell
+    // lost) with a delivered envelope: `success: true`, `state.success:
+    // false`, and no exitCode — they must surface as failures, not as a
+    // still-running command.
+    it('reports failure when the device service fails without an exit code', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'spawn ENOENT',
+        state: { error: 'spawn ENOENT', isBackground: false, success: false },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'python scripts/run.py',
+        description: 'spawn failure',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('spawn ENOENT');
+      expect(result.content).not.toContain('still running');
+    });
+
     // The device shell observation reports success: true for any delivered
     // observation — the actual exit status only lives in exitCode.
     it('reports failure when the script exits non-zero despite a successful observation', async () => {
