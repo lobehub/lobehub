@@ -44,6 +44,7 @@ import {
 } from '../messagePersistErrors';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
 import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
+import { resolveRunProjectSkills } from './resolveRunProjectSkills';
 
 export const callTool =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -287,16 +288,7 @@ export const callTool =
                 memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
                 messageId: state.metadata?.sourceMessageId,
                 operationId,
-                projectSkills: (state.metadata?.operationSkillSet?.skills ?? [])
-                  .filter(
-                    (skill: { location?: string; source?: string }) =>
-                      (skill.source === 'project' || skill.source === 'device') && !!skill.location,
-                  )
-                  .map((skill: { location: string; name: string; source?: string }) => ({
-                    location: skill.location,
-                    name: skill.name,
-                    source: skill.source === 'device' ? 'device' : 'project',
-                  })),
+                projectSkills: resolveRunProjectSkills(state.metadata),
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,
                 skipResultTruncation: true,

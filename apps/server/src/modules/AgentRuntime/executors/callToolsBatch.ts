@@ -45,6 +45,7 @@ import {
 } from '../messagePersistErrors';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
 import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
+import { resolveRunProjectSkills } from './resolveRunProjectSkills';
 
 export const callToolsBatch =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -284,6 +285,10 @@ export const callToolsBatch =
                     memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
                     messageId: state.metadata?.sourceMessageId,
                     operationId,
+                    // Mirrors the single-tool `callTool` context: without these
+                    // a batched device execScript loses the SKILL.md / selected
+                    // working directory and runs from the daemon's default cwd.
+                    projectSkills: resolveRunProjectSkills(state.metadata),
                     scope: state.metadata?.scope,
                     serverDB: ctx.serverDB,
                     skipResultTruncation: true,
@@ -300,6 +305,10 @@ export const callToolsBatch =
                     toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
                     topicId: ctx.topicId,
                     userId: ctx.userId,
+                    // Device-bound cwd folded into deviceSystemInfo at operation
+                    // creation; resume-safe via computeDeviceContext (recovers it
+                    // from the prior tool message's pluginState.metadata).
+                    workingDirectory: state.metadata?.deviceSystemInfo?.workingDirectory,
                     workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
                   }),
                 {
