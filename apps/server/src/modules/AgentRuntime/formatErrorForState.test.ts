@@ -1,8 +1,8 @@
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { formatErrorForState } from './formatErrorForState';
-import { ModelEmptyError } from './ModelEmptyError';
 
 describe('formatErrorForState', () => {
   describe('input normalization', () => {

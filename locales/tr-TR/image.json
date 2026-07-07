@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Tohum Uygulanamadı",
   "generation.actions.seedCopied": "Tohum Panoya Kopyalandı",
   "generation.actions.seedCopyFailed": "Tohum Kopyalanamadı",
+  "generation.metadata.by": "{{name}} tarafından",
   "generation.metadata.count": "{{count}} Görsel",
+  "generation.metadata.createdAt": "{{time}} tarihinde oluşturuldu",
   "generation.status.failed": "Oluşturma Başarısız",
   "generation.status.generating": "Oluşturuluyor...",
   "notSupportGuide.desc": "Mevcut dağıtım modu yapay zeka görsel oluşturmayı desteklemiyor. <1>sunucu veritabanı dağıtım moduna</1> geçin veya <3>LobeHub Cloud</3> kullanın.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Çoklu Sağlayıcı Desteği",
   "notSupportGuide.title": "Mevcut Dağıtım Modu Yapay Zeka Görsel Oluşturmayı Desteklemiyor",
   "topic.createNew": "Yeni Konu Oluştur",
+  "topic.createdBy": "{{name}} tarafından oluşturuldu",
   "topic.deleteConfirm": "Oluşturma Konusunu Sil",
   "topic.deleteConfirmDesc": "Bu oluşturma konusunu silmek üzeresiniz. Bu işlem geri alınamaz, lütfen dikkatli olun.",
   "topic.empty": "Henüz oluşturma konusu yok",
+  "topic.privateTitle": "Özel",
   "topic.title": "Resim Teması",
-  "topic.untitled": "Varsayılan Konu"
+  "topic.untitled": "Varsayılan Konu",
+  "topic.visibility.existingLocked": "Mevcut konunun görünürlüğü sabitlenmiştir. Farklı bir alan seçmek için yeni bir konu oluşturun.",
+  "topic.workspaceTitle": "Çalışma Alanı"
 }

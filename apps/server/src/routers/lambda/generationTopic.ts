@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -39,9 +40,16 @@ const updateTopicCoverSchema = z.object({
 export const generationTopicRouter = router({
   createTopic: generationTopicProcedure
     .use(withScopedPermission('topic:create'))
-    .input(z.object({ type: z.enum(['image', 'video']).optional() }).optional())
+    .input(
+      z
+        .object({
+          type: z.enum(['image', 'video']).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .mutation(async ({ ctx, input }) => {
-      const data = await ctx.generationTopicModel.create('', input?.type);
+      const data = await ctx.generationTopicModel.create('', input?.type, input?.visibility);
       return data.id;
     }),
   deleteTopic: generationTopicProcedure
@@ -93,6 +101,44 @@ export const generationTopicRouter = router({
 
       // Update the topic with the new cover key
       return ctx.generationTopicModel.update(input.id, { coverUrl: newCoverKey });
+    }),
+
+  /**
+   * Toggle a generation topic's workspace visibility. Creator-only. Personal
+   * mode has no workspace visibility concept, so the call is rejected there.
+   */
+  setTopicVisibility: generationTopicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Generation topic visibility only applies inside a workspace',
+        });
+      }
+
+      const topic = await ctx.generationTopicModel.findById(input.id);
+      if (!topic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Generation topic not found' });
+      }
+
+      if (topic.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can change a generation topic’s visibility',
+        });
+      }
+
+      if (topic.visibility === input.visibility) return { success: true };
+
+      await ctx.generationTopicModel.setVisibility(input.id, input.visibility);
+      return { success: true };
     }),
 });
 

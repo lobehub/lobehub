@@ -168,6 +168,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             ? 'header'
             : 'none';
 
+      // Custom headers now live in metadata; older rows stored them as a
+      // 'header'-type credential. Read metadata first, fall back to the legacy
+      // credential so existing connectors still pre-fill their headers — and do
+      // so regardless of the auth radio (headers can coexist with bearer auth).
+      const customHeaders =
+        (connector.metadata?.customHeaders as Record<string, string> | undefined) ??
+        (credentials?.type === 'header'
+          ? (credentials as { headers: Record<string, string> }).headers
+          : undefined);
+
       return {
         customParams: {
           description: connector.metadata?.description as string | undefined,
@@ -180,10 +190,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
-            headers:
-              authType === 'header'
-                ? (credentials as { headers: Record<string, string> })?.headers
-                : undefined,
+            headers: customHeaders,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -250,21 +257,33 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
+        // Custom headers live in metadata (independent of the auth credential and
+        // of the server URL), so always re-sync them from the form. Merge into the
+        // existing metadata — a jsonb update replaces the whole column, so other
+        // keys (e.g. description) must be carried over. Also migrates legacy rows
+        // that stored headers as a 'header' credential (cleared below).
+        //
+        // Guard on `connector`: only rewrite metadata once the connector record is
+        // loaded, so we never overwrite a populated column with `{}` (which would
+        // drop sibling keys like description). In practice the form can't be
+        // submitted before `connector` resolves, but this keeps it safe.
+        const headers = cleanRecord(mcp.headers);
+        if (connector) {
+          const nextMetadata: Record<string, unknown> = { ...(connector.metadata ?? {}) };
+          if (headers) nextMetadata.customHeaders = headers;
+          else delete nextMetadata.customHeaders;
+          patch.metadata = nextMetadata;
+        }
+
         if (urlChanged) {
-          // Clear stale credentials whenever the server URL changes.
+          // Clear stale auth credentials whenever the server URL changes.
           patch.credentials = null;
         } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
           patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
         } else if (authType !== 'oauth2') {
-          // Auth radio 'none' covers both "no auth" and "header auth" (headers live in
-          // the Advanced section, not the auth radio). Mirror the create-mode logic:
-          // any filled headers → header credentials; empty → clear credentials.
-          const headers = cleanRecord(mcp.headers);
-          if (headers) {
-            patch.credentials = { headers, type: 'header' as const };
-          } else {
-            patch.credentials = null;
-          }
+          // 'none' / header-only auth: no separate auth credential — custom headers
+          // are persisted via metadata above, so clear the credentials column.
+          patch.credentials = null;
         }
 
         if (authType === 'oauth2') {
@@ -345,16 +364,22 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         return;
       }
 
-      // None / bearer / custom headers: store credentials and sync the tool list.
+      // The auth credential (bearer token) and custom headers are stored
+      // separately: the credential goes in the encrypted single-kind
+      // `credentials` column, while custom headers live in
+      // `metadata.customHeaders` so they can coexist with no-auth OR bearer
+      // (the credentials column can only hold one credential kind at a time).
       const credentials =
         authType === 'bearer' && mcp.auth?.token?.trim()
           ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
-          : (() => {
-              const headers = cleanRecord(mcp.headers);
-              return headers ? ({ headers, type: 'header' } as const) : undefined;
-            })();
+          : undefined;
+      const headers = cleanRecord(mcp.headers);
 
-      const newConnectorId = await createConnector({ ...base, credentials });
+      const newConnectorId = await createConnector({
+        ...base,
+        credentials,
+        metadata: headers ? { customHeaders: headers } : undefined,
+      });
       await syncConnectorTools(newConnectorId);
     };
 

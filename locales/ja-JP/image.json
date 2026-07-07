@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "シードの適用に失敗しました",
   "generation.actions.seedCopied": "シードがクリップボードにコピーされました",
   "generation.actions.seedCopyFailed": "シードのコピーに失敗しました",
+  "generation.metadata.by": "{{name}} による",
   "generation.metadata.count": "{{count}} 枚の画像",
+  "generation.metadata.createdAt": "{{time}} に作成",
   "generation.status.failed": "生成失敗",
   "generation.status.generating": "生成中...",
   "notSupportGuide.desc": "現在のデプロイはクライアントデータベースモードのため、AI画像生成機能は使用できません。<1>サーバーデータベースデプロイモード</1>に切り替えるか、直接 <3>LobeChat Cloud</3> をご利用ください。",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "複数プロバイダー対応",
   "notSupportGuide.title": "現在のデプロイモードはAI絵画をサポートしていません",
   "topic.createNew": "新しいトピックを作成",
+  "topic.createdBy": "{{name}} によって作成",
   "topic.deleteConfirm": "生成テーマを削除",
   "topic.deleteConfirmDesc": "この生成テーマを削除すると復元できません。慎重に操作してください。",
   "topic.empty": "生成されたテーマはありません",
+  "topic.privateTitle": "非公開",
   "topic.title": "絵画のテーマ",
-  "topic.untitled": "デフォルトテーマ"
+  "topic.untitled": "デフォルトテーマ",
+  "topic.visibility.existingLocked": "現在のトピックの可視性は固定されています。別のスペースを選択するには、新しいトピックを作成してください。",
+  "topic.workspaceTitle": "ワークスペース"
 }

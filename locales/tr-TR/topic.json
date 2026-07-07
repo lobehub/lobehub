@@ -168,6 +168,8 @@
   "sidebar.expandAll": "Tüm grupları genişlet",
   "sidebar.title": "Konular",
   "taskManager.agent": "Görev Aracısı",
+  "taskManager.agentSelector.privateGroup": "Özel",
+  "taskManager.agentSelector.workspaceGroup": "Çalışma Alanı",
   "taskManager.welcome": "Görevlerin hakkında bana soru sor",
   "temp": "Geçici",
   "title": "Konu"

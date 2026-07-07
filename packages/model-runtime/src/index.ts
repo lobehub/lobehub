@@ -21,10 +21,12 @@ export {
   type ErrorSeverity,
   formatErrorRef,
   getErrorCodeSpec,
+  isEmptyModelCompletion,
   isUserSideError,
   matchErrorPattern,
   type MatchInput,
   type MatchResult,
+  ModelEmptyError,
   parseErrorRef,
   refineErrorCode,
   type RefineErrorInput,
@@ -85,6 +87,7 @@ export {
   applyModelExtendParams,
   type ApplyModelExtendParamsContext,
   type ModelExtendParams,
+  resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from './utils/modelExtendParams';
 export { isDeepSeekThinkingEligibleModel, isDeepSeekV4FamilyModel } from './utils/modelParse';

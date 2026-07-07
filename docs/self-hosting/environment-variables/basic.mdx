@@ -97,8 +97,11 @@ Available system agents and their functions:
 | Translation         | `translation`     | Handles text translation between multiple languages                                    |
 | Metadata Generation | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
 | History Compression | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
-| Thread Management   | `thread`          | Handles the creation and management of conversation threads                            |
-
+| Branch Conversation | `thread`          | Automatically generate titles for branch conversations                                 |
+| Image Generation Naming   | `generationTopic`          | AI image automatic topic naming                                         |
+| Input Auto-completion  | `inputCompletion`       | Input auto-completion suggestions (similar to GitHub Copilot ghost text)      |
+| Prompt Rewrite      | `promptRewrite`   | Optimize prompts before generation                                                              |
+| Image Generation Naming   | `generationTopic`          | AI image automatic topic naming                                         |
 ### `FEATURE_FLAGS`
 
 - Type: Optional
@@ -123,6 +126,13 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend.
 - Default: -
 - Example: `https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_SERVICE_TOKEN`
+
+- Type: Optional
+- Description: Agent Gateway authentication token, used for authentication between Gateway Mode and self-deployed Agent Gateway
+- Default: -
+- Example: `dev-secret`
 
 ### `PROXY_URL`
 

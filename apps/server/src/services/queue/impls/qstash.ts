@@ -1,9 +1,20 @@
 import debug from 'debug';
 
+import { OtelQstashClient } from '@/libs/qstash';
+
 import { type HealthCheckResult, type QueueMessage, type QueueStats } from '../types';
 import { type QueueServiceImpl } from './type';
 
 const log = debug('lobe-server:service:queue:qstash');
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const toQStashDelaySeconds = (delayMs: number): number | undefined => {
+  if (delayMs <= 0) return undefined;
+  if (delayMs < 1000) return undefined;
+
+  return Math.round(delayMs / 1000);
+};
 
 /**
  * QStash queue service implementation
@@ -33,10 +44,18 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
     } = message;
 
     try {
-      const { Client } = await import('@upstash/qstash');
+      // QStash publish delays are second-granularity (`10s`, `1m`, or numeric
+      // seconds). Preserve the runtime's small settling windows, such as the
+      // initial 50ms, by waiting before publishing instead of collapsing them to
+      // immediate delivery.
+      if (delay > 0 && delay < 1000) {
+        await sleep(delay);
+      }
+
       log('Initialized QStash queue service');
-      const qstashClient = new Client({ token: this.config.qstashToken });
-      const response = await qstashClient.publishJSON({
+      const qstashClient = new OtelQstashClient({ token: this.config.qstashToken });
+      const qstashDelay = toQStashDelaySeconds(delay);
+      const request = {
         body: {
           context,
           operationId,
@@ -45,7 +64,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           stepIndex,
           timestamp: Date.now(),
         },
-        delay: Math.ceil(delay / 1000), // Convert milliseconds to seconds
+        ...(qstashDelay === undefined ? {} : { delay: qstashDelay }),
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,
@@ -55,7 +74,8 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
         retryDelay,
         retries,
         url: endpoint,
-      });
+      };
+      const response = await qstashClient.publishJSON(request);
 
       log(
         `[${operationId}] Scheduled step %d to %s with %dms delay (messageId: %s)`,

@@ -21,6 +21,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 import ChatPreview from './ChatPreview';
 import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
+import LinkIconPreview from './LinkIconPreview';
 import MermaidPreview from './MermaidPreview';
 
 const ChatAppearance = memo(() => {
@@ -93,6 +94,27 @@ const ChatAppearance = memo(() => {
         }
       >
         {null}
+      </FormGroup>
+
+      <FormGroup
+        collapsible={false}
+        desc={t('settingChatAppearance.linkIcon.desc')}
+        gap={16}
+        title={t('settingChatAppearance.linkIcon.title')}
+        variant={'filled'}
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {loadingStates.enableMessageLinkIcon && (
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+            )}
+            <Switch
+              checked={general.enableMessageLinkIcon ?? true}
+              onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
+            />
+          </Flexbox>
+        }
+      >
+        <LinkIconPreview />
       </FormGroup>
 
       <FormGroup

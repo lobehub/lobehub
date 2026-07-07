@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 
 import {
@@ -17,6 +18,7 @@ import {
 
 import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
+import { operationSelectors } from '../operation/selectors';
 import { type TopicData } from './initialState';
 
 // Helper selector: get current topic data based on session context
@@ -88,14 +90,40 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   const activeTopic = currentActiveTopic(s);
   if (!activeTopic) return;
 
-  if (isDesktop) return activeTopic.metadata?.workingDirectory;
+  if (isDesktop) {
+    return (
+      getWorkingDirEffectivePath(activeTopic.metadata?.workingDirectoryConfig) ??
+      activeTopic.metadata?.workingDirectory
+    );
+  }
 
   // Web: return primary repo from repos list, or workingDirectory if set directly
   const meta = activeTopic.metadata;
-  return meta?.repos?.[0] ?? meta?.workingDirectory;
+  return (
+    meta?.repos?.[0] ??
+    getWorkingDirEffectivePath(meta?.workingDirectoryConfig) ??
+    meta?.workingDirectory
+  );
 };
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
+
+/**
+ * Whether a send from the new-topic view is still in flight — no active topic
+ * yet, while the running send owns creation of the real topic (the `_new`
+ * context only holds optimistic tmp_* messages until then). While true,
+ * `openNewTopicOrSaveTopic` is a no-op, so its entry buttons should be
+ * disabled to make the blocked window visible instead of silently ignoring
+ * the click.
+ */
+const isNewTopicSendInFlight = (s: ChatStoreState): boolean =>
+  !s.activeTopicId &&
+  operationSelectors.isInputLoadingByContext({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  })(s);
 const isUndefinedTopics = (s: ChatStoreState) => !currentTopics(s);
 const isInSearchMode = (s: ChatStoreState) => s.inSearchingMode;
 const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
@@ -205,6 +233,8 @@ const hasMoreTopicsForSidebar = (s: ChatStoreState): boolean => {
 const isLoadingMoreTopics = (s: ChatStoreState): boolean =>
   currentTopicData(s)?.isLoadingMore ?? false;
 
+const loadMoreTopicsError = (s: ChatStoreState): unknown => currentTopicData(s)?.loadMoreError;
+
 const isExpandingPageSize = (s: ChatStoreState): boolean =>
   currentTopicData(s)?.isExpandingPageSize ?? false;
 
@@ -224,9 +254,13 @@ const agentTopicsViewHasMore = (s: ChatStoreState): boolean =>
 const agentTopicsViewIsLoadingMore = (s: ChatStoreState): boolean =>
   agentTopicsViewData(s)?.isLoadingMore ?? false;
 
+const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
+  agentTopicsViewData(s)?.loadMoreError;
+
 export const topicSelectors = {
   agentTopicsViewHasMore,
   agentTopicsViewIsLoadingMore,
+  agentTopicsViewLoadMoreError,
   agentTopicsViewTopics,
   currentActiveTopic,
   currentActiveTopicSummary,
@@ -250,7 +284,9 @@ export const topicSelectors = {
   isExpandingPageSize,
   isInSearchMode,
   isLoadingMoreTopics,
+  isNewTopicSendInFlight,
   isSearchingTopic,
   isUndefinedTopics,
+  loadMoreTopicsError,
   searchTopics,
 };

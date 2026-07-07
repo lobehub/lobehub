@@ -266,7 +266,11 @@ describe('createSidebarUISlice', () => {
         returnedId = await result.current.addGroup(mockName);
       });
 
-      expect(sessionService.createSessionGroup).toHaveBeenCalledWith(mockName);
+      expect(sessionService.createSessionGroup).toHaveBeenCalledWith(
+        mockName,
+        undefined,
+        undefined,
+      );
       expect(spyOnRefresh).toHaveBeenCalled();
       expect(returnedId!).toBe(mockId);
     });

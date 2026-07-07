@@ -18,7 +18,6 @@ import {
   type ListProjectSkillsResult,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
-  type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -31,6 +30,8 @@ import {
   type PrepareSkillDirectoryResult,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
   type RenameLocalFileParams,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -139,6 +140,10 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.getProjectFileIndex(params);
   }
 
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    return ensureElectronIpc().localSystem.searchProjectFiles(params);
+  }
+
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
     // Project-skill scanning lives in the main-process WorkspaceCtr ('workspace'
     // group), split out of LocalFileCtr — hence the namespace differs from the
@@ -170,14 +175,8 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.auditSafePaths(params);
   }
 
-  async getLocalFilePreviewUrl(
-    params: LocalFilePreviewUrlParams,
-  ): Promise<LocalFilePreviewUrlResult> {
-    return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
-  }
-
   async getLocalFilePreview(params: LocalFilePreviewUrlParams): Promise<LocalFilePreview> {
-    const result = await this.getLocalFilePreviewUrl(params);
+    const result = await ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
 
     if (!result.success || !result.url) {
       throw new Error(result.error || 'Missing local file preview URL');

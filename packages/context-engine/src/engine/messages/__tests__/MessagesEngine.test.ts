@@ -127,7 +127,7 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant\n\nModel knowledge cutoff: 2024-06',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBe(true);
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should skip model knowledge cutoff injection when unknown', async () => {
@@ -140,7 +140,26 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBeUndefined();
+      expect(result.metadata.modelInfoInjected).toBeUndefined();
+    });
+
+    it('should inject model name and id when displayName is provided', async () => {
+      const params = createBasicParams({
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        systemRole: 'You are a helpful assistant',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0]).toEqual({
+        content:
+          'You are a helpful assistant\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+        role: 'system',
+      });
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should inject history summary when provided', async () => {
@@ -628,6 +647,11 @@ Document content here.
           activeTopicDocument: {
             agentDocumentId: 'agd_123',
             documentId: 'docs_123',
+            snapshot: {
+              markdown: '# Topic Plan\n\nDraft body',
+              metadata: { charCount: 24, lineCount: 3, title: 'Topic Plan' },
+              xml: '<doc><heading id="h1">Topic Plan</heading></doc>',
+            },
             title: 'Topic Plan',
           },
         },
@@ -641,8 +665,12 @@ Document content here.
       expect(userMessage?.content).toContain('<active_topic_document>');
       expect(userMessage?.content).toContain('document_id="docs_123"');
       expect(userMessage?.content).toContain('agent_document_id="agd_123"');
+      expect(userMessage?.content).toContain('<current_document_snapshot>');
+      expect(userMessage?.content).toContain('<markdown chars="24" lines="3">');
+      expect(userMessage?.content).toContain('<doc_xml_structure>');
       expect(userMessage?.content).toContain('scope="currentTopic"');
       expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
+      expect(userMessage?.content).toContain('Call readDocument with format="xml" only when');
       expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
     });
 

@@ -6,6 +6,12 @@ import {
 } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  /**
+   * Reuse an existing assistant message instead of creating a new one. Set when
+   * resuming from a tool-first step (e.g. tools activator) whose seeded
+   * placeholder must be filled by this LLM turn rather than orphaned.
+   */
+  assistantMessageId?: string;
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
   isFirstMessage?: boolean;

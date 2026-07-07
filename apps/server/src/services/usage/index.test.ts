@@ -6,6 +6,18 @@ import { type MessageMetadata } from '@/types/message';
 
 import { UsageRecordService } from './index';
 
+/**
+ * Recursively walk an object graph (cycle-safe) looking for `target` as a
+ * substring of any string value. Used to assert that a bound value (e.g. an
+ * agent id) made it into the composed drizzle WHERE clause.
+ */
+const deepIncludes = (value: unknown, target: string, seen = new Set<unknown>()): boolean => {
+  if (typeof value === 'string') return value.includes(target);
+  if (!value || typeof value !== 'object' || seen.has(value)) return false;
+  seen.add(value);
+  return Object.values(value as Record<string, unknown>).some((v) => deepIncludes(v, target, seen));
+};
+
 describe('UsageRecordService', () => {
   let service: UsageRecordService;
   let mockDb: LobeChatDatabase;
@@ -17,6 +29,20 @@ describe('UsageRecordService', () => {
     const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
     const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
     mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
+  };
+
+  // Variant that also captures the args passed to `.where(...)` so tests can
+  // assert what ended up in the composed WHERE clause.
+  const setupCapturingMock = (mockMessages: any[]) => {
+    const whereArgs: unknown[] = [];
+    const mockOrderBy = vi.fn().mockResolvedValue(mockMessages);
+    const mockWhere = vi.fn().mockImplementation((arg: unknown) => {
+      whereArgs.push(arg);
+      return { orderBy: mockOrderBy };
+    });
+    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
+    return { whereArgs };
   };
 
   beforeEach(() => {
@@ -322,6 +348,37 @@ describe('UsageRecordService', () => {
       await service.findAndGroupByDay('2024-01', 'agent-99');
 
       expect(spy).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'agent-99');
+    });
+
+    it('scopes the query to a single agent when agentId is provided', async () => {
+      const { whereArgs } = setupCapturingMock([
+        {
+          id: 'msg-1',
+          userId,
+          role: 'assistant',
+          provider: 'openai',
+          model: 'gpt-4',
+          createdAt: dayjs().startOf('month').toDate(),
+          agentId: 'agt_123',
+          metadata: { cost: 0.05, totalInputTokens: 100, totalOutputTokens: 50 } as MessageMetadata,
+        },
+      ]);
+
+      const result = await service.findAndGroupByDay(undefined, 'agt_123');
+
+      // the composed WHERE clause must carry the agent id as a bound value
+      expect(deepIncludes(whereArgs[0], 'agt_123')).toBe(true);
+      // and the records still map through correctly
+      expect(result.some((log) => log.totalRequests > 0)).toBe(true);
+    });
+
+    it('does not add an agent filter when agentId is omitted', async () => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await service.findAndGroupByDay();
+
+      // no bound value should reference an agent id (none was passed)
+      expect(deepIncludes(whereArgs[0], 'agt_')).toBe(false);
     });
 
     it('should handle specific month parameter', async () => {

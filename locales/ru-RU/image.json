@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Не удалось применить сид",
   "generation.actions.seedCopied": "Сид скопирован в буфер обмена",
   "generation.actions.seedCopyFailed": "Не удалось скопировать сид",
+  "generation.metadata.by": "от {{name}}",
   "generation.metadata.count": "{{count}} изображений",
+  "generation.metadata.createdAt": "Создано в {{time}}",
   "generation.status.failed": "Ошибка генерации",
   "generation.status.generating": "Генерация...",
   "notSupportGuide.desc": "Текущий режим развертывания не поддерживает генерацию AI-изображений. Переключитесь на <1>режим развертывания с серверной базой данных</1> или используйте <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Поддержка нескольких провайдеров",
   "notSupportGuide.title": "Текущий режим развертывания не поддерживает генерацию AI-изображений",
   "topic.createNew": "Создать новую тему",
+  "topic.createdBy": "Создано {{name}}",
   "topic.deleteConfirm": "Удалить тему генерации",
   "topic.deleteConfirmDesc": "Вы собираетесь удалить эту тему генерации. Это действие необратимо, пожалуйста, будьте осторожны.",
   "topic.empty": "Нет тем генерации",
+  "topic.privateTitle": "Приватный",
   "topic.title": "Тема картины",
-  "topic.untitled": "Тема по умолчанию"
+  "topic.untitled": "Тема по умолчанию",
+  "topic.visibility.existingLocked": "Видимость зафиксирована для текущей темы. Создайте новую тему, чтобы выбрать другое пространство.",
+  "topic.workspaceTitle": "Рабочая область"
 }

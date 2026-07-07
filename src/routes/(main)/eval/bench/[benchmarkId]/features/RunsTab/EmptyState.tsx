@@ -1,21 +1,34 @@
-import { Button, Empty, Flexbox } from '@lobehub/ui';
-import { Card } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Activity, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   emptyCard: css`
-    .ant-card-body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+    align-items: center;
+    justify-content: center;
 
-      padding-block: 64px;
-      padding-inline: 24px;
-    }
+    padding-block: 64px;
+    padding-inline: 24px;
+    border: 1px dashed ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    text-align: center;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  iconBox: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 56px;
+    height: 56px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
@@ -27,44 +40,20 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
   const { t } = useTranslation('eval');
 
   return (
-    <Card className={styles.emptyCard}>
-      <Empty
-        icon={Activity}
-        description={
-          <Flexbox gap={4}>
-            <p
-              style={{
-                color: 'var(--ant-color-text)',
-                fontSize: 14,
-                fontWeight: 500,
-                margin: 0,
-              }}
-            >
-              {t('run.empty.title')}
-            </p>
-            <p
-              style={{
-                color: 'var(--ant-color-text-tertiary)',
-                fontSize: 12,
-                margin: 0,
-              }}
-            >
-              {t('run.empty.descriptionBenchmark')}
-            </p>
-          </Flexbox>
-        }
-      >
-        <Button
-          icon={Plus}
-          size="small"
-          style={{ marginTop: 16 }}
-          type="primary"
-          onClick={onCreate}
-        >
-          {t('run.actions.create')}
-        </Button>
-      </Empty>
-    </Card>
+    <Flexbox className={styles.emptyCard} gap={16}>
+      <div className={styles.iconBox}>
+        <Icon icon={Activity} size={28} style={{ color: cssVar.colorTextTertiary }} />
+      </div>
+      <Flexbox align="center" gap={4}>
+        <Text weight={600}>{t('run.empty.title')}</Text>
+        <Text color={cssVar.colorTextTertiary} fontSize={12}>
+          {t('run.empty.descriptionBenchmark')}
+        </Text>
+      </Flexbox>
+      <Button icon={Plus} size="small" type="primary" onClick={onCreate}>
+        {t('run.actions.create')}
+      </Button>
+    </Flexbox>
   );
 });
 

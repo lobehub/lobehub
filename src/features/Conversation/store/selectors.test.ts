@@ -17,6 +17,8 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   messageEditingIds: [],
   messageLoadingIds: [],
   pendingArgsUpdates: new Map(),
+  selectedMessageIds: [],
+  selectionMode: false,
 
   // VirtuaList state
   activeIndex: null,

@@ -23,6 +23,8 @@
  * </SWRConfig>
  * ```
  */
+import { bootTiming } from '@/libs/bootTiming';
+
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 
 interface CacheEntry<T = unknown> {
@@ -147,6 +149,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
   let hydratedScope: string | null = null;
   let hydrationEpoch = 0;
   let pendingHydration: { promise: Promise<void>; scope: string } | null = null;
+  let cacheHydrationSpanRecorded = false;
 
   // --- localStorage tier (synchronous snapshot) ----------------------------
   let localTimer: ReturnType<typeof setTimeout> | null = null;
@@ -230,7 +233,8 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     idbTimer = setTimeout(flushIdb, debounceMs);
   };
 
-  const loadIdb = async (scope: string, epoch: number) => {
+  const loadIdb = async (scope: string, epoch: number, hydrationStart?: number) => {
+    let succeeded = false;
     try {
       const entries = await localDataCache.entriesByScope(scope);
       // The IndexedDB tier holds read-heavy / write-light business entities
@@ -247,9 +251,18 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
         hydratedScope = scope;
       }
+      succeeded = true;
     } catch (error) {
       onError(error as Error);
     } finally {
+      if (hydrationStart !== undefined && succeeded && !cacheHydrationSpanRecorded) {
+        cacheHydrationSpanRecorded = true;
+        bootTiming.recordSpan(
+          'cache-hydration',
+          hydrationStart,
+          performance.now() - hydrationStart,
+        );
+      }
       onScopeHydrated?.(scope);
       if (pendingHydration?.scope === scope && hydrationEpoch === epoch) {
         pendingHydration = null;
@@ -367,7 +380,8 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     if (pendingHydration?.scope === scope) return pendingHydration.promise;
 
     const epoch = ++hydrationEpoch;
-    const promise = loadIdb(scope, epoch);
+    const start = !cacheHydrationSpanRecorded ? performance.now() : undefined;
+    const promise = loadIdb(scope, epoch, start);
     pendingHydration = { promise, scope };
     return promise;
   };

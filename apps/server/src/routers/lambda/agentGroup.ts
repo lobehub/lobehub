@@ -1,6 +1,5 @@
 import { InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -9,13 +8,13 @@ import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
-import { workspaceMembers } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 /**
@@ -309,6 +308,7 @@ export const agentGroupRouter = router({
     .input(
       z.object({
         groupId: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -323,19 +323,15 @@ export const agentGroupRouter = router({
       }
 
       if (ctx.workspaceId && group.userId !== ctx.userId) {
-        const [membership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, ctx.workspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
+        const canOverride = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          scopes: ['ALL'],
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
 
-        if (!membership || membership.role !== 'owner') {
+        if (!canOverride) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
@@ -345,19 +341,14 @@ export const agentGroupRouter = router({
       }
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'AGENT_CREATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
 
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -378,6 +369,7 @@ export const agentGroupRouter = router({
         input.groupId,
         input.targetWorkspaceId,
         ctx.userId,
+        input.targetVisibility,
       );
     }),
 
@@ -395,6 +387,17 @@ export const agentGroupRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       return ctx.chatGroupModel.updateAgentInGroup(input.groupId, input.agentId, input.updates);
+    }),
+
+  /**
+   * Publish a private chat group into the workspace. One-way: once shared,
+   * other workspace members may already be using it, so we never let it slip
+   * back to `private`. Restricted to the creator's own still-private group.
+   */
+  publishGroupToWorkspace: agentGroupProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.chatGroupModel.publishToWorkspace(input.id);
     }),
 
   updateGroup: agentGroupProcedureWrite

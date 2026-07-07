@@ -193,6 +193,28 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     );
   });
 
+  it('disables early final visible output end for custom multi-step agents', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      agentFactory: () => ({ runner: vi.fn() }) as any,
+      queueService: null,
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-custom-agent',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ allowEarlyFinalAnswerVisibleOutputEnd: false }),
+    );
+  });
+
   it('should NOT skip step when operation status is "running"', async () => {
     const service = createService();
 

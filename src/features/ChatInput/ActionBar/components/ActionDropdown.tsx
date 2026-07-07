@@ -33,7 +33,7 @@ import {
 import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   dropdownMenu: css`
     .ant-avatar {
       margin-inline-end: var(--ant-margin-xs);
@@ -41,6 +41,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   trigger: css`
     outline: none;
+
+    /* Keyboard users still need a landmark for where Enter will land. */
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadius};
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
   `,
 }));
 

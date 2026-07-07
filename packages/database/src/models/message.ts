@@ -69,6 +69,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
@@ -446,6 +447,34 @@ export class MessageModel {
   };
 
   /**
+   * Lightweight parent/group links for the FULL message tree of a topic,
+   * INCLUDING messages hidden inside MessageGroups (compression / parallel).
+   *
+   * `query` replaces grouped messages with synthetic group nodes that expose
+   * neither their members' `parentId` nor (for compaction) the group's
+   * `parentMessageId`, so branch-ancestry can't be reconstructed from `query`
+   * output alone. This returns the raw `id → parentId` / `messageGroupId` links
+   * so callers (e.g. server-runtime regenerate pruning) can walk ancestry across
+   * a compacted range.
+   */
+  queryTopicMessageTree = async ({
+    threadId,
+    topicId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ id: string; messageGroupId: string | null; parentId: string | null }[]> => {
+    return this.db
+      .select({
+        id: messages.id,
+        messageGroupId: messages.messageGroupId,
+        parentId: messages.parentId,
+      })
+      .from(messages)
+      .where(and(this.ownership(), this.matchTopic(topicId), this.matchThread(threadId)));
+  };
+
+  /**
    * Query messages with full relations (files, plugins, translations, etc.)
    *
    * This is the low-level query method that accepts a custom where condition.
@@ -498,6 +527,13 @@ export class MessageModel {
             agentId: messages.agentId,
             targetId: messages.targetId,
 
+            sender: {
+              avatar: users.avatar,
+              fullName: users.fullName,
+              id: users.id,
+              username: users.username,
+            },
+
             tools: messages.tools,
             tool_call_id: messagePlugins.toolCallId,
 
@@ -534,6 +570,7 @@ export class MessageModel {
           .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
           .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
           .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+          .leftJoin(users, eq(users.id, messages.userId))
           .orderBy(asc(messages.createdAt))
           .limit(pageSize)
           .offset(offset),
@@ -598,12 +635,27 @@ export class MessageModel {
       'db.message.queryWithWhere.transform',
       () =>
         result.map(
-          ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+          ({
+            model,
+            provider,
+            translate,
+            ttsId,
+            ttsFile,
+            ttsContentMd5,
+            ttsVoice,
+            sender,
+            ...item
+          }) => {
             const messageQuery = messageQueriesList.find(
               (relation) => relation.messageId === item.id,
             );
             return {
               ...item,
+              // LEFT JOIN → users row is null only when the sender account was
+              // deleted (rare, since `messages.user_id` cascades on user delete).
+              // Collapse a null-id sender to `null` so the client can rely on
+              // `sender?.id` as the presence check.
+              sender: sender?.id ? sender : null,
               chunksList: chunksList
                 .filter((relation) => relation.messageId === item.id)
                 .map((c) => ({
@@ -2523,10 +2575,11 @@ export class MessageModel {
    * needed: a topic runs at most one operation at a time, so the latest spine
    * message IS this run's continuation point.
    *
-   * Excludes `role:'tool'` (inline children) and signal-tagged assistants
-   * (`metadata->'signal'`), which are tool-child callbacks — anchoring a normal
-   * turn onto a callback would orphan it under the read side's tool-only signal
-   * collection.
+   * Excludes `role:'tool'` (inline children) and TOOLLESS signal-tagged
+   * assistants (`metadata->'signal'` with no tools), which are tool-child
+   * callbacks — anchoring a normal turn onto a callback would orphan it under
+   * the read side's tool-only signal collection. A signal turn that DID emit
+   * tools is back on the main chain and stays a spine candidate.
    */
   getLastMainThreadSpineMessageId = async (topicId: string): Promise<string | undefined> =>
     this.getLatestSpineMessageId({ topicId, threadId: null });
@@ -2537,10 +2590,11 @@ export class MessageModel {
    * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
    * (`threadId IS NULL`) or to a specific thread.
    *
-   * Like the main-thread query it EXCLUDES `role:'tool'` and signal-tagged
-   * assistants: tools are inline children of their assistant turn, so the
-   * conversation head a new turn parents off is the assistant, never the tool
-   * result that landed under it.
+   * Like the main-thread query it EXCLUDES `role:'tool'` and TOOLLESS
+   * signal-tagged assistants: tools are inline children of their assistant turn,
+   * so the conversation head a new turn parents off is the assistant, never the
+   * tool result that landed under it. A tools-bearing signal turn is main-chain
+   * and remains a spine candidate.
    *
    * Used by `sendMessageInServer` to make `parentId` server-authoritative and
    * close the concurrent-append race: the client computes `parentId` from a
@@ -2564,7 +2618,24 @@ export class MessageModel {
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
-          sql`${messages.metadata} -> 'signal' IS NULL`,
+          // Exclude signal-tagged assistants — BUT only the toolless ones. The
+          // writer tags a turn `signal` at stream_start before it knows the turn
+          // will call tools; a signal turn that DOES emit a tool_use is really
+          // back on the main chain (see `reduceToolsChunk`'s spine promotion),
+          // so it must stay a spine candidate or a cold replica re-forks the
+          // wire off the pre-signal turn. Match the read side, which likewise
+          // treats a tools-bearing message as non-signal (`getMessageSignal`).
+          //
+          // Key existence (`jsonb_exists`) is used instead of `metadata -> 'signal'
+          // IS NULL`, which crashes the serverless Postgres engine as a WHERE
+          // predicate (rt_fetch out-of-bounds, SQLSTATE XX000 — the `->` operator
+          // only survives in SELECT/ORDER BY). Toolless is expressed with plain
+          // jsonb equality (`= '[]'` / IS NULL) rather than `jsonb_array_length`,
+          // which is unproven on this engine as a qual.
+          sql`NOT (
+            COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)
+            AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
+          )`,
           this.ownership(),
         ),
       )

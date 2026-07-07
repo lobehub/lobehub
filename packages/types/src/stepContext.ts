@@ -89,6 +89,13 @@ export interface RuntimeActiveTopicDocumentContext {
    */
   documentId: string;
   /**
+   * Optional send-time document snapshot.
+   *
+   * This lets non-page surfaces, such as an agent-document floating panel,
+   * provide the current document body without enabling PageAgent editor tools.
+   */
+  snapshot?: InitialPageEditorContext;
+  /**
    * Human-readable title for model disambiguation.
    */
   title?: string | null;

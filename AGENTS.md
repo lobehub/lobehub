@@ -104,23 +104,19 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 - `bun` to run npm scripts
 - `bunx` for executable npm packages
 
-### Testing
+### Quality Check
 
 ```bash
-# Run specific test (NEVER run `bun run test` - takes ~10 minutes)
-bunx vitest run --silent='passed-only' '[file-path]'
-
-# Database package
-cd packages/database && bunx vitest run --silent='passed-only' '[file]'
+# Lint (with autofix) + related tests for changed files, or explicit paths
+bun run check [files...] [--lint] [--test] [--type]
 ```
 
+- `--lint` / `--test` / `--type` are composable selectors; no selector = lint + test. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
+- Tests are auto-routed to the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages. `--type` runs the full type-check.
+- NEVER run `bun run test` — the full suite takes \~10 minutes.
 - Prefer `vi.spyOn` over `vi.mock`
-
-### Type Checking
-
-```bash
-bun run type-check
-```
+- Manual fallback when you need unusual flags or a single tool: `bunx vitest run --silent='passed-only' '[file-path]'` from the owning package directory, `bun run type-check` for types.
+- The implementation lives in `.agents/scripts/check/` as a reusable engine. A superproject that vendors this repo as a submodule can ship its own `check` entry that mounts this repo's pipelines; when this repo is checked out as such a submodule, `bun run check` here detects that and delegates to the superproject's entry automatically.
 
 ### i18n
 
@@ -135,6 +131,6 @@ bun run type-check
 
 ### Code Review
 
-Before reviewing a PR / diff / branch change, read the **review-checklist** skill (`.agents/skills/review-checklist/SKILL.md`) — it lists the recurring mistakes specific to this codebase.
+Before reviewing a PR / diff / branch change, read the **deep-review** skill (`.agents/skills/deep-review/SKILL.md`). Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
-When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow the **ux** skill (`.agents/skills/ux/SKILL.md`) — LobeHub's design values (自然 / 意义感 / 确定性) plus per-aspect execution checklists.
+When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).

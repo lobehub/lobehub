@@ -16,7 +16,7 @@ import {
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
@@ -36,17 +36,29 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 20px;
   `,
   dot: css`
-    width: 6px;
-    height: 6px;
+    flex: none;
+
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
   `,
   header: css`
     padding-block-end: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  label: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+  iconTile: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   path: css`
     overflow: hidden;
@@ -55,16 +67,26 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   recentItem: css`
-    padding-block: 6px;
+    padding-block: 8px;
     padding-inline: 8px;
   `,
 }));
+
+// Section label — one consistent treatment for every field heading in the panel.
+const FieldLabel = memo<{ children: ReactNode; extra?: ReactNode }>(({ children, extra }) => (
+  <Flexbox horizontal align={'center'} distribution={'space-between'}>
+    <Text fontSize={12} type={'secondary'} weight={500}>
+      {children}
+    </Text>
+    {extra}
+  </Flexbox>
+));
 
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
@@ -97,6 +119,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   // Render the device's live connections straight from `device.channels` — one
   // row per connection; an empty array means offline.
   const channels = device.channels ?? [];
+  const online = channels.length > 0;
 
   // Every edit persists immediately — there is no Save button. Name and the
   // default cwd commit on blur; recent-dir add / remove / reorder commit on the
@@ -188,12 +211,19 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   return (
     <Flexbox className={styles.container} gap={20}>
       {/* ─── Header ─── */}
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        {getDeviceIcon(device.platform)}
-        <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-          {device.friendlyName || device.hostname || device.deviceId}
-        </Text>
-        {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+      <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
+        <span className={styles.iconTile}>{getDeviceIcon(device.platform, 18)}</span>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+          <Text ellipsis weight={600}>
+            {device.friendlyName || device.hostname || device.deviceId}
+          </Text>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Tag color={online ? 'success' : 'default'} size={'small'}>
+              {online ? t('devices.status.online') : t('devices.status.offline')}
+            </Tag>
+            {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
+          </Flexbox>
+        </Flexbox>
         <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>
 
@@ -202,9 +232,9 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           403. Only renders for workspace devices that aren't the caller's own
           enrollment (personal scope is always editable). */}
       {!canEdit && (
-        <Flexbox horizontal align={'center'} gap={6}>
-          <Icon icon={LockIcon} size={12} style={{ color: cssVar.colorTextTertiary }} />
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
+          <Text fontSize={12} type={'secondary'}>
             {t('workspaceSetting.devices.readonlyHint')}
           </Text>
         </Flexbox>
@@ -212,11 +242,11 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
       {/* ─── Enrolled by (workspace only) ─── */}
       {device.scope === 'workspace' && device.enroller && (
-        <Flexbox gap={6}>
-          <span className={styles.label}>{t('workspaceSetting.devices.enrolledByLabel')}</span>
+        <Flexbox gap={8}>
+          <FieldLabel>{t('workspaceSetting.devices.enrolledByLabel')}</FieldLabel>
           <Flexbox horizontal align={'center'} gap={8}>
             <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
-            <Text style={{ fontSize: 13 }}>
+            <Text>
               {device.enroller.fullName ||
                 device.enroller.username ||
                 t('workspaceSetting.devices.unknownEnroller')}
@@ -227,27 +257,21 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
       {/* ─── Connections ─── */}
       <Flexbox gap={8}>
-        <span className={styles.label}>{t('devices.detail.connections')}</span>
+        <FieldLabel>{t('devices.detail.connections')}</FieldLabel>
         {channels.length > 0 ? (
           channels.map((channel, index) => (
             <Flexbox horizontal align={'center'} gap={8} key={`${channel.connectedAt}-${index}`}>
-              <span
-                className={styles.dot}
-                style={{ background: cssVar.colorSuccess, flex: 'none' }}
-              />
+              <span className={styles.dot} style={{ background: cssVar.colorSuccess }} />
               {channel.channel && <Tag size={'small'}>{channel.channel}</Tag>}
-              <Text style={{ fontSize: 12 }} type={'secondary'}>
+              <Text fontSize={12} type={'secondary'}>
                 {t('devices.channel.connected', { time: dayjs(channel.connectedAt).fromNow() })}
               </Text>
             </Flexbox>
           ))
         ) : (
           <Flexbox horizontal align={'center'} gap={8}>
-            <span
-              className={styles.dot}
-              style={{ background: cssVar.colorTextQuaternary, flex: 'none' }}
-            />
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
+            <span className={styles.dot} style={{ background: cssVar.colorTextQuaternary }} />
+            <Text fontSize={12} type={'secondary'}>
               {t('devices.status.offline')} ·{' '}
               {t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() })}
             </Text>
@@ -256,8 +280,8 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       </Flexbox>
 
       {/* ─── Name ─── */}
-      <Flexbox gap={6}>
-        <span className={styles.label}>{t('devices.edit.friendlyName')}</span>
+      <Flexbox gap={8}>
+        <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
         {canEdit ? (
           <Input
             placeholder={t('devices.edit.friendlyNamePlaceholder')}
@@ -269,17 +293,15 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
         ) : device.friendlyName ? (
           // Read-only: render the canonical value (not the local draft), so a
           // value the caller can't actually commit never bleeds through.
-          <Text style={{ fontSize: 13 }}>{device.friendlyName}</Text>
+          <Text>{device.friendlyName}</Text>
         ) : (
-          <Text style={{ fontSize: 13 }} type={'secondary'}>
-            —
-          </Text>
+          <Text type={'secondary'}>—</Text>
         )}
       </Flexbox>
 
       {/* ─── Default working directory ─── */}
-      <Flexbox gap={6}>
-        <span className={styles.label}>{t('devices.edit.defaultCwd')}</span>
+      <Flexbox gap={8}>
+        <FieldLabel>{t('devices.edit.defaultCwd')}</FieldLabel>
         {canEdit ? (
           <Flexbox horizontal gap={8}>
             <Input
@@ -300,27 +322,28 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           // to the same dash style as Name so the two fields look consistent.
           <Text className={styles.path}>{device.defaultCwd}</Text>
         ) : (
-          <Text style={{ fontSize: 13 }} type={'secondary'}>
-            —
-          </Text>
+          <Text type={'secondary'}>—</Text>
         )}
       </Flexbox>
 
       {/* ─── Recent directories ─── */}
-      <Flexbox gap={6}>
-        <Flexbox horizontal align={'center'} distribution={'space-between'}>
-          <span className={styles.label}>{t('devices.detail.recentDirs')}</span>
-          {canEdit && (
-            <ActionIcon
-              icon={FolderPlusIcon}
-              size={'small'}
-              title={t('devices.detail.addDir')}
-              onClick={handleAddRecent}
-            />
-          )}
-        </Flexbox>
+      <Flexbox gap={8}>
+        <FieldLabel
+          extra={
+            canEdit && (
+              <ActionIcon
+                icon={FolderPlusIcon}
+                size={'small'}
+                title={t('devices.detail.addDir')}
+                onClick={handleAddRecent}
+              />
+            )
+          }
+        >
+          {t('devices.detail.recentDirs')}
+        </FieldLabel>
         {device.workingDirs.length === 0 ? (
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
+          <Text fontSize={12} type={'secondary'}>
             {t('devices.detail.noRecent')}
           </Text>
         ) : canEdit ? (

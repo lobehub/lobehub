@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockFindById, mockMessageCreate, mockMessageQuery } = vi.hoisted(
-  () => ({
+const { mockCreateOperation, mockFindById, mockMessageCreate, mockMessageQuery, mockQueryTree } =
+  vi.hoisted(() => ({
     mockCreateOperation: vi.fn(),
     mockFindById: vi.fn(),
     mockMessageCreate: vi.fn(),
     mockMessageQuery: vi.fn(),
-  }),
-);
+    mockQueryTree: vi.fn(),
+  }));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -23,6 +23,7 @@ vi.mock('@/database/models/message', () => ({
     create: mockMessageCreate,
     findById: mockFindById,
     query: mockMessageQuery,
+    queryTopicMessageTree: mockQueryTree,
     update: vi.fn().mockResolvedValue({}),
   })),
 }));
@@ -158,6 +159,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
     ]);
 
     mockMessageCreate.mockResolvedValue({ id: 'assistant-msg-new' });
+    mockQueryTree.mockResolvedValue([]);
 
     service = new AiAgentService({} as any, 'user-1');
   });
@@ -251,5 +253,188 @@ describe('AiAgentService.execAgent - resume mode', () => {
         resume: true,
       }),
     ).rejects.toThrow('parentMessageId is required when resume is true');
+  });
+
+  // Regression: gateway/server-runtime regenerate must replace, not continue.
+  // The flat topic query returns the anchor user message's existing answer
+  // branch; feeding it back makes the model continue the old answer
+  // ([U1, A1] -> continue) instead of producing a fresh one ([U1] -> A2).
+  it('regenerate: drops the anchor user message existing answer branch from history', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'prior question', id: 'prior-u', role: 'user' },
+      { content: 'prior answer', id: 'prior-a', parentId: 'prior-u', role: 'assistant' },
+      { content: 'the question', id: 'u1', parentId: 'prior-a', role: 'user' },
+      // Old answer being regenerated — must NOT be fed back as context.
+      { content: 'OLD answer', id: 'a1', parentId: 'u1', role: 'assistant' },
+    ]);
+    mockQueryTree.mockResolvedValue([
+      { id: 'prior-u', messageGroupId: null, parentId: null },
+      { id: 'prior-a', messageGroupId: null, parentId: 'prior-u' },
+      { id: 'u1', messageGroupId: null, parentId: 'prior-a' },
+      { id: 'a1', messageGroupId: null, parentId: 'u1' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['prior-u', 'prior-a', 'u1']);
+  });
+
+  // Regression: regenerating a MIDDLE turn must also drop the turns that
+  // continued from it (they live on the old branch), so history ends at U1.
+  it('regenerate: drops later turns that continued from the anchor (middle-turn regenerate)', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'the question', id: 'u1', role: 'user' },
+      { content: 'OLD answer', id: 'a1', parentId: 'u1', role: 'assistant' },
+      { content: 'follow-up question', id: 'u2', parentId: 'a1', role: 'user' },
+      { content: 'follow-up answer', id: 'a2', parentId: 'u2', role: 'assistant' },
+    ]);
+    mockQueryTree.mockResolvedValue([
+      { id: 'u1', messageGroupId: null, parentId: null },
+      { id: 'a1', messageGroupId: null, parentId: 'u1' },
+      { id: 'u2', messageGroupId: null, parentId: 'a1' },
+      { id: 'a2', messageGroupId: null, parentId: 'u2' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['u1']);
+  });
+
+  // Regression: after /compact, the old branch is hidden inside a compression
+  // group and `query` returns a synthetic `compressedGroup` node that carries no
+  // `parentId`. Pruning must use the raw message tree so the group (whose members
+  // descend from the anchor) is dropped instead of being fed back as a summary.
+  it('regenerate: drops a compressedGroup node whose compacted members descend from the anchor', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    // `query` hides the grouped messages and injects a synthetic group node
+    // (id = group id, role = 'compressedGroup', no parentId).
+    mockMessageQuery.mockResolvedValue([
+      { content: 'prior question', id: 'prior-u', role: 'user' },
+      { content: 'prior answer', id: 'prior-a', parentId: 'prior-u', role: 'assistant' },
+      { content: 'the question', id: 'u1', parentId: 'prior-a', role: 'user' },
+      { content: 'summary of old branch', id: 'grp-1', role: 'compressedGroup' },
+    ]);
+    // Raw tree still has the hidden members linked to the anchor via parentId.
+    mockQueryTree.mockResolvedValue([
+      { id: 'prior-u', messageGroupId: null, parentId: null },
+      { id: 'prior-a', messageGroupId: null, parentId: 'prior-u' },
+      { id: 'u1', messageGroupId: null, parentId: 'prior-a' },
+      { id: 'a1', messageGroupId: 'grp-1', parentId: 'u1' },
+      { id: 'u2', messageGroupId: 'grp-1', parentId: 'a1' },
+      { id: 'a2', messageGroupId: 'grp-1', parentId: 'u2' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['prior-u', 'prior-a', 'u1']);
+  });
+
+  // Guard: a compression group of PRIOR turns (not descended from the anchor)
+  // must be kept — it is legitimate earlier context.
+  it('regenerate: keeps a compressedGroup node whose members precede the anchor', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'u1',
+      role: 'user',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'summary of early turns', id: 'grp-0', role: 'compressedGroup' },
+      { content: 'the question', id: 'u1', parentId: 'old-a', role: 'user' },
+      { content: 'OLD answer', id: 'a1', parentId: 'u1', role: 'assistant' },
+    ]);
+    mockQueryTree.mockResolvedValue([
+      { id: 'old-u', messageGroupId: 'grp-0', parentId: null },
+      { id: 'old-a', messageGroupId: 'grp-0', parentId: 'old-u' },
+      { id: 'u1', messageGroupId: null, parentId: 'old-a' },
+      { id: 'a1', messageGroupId: null, parentId: 'u1' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'u1',
+      prompt: 'ignored',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['grp-0', 'u1']);
+  });
+
+  // Guard: the human-approval resume path anchors on a tool message and must
+  // keep the in-flight turn — including parallel-tool sibling messages — intact.
+  it('resume on a non-user anchor (tool message) keeps full history untouched', async () => {
+    mockFindById.mockResolvedValue({
+      id: 'tool-1',
+      role: 'tool',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+
+    mockMessageQuery.mockResolvedValue([
+      { content: 'q', id: 'u1', role: 'user' },
+      { content: 'a with tool calls', id: 'a1', parentId: 'u1', role: 'assistant' },
+      { content: 'tool result A', id: 'tool-1', parentId: 'a1', role: 'tool' },
+      { content: 'tool result B', id: 'tool-2', parentId: 'a1', role: 'tool' },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+      parentMessageId: 'tool-1',
+      prompt: '',
+      resume: true,
+    });
+
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialMessages.map((m: any) => m.id)).toEqual(['u1', 'a1', 'tool-1', 'tool-2']);
   });
 });

@@ -2,9 +2,8 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Badge } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleDollarSign,
@@ -25,21 +24,29 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useEvalStore } from '@/store/eval';
 
 import { createBenchmarkEditModal } from '../../../../features/BenchmarkEditModal';
+import Sparkline from '../../../../features/Sparkline';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  bestPerformance: css`
-    margin: 0;
-    margin-block-start: 4px;
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
+  heroBand: css`
+    padding: 20px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  heroValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading1};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
   `,
   description: css`
     margin: 0;
     margin-block-start: 2px;
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextTertiary};
   `,
   iconBox: css`
@@ -50,15 +57,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   statCard: css`
     flex: 1;
 
     min-width: 0;
     padding: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 8px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
   `,
   statIcon: css`
     display: flex;
@@ -67,11 +74,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 36px;
     height: 36px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
+  `,
+  statLabel: css`
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     margin: 0;
-    font-size: 24px;
+    font-size: ${cssVar.fontSizeHeading3};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
@@ -161,6 +173,16 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     // Best agent for the summary line
     const bestAgent = topAgents.length > 0 ? topAgents[0] : null;
 
+    // Pass-rate trend across completed runs (reversed to read oldest→newest) for
+    // the hero sparkline; the best rate anchors the headline number.
+    const passRateTrend = useMemo(() => {
+      const rates = completedRuns
+        .map((r) => r.passRate ?? r.metrics?.passRate)
+        .filter((v): v is number => typeof v === 'number');
+      return rates.reverse();
+    }, [completedRuns]);
+    const bestPassRate = passRateTrend.length > 0 ? Math.max(...passRateTrend) : undefined;
+
     // Avg Duration
     const avgDuration = useMemo(() => {
       if (!hasCompletedRuns) return null;
@@ -233,15 +255,31 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
           </Flexbox>
         </Flexbox>
 
-        {/* Best Performance Summary */}
-        {bestAgent && (
-          <p className={styles.bestPerformance}>
-            {t('benchmark.detail.stats.bestPerformance', {
-              agent: bestAgent.name,
-              passRate: (bestAgent.avgPassRate * 100).toFixed(1),
-            })}
-          </p>
-        )}
+        {/* Results hero — headline best pass rate + trend across completed runs.
+            Always rendered (shows a muted dash before the first completed run) so
+            the benchmark always leads with its outcome. */}
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.heroBand}
+          gap={16}
+          justify={'space-between'}
+        >
+          <Flexbox gap={6}>
+            <span className={styles.heroValue}>
+              {bestPassRate !== undefined ? `${(bestPassRate * 100).toFixed(0)}%` : '—'}
+            </span>
+            <Text color={cssVar.colorTextSecondary} fontSize={14}>
+              {bestAgent
+                ? t('benchmark.detail.stats.bestPerformance', {
+                    agent: bestAgent.name,
+                    passRate: (bestAgent.avgPassRate * 100).toFixed(1),
+                  })
+                : t('benchmark.card.bestPassRate')}
+            </Text>
+          </Flexbox>
+          {passRateTrend.length > 1 && <Sparkline values={passRateTrend} width={220} />}
+        </Flexbox>
 
         {/* Stats Cards */}
         <Flexbox horizontal gap={12}>
@@ -252,14 +290,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span
-                  style={{
-                    color: cssVar.colorTextSecondary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                  }}
-                >
+                <span className={styles.statLabel} style={{ textTransform: 'uppercase' }}>
                   {t('benchmark.detail.stats.topAgents')}
                 </span>
               </Flexbox>
@@ -268,8 +299,8 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <span
                   style={{
                     color: cssVar.colorTextQuaternary,
-                    fontSize: 20,
-                    fontWeight: 'bold',
+                    fontSize: cssVar.fontSizeXL,
+                    fontWeight: 600,
                   }}
                 >
                   --
@@ -281,13 +312,13 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                   <span
                     style={{
                       color: cssVar.colorTextQuaternary,
-                      fontSize: 20,
-                      fontWeight: 'bold',
+                      fontSize: cssVar.fontSizeXL,
+                      fontWeight: 600,
                     }}
                   >
                     {t('benchmark.detail.stats.waiting')}
                   </span>
-                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
+                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
                     {t('benchmark.detail.stats.noEvalRecord')}
                   </span>
                 </Flexbox>
@@ -301,7 +332,8 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                         <span
                           style={{
                             color: RANK_COLORS[idx] || RANK_COLORS[2],
-                            fontSize: 12,
+                            fontFamily: cssVar.fontFamilyCode,
+                            fontSize: cssVar.fontSizeSM,
                             fontWeight: 600,
                             minWidth: 14,
                             textAlign: 'center',
@@ -312,7 +344,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                         <span
                           style={{
                             color: cssVar.colorText,
-                            fontSize: 13,
+                            fontSize: cssVar.fontSize,
                             fontWeight: 500,
                           }}
                         >
@@ -322,7 +354,8 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                       <span
                         style={{
                           color: cssVar.colorTextSecondary,
-                          fontSize: 13,
+                          fontFamily: cssVar.fontFamilyCode,
+                          fontSize: cssVar.fontSize,
                         }}
                       >
                         {(agent.avgPassRate * 100).toFixed(1)}%
@@ -341,24 +374,22 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorPrimaryBg }}>
                   <Layers size={16} style={{ color: cssVar.colorPrimary }} />
                 </div>
-                <span
-                  style={{
-                    color: cssVar.colorTextSecondary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
+                <span className={styles.statLabel}>
                   {t('benchmark.detail.stats.dataScale')}
                 </span>
                 {totalCases === 0 && (
-                  <Badge
-                    count={t('benchmark.detail.stats.needSetup')}
+                  <span
                     style={{
                       backgroundColor: cssVar.colorWarningBg,
+                      borderRadius: cssVar.borderRadiusXS,
                       color: cssVar.colorWarning,
-                      fontSize: 11,
+                      fontSize: cssVar.fontSizeSM,
+                      paddingBlock: 2,
+                      paddingInline: 8,
                     }}
-                  />
+                  >
+                    {t('benchmark.detail.stats.needSetup')}
+                  </span>
                 )}
               </Flexbox>
 
@@ -367,22 +398,25 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                   <span
                     style={{
                       color: cssVar.colorText,
-                      fontSize: 24,
-                      fontWeight: 'bold',
+                      fontFamily: cssVar.fontFamilyCode,
+                      fontSize: cssVar.fontSizeHeading3,
+                      fontWeight: 600,
                     }}
                   >
                     {totalCases}
                   </span>
                   {totalCases > 0 && (
-                    <span style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>Cases</span>
+                    <span style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSize }}>
+                      Cases
+                    </span>
                   )}
                 </Flexbox>
                 {totalCases === 0 ? (
-                  <span style={{ color: cssVar.colorPrimary, fontSize: 12 }}>
+                  <span style={{ color: cssVar.colorPrimary, fontSize: cssVar.fontSizeSM }}>
                     {t('benchmark.detail.stats.addFirstDataset')}
                   </span>
                 ) : (
-                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
+                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
                     {datasets.length} Datasets
                   </span>
                 )}
@@ -397,13 +431,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorInfoBg }}>
                   <Clock size={16} style={{ color: cssVar.colorInfo }} />
                 </div>
-                <span
-                  style={{
-                    color: cssVar.colorTextSecondary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
+                <span className={styles.statLabel}>
                   {t('benchmark.detail.stats.avgDuration')}
                 </span>
               </Flexbox>
@@ -412,8 +440,8 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <span
                   style={{
                     color: cssVar.colorTextQuaternary,
-                    fontSize: 20,
-                    fontWeight: 'bold',
+                    fontSize: cssVar.fontSizeXL,
+                    fontWeight: 600,
                   }}
                 >
                   --
@@ -424,16 +452,19 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                     <span
                       style={{
                         color: cssVar.colorText,
-                        fontSize: 24,
-                        fontWeight: 'bold',
+                        fontFamily: cssVar.fontFamilyCode,
+                        fontSize: cssVar.fontSizeHeading3,
+                        fontWeight: 600,
                       }}
                     >
                       {formatDurationMinutes(avgDuration)}
                     </span>
-                    <span style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>min</span>
+                    <span style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSize }}>
+                      min
+                    </span>
                   </Flexbox>
                   {p99Duration != null && (
-                    <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
+                    <span style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
                       P99: {formatDuration(p99Duration)}
                     </span>
                   )}
@@ -449,23 +480,15 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorSuccessBg }}>
                   <CircleDollarSign size={16} style={{ color: cssVar.colorSuccess }} />
                 </div>
-                <span
-                  style={{
-                    color: cssVar.colorTextSecondary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  {t('benchmark.detail.stats.avgCost')}
-                </span>
+                <span className={styles.statLabel}>{t('benchmark.detail.stats.avgCost')}</span>
               </Flexbox>
 
               {avgCost == null ? (
                 <span
                   style={{
                     color: cssVar.colorTextQuaternary,
-                    fontSize: 20,
-                    fontWeight: 'bold',
+                    fontSize: cssVar.fontSizeXL,
+                    fontWeight: 600,
                   }}
                 >
                   --
@@ -476,17 +499,18 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                     <span
                       style={{
                         color: cssVar.colorText,
-                        fontSize: 24,
-                        fontWeight: 'bold',
+                        fontFamily: cssVar.fontFamilyCode,
+                        fontSize: cssVar.fontSizeHeading3,
+                        fontWeight: 600,
                       }}
                     >
                       ${formatCost(avgCost)}
                     </span>
-                    <span style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>
+                    <span style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSize }}>
                       {t('benchmark.detail.stats.perRun')}
                     </span>
                   </Flexbox>
-                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
+                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
                     {t('benchmark.detail.stats.basedOnLastNRuns', {
                       count: completedRuns.length,
                     })}

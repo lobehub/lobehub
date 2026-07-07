@@ -42,7 +42,7 @@ export const driveTaskFromVerify = async (
     const runModel = new VerifyRunModel(db, userId, workspaceId);
     const run = await runModel.findByOperation(operationId);
     // Only act on a terminally settled run (skip pending / verifying / repairing).
-    if (run?.status !== 'passed' && run?.status !== 'failed') return;
+    if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(operationId);
@@ -62,19 +62,33 @@ export const driveTaskFromVerify = async (
       });
       log('verify passed → task %s completed', op.taskId);
     } else {
-      // Failed acceptance → surface for the user (urgent brief) + pause the task.
+      // Two non-pass outcomes, kept distinct so an infra error never reads as a
+      // rejected delivery:
+      // - failed:  the verifier ran and judged the delivery short of the criteria.
+      // - errored: the verifier could not run (infra) — the delivery was NOT
+      //   evaluated, so we must not claim it "did not pass".
+      const isErrored = run.status === 'errored';
       await new BriefModel(db, userId, workspaceId).create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
         agentId: task.assigneeAgentId || undefined,
         priority: 'urgent',
-        summary: 'Delivery did not pass verification.',
+        summary: isErrored
+          ? 'Verification could not run (internal error); the delivery was not evaluated.'
+          : 'Delivery did not pass verification.',
         taskId: op.taskId,
-        title: `${task.identifier} failed verification`,
+        title: isErrored
+          ? `${task.identifier} verification errored`
+          : `${task.identifier} failed verification`,
         trigger: 'task',
         type: 'error',
       });
       await taskModel.updateStatus(op.taskId, 'paused', { error: null });
-      log('verify failed → task %s paused + brief', op.taskId);
+      log(
+        isErrored
+          ? 'verify errored → task %s paused + brief'
+          : 'verify failed → task %s paused + brief',
+        op.taskId,
+      );
     }
 
     // Deferred creator callback: verify-bound runs defer
@@ -83,13 +97,19 @@ export const driveTaskFromVerify = async (
     // never an unaccepted output it might act on before a later verify failure.
     // Best-effort; must not block the idempotency marker below.
     try {
+      const errorMessage =
+        run.status === 'failed'
+          ? 'Delivery did not pass verification.'
+          : run.status === 'errored'
+            ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
+            : undefined;
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
         reason: run.status === 'passed' ? 'done' : 'error',
         taskId: op.taskId,
         taskIdentifier: task.identifier,
         topicId: op.topicId ?? undefined,
-        ...(run.status === 'failed' && { errorMessage: 'Delivery did not pass verification.' }),
+        ...(errorMessage && { errorMessage }),
       });
     } catch (error) {
       log('verify-settle creator callback failed for task %s (non-fatal): %O', op.taskId, error);
@@ -121,11 +141,13 @@ export const finalizeVerifyRun = async (
   await maybeAutoRepair(db, userId, operationId, workspaceId);
 
   const settled = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
-  if (settled?.status !== 'passed' && settled?.status !== 'failed') return;
+  if (settled?.status !== 'passed' && settled?.status !== 'failed' && settled?.status !== 'errored')
+    return;
 
   // Report only on terminal settle (a single card on the final delivery, not one
-  // per repair round). Skipped when the caller lacks the deliverable (agent path).
-  if (opts.report) {
+  // per repair round). Skipped when the caller lacks the deliverable (agent path)
+  // and for `errored` runs, which carry no criteria judgment to report.
+  if (opts.report && settled.status !== 'errored') {
     await new VerifyReporterService(db, userId, workspaceId).generateReport({
       ...opts.report,
       verifyRunId: settled.id,

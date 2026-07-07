@@ -329,7 +329,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           })
       : [];
 
-    // Project skills live on the device filesystem. Read them through the
+    // Project/device skills live on the execution device filesystem. Read them through the
     // device gateway by reusing the local-system tools — no special
     // file-read primitive, just the existing capabilities over deviceGateway.
     //   - `readFile`  loads SKILL.md and validated reference files.
@@ -390,7 +390,17 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     }
 
     return new SkillsExecutionRuntime({
-      builtinSkills: [...filterBuiltinSkills(builtinSkills), ...agentSkillBuiltins],
+      builtinSkills: [
+        // Device-only skills resolve in device-capable runs — mirrors the
+        // SkillEngine gate in aiAgent that builds <available_skills>, so a
+        // `device-unrouted` run can activate/read them before the model routes
+        // a device. `activeDeviceId` is the fallback for callers without an
+        // execution plan.
+        ...filterBuiltinSkills(builtinSkills, {
+          canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
+        }),
+        ...agentSkillBuiltins,
+      ],
       deviceFileAccess,
       projectSkills,
       service,

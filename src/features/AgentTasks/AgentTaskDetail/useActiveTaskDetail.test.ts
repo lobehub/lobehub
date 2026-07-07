@@ -41,7 +41,7 @@ const buildTaskState = (
     setActiveTaskId: vi.fn(),
     taskDetailMap: detail ? { 'T-194': { agentId } } : {},
     // `useFetchTaskDetail` is read off the store and called with the id.
-    useFetchTaskDetail: () => ({ error: taskError }),
+    useFetchTaskDetail: () => ({ error: taskError, mutate: vi.fn() }),
   };
 };
 
@@ -111,12 +111,28 @@ describe('useActiveTaskDetail', () => {
     expect(result.current.isNotFound).toBe(false);
   });
 
-  it('reports not-found when the task fetch errored and there is no cached detail', () => {
-    mocks.taskState = buildTaskState({ detail: false, taskError: new Error('not found') });
+  it('reports not-found when the fetch threw a tagged not-found and there is no cached detail', () => {
+    const notFound = Object.assign(new Error('Task not found: T-194'), { code: 'TASK_NOT_FOUND' });
+    mocks.taskState = buildTaskState({ detail: false, taskError: notFound });
 
     const { result } = renderHook(() => useActiveTaskDetail('T-194'));
 
     expect(result.current.isNotFound).toBe(true);
+    expect(result.current.error).toBeUndefined();
+    expect(result.current.isInitialLoading).toBe(false);
+  });
+
+  it('reports a transient fetch error (not a 404) when a network / 500 rejection has no cached detail', () => {
+    const networkError = Object.assign(new Error('Internal Server Error'), {
+      data: { httpStatus: 500 },
+    });
+    mocks.taskState = buildTaskState({ detail: false, taskError: networkError });
+
+    const { result } = renderHook(() => useActiveTaskDetail('T-194'));
+
+    // A merely-errored task must not read as deleted — reload path, not the 404 dead-end.
+    expect(result.current.isNotFound).toBe(false);
+    expect(result.current.error).toBe(networkError);
     expect(result.current.isInitialLoading).toBe(false);
   });
 });

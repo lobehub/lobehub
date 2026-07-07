@@ -1,5 +1,5 @@
 import { AGENT_DOCUMENT_FILE_TYPE, AGENT_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
@@ -951,9 +951,11 @@ export class AgentDocumentModel {
 
   async listByAgent(
     agentId: string,
-    options?: { sourceType?: AgentDocumentListSourceType },
+    options?: { excludeWeb?: boolean; parentId?: string; sourceType?: AgentDocumentListSourceType },
   ): Promise<AgentDocumentListItem[]> {
     const sourceType = options?.sourceType;
+    const parentId = options?.parentId;
+    const excludeWeb = options?.excludeWeb;
     const results = await this.db
       .select({
         description: documents.description,
@@ -976,6 +978,8 @@ export class AgentDocumentModel {
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
           ...(sourceType && sourceType !== 'all' ? [eq(documents.sourceType, sourceType)] : []),
+          ...(excludeWeb ? [ne(documents.sourceType, 'web')] : []),
+          ...(parentId ? [eq(documents.parentId, parentId)] : []),
         ),
       )
       .orderBy(desc(agentDocuments.updatedAt));

@@ -8,12 +8,111 @@ import type {
   DeviceGitInfo,
   GitAheadBehind,
   GitBranchInfo,
+  GitLinkedPullRequest,
   GitLinkedPullRequestResult,
+  GitPullRequestCiStatus,
   GitWorkingTreeStatus,
 } from './types';
 
 const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
+
+type GithubStatusCheckRollupNode = {
+  conclusion?: string | null;
+  state?: string | null;
+  status?: string | null;
+};
+
+type GithubPullRequestPayload = {
+  isDraft?: boolean;
+  mergeable?: string | null;
+  mergeStateStatus?: string | null;
+  mergedAt?: string | null;
+  number: number;
+  reviewDecision?: string | null;
+  state: string;
+  statusCheckRollup?: GithubStatusCheckRollupNode[] | null;
+  title: string;
+  url: string;
+};
+
+const failureConclusions = new Set([
+  'action_required',
+  'cancelled',
+  'failure',
+  'startup_failure',
+  'timed_out',
+]);
+const pendingStates = new Set([
+  'expected',
+  'in_progress',
+  'pending',
+  'queued',
+  'requested',
+  'waiting',
+]);
+const successConclusions = new Set(['neutral', 'skipped', 'success']);
+
+const toLowerStatus = (value?: string | null) => value?.toLowerCase();
+
+const resolveCiStatus = (
+  checks?: GithubStatusCheckRollupNode[] | null,
+): GitPullRequestCiStatus | undefined => {
+  if (!Array.isArray(checks)) return undefined;
+  if (checks.length === 0) return undefined;
+
+  let hasPending = false;
+  let hasUnknown = false;
+
+  for (const check of checks) {
+    const conclusion = toLowerStatus(check.conclusion);
+    const state = toLowerStatus(check.state) ?? toLowerStatus(check.status);
+
+    if (
+      (conclusion && failureConclusions.has(conclusion)) ||
+      state === 'failure' ||
+      state === 'error'
+    ) {
+      return 'failure';
+    }
+
+    if (state && pendingStates.has(state)) {
+      hasPending = true;
+      continue;
+    }
+
+    if ((conclusion && successConclusions.has(conclusion)) || state === 'success') {
+      continue;
+    }
+
+    hasUnknown = true;
+  }
+
+  if (hasPending) return 'pending';
+  return hasUnknown ? 'unknown' : 'success';
+};
+
+const compactString = (value?: string | null) => value || undefined;
+
+const normalizeGithubPullRequest = (pr: GithubPullRequestPayload): GitLinkedPullRequest => {
+  const ciStatus = resolveCiStatus(pr.statusCheckRollup);
+  const mergeable = compactString(pr.mergeable);
+  const mergeStateStatus = compactString(pr.mergeStateStatus);
+  const reviewDecision = compactString(pr.reviewDecision);
+
+  return {
+    ...(ciStatus ? { ciStatus } : {}),
+    ...(pr.isDraft === undefined ? {} : { isDraft: pr.isDraft }),
+    ...(mergeable ? { mergeable } : {}),
+    ...(mergeStateStatus ? { mergeStateStatus } : {}),
+    ...(pr.mergedAt === undefined ? {} : { mergedAt: pr.mergedAt }),
+    number: pr.number,
+    ...(reviewDecision ? { reviewDecision } : {}),
+    state: pr.state,
+    title: pr.title,
+    url: pr.url,
+  };
+};
 
 /** Current branch short name, or short SHA + `detached` for detached HEAD. */
 export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
@@ -56,18 +155,14 @@ export const getLinkedPullRequest = async (payload: {
         '--limit',
         '5',
         '--json',
-        'number,url,title,state',
+        'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup',
       ],
       { cwd: dirPath, timeout: 8000 },
     );
-    const parsed = JSON.parse(stdout.trim() || '[]') as Array<{
-      number: number;
-      state: string;
-      title: string;
-      url: string;
-    }>;
+    const parsed = JSON.parse(stdout.trim() || '[]') as GithubPullRequestPayload[];
     if (parsed.length === 0) return { pullRequest: null, status: 'ok' };
-    const [primary, ...rest] = parsed;
+    const [primaryRaw, ...rest] = parsed;
+    const primary = normalizeGithubPullRequest(primaryRaw);
     return { extraCount: rest.length, pullRequest: primary, status: 'ok' };
   } catch (error: any) {
     const code = error?.code;

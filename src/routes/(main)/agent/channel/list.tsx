@@ -286,6 +286,13 @@ const PlatformList = memo<PlatformListProps>(
                     {t('channel.comingSoon')}
                   </Tag>
                 )}
+                {platform.access?.requiredPlan === 'paid' && (
+                  <Tag color="gold" size={'small'} style={{ marginInlineEnd: 0 }}>
+                    {platform.access.rolloutMode === 'notice'
+                      ? t('channel.paidFeature.noticeBadge')
+                      : t('channel.paidFeature.badge')}
+                  </Tag>
+                )}
                 {runtimeStatus && (
                   <div
                     className={styles.statusDot}

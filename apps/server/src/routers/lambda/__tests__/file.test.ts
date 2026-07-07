@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
@@ -13,6 +14,7 @@ const routerMocks = vi.hoisted(() => {
   return {
     businessFileUploadCheck: vi.fn(),
     businessFileTransferStorageCheck: vi.fn(),
+    hasWorkspaceScopedPermission: vi.fn(),
     serverDB: {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
@@ -122,6 +124,10 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileUploadCheck: routerMocks.businessFileUploadCheck,
 }));
 
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
+}));
+
 const mockAsyncTaskFindByIds = vi.fn();
 const mockAsyncTaskFindById = vi.fn();
 const mockAsyncTaskDelete = vi.fn();
@@ -222,6 +228,7 @@ describe('fileRouter', () => {
     vi.clearAllMocks();
     routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
+    routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
 
     mockFile = {
       id: 'test-id',
@@ -825,7 +832,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
 
@@ -848,7 +860,30 @@ describe('fileRouter', () => {
         'file-1',
         'workspace-target',
         'test-user',
+        undefined,
       );
+    });
+
+    it('should reject target workspace transfer when RBAC denies file upload', async () => {
+      routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(false);
+      mockFileModelFindById.mockResolvedValue({ id: 'file-1', size: 2048 });
+
+      await expect(
+        caller.transferEntity({
+          entityType: 'file',
+          id: 'file-1',
+          targetWorkspaceId: 'workspace-target',
+        }),
+      ).rejects.toMatchObject({
+        cause: {
+          data: {
+            code: TransferErrorCode.TargetNoWriteAccess,
+          },
+        },
+      });
+
+      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
+      expect(mockFileModelTransferTo).not.toHaveBeenCalled();
     });
   });
 
@@ -868,7 +903,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith('file-1', null, 'test-user');
+      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith(
+        'file-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('should copy document resources via documentModel', async () => {
@@ -889,7 +929,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
   });

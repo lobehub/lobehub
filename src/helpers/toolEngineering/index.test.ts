@@ -113,8 +113,10 @@ vi.mock('@/store/tool/selectors', () => ({
   },
 }));
 
+let mockIsCanUseFC = true;
+
 vi.mock('../isCanUseFC', () => ({
-  isCanUseFC: () => true,
+  isCanUseFC: () => mockIsCanUseFC,
 }));
 
 let mockCurrentAgentPlugins: string[] = [];
@@ -162,6 +164,7 @@ describe('toolEngineering', () => {
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
+    mockIsCanUseFC = true;
   });
 
   describe('createToolsEngine', () => {
@@ -281,6 +284,31 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it('should use chat-mode defaults when the model does not support function calling', () => {
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.filteredTools).not.toContainEqual({
+        id: 'lobe-agent',
+        reason: 'incompatible',
+      });
+      expect(result.filteredTools).toContainEqual({
+        id: 'lobe-web-browsing',
+        reason: 'incompatible',
+      });
     });
   });
 

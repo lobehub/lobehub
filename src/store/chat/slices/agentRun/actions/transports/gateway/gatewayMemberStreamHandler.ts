@@ -148,6 +148,17 @@ export const createGatewayMemberStreamHandler = (
         break;
       }
 
+      case 'visible_output_end': {
+        // Example: forwarded member streams can finish text before the
+        // supervisor's terminal barrier refetches the group tree. Clear only
+        // the member column's visible loading; terminal reconciliation still
+        // belongs to agent_runtime_end/error.
+        if (localOperationId) {
+          get().updateOperationMetadata(localOperationId, { visibleLoadingDone: true });
+        }
+        break;
+      }
+
       case 'agent_runtime_end':
       case 'error': {
         ended = true;

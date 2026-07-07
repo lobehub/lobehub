@@ -42,6 +42,7 @@ import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -759,10 +760,18 @@ export class AgentRuntimeService {
           externalRetryCount,
         };
 
+        // Rehydrate `messages` from the DB at every step entry. Each step is a
+        // separate invocation that loads state fresh from Redis, so this makes
+        // the DB the single source of truth for the conversation on every path
+        // — not just the async-tool / human-intervention resumes that already
+        // refresh below. With this in place the Redis-persisted state no longer
+        // needs to carry the (potentially multi-MB) `messages` array, which is
+        // what trips Upstash's 10MB single-request limit and drops the op.
+        await this.rehydrateStateMessagesFromDB(agentState);
+
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
         const stateProvider =
@@ -1971,6 +1980,23 @@ export class AgentRuntimeService {
     // `updateToolMessage` swallows transaction errors into `success: false`,
     // so the flag must be checked — an unfulfilled message would hold the
     // parent's barrier forever while the callback acked with 200.
+    //
+    // A state loaded via the fallback above arrives without `messages` (the
+    // persisted Redis blob no longer carries them — see
+    // AgentStateManager.serializeStateForPersist), so rehydrate from the DB
+    // before reading the sub-agent's final answer. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2141,6 +2167,22 @@ export class AgentRuntimeService {
     );
 
     // 1. Backfill this member's anchor.
+    // The member's textual answer is only read in delegate mode below; a state
+    // loaded via the fallback above arrives without `messages` (dropped from
+    // the persisted Redis blob — see AgentStateManager.serializeStateForPersist),
+    // so rehydrate from the DB when we actually need them. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && mode !== 'in_group' && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2325,6 +2367,40 @@ export class AgentRuntimeService {
     return flatList as AgentState['messages'];
   }
 
+  /**
+   * Overwrite `state.messages` in place with the canonical DB conversation at
+   * step entry, making the DB the single source of truth for messages.
+   *
+   * Guarded against regressions:
+   * - Ops carrying a non-persisted (ephemeral / suppressed) message — e.g. the
+   *   group-member supervisor instruction, which has no DB row — keep their
+   *   full working set in Redis (see `AgentStateManager.serializeStateForPersist`),
+   *   so leave the loaded array intact instead of clobbering it with a DB-only
+   *   view that would drop the prompt.
+   * - `state.messages` is guaranteed to end up an array, so a missing-identifier
+   *   early return or an empty/failed read never hands `undefined` to downstream
+   *   consumers (e.g. `shouldCompress(state.messages)`).
+   * - A populated working set is never replaced with an empty one or on a DB
+   *   error, so a transient read miss can't blank the conversation mid-op.
+   */
+  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (hasNonPersistedMessage(state.messages)) return;
+
+    if (!Array.isArray(state.messages)) state.messages = [];
+
+    if (!state.metadata?.agentId || !state.metadata?.topicId) return;
+
+    try {
+      const refreshed = await this.refreshMessagesFromDB(state);
+      if (refreshed.length > 0) state.messages = refreshed;
+    } catch (error) {
+      console.error(
+        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
+        error,
+      );
+    }
+  }
+
   private resolveAsyncToolResumeParentMessageId(
     messages: AgentState['messages'],
     pendingTools: ChatToolPayload[],
@@ -2424,6 +2500,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      allowEarlyFinalAnswerVisibleOutputEnd: !this.agentFactory,
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
@@ -2479,8 +2556,7 @@ export class AgentRuntimeService {
               activeDeviceId,
               devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
               deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
-                | Record<string, string>
-                | undefined,
+                Record<string, string> | undefined,
             };
           }
         },

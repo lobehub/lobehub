@@ -1,11 +1,15 @@
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
+import { and, desc, eq, gte, lte, or } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
+import { TopicModel } from '@/database/models/topic';
+import { agentOperations, messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 // Direct file import (not the barrel) to avoid pulling in RuntimeExecutors and
 // its workspace-package transitive deps in the unit-test environment.
@@ -37,6 +41,12 @@ export interface AbandonedSubAgentResume {
 }
 
 export interface FinalizeAbandonedResult {
+  /**
+   * Whether this watchdog firing represents a real abandoned run. `found=false`
+   * alone is ambiguous: normal runtime ops may already be cleaned up, while
+   * device/hetero runs can have no coordinator state but still be stuck in DB.
+   */
+  abandoned?: boolean;
   /** Whether the assistant message was successfully marked as errored. */
   assistantMessageUpdated: boolean;
   /** Whether the operation was finalized into a snapshot (false if no partial existed). */
@@ -88,6 +98,7 @@ export class AbandonOperationService {
     const state = await this.coordinator.loadAgentState(operationId);
     if (!state) {
       log('[%s] no agent state in coordinator — already cleaned up', operationId);
+      await this.finalizeRunningOperationWithoutState(operationId, reason, result);
       return result;
     }
     result.found = true;
@@ -207,5 +218,117 @@ export class AbandonOperationService {
 
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
     return result;
+  }
+
+  private async finalizeRunningOperationWithoutState(
+    operationId: string,
+    reason: string,
+    result: FinalizeAbandonedResult,
+  ): Promise<void> {
+    const op = await this.findOperationRow(operationId);
+    if (!op || !['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(op.status)) {
+      return;
+    }
+
+    result.abandoned = true;
+
+    const message = `Operation abandoned: ${reason}`;
+    const error: ChatMessageError = {
+      body: { message },
+      message,
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    };
+
+    try {
+      await new AgentOperationModel(
+        this.db,
+        op.userId,
+        op.workspaceId ?? undefined,
+      ).recordCompletion(operationId, {
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { message, type: String(error.type) },
+        llmCalls: 0,
+        processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
+        status: 'error',
+        stepCount: 0,
+        toolCalls: 0,
+        totalTokens: 0,
+      });
+    } catch (e) {
+      log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
+    }
+
+    const assistantMessageId = await this.resolveAssistantMessageIdForOperation(op, operationId);
+    if (!assistantMessageId) return;
+
+    try {
+      const messageModel = new MessageModel(this.db, op.userId, op.workspaceId ?? undefined);
+      await messageModel.update(assistantMessageId, { content: '', error });
+      result.assistantMessageUpdated = true;
+    } catch (e) {
+      log('[%s] no-state abandon: assistant message update failed (non-fatal): %O', operationId, e);
+    }
+  }
+
+  private async findOperationRow(operationId: string) {
+    try {
+      return await (this.db as any).query?.agentOperations?.findFirst({
+        where: eq(agentOperations.id, operationId),
+      });
+    } catch (e) {
+      log('[%s] no-state abandon: operation lookup failed (non-fatal): %O', operationId, e);
+      return null;
+    }
+  }
+
+  private async resolveAssistantMessageIdForOperation(
+    op: typeof agentOperations.$inferSelect,
+    operationId: string,
+  ): Promise<string | undefined> {
+    let topicModel: TopicModel | undefined;
+
+    if (op.topicId) {
+      try {
+        topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
+        const topic = await topicModel.findById(op.topicId);
+        const running = topic?.metadata?.runningOperation as
+          | { assistantMessageId?: string; operationId?: string }
+          | undefined;
+
+        if (running?.operationId && running.operationId !== operationId) return undefined;
+
+        if (running?.operationId === operationId) {
+          await topicModel.updateMetadata(op.topicId, { runningOperation: null }).catch(() => {});
+          if (running.assistantMessageId) return running.assistantMessageId;
+        }
+      } catch (e) {
+        log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
+      }
+    }
+
+    try {
+      const startedAt = op.startedAt ? new Date(op.startedAt) : undefined;
+      const lowerBound = startedAt ? new Date(startedAt.getTime() - 5000) : undefined;
+      const upperBound = startedAt ? new Date(startedAt.getTime() + 5000) : undefined;
+      const assistant = await (this.db as any).query?.messages?.findFirst({
+        orderBy: [desc(messages.createdAt)],
+        where: and(
+          eq(messages.userId, op.userId),
+          eq(messages.role, 'assistant'),
+          op.topicId ? eq(messages.topicId, op.topicId) : undefined,
+          op.agentId ? eq(messages.agentId, op.agentId) : undefined,
+          op.provider ? eq(messages.provider, op.provider) : undefined,
+          lowerBound ? gte(messages.createdAt, lowerBound) : undefined,
+          upperBound ? lte(messages.createdAt, upperBound) : undefined,
+          or(eq(messages.content, LOADING_FLAT), eq(messages.content, '')),
+        ),
+      });
+
+      return assistant?.id;
+    } catch (e) {
+      log('[%s] no-state abandon: assistant lookup failed (non-fatal): %O', operationId, e);
+      return undefined;
+    }
   }
 }

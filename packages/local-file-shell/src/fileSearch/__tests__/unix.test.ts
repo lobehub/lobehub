@@ -18,9 +18,12 @@ vi.mock('../../logger', () => ({
 }));
 
 const fgMock = vi.fn();
-vi.mock('fast-glob', () => ({
-  default: (...args: unknown[]) => fgMock(...args),
-}));
+const fgStreamMock = () => (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream;
+vi.mock('fast-glob', () => {
+  const defaultExport = (...args: unknown[]) => fgMock(...args);
+  Object.defineProperty(defaultExport, 'stream', { get: () => fgStreamMock() });
+  return { default: defaultExport };
+});
 
 const execaMock = vi.fn();
 vi.mock('execa', () => ({
@@ -40,6 +43,7 @@ vi.mock('node:fs/promises', () => ({
 describe('UnixFileSearch glob fallback root', () => {
   beforeEach(() => {
     fgMock.mockReset();
+    (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream = vi.fn();
     execaMock.mockReset();
     // Force the Unix tool selection to fall through to fast-glob so we
     // don't have to mock fd/find availability checks.
@@ -119,5 +123,26 @@ describe('UnixFileSearch glob fallback root', () => {
 
     const [, args] = execaMock.mock.calls[0] as [string, string[]];
     expect(args).not.toContain('--max-results');
+  });
+
+  it('streams fast-glob results when the caller provides a glob limit', async () => {
+    fgStreamMock().mockReturnValue(
+      (async function* () {
+        yield { path: '/repo/packages/b.ts', stats: { mtime: new Date('2026-01-02') } };
+        yield { path: '/repo/packages/a.ts', stats: { mtime: new Date('2026-01-01') } };
+        yield { path: '/repo/packages/c.ts', stats: { mtime: new Date('2026-01-03') } };
+      })(),
+    );
+
+    const impl = new LinuxSearchServiceImpl();
+    const result = await impl.glob({ limit: 2, pattern: '**/*.ts', scope: '/repo/packages' });
+
+    expect(fgMock).not.toHaveBeenCalled();
+    expect(fgStreamMock()).toHaveBeenCalledWith(
+      '**/*.ts',
+      expect.objectContaining({ cwd: '/repo/packages', stats: true }),
+    );
+    expect(result.files).toEqual(['/repo/packages/b.ts', '/repo/packages/a.ts']);
+    expect(result.total_files).toBe(2);
   });
 });

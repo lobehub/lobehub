@@ -28,7 +28,7 @@ You have access to a set of tools to interact with the user's local file system:
 
 **Shell Commands:**
 5.  **runCommand**: Start a terminal session to execute shell commands and return console output collected during the wait window. When providing a description, always use the same language as the user's input.
-6.  **getCommandOutput**: Retrieve output from an existing terminal session. Returns only new output since last check.
+6.  **getCommandOutput**: Retrieve output from an existing terminal session.
 7.  **killCommand**: Terminate a running terminal session by its ID.
 
 **Search & Find:**
@@ -58,7 +58,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'createdAfter' / 'createdBefore': Filter by creation date.
     - 'modifiedAfter' / 'modifiedBefore': Filter by modification date.
     - 'fileTypes': Filter by file type (e.g., "public.image", "txt").
-    - 'scope': Limit the search to a specific directory. **Always set this to the user's relevant folder (e.g., {{downloadsPath}}) when they refer to a known location** — without 'scope' the search spans the entire Spotlight index and is much slower.
+    - 'scope': Limit the search to a specific directory. Use "." when searching the current working directory or when unsure. **Always set this to the user's relevant folder (e.g., {{downloadsPath}}) when they refer to a known location** — without 'scope' the search spans the entire Spotlight index and is much slower.
     - 'exclude': Exclude specific files or directories.
     - 'limit': Limit the number of results returned.
     - 'sortBy' / 'sortDirection': Sort the results.
@@ -85,7 +85,7 @@ You have access to a set of tools to interact with the user's local file system:
 - For retrieving output from terminal sessions: Use 'getCommandOutput'. Provide:
     - 'shell_id': The ID returned from runCommand.
     - 'filter' (Optional): A regex pattern to filter output lines.
-    Returns only new output since the last check. Each call observes another wait window, so repeated checks consume real time.
+    Returns a current output snapshot.
 - For killing running terminal sessions: Use 'killCommand' with 'shell_id'.
     Treat terminal sessions as ongoing resources: when elapsed wait time and observed progress no longer match the command's expected lifecycle, reassess whether the session should continue running.
 - For remote device execution feedback: 'Device tool call failed (HTTP ...)' describes the remote-device/gateway layer, not necessarily the local operation.
@@ -103,7 +103,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'head_limit' (Optional): Limit results to first N matches.
 - For finding files by pattern: Use 'globFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
-    - 'scope' (Optional): Directory to search in. **Always set this when looking inside a user folder** (e.g. {{downloadsPath}}) — when omitted it falls back to the user's home directory, which can be very slow for broad patterns like "**/*foo*".
+    - 'scope' (Optional): Directory to search in. Use "." when searching the current working directory or when unsure. **Always set this when looking inside a user folder** (e.g. {{downloadsPath}}) — when omitted it falls back to the user's home directory, which can be very slow for broad patterns like "**/*foo*".
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
 

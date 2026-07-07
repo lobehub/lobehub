@@ -1,7 +1,7 @@
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { describe, expect, it } from 'vitest';
 
 import { classifyLLMError } from '../llmErrorClassification';
-import { ModelEmptyError } from '../ModelEmptyError';
 
 describe('classifyLLMError', () => {
   it('should classify rate limit errors as retry', () => {

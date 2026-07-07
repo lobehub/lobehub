@@ -1,7 +1,9 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
+import * as os from 'node:os';
 import path from 'node:path';
 
 import { detectRepoType } from '@lobechat/local-file-shell';
+import matter from 'gray-matter';
 
 import type {
   InitWorkspaceParams,
@@ -9,17 +11,54 @@ import type {
   ListProjectSkillsParams,
   ListProjectSkillsResult,
   ProjectSkillItem,
+  ProjectSkillScope,
+  ProjectSkillSource,
   StatPathResult,
   WorkspaceInstructionsItem,
   WorkspaceScanDeps,
 } from './types';
 
-const SKILL_FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
-
 // Cap recursion to guard against pathological directory trees.
 const MAX_SKILL_FILE_COUNT = 1000;
 
-const SKILL_SOURCES = ['.agents/skills', '.claude/skills'] as const;
+const SKILL_SOURCES = [
+  '.agents/skills',
+  '.claude/skills',
+] as const satisfies readonly ProjectSkillSource[];
+
+interface SkillScanRoot {
+  previewRoot: string;
+  scope: ProjectSkillScope;
+  source: ProjectSkillSource;
+  sourceRoot: string;
+}
+
+const createProjectSkillRoots = (root: string): SkillScanRoot[] =>
+  SKILL_SOURCES.map((source) => ({
+    previewRoot: root,
+    scope: 'project',
+    source,
+    sourceRoot: path.join(root, source),
+  }));
+
+const createDeviceSkillRoots = (): SkillScanRoot[] => {
+  const home = os.homedir();
+
+  return SKILL_SOURCES.map((source) => {
+    const sourceRoot = path.join(home, source);
+    return {
+      previewRoot: sourceRoot,
+      scope: 'device',
+      source,
+      sourceRoot,
+    };
+  });
+};
+
+const createSkillRoots = (root: string): SkillScanRoot[] => [
+  ...createProjectSkillRoots(root),
+  ...createDeviceSkillRoots(),
+];
 
 const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
 
@@ -49,46 +88,46 @@ const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
   return results.sort();
 };
 
-/**
- * Parse a minimal YAML frontmatter block for SKILL.md files. Only handles
- * `key: value` lines; multi-line block scalars fall back to the first line.
- */
-const parseSkillFrontmatter = (raw: string): Record<string, string> => {
-  const match = raw.match(SKILL_FRONTMATTER_RE);
-  if (!match) return {};
+interface SkillFrontmatterFields {
+  description?: string;
+  name?: string;
+}
 
-  const fields: Record<string, string> = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    if (!key || key.startsWith('#')) continue;
-    let value = line.slice(colonIdx + 1).trim();
-    if (value.startsWith('|') || value.startsWith('>')) continue;
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    fields[key] = value;
-  }
-  return fields;
+const readStringField = (data: Record<string, unknown>, field: keyof SkillFrontmatterFields) => {
+  const value = data[field];
+  return typeof value === 'string' ? value.trim() : undefined;
 };
 
 /**
- * Scan one skill source directory (e.g. `.agents/skills`) under `root` and
- * return parsed frontmatter for each `SKILL.md`. Returns `[]` when the source
- * directory is absent or unreadable. Unsorted — callers sort/merge.
+ * Parse SKILL.md YAML frontmatter. `gray-matter` handles block scalars such as
+ * `description: >`, keeping this path aligned with the server-side skill parser.
  */
-const scanSkillsInSource = async (
-  root: string,
-  source: ProjectSkillItem['source'],
-): Promise<ProjectSkillItem[]> => {
-  const dir = path.join(root, source);
+const parseSkillFrontmatter = (raw: string): SkillFrontmatterFields => {
+  try {
+    const { data } = matter(raw) as { data: Record<string, unknown> };
+    return {
+      description: readStringField(data, 'description'),
+      name: readStringField(data, 'name'),
+    };
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Scan one skill source directory and return parsed frontmatter for each
+ * `SKILL.md`. Returns `[]` when the source directory is absent or unreadable.
+ * Unsorted — callers sort/merge.
+ */
+const scanSkillsInSource = async ({
+  previewRoot,
+  scope,
+  source,
+  sourceRoot,
+}: SkillScanRoot): Promise<ProjectSkillItem[]> => {
   let entries;
   try {
-    entries = await readdir(dir, { withFileTypes: true });
+    entries = await readdir(sourceRoot, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -97,7 +136,7 @@ const scanSkillsInSource = async (
     entries
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .map(async (entry): Promise<ProjectSkillItem | null> => {
-        const skillDir = path.join(dir, entry.name);
+        const skillDir = path.join(sourceRoot, entry.name);
         const skillFile = path.join(skillDir, 'SKILL.md');
         try {
           const raw = await readFile(skillFile, 'utf8');
@@ -109,6 +148,8 @@ const scanSkillsInSource = async (
             files,
             name: fields.name || entry.name,
             path: skillFile,
+            previewRoot,
+            scope,
             skillDir,
             source,
           };
@@ -119,6 +160,32 @@ const scanSkillsInSource = async (
   );
 
   return skills.filter((skill): skill is ProjectSkillItem => skill !== null);
+};
+
+const collectSkills = async (roots: SkillScanRoot[]): Promise<ProjectSkillItem[]> => {
+  const seen = new Set<string>();
+  const skills: ProjectSkillItem[] = [];
+
+  for (const root of roots) {
+    for (const skill of await scanSkillsInSource(root)) {
+      if (seen.has(skill.name)) continue;
+      seen.add(skill.name);
+      skills.push(skill);
+    }
+  }
+
+  return skills.sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const approvePreviewRoots = async (
+  skills: ProjectSkillItem[],
+  deps: WorkspaceScanDeps,
+  extraRoots: string[] = [],
+): Promise<void> => {
+  if (!deps.approveProjectRoot) return;
+
+  const roots = new Set([...extraRoots, ...skills.map((skill) => skill.previewRoot)]);
+  await Promise.all([...roots].map((root) => deps.approveProjectRoot!(root)));
 };
 
 /**
@@ -147,36 +214,29 @@ const readWorkspaceInstructions = async (root: string): Promise<WorkspaceInstruc
 };
 
 /**
- * Scan agent skill directories under the project root. Returns the first source
- * directory that yields any skills (`.agents/skills` wins). Approves the root
- * for the host preview protocol when any skills are found.
+ * Scan agent skill directories for the project and the execution device.
+ * Project skills win over device skills on name collision. Approves each
+ * discovered skill's preview root for the host preview protocol.
  */
 export const listProjectSkills = async (
   params: ListProjectSkillsParams,
   deps: WorkspaceScanDeps = {},
 ): Promise<ListProjectSkillsResult> => {
   const root = params.scope;
+  const skills = await collectSkills(createSkillRoots(root));
 
-  for (const source of SKILL_SOURCES) {
-    const skills = (await scanSkillsInSource(root, source)).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-
-    if (skills.length > 0) {
-      await deps.approveProjectRoot?.(root);
-      return { root, skills, source };
-    }
+  if (skills.length > 0) {
+    await approvePreviewRoots(skills, deps);
   }
 
-  return { root, skills: [], source: null };
+  return { root, skills, source: skills[0]?.source ?? null };
 };
 
 /**
- * One-call "workspace init" scan: merge project skills from BOTH
- * `.agents/skills` and `.claude/skills` (deduped by name, `.agents/skills`
- * winning) and read the project-root agent instructions. Approves the root for
- * the host preview protocol regardless of what was found, since the run is now
- * bound to this root.
+ * One-call "workspace init" scan: merge project and execution-device skills
+ * (deduped by name, project winning) and read the project-root agent
+ * instructions. Approves the project root regardless of what was found, since
+ * the run is now bound to this root.
  */
 export const initWorkspace = async (
   params: InitWorkspaceParams,
@@ -184,20 +244,10 @@ export const initWorkspace = async (
 ): Promise<InitWorkspaceResult> => {
   const root = params.scope;
 
-  const seen = new Set<string>();
-  const skills: ProjectSkillItem[] = [];
-  for (const source of SKILL_SOURCES) {
-    for (const skill of await scanSkillsInSource(root, source)) {
-      if (seen.has(skill.name)) continue;
-      seen.add(skill.name);
-      skills.push(skill);
-    }
-  }
-  skills.sort((a, b) => a.name.localeCompare(b.name));
-
+  const skills = await collectSkills(createSkillRoots(root));
   const instructions = await readWorkspaceInstructions(root);
 
-  await deps.approveProjectRoot?.(root);
+  await approvePreviewRoots(skills, deps, [root]);
 
   return { instructions, root, skills };
 };

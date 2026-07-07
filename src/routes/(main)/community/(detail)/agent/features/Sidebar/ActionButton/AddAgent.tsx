@@ -9,6 +9,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
@@ -43,6 +44,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { allowed: canCreate } = usePermission('create_content');
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const meta = {
     avatar,
@@ -72,12 +74,15 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
     if (!canCreate || !config) return;
 
     // Note: agentService.createAgent automatically normalizes market config (handles model as object)
+    // In workspace mode, default the new agent to the user's Private bucket
+    // — they can promote it to the workspace later via "Publish to Workspace".
     const agentData = {
       config: {
         ...config,
         editorData,
         ...meta,
       },
+      ...(activeWorkspaceId ? { visibility: 'private' as const } : {}),
     };
 
     const result = await createAgent(agentData);

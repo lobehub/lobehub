@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Auto (zgodnie z językiem systemu)",
   "responseLanguage.desc": "Wybierz język odpowiedzi Agenta",
   "responseLanguage.hint": "Po wybraniu języka, odpowiedzi AI będą w tym języku, a interfejs również się dostosuje",
+  "responseLanguage.saveFailed": "Nie udało się zapisać. Proszę spróbować ponownie.",
   "responseLanguage.title": "W jakim języku chcesz się ze mną komunikować?",
   "responseLanguage.title2": "Zacznijmy od języka, by zbudować prawdziwe zrozumienie.",
   "responseLanguage.title3": "Pozwól mi mówić jasno i lepiej Cię rozumieć~",

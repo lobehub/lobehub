@@ -1,8 +1,13 @@
 'use client';
 
+import { WorkspaceAdminOnly } from '@/features/WorkspaceSetting';
 import Page from '@/routes/(main)/settings/apikey';
 
-const WorkspaceApiKeySetting = () => <Page />;
+const WorkspaceApiKeySetting = () => (
+  <WorkspaceAdminOnly>
+    <Page />
+  </WorkspaceAdminOnly>
+);
 
 WorkspaceApiKeySetting.displayName = 'WorkspaceApiKeySetting';
 

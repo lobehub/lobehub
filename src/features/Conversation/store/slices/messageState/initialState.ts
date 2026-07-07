@@ -33,6 +33,25 @@ export interface MessageStateState {
    * Used to ensure approve/reject waits for pending saves to complete
    */
   pendingArgsUpdates: Map<string, Promise<void>>;
+
+  /**
+   * IDs of messages currently checked in multi-select mode. Only meaningful
+   * while `selectionMode` is true; cleared on exit.
+   */
+  selectedMessageIds: string[];
+
+  /**
+   * The message multi-select mode was entered from. Anchors the "select to
+   * here" range action (top-of-conversation → anchor).
+   */
+  selectionAnchorId?: string;
+
+  /**
+   * Whether the conversation is in multi-select mode (used to forward several
+   * messages to another agent). When true, each message renders a checkbox and
+   * the per-message action bar is suppressed.
+   */
+  selectionMode: boolean;
 }
 
 export const messageStateInitialState: MessageStateState = {
@@ -41,4 +60,7 @@ export const messageStateInitialState: MessageStateState = {
   messageEditingIds: [],
   messageLoadingIds: [],
   pendingArgsUpdates: new Map(),
+  selectionAnchorId: undefined,
+  selectedMessageIds: [],
+  selectionMode: false,
 };

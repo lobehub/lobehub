@@ -1,5 +1,6 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { LockIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
@@ -25,41 +26,51 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const PluginItem = memo<KnowledgeItem>(({ id, fileType, name, type, description, enabled }) => {
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      justify={'space-between'}
-      paddingBlock={12}
-      paddingInline={16}
-      style={{ position: 'relative' }}
-    >
+const PluginItem = memo<KnowledgeItem>(
+  ({ id, fileType, name, type, description, enabled, visibility }) => {
+    return (
       <Flexbox
         horizontal
         align={'center'}
-        flex={1}
         gap={8}
-        style={{ overflow: 'hidden', position: 'relative' }}
+        justify={'space-between'}
+        paddingBlock={12}
+        paddingInline={16}
+        style={{ position: 'relative' }}
       >
-        <KnowledgeIcon fileType={fileType} name={name} size={{ file: 40, repo: 40 }} type={type} />
-        <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text ellipsis className={styles.title}>
-              {name}
-            </Text>
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={1}
+          gap={8}
+          style={{ overflow: 'hidden', position: 'relative' }}
+        >
+          <KnowledgeIcon
+            fileType={fileType}
+            name={name}
+            size={{ file: 40, repo: 40 }}
+            type={type}
+          />
+          <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>
+            <Flexbox horizontal align={'center'} gap={6}>
+              {visibility === 'private' && (
+                <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={12} />
+              )}
+              <Text ellipsis className={styles.title}>
+                {name}
+              </Text>
+            </Flexbox>
+            {description && (
+              <Text ellipsis className={styles.desc}>
+                {description}
+              </Text>
+            )}
           </Flexbox>
-          {description && (
-            <Text ellipsis className={styles.desc}>
-              {description}
-            </Text>
-          )}
         </Flexbox>
+        <Actions enabled={enabled} id={id} type={type} />
       </Flexbox>
-      <Actions enabled={enabled} id={id} type={type} />
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 export default PluginItem;

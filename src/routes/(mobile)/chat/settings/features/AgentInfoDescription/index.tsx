@@ -23,11 +23,6 @@ interface ChatConfig {
   searchMode?: string;
 }
 
-interface TTSConfig {
-  ttsService?: string;
-  voice?: any;
-}
-
 interface AgentInfoDescriptionProps {
   agentConfig?: AgentConfig;
   chatConfig?: ChatConfig;
@@ -52,7 +47,6 @@ interface AgentInfoDescriptionProps {
   plugins?: string[];
   provider?: string;
   systemRole?: string;
-  ttsConfig?: TTSConfig;
 }
 
 const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
@@ -67,7 +61,6 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
     plugins = [],
     provider,
     systemRole,
-    ttsConfig,
   }) => {
     const { t } = useTranslation('setting');
     // Convert remote data format
@@ -83,7 +76,6 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
           plugins,
           provider,
           systemRole,
-          ttsConfig,
         };
       }
 
@@ -109,7 +101,6 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
         plugins: config.plugins?.map((p: any) => (typeof p === 'string' ? p : p.identifier)) || [],
         provider: config.model?.provider,
         systemRole: config.systemRole,
-        ttsConfig: config.tts || {},
       };
     };
 

@@ -6,8 +6,19 @@ const mockAppEnv = {
   enableQueueAgentRuntime: false,
 };
 
+const qstashMocks = vi.hoisted(() => ({
+  client: vi.fn(),
+  publishJSON: vi.fn(),
+}));
+
 vi.mock('@/envs/app', () => ({
   appEnv: mockAppEnv,
+}));
+
+vi.mock('@/libs/qstash', () => ({
+  OtelQstashClient: qstashMocks.client.mockImplementation(() => ({
+    publishJSON: qstashMocks.publishJSON,
+  })),
 }));
 
 describe('QueueService', () => {
@@ -15,9 +26,12 @@ describe('QueueService', () => {
     vi.resetModules();
     // Reset to default local mode
     mockAppEnv.enableQueueAgentRuntime = false;
+    qstashMocks.client.mockClear();
+    qstashMocks.publishJSON.mockReset();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -145,6 +159,50 @@ describe('QueueService', () => {
 
       // Cleanup
       delete process.env.QSTASH_TOKEN;
+    });
+
+    it('should wait locally for sub-second QStash delays before publishing', async () => {
+      vi.useFakeTimers();
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const result = impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 50,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      await vi.advanceTimersByTimeAsync(49);
+      expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toBe('msg-test');
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(request).not.toHaveProperty('delay');
+      expect(request.body.timestamp).toEqual(expect.any(Number));
+    });
+
+    it('should pass second-granularity delays through to QStash', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      await impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 1500,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
     });
   });
 

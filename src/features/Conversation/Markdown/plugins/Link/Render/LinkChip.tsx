@@ -22,13 +22,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface LinkChipProps {
   href?: string;
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
 }
 
 const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => (
   <a className={styles.chip} href={href} rel="noopener noreferrer" target="_blank">
-    <span className={styles.icon}>{icon}</span>
+    {icon && <span className={styles.icon}>{icon}</span>}
     {label}
   </a>
 ));

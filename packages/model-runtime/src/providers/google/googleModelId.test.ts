@@ -4,6 +4,7 @@ import {
   isGemini3OrAbove,
   isGeminiVersionAtLeast,
   isGoogleImageResponseModel,
+  isGoogleNanoBananaModel,
   isGoogleSafetyOffModel,
   normalizeGoogleModelId,
   parseGoogleModelId,
@@ -70,6 +71,17 @@ describe('googleModelId', () => {
       'gemini-3.5-pro-image-preview',
       'google/gemini-3.5-pro-image-preview-free',
       'nano-banana-pro-preview',
+      // Real Nano Banana model ids (Google): every one is an image-output model
+      // and must request the Image response modality. `gemini-3.1-flash-lite-image`
+      // (Nano Banana 2 Lite) is the id that surfaced the base64-as-text bug.
+      'gemini-3.1-flash-lite-image',
+      'gemini-3.1-flash-lite-image:image',
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image',
+      // Bare nanoBanana-family aliases (no `gemini-*-image` shape) are covered too.
+      'nano-banana',
+      'nano-banana-lite',
+      'google/nano-banana-lite',
     ])('detects image-response model %s', (model) => {
       expect(isGoogleImageResponseModel(model)).toBe(true);
     });
@@ -88,6 +100,28 @@ describe('googleModelId', () => {
       expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image-preview')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.5-pro-image-preview')).toBe(false);
     });
+  });
+
+  describe('Nano Banana helpers', () => {
+    it.each([
+      'nano-banana-pro-preview',
+      'google/nano-banana-pro-preview',
+      'gemini-2.5-flash-image',
+      'gemini-3-pro-image-preview',
+      'gemini-3-pro-image-preview:image',
+      'gemini-3.1-flash-image-preview:image',
+      'gemini-3.1-flash-lite-image',
+      'gemini-3.1-flash-lite-image:image',
+    ])('detects Nano Banana model %s', (model) => {
+      expect(isGoogleNanoBananaModel(model)).toBe(true);
+    });
+
+    it.each(['gemini-3.5-pro', 'gemini-3.5-pro:image', 'gemini-3.1-flash-lite', undefined])(
+      'does not detect non-Nano Banana model %s',
+      (model) => {
+        expect(isGoogleNanoBananaModel(model)).toBe(false);
+      },
+    );
   });
 
   describe('payload guard helpers', () => {

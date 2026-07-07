@@ -8,7 +8,10 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
-import { resolveDefaultThinkingLevelForModel } from '@/services/chat/mecha/modelParamsResolver';
+import {
+  resolveDefaultEnableAdaptiveThinkingForModel,
+  resolveDefaultThinkingLevelForModel,
+} from '@/services/chat/mecha/modelParamsResolver';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -65,6 +68,12 @@ const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   return undefined;
 };
 
+const resolveEnableAdaptiveThinkingInitialValue = (config: LobeAgentChatConfig, model?: string) => {
+  if (Object.hasOwn(config, 'enableAdaptiveThinking')) return config.enableAdaptiveThinking;
+
+  return resolveDefaultEnableAdaptiveThinkingForModel(model);
+};
+
 const ControlsForm = memo<ControlsFormProps>(
   ({ disabled, model: modelProp, onUpdatingChange, provider: providerProp }) => {
     const { t } = useTranslation('chat');
@@ -86,12 +95,17 @@ const ControlsForm = memo<ControlsFormProps>(
     const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
     const initialValues = useMemo(() => {
       const enableReasoningInitialValue = resolveEnableReasoningInitialValue(config);
+      const enableAdaptiveThinkingInitialValue = resolveEnableAdaptiveThinkingInitialValue(
+        config,
+        model,
+      );
 
       return {
         ...config,
+        enableAdaptiveThinking: enableAdaptiveThinkingInitialValue,
         enableReasoning: enableReasoningInitialValue,
       };
-    }, [config]);
+    }, [config, model]);
 
     useEffect(() => {
       form.setFieldsValue(initialValues);

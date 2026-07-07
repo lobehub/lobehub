@@ -1,11 +1,13 @@
 'use client';
 
 import { type IEditor } from '@lobehub/editor';
-import { Alert, Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
+import NotFound from '@/components/404';
+import AsyncError from '@/components/AsyncError';
 import { useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
@@ -22,23 +24,6 @@ const EditorSkeleton = memo(() => (
     <Skeleton active paragraph={{ rows: 8 }} />
   </div>
 ));
-
-/**
- * Error display for fetch failures
- */
-const EditorError = memo<{ error: Error }>(({ error }) => {
-  const { t } = useTranslation('file');
-
-  return (
-    <Alert
-      showIcon
-      description={error.message || t('pageEditor.loadError', 'Failed to load document')}
-      style={{ margin: 16 }}
-      title={t('pageEditor.error', 'Error')}
-      type="error"
-    />
-  );
-});
 
 export interface DocumentIdModeProps extends EditorCanvasProps {
   documentId: string;
@@ -93,7 +78,12 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     );
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
-    const { data: remoteDocument, error } = useFetchDocument(documentId, {
+    const {
+      data: remoteDocument,
+      error,
+      isLoading: isFetchingDocument,
+      mutate,
+    } = useFetchDocument(documentId, {
       autoSave,
       editor,
       sourceType,
@@ -205,6 +195,30 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       remoteDocumentVersion,
     ]);
 
+    if (error && isLoading && !isFetchingDocument) {
+      return (
+        <>
+          {unsavedGuardNode}
+          <AsyncError
+            error={error}
+            variant={'page'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
+        </>
+      );
+    }
+
+    if (remoteDocument === null) {
+      return (
+        <>
+          {unsavedGuardNode}
+          <NotFound />
+        </>
+      );
+    }
+
     // Show loading state
     if (isLoading) {
       return (
@@ -220,7 +234,15 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     return (
       <>
         {unsavedGuardNode}
-        {error && <EditorError error={error as Error} />}
+        {error && (
+          <AsyncError
+            error={error}
+            variant={'inline'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
+        )}
         <InternalEditor
           contentChangeLockRef={contentChangeLockRef}
           editor={editor}

@@ -1,4 +1,3 @@
-import { Modal } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -6,6 +5,7 @@ import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import { lazy, memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
   openRenameSkillModal,
@@ -160,7 +160,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
   );
 
   const detailModal = (
-    <Modal
+    <ImperativeModal
       destroyOnHidden
       footer={null}
       open={!!detailSkillId}
@@ -172,7 +172,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
       <Suspense fallback={<div style={{ height: '100%' }} />}>
         {detailSkillId && <AgentSkillDetail skillId={detailSkillId} />}
       </Suspense>
-    </Modal>
+    </ImperativeModal>
   );
 
   if (hideHeader)

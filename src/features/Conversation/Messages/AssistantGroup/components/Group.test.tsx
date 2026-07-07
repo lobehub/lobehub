@@ -12,6 +12,7 @@ import Group from './Group';
 
 let mockIsCollapsed = false;
 let mockIsGenerating = false;
+let mockDbMessages: { createdAt?: Date | number | string | null; id: string }[] = [];
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -46,7 +47,8 @@ vi.mock('../../../store', () => ({
     isMessageCollapsed: () => () => mockIsCollapsed,
     isMessageGenerating: () => () => mockIsGenerating,
   },
-  useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
+  useConversationStore: (selector: (state: unknown) => unknown) =>
+    selector({ dbMessages: mockDbMessages }),
 }));
 
 vi.mock('./CollapsedMessage', () => ({
@@ -152,7 +154,9 @@ vi.mock('./GroupItem', () => ({
 }));
 
 vi.mock('@/features/Conversation/Messages/components/ContentLoading', () => ({
-  default: ({ id }: { id: string }) => <div data-id={id} data-testid="tail-running" />,
+  default: ({ id, startTime }: { id: string; startTime?: number }) => (
+    <div data-id={id} data-start-time={startTime} data-testid="tail-running" />
+  ),
 }));
 
 const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantContentBlock =>
@@ -174,6 +178,7 @@ describe('Group', () => {
     cleanup();
     mockIsCollapsed = false;
     mockIsGenerating = false;
+    mockDbMessages = [];
   });
 
   it('keeps a long mixed single-tool block inline in its natural order', () => {
@@ -375,6 +380,63 @@ describe('Group', () => {
     expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
   });
 
+  it('keeps a non-latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        id="assistant-1"
+        isLatestItem={false}
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Folding only ever collapses the process; the final answer stays a visible
+    // sibling for every turn, latest or not — never swallowed into the fold.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+  });
+
+  it('keeps the latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Latest turn: the answer stays out of the fold so it reads without expanding.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+  });
+
   it('keeps assistant runtime errors outside the workflow collapse', () => {
     const { container } = render(
       <Group
@@ -476,6 +538,39 @@ describe('Group', () => {
     );
 
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('anchors the running indicator to the tool RESULT createdAt, not the tool-call block', () => {
+    mockIsGenerating = true;
+    // The tool result lands after the tool-call block; the tail timer must start
+    // from the result row so a long tool runtime is not folded back into elapsed.
+    mockDbMessages = [
+      { createdAt: 1000, id: 'block-1' },
+      { createdAt: 5000, id: 'tool-result-1' },
+    ];
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [
+              {
+                apiName: 'bash',
+                id: 'tool-1',
+                result: { content: 'done' },
+                result_msg_id: 'tool-result-1',
+              } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-start-time', '5000');
   });
 
   it('hides the running indicator while the inline tool is still executing', () => {

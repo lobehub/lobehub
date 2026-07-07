@@ -3,15 +3,23 @@
 import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { Collapse, Divider, Progress, Typography } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { Collapse } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+import SegmentBar from '../../../../../../../../features/SegmentBar';
+
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorBgContainer};
+  `,
+  // Reading block for free-text values (input / expected).
+  copyBlock: css`
+    font-size: ${cssVar.fontSize};
+    line-height: 1.5;
+    color: ${cssVar.colorText};
   `,
   infoItem: css`
     display: flex;
@@ -22,40 +30,46 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 0;
   `,
   infoLabel: css`
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   infoValue: css`
-    font-family: monospace;
-    font-size: 13px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorText};
   `,
-  rubricItem: css`
-    padding-block: 8px;
-    padding-inline: 0;
+  // The headline score for the panel — large mono number on a tonal surface.
+  scoreCard: css`
+    padding: 12px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  scoreValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading3};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
+  // Divider between titled sections — tonal hairline, not a heavy rule.
+  section: css`
+    padding-block-end: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   rubricName: css`
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
   `,
   rubricReason: css`
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     line-height: 1.5;
     color: ${cssVar.colorTextSecondary};
   `,
   rubricScore: css`
-    font-family: monospace;
-    font-size: 12px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
-  `,
-  sectionTitle: css`
-    margin: 0;
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
   `,
 }));
 
@@ -95,6 +109,13 @@ const DETERMINISTIC_MODES = new Set([
   'python',
 ]);
 
+// Section label — one consistent treatment for every field heading in the panel.
+const SectionTitle = memo<{ children: ReactNode }>(({ children }) => (
+  <Text fontSize={12} type={'secondary'} weight={500}>
+    {children}
+  </Text>
+));
+
 const getEvalModeFromRubricId = (rubricId: string): string => {
   return rubricId.replace(/^eval-mode-/, '');
 };
@@ -116,6 +137,9 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
     ? rubricScores.filter((s) => !isDeterministicMode(s.rubricId))
     : [];
 
+  const hasScore = score !== undefined && score !== null;
+  const scorePct = hasScore ? Math.max(0, Math.min(100, Math.round(score * 100))) : 0;
+
   return (
     <Flexbox
       className={styles.container}
@@ -123,48 +147,54 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
       padding={16}
       style={{ height: '100%', overflowY: 'auto', width: 320 }}
     >
+      {/* Failure reason — error states surface at the top of the panel */}
+      {evalResult?.error && (
+        <Flexbox className={styles.section} gap={8}>
+          <SectionTitle>{t('caseDetail.failureReason')}</SectionTitle>
+          <Text className={styles.copyBlock} type="danger">
+            {evalResult.error}
+          </Text>
+        </Flexbox>
+      )}
+
       {/* Test Case */}
-      <Flexbox gap={8}>
-        <Typography.Text className={styles.sectionTitle}>
-          {t('caseDetail.section.testCase')}
-        </Typography.Text>
+      <Flexbox className={styles.section} gap={12}>
+        <SectionTitle>{t('caseDetail.section.testCase')}</SectionTitle>
 
         {testCase?.content?.input && (
           <Flexbox gap={4}>
-            <Text style={{ fontSize: 12 }} type="secondary">
+            <Text fontSize={12} type="secondary">
               {t('caseDetail.input')}
             </Text>
-            <Text style={{ fontSize: 14 }}>{testCase.content.input}</Text>
+            <Text className={styles.copyBlock}>{testCase.content.input}</Text>
           </Flexbox>
         )}
 
         {testCase?.content?.expected && (
           <Flexbox gap={4}>
-            <Text style={{ fontSize: 12 }} type="secondary">
+            <Text fontSize={12} type="secondary">
               {t('caseDetail.expected')}
             </Text>
-            <Text style={{ fontSize: 14 }}>{testCase.content.expected}</Text>
+            <Text className={styles.copyBlock}>{testCase.content.expected}</Text>
           </Flexbox>
         )}
 
         {testCase?.metadata?.difficulty && (
           <Flexbox gap={4}>
-            <Typography.Text strong style={{ fontSize: 13 }}>
+            <Text fontSize={12} type="secondary">
               {t('caseDetail.difficulty')}
-            </Typography.Text>
-            <Tag>{t(`difficulty.${testCase.metadata.difficulty}` as any)}</Tag>
+            </Text>
+            <Flexbox horizontal>
+              <Tag>{t(`difficulty.${testCase.metadata.difficulty}` as any)}</Tag>
+            </Flexbox>
           </Flexbox>
         )}
-
-        <Divider style={{ margin: 0 }} />
       </Flexbox>
 
       {/* Scoring Details */}
       {(hasRubricScores || score !== undefined) && (
-        <Flexbox gap={8}>
-          <Typography.Text className={styles.sectionTitle}>
-            {t('caseDetail.section.scoring')}
-          </Typography.Text>
+        <Flexbox className={styles.section} gap={12}>
+          <SectionTitle>{t('caseDetail.section.scoring')}</SectionTitle>
 
           {/* Deterministic modes: just show eval mode + pass/fail */}
           {allDeterministic && hasRubricScores && (
@@ -178,20 +208,22 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
             </div>
           )}
 
-          {/* LLM/Rubric modes: show score + progress + expandable reasons */}
+          {/* LLM/Rubric modes: show score card + pill progress + expandable reasons */}
           {!allDeterministic && (
             <>
-              {score !== undefined && score !== null && (
-                <Flexbox gap={4}>
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>{t('caseDetail.score')}</span>
-                    <span className={styles.infoValue}>{score.toFixed(2)}</span>
-                  </div>
-                  <Progress
-                    percent={Math.round(score * 100)}
-                    size="small"
-                    status={passed ? 'success' : 'exception'}
-                    strokeLinecap="round"
+              {hasScore && (
+                <Flexbox className={styles.scoreCard} gap={8}>
+                  <Flexbox horizontal align="flex-end" gap={8} justify="space-between">
+                    <span className={styles.scoreValue}>{score.toFixed(2)}</span>
+                    <Text fontSize={12} type="secondary">
+                      {t('caseDetail.score')}
+                    </Text>
+                  </Flexbox>
+                  <SegmentBar
+                    segments={[
+                      { color: passed ? cssVar.colorSuccess : cssVar.colorError, value: scorePct },
+                      { color: cssVar.colorFillSecondary, value: 100 - scorePct },
+                    ]}
                   />
                 </Flexbox>
               )}
@@ -202,7 +234,7 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
                   size="small"
                   items={scoredRubrics.map((s) => ({
                     children: s.reason ? (
-                      <Typography.Text className={styles.rubricReason}>{s.reason}</Typography.Text>
+                      <span className={styles.rubricReason}>{s.reason}</span>
                     ) : null,
                     key: s.rubricId,
                     label: (
@@ -218,16 +250,12 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
               )}
             </>
           )}
-
-          <Divider style={{ margin: 0 }} />
         </Flexbox>
       )}
 
       {/* Runtime */}
       <Flexbox gap={8}>
-        <Typography.Text className={styles.sectionTitle}>
-          {t('caseDetail.section.runtime')}
-        </Typography.Text>
+        <SectionTitle>{t('caseDetail.section.runtime')}</SectionTitle>
 
         {evalResult?.duration !== undefined && evalResult.duration !== null && (
           <div className={styles.infoItem}>
@@ -262,15 +290,6 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
             <span className={styles.infoLabel}>{t('caseDetail.completionReason')}</span>
             <Tag>{evalResult.completionReason}</Tag>
           </div>
-        )}
-
-        {evalResult?.error && (
-          <Flexbox gap={4}>
-            <Typography.Text strong style={{ fontSize: 13 }}>
-              {t('caseDetail.failureReason')}
-            </Typography.Text>
-            <Typography.Text type="danger">{evalResult.error}</Typography.Text>
-          </Flexbox>
         )}
       </Flexbox>
     </Flexbox>

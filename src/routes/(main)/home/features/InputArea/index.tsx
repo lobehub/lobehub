@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
+import { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
@@ -16,6 +16,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
 import { stripMarkdownLinks } from './hintFormat';
+import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
@@ -131,7 +132,8 @@ const InputArea = () => {
         {visibleBanner === 'skill' && <SkillInstallBanner />}
         {visibleBanner === 'botIntegration' && <BotIntegrationBanner />}
         {visibleBanner === 'messenger' && <MessengerBanner />}
-        <DragUploadZone
+        <InputDragUpload
+          radius={20}
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
         >
@@ -164,7 +166,7 @@ const InputArea = () => {
               showControlBar={false}
             />
           </ChatInputProvider>
-        </DragUploadZone>
+        </InputDragUpload>
       </Flexbox>
 
       <StarterList />

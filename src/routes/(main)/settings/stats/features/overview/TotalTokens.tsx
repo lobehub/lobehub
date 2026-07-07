@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
@@ -23,8 +24,9 @@ import TotalCard from './ShareButton/TotalCard';
 const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
-    messageService.getTokenHeatmaps(),
+  const { data, isLoading, error, mutate } = useClientDataSWR(
+    statsKeys.heatmaps(HeatmapType.Tokens),
+    () => messageService.getTokenHeatmaps(),
   );
 
   const { count, prevCount } = useMemo(() => {
@@ -48,27 +50,31 @@ const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
       />
     );
 
+  // Metric variant: a failed fetch must never fall through to a confident `$0`
+  // — show a failed marker + Retry where the number would sit (ux Read §1.1).
   return (
-    <StatisticCard
-      loading={isLoading || !data}
-      statistic={{
-        description: (
-          <Statistic title={t('date.prevMonth')} value={formatShortenNumber(prevCount) || '--'} />
-        ),
-        precision: 0,
-        style: {
-          fontWeight: 'bold',
-        },
-        value: formatShortenNumber(count) || '--',
-      }}
-      title={
-        <TitleWithPercentage
-          count={count}
-          prvCount={prevCount}
-          title={t('stats.heatmapStats.totalTokens')}
-        />
-      }
-    />
+    <AsyncBoundary data={data} error={error} errorVariant={'metric'} onRetry={() => mutate()}>
+      <StatisticCard
+        loading={isLoading || !data}
+        statistic={{
+          description: (
+            <Statistic title={t('date.prevMonth')} value={formatShortenNumber(prevCount) || '--'} />
+          ),
+          precision: 0,
+          style: {
+            fontWeight: 'bold',
+          },
+          value: formatShortenNumber(count) || '--',
+        }}
+        title={
+          <TitleWithPercentage
+            count={count}
+            prvCount={prevCount}
+            title={t('stats.heatmapStats.totalTokens')}
+          />
+        }
+      />
+    </AsyncBoundary>
   );
 });
 

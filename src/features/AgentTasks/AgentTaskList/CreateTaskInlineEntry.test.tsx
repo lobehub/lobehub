@@ -12,6 +12,9 @@ const permissionMock = vi.hoisted(() => ({
 }));
 
 const focusMock = vi.hoisted(() => vi.fn());
+const activeWorkspaceMock = vi.hoisted(() => ({
+  id: 'workspace-1' as string | undefined,
+}));
 
 vi.mock('@lobehub/editor/react', () => ({
   useEditor: () => ({
@@ -32,6 +35,10 @@ vi.mock('@/hooks/usePermission', () => ({
     allowed: permissionMock.allowed,
     reason: permissionMock.allowed ? '' : 'requires member',
   }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => activeWorkspaceMock.id,
 }));
 
 vi.mock('@/store/task', () => ({
@@ -63,8 +70,20 @@ vi.mock('../features/AssigneeAvatar', () => ({
   default: () => <div />,
 }));
 
+vi.mock('../features/TaskVisibilityTag', () => ({
+  default: ({ children, lockedReason }: { children?: ReactNode; lockedReason?: string }) => (
+    <button data-locked={String(Boolean(lockedReason))} data-testid="visibility-trigger">
+      {children}
+    </button>
+  ),
+}));
+
 vi.mock('../shared/useAgentDisplayMeta', () => ({
   useAgentDisplayMeta: () => undefined,
+}));
+
+vi.mock('../shared/useAgentVisibility', () => ({
+  useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -74,6 +93,7 @@ vi.mock('react-i18next', () => ({
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
+    activeWorkspaceMock.id = 'workspace-1';
     focusMock.mockReset();
   });
 
@@ -84,5 +104,17 @@ describe('CreateTaskInlineEntry', () => {
 
     expect(screen.getByTestId('task-editor')).toHaveAttribute('data-disabled', 'true');
     expect(focusMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the private-agent visibility lock when switching to the all-tasks create form', () => {
+    const { rerender } = render(
+      <CreateTaskInlineEntry lockAssignee agentId="agent-private" variant="hero" />,
+    );
+
+    expect(screen.getByTestId('visibility-trigger')).toHaveAttribute('data-locked', 'true');
+
+    rerender(<CreateTaskInlineEntry variant="hero" />);
+
+    expect(screen.getByTestId('visibility-trigger')).toHaveAttribute('data-locked', 'false');
   });
 });

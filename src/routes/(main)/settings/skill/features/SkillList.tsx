@@ -20,6 +20,7 @@ import type React from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -122,10 +123,21 @@ const SkillList = memo<SkillListProps>(
     ]);
 
     useFetchInstalledPlugins();
-    useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-    useFetchUserComposioConnections(isComposioEnabled);
-    useFetchAgentSkills(true);
-    useFetchUninstalledBuiltinTools(true);
+    // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
+    // of a fake-empty list (each hook syncs into the store only on success —
+    //
+    const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+    const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
+    const agentSkillsSWR = useFetchAgentSkills(true);
+    const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
+    const skillsError =
+      lobehubSkillsSWR.error ?? composioSWR.error ?? agentSkillsSWR.error ?? builtinToolsSWR.error;
+    const reloadSkills = () => {
+      void lobehubSkillsSWR.mutate();
+      void composioSWR.mutate();
+      void agentSkillsSWR.mutate();
+      void builtinToolsSWR.mutate();
+    };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
     // connectors appear in the Connectors tab list.
@@ -206,32 +218,27 @@ const SkillList = memo<SkillListProps>(
           }
         }
 
-        // Also add connected Lobehub skills that are not in RECOMMENDED_SKILLS
+        // Also add every other Lobehub skill provider so users can discover and
+        // connect integrations beyond the curated RECOMMENDED_SKILLS set —
+        // otherwise a provider like Vercel or Linear never appears until it's
+        // already connected, and a disconnected one has no way to be found.
         if (isLobehubSkillEnabled) {
-          for (const server of allLobehubSkillServers) {
-            if (
-              server.status === LobehubSkillStatus.CONNECTED &&
-              !addedLobehubIds.has(server.identifier)
-            ) {
-              const provider = getLobehubSkillProviderById(server.identifier);
-              if (provider) {
-                integrationItems.push({ provider, type: 'lobehub' });
-              }
+          for (const provider of LOBEHUB_SKILL_PROVIDERS) {
+            if (!addedLobehubIds.has(provider.id)) {
+              integrationItems.push({ provider, type: 'lobehub' });
+              addedLobehubIds.add(provider.id);
             }
           }
         }
 
-        // Also add connected Composio skills that are not in RECOMMENDED_SKILLS
+        // Also add every other Composio app so users can discover and connect
+        // integrations beyond the curated RECOMMENDED_SKILLS set — otherwise an
+        // app like Jira never appears until it's already connected.
         if (isComposioEnabled) {
-          for (const server of allComposioServers) {
-            if (
-              server.status === ComposioServerStatus.ACTIVE &&
-              !addedComposioIds.has(server.identifier)
-            ) {
-              const serverType = getComposioAppByIdentifier(server.identifier);
-              if (serverType) {
-                integrationItems.push({ serverType, type: 'composio' });
-              }
+          for (const serverType of COMPOSIO_APP_TYPES) {
+            if (!addedComposioIds.has(serverType.identifier)) {
+              integrationItems.push({ serverType, type: 'composio' });
+              addedComposioIds.add(serverType.identifier);
             }
           }
         }
@@ -328,6 +335,16 @@ const SkillList = memo<SkillListProps>(
       userAgentSkills.length > 0 ||
       communityMCPs.length > 0 ||
       customMCPs.length > 0;
+
+    // A failed fetch must read as a failure with Retry, never as the "no skills"
+    // empty (error gated ahead of empty).
+    if (skillsError && !hasAnySkills) {
+      return (
+        <Center className={styles.container} paddingBlock={48}>
+          <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
+        </Center>
+      );
+    }
 
     if (!hasAnySkills) {
       return (

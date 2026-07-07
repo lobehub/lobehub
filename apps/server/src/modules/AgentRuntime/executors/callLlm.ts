@@ -4,6 +4,7 @@ import {
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
   type InstructionExecutor,
+  stripAssistantReasoningForReplay,
   UsageCounter,
 } from '@lobechat/agent-runtime';
 import {
@@ -38,7 +39,9 @@ import {
   consumeStreamUntilDone,
   isDeepSeekThinkingEligibleModel,
   isDeepSeekV4FamilyModel,
+  isEmptyModelCompletion,
   isKimiAlwaysPreserveThinkingModel,
+  ModelEmptyError,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
 import {
@@ -61,6 +64,7 @@ import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { AiModelModel } from '@/database/models/aiModel';
 import { FileModel } from '@/database/models/file';
 import { MessageModel as MessageModelClass } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -84,7 +88,6 @@ import {
   buildPostProcessUrl,
   buildToolDiscoveryConfig,
   getLLMRetryDelayMs,
-  isEmptyModelCompletion,
   isOperationInterrupted,
   log,
   resolveLLMMaxAttempts,
@@ -92,13 +95,12 @@ import {
   resolveRuntimeHistoryCount,
   shouldRetryLLM,
   sleep,
-  stripAssistantReasoningForReplay,
   timing,
 } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
-import { ModelEmptyError } from '../ModelEmptyError';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 
 export const callLlm =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -107,6 +109,7 @@ export const callLlm =
     const llmPayload = payload as CallLLMPayload;
     const { operationId, stepIndex, streamManager } = ctx;
     const events: AgentEvent[] = [];
+    let visibleOutputEndPublishedStepIndex: number | undefined;
 
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
@@ -122,8 +125,7 @@ export const callLlm =
     // was populated by a bug or a mid-run side effect. Plans absent on old /
     // resumed operations fall back to the policy-only gate.
     const devicePolicy = state.metadata?.deviceAccessPolicy as
-      | { canUseDevice: boolean; reason: DeviceAccessReason }
-      | undefined;
+      { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
     const executionPlan = state.metadata?.executionPlan as ExecutionPlan | undefined;
     const planAllowsDevice = !executionPlan || isDeviceCapablePlan(executionPlan);
     const activeDeviceId =
@@ -288,6 +290,22 @@ export const callLlm =
         const modelKnowledgeCutoff =
           modelCard?.knowledgeCutoff ??
           (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
+        let modelDisplayName =
+          modelCard?.displayName ??
+          (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
+
+        // Custom/remote user models aren't in the bundled model bank, so both cards
+        // miss. Fall back to the user's own AI model record so server-side runs still
+        // surface identity (the inbox `{{model}}` fallback no longer exists).
+        if (!modelDisplayName && ctx.serverDB && ctx.userId) {
+          try {
+            const aiModelModel = new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+            const userModel = await aiModelModel.findByIdAndProvider(model, provider);
+            modelDisplayName = userModel?.displayName ?? undefined;
+          } catch (error) {
+            log('Failed to resolve user model display name for %s: %O', model, error);
+          }
+        }
 
         let modelExtendParams = readExtendParams(modelCard);
 
@@ -490,8 +508,7 @@ export const callLlm =
         const lobehubSkillAgentId = state.metadata?.agentId;
         const lobehubSkillTopicId = state.metadata?.topicId;
         const lobehubSkillAgentMeta = state.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
 
         let lobehubSkillTopicTitle = '';
         if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
@@ -574,14 +591,12 @@ export const callLlm =
             const credsResult = await marketService.market.creds.list();
             const userCreds = (credsResult as any)?.data ?? [];
             credsListStr = generateCredsList(
-              userCreds.map(
-                (cred: any): CredSummary => ({
-                  description: cred.description,
-                  key: cred.key,
-                  name: cred.name,
-                  type: cred.type,
-                }),
-              ),
+              userCreds.map((cred: any): CredSummary => ({
+                description: cred.description,
+                key: cred.key,
+                name: cred.name,
+                type: cred.type,
+              })),
             );
             log('Fetched %d creds for {{CREDS_LIST}} substitution', userCreds.length);
           } catch (error) {
@@ -737,6 +752,18 @@ export const callLlm =
           // into op metadata, mirroring agentConfig/botContext — no per-step DB
           // lookup here.
           agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
+          // Bridge the @-mentioned agents (persisted into the runtime
+          // initialContext by AiAgentService.execAgent) into the agent-management
+          // context so AgentManagementContextInjector injects the delegation
+          // block, prompting the supervisor to `callAgent` the mentioned agents.
+          // Mirrors the client's contextEngineering bridge; scoped to mention
+          // runs only (undefined otherwise) so ordinary runs are unaffected.
+          agentManagementContext: (state as any).initialContext?.initialContext?.mentionedAgents
+            ?.length
+            ? {
+                mentionedAgents: (state as any).initialContext.initialContext.mentionedAgents,
+              }
+            : undefined,
           additionalVariables: {
             ...state.metadata?.deviceSystemInfo,
             ...lobehubSkillVariables,
@@ -805,6 +832,7 @@ export const callLlm =
           },
           messages: messagesForContext,
           model,
+          modelDisplayName,
           modelKnowledgeCutoff,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
@@ -888,6 +916,22 @@ export const callLlm =
         );
       } else {
         processedMessages = llmPayload.messages;
+      }
+
+      // A turn must carry at least one non-system message. Anthropic-compatible
+      // providers (anthropic / deepseek) move `role: system` into a separate
+      // top-level field, so a system-only array dispatches `messages: []` and
+      // the upstream rejects it with a 400 `messages: at least one message is
+      // required` (surfaced as an opaque UpstreamHttpError); for other providers
+      // a system-only turn has nothing to respond to. Either way the context
+      // pipeline dropped everything real — fail fast with a locatable internal
+      // error instead of a doomed round-trip. Attributed here (agent-runtime),
+      // not the provider layer, since it's our own pipeline that emptied it.
+      if (!processedMessages.some((message) => message.role !== 'system')) {
+        throw new Error(
+          `call_llm produced no non-system messages for ${provider}/${model} ` +
+            `(topic=${state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
+        );
       }
 
       // Initialize ModelRuntime (read user's keyVaults from database)
@@ -1204,6 +1248,30 @@ export const callLlm =
                       }, BUFFER_INTERVAL);
                     }
                   },
+                  // Some Gemini / Nano Banana image responses arrive via the
+                  // legacy single-image `base64_image` event instead of
+                  // `content_part` (the Google stream transform emits it when a
+                  // response can't be classified as multimodal). Without this
+                  // handler the image is silently dropped server-side — never
+                  // uploaded, never persisted — and, on channels that omit the
+                  // Image response modality, the raw base64 leaks into text and
+                  // bloats the context. Mirror the onContentPart image branch:
+                  // register a placeholder part, upload to object storage, and
+                  // mark the turn multimodal so raw base64 never lands in content.
+                  onBase64Image: async ({ image }) => {
+                    if (firstChunkAt === undefined) {
+                      firstChunkAt = Date.now() - llmStartTime;
+                    }
+
+                    // `image.data` is a full data URI (`data:<mime>;base64,<...>`).
+                    const mimeType = /^data:([^;]+);/.exec(image.data)?.[1];
+                    const partIndex = contentParts.length;
+                    contentParts.push({ image: image.data, type: 'image' });
+                    hasContentImages = true;
+                    contentImageUploads.push(
+                      uploadPartImage(contentParts, partIndex, image.data, mimeType),
+                    );
+                  },
                   onReasoningPart: async (part) => {
                     if (firstChunkAt === undefined) {
                       firstChunkAt = Date.now() - llmStartTime;
@@ -1414,6 +1482,29 @@ export const callLlm =
                 type: 'stream_end',
               });
 
+              const canPublishEarlyFinalAnswerVisibleEnd =
+                ctx.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
+              if (
+                canPublishEarlyFinalAnswerVisibleEnd &&
+                toolsCalling.length === 0 &&
+                tool_calls.length === 0
+              ) {
+                try {
+                  // Example: a no-tool answer can publish stream_end, then spend
+                  // several seconds in DB/Redis persistence before terminal done.
+                  // Clear visible loading once no more text/tool output can appear.
+                  await streamManager.publishStreamEvent(operationId, {
+                    data: { reason: 'final_answer' },
+                    stepIndex,
+                    type: 'visible_output_end',
+                  });
+                  visibleOutputEndPublishedStepIndex = stepIndex;
+                } catch (error) {
+                  // Terminal saveStepResult still publishes the same hint as a fallback.
+                  console.error('Failed to publish visible_output_end:', error);
+                }
+              }
+
               log('[%s:%d] call_llm completed', operationId, stepIndex);
 
               // ===== 1. First save original usage to message.metadata =====
@@ -1530,9 +1621,14 @@ export const callLlm =
               }
 
               // Propagate stepLabel from instruction to state metadata for hook consumers
-              if (stepLabel) {
-                if (!newState.metadata) newState.metadata = {};
-                newState.metadata._stepLabel = stepLabel;
+              if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
+                const stateMetadata = { ...newState.metadata };
+                if (stepLabel) stateMetadata._stepLabel = stepLabel;
+                if (visibleOutputEndPublishedStepIndex !== undefined) {
+                  stateMetadata[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY] =
+                    visibleOutputEndPublishedStepIndex;
+                }
+                newState.metadata = stateMetadata;
               }
 
               // Record chat response attributes on the OTel span.

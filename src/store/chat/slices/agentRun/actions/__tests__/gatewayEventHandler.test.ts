@@ -41,6 +41,7 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
+    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
     operations: {
@@ -432,7 +433,72 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('should clear tool streaming only', async () => {
+    it('keeps visible loading for a plain no-tool stream boundary', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('keeps visible loading after stream_end when tool calls need another step', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'tc-1' }],
+        }),
+      );
+      handler(makeEvent('stream_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+    });
+
+    it('applies finalContent before ending a reasoning-only stream', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'thinking text' }));
+      handler(makeEvent('stream_end', { finalContent: 'final answer' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'final answer' },
+        },
+        { operationId: 'op-1' },
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-reasoning-1');
+      expect(store.updateOperationMetadata).not.toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+    });
+
+    it('should clear tool streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -443,6 +509,31 @@ describe('createGatewayEventHandler', () => {
         'msg-initial',
         undefined,
       );
+    });
+  });
+
+  describe('visible_output_end', () => {
+    it('marks visible loading done without completing the operation or clearing topic loading', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
+      handler(makeEvent('visible_output_end'));
+      await flush();
+
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        visibleLoadingDone: true,
+      });
+      expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
+      // Sidebar "running" spinner is driven off `topic.status === 'running'`
+      // (persisted, reset at the terminal) for gateway/hetero runs — not the
+      // client-only `topicLoadingIds` overlay — so visible_output_end no longer
+      // clears it early.
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalled();
     });
   });
 
@@ -589,6 +680,7 @@ describe('createGatewayEventHandler', () => {
         params: { identifier: 'T-3' },
         result: { content: 'Task deleted', success: true },
         toolCallId: 'tc-1',
+        topicId: 'topic-1',
       });
     });
 
@@ -659,6 +751,7 @@ describe('createGatewayEventHandler', () => {
         identifier: 'lobe-task',
         params: { identifier: 'T-5', name: 'renamed' },
         toolCallId: 'tc-3',
+        topicId: 'topic-1',
       });
     });
   });

@@ -1,11 +1,10 @@
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Button } from 'antd';
+import { ActionIcon, CopyButton, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     flex-shrink: 0;
     width: 360px;
@@ -18,16 +17,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   fieldLabel: css`
     margin: 0;
-    font-size: 12px;
-    font-weight: 500;
+
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 600;
     color: ${cssVar.colorTextTertiary};
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
   `,
   fieldValue: css`
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorText};
     word-break: break-word;
@@ -46,7 +48,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     margin: 0;
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
@@ -64,13 +66,7 @@ const TestCasePreviewPanel = memo<TestCasePreviewPanelProps>(({ testCase, onClos
     <Flexbox className={styles.container} height="100%">
       <div className={styles.header}>
         <p className={styles.title}>{t('testCase.preview.title')}</p>
-        <Button
-          icon={<X size={14} />}
-          size="small"
-          style={{ color: cssVar.colorTextTertiary, height: 28, padding: 0, width: 28 }}
-          type="text"
-          onClick={onClose}
-        />
+        <ActionIcon icon={X} size="small" onClick={onClose} />
       </div>
       <div className={styles.content}>
         <Flexbox gap={16}>

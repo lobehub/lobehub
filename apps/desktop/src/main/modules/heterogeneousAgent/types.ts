@@ -12,6 +12,7 @@ export interface HeterogeneousAgentBuildPlanHelpers {
   buildClaudeStreamJsonInput: (
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[],
+    systemContext?: string,
   ) => Promise<string>;
   resolveCliImagePaths: (imageList: HeterogeneousAgentImageAttachment[]) => Promise<string[]>;
 }
@@ -28,6 +29,7 @@ export interface HeterogeneousAgentBuildPlanParams {
   mcpConfigPath?: string;
   prompt: string;
   resumeSessionId?: string;
+  systemContext?: string;
 }
 
 /**

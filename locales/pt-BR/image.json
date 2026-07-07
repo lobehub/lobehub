@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Falha ao Aplicar a Semente",
   "generation.actions.seedCopied": "Semente copiada para a área de transferência",
   "generation.actions.seedCopyFailed": "Falha ao copiar a semente",
+  "generation.metadata.by": "por {{name}}",
   "generation.metadata.count": "{{count}} Imagens",
+  "generation.metadata.createdAt": "Criado em {{time}}",
   "generation.status.failed": "Falha na Geração",
   "generation.status.generating": "Gerando...",
   "notSupportGuide.desc": "O modo de implantação atual não suporta geração de imagens com IA. Mude para o <1>modo de implantação com banco de dados no servidor</1> ou utilize o <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Suporte a Múltiplos Provedores",
   "notSupportGuide.title": "O Modo de Implantação Atual Não Suporta Geração de Imagens com IA",
   "topic.createNew": "Criar Novo Tópico",
+  "topic.createdBy": "Criado por {{name}}",
   "topic.deleteConfirm": "Excluir Tópico de Geração",
   "topic.deleteConfirmDesc": "Você está prestes a excluir este tópico de geração. Esta ação não pode ser desfeita, prossiga com cautela.",
   "topic.empty": "Nenhum tópico de geração",
+  "topic.privateTitle": "Privado",
   "topic.title": "Tema da Pintura",
-  "topic.untitled": "Tópico Padrão"
+  "topic.untitled": "Tópico Padrão",
+  "topic.visibility.existingLocked": "A visibilidade está fixa para o tópico atual. Crie um novo tópico para escolher um espaço diferente.",
+  "topic.workspaceTitle": "Espaço de Trabalho"
 }

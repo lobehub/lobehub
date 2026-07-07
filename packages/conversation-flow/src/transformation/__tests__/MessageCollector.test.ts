@@ -848,23 +848,39 @@ describe('MessageCollector', () => {
       expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
     });
 
-    it('does NOT bridge a multi-prose prelude (toolless → toolless ends the chain)', () => {
-      // The bridge is intentionally narrow: it folds at most ONE prose step before
-      // a tool step. Two consecutive toolless steps still terminate the chain so
-      // they fall back to standalone bubbles rather than a malformed group.
+    it('bridges multiple toolless prose steps before the next tool step', () => {
+      // Codex can stream several plain assistant progress updates before the
+      // next command. They are still one run and should not split into
+      // standalone bubbles between tool-using steps.
       const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-1')] });
       const toolA = mkTool('tool-1', { parentId: 'ast-A', tool_call_id: 'tc-1' });
       const prose1 = mkAssistant('ast-prose-1', { createdAt: 1, parentId: 'ast-A' });
       const prose2 = mkAssistant('ast-prose-2', { createdAt: 2, parentId: 'ast-prose-1' });
       const astC = mkAssistant('ast-C', { parentId: 'ast-prose-2', tools: [bashTool('tc-2')] });
+      const toolC = mkTool('tool-2', { parentId: 'ast-C', tool_call_id: 'tc-2' });
+      const astFinal = mkAssistant('ast-final', { parentId: 'ast-C' });
 
-      const allMessages: Message[] = [astA, toolA, prose1, prose2, astC];
+      const allMessages: Message[] = [astA, toolA, prose1, prose2, astC, toolC, astFinal];
       const collector = new MessageCollector(new Map(), new Map());
 
       const assistantChain: Message[] = [];
-      collector.collectAssistantChain(astA, allMessages, assistantChain, [], new Set());
+      const allToolMessages: Message[] = [];
+      collector.collectAssistantChain(
+        astA,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        new Set(),
+      );
 
-      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-prose-1']);
+      expect(assistantChain.map((m) => m.id)).toEqual([
+        'ast-A',
+        'ast-prose-1',
+        'ast-prose-2',
+        'ast-C',
+        'ast-final',
+      ]);
+      expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
     });
   });
 });

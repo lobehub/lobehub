@@ -6,6 +6,12 @@ export type AgentStreamEventType =
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
+  /**
+   * Producer-side boundary meaning this operation will not emit more visible
+   * assistant/tool/intervention output. The operation may still wait for
+   * `agent_runtime_end` to finish terminal bookkeeping.
+   */
+  | 'visible_output_end'
   | 'stream_retry'
   | 'tool_start'
   | 'tool_end'

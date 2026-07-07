@@ -106,7 +106,10 @@ const readToolPayload = (
  * tool packages can react before their own mutations dispatch (e.g.
  * optimistic UI). Fires for both client- and server-runtime tools.
  */
-const dispatchOnBeforeCall = async (data: ToolStartData | undefined): Promise<void> => {
+const dispatchOnBeforeCall = async (
+  data: ToolStartData | undefined,
+  topicId?: string,
+): Promise<void> => {
   const payload = data?.toolCalling as ChatToolPayloadLike | undefined;
   const identity = readToolPayload(payload);
   if (!identity) return;
@@ -115,7 +118,7 @@ const dispatchOnBeforeCall = async (data: ToolStartData | undefined): Promise<vo
   const executor = getExecutor(identity.identifier);
   if (!executor?.onBeforeCall) return;
 
-  await executor.onBeforeCall(identity);
+  await executor.onBeforeCall({ ...identity, topicId });
 };
 
 /**
@@ -140,7 +143,10 @@ const unwrapToolPayload = (raw: unknown): ChatToolPayloadLike | undefined => {
  * tool packages can react to their own mutations (e.g. invalidate store
  * caches) regardless of whether the tool ran client- or server-side.
  */
-const dispatchOnAfterCall = async (data: ToolEndData | undefined): Promise<void> => {
+const dispatchOnAfterCall = async (
+  data: ToolEndData | undefined,
+  topicId?: string,
+): Promise<void> => {
   const identity = readToolPayload(unwrapToolPayload(data?.payload));
   if (!identity) return;
 
@@ -151,6 +157,7 @@ const dispatchOnAfterCall = async (data: ToolEndData | undefined): Promise<void>
   await executor.onAfterCall({
     ...identity,
     result: (data?.result ?? {}) as BuiltinToolResult,
+    topicId,
   });
 };
 
@@ -429,6 +436,7 @@ export const createGatewayEventHandler = (
           // Reset accumulators for the new stream
           accumulatedContent = '';
           accumulatedReasoning = '';
+          get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Skip the DB read ONLY for native gateway streams — those carry
           // `assistantMessage.id` directly on stream_start AND the preceding
@@ -550,11 +558,44 @@ export const createGatewayEventHandler = (
 
       case 'stream_end': {
         enqueue(() => {
-          // Only clear tool calling streaming — keep message loading active
-          // until agent_runtime_end so users don't think the session ended
-          // during tool execution gaps between steps
+          const data = toRecord(event.data);
+          const finalContent = pickNonEmptyString(data?.finalContent);
+          if (finalContent !== undefined) {
+            // Example: reasoning-only answers stream as reasoning chunks, then
+            // the server promotes that text into stream_end.finalContent. Apply
+            // it before ending reasoning so visible_output_end cannot leave an
+            // empty completed assistant bubble while waiting for terminal SoT.
+            accumulatedContent = finalContent;
+            hasStreamedContent = true;
+            get().internal_dispatchMessage(
+              {
+                id: currentAssistantMessageId,
+                type: 'updateMessage',
+                value: { content: accumulatedContent },
+              },
+              dispatchContext,
+            );
+          }
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
+        });
+        break;
+      }
+
+      case 'visible_output_end': {
+        enqueue(() => {
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          endReasoningIfNeeded();
+          // Example: CC/Codex may emit stream_end -> stream_start(newStep) for
+          // assistant-assistant transitions. Only this explicit producer signal
+          // means visible output is done; the operation still waits for
+          // agent_runtime_end to preserve terminal side-effect ordering.
+          get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+          // From here the sidebar item stops showing the running spinner (the
+          // answer is visibly complete) and — when the user isn't viewing the
+          // topic — shows the unread dot instead, ahead of markTopicUnread's
+          // persisted 'unread' at the terminal. See `isRunningTailUnread` in
+          // the sidebar topic Item.
         });
         break;
       }
@@ -564,7 +605,7 @@ export const createGatewayEventHandler = (
         // Loading is already active from stream_start (not cleared by stream_end).
         const data = event.data as ToolStartData | undefined;
         enqueue(async () => {
-          await dispatchOnBeforeCall(data).catch(console.error);
+          await dispatchOnBeforeCall(data, context.topicId ?? undefined).catch(console.error);
         });
         break;
       }
@@ -630,7 +671,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           await Promise.all([
             fetchAndReplaceMessages(get, context).catch(console.error),
-            dispatchOnAfterCall(data).catch(console.error),
+            dispatchOnAfterCall(data, context.topicId ?? undefined).catch(console.error),
           ]);
         });
         break;

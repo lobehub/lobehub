@@ -1,3 +1,5 @@
+import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
@@ -24,8 +26,15 @@ class HeterogeneousAgentService {
     prompt: string,
     operationId: string,
     imageList?: Array<{ id: string; url: string }>,
+    systemContext?: string,
   ) {
-    return this.ipc.heterogeneousAgent.sendPrompt({ imageList, operationId, prompt, sessionId });
+    return this.ipc.heterogeneousAgent.sendPrompt({
+      imageList,
+      operationId,
+      prompt,
+      sessionId,
+      systemContext,
+    });
   }
 
   async cancelSession(sessionId: string) {
@@ -38,6 +47,19 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  async getCodexQuota(params?: {
+    command?: string;
+    env?: Record<string, string>;
+  }): Promise<CodexQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getCodexQuota(params);
+  }
+
+  async getClaudeCodeQuota(params?: {
+    env?: Record<string, string>;
+  }): Promise<ClaudeCodeQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
   }
 
   /**

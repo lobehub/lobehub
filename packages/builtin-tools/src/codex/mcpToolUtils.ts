@@ -94,7 +94,11 @@ export const getMcpInputRecord = (
 const normalizeCodexLinearToolName = (toolName: string) => {
   if (!toolName) return { apiName: '', hasLinearPrefix: false };
 
-  let apiName = toolName.trim();
+  let apiName = toolName
+    .trim()
+    .replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replaceAll(/[.\-\s]+/g, '_')
+    .toLowerCase();
   let hasLinearPrefix = false;
 
   let changed = true;

@@ -3,14 +3,17 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { addInputHistory } from '../inputHistoryStorage';
-import {
-  createInputHistoryNavigator,
-  shouldIgnoreInputHistoryKeyDown,
-  useChatInputHistory,
-} from './useChatInputHistory';
+import { shouldIgnoreInputHistoryKeyDown, useChatInputHistory } from './useChatInputHistory';
 
 const createKeyDownEvent = (key: string, init?: KeyboardEventInit) =>
   new KeyboardEvent('keydown', { key, ...init });
+
+const createEditorMock = (onSetDocument?: (type: string, value: unknown) => void) =>
+  ({
+    cleanDocument: vi.fn(),
+    focus: vi.fn(),
+    setDocument: vi.fn((type: string, value: unknown) => onSetDocument?.(type, value)),
+  }) as unknown as IEditor;
 
 beforeEach(() => {
   localStorage.clear();
@@ -22,64 +25,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe('createInputHistoryNavigator', () => {
-  it('does not enter history mode when the editor already has input', () => {
-    const applyEntry = vi.fn();
-    const navigator = createInputHistoryNavigator({
-      applyEntry,
-      clearInput: vi.fn(),
-      getEntries: () => [{ createdAt: 1, markdown: 'previous prompt' }],
-      getMarkdownContent: () => 'line 1\nline 2',
-    });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(false);
-    expect(applyEntry).not.toHaveBeenCalled();
-  });
-
-  it('navigates older and newer entries after starting from an empty input', () => {
-    const applyEntry = vi.fn();
-    const clearInput = vi.fn();
-    const navigator = createInputHistoryNavigator({
-      applyEntry,
-      clearInput,
-      getEntries: () => [
-        { createdAt: 3, markdown: 'third prompt' },
-        { createdAt: 2, markdown: 'second prompt' },
-        { createdAt: 1, markdown: 'first prompt' },
-      ],
-      getMarkdownContent: () => '',
-    });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
-    expect(applyEntry).toHaveBeenLastCalledWith({ createdAt: 3, markdown: 'third prompt' });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
-    expect(applyEntry).toHaveBeenLastCalledWith({ createdAt: 2, markdown: 'second prompt' });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowDown'))).toBe(true);
-    expect(applyEntry).toHaveBeenLastCalledWith({ createdAt: 3, markdown: 'third prompt' });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowDown'))).toBe(true);
-    expect(clearInput).toHaveBeenCalledTimes(1);
-  });
-
-  it('resets history mode on unrelated keys', () => {
-    const applyEntry = vi.fn();
-    const clearInput = vi.fn();
-    const navigator = createInputHistoryNavigator({
-      applyEntry,
-      clearInput,
-      getEntries: () => [{ createdAt: 1, markdown: 'previous prompt' }],
-      getMarkdownContent: () => '',
-    });
-
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
-    expect(navigator.handleKeyDown(createKeyDownEvent('a'))).toBe(false);
-    expect(navigator.handleKeyDown(createKeyDownEvent('ArrowDown'))).toBe(false);
-    expect(clearInput).not.toHaveBeenCalled();
-  });
 });
 
 describe('shouldIgnoreInputHistoryKeyDown', () => {
@@ -109,147 +54,182 @@ describe('shouldIgnoreInputHistoryKeyDown', () => {
 });
 
 describe('useChatInputHistory', () => {
-  it('preserves the history cursor when restoring an entry briefly blurs the editor', () => {
-    addInputHistory({ markdown: 'older prompt' });
-    addInputHistory({ markdown: 'latest prompt' });
-
-    const frameCallbacks: FrameRequestCallback[] = [];
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frameCallbacks.push(callback);
-      return frameCallbacks.length;
-    });
-
-    let markdown = '';
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      setDocument: vi.fn((type: string, value: string) => {
-        if (type === 'markdown') markdown = value;
-      }),
-    } as unknown as IEditor;
+  const renderHistory = (overrides: Partial<Parameters<typeof useChatInputHistory>[0]> = {}) => {
+    const editor = overrides.editor ?? createEditorMock();
     const isComposingRef = { current: false };
-
-    const { result } = renderHook(() =>
-      useChatInputHistory({
-        editor,
-        enabled: true,
-        getMarkdownContent: () => markdown,
-        isComposingRef,
-      }),
-    );
-
-    act(() => {
-      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
-      result.current.handleEditorBlur();
-    });
-
-    act(() => {
-      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
-    });
-
-    expect(editor.setDocument).toHaveBeenLastCalledWith('markdown', 'older prompt', {
-      keepHistory: true,
-    });
-
-    act(() => {
-      frameCallbacks.forEach((callback) => callback(0));
-    });
-
-    expect(editor.focus).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps editor focus after restoring and clearing history entries', () => {
-    const editorData = { root: { children: [{ text: 'previous prompt' }] } };
-    addInputHistory({ json: editorData, markdown: 'previous prompt' });
-
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      setDocument: vi.fn(),
-    } as unknown as IEditor;
-    const isComposingRef = { current: false };
-
-    const { result } = renderHook(() =>
+    const view = renderHook(() =>
       useChatInputHistory({
         editor,
         enabled: true,
         getMarkdownContent: () => '',
         isComposingRef,
+        ...overrides,
       }),
     );
+    return { editor, ...view };
+  };
+
+  it('does not open the popup when the editor already has input', () => {
+    addInputHistory({ markdown: 'previous prompt' });
+    const { result } = renderHistory({ getMarkdownContent: () => 'line 1\nline 2' });
+
+    let consumed = true;
+    act(() => {
+      consumed = result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(consumed).toBe(false);
+    expect(result.current.popup.open).toBe(false);
+  });
+
+  it('does not open the popup when there is no history', () => {
+    const { result } = renderHistory();
+
+    let consumed = true;
+    act(() => {
+      consumed = result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(consumed).toBe(false);
+    expect(result.current.popup.open).toBe(false);
+  });
+
+  it('opens the popup with a ghost preview without mutating the editor', () => {
+    addInputHistory({ markdown: 'older prompt' });
+    addInputHistory({ markdown: 'latest prompt' });
+    const { editor, result } = renderHistory();
+
+    act(() => {
+      expect(result.current.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
+    });
+
+    expect(result.current.popup.open).toBe(true);
+    expect(result.current.popup.activeIndex).toBe(0);
+    expect(result.current.ghostMarkdown).toBe('latest prompt');
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
+  it('navigates older and newer entries while the popup is open', () => {
+    addInputHistory({ markdown: 'first prompt' });
+    addInputHistory({ markdown: 'second prompt' });
+    addInputHistory({ markdown: 'third prompt' });
+    const { result } = renderHistory();
 
     act(() => {
       result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
     });
+    expect(result.current.ghostMarkdown).toBe('third prompt');
 
-    expect(editor.setDocument).toHaveBeenCalledWith('json', editorData, { keepHistory: true });
-    expect(editor.focus).toHaveBeenCalledTimes(1);
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+    expect(result.current.ghostMarkdown).toBe('second prompt');
 
     act(() => {
       result.current.handleKeyDown(createKeyDownEvent('ArrowDown'));
     });
-
-    expect(editor.cleanDocument).toHaveBeenCalledTimes(1);
-    expect(editor.focus).toHaveBeenCalledTimes(2);
+    expect(result.current.ghostMarkdown).toBe('third prompt');
   });
 
-  it('reads history from the current scope only', () => {
-    addInputHistory({ agentId: 'agent-1', markdown: 'scoped prompt', userId: 'user-a' });
-    addInputHistory({ agentId: 'agent-2', markdown: 'other agent prompt', userId: 'user-a' });
-
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      setDocument: vi.fn(),
-    } as unknown as IEditor;
-    const isComposingRef = { current: false };
-
-    const { result } = renderHook(() =>
-      useChatInputHistory({
-        editor,
-        enabled: true,
-        getMarkdownContent: () => '',
-        isComposingRef,
-        scope: { agentId: 'agent-1', userId: 'user-a' },
-      }),
-    );
+  it('closes the popup when navigating newer than the most recent entry', () => {
+    addInputHistory({ markdown: 'only prompt' });
+    const { editor, result } = renderHistory();
 
     act(() => {
       result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
     });
+    expect(result.current.popup.open).toBe(true);
 
-    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'scoped prompt', {
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowDown'));
+    });
+    expect(result.current.popup.open).toBe(false);
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
+  it('closes the popup on Escape without mutating the editor', () => {
+    addInputHistory({ markdown: 'only prompt' });
+    const { editor, result } = renderHistory();
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+      result.current.handleKeyDown(createKeyDownEvent('Escape'));
+    });
+
+    expect(result.current.popup.open).toBe(false);
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
+  it('restores the highlighted entry on confirm and refocuses the editor', () => {
+    addInputHistory({ markdown: 'older prompt' });
+    addInputHistory({ markdown: 'latest prompt' });
+    const { editor, result } = renderHistory();
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+    act(() => {
+      result.current.confirm();
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'latest prompt', {
       keepHistory: true,
     });
-    expect(editor.setDocument).not.toHaveBeenCalledWith('markdown', 'other agent prompt', {
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+    expect(result.current.popup.open).toBe(false);
+  });
+
+  it('confirms a hovered index via Tab', () => {
+    addInputHistory({ markdown: 'older prompt' });
+    addInputHistory({ markdown: 'latest prompt' });
+    const { editor, result } = renderHistory();
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+    act(() => {
+      result.current.setActiveIndex(1);
+    });
+    expect(result.current.ghostMarkdown).toBe('older prompt');
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('Tab'));
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'older prompt', {
       keepHistory: true,
     });
+    expect(result.current.popup.open).toBe(false);
+  });
+
+  it('restores saved JSON when present', () => {
+    const editorData = { root: { children: [{ text: 'previous prompt' }] } };
+    addInputHistory({ json: editorData, markdown: 'previous prompt' });
+    const { editor, result } = renderHistory();
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+    act(() => {
+      result.current.confirm();
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('json', editorData, { keepHistory: true });
   });
 
   it('falls back to markdown when saved JSON cannot be restored', () => {
     const incompatibleEditorData = { root: { children: [{ text: 'item', type: 'list' }] } };
     addInputHistory({ json: incompatibleEditorData, markdown: '- fallback prompt' });
-
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      setDocument: vi.fn((type: string) => {
-        if (type === 'json') throw new Error('unknown node type');
-      }),
-    } as unknown as IEditor;
-    const isComposingRef = { current: false };
-
-    const { result } = renderHook(() =>
-      useChatInputHistory({
-        editor,
-        enabled: true,
-        getMarkdownContent: () => '',
-        isComposingRef,
-      }),
-    );
+    const editor = createEditorMock((type) => {
+      if (type === 'json') throw new Error('unknown node type');
+    });
+    const { result } = renderHistory({ editor });
 
     act(() => {
-      expect(result.current.handleKeyDown(createKeyDownEvent('ArrowUp'))).toBe(true);
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+    act(() => {
+      result.current.confirm();
     });
 
     expect(editor.setDocument).toHaveBeenNthCalledWith(1, 'json', incompatibleEditorData, {
@@ -258,6 +238,31 @@ describe('useChatInputHistory', () => {
     expect(editor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '- fallback prompt', {
       keepHistory: true,
     });
-    expect(editor.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads history from the current scope only', () => {
+    addInputHistory({ agentId: 'agent-1', markdown: 'scoped prompt', userId: 'user-a' });
+    addInputHistory({ agentId: 'agent-2', markdown: 'other agent prompt', userId: 'user-a' });
+    const { result } = renderHistory({ scope: { agentId: 'agent-1', userId: 'user-a' } });
+
+    act(() => {
+      result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(result.current.popup.entries).toHaveLength(1);
+    expect(result.current.ghostMarkdown).toBe('scoped prompt');
+  });
+
+  it('does nothing when disabled', () => {
+    addInputHistory({ markdown: 'previous prompt' });
+    const { result } = renderHistory({ enabled: false });
+
+    let consumed = true;
+    act(() => {
+      consumed = result.current.handleKeyDown(createKeyDownEvent('ArrowUp'));
+    });
+
+    expect(consumed).toBe(false);
+    expect(result.current.popup.open).toBe(false);
   });
 });

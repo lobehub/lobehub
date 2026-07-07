@@ -24,6 +24,27 @@ describe('preserveWorkspaceCache', () => {
     ]);
   });
 
+  it('preserves incoming git metadata while re-attaching the server cache', () => {
+    const incoming: WorkingDirEntry[] = [
+      {
+        git: { activeWorktree: '/proj-fix', branch: 'fix', isWorktree: true },
+        path: '/proj',
+        repoType: 'git',
+      },
+    ];
+    const stored: WorkingDirEntry[] = [{ path: '/proj', workspace, workspaceScannedAt: 123 }];
+
+    expect(preserveWorkspaceCache(incoming, stored)).toEqual([
+      {
+        git: { activeWorktree: '/proj-fix', branch: 'fix', isWorktree: true },
+        path: '/proj',
+        repoType: 'git',
+        workspace,
+        workspaceScannedAt: 123,
+      },
+    ]);
+  });
+
   it('drops the cache for a path no longer present (dir removed)', () => {
     const stored: WorkingDirEntry[] = [{ path: '/proj', workspace, workspaceScannedAt: 123 }];
 

@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
-import CurrentModelNotice from '@/features/ChatInput/CurrentModelNotice';
+import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import dynamic from '@/libs/next/dynamic';
 
@@ -45,7 +45,7 @@ const DesktopChatInput = memo(() => {
         paddingBlock={'0 12px'}
         paddingInline={12}
       >
-        <CurrentModelNotice />
+        <ChatInputNotice />
         <ChatInput
           fullscreen={expand}
           header={<ChatInputActionBar left={<ActionBar />} />}

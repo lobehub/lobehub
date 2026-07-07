@@ -38,6 +38,8 @@ export default {
   'context.description': 'Description',
   'context.empty': 'No context memories available',
   'context.source': 'Source',
+  'detail.notFound.desc': 'This memory may have been deleted or is no longer available.',
+  'detail.notFound.title': 'Memory not found',
   'empty.description':
     'Memory retrieval is a gradual process. Please engage in more conversations to enrich the content available for recall. Try having deeper interactions with the agent to better capture and store valuable information.',
   'empty.search': 'No matching memories found',

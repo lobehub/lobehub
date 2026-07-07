@@ -18,12 +18,18 @@ export type VerifierType = (typeof verifierTypes)[number];
 export const verifyOnFailStrategies = ['manual', 'auto_repair'] as const;
 export type VerifyOnFailStrategy = (typeof verifyOnFailStrategies)[number];
 
-/** Lifecycle of a single check result. */
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
 export const verifyCheckResultStatuses = [
   'pending',
   'running',
   'passed',
   'failed',
+  'errored',
   'skipped',
 ] as const;
 export type VerifyCheckResultStatus = (typeof verifyCheckResultStatuses)[number];
@@ -47,6 +53,9 @@ export const verifyRunStatuses = [
   'verifying',
   'passed',
   'failed',
+  // At least one required check errored (verifier couldn't run) and none
+  // genuinely failed — verification is inconclusive, not a rejected delivery.
+  'errored',
   'repairing',
   'delivered',
 ] as const;
@@ -76,6 +85,15 @@ export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
  * Rendered as the report's scope header so the verify page reads as the final
  * report.
  */
+export interface VerifyCodingPullRequest {
+  /** Pull request number, e.g. 123. */
+  number?: number | string;
+  /** Pull request title. */
+  title?: string;
+  /** Web URL for opening the PR. */
+  url?: string;
+}
+
 export interface VerifyCodingScope {
   /** Git branch the report was produced against. */
   branch?: string;
@@ -85,6 +103,8 @@ export interface VerifyCodingScope {
   entry?: string;
   /** The focus / key risk of this round (free text). */
   focus?: string;
+  /** Associated pull request, when the verification run has one. */
+  pullRequest?: VerifyCodingPullRequest;
   /** Test surfaces exercised, e.g. ["cli", "web"]. */
   surfaces?: string[];
   /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */

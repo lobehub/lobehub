@@ -11,6 +11,7 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchDiffPatches,
   DeviceGitBranchInfo,
@@ -20,6 +21,7 @@ import type {
   DeviceGitFileRevertResult,
   DeviceGitLinkedPullRequestResult,
   DeviceGitRemoteBranchListItem,
+  DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
   DeviceGitWorkingTreeFiles,
@@ -31,6 +33,7 @@ import type {
   DeviceMoveProjectFileItem,
   DeviceMoveProjectFileResultItem,
   DeviceProjectFileIndexResult,
+  DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
   DeviceWriteProjectFileResult,
   ProjectSkillMeta,
@@ -169,7 +172,8 @@ export class DeviceGateway {
     try {
       // The device returns rich `ProjectSkillItem`s; narrow to metadata only so
       // the cached `workingDirs` payload stays small (SKILL.md bodies are still
-      // read lazily at activation time).
+      // read lazily at activation time). Keep scope so project/device skills can
+      // be displayed and activated with the correct origin.
       const result = await client.invokeRpc<{
         instructions?: WorkspaceInitResult['instructions'];
         skills?: (ProjectSkillMeta & Record<string, unknown>)[];
@@ -186,10 +190,11 @@ export class DeviceGateway {
       const { instructions, skills } = result.data;
       return {
         instructions: instructions ?? [],
-        skills: (skills ?? []).map(({ description, name, path }) => ({
+        skills: (skills ?? []).map(({ description, name, path, scope }) => ({
           description,
           name,
           path,
+          scope,
         })),
       };
     } catch (error) {
@@ -419,6 +424,75 @@ export class DeviceGateway {
   }
 
   /**
+   * Remove a worktree in a directory's repository on a remote device via
+   * the `removeGitWorktree` device RPC.
+   */
+  async removeGitWorktree(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+    worktreePath: string;
+  }): Promise<DeviceGitRemoveWorktreeResult> {
+    const { userId, deviceId, path, worktreePath, workspaceId, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitRemoveWorktreeResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'removeGitWorktree', params: { path, worktreePath } },
+      );
+
+      if (!result.success || !result.data) {
+        log('removeGitWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Remove worktree failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('removeGitWorktree: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Remove worktree failed', success: false };
+    }
+  }
+
+  /**
+   * Add a linked worktree on a fresh branch in a directory's repository on a
+   * remote device via the `addGitWorktree` device RPC.
+   */
+  async addGitWorktree(params: {
+    branch: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+    worktreePath: string;
+  }): Promise<DeviceGitAddWorktreeResult> {
+    const { userId, deviceId, branch, path, worktreePath, workspaceId, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitAddWorktreeResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'addGitWorktree', params: { branch, path, worktreePath } },
+      );
+
+      if (!result.success || !result.data) {
+        log('addGitWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Add worktree failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('addGitWorktree: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Add worktree failed', success: false };
+    }
+  }
+
+  /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device via
    * the `pullGitBranch` device RPC.
    */
@@ -615,6 +689,42 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Project file search for a directory on a remote device via the
+   * `searchProjectFiles` device RPC. The device performs matching and returns a
+   * compact tree subset with ancestor directories.
+   */
+  async searchProjectFiles(params: {
+    deviceId: string;
+    limit?: number;
+    query: string;
+    scope: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceProjectFileSearchResult | undefined> {
+    const { userId, deviceId, limit, query, scope, timeout = 30_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceProjectFileSearchResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'searchProjectFiles', params: { limit, query, scope } },
+      );
+
+      if (!result.success || !result.data) {
+        log('searchProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('searchProjectFiles: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

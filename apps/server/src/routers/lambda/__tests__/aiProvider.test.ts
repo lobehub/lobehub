@@ -1,12 +1,14 @@
 // @vitest-environment node
 import type * as BusinessConst from '@lobechat/business-const';
 import { OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 
 import { aiProviderRouter } from '../aiProvider';
@@ -16,6 +18,9 @@ vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/database/repositories/aiInfra');
 vi.mock('@/database/models/aiProvider');
 vi.mock('@/database/models/user');
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
 vi.mock('@lobechat/business-const', async () => {
   const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
 
@@ -68,6 +73,34 @@ describe('aiProviderRouter', () => {
 
   const createMockContext = () => ({
     userId: mockUserId,
+  });
+
+  describe('checkProviderConnectivity', () => {
+    it('should pass api trigger metadata to the runtime connectivity check', async () => {
+      const mockChat = vi.fn().mockResolvedValue({ ok: true });
+      const mockGetDetail = vi
+        .fn()
+        .mockResolvedValue({ ...mockProviderDetail, checkModel: 'gpt-4' });
+
+      vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = mockGetDetail;
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.checkProviderConnectivity({ id: mockProviderId });
+
+      expect(result).toEqual({ model: 'gpt-4', ok: true });
+      expect(mockChat).toHaveBeenCalledWith(
+        {
+          messages: [{ content: 'Hi', role: 'user' }],
+          model: 'gpt-4',
+          stream: false,
+          temperature: 0,
+        },
+        {
+          metadata: { trigger: RequestTrigger.Api },
+        },
+      );
+    });
   });
 
   describe('createAiProvider', () => {

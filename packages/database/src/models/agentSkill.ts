@@ -1,6 +1,6 @@
 import type { SkillItem, SkillListItem } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
-import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 
 import type { NewAgentSkill } from '../schemas';
 import { agentSkills } from '../schemas';
@@ -82,7 +82,7 @@ export class AgentSkillModel {
     const [result] = await this.db
       .select(skillItemColumns)
       .from(agentSkills)
-      .where(and(eq(agentSkills.name, name), this.scopeWhere()))
+      .where(and(sql`lower(${agentSkills.name}) = ${name.toLowerCase()}`, this.scopeWhere()))
       .limit(1);
     return result;
   };

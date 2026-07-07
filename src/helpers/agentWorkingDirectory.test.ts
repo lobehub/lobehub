@@ -1,7 +1,11 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveAgentWorkingDirectory, resolveTargetDeviceId } from './agentWorkingDirectory';
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+  resolveTargetDeviceId,
+} from './agentWorkingDirectory';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 
@@ -26,10 +30,7 @@ describe('resolveTargetDeviceId', () => {
 
   it('does not use stale bindings for sandbox targets', () => {
     expect(
-      resolveTargetDeviceId(
-        cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }),
-        undefined,
-      ),
+      resolveTargetDeviceId(cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }), undefined),
     ).toBeUndefined();
   });
 
@@ -87,6 +88,23 @@ describe('resolveAgentWorkingDirectory', () => {
     );
   });
 
+  it('uses the active worktree from the per-device source entry as the effective cwd', () => {
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: {
+        cur: {
+          git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+          path: '/repo',
+          repoType: 'git',
+        },
+      },
+    });
+
+    expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo-fix',
+    );
+  });
+
   it('ignores the per-device choice when the target device has no entry', () => {
     const agencyConfig = cfg({
       executionTarget: 'local',
@@ -103,5 +121,40 @@ describe('resolveAgentWorkingDirectory', () => {
 
   it('returns undefined when nothing is configured', () => {
     expect(resolveAgentWorkingDirectory({})).toBeUndefined();
+  });
+});
+
+describe('resolveAgentWorkingDirectoryConfig', () => {
+  it('keeps the topic-level rich config as a single structured directory', () => {
+    const topicWorkingDirectoryConfig = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+
+    expect(
+      resolveAgentWorkingDirectoryConfig({
+        agencyConfig: cfg({ workingDirByDevice: { cur: '/agent' } }),
+        currentDeviceId: 'cur',
+        topicWorkingDirectory: '/repo-fix',
+        topicWorkingDirectoryConfig,
+      }),
+    ).toEqual(topicWorkingDirectoryConfig);
+  });
+
+  it('returns the agent rich entry so new topics can snapshot it', () => {
+    const agentChoice = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: { cur: agentChoice },
+    });
+
+    expect(resolveAgentWorkingDirectoryConfig({ agencyConfig, currentDeviceId: 'cur' })).toEqual(
+      agentChoice,
+    );
   });
 });

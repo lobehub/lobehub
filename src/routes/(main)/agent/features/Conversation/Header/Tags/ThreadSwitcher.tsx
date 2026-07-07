@@ -65,10 +65,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillTertiary};
     }
 
-    &:focus,
-    &:focus-visible {
+    &:focus {
       outline: none;
       box-shadow: none;
+    }
+
+    /* Keep a visible landmark for keyboard focus (mirrors DeviceItem). */
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -1px;
     }
 
     &[data-popup-open] {

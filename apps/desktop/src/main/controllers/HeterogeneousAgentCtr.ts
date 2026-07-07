@@ -8,7 +8,11 @@ import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
 
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  HeterogeneousAgentSessionError,
+} from '@lobechat/electron-client-ipc';
 import {
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
@@ -38,6 +42,8 @@ import { app as electronApp, BrowserWindow } from 'electron';
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
+import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -136,6 +142,8 @@ interface SendPromptParams {
   operationId: string;
   prompt: string;
   sessionId: string;
+  /** Extra context injected before the user prompt without mutating the prompt text. */
+  systemContext?: string;
 }
 
 interface CancelSessionParams {
@@ -160,6 +168,15 @@ interface StopSessionParams {
 
 interface GetSessionInfoParams {
   sessionId: string;
+}
+
+interface GetCodexQuotaParams {
+  command?: string;
+  env?: Record<string, string>;
+}
+
+interface GetClaudeCodeQuotaParams {
+  env?: Record<string, string>;
 }
 
 interface SessionInfo {
@@ -819,8 +836,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private async buildStreamJsonInput(
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
+    systemContext?: string,
   ): Promise<string> {
     const blocks: AgentContentBlock[] = [];
+    if (systemContext && systemContext.length > 0)
+      blocks.push({ text: systemContext, type: 'text' });
     if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
     blocks.push(...this.toImageContentBlocks(imageList));
 
@@ -943,13 +963,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         args: session.args,
         helpers: {
           buildClaudeStreamJsonInput: (prompt, imageList) =>
-            this.buildStreamJsonInput(prompt, imageList),
+            this.buildStreamJsonInput(prompt, imageList, params.systemContext),
           resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
         },
         imageList: params.imageList ?? [],
         mcpConfigPath: intervention?.tmpConfigPath,
         prompt: params.prompt,
         resumeSessionId: session.agentSessionId,
+        systemContext: params.systemContext,
       });
 
       // Fall back to the user's Desktop so the process never inherits
@@ -1297,6 +1318,34 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
     const session = this.sessions.get(params.sessionId);
     return { agentSessionId: session?.agentSessionId };
+  }
+
+  @IpcMethod()
+  async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
+    const command = params.command?.trim() || 'codex';
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return fetchCodexQuota({
+      command: status.available && status.path ? status.path : command,
+      env: Object.keys(env).length > 0 ? env : undefined,
+    });
+  }
+
+  /**
+   * Read the Claude Code subscription quota. No CLI is spawned: the quota
+   * comes from Anthropic's OAuth usage API using the local `claude` login,
+   * and the request goes through the app's global proxy dispatcher.
+   */
+  @IpcMethod()
+  async getClaudeCodeQuota(
+    params: GetClaudeCodeQuotaParams = {},
+  ): Promise<ClaudeCodeQuotaSnapshot> {
+    return fetchClaudeCodeQuota({ env: params.env });
   }
 
   /**

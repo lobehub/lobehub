@@ -157,6 +157,28 @@ describe('HomeInputActionImpl', () => {
         }),
       );
     });
+
+    it('forwards context selections to the agent builder message', async () => {
+      const action = createAction();
+      const contextSelections = [
+        {
+          content: 'const selected = true;',
+          filePath: 'src/example.ts',
+          id: 'code-selection',
+          lineRange: { endLine: 12, startLine: 10 },
+          source: 'code' as const,
+        },
+      ];
+
+      await action.sendAsAgent({ contextSelections, message: 'use this selected code' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contextSelections,
+          message: 'use this selected code',
+        }),
+      );
+    });
   });
 
   describe('sendAsGroup', () => {

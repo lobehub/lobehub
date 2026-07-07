@@ -9,6 +9,7 @@ import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -197,6 +198,34 @@ describe('ChatService', () => {
           messages: expect.anything(),
         }),
         expect.anything(),
+      );
+    });
+
+    it('should pass chat mode to context engineering when the selected model lacks function calling', async () => {
+      const contextEngineeringSpy = vi
+        .spyOn(mechaModule, 'contextEngineering')
+        .mockResolvedValue([]);
+      vi.mocked(isCanUseFC).mockReturnValue(false);
+      const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+      await chatService.createAssistantMessage({
+        model: 'gemini-3.1-flash-lite-image',
+        messages,
+        provider: ModelProvider.LobeHub,
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: {
+            model: 'gemini-3.1-flash-lite-image',
+            provider: ModelProvider.LobeHub,
+          },
+          chatConfig: { enableAgentMode: true },
+        }),
+      });
+
+      expect(isCanUseFC).toHaveBeenCalledWith('gemini-3.1-flash-lite-image', ModelProvider.LobeHub);
+      expect(contextEngineeringSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableAgentMode: false,
+        }),
       );
     });
 

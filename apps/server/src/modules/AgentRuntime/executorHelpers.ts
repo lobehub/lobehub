@@ -2,8 +2,9 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type OperationToolSet } from '@lobechat/context-engine';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type UIChatMessage } from '@lobechat/types';
+import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 
 import { type LobeChatDatabase } from '@/database/type';
@@ -17,7 +18,6 @@ import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archi
 
 import { type RuntimeExecutorContext } from './context';
 import { type LLMErrorKind } from './llmErrorClassification';
-import { ModelEmptyError } from './ModelEmptyError';
 
 export const log = debug('lobe-server:agent-runtime:streaming-executors');
 export const timing = debug('lobe-server:agent-runtime:timing');
@@ -42,89 +42,6 @@ const LLM_RETRY_MAX_DELAY_MS = 30_000;
  * the first retry.
  */
 const EMPTY_COMPLETION_MAX_RETRIES = 2;
-
-/**
- * Output-token count at or below this — combined with no content, reasoning,
- * tool calls, or images — marks a turn as an empty completion.
- * The observed failure case reported `out=1 token`.
- */
-const EMPTY_COMPLETION_MAX_OUTPUT_TOKENS = 1;
-
-/**
- * Detect the "empty completion" failure mode: the model returns a
- * turn with no text, no reasoning, no tool calls, no images, and ~0 output
- * tokens — typically after a stalled tool loop where it effectively gives up.
- * Callers throw `ModelEmptyError` on a hit so the LLM retry loop re-attempts
- * instead of silently finalizing to `done` with a blank assistant message.
- */
-export const isEmptyModelCompletion = (params: {
-  content: string;
-  imageCount: number;
-  outputTokens: number | undefined;
-  reasoning: string;
-  toolCallCount: number;
-}): boolean => {
-  const { content, reasoning, toolCallCount, imageCount, outputTokens } = params;
-
-  if (content.trim().length > 0) return false;
-  if (reasoning.trim().length > 0) return false;
-  if (toolCallCount > 0) return false;
-  if (imageCount > 0) return false;
-
-  // When the provider reports output tokens, only treat as empty if it's ~0.
-  // Guards against rare cases where structured output we don't accumulate into
-  // `content`/`reasoning` here (e.g. grounding) still consumed real tokens.
-  if (typeof outputTokens === 'number' && outputTokens > EMPTY_COMPLETION_MAX_OUTPUT_TOKENS) {
-    return false;
-  }
-
-  return true;
-};
-
-type ReasoningReplayNode = {
-  children?: ReasoningReplayNode[];
-  members?: ReasoningReplayNode[];
-  reasoning?: unknown;
-};
-
-export const stripAssistantReasoningForReplay = (messages: UIChatMessage[]): UIChatMessage[] => {
-  const stripMessage = <T extends ReasoningReplayNode>(message: T): T => {
-    let changed = false;
-
-    const children = message.children?.map((child) => {
-      const strippedChild = stripMessage(child);
-      if (strippedChild !== child) changed = true;
-      return strippedChild;
-    });
-
-    const members = message.members?.map((member) => {
-      const strippedMember = stripMessage(member);
-      if (strippedMember !== member) changed = true;
-      return strippedMember;
-    });
-
-    if ('reasoning' in message) changed = true;
-    if (!changed) return message;
-
-    const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
-
-    return {
-      ...messageWithoutReasoning,
-      ...(children ? { children } : {}),
-      ...(members ? { members } : {}),
-    } as T;
-  };
-
-  let changed = false;
-
-  const strippedMessages = messages.map((message) => {
-    const strippedMessage = stripMessage(message);
-    if (strippedMessage !== message) changed = true;
-    return strippedMessage;
-  });
-
-  return changed ? strippedMessages : messages;
-};
 
 export const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
 

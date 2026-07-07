@@ -383,6 +383,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       },
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
     };
   }
 

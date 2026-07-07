@@ -122,6 +122,7 @@
   "responseLanguage.auto": "تلقائي (وفقًا للغة النظام)",
   "responseLanguage.desc": "اختر لغة ردود الوكيل",
   "responseLanguage.hint": "بعد اختيار اللغة، ستُستخدم هذه اللغة في ردود الذكاء الاصطناعي، كما ستتزامن لغة الواجهة",
+  "responseLanguage.saveFailed": "فشل الحفظ. يرجى المحاولة مرة أخرى.",
   "responseLanguage.title": "ما اللغة التي تود أن نتواصل بها؟",
   "responseLanguage.title2": "ابدأ باللغة، وابنِ فهماً حقيقياً.",
   "responseLanguage.title3": "دعني أتحدث بوضوح وأفهمك بشكل أفضل~",

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -8,6 +8,7 @@ import { DownloadIcon, MoreVerticalIcon, PackageSearch, Trash2 } from 'lucide-re
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import SkillAvatar from '@/components/SkillAvatar';
 import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
@@ -141,7 +142,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           </Flexbox>
         </Block>
       </Flexbox>
-      <Modal
+      <ImperativeModal
         destroyOnHidden
         footer={null}
         open={detailOpen}
@@ -153,7 +154,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         <Suspense fallback={<div style={{ height: '100%' }} />}>
           <AgentSkillDetail skillId={skill.id} />
         </Suspense>
-      </Modal>
+      </ImperativeModal>
       {skill.source === 'user' && (
         <Suspense>
           <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />

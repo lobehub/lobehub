@@ -320,50 +320,42 @@ export class HeterogeneousAgentService {
       }
     }
 
-    // Route the terminal transition through CompletionLifecycle — the SAME owner
-    // the in-process runtime uses — instead of the stripped-down dispatchTerminalHooks.
-    // This is what makes the hetero run a true lifecycle peer: persistCompletion
-    // writes the terminal op row (model/provider backfilled from the CLI stream via
-    // `state.model/provider`), onComplete/onError hooks fire through hookDispatcher,
+    // Route the terminal transition through CompletionLifecycle's single entry —
+    // the SAME owner the in-process runtime uses — instead of the stripped-down
+    // dispatchTerminalHooks. This is what makes the hetero run a true lifecycle
+    // peer: persistCompletion writes the terminal op row (model/provider backfilled
+    // from the CLI stream), onComplete/onError hooks fire through hookDispatcher,
     // and on success the delivery-checker card + verify gate run against the task's
-    // plan. We synthesize the runtime `state` shape CompletionLifecycle reads:
-    // metadata (agentId/topicId/userId/assistantMessageId/_hooks), the goal+reply
-    // messages, and the trace aggregates mapped into usage/cost.
-    const syntheticState = {
-      cost: { total: totals?.totalCost ?? null },
-      error: error ?? undefined,
-      messages: [
-        { content: goalContent, role: 'user' },
-        { content: lastAssistantContent ?? '', role: 'assistant' },
-      ],
-      metadata: {
-        _hooks: serializedHooks,
+    // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
+    // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+      {
         agentId,
         assistantMessageId,
+        cost: { total: totals?.totalCost ?? null },
+        deliverable: lastAssistantContent ?? '',
+        error: error ?? undefined,
+        goal: goalContent,
+        // Backfilled executed model/provider — the verify gate bails when absent.
+        model: totals?.model,
+        operationId,
+        provider: totals?.provider,
+        serializedHooks,
+        stepCount: totals?.stepCount ?? null,
         topicId,
+        usage: {
+          llm: {
+            apiCalls: totals?.llmCalls ?? null,
+            tokens: {
+              input: totals?.totalInputTokens ?? null,
+              output: totals?.totalOutputTokens ?? null,
+              total: totals?.totalTokens ?? null,
+            },
+          },
+          tools: { totalCalls: totals?.toolCalls ?? null },
+        },
         userId: this.userId,
       },
-      // Backfilled executed model/provider — persistCompletion writes these and the
-      // verify gate (lifecycle.ts) bails when op.model/provider are absent.
-      model: totals?.model,
-      provider: totals?.provider,
-      stepCount: totals?.stepCount ?? null,
-      usage: {
-        llm: {
-          apiCalls: totals?.llmCalls ?? null,
-          tokens: {
-            input: totals?.totalInputTokens ?? null,
-            output: totals?.totalOutputTokens ?? null,
-            total: totals?.totalTokens ?? null,
-          },
-        },
-        tools: { totalCalls: totals?.toolCalls ?? null },
-      },
-    };
-
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).dispatchHooks(
-      operationId,
-      syntheticState,
       completionReason,
     );
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);

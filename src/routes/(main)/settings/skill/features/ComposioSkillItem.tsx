@@ -11,9 +11,10 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { Badge, Button } from 'antd';
+import { Button } from 'antd';
 import { cssVar } from 'antd-style';
 import {
+  CircleCheck,
   Loader2,
   MoreHorizontalIcon,
   RotateCcw,
@@ -21,7 +22,7 @@ import {
   Trash2,
   Unplug,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -340,21 +341,54 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const isPending = server?.status === ComposioServerStatus.PENDING_AUTH;
     const isError = server?.status === ComposioServerStatus.ERROR;
 
-    if (onSelect) {
-      let badge: ReactNode;
-      if (isPending) {
-        badge = (
-          <Center width={18}>
-            <Badge status="warning" />
-          </Center>
-        );
-      } else if (isError) {
-        badge = (
-          <Center width={18}>
-            <Badge status="error" />
-          </Center>
+    // Compact connect/status control for the left-list (NavItem) row. Mirrors the
+    // ChatInput skills dropdown UX: connected → green check; pending/errored →
+    // Re-authorize; not connected → Connect. All open the OAuth flow inline so
+    // users can tell what is connected instead of hitting a blank detail panel.
+    const renderNavExtra = () => {
+      if (isConnecting || isWaitingAuth) {
+        return <Button disabled icon={<Icon spin icon={Loader2} />} size="small" type="text" />;
+      }
+      if (isConnected) {
+        return (
+          <Tooltip title={t('tools.composio.connected')}>
+            <Center width={20}>
+              <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
+            </Center>
+          </Tooltip>
         );
       }
+      if (isPending || isError) {
+        return (
+          <Tooltip title={!canCreate ? createReason : editReason}>
+            <Button
+              disabled={!canCreate || !canEdit}
+              icon={<Icon icon={SquareArrowOutUpRight} />}
+              size="small"
+              type="text"
+              onClick={handleReauthorize}
+            >
+              {t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' })}
+            </Button>
+          </Tooltip>
+        );
+      }
+      return (
+        <Tooltip title={!canCreate ? createReason : editReason}>
+          <Button
+            disabled={!canCreate || !canEdit}
+            icon={<Icon icon={SquareArrowOutUpRight} />}
+            size="small"
+            type="text"
+            onClick={handleConnect}
+          >
+            {t('tools.composio.connect', { defaultValue: 'Connect' })}
+          </Button>
+        </Tooltip>
+      );
+    };
+
+    if (onSelect) {
       const renderNavIcon = () => {
         const { icon, label } = serverType;
         if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
@@ -363,11 +397,15 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       return (
         <NavItem
           active={isSelected}
-          extra={badge}
+          extra={renderNavExtra()}
           icon={renderNavIcon}
           title={serverType.label}
           titleColor={!isConnected ? cssVar.colorTextDescription : undefined}
-          onClick={onSelect}
+          // Only connected connectors open the detail panel. When not active
+          // (disconnected / pending / error) the row is inert and the only
+          // affordance is the inline Connect / Re-authorize button — otherwise
+          // clicking opens a blank detail panel that reads as a bug.
+          onClick={isConnected ? onSelect : undefined}
         />
       );
     }

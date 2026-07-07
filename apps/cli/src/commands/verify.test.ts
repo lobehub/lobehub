@@ -176,7 +176,7 @@ describe('verify init command', () => {
       content: '# Verify SKILL',
       files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
       identifier: 'verify',
-      name: 'Verify',
+      name: 'verify',
     });
     dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
   });
@@ -214,7 +214,7 @@ describe('verify init command', () => {
       content: '# Updated SKILL',
       files: {},
       identifier: 'verify',
-      name: 'Verify',
+      name: 'verify',
     });
 
     await run(['init', '--dir', dir]); // no --force → keep existing

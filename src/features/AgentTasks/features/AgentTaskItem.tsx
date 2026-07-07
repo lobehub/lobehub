@@ -1,5 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +13,6 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
-import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
@@ -95,10 +96,18 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       </Block>
     ) : null;
 
+  const privacyBadge =
+    task.visibility === 'private' ? (
+      <Tooltip title={tChat('createTask.visibility.helperPrivate', { defaultValue: 'Private' })}>
+        <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={14} />
+      </Tooltip>
+    ) : null;
+
   const titleRow = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
       <TaskStatusTag status={status} taskIdentifier={task.identifier} />
+      {privacyBadge}
       {hasName ? (
         <>
           <Text style={{ flex: 'none' }} type={'secondary'}>
@@ -174,7 +183,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
               onSubtaskClick={handleSubtaskClick}
             />
           </Flexbox>
-          <TaskLatestActivity activities={taskDetail?.activities} />
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
             <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
             {scheduleNode}
@@ -196,7 +204,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
             {timeNode}
           </Flexbox>
         </Flexbox>
-        <TaskLatestActivity activities={taskDetail?.activities} />
       </Block>
     </ContextMenuTrigger>
   );

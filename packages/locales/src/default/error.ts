@@ -1,4 +1,9 @@
 export default {
+  'asyncState.desc': 'Something went wrong while loading. Please try again.',
+  'asyncState.metricLabel': 'Failed to load',
+  'asyncState.title': 'Failed to load',
+  'saveState.retry': 'Retry',
+  'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
   'error.stack': 'Error Stack',
@@ -13,6 +18,10 @@ export default {
   'import.incompatible.title': 'Current application does not support importing this file',
   'loginRequired.desc': 'You will be redirected to the sign-in page shortly',
   'loginRequired.title': 'Please sign in to use this feature',
+  'forbidden.backHome': 'Back to Home',
+  'forbidden.desc':
+    "You don't have permission to view this page. Please contact a workspace owner if you need access.",
+  'forbidden.title': 'Access denied',
   'notFound.backHome': 'Back to Home',
   'notFound.check': 'Please check if your URL is correct.',
   'notFound.desc': "We couldn't find the page you were looking for.",

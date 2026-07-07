@@ -4,7 +4,6 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -102,9 +101,11 @@ const Intervention = memo<InterventionProps>(
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
     // Hetero (CC / Codex) interventions ship the answer back through IPC to a
     // running CLI subprocess instead of starting a fresh `executeClientAgent`
-    // turn. Pull the chat-store action lazily so non-hetero interactions stay
-    // on the existing path with no behavior change.
-    const submitHeteroIntervention = useChatStore((s) => s.submitHeteroIntervention);
+    // turn. Route through the conversation store so it carries this card's own
+    // `context` (agent/topic) to the chat store — otherwise the optimistic
+    // writes and topic-status flip fall back to the global `activeTopicId` and
+    // land on whichever topic the user is currently viewing.
+    const submitHeteroIntervention = useConversationStore((s) => s.submitHeteroIntervention);
 
     const handleInteractionAction = useCallback(
       async (
@@ -188,6 +189,7 @@ const Intervention = memo<InterventionProps>(
         return (
           <Flexbox gap={12}>
             <BuiltinToolInterventionRender
+              actionsPortalTarget={actionsPortalTarget}
               apiName={apiName}
               args={parsedArgs}
               identifier={identifier}

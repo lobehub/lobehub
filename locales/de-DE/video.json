@@ -27,8 +27,12 @@
   "generation.status.generating": "Wird erstellt...",
   "generation.validation.endFrameRequiresStartFrame": "Ein Endbild kann nicht ohne ein Startbild verwendet werden. Bitte zuerst ein Startbild festlegen.",
   "topic.createNew": "Neues Thema erstellen",
+  "topic.createdBy": "Erstellt von {{name}}",
   "topic.deleteConfirm": "Video-Thema löschen",
   "topic.deleteConfirmDesc": "Sie sind dabei, dieses Video-Thema zu löschen. Diese Aktion kann nicht rückgängig gemacht werden.",
+  "topic.privateTitle": "Privat",
   "topic.title": "Video-Themen",
-  "topic.untitled": "Standardthema"
+  "topic.untitled": "Standardthema",
+  "topic.visibility.existingLocked": "Die Sichtbarkeit ist für das aktuelle Thema festgelegt. Erstellen Sie ein neues Thema, um einen anderen Bereich auszuwählen.",
+  "topic.workspaceTitle": "Arbeitsbereich"
 }

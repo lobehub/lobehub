@@ -8,9 +8,13 @@ import { executeDeviceRpc } from '../dispatch';
 import type { DeviceControlDeps } from '../types';
 
 let root: string;
+let deviceHome: string;
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'device-control-'));
+  deviceHome = await mkdtemp(path.join(tmpdir(), 'device-control-home-'));
+  vi.stubEnv('HOME', deviceHome);
+
   await mkdir(path.join(root, '.agents', 'skills', 'spa-routes'), { recursive: true });
   await writeFile(
     path.join(root, '.agents', 'skills', 'spa-routes', 'SKILL.md'),
@@ -20,7 +24,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  vi.unstubAllEnvs();
   await rm(root, { force: true, recursive: true });
+  await rm(deviceHome, { force: true, recursive: true });
 });
 
 const makeDeps = (): DeviceControlDeps => ({
@@ -31,7 +37,12 @@ const makeDeps = (): DeviceControlDeps => ({
     indexedAt: '',
     root: '',
     source: 'glob' as const,
-    totalCount: 0,
+  })),
+  searchProjectFiles: vi.fn(async () => ({
+    entries: [],
+    root: '',
+    searchedAt: '',
+    source: 'glob' as const,
   })),
 });
 
@@ -61,6 +72,65 @@ describe('executeDeviceRpc', () => {
     expect(result.source).toBe('.agents/skills');
   });
 
+  it('merges project and device skills with project taking name precedence', async () => {
+    const deviceSkillRoot = path.join(deviceHome, '.agents', 'skills');
+
+    await mkdir(path.join(deviceSkillRoot, 'device-writer'), { recursive: true });
+    await writeFile(
+      path.join(deviceSkillRoot, 'device-writer', 'SKILL.md'),
+      '---\nname: device-writer\ndescription: Device writer\n---\nbody',
+    );
+    await mkdir(path.join(deviceSkillRoot, 'spa-routes'), { recursive: true });
+    await writeFile(
+      path.join(deviceSkillRoot, 'spa-routes', 'SKILL.md'),
+      '---\nname: spa-routes\ndescription: Device duplicate\n---\nbody',
+    );
+
+    try {
+      const deps = makeDeps();
+      const result = (await executeDeviceRpc('listProjectSkills', { scope: root }, deps)) as {
+        skills: { name: string; previewRoot: string; scope: 'device' | 'project' }[];
+      };
+
+      expect(result.skills.map((skill) => `${skill.name}:${skill.scope}`)).toEqual([
+        'device-writer:device',
+        'spa-routes:project',
+      ]);
+      expect(result.skills.find((skill) => skill.name === 'device-writer')?.previewRoot).toBe(
+        deviceSkillRoot,
+      );
+      expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
+      expect(deps.approveProjectRoot).toHaveBeenCalledWith(deviceSkillRoot);
+    } finally {
+      await rm(path.join(deviceSkillRoot, 'device-writer'), { force: true, recursive: true });
+      await rm(path.join(deviceSkillRoot, 'spa-routes'), { force: true, recursive: true });
+    }
+  });
+
+  it('parses folded skill descriptions from frontmatter', async () => {
+    await mkdir(path.join(root, '.agents', 'skills', 'agent-testing'), { recursive: true });
+    await writeFile(
+      path.join(root, '.agents', 'skills', 'agent-testing', 'SKILL.md'),
+      [
+        '---',
+        'name: agent-testing',
+        'description: >',
+        '  Agentic end-to-end testing for LobeHub: backend verification via the CLI,',
+        '  frontend verification via agent-browser (Electron).',
+        '---',
+        'body',
+      ].join('\n'),
+    );
+
+    const result = (await executeDeviceRpc('listProjectSkills', { scope: root }, makeDeps())) as {
+      skills: { description?: string; name: string }[];
+    };
+
+    expect(result.skills.find((skill) => skill.name === 'agent-testing')?.description).toBe(
+      'Agentic end-to-end testing for LobeHub: backend verification via the CLI, frontend verification via agent-browser (Electron).',
+    );
+  });
+
   it('routes statPath and reports a directory + repo type', async () => {
     const result = (await executeDeviceRpc('statPath', { path: root }, makeDeps())) as {
       exists: boolean;
@@ -70,10 +140,13 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
-  it('delegates getProjectFileIndex and getLocalFilePreview to injected deps', async () => {
+  it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);
     expect(deps.getProjectFileIndex).toHaveBeenCalledWith({ scope: root });
+
+    await executeDeviceRpc('searchProjectFiles', { query: 'agent', scope: root }, deps);
+    expect(deps.searchProjectFiles).toHaveBeenCalledWith({ query: 'agent', scope: root });
 
     const previewParams = { path: path.join(root, 'AGENTS.md'), workingDirectory: root };
     await executeDeviceRpc('getLocalFilePreview', previewParams, deps);
@@ -127,5 +200,20 @@ describe('executeDeviceRpc', () => {
 
     expect(result.success).toBe(true);
     expect(await readFile(filePath, 'utf8')).toBe('remote edit');
+  });
+
+  it('routes listGitWorktrees through the shared git dispatcher', async () => {
+    // Not a git repo → the shared local-file-shell impl returns an empty list.
+    const result = await executeDeviceRpc('listGitWorktrees', { path: root }, makeDeps());
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('routes removeGitWorktree through the shared git dispatcher', async () => {
+    const result = (await executeDeviceRpc(
+      'removeGitWorktree',
+      { path: root, worktreePath: root },
+      makeDeps(),
+    )) as { success: boolean };
+    expect(result.success).toBe(false);
   });
 });

@@ -168,6 +168,8 @@
   "sidebar.expandAll": "Разшири всички групи",
   "sidebar.title": "Теми",
   "taskManager.agent": "Агент за задачи",
+  "taskManager.agentSelector.privateGroup": "Частен",
+  "taskManager.agentSelector.workspaceGroup": "Работно пространство",
   "taskManager.welcome": "Попитай ме за твоите задачи",
   "temp": "Временна",
   "title": "Тема"

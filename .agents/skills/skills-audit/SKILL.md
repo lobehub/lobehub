@@ -1,7 +1,6 @@
 ---
 name: skills-audit
 description: 'Audit .agents/skills SKILL.md files. Use for recurring checks of duplicate, overlapping, stale, inconsistent, or broken skills and merge/delete candidates.'
-disable-model-invocation: true
 argument-hint: '[--verbose | --apply]'
 ---
 
@@ -48,7 +47,6 @@ For each pair within the same domain, ask:
 Common false positives (do NOT merge):
 
 - `db-migrations` vs `drizzle` — distinct workflows (migration files vs schema authoring).
-- `microcopy` vs `i18n` — content vs mechanics.
 - `agent-runtime-hooks` vs `agent-tracing` vs `agent-signal` — different surfaces of the agent system.
 - `testing` vs `agent-testing` — different test types.
 

@@ -17,14 +17,19 @@ import {
   reduceMainAgent,
   type SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
+import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
   ChatToolPayload,
+  ChatTopicMetadata,
   ChatTopicStatus,
+  ContextSelection,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
+  PageSelection,
   UIChatMessage,
+  WorkingDirConfig,
 } from '@lobechat/types';
 import {
   AgentRuntimeErrorType,
@@ -36,19 +41,25 @@ import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import {
+  removeHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionIdForWorkingDirectory,
+} from '@/helpers/heteroSessionByWorkingDirectory';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
+import { topicSelectors } from '@/store/chat/selectors';
 import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
 } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
-import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
+import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -104,8 +115,7 @@ const maybeClassifyCliAuthRequiredError = (
 
 const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
   const errorBody = error.body as
-    | (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean })
-    | undefined;
+    (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean }) | undefined;
   if (
     !errorBody?.clearEchoedContent &&
     errorBody?.code !== HeterogeneousAgentSessionErrorCode.AuthRequired
@@ -189,18 +199,91 @@ const isRecoverableResumeError = (
   );
 };
 
+/**
+ * How long the terminal callbacks wait for the persist queue to drain before
+ * proceeding regardless. Bounds the one place a completed run could otherwise
+ * hang forever — a queued DB write whose desktop-IPC reply never arrives — so op
+ * completion, the terminal forward, and the desktop notification still run.
+ * Topic status is reset ahead of this wait, so the sidebar spinner never depends
+ * on it at all.
+ */
+const PERSIST_DRAIN_TIMEOUT = 10_000;
+
+/** Await `queue`, but give up after `ms`; pending work is abandoned, not cancelled. */
+const drainWithTimeout = (queue: Promise<unknown>, ms: number): Promise<void> =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    void Promise.resolve(queue)
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+  });
+
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
   context: ConversationContext;
+  contextSelections?: ContextSelection[];
   heterogeneousProvider: HeterogeneousProviderConfig;
   /** Image attachments from user message — passed to Main for vision support */
   imageList?: Array<{ id: string; url: string }>;
   message: string;
   operationId: string;
+  pageSelections?: PageSelection[];
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeSessionId?: string;
   workingDirectory?: string;
+  workingDirectoryConfig?: WorkingDirConfig;
 }
+
+const buildLocalHeterogeneousSystemContext = ({
+  agentSystemContext,
+  contextSelections,
+  pageSelections,
+  workingDirectory,
+}: {
+  agentSystemContext?: string;
+  contextSelections?: ContextSelection[];
+  pageSelections?: PageSelection[];
+  workingDirectory?: string;
+}): string | undefined => {
+  const parts: string[] = [];
+
+  if (agentSystemContext?.trim()) parts.push(agentSystemContext.trim());
+
+  if (workingDirectory?.trim()) {
+    parts.push(
+      [
+        '## Workspace',
+        `You are running on the user's own machine. Your working directory is \`${workingDirectory.trim()}\`.`,
+      ].join('\n'),
+    );
+  }
+
+  const selectionContext =
+    contextSelections && contextSelections.length > 0
+      ? formatContextSelections(contextSelections)
+      : pageSelections && pageSelections.length > 0
+        ? formatPageSelections(pageSelections)
+        : '';
+
+  if (selectionContext) parts.push(selectionContext);
+
+  return parts.length > 0 ? parts.join('\n\n') : undefined;
+};
+
+const getTopicMetadataById = (
+  store: ChatStore,
+  topicId: string | undefined,
+): ChatTopicMetadata | undefined => {
+  if (!topicId) return;
+
+  for (const topicData of Object.values(store.topicDataMap ?? {})) {
+    const topic = topicData?.items?.find((item) => item.id === topicId);
+    if (topic) return topic.metadata;
+  }
+};
 
 /**
  * Map heterogeneousProvider.command to adapter type key.
@@ -343,13 +426,16 @@ export const executeHeterogeneousAgent = async (
 ): Promise<void> => {
   const {
     heterogeneousProvider,
+    contextSelections,
     assistantMessageId,
     context,
     imageList,
     message,
     operationId,
+    pageSelections,
     resumeSessionId,
     workingDirectory,
+    workingDirectoryConfig,
   } = params;
 
   const adapterType = resolveAdapterType(heterogeneousProvider);
@@ -435,6 +521,32 @@ export const executeHeterogeneousAgent = async (
   let resumeFallbackTriggered = false;
 
   /**
+   * CC-native session id this run is producing, captured off the stream_start
+   * event stream and stamped on every message created below. Mirrors the server
+   * handler's `OperationState.heteroSessionId`: `topic.metadata.heteroSessionId`
+   * only keeps the single latest value (written at run end), so a per-message
+   * copy is what lets a diff pinpoint the exact row where CC forked to a new
+   * session — the forensic signal for a lost-`--resume` "session break".
+   */
+  let heteroSessionId: string | undefined;
+
+  /**
+   * Per-message provenance stamped on every row this run persists: the CC
+   * session id (`heteroSessionId`) and, when known, the turn's CC `message.id`
+   * (`heteroMessageId`). Returns `{}` when neither is known so callers can
+   * spread it without minting empty metadata. Mirrors the server handler's
+   * `heteroProvenance`.
+   */
+  const heteroProvenance = (
+    heteroMessageId?: string,
+  ): { heteroMessageId?: string; heteroSessionId?: string } => {
+    const out: { heteroMessageId?: string; heteroSessionId?: string } = {};
+    if (heteroSessionId) out.heteroSessionId = heteroSessionId;
+    if (heteroMessageId) out.heteroMessageId = heteroMessageId;
+    return out;
+  };
+
+  /**
    * Global `tool_use.id → tool message DB id` lookup, shared across the
    * main agent and every subagent run. `tool_result` events identify
    * the target row by `toolCallId` alone (no scope context needed), so
@@ -509,6 +621,17 @@ export const executeHeterogeneousAgent = async (
   const abortSignal = get().operations?.[operationId]?.abortController?.signal;
   const isAborted = () => !!abortSignal?.aborted;
   const updateTopicMetadata = get().updateTopicMetadata;
+  const getPersistedWorkingDirectoryConfig = (
+    topicMetadata: ChatTopicMetadata | undefined,
+  ): WorkingDirConfig | undefined =>
+    // Prefer the topic's CURRENT config: while the CLI runs, GitStatus may have
+    // persisted richer branch/PR/CI (`git.github`) onto it. Falling back to the
+    // run-start captured config would drop that enrichment on the completion
+    // write until a status component re-probes. Captured config is only the
+    // fallback for a topic that carries none yet.
+    topicMetadata?.workingDirectoryConfig ??
+    workingDirectoryConfig ??
+    (workingDirectory === undefined ? undefined : { path: workingDirectory });
   const hasStreamedState = () =>
     sawStreamedEvent ||
     !!mainState.accContent ||
@@ -519,9 +642,15 @@ export const executeHeterogeneousAgent = async (
   const clearStaleResumeMetadata = async () => {
     if (!context.topicId || !updateTopicMetadata) return;
 
+    const topicMetadata = getTopicMetadataById(get(), context.topicId);
     await updateTopicMetadata(context.topicId, {
       heteroSessionId: undefined,
+      heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
+        topicMetadata,
+        workingDirectory,
+      ),
       workingDirectory: workingDirectory ?? '',
+      workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
     });
   };
   const writeTopicStatus = (status: ChatTopicStatus): void => {
@@ -668,10 +797,12 @@ export const executeHeterogeneousAgent = async (
 
       case 'createMessage': {
         const t = subagentThreads.get(intent.threadId);
+        const subMetadata = heteroProvenance(intent.subagentMessageId);
         const msg = {
           agentId: intent.agentId ?? undefined,
           content: intent.content,
           id: intent.messageId,
+          ...(Object.keys(subMetadata).length > 0 ? { metadata: subMetadata } : {}),
           parentId: intent.parentId,
           role: intent.role,
           threadId: intent.threadId,
@@ -757,10 +888,12 @@ export const executeHeterogeneousAgent = async (
         // register the global lookup, and seed the thread bucket bubble.
         for (const x of intent.tools) {
           if (!x.isNew) continue;
+          const subToolMetadata = heteroProvenance(intent.subagentMessageId);
           const toolMsg = {
             agentId: context.agentId,
             content: '',
             id: x.toolMessageId,
+            ...(Object.keys(subToolMetadata).length > 0 ? { metadata: subToolMetadata } : {}),
             parentId: intent.assistantMessageId,
             plugin: {
               apiName: x.payload.apiName,
@@ -822,7 +955,12 @@ export const executeHeterogeneousAgent = async (
       case 'recordUsage': {
         const t = subagentThreads.get(intent.threadId);
         const update = {
-          metadata: { usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the session + message
+          // provenance the createMessage write put there, or usage would wipe it.
+          metadata: {
+            ...heteroProvenance(intent.subagentMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };
@@ -865,12 +1003,14 @@ export const executeHeterogeneousAgent = async (
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
       case 'createAssistant': {
+        const createMetadata: Record<string, any> = { ...heteroProvenance(intent.mainMessageId) };
+        if (intent.signal) createMetadata.signal = intent.signal;
         try {
           await messageService.createMessage({
             agentId: intent.agentId ?? context.agentId,
             content: '',
             id: intent.messageId,
-            ...(intent.signal ? { metadata: { signal: intent.signal } } : {}),
+            ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
             model: intent.model,
             parentId: intent.parentId,
             provider: intent.provider,
@@ -952,11 +1092,13 @@ export const executeHeterogeneousAgent = async (
         // register the global lookup so a later tool_result resolves.
         for (const x of intent.tools) {
           if (!x.isNew) continue;
+          const toolMetadata = heteroProvenance(mainState.currentMainMessageId);
           try {
             await messageService.createMessage({
               agentId: context.agentId,
               content: '',
               id: x.toolMessageId,
+              ...(Object.keys(toolMetadata).length > 0 ? { metadata: toolMetadata } : {}),
               parentId: intent.assistantMessageId,
               plugin: {
                 apiName: x.payload.apiName,
@@ -1001,7 +1143,12 @@ export const executeHeterogeneousAgent = async (
 
       case 'recordUsage': {
         const update = {
-          metadata: { usage: intent.usage as any },
+          // Wholesale metadata overwrite — re-stamp the provenance the
+          // createAssistant write put there, or usage would wipe it.
+          metadata: {
+            ...heteroProvenance(mainState.currentMainMessageId),
+            usage: intent.usage as any,
+          },
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };
@@ -1038,6 +1185,14 @@ export const executeHeterogeneousAgent = async (
    * matches arrival.
    */
   const reduceAndApplyMain = async (event: AgentStreamEvent) => {
+    // Capture the CC-native session id off the stream_start stream so every
+    // message persisted below carries the session it belongs to (mirrors the
+    // server handler). Stable per run; the copy makes a mid-topic fork visible.
+    if (event.type === 'stream_start') {
+      const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
+      if (typeof sid === 'string' && sid.length > 0) heteroSessionId = sid;
+    }
+
     const ctx: MainAgentReduceCtx = {
       agentId: context.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
@@ -1134,6 +1289,12 @@ export const executeHeterogeneousAgent = async (
             // so it's obvious from the topic list that this conversation is
             // blocked on the user, not still streaming.
             writeTopicStatus('waitingForHuman');
+            // Parity with the homogeneous approval paths (client / gateway /
+            // aiAgent): a CC AskUserQuestion now also bumps the dock badge and
+            // bounces the macOS dock. The helper is desktop-guarded and only
+            // requests attention while the window is hidden/unfocused, so it's
+            // a no-op when the user is already looking at the approval.
+            void notifyDesktopHumanApprovalRequired(get, context);
           } catch (err) {
             console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
           }
@@ -1308,10 +1469,38 @@ export const executeHeterogeneousAgent = async (
         if (completed) return;
         completed = true;
 
-        // Wait for all tool persistence to finish before writing final state
-        await persistQueue.catch(console.error);
-
         const isErrorTerminal = deferredTerminalEvent?.type === 'error';
+
+        // Reset the sidebar "running" status BEFORE draining the persist queue.
+        // Topic status is independent of message persistence, so a stalled queue
+        // (e.g. a subagent-heavy run whose final DB write never settles) must not
+        // strand the topic spinning after the CLI has exited — the stuck-spinner
+        // this guards against. Content persistence + the terminal forward still
+        // wait for the (now bounded) drain below.
+        {
+          const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason;
+          if (isErrorTerminal) {
+            writeTopicStatus('failed');
+          } else if (!isAborted() && isCompletedRuntimeEnd(reason)) {
+            // Clean completion: the viewer sees 'active'; a background topic gets
+            // the unread badge (markTopicUnread self-guards on activeTopicId).
+            if (get().activeTopicId === context.topicId) writeTopicStatus('active');
+            else
+              get().markTopicUnread?.({
+                agentId: context.agentId,
+                groupId: context.groupId,
+                topicId: context.topicId,
+              });
+          } else {
+            // Cancel / deferred-tool park — back to a neutral 'active'.
+            writeTopicStatus('active');
+          }
+        }
+
+        // Bounded: a persist that never settles must not block op completion,
+        // the terminal forward, or the completion notification below.
+        await drainWithTimeout(persistQueue, PERSIST_DRAIN_TIMEOUT);
+
         // Snapshot the final content BEFORE the terminal reduce resets the
         // accumulator — used for the completion notification body below.
         const finalContent = mainState.accContent;
@@ -1354,12 +1543,10 @@ export const executeHeterogeneousAgent = async (
         pendingSubagentFlush.clear();
 
         if (!isErrorTerminal) {
-          // A clean completion the user isn't watching is owned by the gateway
-          // handler's markTopicUnread (status: 'unread'); only clear back to
-          // 'active' when the user is viewing so the two writes don't race.
-          if (get().activeTopicId === context.topicId) writeTopicStatus('active');
-          // NOW forward the deferred terminal event — handler will
-          // fetchAndReplaceMessages and pick up the final persisted state.
+          // Topic status was already reset ahead of the drain (top of
+          // onComplete); forward the deferred terminal only so the handler runs
+          // the final fetchAndReplaceMessages + completeOperation against the
+          // now-persisted state.
           eventHandler(terminalEvent);
         }
 
@@ -1386,7 +1573,12 @@ export const executeHeterogeneousAgent = async (
         if (retryWithoutResume(error)) return;
         completed = true;
 
-        await persistQueue.catch(console.error);
+        // Reset status ahead of the drain (see onComplete) so a stalled queue
+        // can't strand the spinner; persistTerminalError below re-asserts 'failed'
+        // with the full error UI.
+        writeTopicStatus(isAborted() ? 'active' : 'failed');
+
+        await drainWithTimeout(persistQueue, PERSIST_DRAIN_TIMEOUT);
 
         const deferredMessageError =
           deferredTerminalEvent?.type === 'error'
@@ -1424,8 +1616,25 @@ export const executeHeterogeneousAgent = async (
       },
     });
 
+    const systemContext = buildLocalHeterogeneousSystemContext({
+      agentSystemContext: heterogeneousProvider.systemContext,
+      contextSelections,
+      pageSelections,
+      workingDirectory,
+    });
+
     // Send the prompt — blocks until process exits
-    await heterogeneousAgentService.sendPrompt(agentSessionId, message, operationId, imageList);
+    if (systemContext) {
+      await heterogeneousAgentService.sendPrompt(
+        agentSessionId,
+        message,
+        operationId,
+        imageList,
+        systemContext,
+      );
+    } else {
+      await heterogeneousAgentService.sendPrompt(agentSessionId, message, operationId, imageList);
+    }
 
     // Persist heterogeneous-agent session id + the cwd it was created under,
     // for multi-turn resume. CC stores sessions per-cwd
@@ -1442,6 +1651,7 @@ export const executeHeterogeneousAgent = async (
       .getSessionInfo(agentSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
+      const topicMetadata = getTopicMetadataById(get(), context.topicId);
       // Best-effort: a rejected
       // metadata save must NOT throw past the queue drain below — guarding the
       // await here keeps the resume-id persistence from blocking the follow-up
@@ -1449,7 +1659,13 @@ export const executeHeterogeneousAgent = async (
       // `resolveHeteroResume` reads the just-finished session id.
       await updateTopicMetadata?.(context.topicId, {
         heteroSessionId: sessionInfo.agentSessionId,
+        heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+          topicMetadata,
+          workingDirectory,
+          sessionInfo.agentSessionId,
+        ),
         workingDirectory: workingDirectory ?? '',
+        workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
       }).catch((err) =>
         console.error('[HeterogeneousAgent] Failed to persist resume session id:', err),
       );
@@ -1535,6 +1751,32 @@ export const executeHeterogeneousAgent = async (
     unsubscribe?.();
     // Don't stopSession here — keep it alive for multi-turn resume.
     // Session cleanup happens on topic deletion or Electron quit.
+
+    // Backstop: if neither onComplete nor onError ever ran (e.g. the
+    // heteroAgentSessionComplete IPC was missed, or its listener was torn down
+    // before it landed), the status reset above never happened. The CLI has
+    // exited by the time this linear path resolves, so a topic still persisted
+    // as 'running' would spin forever — reconcile it. Both terminal callbacks
+    // reset status ahead of their drain, so reaching here still 'running' means
+    // neither ran. Skipped on the resume-retry path, whose recursive run owns
+    // the lifecycle.
+    if (!resumeFallbackTriggered && context.topicId) {
+      // Best-effort: a finally must never throw (it would mask the real flow),
+      // and the topic map may be absent in edge/test states.
+      try {
+        const stuckRunning =
+          topicSelectors.getTopicById(context.topicId)(get())?.status === 'running';
+        if (stuckRunning) {
+          // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
+          // `null` in this linear-flow scope (it can't see the async IPC writes).
+          const terminal = deferredTerminalEvent as AgentStreamEvent | null;
+          writeTopicStatus(terminal?.type === 'error' ? 'failed' : 'active');
+          get().completeOperation(operationId);
+        }
+      } catch (err) {
+        console.error('[HeterogeneousAgent] status reconcile backstop failed:', err);
+      }
+    }
   }
 
   if (fallbackPromise) {

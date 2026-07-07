@@ -12,6 +12,7 @@ import SafeBoundary from '@/components/ErrorBoundary';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
+import MessageSelectionWrapper from '../MessageForward/MessageSelectionWrapper';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
@@ -220,9 +221,11 @@ const MessageItem = memo<MessageItemProps>(
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <SafeBoundary variant="alert">
-            <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
-          </SafeBoundary>
+          <MessageSelectionWrapper id={id} role={role}>
+            <SafeBoundary variant="alert">
+              <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
+            </SafeBoundary>
+          </MessageSelectionWrapper>
           {!shouldInjectFooter && footerRender}
           {endRender}
         </Flexbox>

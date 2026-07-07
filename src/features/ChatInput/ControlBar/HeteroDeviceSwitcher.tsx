@@ -23,10 +23,10 @@ import {
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { lambdaQuery } from '@/libs/trpc/client';
-import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -342,7 +342,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   // Workspace-scoped agent: every workspace member runs through one device pool,
   // so personal devices (only reachable by their registering user) must be
   // suppressed from the picker. The server enforces the same rule on writes.
@@ -377,34 +376,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     clientExecutionAvailable: isDesktop,
   });
 
+  const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
-
-      // `executionTarget` is the single source of truth — the server tool
-      // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
-      let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
-      if (target === 'local') {
-        nextBoundDeviceId = currentDeviceId;
-        if (!nextBoundDeviceId) {
-          try {
-            nextBoundDeviceId = (await gatewayConnectionService.getDeviceInfo())?.deviceId;
-          } catch {
-            nextBoundDeviceId = undefined;
-          }
-        }
-        if (isHetero && !nextBoundDeviceId) return;
-      }
-
-      await updateAgentConfigById(agentId, {
-        agencyConfig: {
-          ...agencyConfig,
-          executionTarget: target,
-          ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
-        },
-      });
+      await selectExecutionTarget(target, deviceId);
     },
-    [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
+    [selectExecutionTarget],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
@@ -412,7 +390,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const deviceRows = devices ?? [];
   const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
@@ -440,11 +417,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipIcon = <Icon icon={SparklesIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
   } else if (executionTarget === 'local') {
-    chipIcon = currentDevice ? (
-      getDeviceIcon(currentDevice.platform)
-    ) : (
-      <Icon icon={LaptopIcon} size={14} />
-    );
+    // 本机始终使用通用的本地电脑图标，不区分具体平台
+    chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
     chipIcon = getDeviceIcon(boundDevice?.platform);
@@ -544,19 +518,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
-          tag={t('heteroAgent.executionTarget.local')}
-          icon={
-            currentDevice ? (
-              getDeviceIcon(currentDevice.platform)
-            ) : (
-              <Icon icon={LaptopIcon} size={14} />
-            )
-          }
-          label={
-            currentDevice?.friendlyName ||
-            currentDevice?.hostname ||
-            t('heteroAgent.executionTarget.local')
-          }
+          icon={<Icon icon={LaptopIcon} size={14} />}
+          // 本机统一显示「本地设备」，不再带具体设备名称
+          label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local')}
         />
       ) : null}

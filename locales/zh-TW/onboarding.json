@@ -122,6 +122,7 @@
   "responseLanguage.auto": "自動（依系統語言）",
   "responseLanguage.desc": "選擇 AI 助手回覆訊息時使用的語言",
   "responseLanguage.hint": "選擇語言後，AI 回覆將使用該語言，介面語言也會同步切換",
+  "responseLanguage.saveFailed": "儲存失敗。請再試一次。",
   "responseLanguage.title": "我們要用哪種語言交流？",
   "responseLanguage.title2": "從語言開始，建立真正的理解。",
   "responseLanguage.title3": "讓我說得清楚、聽得明白～",

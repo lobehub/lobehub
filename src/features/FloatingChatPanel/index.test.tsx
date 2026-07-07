@@ -132,6 +132,20 @@ vi.mock('@/features/Conversation', () => ({
   },
 }));
 
+const mockConversationState = vi.hoisted(() => ({
+  current: {
+    chatInputOverlayHeight: 0,
+  },
+}));
+
+vi.mock('@/features/Conversation/store', () => ({
+  inputSelectors: {
+    chatInputOverlayHeight: (s: { chatInputOverlayHeight: number }) => s.chatInputOverlayHeight,
+  },
+  useConversationStore: (selector: (s: { chatInputOverlayHeight: number }) => unknown) =>
+    selector(mockConversationState.current),
+}));
+
 vi.mock('@/routes/(main)/agent/features/Conversation/useActionsBarConfig', () => ({
   useActionsBarConfig: () => ({ assistant: {}, user: {} }),
 }));
@@ -242,11 +256,11 @@ describe('FloatingChatPanel', () => {
   it('starts collapsed and ships a seamless dismissible sheet with two snap points', () => {
     const { getByTestId } = render(<FloatingChatPanel agentId="a" topicId="t" />);
     const sheet = getByTestId('floating-panel-shell');
-    expect(sheet.dataset.snapPoints).toBe(JSON.stringify([420, 800]));
+    expect(sheet.dataset.snapPoints).toBe(JSON.stringify([320, 800]));
     expect(sheet.dataset.variant).toBe('elevated');
     expect(sheet.dataset.dismissible).toBe('true');
     expect(sheet.dataset.open).toBe('false');
-    expect(sheet.dataset.activeSnap).toBe('420');
+    expect(sheet.dataset.activeSnap).toBe('320');
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('true');
   });
 
@@ -268,7 +282,7 @@ describe('FloatingChatPanel', () => {
 
     const sheet = getByTestId('floating-panel-shell');
     expect(sheet.dataset.open).toBe('true');
-    expect(sheet.dataset.activeSnap).toBe('420');
+    expect(sheet.dataset.activeSnap).toBe('320');
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('false');
     const input = getByTestId('chat-input');
     expect(input.dataset.allowExpand).toBe('false');
@@ -290,7 +304,7 @@ describe('FloatingChatPanel', () => {
 
     expect(getByTestId('floating-panel-shell').dataset.open).toBe('false');
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('true');
-    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('420');
+    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('320');
   });
 
   it('expands when the header collapse button is clicked from expanded state', async () => {
@@ -311,7 +325,7 @@ describe('FloatingChatPanel', () => {
 
     fireEvent.click(getByTestId('floating-chat-panel-expand-button'));
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('false');
-    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('420');
+    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('320');
   });
 
   it('reflects user-driven snap changes through onSnapPointChange', async () => {
@@ -320,7 +334,7 @@ describe('FloatingChatPanel', () => {
     await act(async () => {
       await mergedHooksCaptured.current?.onBeforeSendMessage?.();
     });
-    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('420');
+    expect(getByTestId('floating-panel-shell').dataset.activeSnap).toBe('320');
 
     act(() => {
       sheetHandlers.current.onSnapPointChange?.(800);

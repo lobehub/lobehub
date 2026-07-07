@@ -1,10 +1,11 @@
 import { type ModalProps } from '@lobehub/ui';
-import { Input, Modal } from '@lobehub/ui';
+import { Input } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/selectors';
 
@@ -28,7 +29,7 @@ const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) =>
   }, [group]);
 
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       destroyOnHidden
       okButtonProps={{ loading }}
@@ -57,7 +58,7 @@ const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) =>
         value={input}
         onChange={(e) => setInput(e.target.value)}
       />
-    </Modal>
+    </ImperativeModal>
   );
 });
 

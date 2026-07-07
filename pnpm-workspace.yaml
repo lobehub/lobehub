@@ -5,6 +5,9 @@ packages:
   - apps/desktop/src/main
   - apps/server
 
+minimumReleaseAgeExclude:
+  - '@lobehub/ui@5.19.0'
+
 onlyBuiltDependencies:
   - '@google/genai'
   - '@lobehub/editor'

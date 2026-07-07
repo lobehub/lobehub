@@ -33,7 +33,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
     const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const aiInfraRepos = new AiInfraRepos(context.serverDB, context.userId, {});
+    const aiInfraRepos = new AiInfraRepos(
+      context.serverDB,
+      context.userId,
+      {},
+      context.workspaceId,
+    );
     const discoverService = new DiscoverService();
 
     return {

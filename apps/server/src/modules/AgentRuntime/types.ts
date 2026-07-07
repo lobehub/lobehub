@@ -163,6 +163,24 @@ export interface IStreamEventManager {
   ) => Promise<string>;
 
   /**
+   * Single bounded read of a stream — the long-poll primitive. Returns every
+   * event after `lastEventId`, blocking up to `blockMs` for the first one; on
+   * timeout returns an empty list. The returned `lastEventId` is always a
+   * CONCRETE stream id (never the `'$'` sentinel), so the caller can immediately
+   * re-poll from it without a gap. Unlike `subscribeStreamEvents` this does NOT
+   * loop — one request, one bounded wait.
+   *
+   * Used by the heterogeneous `lh hetero exec` producer (which holds only an
+   * op-scoped JWT + tRPC, never Redis) to pull `agent_intervention_response`
+   * back into its in-process `AskUserBridge`. See `aiAgent.waitInterventionResponse`.
+   */
+  readEventsOnce: (
+    operationId: string,
+    lastEventId?: string,
+    blockMs?: number,
+  ) => Promise<{ events: StreamEvent[]; lastEventId: string }>;
+
+  /**
    * Optional: dispatch a tool execution request to the client via Agent Gateway.
    * Rejects if the gateway is unavailable — callers decide their fallback path.
    * Only present on implementations that speak to a live gateway (not on the

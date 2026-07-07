@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { defaultSearchProjectFiles } from '@lobechat/device-control';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -30,6 +31,8 @@ import {
   type ProjectFileIndexEntry,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
   type RenameLocalFileResult,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -65,6 +68,7 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -659,7 +663,6 @@ export default class LocalFileCtr extends ControllerModule {
           indexedAt: new Date().toISOString(),
           root,
           source: 'git',
-          totalCount: entries.length,
         };
       }
     } catch (error) {
@@ -669,7 +672,11 @@ export default class LocalFileCtr extends ControllerModule {
       });
     }
 
-    const fallback = await this.searchService.glob({ pattern: '**/*', scope: requestedScope });
+    const fallback = await this.searchService.glob({
+      limit: PROJECT_FILE_GLOB_LIMIT,
+      pattern: '**/*',
+      scope: requestedScope,
+    });
     const files = fallback.files.map((filePath) => path.resolve(filePath));
     const entries = await Promise.all(
       files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
@@ -688,8 +695,25 @@ export default class LocalFileCtr extends ControllerModule {
       indexedAt: new Date().toISOString(),
       root: requestedScope,
       source: 'glob',
-      totalCount: entries.length,
     };
+  }
+
+  @IpcMethod()
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    const startedAt = Date.now();
+    const result = await defaultSearchProjectFiles(params);
+
+    logger.debug('Project file search completed', {
+      duration: Date.now() - startedAt,
+      entries: result.entries.length,
+      query: params.query,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
+    });
+    await this.approveProjectRootForPreview(result.root);
+
+    return result;
   }
 
   /**

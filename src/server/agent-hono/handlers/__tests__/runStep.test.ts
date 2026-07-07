@@ -7,6 +7,7 @@ import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
 const mockExecuteStep = vi.fn();
+const mockGetServerDB = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
@@ -21,10 +22,27 @@ vi.mock('@/server/services/aiAgent', () => ({
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn().mockResolvedValue({} as any),
+  getServerDB: mockGetServerDB,
 }));
 
-function buildContext(opts: { body?: unknown; jsonThrows?: boolean; retried?: string }) {
+function buildOperationDiagnosticDB(row?: any) {
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue(row ? [row] : []),
+        })),
+      })),
+    })),
+  };
+}
+
+function buildContext(opts: {
+  body?: unknown;
+  jsonThrows?: boolean;
+  messageId?: string;
+  retried?: string;
+}) {
   const captures: Array<{ body: any; status: number; headers?: Record<string, string> }> = [];
   const ctx = {
     json: (b: any, status = 200, headers?: Record<string, string>) => {
@@ -32,8 +50,12 @@ function buildContext(opts: { body?: unknown; jsonThrows?: boolean; retried?: st
       return Response.json(b, { status, headers });
     },
     req: {
-      header: (name: string) =>
-        name.toLowerCase() === 'upstash-retried' ? opts.retried : undefined,
+      header: (name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized === 'upstash-retried') return opts.retried;
+        if (normalized === 'upstash-message-id') return opts.messageId;
+        return undefined;
+      },
       json: opts.jsonThrows
         ? async () => {
             throw new Error('bad json');
@@ -54,6 +76,7 @@ describe('runStep handler', () => {
   beforeEach(() => {
     mockGetOperationMetadata.mockReset();
     mockExecuteStep.mockReset();
+    mockGetServerDB.mockResolvedValue({} as any);
   });
 
   afterEach(() => {
@@ -77,6 +100,16 @@ describe('runStep handler', () => {
 
   it('returns 401 when operation metadata has no userId', async () => {
     mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date('2026-07-07T03:23:44.015Z'),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { ctx, getCaptures } = buildContext({ body: validBody });
 
     const res = await runStep(ctx);
@@ -84,6 +117,48 @@ describe('runStep handler', () => {
     expect(res.status).toBe(401);
     expect(getCaptures()[0].body).toEqual({ error: 'Invalid operation or unauthorized' });
     expect(mockExecuteStep).not.toHaveBeenCalled();
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: true,
+        startedAt: '2026-07-07T03:23:44.015Z',
+        status: 'running',
+        stepCount: null,
+        traceS3KeyPresent: false,
+      },
+      event: 'agent.run_step.missing_operation_metadata',
+      metadataPresent: false,
+      operationId: 'op-1',
+      stepIndex: 2,
+      upstashRetried: null,
+    });
+    warnSpy.mockRestore();
+  });
+
+  it('includes QStash retry and message IDs in missing metadata diagnostics', async () => {
+    mockGetOperationMetadata.mockResolvedValue({});
+    mockGetServerDB.mockResolvedValue(buildOperationDiagnosticDB());
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { ctx } = buildContext({
+      body: validBody,
+      messageId: 'msg-123',
+      retried: '3',
+    });
+
+    await runStep(ctx);
+
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: false,
+        status: null,
+      },
+      metadataHasUserId: false,
+      metadataPresent: true,
+      operationId: 'op-1',
+      qstashMessageId: 'msg-123',
+      stepIndex: 2,
+      upstashRetried: '3',
+    });
+    warnSpy.mockRestore();
   });
 
   it('steps through AiAgentService scoped to the operation workspace', async () => {

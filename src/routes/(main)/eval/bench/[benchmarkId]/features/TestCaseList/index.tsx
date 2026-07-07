@@ -1,12 +1,19 @@
 'use client';
 
-import { Flexbox, Tag } from '@lobehub/ui';
-import { Table, Typography } from 'antd';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Badge, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEvalStore } from '@/store/eval';
+
+const DIFFICULTY_COLORS: Record<string, { bg: string; color: string }> = {
+  easy: { bg: cssVar.colorSuccessBg, color: cssVar.colorSuccess },
+  hard: { bg: cssVar.colorErrorBg, color: cssVar.colorError },
+  medium: { bg: cssVar.colorWarningBg, color: cssVar.colorWarning },
+};
 
 interface TestCaseListProps {
   datasetId: string;
@@ -33,9 +40,9 @@ const TestCaseList = memo<TestCaseListProps>(({ datasetId }) => {
       ellipsis: true,
       key: 'input',
       render: (text: string) => (
-        <Typography.Text ellipsis style={{ maxWidth: 400 }}>
+        <Text ellipsis style={{ maxWidth: 400 }}>
           {text}
-        </Typography.Text>
+        </Text>
       ),
       title: t('table.columns.input'),
       width: 400,
@@ -43,8 +50,17 @@ const TestCaseList = memo<TestCaseListProps>(({ datasetId }) => {
     {
       dataIndex: ['metadata', 'difficulty'],
       key: 'difficulty',
-      render: (difficulty: string) =>
-        difficulty ? <Tag>{t(`difficulty.${difficulty}` as any)}</Tag> : '-',
+      render: (difficulty: string) => {
+        if (!difficulty) return '-';
+        const c = DIFFICULTY_COLORS[difficulty] || DIFFICULTY_COLORS.easy;
+        return (
+          <Badge
+            style={{ backgroundColor: c.bg, borderColor: c.color + '30', color: c.color }}
+          >
+            {t(`difficulty.${difficulty}` as any)}
+          </Badge>
+        );
+      },
       title: t('table.columns.difficulty'),
       width: 100,
     },

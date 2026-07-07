@@ -22,7 +22,7 @@ const FleetView = memo(() => {
   // (avatar/title) — otherwise a fresh entry shows the default-assistant fallback.
   useFetchAgentList();
 
-  const { columns, isInit, statusByColumnKey } = useRunningTopics();
+  const { columns, error, isInit, reload, statusByColumnKey } = useRunningTopics();
   const syncRunningColumns = useFleetStore((s) => s.syncRunningColumns);
 
   // Reconcile the live running set into the board whenever it changes (initial
@@ -39,8 +39,10 @@ const FleetView = memo(() => {
       <FleetPanelCollapseSync />
       <RunningTaskSidebar
         columns={columns}
+        error={error}
         isLoading={!isInit}
         statusByColumnKey={statusByColumnKey}
+        onReload={() => reload()}
       />
       <ColumnsBoard statusByColumnKey={statusByColumnKey} />
     </Flexbox>
