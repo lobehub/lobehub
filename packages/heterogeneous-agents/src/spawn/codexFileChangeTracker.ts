@@ -40,7 +40,7 @@ interface CodexFileChangeDiff extends CodexFileChangeLineStats {
   diffText?: string;
 }
 
-interface CodexTrackedFileChangeEntry extends CodexFileChangeEntry, CodexFileChangeDiff {}
+type CodexTrackedFileChangeEntry = CodexFileChangeEntry & CodexFileChangeDiff;
 
 interface CodexTrackedFileChangeItem extends CodexFileChangeItem, CodexFileChangeLineStats {
   changes?: CodexTrackedFileChangeEntry[];
