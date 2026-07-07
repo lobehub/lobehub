@@ -17,6 +17,7 @@ import {
   isNull,
   ne,
   notInArray,
+  or,
   type SQL,
   sql,
 } from 'drizzle-orm';
@@ -339,24 +340,59 @@ export class TaskModel {
   }
 
   /**
-   * Count public tasks assigned to the given agent (workspace-wide — public
-   * rows match the ownership predicate for every member, so other members'
-   * public tasks are included). Backs the agent demotion guard: a public task
-   * must never reference a private agent (`assertAgentVisibilityCompat`), so
-   * an agent cannot be pulled back to private while such tasks exist.
+   * Count workspace tasks that would break if the given agent were demoted to
+   * private:
+   *   - public tasks assigned to it — a public task must never reference a
+   *     private agent (`assertAgentVisibilityCompat`);
+   *   - tasks created by anyone other than the agent's owner (any visibility)
+   *     — after demotion those creators can no longer resolve the assignee,
+   *     so their runs and assignee updates fail.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private tasks are invisible to the caller but still lose
+   * their assignee. Backs the router-level agent demotion guard.
    */
-  async countPublicTasksByAssignee(assigneeAgentId: string): Promise<number> {
+  async countTasksBlockingAgentDemotion(
+    assigneeAgentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
     const [row] = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(tasks)
       .where(
         and(
+          eq(tasks.workspaceId, this.workspaceId),
           eq(tasks.assigneeAgentId, assigneeAgentId),
-          eq(tasks.visibility, 'public'),
-          this.ownership(),
+          or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
         ),
       );
     return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Whether the subtree rooted at `rootTaskId` (root excluded) contains tasks
+   * created by someone other than `creatorUserId`. Deliberately workspace-wide
+   * and visibility-blind: other members' private subtasks are invisible to the
+   * caller but would still be fractured by a public→private demotion (each row
+   * stays owned by its creator, so the root creator loses those descendants
+   * while their creators keep orphaned children whose parent is hidden).
+   * Backs the router-level task demotion guard.
+   */
+  async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
+    if (!this.workspaceId) return false;
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT id, created_by_user_id FROM tasks
+          WHERE id = ${rootTaskId} AND workspace_id = ${this.workspaceId}
+        UNION ALL
+        SELECT t.id, t.created_by_user_id FROM tasks t
+        JOIN task_tree tt ON t.parent_task_id = tt.id
+      )
+      SELECT 1 AS hit FROM task_tree
+      WHERE id <> ${rootTaskId} AND created_by_user_id <> ${creatorUserId}
+      LIMIT 1
+    `);
+    return result.rows.length > 0;
   }
 
   async deleteAll(): Promise<number> {

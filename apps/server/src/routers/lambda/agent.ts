@@ -151,20 +151,24 @@ export const agentRouter = router({
         }
       }
 
-      // A public task must never be assigned to a private agent — the task
-      // side rejects that combo on create/update/updateVisibility
-      // (`assertAgentVisibilityCompat`). Demoting an agent that still has
-      // public tasks would break the invariant from the agent side: members
-      // keep seeing the tasks but can no longer see or run the assignee.
-      // Reject early — reassign or demote those tasks first.
+      // Demoting an agent must not strand tasks that depend on it: public
+      // tasks would violate the `assertAgentVisibilityCompat` invariant
+      // (members keep seeing the task but can no longer see or run the
+      // assignee), and other members' tasks — private ones included — would
+      // fail future runs/updates because their creators can no longer
+      // resolve the agent. Reject early — reassign or demote those tasks
+      // first.
       if (input.visibility === 'private' && ctx.workspaceId) {
         const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-        const publicTaskCount = await taskModel.countPublicTasksByAssignee(input.id);
-        if (publicTaskCount > 0) {
+        const blockingTasks = await taskModel.countTasksBlockingAgentDemotion(
+          input.id,
+          meta.userId,
+        );
+        if (blockingTasks > 0) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
-              'Cannot make this agent private while workspace tasks are assigned to it. Reassign or make those tasks private first.',
+              'Cannot make this agent private while workspace tasks still depend on it. Reassign those tasks or make them private first.',
           });
         }
       }

@@ -78,7 +78,7 @@ describe('agentRouter', () => {
     vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
 
     taskModelMock = {
-      countPublicTasksByAssignee: vi.fn().mockResolvedValue(0),
+      countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
     };
     vi.mocked(TaskModel).mockImplementation(() => taskModelMock);
 
@@ -368,20 +368,21 @@ describe('agentRouter', () => {
       agentModelMock.setVisibility = vi.fn().mockResolvedValue({ id: 'agent-1' });
     });
 
-    it('rejects demotion while public tasks are assigned to the agent', async () => {
-      taskModelMock.countPublicTasksByAssignee.mockResolvedValue(2);
+    it('rejects demotion while workspace tasks still depend on the agent', async () => {
+      taskModelMock.countTasksBlockingAgentDemotion.mockResolvedValue(2);
 
       const caller = agentRouter.createCaller(wsCtx());
 
       await expect(
         caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      expect(taskModelMock.countPublicTasksByAssignee).toHaveBeenCalledWith('agent-1');
+      // Compared against the agent owner (meta.userId), not just the caller.
+      expect(taskModelMock.countTasksBlockingAgentDemotion).toHaveBeenCalledWith('agent-1', userId);
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('allows demotion when no public task references the agent', async () => {
-      taskModelMock.countPublicTasksByAssignee.mockResolvedValue(0);
+    it('allows demotion when no task depends on the agent', async () => {
+      taskModelMock.countTasksBlockingAgentDemotion.mockResolvedValue(0);
 
       const caller = agentRouter.createCaller(wsCtx());
       const result = await caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' });
@@ -400,7 +401,7 @@ describe('agentRouter', () => {
       const caller = agentRouter.createCaller(wsCtx());
       await caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' });
 
-      expect(taskModelMock.countPublicTasksByAssignee).not.toHaveBeenCalled();
+      expect(taskModelMock.countTasksBlockingAgentDemotion).not.toHaveBeenCalled();
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
     });
   });

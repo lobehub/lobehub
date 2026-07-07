@@ -1106,6 +1106,25 @@ export const taskRouter = router({
           }
         }
 
+        // Demoting a mixed-creator subtree would fracture it: each descendant
+        // stays owned by its creator, so the root creator loses other
+        // members' subtasks while those members keep orphaned children whose
+        // parent is hidden. Reject early — the subtree must be single-creator
+        // to go private.
+        if (input.visibility === 'private') {
+          const hasOtherCreators = await ctx.taskModel.subtreeHasOtherCreators(
+            resolved.id,
+            resolved.createdByUserId,
+          );
+          if (hasOtherCreators) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Cannot make this task private while it has subtasks created by other members. Reassign or remove those subtasks first.',
+            });
+          }
+        }
+
         // Promoting a task to public while a private agent is its assignee
         // breaks the visibility invariant. Reject early — the user should
         // reassign first, then promote.

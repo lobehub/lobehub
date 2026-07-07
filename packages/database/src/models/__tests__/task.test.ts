@@ -2140,10 +2140,11 @@ describe('TaskModel', () => {
       expect(await alice.getComments(task.id)).toHaveLength(1);
     });
 
-    it('should count public tasks by assignee across workspace members', async () => {
-      // Backs the agent demotion guard: public tasks created by ANY member
-      // must block the demotion, while private tasks and other agents' tasks
-      // must not.
+    it('should count tasks blocking agent demotion (public + other creators, even private)', async () => {
+      // Backs the agent demotion guard. Blocking: public tasks by any member,
+      // and other members' tasks of ANY visibility (their creators lose the
+      // assignee after demotion). Non-blocking: the agent owner's own private
+      // tasks and tasks assigned elsewhere.
       const alice = new TaskModel(serverDB, userId, wsId);
       const bob = new TaskModel(serverDB, userId2, wsId);
       const agentId = 'count-assignee-agent';
@@ -2152,26 +2153,67 @@ describe('TaskModel', () => {
         .values({ id: agentId, userId, visibility: 'public', workspaceId: wsId })
         .onConflictDoNothing();
 
-      expect(await alice.countPublicTasksByAssignee(agentId)).toBe(0);
+      expect(await alice.countTasksBlockingAgentDemotion(agentId, userId)).toBe(0);
 
-      await alice.create({
-        assigneeAgentId: agentId,
-        instruction: 'Alice public',
-        visibility: 'public',
-      });
-      await bob.create({
-        assigneeAgentId: agentId,
-        instruction: 'Bob public',
-        visibility: 'public',
-      });
+      // Owner's own private task — does NOT block (owner keeps the agent).
       await alice.create({
         assigneeAgentId: agentId,
         instruction: 'Alice private',
         visibility: 'private',
       });
+      expect(await alice.countTasksBlockingAgentDemotion(agentId, userId)).toBe(0);
+
+      // Public tasks block regardless of creator.
+      await alice.create({
+        assigneeAgentId: agentId,
+        instruction: 'Alice public',
+        visibility: 'public',
+      });
+      // Bob's PRIVATE task blocks too — invisible to Alice, but Bob would
+      // lose the assignee.
+      await bob.create({
+        assigneeAgentId: agentId,
+        instruction: 'Bob private',
+        visibility: 'private',
+      });
+      // Unrelated public task does not count.
       await alice.create({ instruction: 'Unassigned public', visibility: 'public' });
 
-      expect(await alice.countPublicTasksByAssignee(agentId)).toBe(2);
+      expect(await alice.countTasksBlockingAgentDemotion(agentId, userId)).toBe(2);
+
+      // Personal mode: guard is inert.
+      const personal = new TaskModel(serverDB, userId);
+      expect(await personal.countTasksBlockingAgentDemotion(agentId, userId)).toBe(0);
+    });
+
+    it('should detect other creators in the subtree (visibility-blind)', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const bob = new TaskModel(serverDB, userId2, wsId);
+
+      const root = await alice.create({ instruction: 'Root', visibility: 'public' });
+      const aliceChild = await alice.create({
+        instruction: 'Alice child',
+        parentTaskId: root.id,
+        visibility: 'public',
+      });
+
+      // Single-creator subtree → demotion is allowed.
+      expect(await alice.subtreeHasOtherCreators(root.id, userId)).toBe(false);
+
+      // Bob's PRIVATE grandchild — invisible to Alice, but demoting the root
+      // would orphan it, so it must still be detected.
+      await bob.create({
+        instruction: 'Bob grandchild',
+        parentTaskId: aliceChild.id,
+        visibility: 'private',
+      });
+      expect(await alice.subtreeHasOtherCreators(root.id, userId)).toBe(true);
+
+      // The root's own creator mismatch is not the subtree's problem: a
+      // workspace owner demoting Bob's task compares against Bob (the root
+      // creator), not the caller.
+      const bobRoot = await bob.create({ instruction: 'Bob root', visibility: 'public' });
+      expect(await alice.subtreeHasOtherCreators(bobRoot.id, userId2)).toBe(false);
     });
 
     it('should narrow list() to private tasks when visibility filter is set', async () => {
