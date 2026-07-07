@@ -9,8 +9,7 @@ import CacheHydrationGate from './CacheHydrationGate';
 // --- controllable inputs -----------------------------------------------------
 let mockScope = 'anon:personal';
 let mockIsAuthLoaded = true;
-let mockIsUserStateInit = true;
-let mockIsDesktop = false;
+let mockUserId: string | undefined = 'u1';
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   useCacheScope: () => mockScope,
@@ -18,21 +17,16 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: any) => unknown) =>
-    selector({ isLoaded: mockIsAuthLoaded, isUserStateInit: mockIsUserStateInit }),
+    selector({ isLoaded: mockIsAuthLoaded, user: { id: mockUserId } }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   authSelectors: { isLoaded: (s: any) => s.isLoaded },
+  userProfileSelectors: { userId: (s: any) => s.user?.id },
 }));
 
 vi.mock('@/libs/bootTiming', () => ({
   bootTiming: { mark: vi.fn() },
-}));
-
-vi.mock('@lobechat/const', () => ({
-  get isDesktop() {
-    return mockIsDesktop;
-  },
 }));
 
 const ALL_SCOPES = ['anon:personal', 'u1:personal', 'u2:personal'];
@@ -50,8 +44,7 @@ const renderGate = () =>
 beforeEach(() => {
   mockScope = 'anon:personal';
   mockIsAuthLoaded = true;
-  mockIsUserStateInit = true;
-  mockIsDesktop = false;
+  mockUserId = 'u1';
   resetHydration();
   // A loading-screen node so the gate's removal side-effect has a target.
   const el = document.createElement('div');
@@ -67,7 +60,6 @@ afterEach(() => {
 
 describe('CacheHydrationGate', () => {
   it('blocks first paint (renders nothing) until the initial scope is ready', () => {
-    // web path (isDesktop=false): released needs isAuthLoaded && ready
     renderGate();
     // not ready yet → blocked
     expect(screen.queryByTestId('app')).toBeNull();
@@ -110,9 +102,8 @@ describe('CacheHydrationGate', () => {
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
-  it('desktop first paint waits for isUserStateInit even when cache is ready', () => {
-    mockIsDesktop = true;
-    mockIsUserStateInit = false;
+  it('first paint waits for userId to resolve even when cache is ready', () => {
+    mockUserId = undefined;
     renderGate();
 
     act(() => {
@@ -121,10 +112,10 @@ describe('CacheHydrationGate', () => {
     // cache ready + auth loaded, but identity round-trip not done → still blocked
     expect(screen.queryByTestId('app')).toBeNull();
 
-    // Flip identity to resolved and drive a genuine hydration snapshot change so
-    // the gate re-renders and re-evaluates the release condition.
+    // Resolve identity and drive a genuine hydration snapshot change so the gate
+    // re-renders and re-evaluates the release condition.
     act(() => {
-      mockIsUserStateInit = true;
+      mockUserId = 'u1';
       cacheHydration.markPending('anon:personal'); // ready: true → false (re-render, still !ready)
     });
     expect(screen.queryByTestId('app')).toBeNull();
@@ -135,15 +126,37 @@ describe('CacheHydrationGate', () => {
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
-  it('timeout backstop releases the app even if hydration never becomes ready', () => {
+  it('timeout backstop releases the app once identity is resolved even if cache never hydrates', () => {
     vi.useFakeTimers();
-    mockIsDesktop = true;
-    mockIsUserStateInit = false; // would otherwise block forever on desktop
+    mockUserId = 'u1';
+    // cache scope is never marked ready
     renderGate();
     expect(screen.queryByTestId('app')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1500);
+    });
+    expect(screen.queryByTestId('app')).not.toBeNull();
+  });
+
+  it('REGRESSION: stays blocked past the timeout when userId is unresolved (no anon release)', () => {
+    vi.useFakeTimers();
+    mockUserId = undefined;
+    renderGate();
+    expect(screen.queryByTestId('app')).toBeNull();
+
+    // The old behavior released into the anonymous scope here — orphaning any
+    // data fetched under it. The userId guard now precedes the timeout backstop.
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(screen.queryByTestId('app')).toBeNull();
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    // Identity resolves later (incl. via SWR focus/reconnect revalidation) → release.
+    act(() => {
+      mockUserId = 'u1';
+      cacheHydration.markReady('anon:personal');
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
   });

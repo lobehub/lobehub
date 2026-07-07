@@ -25,6 +25,16 @@ export const buildCacheScope = (
 ): string => `${userId || ANON}:${workspaceId || PERSONAL}`;
 
 /**
+ * Whether a scope belongs to the anonymous (identity-unresolved) partition.
+ *
+ * The anonymous scope is only ever a transient pre-identity boot state — once
+ * auth resolves, every signed-in user has a real `userId` — so it is never a
+ * durable identity and its writes must not be persisted (see the cache
+ * provider's `isEphemeralScope`).
+ */
+export const isAnonymousScope = (scope: string): boolean => scope.startsWith(`${ANON}:`);
+
+/**
  * React hook returning the current cache scope. Recomputes when the signed-in
  * user or the active workspace changes.
  */
