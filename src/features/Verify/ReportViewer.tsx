@@ -942,6 +942,17 @@ const formatScopeDate = (value: string | undefined): string | undefined => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
+const safeWebUrl = (value: string | null | undefined): string | undefined => {
+  if (!value) return undefined;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const pullRequestLabel = (
   pullRequest: NonNullable<VerifyCodingScope['pullRequest']>,
   t: TFunction<'verify'>,
@@ -974,13 +985,14 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
 
   if (!hasScope) return null;
 
+  const pullRequestUrl = safeWebUrl(pullRequest?.url);
   const pullRequestContent =
     hasPullRequest && pullRequest ? (
       <>
         <Icon icon={GitPullRequest} size={15} />
         <span className={styles.prNumber}>{pullRequestLabel(pullRequest, t)}</span>
         {pullRequest.title && <span className={styles.prTitle}>{pullRequest.title}</span>}
-        {pullRequest.url && <Icon icon={ExternalLink} size={13} />}
+        {pullRequestUrl && <Icon icon={ExternalLink} size={13} />}
       </>
     ) : null;
   const shortCommit = commit && commit.length > 12 ? commit.slice(0, 10) : commit;
@@ -990,14 +1002,14 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
       {(hasPullRequest || branch || commit || date) && (
         <div className={styles.codingScopeMain}>
           {pullRequestContent &&
-            (pullRequest?.url ? (
+            (pullRequestUrl ? (
               <a
                 className={styles.prChip}
                 data-link={true}
-                href={pullRequest.url}
+                href={pullRequestUrl}
                 rel="noreferrer"
                 target="_blank"
-                title={pullRequest.title ?? pullRequest.url}
+                title={pullRequest.title ?? pullRequestUrl}
               >
                 {pullRequestContent}
               </a>

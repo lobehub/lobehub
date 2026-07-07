@@ -206,6 +206,26 @@ describe('verifyRouter', () => {
         goal: 'ship x',
       });
     });
+
+    it('rejects non-web pull request URLs before storing report context', async () => {
+      await expect(
+        createCaller().updateRun({
+          value: {
+            context: {
+              pullRequest: {
+                number: 42,
+                title: 'Unsafe PR',
+                url: 'javascript:alert(1)',
+              },
+            },
+          },
+          verifyRunId: 'run-1',
+        }),
+      ).rejects.toThrow();
+
+      expect(modelMocks.findRunById).not.toHaveBeenCalled();
+      expect(modelMocks.updateRun).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteResult', () => {

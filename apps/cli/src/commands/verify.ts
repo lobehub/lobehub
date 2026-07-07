@@ -99,16 +99,29 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function safeWebUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Normalize common agent-testing PR shapes into the verify coding scope. */
 function pullRequestFromResult(result: Record<string, unknown>) {
   const pr = objectValue(result.pullRequest) ?? objectValue(result.pr);
-  const url = firstString(
-    pr?.url,
-    pr?.htmlUrl,
-    pr?.html_url,
-    result.pullRequestUrl,
-    result.prUrl,
-    typeof result.pr === 'string' ? result.pr : undefined,
+  const url = safeWebUrl(
+    firstString(
+      pr?.url,
+      pr?.htmlUrl,
+      pr?.html_url,
+      result.pullRequestUrl,
+      result.prUrl,
+      typeof result.pr === 'string' ? result.pr : undefined,
+    ),
   );
   const number = firstStringOrNumber(pr?.number, result.pullRequestNumber, result.prNumber);
   const title = firstString(pr?.title, result.pullRequestTitle, result.prTitle);
