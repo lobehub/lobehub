@@ -131,7 +131,7 @@ export const messageRouter = router({
               ...operation.message,
               agentId: agentId!,
             },
-          };
+          } as MessageBatchOperation;
         }),
       );
 
