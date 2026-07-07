@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -79,6 +79,38 @@ describe('prepareSkillDirectory', () => {
     );
 
     expect(fetchSkillArchive).toHaveBeenCalledTimes(2);
+  });
+
+  // Two concurrent cache-missed prepares of the same zipHash used to both
+  // pass the marker check and interleave rm/extract on the live directory.
+  it('serializes concurrent prepares of the same zipHash so the follower reuses the cache', async () => {
+    const zip = buildZip({ 'SKILL.md': '# skill' });
+    let releaseFetch!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const fetchSkillArchive = vi.fn(async () => {
+      await gate;
+      return okResponse(zip);
+    });
+    const deps = { fetchSkillArchive, skillCacheRoot: cacheRoot };
+
+    const first = prepareSkillDirectory(
+      { url: 'https://example.com/a.zip', zipHash: 'hash-1' },
+      deps,
+    );
+    const second = prepareSkillDirectory(
+      { url: 'https://example.com/a.zip', zipHash: 'hash-1' },
+      deps,
+    );
+    releaseFetch();
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.success).toBe(true);
+    expect(secondResult.success).toBe(true);
+    expect(fetchSkillArchive).toHaveBeenCalledTimes(1);
+    // The staging dir is swapped in via rename, never left behind.
+    await expect(readdir(path.join(cacheRoot, 'extracted'))).resolves.toEqual(['hash-1']);
   });
 
   it('rejects zipHash values that are not plain content-hash tokens', async () => {
