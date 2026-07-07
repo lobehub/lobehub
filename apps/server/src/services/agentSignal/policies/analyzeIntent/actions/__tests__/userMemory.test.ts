@@ -344,9 +344,9 @@ describe('defineUserMemoryActionHandler', () => {
 describe('buildUserMemoryActionAgentSignalMarker', () => {
   it('keeps the user message as trigger without using it as the receipt anchor', () => {
     const marker = buildUserMemoryActionAgentSignalMarker({
-      messageId: 'msg_user_1',
       sourceId: 'source_1:memory:msg_user_1',
       topicId: 'topic_1',
+      triggerMessageId: 'msg_user_1',
     });
 
     expect(marker).toEqual({
@@ -360,9 +360,9 @@ describe('buildUserMemoryActionAgentSignalMarker', () => {
   it('uses the assistant message as anchor while preserving the user trigger', () => {
     const marker = buildUserMemoryActionAgentSignalMarker({
       assistantMessageId: 'msg_assistant_1',
-      messageId: 'msg_user_1',
       sourceId: 'source_1:memory:msg_user_1',
       topicId: 'topic_1',
+      triggerMessageId: 'msg_user_1',
     });
 
     expect(marker).toEqual({
@@ -372,6 +372,17 @@ describe('buildUserMemoryActionAgentSignalMarker', () => {
       topicId: 'topic_1',
       triggerMessageId: 'msg_user_1',
     });
+  });
+
+  it('keeps an explicit trigger id separate from the feedback message id', () => {
+    const marker = buildUserMemoryActionAgentSignalMarker({
+      assistantMessageId: 'msg_assistant_1',
+      sourceId: 'source_1:memory:msg_feedback_1',
+      topicId: 'topic_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
+
+    expect(marker.triggerMessageId).toBe('msg_trigger_1');
   });
 });
 

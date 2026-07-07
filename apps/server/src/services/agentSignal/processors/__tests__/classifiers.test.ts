@@ -25,6 +25,7 @@ const createUserMessageSource = (
     anchorMessageId: string;
     message: string;
     sourceId: string;
+    triggerMessageId: string;
   }> = {},
 ): SourceAgentUserMessage => ({
   chain: {
@@ -41,6 +42,7 @@ const createUserMessageSource = (
     messageId: `msg:${input.sourceId ?? 'source_1'}`,
     serializedContext: 'topic=repo-review',
     topicId: 'topic_1',
+    triggerMessageId: input.triggerMessageId,
   },
   scopeKey: 'topic:thread_1',
   sourceId: input.sourceId ?? 'source_1',
@@ -99,7 +101,10 @@ describe('classifier processors', () => {
       reason: 'explicit style feedback',
       result: 'not_satisfied',
     });
-    const source = createUserMessageSource({ anchorMessageId: 'msg_assistant_1' });
+    const source = createUserMessageSource({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifySatisfaction(source, context, {
       satisfactionClassifier: { classify },
@@ -130,6 +135,7 @@ describe('classifier processors', () => {
             memoryPayload: { shouldRemember: true },
           },
           topicId: 'topic_1',
+          triggerMessageId: 'msg_trigger_1',
         }),
         signalId: 'source_1:signal:feedback-satisfaction',
         signalType: 'signal.feedback.satisfaction',
@@ -161,7 +167,10 @@ describe('classifier processors', () => {
         target: 'skill',
       },
     ]);
-    const signal = createSatisfactionSignal({ anchorMessageId: 'msg_assistant_1' });
+    const signal = createSatisfactionSignal({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifyDomain(signal, context, {
       domainClassifier: { classify },
@@ -179,6 +188,7 @@ describe('classifier processors', () => {
             evidence: signal.payload.evidence,
             satisfactionResult: 'not_satisfied',
             target: 'memory',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:memory',
           signalType: 'signal.feedback.domain.memory',
@@ -191,6 +201,7 @@ describe('classifier processors', () => {
             evidence: [{ cue: 'template', excerpt: 'reusable template' }],
             satisfactionResult: 'not_satisfied',
             target: 'skill',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:skill',
           signalType: 'signal.feedback.domain.skill',

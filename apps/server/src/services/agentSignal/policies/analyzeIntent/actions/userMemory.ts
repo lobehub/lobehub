@@ -107,16 +107,16 @@ const isUserMemoryAction = (action: BaseAction): action is ActionUserMemoryHandl
 
 interface BuildUserMemoryActionAgentSignalMarkerInput {
   assistantMessageId?: string;
-  messageId?: string;
   sourceId: string;
   topicId?: string;
+  triggerMessageId?: string;
 }
 
 export const buildUserMemoryActionAgentSignalMarker = ({
   assistantMessageId,
-  messageId,
   sourceId,
   topicId,
+  triggerMessageId,
 }: BuildUserMemoryActionAgentSignalMarkerInput): AgentSignalOperationMarker => ({
   // Preserve the split: user feedback is the trigger; only a known assistant
   // reply is a durable receipt anchor. UI fallback happens in the chat list.
@@ -124,7 +124,7 @@ export const buildUserMemoryActionAgentSignalMarker = ({
   kind: 'memory',
   sourceId,
   ...(topicId ? { topicId } : {}),
-  ...(messageId ? { triggerMessageId: messageId } : {}),
+  ...(triggerMessageId ? { triggerMessageId } : {}),
 });
 
 const createInitialContext = (operationId: string): AgentRuntimeContext => {
@@ -412,6 +412,10 @@ export const handleUserMemoryAction = async (
         : undefined;
     const messageId =
       typeof action.payload.messageId === 'string' ? action.payload.messageId : undefined;
+    const triggerMessageId =
+      typeof action.payload.triggerMessageId === 'string'
+        ? action.payload.triggerMessageId
+        : messageId;
     const runnerInput = {
       agentId: typeof action.payload.agentId === 'string' ? action.payload.agentId : undefined,
       conflictPolicy:
@@ -432,18 +436,18 @@ export const handleUserMemoryAction = async (
           : undefined,
       // Attach the memory-agent child thread to the completed assistant turn
       // when the planner has one, either from the normalized payload anchor or
-      // the legacy `:completion:` source id. Fall back to the triggering user
+      // the legacy `:completion:` source id. Fall back to the triggering
       // message so the async run still stays out of the main topic.
-      sourceMessageId: assistantMessageId ?? messageId,
+      sourceMessageId: assistantMessageId ?? triggerMessageId,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     // Stamp the run so the completion path can project the memory receipt (the
     // memory write is now enqueued async, not resolved synchronously here).
     const marker = buildUserMemoryActionAgentSignalMarker({
       ...(assistantMessageId ? { assistantMessageId } : {}),
-      ...(messageId ? { messageId } : {}),
       sourceId: idempotencyKey ?? action.actionId,
       ...(runnerInput.topicId ? { topicId: runnerInput.topicId } : {}),
+      ...(triggerMessageId ? { triggerMessageId } : {}),
     });
     const runner =
       options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options, { marker }));

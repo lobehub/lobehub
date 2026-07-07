@@ -68,17 +68,17 @@ const isSkillManagementAction = (action: BaseAction): action is ActionSkillManag
 interface BuildSkillManagementAgentSignalMarkerInput {
   agentId: string;
   assistantMessageId?: string;
-  messageId?: string;
   sourceId: string;
   topicId?: string;
+  triggerMessageId?: string;
 }
 
 export const buildSkillManagementAgentSignalMarker = ({
   agentId,
   assistantMessageId,
-  messageId,
   sourceId,
   topicId,
+  triggerMessageId,
 }: BuildSkillManagementAgentSignalMarkerInput): AgentSignalOperationMarker => ({
   agentId,
   // Preserve the split: user feedback is the trigger; only a known assistant
@@ -86,8 +86,8 @@ export const buildSkillManagementAgentSignalMarker = ({
   ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
   kind: 'skill',
   sourceId,
-  ...(messageId ? { triggerMessageId: messageId } : {}),
   ...(topicId ? { topicId } : {}),
+  ...(triggerMessageId ? { triggerMessageId } : {}),
 });
 
 /**
@@ -179,12 +179,13 @@ export const executeSkillManagementAction = async (
 
     const sourceId = idempotencyKey ?? action.actionId;
     const { assistantMessageId, messageId, topicId } = action.payload;
+    const triggerMessageId = action.payload.triggerMessageId ?? messageId;
 
     // Keep child-thread isolation separate from receipt anchoring. The receipt
     // marker only anchors to an assistant message; the fallback here prevents
     // async skill-management messages from flattening into the main topic when a
     // legacy inbound dispatch has no completed assistant boundary yet.
-    const sourceMessageId = assistantMessageId ?? messageId;
+    const sourceMessageId = assistantMessageId ?? triggerMessageId;
 
     const prompt = buildSkillFeedbackPrompt({
       agentId,
@@ -202,9 +203,9 @@ export const executeSkillManagementAction = async (
     const marker = buildSkillManagementAgentSignalMarker({
       agentId,
       ...(assistantMessageId ? { assistantMessageId } : {}),
-      ...(messageId ? { messageId } : {}),
       sourceId,
       ...(topicId ? { topicId } : {}),
+      ...(triggerMessageId ? { triggerMessageId } : {}),
     });
 
     const dispatch = options.dispatch ?? enqueueSelfIterationRun;

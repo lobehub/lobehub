@@ -57,6 +57,9 @@ const getSerializedContext = (signal: SignalFeedbackDomainMemory | SignalFeedbac
 const getAssistantMessageId = (signal: SignalFeedbackDomainMemory | SignalFeedbackDomainSkill) =>
   signal.payload.anchorMessageId ?? extractAssistantMessageIdFromSourceId(signal.source?.sourceId);
 
+const getTriggerMessageId = (signal: SignalFeedbackDomainMemory | SignalFeedbackDomainSkill) =>
+  signal.payload.triggerMessageId ?? signal.payload.messageId;
+
 /**
  * Plans a user-memory action from one memory feedback-domain signal.
  *
@@ -100,6 +103,7 @@ export const planUserMemory = (signal: SignalFeedbackDomainMemory): ActionUserMe
       serializedContext: getSerializedContext(signal),
       sourceHints: payload.sourceHints,
       topicId: payload.topicId,
+      triggerMessageId: getTriggerMessageId(signal),
     },
     signal: {
       signalId: signal.signalId,
@@ -153,6 +157,7 @@ export const planSkillManagement = (
       serializedContext: getSerializedContext(signal),
       sourceHints: payload.sourceHints,
       topicId: payload.topicId,
+      triggerMessageId: getTriggerMessageId(signal),
     },
     signal: {
       signalId: signal.signalId,

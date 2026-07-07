@@ -121,6 +121,32 @@ describe('defineSkillManagementActionHandler', () => {
     });
   });
 
+  it('stamps the explicit trigger id when it differs from the feedback message id', async () => {
+    dispatch.mockResolvedValue({ operationId: 'op_1', topicId: 'topic_1' });
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      dispatch,
+      selfIterationEnabled: true,
+      userId: 'user_1',
+    });
+
+    await handler.handle(
+      {
+        ...skillAction,
+        payload: {
+          ...skillAction.payload,
+          messageId: 'msg_feedback_1',
+          triggerMessageId: 'msg_trigger_1',
+        },
+      },
+      createContext(),
+    );
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0].marker.triggerMessageId).toBe('msg_trigger_1');
+  });
+
   it('skips when self-iteration is disabled (no dispatch)', async () => {
     const handler = defineSkillManagementActionHandler({
       db: {} as never,

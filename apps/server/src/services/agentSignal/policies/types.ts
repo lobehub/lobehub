@@ -154,6 +154,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone]: {
     agentId?: string;
@@ -172,6 +174,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt]: {
     agentId?: string;
@@ -190,6 +194,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill]: {
     agentId?: string;
@@ -214,6 +220,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction]: {
     agentId?: string;
@@ -230,6 +238,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.nudgeMemoryConditionMatched]: {
     agentId?: string;
@@ -329,6 +339,8 @@ export interface AgentSignalPolicyActionPayloadMap {
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle]: {
     agentId?: string;
@@ -344,6 +356,8 @@ export interface AgentSignalPolicyActionPayloadMap {
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
 }
 
