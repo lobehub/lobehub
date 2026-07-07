@@ -46,6 +46,9 @@ vi.mock('@/utils/localStorage', () => {
 
 beforeEach(() => {
   resetTestEnvironment();
+  useChatStore.setState({
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
+  });
 });
 
 afterEach(() => {
@@ -495,6 +498,9 @@ describe('ConversationControl actions', () => {
 
       // Mock internal methods
       vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
         .mockReturnValue({
@@ -533,6 +539,13 @@ describe('ConversationControl actions', () => {
             topicId: builderTopicId,
             scope: 'agent_builder',
           }),
+        }),
+      );
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: builderAgentId,
+          status: 'active',
+          topicId: builderTopicId,
         }),
       );
     });

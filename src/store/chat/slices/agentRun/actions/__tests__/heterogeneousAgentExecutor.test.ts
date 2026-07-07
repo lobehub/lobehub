@@ -3993,7 +3993,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           // body = markdownToTxt(finalContent)
           body: expect.stringContaining('All done with the task'),
           // navigate path resolved from agentId + topicId
-          navigate: { path: expect.any(String) },
+          navigate: expect.objectContaining({ escape: true, path: expect.any(String) }),
           title: expect.any(String),
         }),
       );

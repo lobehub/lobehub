@@ -636,16 +636,22 @@ export const createGatewayEventHandler = (
 
         if (data?.phase === 'human_approval' && data.requiresApproval && data.pendingToolsCalling) {
           void notifyDesktopHumanApprovalRequired(get, context);
-          // Persist a paused marker so the sidebar reflects "waiting on user" across reload.
-          // Resume back to 'running' is free: approve / reject both spawn a new op via the
-          // executor entries, which already write 'running'.
-          if (context.topicId)
-            void get().updateTopicStatus?.({
+          // Persist the explicit "needs user input" marker so the sidebar swaps
+          // the running spinner for the hand icon across reloads.
+          if (context.topicId) {
+            const statusWrite = get().updateTopicStatus?.({
               agentId: context.agentId,
               groupId: context.groupId,
-              status: 'paused',
+              ...(context.scope === 'group' || context.scope === 'group_agent'
+                ? { scope: context.scope }
+                : {}),
+              status: 'waitingForHuman',
               topicId: context.topicId,
             });
+            void statusWrite?.catch((error) => {
+              console.error('[gatewayEventHandler] updateTopicStatus failed:', error);
+            });
+          }
         }
 
         break;

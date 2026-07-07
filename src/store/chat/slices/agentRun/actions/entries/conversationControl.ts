@@ -2,6 +2,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import {
+  type ChatTopicStatus,
   type ConversationContext,
   type MessageMetadata,
   type UIChatMessage,
@@ -153,6 +154,25 @@ export class ConversationControlActionImpl {
     for (const id of opIds) completeOperation(id);
   };
 
+  #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
+    if (!context.topicId) return;
+
+    const topicScope =
+      context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
+
+    const statusWrite = this.#get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      ...(topicScope ? { scope: topicScope } : {}),
+      status,
+      topicId: context.topicId,
+    });
+
+    void statusWrite?.catch((error) => {
+      console.error('[conversationControl] updateTopicStatus failed:', error);
+    });
+  };
+
   stopGenerateMessage = (): void => {
     const { activeAgentId, activeTopicId, cancelOperations } = this.#get();
 
@@ -295,6 +315,8 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+
+    this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool's approval.
     this.#emitRunResumed(effectiveContext, {
@@ -445,6 +467,8 @@ export class ConversationControlActionImpl {
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
     const shouldCreateUserMessage = options?.createUserMessage !== false;
+
+    this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool interaction.
     this.#emitRunResumed(effectiveContext, {
@@ -671,6 +695,8 @@ export class ConversationControlActionImpl {
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
 
+    this.#writeTopicStatus(effectiveContext, 'active');
+
     // Park → resume: a new op continues the run paused on this tool interaction.
     this.#emitRunResumed(effectiveContext, {
       operationId,
@@ -782,6 +808,8 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+
+    this.#writeTopicStatus(effectiveContext, 'active');
 
     await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
@@ -1050,6 +1078,8 @@ export class ConversationControlActionImpl {
 
     const optimisticContext = { operationId };
 
+    this.#writeTopicStatus(effectiveContext, 'active');
+
     // Optimistic update - update status to rejected and save reason
     const intervention = {
       rejectedReason: reason,
@@ -1164,6 +1194,7 @@ export class ConversationControlActionImpl {
       });
 
       const optimisticContext = { operationId };
+      this.#writeTopicStatus(effectiveContext, 'active');
       // Park → resume: the new gateway op continues the run paused on this tool.
       this.#emitRunResumed(effectiveContext, {
         operationId,

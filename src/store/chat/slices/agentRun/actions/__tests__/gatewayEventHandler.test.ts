@@ -59,6 +59,7 @@ function createMockStore() {
       };
     }),
     updateOperationMetadata: vi.fn(),
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -567,6 +568,13 @@ describe('createGatewayEventHandler', () => {
         expect.any(Function),
         expect.objectContaining({
           agentId: 'agent-1',
+          topicId: 'topic-1',
+        }),
+      );
+      expect(store.updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-1',
+          status: 'waitingForHuman',
           topicId: 'topic-1',
         }),
       );
