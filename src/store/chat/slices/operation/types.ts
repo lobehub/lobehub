@@ -419,4 +419,24 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // The auto-retry waiting period is part of the same in-progress turn — keep
   // the input in loading state (and let Stop target it) across the countdown.
   'autoRetryPending',
+  // Approve / submit / skip / regenerate each synchronously start their own
+  // interim operation on click, but only create the whitelisted
+  // `execServerAgentRuntime` op after 2–4 serial tRPC round-trips complete.
+  // Register these interim ops so the input shows loading the instant the user
+  // clicks — mirroring how `sendMessage` already lights up immediately — instead
+  // of after the round-trips. The interim op stays running until
+  // `executeGatewayAgent` spins up `execServerAgentRuntime`, so coverage is
+  // seamless. Kept out of AI_RUNTIME_OPERATION_TYPES on purpose to avoid
+  // flipping isAgentRuntimeRunning / isMessageGenerating and their gating logic.
+  //
+  // Known limitation (accepted): this also makes Stop appear during the pre-
+  // generation window. Because these gateway branches don't forward
+  // `parentOperationId` to `executeGatewayAgent`, hitting Stop in that narrow
+  // window doesn't actually abort the in-flight request (loading briefly
+  // flickers, generation proceeds). No stuck state; wiring the abort handoff
+  // through these branches is deferred.
+  'approveToolCalling',
+  'submitToolInteraction',
+  'skipToolInteraction',
+  'regenerate',
 ];
