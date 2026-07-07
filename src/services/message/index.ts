@@ -31,7 +31,47 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
+export type MessageBatchOperation =
+  | {
+      message: CreateMessageParams;
+      type: 'createMessage';
+    }
+  | {
+      id: string;
+      type: 'updateMessage';
+      value: Partial<UpdateMessageParams>;
+    }
+  | {
+      id: string;
+      type: 'updateToolMessage';
+      value: {
+        content?: string;
+        metadata?: Record<string, any>;
+        pluginError?: any;
+        pluginState?: Record<string, any>;
+      };
+    };
+
 export class MessageService {
+  batchMutate = async (operations: MessageBatchOperation[]) => {
+    return lambdaClient.message.batchMutate.mutate({
+      operations: operations.map((operation) => {
+        if (operation.type === 'createMessage') {
+          return {
+            message: operation.message,
+            type: operation.type,
+          };
+        }
+
+        return {
+          id: operation.id,
+          type: operation.type,
+          value: operation.value,
+        };
+      }),
+    } as any);
+  };
+
   createMessage = async (params: CreateMessageParams): Promise<CreateMessageResult> => {
     return lambdaClient.message.createMessage.mutate(params as any);
   };
