@@ -83,7 +83,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -111,14 +111,13 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -147,6 +146,34 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       vision: true,
+      video: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.7-Code is a code-specialized variant of Kimi K2.7, the latest generation MoE model from Moonshot AI designed for extreme thinking. Built on Kimi K2.6 architecture with total parameters scaled from 1 trillion to 2 trillion (32B active), trained on 25 trillion tokens. It supports thinking-only mode (forced) and excels at coding, reasoning, and multimodal tasks.',
+    displayName: 'Kimi K2.7 Code (Pro)',
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'Pro/moonshotai/Kimi-K2.7-Code',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
     },
     contextWindowTokens: 262_144,
     description:
@@ -162,8 +189,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.6,
-              '[0.128, infinity]': 1.8,
+              '[0, 0.131072]': 0.6,
+              '[0.131072, infinity]': 1.8,
             },
             pricingParams: ['textInput'],
           },
@@ -174,8 +201,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 4.8,
-              '[0.128, infinity]': 14.4,
+              '[0, 0.131072]': 4.8,
+              '[0.131072, infinity]': 14.4,
             },
             pricingParams: ['textInput'],
           },
@@ -285,6 +312,33 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-02-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Nex-N2-Pro is an agentic reasoning model built on the Qwen3.5-397B-A17B MoE architecture. It features Agentic Thinking for autonomous task decomposition, excels at coding, search, and tool calling, and supports adaptive reasoning depth control. With a 256K context window, it delivers strong performance in complex agentic workflows.',
+    displayName: 'Nex-N2 Pro',
+    family: 'qwen',
+    generation: 'nex-n2',
+    id: 'Pro/nex-agi/Nex-N2-Pro',
+    organization: 'nex-agi',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -685,10 +739,37 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 1_048_576,
+    description:
+      "GLM-5.2 is Z.ai's latest flagship model for long-horizon tasks, with significant improvements over GLM-5.1. It uses a 753B Mixture-of-Experts architecture with stable 1M-token context, stronger coding capabilities, and support for multiple thinking effort levels. It introduces the IndexShare architecture optimization for efficient long-context processing.",
+    displayName: 'GLM-5.2 (Pro)',
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'Pro/zai-org/GLM-5.2',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 163_840,
     description:
       "DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is based on three major technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework, through which the model's performance can rival GPT-5, and its high-compute version can rival Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline, designed to integrate reasoning capabilities into tool-using scenarios, thereby improving instruction-following and generalization abilities in complex interactive environments. The model achieved gold medal results in the 2025 International Mathematical Olympiad (IMO) and International Informatics Olympiad (IOI).",
     displayName: 'DeepSeek V3.2',
+    enabled: true,
     family: 'deepseek',
     generation: 'deepseek-v3.2',
     id: 'deepseek-ai/DeepSeek-V3.2',
@@ -1143,10 +1224,11 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
     },
     contextWindowTokens: 65_536,
     description:
-      'GLM-4.5V is Zhipu AI’s latest VLM, built on the GLM-4.5-Air flagship text model (106B total, 12B active) with an MoE architecture for strong performance at lower cost. It follows the GLM-4.1V-Thinking path and adds 3D-RoPE to improve 3D spatial reasoning. Optimized through pretraining, SFT, and RL, it handles images, video, and long documents and ranks top among open models on 41 public multimodal benchmarks. A Thinking mode toggle lets users balance speed and depth.',
+      'GLM-4.5V is Zhipu AI\u2019s latest VLM, built on the GLM-4.5-Air flagship text model (106B total, 12B active) with an MoE architecture for strong performance at lower cost. It follows the GLM-4.1V-Thinking path and adds 3D-RoPE to improve 3D spatial reasoning. Optimized through pretraining, SFT, and RL, it handles images, video, and long documents and ranks top among open models on 41 public multimodal benchmarks. A Thinking mode toggle lets users balance speed and depth.',
     displayName: 'GLM-4.5V',
     family: 'glm',
     generation: 'glm-4.5',
@@ -1218,7 +1300,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3-30B-A3B-Instruct-2507 is the updated non-thinking version of Qwen3-30B-A3B. It is an MoE model with 30.5B total and 3.3B active parameters. It significantly improves instruction following, logical reasoning, text understanding, math, science, coding, and tool use, expands multilingual long-tail knowledge, and better aligns with user preferences on subjective open tasks. It supports 256K context. This model is non-thinking only and will not output `נקוד` tags.',
+      'Qwen3-30B-A3B-Instruct-2507 is the updated non-thinking version of Qwen3-30B-A3B. It is an MoE model with 30.5B total and 3.3B active parameters. It significantly improves instruction following, logical reasoning, text understanding, math, science, coding, and tool use, expands multilingual long-tail knowledge, and better aligns with user preferences on subjective open tasks. It supports 256K context. This model is non-thinking only and will not output `<think></think>` tags.',
     displayName: 'Qwen3 30B A3B Instruct 2507',
     family: 'qwen',
     generation: 'qwen3',
