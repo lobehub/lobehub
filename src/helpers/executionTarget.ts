@@ -76,10 +76,14 @@ export interface ResolveExecutionTargetOptions {
  * `device(currentDeviceId)` into the in-process path.
  *
  * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
- * (no local filesystem), so a stored `local` (synced from desktop) usually
- * resolves to `sandbox`. For heterogeneous CLI agents, a desktop `local`
- * selection that has already been bound to that desktop's `deviceId` resolves
- * to `device` on web, so the same machine can execute through `lh connect`.
+ * (no local filesystem). A desktop `local` pick pins that desktop's own
+ * `deviceId` as `boundDeviceId` (see `useSelectExecutionTarget`), and the
+ * server routes such a config to that bound device — so on web we resolve it
+ * to `device`, surfacing honestly that it runs on the user's machine (via
+ * `lh connect`) instead of masquerading as `sandbox`. Only an UNBOUND `local`
+ * (no `boundDeviceId`) falls back to `sandbox` on web. This applies to plain
+ * agents too, not just heterogeneous CLI agents (LOBE-11473: plain agents used
+ * to leak here, showing "cloud sandbox" while the server ran on the device).
  *
  * Bot triggers (`trigger === bot`) upgrade a `local` target (a bot has no UI
  * to pick a device and `local` in-process IPC is unreachable from the cloud
@@ -93,7 +97,7 @@ export const resolveExecutionTarget = (
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (clientExecutionAvailable ? 'local' : 'none');
-  if (isHetero && !clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
+  if (!clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
     return 'device';
   }
   if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';
@@ -167,7 +171,8 @@ export type ExecutionPlanUnroutedReason =
  */
 export type ExecutionPlan = { target: DeviceExecutionTarget } &
   /** route execution / device tools to this device (the local machine is a registered device) */
-  (| { deviceId: string; kind: 'device' }
+  (
+    | { deviceId: string; kind: 'device' }
     /**
      * Device-targeted but no routable device right now. The run proceeds without
      * an active device; the remote-device proxy may let the model activate one

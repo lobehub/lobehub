@@ -45,7 +45,11 @@ describe('resolveExecutionTarget', () => {
     ).toBe('local');
   });
 
-  it('routes hetero desktop-local bindings to the bound device on web', () => {
+  it('routes a bound desktop-local selection to the bound device on web (plain and hetero)', () => {
+    // LOBE-11473: a `local` pick pins this desktop's own deviceId as
+    // `boundDeviceId`; on web that config still runs on the bound device
+    // server-side, so surface it honestly as `device` instead of masquerading
+    // as `sandbox`. This applies to plain agents too, not just hetero.
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
@@ -57,7 +61,7 @@ describe('resolveExecutionTarget', () => {
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
       }),
-    ).toBe('sandbox');
+    ).toBe('device');
   });
 
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
