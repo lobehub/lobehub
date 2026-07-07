@@ -347,6 +347,8 @@
   "plans.message.more": "Още модели в сравнението на планове",
   "plans.message.normalLLM": "Стандартни модели",
   "plans.message.tooltip": "Оценено на база средно {{number}} токена на съобщение",
+  "plans.messageChannels.title": "Канали за съобщения",
+  "plans.messageChannels.wechat": "Канал WeChat",
   "plans.mostPicked": "Най-популярен",
   "plans.navs.monthly": "Месечен",
   "plans.navs.payonce": "Еднократно",

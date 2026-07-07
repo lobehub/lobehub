@@ -347,6 +347,8 @@
   "plans.message.more": "Plan karşılaştırmasında daha fazla model",
   "plans.message.normalLLM": "Standart Modeller",
   "plans.message.tooltip": "Mesaj başına ortalama {{number}} token baz alınarak tahmin edilmiştir",
+  "plans.messageChannels.title": "Mesaj Kanalları",
+  "plans.messageChannels.wechat": "WeChat kanalı",
   "plans.mostPicked": "En Popüler",
   "plans.navs.monthly": "Aylık",
   "plans.navs.payonce": "Tek Seferlik",

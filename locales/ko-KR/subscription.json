@@ -347,6 +347,8 @@
   "plans.message.more": "플랜 비교에서 더 많은 모델 확인",
   "plans.message.normalLLM": "표준 모델",
   "plans.message.tooltip": "메시지당 평균 {{number}} 토큰 기준 추정",
+  "plans.messageChannels.title": "메시지 채널",
+  "plans.messageChannels.wechat": "위챗 채널",
   "plans.mostPicked": "가장 인기 있는 플랜",
   "plans.navs.monthly": "월간",
   "plans.navs.payonce": "일시불",
