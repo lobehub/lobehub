@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   Agent,
   AgentRuntimeContext,
@@ -112,6 +114,9 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 /** Hard ceiling on a single backoff delay so late attempts don't overshoot. */
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
+const STEP_LOCK_TTL_SECONDS = 120;
+const STEP_LOCK_HEARTBEAT_MS = 30_000;
+
 /**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
  * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
@@ -121,6 +126,9 @@ const asyncToolVerifyDelayMs = (attempt: number): number =>
     ASYNC_TOOL_VERIFY_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
     ASYNC_TOOL_VERIFY_MAX_DELAY_MS,
   );
+
+const createStepLockOwner = (operationId: string, stepIndex: number): string =>
+  `${operationId}:${stepIndex}:${process.pid}:${Date.now()}:${randomUUID()}`;
 
 /**
  * Format error for storage in message pluginError metadata.
@@ -336,6 +344,34 @@ export class AgentRuntimeService {
 
     // Setup local execution callback for LocalQueueServiceImpl
     this.setupLocalExecutionCallback();
+  }
+
+  private startStepLockHeartbeat(
+    operationId: string,
+    stepIndex: number,
+    ownerId: string,
+  ): () => void {
+    const timer = setInterval(() => {
+      this.coordinator
+        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
+        .then((refreshed) => {
+          if (!refreshed) {
+            log(
+              '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+        })
+        .catch((error) => {
+          log('[%s][%d] Step lock heartbeat failed: %O', operationId, stepIndex, error);
+        });
+    }, STEP_LOCK_HEARTBEAT_MS);
+
+    const timerWithUnref = timer as { unref?: () => void };
+    timerWithUnref.unref?.();
+
+    return () => clearInterval(timer);
   }
 
   /**
@@ -700,7 +736,13 @@ export class AgentRuntimeService {
     }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
-    const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
+    const stepLockOwner = createStepLockOwner(operationId, stepIndex);
+    const claimed = await this.coordinator.tryClaimStep(
+      operationId,
+      stepIndex,
+      STEP_LOCK_TTL_SECONDS,
+      stepLockOwner,
+    );
     if (!claimed) {
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
@@ -711,9 +753,15 @@ export class AgentRuntimeService {
         locked: true,
         nextStepScheduled: false,
         state: {},
-        success: false,
+        success: true,
       };
     }
+
+    const stopStepLockHeartbeat = this.startStepLockHeartbeat(
+      operationId,
+      stepIndex,
+      stepLockOwner,
+    );
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -1381,10 +1429,8 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
-      // Release lock so legitimate retries or next operations can proceed.
-      // If Vercel force-kills the process, this won't execute — the lock
-      // auto-expires after TTL (35s), allowing QStash retries to self-heal.
-      await this.coordinator.releaseStepLock(operationId, stepIndex);
+      stopStepLockHeartbeat();
+      await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
   }
 

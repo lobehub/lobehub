@@ -20,6 +20,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
     getOperationMetadata: vi.fn(),
     tryClaimStep: vi.fn().mockResolvedValue(true),
     releaseStepLock: vi.fn().mockResolvedValue(undefined),
+    refreshStepLock: vi.fn().mockResolvedValue(true),
   })),
   createStreamEventManager: vi.fn(() => ({
     publishStreamEvent: vi.fn(),
@@ -257,7 +258,7 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     });
 
     expect(result.locked).toBe(true);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.nextStepScheduled).toBe(false);
     // Should NOT call loadAgentState since lock was not acquired
     expect(coordinator.loadAgentState).not.toHaveBeenCalled();
@@ -282,7 +283,11 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(result.stepResult).toBeNull();
     expect(result.nextStepScheduled).toBe(false);
     // Lock should still be released
-    expect(coordinator.releaseStepLock).toHaveBeenCalledWith('op-stale', 8);
+    expect(coordinator.releaseStepLock).toHaveBeenCalledWith(
+      'op-stale',
+      8,
+      expect.stringContaining('op-stale:8:'),
+    );
   });
 
   it('should release lock after successful execution', async () => {
@@ -300,7 +305,11 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
       stepIndex: 6,
     });
 
-    expect(coordinator.releaseStepLock).toHaveBeenCalledWith('op-done', 6);
+    expect(coordinator.releaseStepLock).toHaveBeenCalledWith(
+      'op-done',
+      6,
+      expect.stringContaining('op-done:6:'),
+    );
   });
 
   it('should release lock even when step execution encounters an error', async () => {
@@ -324,7 +333,11 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
 
     expect(result.state.status).toBe('error');
     // Lock must still be released via finally block
-    expect(coordinator.releaseStepLock).toHaveBeenCalledWith('op-error', 6);
+    expect(coordinator.releaseStepLock).toHaveBeenCalledWith(
+      'op-error',
+      6,
+      expect.stringContaining('op-error:6:'),
+    );
   });
 
   it('should NOT release lock when tryClaimStep returns false', async () => {
@@ -350,7 +363,32 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
       stepIndex: 42,
     });
 
-    expect(coordinator.tryClaimStep).toHaveBeenCalledWith('op-args', 42, 35);
+    expect(coordinator.tryClaimStep).toHaveBeenCalledWith(
+      'op-args',
+      42,
+      120,
+      expect.stringContaining('op-args:42:'),
+    );
+  });
+
+  it('should refresh the step lock while execution is still running', async () => {
+    vi.useFakeTimers();
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+
+    try {
+      const stopHeartbeat = (service as any).startStepLockHeartbeat('op-heartbeat', 7, 'owner-1');
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(coordinator.refreshStepLock).toHaveBeenCalledWith('op-heartbeat', 7, 120, 'owner-1');
+
+      stopHeartbeat();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(coordinator.refreshStepLock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

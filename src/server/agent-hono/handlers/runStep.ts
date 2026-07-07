@@ -92,14 +92,17 @@ export async function runStep(c: Context): Promise<Response> {
       verifyAsyncToolBarrier,
     });
 
-    // Step is currently being executed by another instance — tell QStash to retry later
+    // Step is currently being executed by another instance. ACK duplicate
+    // at-least-once deliveries so QStash does not amplify them into retries.
     if (result.locked) {
-      log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
-      return c.json(
-        { error: 'Step is currently being executed, retry later', operationId, stepIndex },
-        429,
-        { 'Retry-After': '37' },
-      );
+      log(`[${operationId}] Step ${stepIndex} locked by another instance, returning no-op ACK`);
+      return c.json({
+        locked: true,
+        nextStepScheduled: false,
+        operationId,
+        stepIndex,
+        success: true,
+      });
     }
 
     const executionTime = Date.now() - startTime;

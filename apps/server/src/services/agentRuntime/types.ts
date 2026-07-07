@@ -181,7 +181,7 @@ export interface AgentExecutionParams {
 export interface AgentExecutionResult {
   /**
    * When true, the step was already being executed by another instance (lock conflict).
-   * The caller should return 429 to force QStash to retry later.
+   * The caller should ACK duplicate queue deliveries as a no-op.
    */
   locked?: boolean;
   nextStepScheduled: boolean;
