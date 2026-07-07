@@ -156,6 +156,7 @@ export default {
   'newapi.apiKey.title': 'API Key',
   'newapi.apiUrl.desc': 'API endpoint for the New API service, usually includes /v1',
   'newapi.apiUrl.title': 'API URL',
+  'newapi.account.open': 'View account info',
   'newapi.enabled.title': 'Enable New API',
   'newapi.models.batchSelect': 'Select models in bulk ({{count}} items)',
   'newapi.models.fetch': 'Fetch model list',

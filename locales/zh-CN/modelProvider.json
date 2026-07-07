@@ -135,6 +135,7 @@
   "menu.notFound": "未找到搜索结果",
   "menu.searchProviders": "搜索服务商…",
   "menu.sort": "自定义排序",
+  "newapi.account.open": "查看账户信息",
   "newapi.apiKey.desc": "New API 平台提供的 API 密钥",
   "newapi.apiKey.placeholder": "New API API 密钥",
   "newapi.apiKey.required": "API 密钥是必需的",

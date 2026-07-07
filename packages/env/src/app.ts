@@ -17,13 +17,13 @@ const getVercelUrl = () => {
   return `https://${process.env.VERCEL_BRANCH_URL}`;
 };
 
-const APP_URL = process.env.APP_URL
-  ? process.env.APP_URL
-  : isInVercel
+const APP_URL =
+  process.env.APP_URL ||
+  (isInVercel
     ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
       ? `http://localhost:${process.env.PORT || 3010}`
-      : `http://localhost:${process.env.PORT || 3210}`;
+      : `http://localhost:${process.env.PORT || 3210}`);
 
 // INTERNAL_APP_URL is used for server-to-server calls to bypass CDN/proxy
 // Falls back to APP_URL if not set
@@ -78,6 +78,15 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       AGENT_GATEWAY_URL: z.string().url().optional(),
+      NEWAPI_ACCOUNT_PATH: z.string().optional(),
+      NEWAPI_ADMIN_TOKEN: z.string().optional(),
+      NEWAPI_API_URL: z.string().url().optional(),
+      NEWAPI_INTERNAL_URL: z.string().url().optional(),
+      NEWAPI_PROVISION_PATH: z.string().optional(),
+      NEWAPI_SSO_PATH: z.string().optional(),
+      NEWAPI_SSO_SECRET: z.string().optional(),
+      NEWAPI_SSO_TOKEN_TTL_SECONDS: z.number(),
+      NEWAPI_WEB_URL: z.string().url().optional(),
       /**
        * Enable Queue-based Agent Runtime
        * When true, use QStash for async agent execution (production)
@@ -124,6 +133,15 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
+      NEWAPI_ACCOUNT_PATH: process.env.NEWAPI_ACCOUNT_PATH || '/console',
+      NEWAPI_ADMIN_TOKEN: process.env.NEWAPI_ADMIN_TOKEN,
+      NEWAPI_API_URL: process.env.NEWAPI_API_URL,
+      NEWAPI_INTERNAL_URL: process.env.NEWAPI_INTERNAL_URL || process.env.NEWAPI_WEB_URL,
+      NEWAPI_PROVISION_PATH: process.env.NEWAPI_PROVISION_PATH || '/api/lobechat/users',
+      NEWAPI_SSO_PATH: process.env.NEWAPI_SSO_PATH || '/api/lobechat/sso',
+      NEWAPI_SSO_SECRET: process.env.NEWAPI_SSO_SECRET,
+      NEWAPI_SSO_TOKEN_TTL_SECONDS: Number(process.env.NEWAPI_SSO_TOKEN_TTL_SECONDS || 300),
+      NEWAPI_WEB_URL: process.env.NEWAPI_WEB_URL,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },

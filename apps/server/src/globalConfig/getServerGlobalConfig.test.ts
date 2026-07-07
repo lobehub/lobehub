@@ -143,26 +143,34 @@ describe('getServerGlobalConfig', () => {
     vi.restoreAllMocks();
   });
 
-  it('should only enable LobeHub by default in business feature mode', async () => {
+  it('should only enable NewAPI by default in business feature mode', async () => {
     const providerConfig = await loadCapturedProviderConfig(true);
 
-    expect(providerConfig[ModelProvider.LobeHub].enabled).toBe(true);
+    expect(providerConfig[ModelProvider.NewAPI].enabled).toBe(true);
+    expect(providerConfig[ModelProvider.LobeHub].enabled).toBe(false);
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(false);
     expect(providerConfig[ModelProvider.Ollama].fetchOnClient).toBe(true);
 
     for (const provider of Object.values(ModelProvider)) {
-      if (provider === ModelProvider.LobeHub) continue;
+      if (provider === ModelProvider.NewAPI) continue;
 
       expect(providerConfig[provider].enabled).toBe(false);
     }
   });
 
-  it('should keep upstream defaults outside business feature mode', async () => {
+  it('should only enable NewAPI by default outside business feature mode', async () => {
     const providerConfig = await loadCapturedProviderConfig(false);
 
-    expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
-    expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
-    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+    expect(providerConfig[ModelProvider.NewAPI].enabled).toBe(true);
+    expect(providerConfig[ModelProvider.LobeHub].enabled).toBe(false);
+    expect(providerConfig[ModelProvider.OpenAI].enabled).toBe(false);
+    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(false);
+
+    for (const provider of Object.values(ModelProvider)) {
+      if (provider === ModelProvider.NewAPI) continue;
+
+      expect(providerConfig[provider].enabled).toBe(false);
+    }
   });
 
   it('should enable gateway mode for business builds', async () => {

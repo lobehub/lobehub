@@ -135,6 +135,7 @@
   "menu.notFound": "No search results found",
   "menu.searchProviders": "Search Providers...",
   "menu.sort": "Custom Sort",
+  "newapi.account.open": "View account info",
   "newapi.apiKey.desc": "API key provided by the New API platform",
   "newapi.apiKey.placeholder": "New API API Key",
   "newapi.apiKey.required": "API key is required",

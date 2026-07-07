@@ -6,6 +6,7 @@ import { UserModel } from '@/database/models/user';
 import { initializeServerAnalytics } from '@/libs/analytics';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
+import { NewApiAccountService } from '@/server/services/newapiAccount';
 
 type CreatedUser = {
   createdAt?: Date | null;
@@ -32,6 +33,13 @@ export class UserService {
         console.error(error);
         console.error('Failed to init new user for business');
       }
+    }
+
+    try {
+      await new NewApiAccountService(this.db).ensureProvisioned(user);
+    } catch (error) {
+      console.error(error);
+      console.error('Failed to provision NewAPI account');
     }
 
     const analytics = await initializeServerAnalytics();

@@ -1295,6 +1295,22 @@ table messenger_installations {
   }
 }
 
+table user_newapi_accounts {
+  user_id text [pk, not null]
+  newapi_user_id text
+  status varchar(20) [not null]
+  last_provision_error text
+  last_provisioned_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    newapi_user_id [name: 'user_newapi_accounts_newapi_user_id_unique', unique]
+    status [name: 'user_newapi_accounts_status_idx']
+  }
+}
+
 table nextauth_accounts {
   access_token text
   expires_at integer

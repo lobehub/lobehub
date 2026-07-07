@@ -84,16 +84,13 @@ export const getServerGlobalConfig = async () => {
     },
   };
 
-  // In business feature mode, keep the built-in provider as the only default-enabled
-  // provider while preserving provider-specific metadata such as fetch/model-list keys.
-  // Non-business builds keep the upstream defaults.
-  if (ENABLE_BUSINESS_FEATURES) {
-    for (const provider of Object.values(ModelProvider)) {
-      aiProviderSpecificConfig[provider] = {
-        ...aiProviderSpecificConfig[provider],
-        enabled: provider === ModelProvider.LobeHub,
-      };
-    }
+  // Keep NewAPI as the only default-enabled provider while preserving
+  // provider-specific metadata such as fetch/model-list keys.
+  for (const provider of Object.values(ModelProvider)) {
+    aiProviderSpecificConfig[provider] = {
+      ...aiProviderSpecificConfig[provider],
+      enabled: provider === ModelProvider.NewAPI,
+    };
   }
 
   const config: GlobalServerConfig = {

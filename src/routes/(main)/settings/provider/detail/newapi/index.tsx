@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@lobehub/ui/base-ui';
 import { NewAPIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -11,13 +12,15 @@ const Page = () => {
   return (
     <ProviderDetail
       {...NewAPIProviderCard}
+      extra={
+        <Button href={'/webapi/newapi/sso'} size={'small'} target={'_blank'}>
+          {t('newapi.account.open')}
+        </Button>
+      }
       settings={{
         ...NewAPIProviderCard.settings,
-        proxyUrl: {
-          desc: t('newapi.apiUrl.desc'),
-          placeholder: 'https://any-newapi-provider.com/',
-          title: t('newapi.apiUrl.title'),
-        },
+        proxyUrl: false,
+        showApiKey: false,
       }}
     />
   );
