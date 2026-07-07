@@ -102,8 +102,12 @@ export interface SkillsExecutionRuntimeOptions {
   service: SkillRuntimeService;
 }
 
-/** Cross-platform dirname for absolute paths (POSIX or Windows separators). */
-const getDirname = (filePath: string): string => {
+/**
+ * Cross-platform dirname for absolute paths (POSIX or Windows separators).
+ * Exported for the server skills runtime, which resolves device paths that may
+ * use either separator — server-side `path.dirname` would mishandle `\`.
+ */
+export const getDirname = (filePath: string): string => {
   const idx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
   return idx === -1 ? '' : filePath.slice(0, idx);
 };

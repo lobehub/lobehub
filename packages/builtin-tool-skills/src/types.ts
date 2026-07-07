@@ -46,7 +46,18 @@ export interface ExecScriptParams {
 
 export interface ExecScriptState {
   command: string;
-  exitCode: number;
+  executionEnv?: 'device' | 'sandbox';
+  /**
+   * Undefined means the command was still running when the observation window
+   * elapsed — mirrors `CommandResult.exitCode`.
+   */
+  exitCode?: number;
+  outputFiles?: CommandResult['outputFiles'];
+  /**
+   * Shell handle for a still-running command, pollable via
+   * `local-system.getCommandOutput`.
+   */
+  shellId?: string;
   success: boolean;
 }
 

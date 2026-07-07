@@ -129,7 +129,7 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
 
   const invocations: ToolInvocation[] = [];
 
-  const children = (msg as any).children;
+  const { children } = msg;
   if (Array.isArray(children)) {
     for (const child of children) {
       if (!Array.isArray(child?.tools)) continue;
@@ -143,7 +143,7 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
     }
   }
 
-  const compressedMessages = (msg as any).compressedMessages;
+  const { compressedMessages } = msg;
   if (Array.isArray(compressedMessages)) {
     for (const compressed of compressedMessages) {
       invocations.push(...collectToolInvocations(compressed));

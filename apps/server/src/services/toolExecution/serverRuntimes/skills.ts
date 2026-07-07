@@ -10,6 +10,7 @@ import {
 import {
   type DeviceFileAccess,
   type ExportFileResult,
+  getDirname,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
@@ -63,16 +64,6 @@ interface SkillDeviceExecution {
   /** cwd fallback when no activated skill resolves to a directory. */
   workingDirectory?: string;
 }
-
-/**
- * Cross-platform dirname for device paths, which may use either separator
- * depending on the device OS (mirrors `getDirname` in the builtin-tool-skills
- * ExecutionRuntime — server-side `path.dirname` would mishandle `\`).
- */
-const deviceDirname = (filePath: string): string => {
-  const idx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-  return idx === -1 ? '' : filePath.slice(0, idx);
-};
 
 interface ActivatedSkillArchive {
   name: string;
@@ -290,6 +281,43 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       // skills already live on the device, so their SKILL.md directory is the
       // cwd directly; archive-backed skills are prepared device-side first
       // (idempotent by zipHash).
+      //
+      // Prepares fire concurrently (deduped by zipHash — concurrent extraction
+      // of the same archive would also race device-side): each call is a full
+      // device-gateway round-trip and activatedSkills accumulates over the
+      // conversation, so awaiting one by one scales exec latency linearly with
+      // skill count. The walk below consumes the settled results in activation
+      // order, preserving the sequential semantics: last resolvable wins, and
+      // the FIRST failure in activation order is the one reported (including
+      // the legacy-client sentinel).
+      const isProjectSkill = (lowerName: string) =>
+        device.projectSkills?.some((s) => s.name.toLowerCase() === lowerName);
+      const prepareByHash = new Map<
+        string,
+        ReturnType<typeof deviceGateway.prepareSkillDirectory>
+      >();
+      for (const activated of activatedSkills ?? []) {
+        const lowerName = activated.name?.toLowerCase();
+        if (!lowerName || isProjectSkill(lowerName)) continue;
+        const archive = archiveByName.get(lowerName);
+        if (!archive || prepareByHash.has(archive.zipHash)) continue;
+        prepareByHash.set(
+          archive.zipHash,
+          deviceGateway.prepareSkillDirectory({
+            deviceId: device.deviceId,
+            url: archive.url,
+            userId: this.userId,
+            workspaceId,
+            zipHash: archive.zipHash,
+          }),
+        );
+      }
+      // Settle everything up front so the early return on a first failure
+      // below can't leave a later rejection unhandled (prepareSkillDirectory
+      // reports failures as `success: false` rather than throwing, so this is
+      // belt-and-braces; re-awaiting a settled entry in the walk is free).
+      await Promise.allSettled(prepareByHash.values());
+
       let runDir: string | undefined;
       for (const activated of activatedSkills ?? []) {
         if (!activated.name) continue;
@@ -299,20 +327,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         // `activateSkill` in the ExecutionRuntime.
         const projectSkill = device.projectSkills?.find((s) => s.name.toLowerCase() === lowerName);
         if (projectSkill) {
-          runDir = deviceDirname(projectSkill.location) || runDir;
+          runDir = getDirname(projectSkill.location) || runDir;
           continue;
         }
 
         const archive = archiveByName.get(lowerName);
         if (!archive) continue;
 
-        const prepared = await deviceGateway.prepareSkillDirectory({
-          deviceId: device.deviceId,
-          url: archive.url,
-          userId: this.userId,
-          workspaceId,
-          zipHash: archive.zipHash,
-        });
+        const prepared = await prepareByHash.get(archive.zipHash)!;
 
         if (!prepared.success || !prepared.extractedDir) {
           // The device dispatcher's deterministic reply for a method it does
