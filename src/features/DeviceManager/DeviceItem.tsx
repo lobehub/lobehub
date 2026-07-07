@@ -30,6 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
   // row at one line.
   cwd: css`
     overflow: hidden;
+
     font-family: ${cssVar.fontFamilyCode};
     font-size: ${cssVar.fontSizeSM};
     text-overflow: ellipsis;
@@ -193,7 +194,9 @@ const DeviceItem = memo<DeviceItemProps>(
 
     const handleRemove = () =>
       confirmModal({
-        content: t('devices.remove.confirmDesc'),
+        content: isCurrent
+          ? `${t('devices.remove.confirmDesc')}\n\n${t('devices.remove.currentSessionWarning')}`
+          : t('devices.remove.confirmDesc'),
         okButtonProps: { danger: true },
         okText: t('devices.actions.remove'),
         onOk: async () => {
@@ -207,15 +210,15 @@ const DeviceItem = memo<DeviceItemProps>(
         horizontal
         align={'center'}
         aria-pressed={selected}
+        gap={12}
+        role={'button'}
+        tabIndex={0}
         className={cx(
           styles.row,
           selected && styles.rowActive,
           onCheckChange && styles.selectable,
           pinSelect && styles.selectOn,
         )}
-        gap={12}
-        role={'button'}
-        tabIndex={0}
         onClick={onSelect}
         onKeyDown={(e) => {
           // Mirror native button keyboard semantics for the div-as-button row.

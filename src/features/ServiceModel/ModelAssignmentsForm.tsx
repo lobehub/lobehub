@@ -1,18 +1,19 @@
 'use client';
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Form, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
+import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
@@ -23,6 +24,8 @@ interface SystemAgentModelItem {
 }
 
 type LoadingKey = 'defaultAgent' | UserServiceModelConfigKey;
+
+type SavingGroup = 'assignments' | 'memory' | 'optional';
 
 const SYSTEM_AGENT_MODEL_ITEMS: SystemAgentModelItem[] = [
   { key: 'topic' },
@@ -65,10 +68,20 @@ const ModelAssignmentsForm = memo(() => {
     s.refreshUserState,
   ]);
   const [loadingKey, setLoadingKey] = useState<LoadingKey>();
+  // Track which group last saved so its AutoSaveHint (and only its) reflects the
+  // shared save-state — the write-side counterpart to the read-side AsyncError above.
+  const [savingGroup, setSavingGroup] = useState<SavingGroup>();
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   useEffect(() => {
     if (loadingKey === 'defaultAgent') setLoadingKey(undefined);
   }, [defaultAgent.config.model, defaultAgent.config.provider, loadingKey]);
+
+  const groupOfKey = (key: UserServiceModelConfigKey): SavingGroup => {
+    if (MEMORY_MODEL_ITEMS.some((item) => item.key === key)) return 'memory';
+    if (OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
+    return 'assignments';
+  };
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -92,9 +105,10 @@ const ModelAssignmentsForm = memo(() => {
   }) => {
     if (!canManageServiceModel) return;
 
+    setSavingGroup('assignments');
     setLoadingKey('defaultAgent');
     try {
-      await updateDefaultAgent({ config: { model, provider } });
+      await save(() => updateDefaultAgent({ config: { model, provider } }));
     } finally {
       setLoadingKey(undefined);
     }
@@ -106,9 +120,10 @@ const ModelAssignmentsForm = memo(() => {
   ) => {
     if (!canManageServiceModel) return;
 
+    setSavingGroup(groupOfKey(key));
     setLoadingKey(key);
     try {
-      await updateSystemAgent(key, value);
+      await save(() => updateSystemAgent(key, value));
     } finally {
       setLoadingKey(undefined);
     }
@@ -243,34 +258,26 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
-  const isOptionalFeatureLoading =
-    loadingKey === 'followUpAction' ||
-    loadingKey === 'inputCompletion' ||
-    loadingKey === 'promptRewrite';
-  const isMemoryModelLoading = MEMORY_MODEL_ITEMS.some(({ key }) => loadingKey === key);
-  const isModelAssignmentLoading = loadingKey && !isOptionalFeatureLoading && !isMemoryModelLoading;
+  const renderSaveHint = (group: SavingGroup) =>
+    savingGroup === group && (
+      <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+    );
 
   const modelAssignments: FormGroupItemType = {
     children: [defaultAgentItem, ...systemModelItems],
-    extra: isModelAssignmentLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('assignments'),
     title: t('serviceModel.modelAssignments.title'),
   };
 
   const optionalFeatures: FormGroupItemType = {
     children: optionalFeatureItems,
-    extra: isOptionalFeatureLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('optional'),
     title: t('serviceModel.optionalFeatures.title'),
   };
 
   const memoryModels: FormGroupItemType = {
     children: memoryModelItems,
-    extra: isMemoryModelLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('memory'),
     title: t('serviceModel.memoryModels.title'),
   };
 
