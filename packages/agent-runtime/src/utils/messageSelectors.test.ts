@@ -163,6 +163,27 @@ describe('extractActivatedSkillsFromMessages', () => {
     ]);
   });
 
+  // Exec paths pick the LAST entry as the most recent activation for the
+  // script cwd, so a reactivation must move the skill to the end.
+  it('should move a reactivated skill to the end of the activation order', () => {
+    const activate = (id: string, name: string) =>
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { id, name },
+      } as any);
+
+    const messages = [
+      activate('skl_a', 'alpha'),
+      activate('skl_b', 'beta'),
+      activate('skl_a', 'alpha'),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { description: undefined, id: 'skl_b', name: 'beta' },
+      { description: undefined, id: 'skl_a', name: 'alpha' },
+    ]);
+  });
+
   // Filesystem (project/device) and builtin skill activations persist no DB
   // id — dropping them broke device-exec cwd resolution, which matches
   // activated skills against device.projectSkills by name.

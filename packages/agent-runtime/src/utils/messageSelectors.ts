@@ -157,7 +157,9 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
  * Accumulate activated skills from all activateSkill / activateTools tool
  * messages. Skills once activated remain active for the rest of the
  * conversation; the skill id (or name, for filesystem/builtin activations that
- * persist no id) deduplicates — later activations update the entry.
+ * persist no id) deduplicates — a reactivation updates the entry AND moves it
+ * to the end, since exec paths treat the last entry as the most recent
+ * activation when picking the script cwd.
  *
  * Shared by the client transport (chat store dbMessage selector feeding
  * `computeStepContext`) and the server runtime executors (`callTool` /
@@ -185,7 +187,13 @@ export const extractActivatedSkillsFromMessages = (
       if (invocation.apiName === 'activateSkill' && invocation.state?.name) {
         const id = invocation.state.id as string | undefined;
         const name = invocation.state.name as string;
-        skillsMap.set(id ?? name, {
+        const key = id ?? name;
+        // Delete before set so reactivation moves the skill to the end —
+        // downstream exec paths pick the LAST resolvable skill as cwd, so
+        // insertion order must reflect activation recency (A → B → A must
+        // yield [B, A], not Map#set's kept-in-place [A, B]).
+        skillsMap.delete(key);
+        skillsMap.set(key, {
           description: invocation.state.description as string | undefined,
           ...(id && { id }),
           name,
@@ -203,7 +211,10 @@ export const extractActivatedSkillsFromMessages = (
           name?: string;
         }>) {
           if (skill.name) {
-            skillsMap.set(skill.id ?? skill.name, {
+            const key = skill.id ?? skill.name;
+            // Same delete-before-set as above: keep activation recency.
+            skillsMap.delete(key);
+            skillsMap.set(key, {
               description: skill.description,
               ...(skill.id && { id: skill.id }),
               name: skill.name,
