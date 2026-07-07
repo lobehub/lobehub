@@ -196,6 +196,37 @@ describe('TopicModel - Query', () => {
       expect(result.items.map((t) => t.id)).toEqual(['waiting', 'active']);
     });
 
+    it('returns the latest message activity as `updatedAt`, falling back to the row updatedAt', async () => {
+      // The client sorts the sidebar by the returned `updatedAt`, so it must
+      // carry the same activity time the server ORDER BY uses (topicActivityAt),
+      // not the raw topics.updatedAt column — otherwise the two sorts disagree
+      // and the list jumps. (LOBE-11543)
+      await serverDB.insert(topics).values([
+        { id: 'has-msg', sessionId, updatedAt: new Date('2023-01-01'), userId },
+        { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },
+      ]);
+      // An assistant message (any role counts) that is newer than the row.
+      await serverDB.insert(messages).values([
+        {
+          id: 'has-msg-latest',
+          role: 'assistant',
+          topicId: 'has-msg',
+          updatedAt: new Date('2023-06-01'),
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      const byId = Object.fromEntries(result.items.map((t) => [t.id, t]));
+      // has-msg reflects the message time (2023-06), NOT its row updatedAt (2023-01).
+      expect(byId['has-msg'].updatedAt.toISOString()).toBe(new Date('2023-06-01').toISOString());
+      // no-msg has no messages → COALESCE falls back to the row updatedAt.
+      expect(byId['no-msg'].updatedAt.toISOString()).toBe(new Date('2023-03-01').toISOString());
+      // And the order follows the returned activity time (2023-06 before 2023-03).
+      expect(result.items.map((t) => t.id)).toEqual(['has-msg', 'no-msg']);
+    });
+
     it('should query topics with pagination', async () => {
       await serverDB.insert(topics).values([
         { id: '1', userId, updatedAt: new Date('2023-01-01') },

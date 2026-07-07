@@ -297,7 +297,13 @@ export class TopicModel {
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                updatedAt: topics.updatedAt,
+                // Sidebar sorts topics client-side by this `updatedAt`. Return the same
+                // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+                // fallback to the row's own updatedAt) so the client-side sort key
+                // matches the server order — otherwise returning the raw
+                // `topics.updatedAt` column makes the two sorts disagree and the list
+                // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
+                updatedAt: topicActivityAt,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -359,7 +365,13 @@ export class TopicModel {
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                updatedAt: topics.updatedAt,
+                // Sidebar sorts topics client-side by this `updatedAt`. Return the same
+                // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+                // fallback to the row's own updatedAt) so the client-side sort key
+                // matches the server order — otherwise returning the raw
+                // `topics.updatedAt` column makes the two sorts disagree and the list
+                // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
+                updatedAt: topicActivityAt,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -417,7 +429,13 @@ export class TopicModel {
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
-              updatedAt: topics.updatedAt,
+              // Sidebar sorts topics client-side by this `updatedAt`. Return the same
+              // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+              // fallback to the row's own updatedAt) so the client-side sort key
+              // matches the server order — otherwise returning the raw
+              // `topics.updatedAt` column makes the two sorts disagree and the list
+              // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
+              updatedAt: topicActivityAt,
               ...detailColumns,
             } as any)
             .from(topics)
