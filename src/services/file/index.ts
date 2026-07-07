@@ -61,10 +61,6 @@ export class FileService {
     await lambdaClient.file.removeFiles.mutate({ ids });
   };
 
-  removeAllFiles = async () => {
-    await lambdaClient.file.removeAllFiles.mutate();
-  };
-
   // V2.0 Migrate from getFiles to getKnowledgeItems
   getKnowledgeItems = async (params: QueryFileListParams) => {
     return lambdaClient.file.getKnowledgeItems.query(params as QueryFileListSchemaType);

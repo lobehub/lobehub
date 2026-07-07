@@ -19,7 +19,6 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
-import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
@@ -30,11 +29,6 @@ import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-/**
- * Generate file proxy URL
- * Returns a unified proxy URL format: ${APP_URL}/f/:id
- */
-const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
 const filterKnowledgeItems = <
@@ -593,25 +587,6 @@ export const fileRouter = router({
             item.fileType !== CUSTOM_FOLDER_FILE_TYPE,
         )
         .slice(0, limit);
-    }),
-
-  removeAllFiles: fileProcedure
-    .use(withScopedPermission('file:delete'))
-    .mutation(async ({ ctx }) => {
-      // Get all file IDs for this user
-      const allFiles = await ctx.fileModel.query({ showFilesInKnowledgeBase: true });
-      const fileIds = allFiles.map((f) => f.id);
-
-      // Use deleteMany to properly handle shared files (globalFiles reference counting)
-      const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        fileIds,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-
-      // Delete S3 files only if no other users reference them
-      if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-        await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
-      }
     }),
 
   removeFile: fileProcedure

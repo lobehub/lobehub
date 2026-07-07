@@ -55,12 +55,6 @@ export const sessionGroupRouter = router({
     return ctx.sessionGroupModel.query() as any;
   }),
 
-  removeAllSessionGroups: sessionProcedure
-    .use(withScopedPermission('session_group:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.sessionGroupModel.deleteAll();
-    }),
-
   removeSessionGroup: sessionProcedure
     .use(withScopedPermission('session_group:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))

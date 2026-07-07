@@ -204,10 +204,6 @@ export class MessageService {
     return lambdaClient.message.removeMessagesByGroup.mutate({ groupId, topicId });
   };
 
-  removeAllMessages = async () => {
-    return lambdaClient.message.removeAllMessages.mutate();
-  };
-
   /**
    * Add files to a message
    * Used to associate exported files from code interpreter with the tool message
