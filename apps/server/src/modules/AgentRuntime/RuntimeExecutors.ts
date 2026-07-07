@@ -3,6 +3,8 @@ import {
   finish as createFinishExecutor,
   type InstructionExecutor,
   requestHumanApprove as createRequestHumanApproveExecutor,
+  resolveAbortedTools as createResolveAbortedToolsExecutor,
+  resolveBlockedTools as createResolveBlockedToolsExecutor,
 } from '@lobechat/agent-runtime';
 
 import { buildHost } from './buildHost';
@@ -12,7 +14,6 @@ import { callTool } from './executors/callTool';
 import { callToolsBatch } from './executors/callToolsBatch';
 import { compressContext } from './executors/compressContext';
 import { execSubAgent, execSubAgents } from './executors/execSubAgent';
-import { resolveAbortedTools, resolveBlockedTools } from './executors/resolveTools';
 
 export { type RuntimeExecutorContext } from './context';
 
@@ -34,7 +35,7 @@ export const createRuntimeExecutors = (
     // abstraction — the server now only registers adapters via buildHost.
     finish: createFinishExecutor(host),
     request_human_approve: createRequestHumanApproveExecutor(host),
-    resolve_aborted_tools: resolveAbortedTools(ctx),
-    resolve_blocked_tools: resolveBlockedTools(ctx),
+    resolve_aborted_tools: createResolveAbortedToolsExecutor(host),
+    resolve_blocked_tools: createResolveBlockedToolsExecutor(host),
   };
 };

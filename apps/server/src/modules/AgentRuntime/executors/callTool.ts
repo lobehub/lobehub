@@ -1,6 +1,7 @@
 import {
   type AgentEvent,
   type AgentInstruction,
+  executeToolWithRetry,
   extractActivatedSkillsFromMessages,
   type InstructionExecutor,
   UsageCounter,
@@ -29,7 +30,6 @@ import {
   archiveRuntimeToolResult,
   buildServerAgentMemberRunner,
   buildServerVirtualSubAgentRunner,
-  executeToolWithRetry,
   GEN_AI_FUNCTION_TOOL_TYPE,
   isOperationInterrupted,
   log,
@@ -321,8 +321,15 @@ export const callTool =
             {
               isInterrupted: () => isOperationInterrupted(ctx),
               maxRetries: TOOL_MAX_RETRIES,
-              operationLogId,
-              toolName,
+              onRetry: ({ attempt, kind, maxAttempts }) =>
+                log(
+                  '[%s] Tool %s failed with kind=%s (attempt %d/%d), retrying ...',
+                  operationLogId,
+                  toolName,
+                  kind,
+                  attempt,
+                  maxAttempts,
+                ),
             },
           );
         }

@@ -3,7 +3,11 @@ import {
   type AgentInstruction,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
+  getLLMRetryDelayMs,
   type InstructionExecutor,
+  resolveLLMMaxAttempts,
+  resolveLLMRetryBudget,
+  shouldRetryLLM,
   stripAssistantReasoningForReplay,
   UsageCounter,
 } from '@lobechat/agent-runtime';
@@ -85,13 +89,9 @@ import { type RuntimeExecutorContext } from '../context';
 import {
   buildPostProcessUrl,
   buildToolDiscoveryConfig,
-  getLLMRetryDelayMs,
   isOperationInterrupted,
   log,
-  resolveLLMMaxAttempts,
-  resolveLLMRetryBudget,
   resolveRuntimeHistoryCount,
-  shouldRetryLLM,
   sleep,
   timing,
 } from '../executorHelpers';
@@ -100,6 +100,11 @@ import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
+
+const SERVER_LLM_RETRY_POLICY = {
+  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
+  noRetryProviders: [BRANDING_PROVIDER],
+};
 
 export const callLlm =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -1054,7 +1059,7 @@ export const callLlm =
           });
       };
 
-      const maxAttempts = resolveLLMMaxAttempts(provider);
+      const maxAttempts = resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
 
       // OTel chat span — wraps all retry attempts; TTFT recorded on the first
       // text/reasoning chunk regardless of which attempt produced it (the
@@ -1668,7 +1673,7 @@ export const callLlm =
               const classified = classifyLLMError(error);
               const interrupted = await isOperationInterrupted(ctx);
 
-              const retryBudget = resolveLLMRetryBudget(provider, error);
+              const retryBudget = resolveLLMRetryBudget(provider, error, SERVER_LLM_RETRY_POLICY);
 
               if (!interrupted && shouldRetryLLM(classified.kind, attempt, retryBudget)) {
                 const delayMs = getLLMRetryDelayMs(attempt);
