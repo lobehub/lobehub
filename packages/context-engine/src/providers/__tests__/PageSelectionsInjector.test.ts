@@ -65,6 +65,40 @@ describe('PageSelectionsInjector', () => {
       expect(result.messages[0].content).toContain('Selected text');
     });
 
+    it('should inject generic text context selections without enabling legacy page selections', async () => {
+      const injector = new PageSelectionsInjector({
+        contextSelectionsEnabled: true,
+        enabled: false,
+      });
+
+      const context = createContext([
+        {
+          content: 'What does this mean?',
+          metadata: {
+            contextSelections: [
+              {
+                content: '脚踢自学习',
+                id: 'text-1',
+                source: 'text',
+                title: '脚踢自学习',
+              },
+            ],
+            pageSelections: [createPageSelection('sel-1', 'Legacy page selection')],
+          },
+          role: 'user',
+        },
+      ]);
+
+      const result = await injector.process(context);
+
+      expect(result.messages[0].content).toContain('What does this mean?');
+      expect(result.messages[0].content).toContain('<user_context_selections>');
+      expect(result.messages[0].content).toContain('source="text"');
+      expect(result.messages[0].content).toContain('脚踢自学习');
+      expect(result.messages[0].content).not.toContain('<user_page_selections>');
+      expect(result.messages[0].content).not.toContain('Legacy page selection');
+    });
+
     it('should inject generic context selections when present', async () => {
       const injector = new PageSelectionsInjector({ enabled: true });
 

@@ -277,3 +277,25 @@ especially UI-facing changes, start with `agent-testing`: read this file and
 `probe-mock-patterns.md`, resolve the test env, choose the correct surface, run
 the app-specific probes, capture visually confirmed evidence, publish the verify
 report, and tear down processes started by the run.
+
+## Case 12 — Verifying the selection chip but not the final model payload
+
+**Wrong approach**: after adding a chat text-selection action, marking the feature
+verified because the floating toolbar appeared, the selected-text chip rendered,
+and the UI store contained a `contextSelections` entry — without checking the
+final message payload that the model receives.
+
+**Why it's wrong**: UI metadata can be saved and displayed while a later
+context-engine/runtime gate drops it before request construction. In this case,
+the user bubble showed the selected text, but the Anthropic request only carried
+the raw user question because generic `contextSelections` were gated behind page
+editor context injection.
+
+**What it breaks**: ships a feature that looks successful in the chat UI but has
+no effect on model behavior; the user must inspect DevTools to discover the
+selected context never reached the assistant.
+
+**Correct approach**: for any feature that claims to "inject" context, verify the
+last mile: add or run an integration-level assertion against the transformed
+messages/request body (e.g. `MessagesEngine` output or transport payload), and
+only treat the UI chip/store as supporting evidence.

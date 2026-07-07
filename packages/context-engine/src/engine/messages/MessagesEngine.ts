@@ -212,8 +212,7 @@ export class MessagesEngine {
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
-      | string
-      | undefined;
+      string | undefined;
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -349,8 +348,9 @@ export class MessagesEngine {
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
-      // Page selections (inject user-selected text into each user message)
-      new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
+      // User-attached selections: generic chat/code/text selections are always eligible;
+      // legacy pageSelections remain scoped to the page editor.
+      new PageSelectionsInjector({ contextSelectionsEnabled: true, enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Page Editor context (inject current page content to last user message)

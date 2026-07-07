@@ -8,6 +8,8 @@ import type { Message, ProcessorOptions } from '../types';
 const log = debug('context-engine:provider:PageSelectionsInjector');
 
 export interface PageSelectionsInjectorConfig {
+  /** Whether generic contextSelections injection is enabled */
+  contextSelectionsEnabled?: boolean;
   /** Whether Page Selections injection is enabled */
   enabled?: boolean;
 }
@@ -36,14 +38,13 @@ export class PageSelectionsInjector extends BaseEveryUserContentProvider {
     message: Message,
     index: number,
   ): { content: string; contextType: string } | null {
-    // Skip if not enabled
-    if (!this.config.enabled) {
-      return null;
-    }
-
     const contextSelections = message.metadata?.contextSelections as ContextSelection[] | undefined;
 
-    if (contextSelections && contextSelections.length > 0) {
+    if (
+      (this.config.contextSelectionsEnabled ?? this.config.enabled) &&
+      contextSelections &&
+      contextSelections.length > 0
+    ) {
       const formattedSelections = formatContextSelections(contextSelections);
 
       if (!formattedSelections) return null;
@@ -56,6 +57,11 @@ export class PageSelectionsInjector extends BaseEveryUserContentProvider {
         content: formattedSelections,
         contextType: 'user_context_selections',
       };
+    }
+
+    // Legacy pageSelections are scoped to the page editor flow.
+    if (!this.config.enabled) {
+      return null;
     }
 
     // Check if message has legacy pageSelections in metadata
