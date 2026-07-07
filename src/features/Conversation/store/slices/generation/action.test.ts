@@ -772,6 +772,55 @@ describe('Generation Actions', () => {
       );
     });
 
+    it('should bail out if the interim op was cancelled during preflight (Stop pressed)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        // Simulate the user hitting Stop during the preflight awaits: stopGenerating
+        // has already flipped the interim regenerate op to 'cancelled'.
+        operations: { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } },
+        operationsByMessage: {},
+
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // The interim op is still created up front (so the input shows loading
+      // instantly)...
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'msg-1' },
+        type: 'regenerate',
+      });
+      // ...but because Stop cancelled it during preflight, the run must NOT start.
+      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+    });
+
     it('should restore mention-based initialContext when regenerating a user message', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({

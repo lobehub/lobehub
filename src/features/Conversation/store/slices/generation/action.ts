@@ -634,6 +634,15 @@ export const generationSlice: StateCreator<
         }
       }
 
+      // If the user hit Stop during the preflight awaits above, stopGenerating has
+      // already cancelled this interim op (cancelOperation flips its status but
+      // keeps the record). Bail out before switching branches or starting a run —
+      // otherwise the Stop is swallowed and a new assistant turn starts anyway. No
+      // child runtime exists yet, so cancelOperation had nothing to propagate to;
+      // this is the only place that can honour the Stop.
+      const preflightOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+      if (preflightOp && preflightOp.status !== 'running') return;
+
       // Calculate next branch index by counting children of this user message
       // We need to count how many assistant messages have this user message as parent
       const { dbMessages } = get();
