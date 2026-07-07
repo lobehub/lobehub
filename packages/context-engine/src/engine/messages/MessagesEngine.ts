@@ -34,6 +34,7 @@ import {
   AgentDocumentSystemReplaceInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
   ForceFinishSummaryInjector,
@@ -348,9 +349,10 @@ export class MessagesEngine {
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
-      // User-attached selections: generic chat/code/text selections are always eligible;
-      // legacy pageSelections remain scoped to the page editor.
-      new PageSelectionsInjector({ contextSelectionsEnabled: true, enabled: isPageEditorEnabled }),
+      // Generic user-attached selections from chat/code/text contexts.
+      new ContextSelectionsInjector({ enabled: true }),
+      // Legacy page editor selections.
+      new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Page Editor context (inject current page content to last user message)
