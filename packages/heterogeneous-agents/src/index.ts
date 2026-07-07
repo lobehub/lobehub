@@ -1,4 +1,9 @@
 export { ClaudeCodeAdapter } from './adapters';
+export {
+  buildClaudeCodeApiEnv,
+  type BuildClaudeCodeApiEnvInput,
+  type BuildClaudeCodeApiEnvResult,
+} from './claudeCodeEnv';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,

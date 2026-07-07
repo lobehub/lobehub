@@ -1213,6 +1213,38 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
     });
 
+    it('fails fast when Claude Code API mode has no provider binding', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          authMode: 'api',
+          command: 'claude',
+          type: 'claude-code' as const,
+        },
+      });
+      await flush();
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockSendPrompt).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({
+          message: expect.any(String),
+          type: 'AgentRuntimeError',
+        }),
+        {
+          agentId: 'agent-1',
+          groupId: undefined,
+          threadId: undefined,
+          topicId: 'topic-1',
+        },
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+    });
+
     it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

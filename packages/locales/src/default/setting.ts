@@ -218,7 +218,16 @@ export default {
 
   // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
   'heterogeneousStatus.account.label': 'Account',
-  'heterogeneousStatus.auth.api': 'API',
+  'heterogeneousStatus.apiMode.configureProvider': 'Go to provider settings',
+  'heterogeneousStatus.apiMode.model': 'Model',
+  'heterogeneousStatus.apiMode.modelPlaceholder': 'Select a model',
+  'heterogeneousStatus.apiMode.noProviders':
+    'No provider with an Anthropic-compatible endpoint is configured.',
+  'heterogeneousStatus.apiMode.provider': 'Provider',
+  'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.smallFastModel': 'Fast Model',
+  'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Optional - for background tasks',
+  'heterogeneousStatus.auth.api': 'Custom API',
   'heterogeneousStatus.auth.label': 'Auth Method',
   'heterogeneousStatus.auth.subscription': 'Subscription',
   'heterogeneousStatus.command.edit': 'Edit command',

@@ -71,6 +71,26 @@ export const CODEX_FAST_SPEED_MODELS = ['gpt-5.5', 'gpt-5.4'] as const;
 const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
 
 /**
+ * Authentication mode for a heterogeneous agent CLI.
+ * - 'subscription': use the CLI's built-in auth (e.g. `claude auth login`).
+ * - 'api': inject API credentials from a LobeHub provider at spawn time.
+ */
+export type HeterogeneousAuthMode = 'subscription' | 'api';
+
+/**
+ * API-mode config: bind a LobeHub provider + model to the CLI.
+ * Resolved into env vars (ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, etc.) when spawning.
+ */
+export interface HeterogeneousApiConfig {
+  /** Primary model id, maps to ANTHROPIC_MODEL / equivalent. */
+  model: string;
+  /** LobeHub AiProvider.id whose keyVaults supplies credentials. */
+  providerId: string;
+  /** Optional fast-path model, maps to ANTHROPIC_SMALL_FAST_MODEL. */
+  smallFastModel?: string;
+}
+
+/**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
  * instead of using the built-in model runtime.
@@ -85,8 +105,12 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *   `platformAgentId` selects the named agent on the remote platform (defaults to `'main'`).
  */
 export interface HeterogeneousProviderConfig {
+  /** API-mode binding to a LobeHub provider. Only read when authMode === 'api'. */
+  apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];
+  /** Auth mode. Defaults to 'subscription' for backwards compatibility. */
+  authMode?: HeterogeneousAuthMode;
   /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
   command?: string;
   /**

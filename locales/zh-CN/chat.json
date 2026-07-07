@@ -267,6 +267,8 @@
   "groupWizard.searchTemplates": "搜索模板…",
   "groupWizard.title": "创建群组",
   "groupWizard.useTemplate": "使用模板",
+  "heteroAgent.apiMode.configMissing": "Claude Code API 模式需要绑定服务商与模型，请先到 Agent 资料中配置。",
+  "heteroAgent.apiMode.providerNotFound": "服务商 \"{{providerId}}\" 尚未配置，请先到服务商设置填写 API Key。",
   "heteroAgent.claudeQuota.errorRateLimited": "Claude Code 额度查询暂时被限流，请稍后再试。",
   "heteroAgent.claudeQuota.refreshRateLimited": "额度刷新暂时被限流，当前显示上次获取的数据。",
   "heteroAgent.claudeQuota.scopedWeekly": "每周（{{model}}）",

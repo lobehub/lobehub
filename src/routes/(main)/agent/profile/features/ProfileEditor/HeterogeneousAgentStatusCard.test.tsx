@@ -4,12 +4,20 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CCCompatibleProvidersResult } from '@/features/Electron/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders';
+
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
-const { detectHeterogeneousAgentCommand, getClaudeAuthStatus } = vi.hoisted(() => ({
-  detectHeterogeneousAgentCommand: vi.fn(),
-  getClaudeAuthStatus: vi.fn(),
-}));
+const { detectHeterogeneousAgentCommand, getClaudeAuthStatus, useCompatibleProviders } = vi.hoisted(
+  () => ({
+    detectHeterogeneousAgentCommand: vi.fn(),
+    getClaudeAuthStatus: vi.fn(),
+    useCompatibleProviders: vi.fn<() => CCCompatibleProvidersResult>(() => ({
+      modelsByProvider: {},
+      providers: [],
+    })),
+  }),
+);
 
 vi.mock('@lobechat/const', () => ({
   isDesktop: true,
@@ -80,6 +88,73 @@ vi.mock('@lobehub/ui', () => ({
   Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Segmented: ({
+    onChange,
+    options,
+    value,
+  }: {
+    onChange?: (v: string) => void;
+    options: Array<{ label: ReactNode; value: string }>;
+    value?: string;
+  }) => (
+    <div role="radiogroup">
+      {options.map((opt) => (
+        <button
+          aria-pressed={value === opt.value}
+          key={opt.value}
+          type="button"
+          onClick={() => onChange?.(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
+vi.mock('antd', () => ({
+  Select: ({
+    onChange,
+    options,
+    value,
+  }: {
+    onChange?: (v: string) => void;
+    options?: Array<{ label: ReactNode; value: string }>;
+    value?: string;
+  }) => (
+    <select value={value ?? ''} onChange={(e) => onChange?.(e.target.value)}>
+      {(options ?? []).map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {typeof opt.label === 'string' ? opt.label : opt.value}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
+vi.mock('@/features/Electron/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders', () => ({
+  useClaudeCodeCompatibleProviders: useCompatibleProviders,
+}));
+
+vi.mock('@/features/ModelSelect', () => ({
+  default: ({
+    onChange,
+    value,
+  }: {
+    onChange?: (next: { model: string; provider: string }) => void;
+    value?: { model: string; provider?: string };
+  }) => (
+    <button
+      data-testid="mock-model-select"
+      type="button"
+      onClick={() => onChange?.({ model: 'x', provider: 'y' })}
+    >
+      {value?.model ?? ''}
+    </button>
+  ),
 }));
 
 vi.mock('antd-style', () => ({
@@ -282,6 +357,59 @@ describe('HeterogeneousAgentStatusCard', () => {
     await waitFor(() => {
       expect(onCommandChange).toHaveBeenCalledWith('codex-alt');
     });
+  });
+
+  it('clears smallFastModel (to "") when the primary model switches provider', async () => {
+    // Regression: config persistence deep-merges and skips `undefined` keys, so a
+    // stale fast model from the previous provider would survive a provider switch
+    // and get injected as a mismatched ANTHROPIC_SMALL_FAST_MODEL. The handler must
+    // emit '' so the merge overwrites it.
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    getClaudeAuthStatus.mockResolvedValue(null);
+    useCompatibleProviders.mockReturnValue({
+      modelsByProvider: {
+        anthropic: [{ id: 'claude-haiku-4-5', providerId: 'anthropic' }],
+        kimicodingplan: [{ id: 'kimi-for-coding', providerId: 'kimicodingplan' }],
+      },
+      providers: [
+        { id: 'anthropic', name: 'Anthropic' },
+        { id: 'kimicodingplan', name: 'Kimi Code' },
+      ],
+    });
+    const onApiConfigChange = vi.fn();
+
+    const provider = {
+      apiConfig: {
+        model: 'kimi-k2.5',
+        providerId: 'kimicodingplan',
+        smallFastModel: 'kimi-for-coding',
+      },
+      authMode: 'api',
+      command: 'claude',
+      type: 'claude-code',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} onApiConfigChange={onApiConfigChange} />
+      </MemoryRouter>,
+    );
+
+    // The first ModelSelect is the primary-model picker; its mock fires
+    // onChange({ model: 'x', provider: 'y' }) — a different provider than the
+    // bound 'kimicodingplan', so the fast model must be dropped.
+    const modelSelects = await screen.findAllByTestId('mock-model-select');
+    fireEvent.click(modelSelects[0]);
+
+    await waitFor(() => {
+      expect(onApiConfigChange).toHaveBeenCalledWith({
+        model: 'x',
+        providerId: 'y',
+        smallFastModel: '',
+      });
+    });
+
+    useCompatibleProviders.mockReturnValue({ modelsByProvider: {}, providers: [] });
   });
 
   it('keeps the command read-only until edit mode is activated', async () => {

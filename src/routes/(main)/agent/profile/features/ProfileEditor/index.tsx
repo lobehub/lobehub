@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -69,6 +70,28 @@ const ProfileEditor = memo(() => {
     });
   };
 
+  const updateHeterogeneousAuthMode = async (authMode: 'subscription' | 'api') => {
+    if (!canEdit) return;
+    if (!heterogeneousProvider) return;
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, authMode },
+      },
+    });
+  };
+
+  const updateHeterogeneousApiConfig = async (
+    apiConfig: HeterogeneousProviderConfig['apiConfig'],
+  ) => {
+    if (!canEdit) return;
+    if (!heterogeneousProvider) return;
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateConfig({ agencyConfig: { ...config.agencyConfig, boundDeviceId } });
   };
@@ -101,6 +124,8 @@ const ProfileEditor = memo(() => {
           children: (
             <HeterogeneousAgentStatusCard
               provider={heterogeneousProvider}
+              onApiConfigChange={updateHeterogeneousApiConfig}
+              onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
             />
           ),

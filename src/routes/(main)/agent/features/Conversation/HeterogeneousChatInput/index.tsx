@@ -24,6 +24,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import ApiModeModelBar from './ApiModeModelBar';
 import HeteroControlBar from './HeteroControlBar';
 import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
@@ -89,7 +90,9 @@ const HeterogeneousChatInput = memo(() => {
   const agencyConfig = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig,
   );
-  const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+  const providerType = heterogeneousProvider?.type;
+  const isApiMode = heterogeneousProvider?.authMode === 'api';
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
@@ -104,6 +107,16 @@ const HeterogeneousChatInput = memo(() => {
   const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
   const showHeteroModel =
     isSelectableHeteroProvider &&
+    !isApiMode &&
+    shouldShowHeteroModelSelector({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      isDesktopClient: isDesktop,
+    });
+  const showApiModeModel =
+    !!agentId &&
+    providerType === 'claude-code' &&
+    isApiMode &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
@@ -111,10 +124,18 @@ const HeterogeneousChatInput = memo(() => {
     });
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () =>
-      showHeteroModel
-        ? [{ alwaysDisplay: true, children: <HeteroModel />, key: 'heteroModel' }]
-        : [],
-    [showHeteroModel],
+      showApiModeModel
+        ? [
+            {
+              alwaysDisplay: true,
+              children: <ApiModeModelBar agentId={agentId} />,
+              key: 'apiModeModel',
+            },
+          ]
+        : showHeteroModel
+          ? [{ alwaysDisplay: true, children: <HeteroModel />, key: 'heteroModel' }]
+          : [],
+    [agentId, showApiModeModel, showHeteroModel],
   );
 
   // A run goes to an `lh connect` device when the provider is a remote-only type

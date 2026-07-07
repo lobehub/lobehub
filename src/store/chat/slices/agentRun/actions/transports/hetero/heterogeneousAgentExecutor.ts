@@ -10,6 +10,7 @@ import {
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
 import {
+  buildClaudeCodeApiEnv,
   createMainAgentRunState,
   type MainAgentIntent,
   type MainAgentReduceCtx,
@@ -48,6 +49,7 @@ import {
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
+import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { topicSelectors } from '@/store/chat/selectors';
 import {
   mergeQueuedMessages,
@@ -1211,6 +1213,53 @@ export const executeHeterogeneousAgent = async (
     mainState = next;
   };
 
+  // When authMode === 'api', translate the bound LobeHub provider into
+  // env vars the CLI understands (ANTHROPIC_API_KEY / _BASE_URL / _MODEL ...).
+  // These are merged on top of user-provided `env` so the provider binding wins.
+  let resolvedEnv = heterogeneousProvider.env;
+  if (adapterType === 'claude-code' && heterogeneousProvider.authMode === 'api') {
+    const { apiConfig } = heterogeneousProvider;
+
+    if (!apiConfig) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(
+          new Error(t('heteroAgent.apiMode.configMissing', { ns: 'chat' })),
+          adapterType,
+        ),
+      );
+      return;
+    }
+
+    const providerConfig = aiProviderSelectors.providerConfigById(apiConfig.providerId)(
+      getAiInfraStoreState(),
+    );
+
+    if (!providerConfig) {
+      const errMsg = t('heteroAgent.apiMode.providerNotFound', {
+        ns: 'chat',
+        providerId: apiConfig.providerId,
+      });
+      await persistTerminalError(toHeterogeneousAgentMessageError(new Error(errMsg), adapterType));
+      return;
+    }
+
+    const { env: apiEnv, error: apiEnvError } = buildClaudeCodeApiEnv({
+      keyVaults: providerConfig.keyVaults,
+      model: apiConfig.model,
+      sdkType: providerConfig.settings.sdkType,
+      smallFastModel: apiConfig.smallFastModel,
+    });
+
+    if (apiEnvError) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(new Error(apiEnvError), adapterType),
+      );
+      return;
+    }
+
+    resolvedEnv = { ...heterogeneousProvider.env, ...apiEnv };
+  }
+
   try {
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
@@ -1218,7 +1267,7 @@ export const executeHeterogeneousAgent = async (
       args: buildHeteroSpawnArgs(heterogeneousProvider),
       command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
-      env: heterogeneousProvider.env,
+      env: resolvedEnv,
       resumeSessionId,
     });
     agentSessionId = result.sessionId;

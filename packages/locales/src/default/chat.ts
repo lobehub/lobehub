@@ -179,6 +179,10 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.apiMode.configMissing':
+    'Claude Code API mode requires a provider and model binding. Open the agent profile to configure it first.',
+  'heteroAgent.apiMode.providerNotFound':
+    'The provider "{{providerId}}" is not configured. Open provider settings to set an API key first.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
