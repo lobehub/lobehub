@@ -143,6 +143,7 @@ const buildDomainSignal = (
         },
         payload: {
           agentId: signal.payload.agentId,
+          anchorMessageId: signal.payload.anchorMessageId,
           confidence: target.confidence,
           conflictPolicy: toConflictPolicy('memory'),
           evidence: resolveDomainEvidence(target, signal),
@@ -170,6 +171,7 @@ const buildDomainSignal = (
         },
         payload: {
           agentId: signal.payload.agentId,
+          anchorMessageId: signal.payload.anchorMessageId,
           confidence: target.confidence,
           conflictPolicy: toConflictPolicy('none'),
           evidence: resolveDomainEvidence(target, signal),
@@ -197,6 +199,7 @@ const buildDomainSignal = (
         },
         payload: {
           agentId: signal.payload.agentId,
+          anchorMessageId: signal.payload.anchorMessageId,
           confidence: target.confidence,
           conflictPolicy: toConflictPolicy('prompt'),
           evidence: resolveDomainEvidence(target, signal),
@@ -224,6 +227,7 @@ const buildDomainSignal = (
         },
         payload: {
           agentId: signal.payload.agentId,
+          anchorMessageId: signal.payload.anchorMessageId,
           confidence: target.confidence,
           conflictPolicy: toConflictPolicy('skill'),
           evidence: resolveDomainEvidence(target, signal),
@@ -321,6 +325,7 @@ export const classifySatisfaction = async (
     },
     payload: {
       agentId: source.payload.agentId,
+      anchorMessageId: source.payload.anchorMessageId,
       confidence: payload.confidence,
       evidence: normalizeEvidence(payload.evidence),
       message,

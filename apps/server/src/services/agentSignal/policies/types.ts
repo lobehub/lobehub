@@ -139,6 +139,8 @@ export interface AgentSignalFeedbackDomainConflictPolicy {
 export interface AgentSignalPolicySignalPayloadMap {
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainMemory]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -155,6 +157,8 @@ export interface AgentSignalPolicySignalPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -171,6 +175,8 @@ export interface AgentSignalPolicySignalPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -187,6 +193,8 @@ export interface AgentSignalPolicySignalPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -209,6 +217,8 @@ export interface AgentSignalPolicySignalPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     evidence: AgentSignalFeedbackEvidence[];
     message: string;

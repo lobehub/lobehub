@@ -22,6 +22,7 @@ const context = createRuntimeProcessorContext({
 
 const createUserMessageSource = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     sourceId: string;
   }> = {},
@@ -32,6 +33,7 @@ const createUserMessageSource = (
   },
   payload: {
     agentId: 'agent_1',
+    anchorMessageId: input.anchorMessageId,
     documentPayload: { section: 'style' },
     intents: ['document', 'memory'],
     memoryPayload: { shouldRemember: true },
@@ -97,7 +99,7 @@ describe('classifier processors', () => {
       reason: 'explicit style feedback',
       result: 'not_satisfied',
     });
-    const source = createUserMessageSource();
+    const source = createUserMessageSource({ anchorMessageId: 'msg_assistant_1' });
 
     const result = await classifySatisfaction(source, context, {
       satisfactionClassifier: { classify },
@@ -118,6 +120,7 @@ describe('classifier processors', () => {
         },
         payload: expect.objectContaining({
           agentId: 'agent_1',
+          anchorMessageId: 'msg_assistant_1',
           message: 'Please keep replies tighter.',
           messageId: 'msg:source_1',
           serializedContext: 'topic=repo-review',
@@ -158,7 +161,7 @@ describe('classifier processors', () => {
         target: 'skill',
       },
     ]);
-    const signal = createSatisfactionSignal();
+    const signal = createSatisfactionSignal({ anchorMessageId: 'msg_assistant_1' });
 
     const result = await classifyDomain(signal, context, {
       domainClassifier: { classify },
@@ -171,6 +174,7 @@ describe('classifier processors', () => {
       value: [
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 100 },
             evidence: signal.payload.evidence,
             satisfactionResult: 'not_satisfied',
@@ -182,6 +186,7 @@ describe('classifier processors', () => {
         }),
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
             evidence: [{ cue: 'template', excerpt: 'reusable template' }],
             satisfactionResult: 'not_satisfied',

@@ -16,6 +16,7 @@ const payloadSerializedContext =
 
 const createMemorySignal = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     messageId: string;
     payloadSerializedContext: string;
@@ -47,6 +48,7 @@ const createMemorySignal = (
     ...base,
     payload: {
       agentId: 'agent_1',
+      anchorMessageId: input.anchorMessageId,
       confidence: 0.9,
       conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 100 },
       evidence: [{ cue: 'test', excerpt: input.message ?? 'Remember this.' }],
@@ -66,6 +68,7 @@ const createMemorySignal = (
 
 const createSkillSignal = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     messageId: string;
     payloadSerializedContext: string;
@@ -97,6 +100,7 @@ const createSkillSignal = (
     ...base,
     payload: {
       agentId: 'agent_1',
+      anchorMessageId: input.anchorMessageId,
       confidence: 0.9,
       conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
       evidence: [{ cue: 'test', excerpt: input.message ?? 'Keep this workflow as a skill.' }],
@@ -259,6 +263,17 @@ describe('action planning processors', () => {
     expect(action.payload.serializedContext).toBeUndefined();
   });
 
+  it('uses the propagated assistant anchor for user memory actions when source id is opaque', () => {
+    const signal = createMemorySignal({
+      anchorMessageId: 'msg_assistant_1',
+      sourceId: 'opaque_source_1',
+    });
+
+    const action = planUserMemory(signal);
+
+    expect(action.payload.assistantMessageId).toBe('msg_assistant_1');
+  });
+
   /**
    * @example
    * Skill action planning accepts skill-domain signals after handler-level route narrowing.
@@ -318,5 +333,16 @@ describe('action planning processors', () => {
     });
     expect(action.source).toBe(signal.source);
     expect(action.timestamp).toBe(1);
+  });
+
+  it('uses the propagated assistant anchor for skill management actions when source id is opaque', () => {
+    const signal = createNonSatisfiedSkillSignal({
+      anchorMessageId: 'msg_assistant_2',
+      sourceId: 'opaque_source_2',
+    });
+
+    const action = planSkillManagement(signal);
+
+    expect(action.payload.assistantMessageId).toBe('msg_assistant_2');
   });
 });

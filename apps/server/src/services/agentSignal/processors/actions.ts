@@ -54,6 +54,9 @@ const getSerializedContext = (signal: SignalFeedbackDomainMemory | SignalFeedbac
     : undefined;
 };
 
+const getAssistantMessageId = (signal: SignalFeedbackDomainMemory | SignalFeedbackDomainSkill) =>
+  signal.payload.anchorMessageId ?? extractAssistantMessageIdFromSourceId(signal.source?.sourceId);
+
 /**
  * Plans a user-memory action from one memory feedback-domain signal.
  *
@@ -86,7 +89,7 @@ export const planUserMemory = (signal: SignalFeedbackDomainMemory): ActionUserMe
       // Propagate the assistant message id so that the memory-agent thread
       // can be anchored under the assistant message that completed the turn,
       // rather than under the user message (messageId).
-      assistantMessageId: extractAssistantMessageIdFromSourceId(signal.source?.sourceId),
+      assistantMessageId: getAssistantMessageId(signal),
       conflictPolicy: payload.conflictPolicy,
       evidence: payload.evidence,
       feedbackHint: payload.satisfactionResult === 'satisfied' ? 'satisfied' : 'not_satisfied',
@@ -139,6 +142,7 @@ export const planSkillManagement = (
     },
     payload: {
       agentId: payload.agentId,
+      assistantMessageId: getAssistantMessageId(signal),
       conflictPolicy: payload.conflictPolicy,
       evidence: payload.evidence,
       feedbackHint: payload.satisfactionResult === 'satisfied' ? 'satisfied' : 'not_satisfied',
