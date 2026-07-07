@@ -130,6 +130,24 @@ function pullRequestFromResult(result: Record<string, unknown>) {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+function metadataForReport(
+  result: Record<string, unknown>,
+  existingMetadata?: unknown,
+): Record<string, unknown> | undefined {
+  if (!Object.prototype.hasOwnProperty.call(result, 'interactionCost')) return undefined;
+
+  const metadata = { ...objectValue(existingMetadata) };
+  const interactionCost = objectValue(result.interactionCost);
+
+  if (interactionCost) {
+    metadata.interactionCost = interactionCost;
+  } else {
+    delete metadata.interactionCost;
+  }
+
+  return metadata;
+}
+
 /**
  * The report dir remembers which verification session it created, so
  * re-verifying the same case updates one evolving `/verify/<id>` in place
@@ -1084,6 +1102,7 @@ export function registerVerifyCommand(program: Command) {
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
+        const newRunMetadata = metadataForReport(result);
 
         // Resolve the target session. Reuse the one this report dir already
         // created (recorded in the sidecar) so re-verifying the same case
@@ -1098,9 +1117,10 @@ export function registerVerifyCommand(program: Command) {
           if (existing) {
             reused = true;
             runId = existing.id;
+            const metadata = metadataForReport(result, existing.metadata);
             // 1a. Refresh the scope header / title / goal in place.
             await client.verify.updateRun.mutate({
-              value: { context, goal, scenario, title },
+              value: { context, goal, metadata, scenario, title },
               verifyRunId: runId,
             });
           } else if (options.run) {
@@ -1120,6 +1140,7 @@ export function registerVerifyCommand(program: Command) {
           const run = await client.verify.createRun.mutate({
             context,
             goal,
+            metadata: newRunMetadata,
             operationId: options.operation,
             scenario,
             source: options.source as any,

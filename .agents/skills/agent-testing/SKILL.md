@@ -388,27 +388,63 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 
 All under `.agents/skills/agent-testing/scripts/`:
 
-| Script                      | Usage                                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| `test-env.sh`               | Print/export the resolved local test env and ports                                          |
-| `setup-auth.sh`             | One-stop auth setup & status check (`status` / `cli` / `web`)                               |
-| `init-dev-env.sh`           | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`)                |
-| `app-probe.sh`              | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`                     |
-| `record-gif.sh`             | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
-| `report-init.sh`            | Scaffold a structured test report (Step 3)                                                  |
-| `check-screen-recording.sh` | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
-| `electron-dev.sh`           | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
-| `cdp-screenshot.sh`         | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
-| `capture-app-window.sh`     | Screenshot a specific app window (general; used by bot tests)                               |
-| `record-app-screen.sh`      | Record app screen (video + periodic screenshots)                                            |
-| `record-electron-demo.sh`   | Record Electron app demo with ffmpeg                                                        |
-| `agent-gateway/`            | Gateway probe / dump / analyze tools                                                        |
+| Script                          | Usage                                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `test-env.sh`                   | Print/export the resolved local test env and ports                                          |
+| `setup-auth.sh`                 | One-stop auth setup & status check (`status` / `cli` / `web`)                               |
+| `init-dev-env.sh`               | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`)                |
+| `app-probe.sh`                  | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`                     |
+| `agent-browser-klm.mjs`         | Wrap `agent-browser`, run the real action, and append a GOMS-KLM interaction atom JSONL     |
+| `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost` / markdown cost output       |
+| `record-gif.sh`                 | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
+| `report-init.sh`                | Scaffold a structured test report (Step 3)                                                  |
+| `check-screen-recording.sh`     | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
+| `electron-dev.sh`               | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
+| `cdp-screenshot.sh`             | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
+| `capture-app-window.sh`         | Screenshot a specific app window (general; used by bot tests)                               |
+| `record-app-screen.sh`          | Record app screen (video + periodic screenshots)                                            |
+| `record-electron-demo.sh`       | Record Electron app demo with ffmpeg                                                        |
+| `agent-gateway/`                | Gateway probe / dump / analyze tools                                                        |
 
 `app-probe.sh` is the LobeHub-specific fast path into app state — auth check,
 current route, running operations, and `goto <path>` quick navigation
 (`/agent/<agentId>/<topicId>`, `/task/<taskId>`, `/settings`, …) so a test can
 jump straight to the state under test instead of clicking through the UI. See
 [ui/electron.md](./ui/electron.md#lobehub-probes--quick-navigation) for usage.
+
+### Agent-browser interaction-cost tracing
+
+For UI verification runs, drive cost-bearing browser actions through the KLM
+wrapper so the same action also records a user-equivalent interaction atom:
+
+```bash
+TRACE="$DIR/interaction-trace.jsonl"
+
+./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs \
+  --klm-trace "$TRACE" --klm-phase login --klm-check case-1 \
+  --session lobehub-dev click @e3
+
+./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs mental \
+  --klm-trace "$TRACE" --klm-phase first-view --m 2 --score 3 \
+  --confidence 0.75 --reason "First view requires understanding run status and next action"
+```
+
+The wrapper forwards every non-`--klm-*` argument to `agent-browser`. Physical
+actions are inferred from the browser command (`click → P+K`, `fill/type →
+P+T(n)`, `press → K`, `wait → R`). Mental operators (`M`) are explicit agent
+estimates recorded with the `mental` subcommand after the first meaningful page
+view or a decision-heavy inspection step.
+
+Analyze the trace before publishing:
+
+```bash
+./.agents/skills/agent-testing/scripts/agent-browser-klm-analyze.mjs \
+  --trace "$TRACE" --result "$DIR/result.json" --write
+```
+
+This writes `result.json.interactionCost`; `verify ingest-report` stores it on
+the verify run metadata so the report can render a separate interaction-cost
+section.
 
 ## Step 3 — Structured report (mandatory deliverable)
 

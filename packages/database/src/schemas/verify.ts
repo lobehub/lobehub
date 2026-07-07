@@ -3,6 +3,7 @@ import type {
   VerifyCheckItem,
   VerifyRubricConfig,
   VerifyRunContext,
+  VerifyRunMetadata,
   VerifyRunScenario,
 } from '@lobechat/types';
 import {
@@ -455,7 +456,7 @@ export const verifyRuns = pgTable(
      * metadata we don't model yet (the active scenario's input lives in
      * `context`). Kept open so future needs don't require a migration.
      */
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    metadata: jsonb('metadata').$type<VerifyRunMetadata>(),
 
     /**
      * Immutable check-plan snapshot for this session (instantiated from rubrics /

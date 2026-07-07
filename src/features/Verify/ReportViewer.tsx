@@ -1,6 +1,13 @@
 'use client';
 
-import type { VerifyCodingScope, VerifyEvidenceType } from '@lobechat/types';
+import type {
+  VerifyCodingScope,
+  VerifyEvidenceType,
+  VerifyInteractionCost,
+  VerifyInteractionCostOperators,
+  VerifyInteractionCostPhase,
+} from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import {
   Block,
   Center,
@@ -133,6 +140,189 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorInfoText};
 
     background: ${cssVar.colorInfoBg};
+  `,
+  interactionCost: css`
+    --klm-blue-1: color-mix(in srgb, ${cssVar.colorInfo} 70%, ${cssVar.colorBgContainer});
+    --klm-blue-2: ${cssVar.colorInfo};
+    --klm-blue-3: color-mix(in srgb, ${cssVar.colorInfo} 84%, ${cssVar.colorText});
+    --klm-blue-4: color-mix(in srgb, ${cssVar.colorInfo} 68%, ${cssVar.colorText});
+    --klm-blue-5: color-mix(in srgb, ${cssVar.colorInfo} 54%, ${cssVar.colorText});
+    --klm-blue-6: color-mix(in srgb, ${cssVar.colorInfo} 42%, ${cssVar.colorText});
+
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  `,
+  interactionCostHeader: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: flex-end;
+  `,
+  interactionCostModel: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  interactionMetrics: css`
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+
+    @media (width <= 520px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  interactionMetric: css`
+    min-width: 0;
+    padding-block: 9px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusSM};
+  `,
+  interactionMetricLabel: css`
+    display: block;
+    margin-block-end: 4px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  interactionMetricValue: css`
+    font-size: 18px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: ${cssVar.colorText};
+  `,
+  operatorList: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  `,
+  operatorChip: css`
+    --operator-color: ${cssVar.colorTextSecondary};
+
+    display: inline-flex;
+    gap: 5px;
+    align-items: baseline;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: color-mix(in srgb, var(--operator-color) 72%, ${cssVar.colorTextSecondary});
+
+    &::before {
+      content: '';
+
+      flex: 0 0 auto;
+
+      width: 6px;
+      height: 6px;
+      margin-block-start: 0.5em;
+      border-radius: 50%;
+
+      background: var(--operator-color);
+    }
+
+    b {
+      font-weight: 650;
+      color: var(--operator-color);
+    }
+
+    &[data-operator='K'] {
+      --operator-color: var(--klm-blue-1);
+    }
+
+    &[data-operator='P'] {
+      --operator-color: var(--klm-blue-2);
+    }
+
+    &[data-operator='M'] {
+      --operator-color: var(--klm-blue-3);
+    }
+
+    &[data-operator='H'] {
+      --operator-color: var(--klm-blue-4);
+    }
+
+    &[data-operator='T_chars'] {
+      --operator-color: var(--klm-blue-5);
+    }
+
+    &[data-operator='R_ms'] {
+      --operator-color: var(--klm-blue-6);
+    }
+  `,
+  phaseList: css`
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  `,
+  phaseRow: css`
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.6fr) auto;
+    gap: 10px;
+    align-items: center;
+
+    @media (width <= 640px) {
+      grid-template-columns: 1fr;
+      gap: 5px;
+    }
+  `,
+  phaseName: css`
+    overflow: hidden;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  phaseTrack: css`
+    overflow: hidden;
+    display: flex;
+
+    height: 8px;
+    border-radius: 999px;
+
+    background: transparent;
+    box-shadow: inset 0 0 0 1px ${cssVar.colorBorderSecondary};
+  `,
+  phaseSegment: css`
+    --operator-color: ${cssVar.colorTextSecondary};
+
+    flex: 0 0 auto;
+    min-width: 2px;
+    height: 100%;
+    background: var(--operator-color);
+
+    &[data-operator='K'] {
+      --operator-color: var(--klm-blue-1);
+    }
+
+    &[data-operator='P'] {
+      --operator-color: var(--klm-blue-2);
+    }
+
+    &[data-operator='M'] {
+      --operator-color: var(--klm-blue-3);
+    }
+
+    &[data-operator='H'] {
+      --operator-color: var(--klm-blue-4);
+    }
+
+    &[data-operator='T_chars'] {
+      --operator-color: var(--klm-blue-5);
+    }
+
+    &[data-operator='R_ms'] {
+      --operator-color: var(--klm-blue-6);
+    }
+  `,
+  phaseValue: css`
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextTertiary};
   `,
   codingScope: css`
     display: flex;
@@ -463,6 +653,10 @@ const styles = createStaticStyles(({ css }) => ({
   /* narrative */
   narrative: css`
     margin-block-start: 24px;
+
+    &:not([open]) > :not(summary) {
+      display: none;
+    }
   `,
   narrativeSummary: css`
     cursor: pointer;
@@ -491,6 +685,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  interactionCostBody: css`
+    margin-block-start: 12px;
   `,
 
   /* evidence */
@@ -666,6 +863,137 @@ const liveStatusLabelKey = {
   verifying: 'report.status.verifying',
 } as const;
 
+const OPERATOR_KEYS = ['K', 'P', 'M', 'H', 'T_chars', 'R_ms'] as const;
+type OperatorKey = (typeof OPERATOR_KEYS)[number];
+
+const OPERATOR_DEFAULT_SECONDS: Record<OperatorKey, number> = {
+  H: 0.4,
+  K: 0.2,
+  M: 1.35,
+  P: 1.1,
+  R_ms: 0.001,
+  T_chars: 0.2,
+};
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const finiteString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const readOperators = (value: unknown): VerifyInteractionCostOperators => {
+  const record = toRecord(value);
+  if (!record) return {};
+
+  return {
+    H: finiteNumber(record.H),
+    K: finiteNumber(record.K),
+    M: finiteNumber(record.M),
+    P: finiteNumber(record.P),
+    R_ms: finiteNumber(record.R_ms),
+    T_chars: finiteNumber(record.T_chars),
+  };
+};
+
+const readTimingSeconds = (value: unknown): Record<string, number> | undefined => {
+  const record = toRecord(value);
+  if (!record) return undefined;
+
+  const entries = Object.entries(record).flatMap(([key, field]) => {
+    const seconds = finiteNumber(field);
+    return seconds === undefined ? [] : [[key, seconds] as const];
+  });
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+};
+
+const readPhase = (value: unknown, index: number): VerifyInteractionCostPhase | null => {
+  const record = toRecord(value);
+  if (!record) return null;
+
+  const seconds = finiteNumber(record.seconds);
+  const activeSeconds = finiteNumber(record.activeSeconds);
+  const waitSeconds = finiteNumber(record.waitSeconds);
+  const hasTiming =
+    seconds !== undefined || activeSeconds !== undefined || waitSeconds !== undefined;
+  if (!hasTiming) return null;
+
+  return {
+    actionCount: finiteNumber(record.actionCount),
+    activeSeconds,
+    checkItemId: finiteString(record.checkItemId),
+    id: finiteString(record.id) ?? `phase-${index + 1}`,
+    label: finiteString(record.label),
+    operators: readOperators(record.operators),
+    seconds,
+    waitSeconds,
+  };
+};
+
+const readInteractionCost = (metadata: unknown): VerifyInteractionCost | null => {
+  const cost = toRecord(toRecord(metadata)?.interactionCost);
+  if (!cost) return null;
+
+  const totalSeconds = finiteNumber(cost.totalSeconds);
+  if (totalSeconds === undefined) return null;
+
+  return {
+    actionCount: finiteNumber(cost.actionCount),
+    activeSeconds: finiteNumber(cost.activeSeconds) ?? 0,
+    model: finiteString(cost.model) ?? 'goms-klm',
+    operators: readOperators(cost.operators),
+    phases: Array.isArray(cost.phases)
+      ? cost.phases
+          .map((phase, index) => readPhase(phase, index))
+          .filter((phase): phase is VerifyInteractionCostPhase => Boolean(phase))
+      : [],
+    scope: finiteString(cost.scope),
+    sourceTrace: finiteString(cost.sourceTrace),
+    timingSeconds: readTimingSeconds(cost.timingSeconds),
+    totalSeconds,
+    waitSeconds: finiteNumber(cost.waitSeconds) ?? 0,
+  };
+};
+
+const formatSeconds = (seconds: number): string =>
+  `${seconds >= 10 ? seconds.toFixed(1) : seconds.toFixed(2)}s`;
+
+const phaseSeconds = (phase: VerifyInteractionCostPhase): number =>
+  phase.seconds ?? (phase.activeSeconds ?? 0) + (phase.waitSeconds ?? 0);
+
+const operatorSeconds = (
+  key: OperatorKey,
+  value: number,
+  timingSeconds?: Record<string, number>,
+): number => {
+  if (key === 'R_ms') return value / 1000;
+  if (key === 'T_chars') {
+    return (
+      value * (timingSeconds?.T_chars ?? timingSeconds?.T_char ?? OPERATOR_DEFAULT_SECONDS[key])
+    );
+  }
+
+  return value * (timingSeconds?.[key] ?? OPERATOR_DEFAULT_SECONDS[key]);
+};
+
+const operatorValue = (key: OperatorKey, value: number): string => {
+  if (key === 'R_ms') return formatSeconds(value / 1000);
+  if (key === 'T_chars') return `${Math.round(value)} chars`;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+};
+
+const phaseOperatorSegments = (
+  phase: VerifyInteractionCostPhase,
+  timingSeconds?: Record<string, number>,
+): { key: OperatorKey; seconds: number; value: number }[] =>
+  OPERATOR_KEYS.flatMap((key) => {
+    const value = phase.operators?.[key];
+    if (value === undefined || value <= 0) return [];
+
+    const seconds = operatorSeconds(key, value, timingSeconds);
+    return seconds > 0 ? [{ key, seconds, value }] : [];
+  });
+
 /** Severity-first sort: failed → uncertain → passed. */
 const SEVERITY_RANK: Record<Verdict, number> = { failed: 0, passed: 2, uncertain: 1 };
 
@@ -720,6 +1048,109 @@ const DocumentViewer = memo<{ fileName?: string | null; url: string }>(({ fileNa
     </Flexbox>
   );
 });
+
+const InteractionCostPanel = memo<{ cost: VerifyInteractionCost }>(({ cost }) => {
+  const { t } = useTranslation('verify');
+  const phases = cost.phases ?? [];
+  const maxPhaseSeconds = Math.max(...phases.map(phaseSeconds), 0);
+  const metrics = [
+    {
+      label: t('report.interaction.total'),
+      value: formatSeconds(cost.totalSeconds),
+    },
+    {
+      label: t('report.interaction.active'),
+      value: formatSeconds(cost.activeSeconds),
+    },
+    {
+      label: t('report.interaction.wait'),
+      value: formatSeconds(cost.waitSeconds),
+    },
+  ];
+
+  return (
+    <section className={styles.interactionCost}>
+      <div className={styles.interactionCostHeader}>
+        <span className={styles.interactionCostModel}>{cost.model}</span>
+      </div>
+
+      <div className={styles.interactionMetrics}>
+        {metrics.map((metric) => (
+          <div className={styles.interactionMetric} key={metric.label}>
+            <span className={styles.interactionMetricLabel}>{metric.label}</span>
+            <span className={styles.interactionMetricValue}>{metric.value}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.operatorList}>
+        {OPERATOR_KEYS.map((key) => {
+          const value = cost.operators[key];
+          if (value === undefined) return null;
+
+          return (
+            <span className={styles.operatorChip} data-operator={key} key={key}>
+              <span>{t(`report.interaction.operator.${key}`)}</span>
+              <b>{operatorValue(key, value)}</b>
+            </span>
+          );
+        })}
+      </div>
+
+      {phases.length > 0 && (
+        <div className={styles.phaseList}>
+          {phases.map((phase) => {
+            const seconds = phaseSeconds(phase);
+            const activeSeconds = phase.activeSeconds ?? 0;
+            const waitSeconds = phase.waitSeconds ?? 0;
+            const activeWidth = maxPhaseSeconds > 0 ? (activeSeconds / maxPhaseSeconds) * 100 : 0;
+            const waitWidth = maxPhaseSeconds > 0 ? (waitSeconds / maxPhaseSeconds) * 100 : 0;
+            const segments = phaseOperatorSegments(phase, cost.timingSeconds);
+
+            return (
+              <div className={styles.phaseRow} key={phase.id}>
+                <span className={styles.phaseName} title={phase.label ?? phase.id}>
+                  {phase.label ?? phase.id}
+                </span>
+                <span className={styles.phaseTrack}>
+                  {segments.length > 0 ? (
+                    segments.map((segment) => (
+                      <span
+                        className={styles.phaseSegment}
+                        data-operator={segment.key}
+                        key={segment.key}
+                        style={{
+                          width: `${
+                            maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
+                          }%`,
+                        }}
+                        title={`${t(`report.interaction.operator.${segment.key}`)} ${formatSeconds(
+                          segment.seconds,
+                        )}`}
+                      />
+                    ))
+                  ) : (
+                    <>
+                      <span className={styles.phaseSegment} style={{ width: `${activeWidth}%` }} />
+                      <span
+                        className={styles.phaseSegment}
+                        data-operator={'R_ms'}
+                        style={{ width: `${waitWidth}%` }}
+                      />
+                    </>
+                  )}
+                </span>
+                <span className={styles.phaseValue}>{formatSeconds(seconds)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+});
+
+InteractionCostPanel.displayName = 'InteractionCostPanel';
 
 /** One evidence artifact rendered by its type: zoomable image/gif, video, doc, text. */
 const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
@@ -1155,6 +1586,7 @@ const ReportViewer = memo(() => {
   const verdict = (report?.verdict as Verdict | null) ?? null;
   const visible = filter === 'all' ? ordered : ordered.filter((r) => checkVerdict(r) === filter);
   const isCodingReport = run.scenario === 'coding';
+  const interactionCost = readInteractionCost(run.metadata);
 
   const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
     { count: total, key: 'all', label: t('report.filter.all') },
@@ -1246,6 +1678,18 @@ const ReportViewer = memo(() => {
             </summary>
             <div className={styles.narrativeBody}>
               <Markdown>{report.content}</Markdown>
+            </div>
+          </details>
+        )}
+
+        {interactionCost && (
+          <details className={styles.narrative}>
+            <summary className={styles.narrativeSummary}>
+              <Icon icon={ChevronRight} size={13} />
+              {t('report.interaction.title')}
+            </summary>
+            <div className={styles.interactionCostBody}>
+              <InteractionCostPanel cost={interactionCost} />
             </div>
           </details>
         )}

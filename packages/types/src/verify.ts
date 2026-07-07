@@ -122,6 +122,43 @@ export interface VerifyCodingScope {
  */
 export type VerifyRunContext = VerifyCodingScope;
 
+export interface VerifyInteractionCostOperators {
+  H?: number;
+  K?: number;
+  M?: number;
+  P?: number;
+  R_ms?: number;
+  T_chars?: number;
+}
+
+export interface VerifyInteractionCostPhase {
+  actionCount?: number;
+  activeSeconds?: number;
+  checkItemId?: string;
+  id: string;
+  label?: string;
+  operators?: VerifyInteractionCostOperators;
+  seconds?: number;
+  waitSeconds?: number;
+}
+
+export interface VerifyInteractionCost {
+  actionCount?: number;
+  activeSeconds: number;
+  actualAgentSeconds?: number;
+  categoryCounts?: Record<string, number>;
+  generatedAt?: string;
+  mentalEstimates?: Record<string, unknown>[];
+  model: string;
+  operators: VerifyInteractionCostOperators;
+  phases?: VerifyInteractionCostPhase[];
+  scope?: string;
+  sourceTrace?: string;
+  timingSeconds?: Record<string, number>;
+  totalSeconds: number;
+  waitSeconds: number;
+}
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
@@ -144,6 +181,8 @@ export interface VerifyRubricConfig {
  * migration; the active scenario's input lives in `context`, not here.
  */
 export interface VerifyRunMetadata {
+  [key: string]: unknown;
+  interactionCost?: VerifyInteractionCost;
   /**
    * Per-run override for the repair-round cap, taking precedence over the
    * rubric's {@link VerifyRubricConfig.maxRepairRounds}. Set from a task's
