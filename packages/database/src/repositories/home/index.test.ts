@@ -8,6 +8,7 @@ import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { agentsToSessions } from '../../schemas/relations';
 import { sessionGroups, sessions } from '../../schemas/session';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 import { HomeRepository } from './index';
 
@@ -490,6 +491,35 @@ describe('HomeRepository', () => {
       expect(result.groups[0].name).toBe('Group A');
       expect(result.groups[1].name).toBe('Group B');
       expect(result.groups[2].name).toBe('Group C');
+    });
+
+    it('should fall back to ungrouped when groupId references a folder outside the scope', async () => {
+      const wsId = 'home-test-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: wsId, name: 'WS', slug: wsId, primaryOwnerId: userId });
+
+      // Personal-scope folder left behind by an agent transfer into the workspace
+      await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'sg-personal-stale', name: 'Personal Folder', userId });
+      await serverDB.insert(agents).values({
+        sessionGroupId: 'sg-personal-stale',
+        title: 'Transferred Agent',
+        userId,
+        virtual: false,
+        visibility: 'private',
+        workspaceId: wsId,
+      });
+
+      const wsRepo = new HomeRepository(serverDB, userId, wsId);
+      const result = await wsRepo.getSidebarAgentList();
+
+      // The folder is not visible in the workspace scope, so the agent must
+      // surface in privateUngrouped instead of vanishing from the sidebar.
+      expect(result.privateGroups).toEqual([]);
+      expect(result.privateUngrouped).toHaveLength(1);
+      expect(result.privateUngrouped[0]).toMatchObject({ title: 'Transferred Agent' });
     });
   });
 

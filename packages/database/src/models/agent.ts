@@ -1234,6 +1234,9 @@ export class AgentModel {
       // 4. Update the agent record.
       //    Only apply visibility when moving into a workspace — visibility is
       //    a no-op in personal scope where every row is implicitly private.
+      //    `sessionGroupId` is cleared because sidebar folders belong to the
+      //    source scope (same rationale as dropping chatGroupsAgents below);
+      //    a stale reference would orphan the agent out of the target sidebar.
       const visibilityUpdate =
         targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       await trx
@@ -1242,6 +1245,7 @@ export class AgentModel {
           ...ownershipUpdate,
           ...visibilityUpdate,
           agencyConfig: nextAgencyConfig,
+          sessionGroupId: null,
           slug,
           updatedAt: new Date(),
         })
@@ -1256,7 +1260,12 @@ export class AgentModel {
       const sessionIds = links.map((l) => l.sessionId);
 
       if (sessionIds.length > 0) {
-        await trx.update(sessions).set(ownershipUpdate).where(inArray(sessions.id, sessionIds));
+        // `groupId` is cleared for the same reason as the agent's
+        // `sessionGroupId`: folders stay in the source scope.
+        await trx
+          .update(sessions)
+          .set({ ...ownershipUpdate, groupId: null })
+          .where(inArray(sessions.id, sessionIds));
       }
 
       await trx
