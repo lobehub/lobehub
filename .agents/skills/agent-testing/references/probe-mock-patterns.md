@@ -455,3 +455,15 @@
   - Byte-size is a reliable auto-flag for near-uniform frames (blank/loading), but two
     different near-uniform states (dark loading-screen vs blank) can both be small — always
     Read the frame to tell them apart (Case 1 rule).
+
+### E4. ✅ WORKS — keep Electron pool `LOBE_IPC_ID` short
+
+- **Situation**: manually starting an isolated Electron dev instance with a
+  descriptive `LOBE_IPC_ID` such as `lobehub-desktop-dev-manual-selection-2`.
+  The main process builds a Unix socket path under `$TMPDIR`, and macOS rejects
+  overlong socket paths.
+- **Doesn't work**: long IPC ids can crash Electron at bootstrap with
+  `listen EINVAL ... <id>-electron-ipc.sock`, before any renderer/CDP evidence is
+  available.
+- **Works**: use the numeric `electron-dev.sh start <id>` pool path, or keep
+  manual IPC ids very short, e.g. `LOBE_IPC_ID=lhmsel2`.
