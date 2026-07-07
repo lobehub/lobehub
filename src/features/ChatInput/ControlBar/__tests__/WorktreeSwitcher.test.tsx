@@ -9,6 +9,10 @@ const confirmModalMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const removeGitWorktreeMock = vi.hoisted(() => vi.fn());
+const toastLoadingCloseMock = vi.hoisted(() => vi.fn());
+const toastLoadingMock = vi.hoisted(() =>
+  vi.fn(() => ({ close: toastLoadingCloseMock, id: 'pending', update: vi.fn() })),
+);
 
 vi.mock('../useCommitWorkingDirectory', () => ({
   useCommitWorkingDirectory: () => ({ commit: commitMock }),
@@ -51,7 +55,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </div>
   ),
-  toast: { error: messageErrorMock, info: vi.fn(), success: messageSuccessMock },
+  toast: {
+    error: messageErrorMock,
+    info: vi.fn(),
+    loading: toastLoadingMock,
+    success: messageSuccessMock,
+  },
 }));
 
 vi.mock('antd-style', () => ({
@@ -72,6 +81,8 @@ beforeEach(() => {
   confirmModalMock.mockReset();
   messageErrorMock.mockReset();
   messageSuccessMock.mockReset();
+  toastLoadingMock.mockClear();
+  toastLoadingCloseMock.mockReset();
   removeGitWorktreeMock.mockReset();
   removeGitWorktreeMock.mockResolvedValue({ success: true });
 });
@@ -227,6 +238,11 @@ describe('WorktreeSwitcher', () => {
     // resolved value.
     confirmModalMock.mock.calls[0][0].onOk();
 
+    // a pending toast surfaces immediately since the closed dropdown hides the row
+    expect(toastLoadingMock).toHaveBeenCalledWith(
+      'workingDirectory.removeWorktreePending:{"name":"repo-detached"}',
+    );
+
     expect(removeGitWorktreeMock).toHaveBeenCalledWith({
       deviceId: 'device-1',
       path: '/repo',
@@ -235,6 +251,8 @@ describe('WorktreeSwitcher', () => {
     await waitFor(() => {
       expect(onWorktreesChange).toHaveBeenCalled();
     });
+    // the pending toast is dismissed before the terminal toast is shown
+    expect(toastLoadingCloseMock).toHaveBeenCalledTimes(1);
     expect(messageSuccessMock).toHaveBeenCalledWith('workingDirectory.removeWorktreeSuccess');
     expect(messageErrorMock).not.toHaveBeenCalled();
   });
@@ -279,6 +297,8 @@ describe('WorktreeSwitcher', () => {
         'fatal: worktree contains modified or untracked files',
       );
     });
+    // the pending toast is dismissed even when the removal fails
+    expect(toastLoadingCloseMock).toHaveBeenCalledTimes(1);
     expect(messageSuccessMock).not.toHaveBeenCalled();
     expect(onWorktreesChange).not.toHaveBeenCalled();
   });

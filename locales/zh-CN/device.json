@@ -69,6 +69,7 @@
   "workingDirectory.removeWorktreeAction": "删除 Worktree",
   "workingDirectory.removeWorktreeConfirm": "删除 Worktree“{{name}}”？这会移除该 worktree 目录，但保留其分支；如果仍有未提交更改，Git 会拒绝删除。",
   "workingDirectory.removeWorktreeFailed": "删除 Worktree 失败",
+  "workingDirectory.removeWorktreePending": "正在删除 Worktree“{{name}}”…",
   "workingDirectory.removeWorktreeSuccess": "Worktree 已删除",
   "workingDirectory.removeWorktreeTitle": "删除 Worktree",
   "workingDirectory.removed": "已移除「{{name}}」",

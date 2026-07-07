@@ -556,12 +556,21 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
           // reconciles on the next `onWorktreesChange` revalidate.
           onOk: () => {
             setRemovingPaths((prev) => new Set(prev).add(worktree.path));
+            // The dropdown is already closed, so a persistent loading toast is the
+            // only signal that a (potentially slow) removal is in progress. It gets
+            // swapped for the success/failure toast once the background op settles.
+            const pendingToast = toast.loading(
+              t('workingDirectory.removeWorktreePending', {
+                name: getPathName(worktree.path),
+              }),
+            );
             void (async () => {
               const result = await gitService.removeGitWorktree({
                 deviceId,
                 path,
                 worktreePath: worktree.path,
               });
+              pendingToast.close();
               if (result.success) {
                 // The list is hidden behind the closed dropdown, so this toast
                 // is the only signal that the background removal finished.
