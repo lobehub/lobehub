@@ -367,7 +367,8 @@ describe('skillsRuntime', () => {
       const result = await runtime.execScript({
         activatedSkills: [
           { id: 'user-skill-id', name: 'user-skill' },
-          { id: 'foo-id', name: 'foo' },
+          // Filesystem activations carry no DB id — matching is by name only.
+          { name: 'foo' },
         ],
         command: 'python scripts/run.py',
         description: 'Run project skill script',

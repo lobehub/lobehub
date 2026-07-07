@@ -163,6 +163,49 @@ describe('extractActivatedSkillsFromMessages', () => {
     ]);
   });
 
+  // Filesystem (project/device) and builtin skill activations persist no DB
+  // id — dropping them broke device-exec cwd resolution, which matches
+  // activated skills against device.projectSkills by name.
+  it('should keep activateSkill states without an id (filesystem/builtin skills)', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: {
+          hasResources: false,
+          location: '/repo/.agents/skills/foo/SKILL.md',
+          name: 'foo',
+          source: 'project',
+        },
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+        pluginState: { activatedSkills: [{ description: 'builtin', name: 'bar' }] },
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { description: undefined, name: 'foo' },
+      { description: 'builtin', name: 'bar' },
+    ]);
+  });
+
+  it('should deduplicate id-less activations by name with later activations winning', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { name: 'foo', source: 'project' },
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { description: 'reactivated', name: 'foo', source: 'project' },
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { description: 'reactivated', name: 'foo' },
+    ]);
+  });
+
   it('should ignore non-tool roles and other tool identifiers', () => {
     const messages = [
       createMessage({

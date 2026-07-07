@@ -30,7 +30,8 @@ export interface ActivateSkillState {
  */
 export interface ExecScriptActivatedSkill {
   description?: string;
-  id: string;
+  /** DB skill id; absent for filesystem/builtin activations — match by `name`. */
+  id?: string;
   name: string;
 }
 

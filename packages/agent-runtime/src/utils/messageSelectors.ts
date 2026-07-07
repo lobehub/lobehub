@@ -156,7 +156,8 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
 /**
  * Accumulate activated skills from all activateSkill / activateTools tool
  * messages. Skills once activated remain active for the rest of the
- * conversation; the skill id deduplicates (later activations update the entry).
+ * conversation; the skill id (or name, for filesystem/builtin activations that
+ * persist no id) deduplicates — later activations update the entry.
  *
  * Shared by the client transport (chat store dbMessage selector feeding
  * `computeStepContext`) and the server runtime executors (`callTool` /
@@ -178,17 +179,16 @@ export const extractActivatedSkillsFromMessages = (
       ))
         continue;
 
-      // Direct activateSkill calls — state has top-level id/name
-      if (
-        invocation.apiName === 'activateSkill' &&
-        invocation.state?.id &&
-        invocation.state?.name
-      ) {
-        const id = invocation.state.id as string;
-        skillsMap.set(id, {
+      // Direct activateSkill calls — state has top-level name (id only for DB
+      // skills; filesystem/builtin activations persist no id, so `name` alone
+      // must be enough to keep them — server exec paths match by name anyway).
+      if (invocation.apiName === 'activateSkill' && invocation.state?.name) {
+        const id = invocation.state.id as string | undefined;
+        const name = invocation.state.name as string;
+        skillsMap.set(id ?? name, {
           description: invocation.state.description as string | undefined,
-          id,
-          name: invocation.state.name as string,
+          ...(id && { id }),
+          name,
         });
       }
 
@@ -202,10 +202,10 @@ export const extractActivatedSkillsFromMessages = (
           id?: string;
           name?: string;
         }>) {
-          if (skill.id && skill.name) {
-            skillsMap.set(skill.id, {
+          if (skill.name) {
+            skillsMap.set(skill.id ?? skill.name, {
               description: skill.description,
-              id: skill.id,
+              ...(skill.id && { id: skill.id }),
               name: skill.name,
             });
           }
