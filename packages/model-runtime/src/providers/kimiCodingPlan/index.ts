@@ -14,6 +14,7 @@ const DEFAULT_KIMI_CODING_BASE_URL = 'https://api.kimi.com/coding';
 // Max output tokens for each model (supports both model id and deploymentName)
 const KIMI_MODEL_MAX_OUTPUT: Record<string, number> = {
   'k2p5': 32_768,
+  'kimi-for-coding': 32_768,
   'kimi-k2.5': 32_768,
   'kimi-k2-thinking': 65_536,
 };
@@ -21,6 +22,11 @@ const KIMI_MODEL_MAX_OUTPUT: Record<string, number> = {
 // Helpers for message normalization (shared with Moonshot provider)
 const isKimiK25Model = (model: string) => model === 'kimi-k2.5' || model === 'k2p5';
 const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
+const isKimiThinkingModel = (model: string) =>
+  isKimiK25Model(model) ||
+  isKimiNativeThinkingModel(model) ||
+  model === 'kimi-for-coding' ||
+  model === 'kimi-k2.6';
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
@@ -71,7 +77,8 @@ const buildKimiCodingPlanAnthropicPayload = async (
 
   const isK25 = isKimiK25Model(payload.model);
   const isNativeThinking = isKimiNativeThinkingModel(payload.model);
-  const isThinkingEnabled = isNativeThinking || (isK25 && payload.thinking?.type !== 'disabled');
+  const isThinkingEnabled =
+    isKimiThinkingModel(payload.model) && payload.thinking?.type !== 'disabled';
 
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
@@ -79,7 +86,10 @@ const buildKimiCodingPlanAnthropicPayload = async (
     messages: normalizeMessagesForAnthropic(payload.messages, isThinkingEnabled),
   });
 
-  if (!isK25 && !isNativeThinking) return basePayload;
+  if (!isKimiThinkingModel(payload.model)) {
+    const { thinking, ...rest } = basePayload;
+    return rest;
+  }
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)

@@ -1,29 +1,25 @@
 import { type AIChatModelCard } from '../types/aiModel';
 
 // ref: https://platform.moonshot.ai/docs
+// Kimi Code API model: https://www.kimi.com/code/docs/third-party-tools/other-coding-agents.html
 
 const kimiCodingPlanChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
       reasoning: true,
-      video: true,
       vision: true,
-    },
-    config: {
-      deploymentName: 'k2p5',
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2.5 is Kimi's most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, 'thinking' and 'non-thinking' modes, and both conversational and agent tasks.",
-    displayName: 'Kimi K2.5',
+      "Kimi K2.6 is Kimi's latest and most capable coding model, delivering strong long-horizon coding, instruction following, and self-correction.",
+    displayName: 'Kimi K2.6',
     enabled: true,
     family: 'kimi',
-    generation: 'kimi-k2.5',
-    id: 'kimi-k2.5',
+    generation: 'kimi-k2.6',
+    id: 'kimi-k2.6',
     maxOutput: 32_768,
     organization: 'Moonshot',
-    releasedAt: '2026-01-27',
     settings: {
       extendParams: ['enableReasoning'],
     },
