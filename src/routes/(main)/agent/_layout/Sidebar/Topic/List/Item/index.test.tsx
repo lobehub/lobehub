@@ -1,14 +1,16 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { CSSProperties, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TopicItem from './index';
 
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
+const prefetchMessagesMock = vi.hoisted(() => vi.fn());
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
+const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
@@ -98,8 +100,13 @@ vi.mock('@/store/agent', () => ({
 }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (
-    selector: (state: { topicLoadingIds: string[]; topicRenamingId: string }) => unknown,
-  ) => selector({ topicLoadingIds: [], topicRenamingId: '' }),
+    selector: (state: {
+      prefetchMessages: typeof prefetchMessagesMock;
+      topicLoadingIds: string[];
+      topicRenamingId: string;
+    }) => unknown,
+  ) =>
+    selector({ prefetchMessages: prefetchMessagesMock, topicLoadingIds: [], topicRenamingId: '' }),
 }));
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
@@ -107,7 +114,7 @@ vi.mock('@/store/chat/selectors', () => ({
     getVisibleAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
     isAgentRuntimeRunningByContext: () => () => false,
     isAgentRuntimeVisiblyRunningByContext: () => () => false,
-    isTopicUnreadCompleted: () => () => false,
+    isTopicUnreadCompleted: () => () => topicUnreadCompletedMock.value,
   },
 }));
 vi.mock('@/store/electron', () => ({
@@ -143,7 +150,9 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 
 describe('TopicItem active state', () => {
   afterEach(() => {
+    prefetchMessagesMock.mockClear();
     runningStartTimeMock.value = undefined;
+    topicUnreadCompletedMock.value = false;
     vi.useRealTimers();
   });
 
@@ -207,6 +216,26 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.getByText('00:33')).toBeInTheDocument();
+  });
+
+  it('prefetches messages when a topic is an unread completion', async () => {
+    topicUnreadCompletedMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    await waitFor(() => {
+      expect(prefetchMessagesMock).toHaveBeenCalledWith({
+        agentId: 'agt_test',
+        scope: 'main',
+        topicId: 'tpc_test',
+      });
+    });
   });
 
   it('shows the topic worktree and branch from structured metadata', () => {
