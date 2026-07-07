@@ -5,6 +5,7 @@ import {
 } from '@lobechat/builtin-tool-creds';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
 import { MarketService } from '@/server/services/market';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -161,7 +162,7 @@ class ServerCredsService implements ICredsService {
  * Per-request runtime (needs userId, topicId)
  */
 export const credsRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId) {
       throw new Error('userId is required for Creds execution');
     }
@@ -173,7 +174,19 @@ export const credsRuntime: ServerRuntimeRegistration = {
       context.workspaceId,
     );
 
-    const marketService = new MarketService({ userInfo: { userId: context.userId } });
+    // Read market accessToken from DB so server-side creds runtime can authenticate.
+    let accessToken: string | undefined;
+    if (context.serverDB) {
+      try {
+        const userModel = new UserModel(context.serverDB, context.userId);
+        const settings = await userModel.getUserSettings();
+        accessToken = (settings?.market as any)?.accessToken;
+      } catch {
+        // non-fatal — MarketService will fall back to trustedClientToken
+      }
+    }
+
+    const marketService = new MarketService({ accessToken, userInfo: { userId: context.userId } });
     const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {

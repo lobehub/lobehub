@@ -7,6 +7,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
@@ -62,11 +63,23 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   const workspaceId = ctx.workspaceId ?? undefined;
   const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId);
 
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
+
   return opts.next({
     ctx: {
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
-      marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
+      marketService: new MarketService({
+        accessToken: marketAccessToken,
+        userInfo: { userId: ctx.userId },
+      }),
       skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
       skillModel,
     },
