@@ -71,5 +71,21 @@ describe('deviceToolRegistry', () => {
       const ids = result.map((t) => t.identifier);
       expect(ids).toContain(LocalSystemManifest.identifier);
     });
+
+    it('strips only remote-device when deviceLocked=true — local-system stays for the routed device', () => {
+      const result = buildAllowedBuiltinTools({
+        canUseDevice: true,
+        deviceLocked: true,
+      });
+      const ids = result.map((t) => t.identifier);
+      expect(ids).not.toContain(RemoteDeviceManifest.identifier);
+      expect(ids).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('keeps remote-device when deviceLocked is omitted', () => {
+      const result = buildAllowedBuiltinTools({ canUseDevice: true });
+      const ids = result.map((t) => t.identifier);
+      expect(ids).toContain(RemoteDeviceManifest.identifier);
+    });
   });
 });

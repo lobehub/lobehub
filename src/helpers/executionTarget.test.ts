@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ExecutionPlan,
   executionTargetToRuntimeMode,
+  isDeviceLockedPlan,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
@@ -682,5 +683,39 @@ describe('resolveExecutionPlan', () => {
         expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });
       }
     });
+  });
+});
+
+describe('isDeviceLockedPlan', () => {
+  it('locks routed plans and bound-but-offline plans', () => {
+    expect(isDeviceLockedPlan({ deviceId: 'device-a', kind: 'device', target: 'device' })).toBe(
+      true,
+    );
+    expect(
+      isDeviceLockedPlan({
+        kind: 'device-unrouted',
+        reason: 'bound-device-offline',
+        target: 'device',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps selection-pending and non-device plans unlocked', () => {
+    // These are exactly the states where the remote-device picker may exist.
+    expect(
+      isDeviceLockedPlan({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' }),
+    ).toBe(false);
+    expect(
+      isDeviceLockedPlan({
+        kind: 'device-unrouted',
+        reason: 'ambiguous-online-devices',
+        target: 'auto',
+      }),
+    ).toBe(false);
+    expect(
+      isDeviceLockedPlan({ kind: 'device-unrouted', reason: 'no-online-device', target: 'auto' }),
+    ).toBe(false);
+    expect(isDeviceLockedPlan({ kind: 'none', target: 'none' })).toBe(false);
+    expect(isDeviceLockedPlan({ kind: 'sandbox', target: 'sandbox' })).toBe(false);
   });
 });

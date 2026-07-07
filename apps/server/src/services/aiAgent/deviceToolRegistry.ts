@@ -29,6 +29,14 @@ export const DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set(
   DEVICE_TOOL_MANIFESTS.map((m) => m.identifier),
 );
 
+/**
+ * The remote-device picker alone — the exclusion set for device-LOCKED runs,
+ * which keep local-system for the routed device but must not see the picker.
+ */
+export const REMOTE_DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set([
+  RemoteDeviceManifest.identifier,
+]);
+
 export const isDeviceToolIdentifier = (identifier: string): boolean =>
   DEVICE_TOOL_IDENTIFIERS.has(identifier);
 
@@ -41,6 +49,17 @@ export interface AllowedBuiltinToolsParams {
    * bypass at the engine's enableChecker layer.
    */
   canUseDevice: boolean;
+  /**
+   * The run is locked to a specific device — routed, or explicitly bound but
+   * offline (see `isDeviceLockedPlan`). Strips `lobe-remote-device` ONLY:
+   * with no device decision left, the picker must not exist (offering
+   * `activateDevice` invites redundant activation or hopping to a machine
+   * the user never chose), while local-system stays for the routed device.
+   * Physical counterpart of the `!deviceLocked` rule gate in
+   * `AgentToolsEngine` — without it, the activator's `isExplicitActivation`
+   * bypass can re-surface the device list mid-run.
+   */
+  deviceLocked?: boolean;
   /**
    * User-level kill switch for local-system specifically. Independent of
    * `canUseDevice` — an owner may want first-party local-system disabled
@@ -63,13 +82,16 @@ export interface AllowedBuiltinToolsParams {
  * here is the only reliable enforcement point.
  */
 export const buildAllowedBuiltinTools = (params: AllowedBuiltinToolsParams) => {
-  const { canUseDevice, disableLocalSystem } = params;
+  const { canUseDevice, deviceLocked, disableLocalSystem } = params;
 
   return builtinTools.filter((tool) => {
     if (disableLocalSystem && tool.identifier === LocalSystemManifest.identifier) {
       return false;
     }
     if (!canUseDevice && DEVICE_TOOL_IDENTIFIERS.has(tool.identifier)) {
+      return false;
+    }
+    if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(tool.identifier)) {
       return false;
     }
     return true;

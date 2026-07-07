@@ -167,7 +167,8 @@ export type ExecutionPlanUnroutedReason =
  */
 export type ExecutionPlan = { target: DeviceExecutionTarget } &
   /** route execution / device tools to this device (the local machine is a registered device) */
-  (| { deviceId: string; kind: 'device' }
+  (
+    | { deviceId: string; kind: 'device' }
     /**
      * Device-targeted but no routable device right now. The run proceeds without
      * an active device; the remote-device proxy may let the model activate one
@@ -184,6 +185,21 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
 /** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
   plan.kind === 'device' || plan.kind === 'device-unrouted';
+
+/**
+ * The run is committed to ONE device: either already routed (`device`, which
+ * includes the opt-in `auto` single-online activation) or locked to an
+ * explicit binding that is currently offline (`bound-device-offline` waits for
+ * that machine rather than hopping elsewhere). A locked run has no device
+ * decision left, so the remote-device picker must not exist for it — not even
+ * as an activator-discoverable manifest, since `allowExplicitActivation`
+ * bypasses the rule-layer gates. The picker exists only in the complement:
+ * unrouted runs that still need a selection (`no-bound-device` /
+ * `ambiguous-online-devices` / `no-online-device`).
+ */
+export const isDeviceLockedPlan = (plan: ExecutionPlan): boolean =>
+  plan.kind === 'device' ||
+  (plan.kind === 'device-unrouted' && plan.reason === 'bound-device-offline');
 
 export interface ResolveExecutionPlanParams {
   agencyConfig: LobeAgentAgencyConfig | undefined;
