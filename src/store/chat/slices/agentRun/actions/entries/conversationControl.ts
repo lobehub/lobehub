@@ -281,6 +281,20 @@ export class ConversationControlActionImpl {
     });
   };
 
+  /**
+   * Honor a Stop pressed during the optimistic-write window. Interim ops
+   * (approve / submit / skip) are created synchronously, but their optimistic
+   * updates await, so a Stop landing in that gap cancels the op via
+   * `stopGenerating` → `cancelOperations`. Detect the cancelled/terminal op and
+   * bail before starting the run instead of resurrecting a stopped conversation.
+   * `cancelOperation` flips status but keeps the record, so a real Stop always
+   * leaves the op present here. Mirrors regenerateUserMessage's preflight guard.
+   */
+  #wasInterimOpStopped = (operationId: string): boolean => {
+    const op = this.#get().operations[operationId];
+    return !!op && op.status !== 'running';
+  };
+
   approveToolCalling = async (
     toolMessageId: string,
     _assistantGroupId: string,
@@ -334,6 +348,10 @@ export class ConversationControlActionImpl {
       { intervention: { status: 'approved' } },
       optimisticContext,
     );
+
+    // Bail if a Stop landed while the optimistic update above was in flight.
+    if (this.#wasInterimOpStopped(operationId)) return;
+
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
 
     // 2.5. Server-mode: start a **new** Gateway op carrying the approval
@@ -505,6 +523,9 @@ export class ConversationControlActionImpl {
         optimisticContext,
       );
     }
+
+    // Bail if a Stop landed while the optimistic updates above were in flight.
+    if (this.#wasInterimOpStopped(operationId)) return;
 
     // 1.5. Server-mode: start a **new** Gateway op carrying the human answer as
     // the tool result via `resumeToolResult`. The server writes the answer as
@@ -726,6 +747,10 @@ export class ConversationControlActionImpl {
       undefined,
       optimisticContext,
     );
+
+    // Bail if a Stop landed while the optimistic updates above were in flight,
+    // before creating the synthetic user message so Stop leaves no dangling turn.
+    if (this.#wasInterimOpStopped(operationId)) return;
 
     // 2. Create a user message indicating the skip
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });

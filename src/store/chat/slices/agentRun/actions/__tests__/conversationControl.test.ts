@@ -640,6 +640,51 @@ describe('ConversationControl actions', () => {
       expect(executeClientAgentSpy).not.toHaveBeenCalled();
     });
 
+    it('should bail before running if a Stop cancels the interim op mid optimistic write', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        role: 'tool',
+        plugin: { identifier: 'test-plugin', type: 'default', arguments: '{}', apiName: 'test' },
+      });
+
+      const globalKey = messageMapKey({ agentId, topicId });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [globalKey]: [toolMessage] },
+          messagesMap: { [globalKey]: [toolMessage] },
+        });
+      });
+
+      // Simulate a Stop pressed while the optimistic update is in flight: cancel
+      // the just-created interim op from inside the awaited optimistic write.
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockImplementation(
+        async (_id, _value, ctx) => {
+          if (ctx?.operationId) result.current.cancelOperation(ctx.operationId);
+        },
+      );
+      const internal_createAgentStateSpy = vi.spyOn(result.current, 'internal_createAgentState');
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.approveToolCalling('tool-msg-1', 'group-1');
+      });
+
+      // The run must not start once the op was cancelled.
+      expect(internal_createAgentStateSpy).not.toHaveBeenCalled();
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
+    });
+
     describe('server-mode branch', () => {
       it('should start a new Gateway op with resumeApproval.decision=approved and NOT run local runtime', async () => {
         const { result } = renderHook(() => useChatStore());
