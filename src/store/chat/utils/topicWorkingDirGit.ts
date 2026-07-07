@@ -18,6 +18,7 @@ export interface TopicLinkedPullRequestBase {
   branch: string;
   currentConfig?: WorkingDirConfig;
   path: string;
+  pullRequestNumber?: number;
 }
 
 export const canReadTopicGitTransport = (transport: Pick<TopicGitTransport, 'deviceId'>) =>
@@ -51,7 +52,12 @@ export const getTopicLinkedPullRequestBase = (
 
   if (!path || !branch || git?.detached || repoType !== 'github') return undefined;
 
-  return { branch, currentConfig, path };
+  return {
+    branch,
+    currentConfig,
+    path,
+    pullRequestNumber: git?.github?.pullRequest?.number,
+  };
 };
 
 export const isSuccessfulLinkedPullRequestLookup = (

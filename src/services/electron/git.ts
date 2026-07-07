@@ -43,6 +43,7 @@ class ElectronGitService {
   async getLinkedPullRequest(params: {
     branch: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
   }

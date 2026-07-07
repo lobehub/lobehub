@@ -1727,7 +1727,10 @@ describe('topic action', () => {
       state: 'MERGED',
     };
 
-    const setupTopic = () => {
+    const setupTopic = (
+      pullRequest: typeof stalePR | null = stalePR,
+      pullRequestStatus: 'error' | 'gh-missing' | 'ok' = 'ok',
+    ) => {
       const topic: ChatTopic = {
         createdAt: Date.now(),
         favorite: false,
@@ -1737,7 +1740,7 @@ describe('topic action', () => {
           workingDirectoryConfig: {
             git: {
               branch,
-              github: { pullRequest: stalePR, pullRequestStatus: 'ok' },
+              github: { pullRequest, pullRequestStatus },
               isWorktree: false,
             },
             path,
@@ -1774,7 +1777,7 @@ describe('topic action', () => {
 
       await act(async () => {
         await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, topicId },
+          { branch, path, pullRequestNumber: 123, topicId },
           { pullRequest: mergedPR, pullRequestStatus: 'ok' },
         );
       });
@@ -1798,9 +1801,9 @@ describe('topic action', () => {
       expect(useChatStore.getState().topicLoadingIds).toEqual([]);
     });
 
-    it('clears the stale PR only when the lookup succeeds with no linked PR', async () => {
+    it('updates empty PR metadata when no existing PR number is anchored', async () => {
       const { result } = renderHook(() => useChatStore());
-      setupTopic();
+      setupTopic(null, 'error');
       const updateTopicMetadataMock = vi
         .spyOn(topicService, 'updateTopicMetadata')
         .mockResolvedValue(undefined as never);
@@ -1817,6 +1820,34 @@ describe('topic action', () => {
           ?.github,
       ).toEqual({ pullRequest: null, pullRequestStatus: 'ok' });
       expect(updateTopicMetadataMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the existing PR snapshot when lookup returns a different PR number', async () => {
+      const { result } = renderHook(() => useChatStore());
+      setupTopic();
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as never);
+
+      await act(async () => {
+        await result.current.internal_updateTopicLinkedPullRequest(
+          { branch, path, pullRequestNumber: 123, topicId },
+          {
+            pullRequest: {
+              ...mergedPR,
+              number: 456,
+              url: 'https://github.com/lobehub/lobehub/pull/456',
+            },
+            pullRequestStatus: 'ok',
+          },
+        );
+      });
+
+      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
+      expect(
+        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
+          ?.github,
+      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
     });
 
     it('keeps the existing PR snapshot when gh is unavailable', async () => {

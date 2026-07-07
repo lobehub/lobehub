@@ -128,7 +128,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'getLinkedPullRequest': {
-      return getLinkedPullRequest(params as { branch: string; path: string });
+      return getLinkedPullRequest(
+        params as { branch: string; path: string; pullRequestNumber?: number },
+      );
     }
 
     case 'getGitWorkingTreeStatus': {

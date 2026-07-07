@@ -245,12 +245,14 @@ export class DeviceGateway {
     branch: string;
     deviceId: string;
     path: string;
+    pullRequestNumber?: number;
     userId: string;
     workspaceId?: string;
   }) {
     return this.invokeGitRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
       branch: params.branch,
       path: params.path,
+      pullRequestNumber: params.pullRequestNumber,
     });
   }
 

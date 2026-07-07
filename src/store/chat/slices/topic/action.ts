@@ -98,6 +98,7 @@ interface TopicLinkedPullRequestRefreshParams {
   branch: string;
   deviceId?: string;
   path: string;
+  pullRequestNumber?: number;
   topicId: string;
 }
 
@@ -140,6 +141,7 @@ export class ChatTopicActionImpl {
       branch: base.branch,
       deviceId: transport.deviceId,
       path: base.path,
+      pullRequestNumber: base.pullRequestNumber,
       topicId,
     };
   };
@@ -608,7 +610,12 @@ export class ChatTopicActionImpl {
 
     return useClientDataSWRWithSync<GitLinkedPRSummary | undefined>(
       params
-        ? deviceKeys.gitLinkedPR(params.deviceId ?? 'local', params.path, params.branch)
+        ? deviceKeys.gitLinkedPR(
+            params.deviceId ?? 'local',
+            params.path,
+            params.branch,
+            params.pullRequestNumber,
+          )
         : null,
       params
         ? () =>
@@ -616,9 +623,11 @@ export class ChatTopicActionImpl {
               branch: params.branch,
               deviceId: params.deviceId,
               path: params.path,
+              pullRequestNumber: params.pullRequestNumber,
             })
         : null,
       {
+        dedupingInterval: 60 * 1000,
         focusThrottleInterval: 60 * 1000,
         onData: (prData) => {
           if (!params) return;
@@ -1367,10 +1376,24 @@ export class ChatTopicActionImpl {
     if (!topic) return;
 
     const base = getTopicLinkedPullRequestBase(topic.metadata);
-    if (!base || base.branch !== params.branch || base.path !== params.path) return;
+    if (
+      !base ||
+      base.branch !== params.branch ||
+      base.path !== params.path ||
+      base.pullRequestNumber !== params.pullRequestNumber
+    ) {
+      return;
+    }
 
     const github = toWorkingDirGithubState(prData);
     if (!github) return;
+
+    if (
+      base.pullRequestNumber !== undefined &&
+      github.pullRequest?.number !== base.pullRequestNumber
+    ) {
+      return;
+    }
 
     const nextConfig = mergeWorkingDirGithubState({
       branch: base.branch,

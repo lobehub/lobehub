@@ -199,14 +199,21 @@ class GitService {
     branch,
     deviceId,
     path,
+    pullRequestNumber,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
-      ? await lambdaClient.device.gitLinkedPullRequest.query({ branch, deviceId, path })
-      : await electronGitService.getLinkedPullRequest({ branch, path });
+      ? await lambdaClient.device.gitLinkedPullRequest.query({
+          branch,
+          deviceId,
+          path,
+          pullRequestNumber,
+        })
+      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,
