@@ -168,6 +168,35 @@ describe('formatErrorForState', () => {
       expect(result.numericId).toBe(7004);
       expect(result.attribution).toBe('harness');
     });
+
+    it('unwraps PG diagnostics from a Drizzle "Failed query" cause for final state errors', () => {
+      const error = new Error('Failed query: begin \nparams: ');
+      (error as any).cause = {
+        code: 'XX000',
+        message:
+          'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+        severity: 'ERROR',
+      };
+
+      const result = formatErrorForState(error);
+
+      expect(result.type).toBe('pg_XX000');
+      expect(result.message).toBe(
+        'PG XX000 · ERROR · Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+      );
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.countAsFailure).toBe(true);
+      expect(result.body).toMatchObject({
+        pg: {
+          code: 'XX000',
+          message:
+            'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+          severity: 'ERROR',
+        },
+        wrappedMessage: 'Failed query: begin \nparams: ',
+      });
+    });
   });
 
   describe('ProviderBizError refinement', () => {
