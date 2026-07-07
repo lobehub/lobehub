@@ -3,7 +3,7 @@
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { ArchiveIcon, BellIcon, ImageIcon, VideoIcon } from 'lucide-react';
+import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -39,6 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
   image_generation_completed: ImageIcon,
+  system_announcement: MegaphoneIcon,
   video_generation_completed: VideoIcon,
 };
 
