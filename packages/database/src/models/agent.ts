@@ -23,6 +23,7 @@ import {
   files,
   knowledgeBases,
   messages,
+  sessionGroups,
   sessions,
   taskComments,
   taskDependencies,
@@ -850,9 +851,27 @@ export class AgentModel {
    * TaskModel.updateVisibility).
    */
   setVisibility = async (agentId: string, visibility: 'private' | 'public') => {
+    // A sidebar folder cannot mix visibilities (HomeRepository.processAgentList
+    // buckets grouped items by item visibility under same-visibility groups),
+    // so an agent crossing scopes while keyed to a group of the OLD scope
+    // would be emitted nowhere and vanish from the sidebar. Rehome it to the
+    // ungrouped section of its new scope when the group no longer matches.
+    const [current] = await this.db
+      .select({ groupVisibility: sessionGroups.visibility })
+      .from(agents)
+      .leftJoin(sessionGroups, eq(agents.sessionGroupId, sessionGroups.id))
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .limit(1);
+    const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
+    const clearGroup = groupVisibility != null && groupVisibility !== visibility;
+
     const [updated] = await this.db
       .update(agents)
-      .set({ updatedAt: new Date(), visibility })
+      .set({
+        updatedAt: new Date(),
+        visibility,
+        ...(clearGroup ? { sessionGroupId: null } : {}),
+      })
       .where(and(eq(agents.id, agentId), this.ownership()))
       .returning();
     return updated ?? null;
