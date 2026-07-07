@@ -47,6 +47,12 @@ this run:
   (Wrong approach / Why / What it breaks / Correct approach).
 - You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
   item in `probe-mock-patterns.md` (Situation / Doesn't work / Works).
+- **Confidentiality — this skill ships in the open-source repository.** Keep
+  appended entries product-generic: never include details that only exist in a
+  private/commercial superproject (its packages, routes, DB schemas, env vars,
+  service names, or business logic). Record those learnings in the
+  superproject's own skills/notes instead, and genericize anything worth
+  keeping here.
 
 ## Step -1 — Plan approval for non-trivial tests
 

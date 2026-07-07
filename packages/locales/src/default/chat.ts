@@ -527,8 +527,6 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
-  'agent.publishToWorkspaceConfirm':
-    'Other workspace members will be able to use this agent. You will not be able to make it private again.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
@@ -1020,8 +1018,6 @@ export default {
   'taskDetail.updateFailed': 'Failed to update task',
   'taskDetail.publishToWorkspace.menuLabel': 'Publish to Workspace',
   'taskDetail.publishToWorkspace.confirmTitle': 'Publish task to workspace?',
-  'taskDetail.publishToWorkspace.confirmContent':
-    'Once published, this task becomes visible to all workspace members and cannot be reverted to private.',
   'taskDetail.publishToWorkspace.confirmHint':
     'Past runs remain private. Only runs created after publishing will be visible to workspace members.',
   'taskDetail.publishToWorkspace.confirmOk': 'Publish',

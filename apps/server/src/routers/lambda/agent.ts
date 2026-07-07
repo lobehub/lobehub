@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import { CreateAgentSchema, type KnowledgeItem } from '@lobechat/types';
 import { KnowledgeType } from '@lobechat/types';
@@ -97,16 +98,62 @@ export const agentRouter = router({
     }),
 
   /**
-   * Publish a private agent into the workspace. **One-way** — once an agent
-   * is shared, workspace members may already depend on it, so it can't slip
-   * back to `private`. Only the creator of a still-private agent can run
-   * this; the underlying SQL enforces both rules.
+   * Publish a private agent into the workspace. Only the creator of a
+   * still-private agent can run this; the underlying SQL enforces both rules.
+   * The inverse transition (public → private) goes through
+   * `setAgentVisibility`, which is gated to the creator or a workspace owner.
    */
   publishAgentToWorkspace: agentProcedure
     .use(withScopedPermission('agent:update'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.agentModel.publishToWorkspace(input.id);
+    }),
+
+  /**
+   * Bidirectional visibility switch (LOBE-11551). Rules:
+   * - builtin agents (LobeAI etc., identified by slug) can never change
+   *   visibility — the workspace copy must stay shared;
+   * - only the agent's creator or a workspace owner may pull a published
+   *   agent back to private; other members get FORBIDDEN. The UI hides the
+   *   entry for them, this is the server-side backstop.
+   */
+  setAgentVisibility: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ id: z.string(), visibility: z.enum(['private', 'public']) }))
+    .mutation(async ({ input, ctx }) => {
+      const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
+      if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+      if (meta.slug && Object.values(BUILTIN_AGENT_SLUGS).includes(meta.slug as any)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Builtin agents cannot change visibility',
+        });
+      }
+
+      if (meta.visibility === input.visibility) return { success: true };
+
+      if (ctx.workspaceId && meta.userId !== ctx.userId) {
+        const canOverride = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          scopes: ['ALL'],
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (!canOverride) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only the agent creator or workspace owner can change visibility',
+          });
+        }
+      }
+
+      const updated = await ctx.agentModel.setVisibility(input.id, input.visibility);
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+      return { success: true };
     }),
 
   createAgentFiles: agentProcedure

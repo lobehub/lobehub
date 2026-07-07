@@ -467,3 +467,45 @@
   available.
 - **Works**: use the numeric `electron-dev.sh start <id>` pool path, or keep
   manual IPC ids very short, e.g. `LOBE_IPC_ID=lhmsel2`.
+
+### E5. ✅ WORKS — no-Docker fallback stack for the isolated no-.env env
+
+- **Situation**: `init-dev-env.sh setup-db` needs Docker (paradedb + redis images), but
+  Docker Desktop's VM can wedge indefinitely (`no route to host` to 192.168.65.x, empty
+  vm/console.log). Verified working substitute:
+  - **Postgres**: local brew Postgres 17 (pgvector available). The only paradedb-specific
+    migrations are `0090_enable_pg_search` / `0093_add_bm25_indexes_with_icu` — no-op them
+    in the worktree (`SELECT 1;`), everything else applies clean.
+  - **Redis is a hard dependency of Better Auth sign-in** — with a dead REDIS\_URL the seed
+    login 500s (`[Better Auth]: Error: Connection is closed`). `brew install redis`,
+    `redis-server --port 6380 --daemonize yes`.
+  - **S3**: `s3rver` (npm) on 29000 with a CORS config for the bucket. Its presigned-URL
+    validation only accepts key id `S3RVER` (secret `S3RVER`) — `allowMismatchedSignatures`
+    does NOT rescue an unknown access key id (403 on the browser preflight). Set the dev
+    server's `S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY=S3RVER`, `S3_ENABLE_PATH_STYLE=1`,
+    `S3_PUBLIC_DOMAIN=http://127.0.0.1:29000/<bucket>`.
+
+### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
+
+- **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
+  graph pulls the chat store dies in `next dev` (Turbopack) with Build Error `Resource path
+"worker/browser/createWorker.ts" needs to be on project filesystem` (chain: layout →
+  GlobalProvider/Query → trpc client → image/chat store → python-interpreter worker).
+  Unauthenticated curl 302s BEFORE the client graph compiles, so it false-passes; a fresh
+  no-lockfile `pnpm install` can resolve a broken plugin version.
+- **Works**: `E2E=1` (or `TEST=1`) — `defineConfig`'s `isTest` skips `codeInspectorPlugin`,
+  the only thing it gates. Webpack mode (`next dev --webpack`) is NOT a viable fallback
+  (react version mismatch when two next versions are hoisted; `zlib-sync` unresolved for
+  discord.js).
+
+### D12. agent-browser daemon serializes commands — `open` queues behind a record-gif loop
+
+- **Situation**: `record-gif.sh` (a screenshot loop) running while you issue
+  `agent-browser open <url>` — the daemon socket serializes, the open lands late/out of
+  order, and your "during navigation" screenshot actually shows the PREVIOUS page (which can
+  look identical to the expected end state — false read).
+- **Works**: during any recording loop, navigate with
+  `agent-browser eval 'location.href="<url>"'` (fire-and-forget) instead of `open`. To hold
+  a streaming loading state on screen, inject a server-side `await sleep(8000)` before the
+  slow lookup in the page (\[AGENT-TEST], revert) — TTFB stays \~0.3s so loading.tsx renders
+  while the route hangs, giving a wide static-capture window.

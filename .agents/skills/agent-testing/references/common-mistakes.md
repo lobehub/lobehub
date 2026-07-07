@@ -299,3 +299,28 @@ selected context never reached the assistant.
 last mile: add or run an integration-level assertion against the transformed
 messages/request body (e.g. `MessagesEngine` output or transport payload), and
 only treat the UI chip/store as supporting evidence.
+
+---
+
+## Case 13 — GIF evidence ending on an expected-failure frame reads as "the page failed to load"
+
+**Wrong approach**: for a loading-skeleton case, attaching a GIF that records the
+full timeline — skeleton (the asserted state) followed by the error page that the
+test data inevitably produces (fake ids / dummy provider keys mean the route can
+only end in its error state). The GIF loops and rests on its final frames, so the
+viewer opens the report and sees the error card, not the skeleton.
+
+**Why it's wrong**: same trap as Case 5 (unlabeled before-shot) in time-based
+form — the LAST frame of a GIF is its de-facto headline. An expected-failure
+terminal state without explanation reads as the case failing (" 这里怎么加载失败
+了 "), even when the asserted behavior (the skeleton) passed.
+
+**What it breaks**: the user reads a passed case as a load failure and a round is
+burned re-explaining the evidence.
+
+**Correct approach**: trim evidence to the asserted state — end the GIF on the
+skeleton/loading phase (cut the frames after the terminal state appears), or
+attach the static shot of the asserted state as the primary evidence. If the
+expected-failure terminal state is worth showing, say so explicitly in the
+case's `observation` ("ends in the error page because the test session id is
+fake — expected, not the assertion") so the viewer is told before they see it.

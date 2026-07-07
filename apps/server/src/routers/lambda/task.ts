@@ -1071,22 +1071,6 @@ export const taskRouter = router({
       try {
         const resolved = await resolveOrThrow(ctx.taskModel, input.id);
 
-        // Visibility is a one-way commitment: once a task is published to the
-        // workspace, retracting it back to private would yank a resource other
-        // members may already be running, referencing, or commenting on. The
-        // product surface enforces this via a "Publish to Workspace" action
-        // that has no inverse — any caller asking for public→private here is
-        // either a stale UI path or a direct API client and should be rejected.
-        // Placed before the edit-lock check because the invariant is schema-
-        // level, not concurrency-level: there is no legitimate "wait for the
-        // lock and try again" outcome.
-        if (resolved.visibility === 'public' && input.visibility === 'private') {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Task visibility cannot be reverted from public to private',
-          });
-        }
-
         // Mirror the edit-lock contract from `update`: reject visibility flips
         // while another workspace member is actively editing this task. Without
         // this check a collaborator could silently retitle a private task to

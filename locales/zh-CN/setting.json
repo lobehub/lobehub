@@ -1906,7 +1906,7 @@
   "workspace.create.submit": "创建工作区",
   "workspace.create.title": "创建新工作区",
   "workspace.description.title": "描述",
-  "workspace.general.avatar.description": "这是您的工作区头像。",
+  "workspace.general.avatar.description": "这是您的工作区头像。点击头像即可从本地文件上传自定义头像。",
   "workspace.general.avatar.hint": "头像是可选的，但强烈推荐。",
   "workspace.general.avatar.title": "工作区头像",
   "workspace.general.avatar.tooLarge": "头像文件必须小于 5MB。",

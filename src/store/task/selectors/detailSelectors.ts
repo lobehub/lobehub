@@ -23,6 +23,8 @@ const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority 
 const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
   activeTaskDetail(s)?.visibility ?? 'public';
 
+const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
+
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
@@ -109,6 +111,7 @@ export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskCreatedByUserId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,

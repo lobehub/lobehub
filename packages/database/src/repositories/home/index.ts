@@ -271,10 +271,12 @@ export class HomeRepository {
           isPrivate: a.visibility === 'private',
           pinned: a.pinned ?? a.sessionPinned ?? false,
           sessionId: a.sessionId,
+          slug: a.slug,
           title: meta.title,
           type: 'agent' as const,
           unreadCount: agentUnread.get(a.id) ?? 0,
           updatedAt: a.updatedAt,
+          userId: a.agentUserId,
           visibility: a.visibility,
         };
       }),

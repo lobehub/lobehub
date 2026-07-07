@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SessionDefaultGroup, type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
@@ -6,6 +7,7 @@ import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
+  EyeOffIcon,
   FolderInputIcon,
   GlobeIcon,
   LucideCopy,
@@ -21,12 +23,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 interface UseAgentDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -36,7 +44,9 @@ interface UseAgentDropdownMenuParams {
   id: string;
   openCreateGroupModal: () => void;
   pinned: boolean;
+  slug?: string | null;
   title: string;
+  userId?: string | null;
   visibility?: SidebarVisibility;
 }
 
@@ -48,7 +58,9 @@ export const useAgentDropdownMenu = ({
   id,
   openCreateGroupModal,
   pinned,
+  slug,
   title,
+  userId,
   visibility,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common']);
@@ -73,15 +85,23 @@ export const useAgentDropdownMenu = ({
     s.removeAgent,
   ]);
 
-  // "Publish to Workspace" is a one-way action and only meaningful inside a
-  // workspace: in personal mode every row is implicitly owner-private. Once
-  // an agent is `public`, other members may already use it, so we never let
-  // it slip back to `private`. The menu item only appears for private
-  // agents in workspace mode; the server is the source of truth for whether
-  // the viewer is the creator and rejects requests from anyone else.
+  // Visibility actions are only meaningful inside a workspace: in personal
+  // mode every row is implicitly owner-private. "Publish to Workspace"
+  // appears on private agents; the inverse "Make private" (LOBE-11551)
+  // appears on published agents, but only for the creator or a workspace
+  // owner, and never on builtin agents (LobeAI etc.). The server enforces
+  // the same rules as a backstop.
   const activeWorkspaceId = useActiveWorkspaceId();
+  const isWorkspaceOwner = useIsWorkspaceOwner();
+  const currentUserId = useUserStore(userProfileSelectors.userId);
   const isPrivate = visibility === 'private';
+  const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
   const showPublishAction = Boolean(activeWorkspaceId) && isPrivate;
+  const showMakePrivateAction =
+    Boolean(activeWorkspaceId) &&
+    visibility === 'public' &&
+    !isBuiltin &&
+    (isWorkspaceOwner || (!!currentUserId && userId === currentUserId));
 
   // Viewer has no write permissions on agents — disable every mutating menu
   // item (pin/rename/duplicate/move/delete) while keeping the menu visible
@@ -184,16 +204,9 @@ export const useAgentDropdownMenu = ({
                 onClick: async ({ domEvent }: any) => {
                   domEvent?.stopPropagation();
                   if (!canEdit) return;
-                  // Soft confirm because the action is irreversible: once
-                  // teammates start using a published agent, the change
-                  // can't be rolled back from the UI.
                   confirmModal({
                     cancelText: t('cancel', { ns: 'common' }),
-                    content: t('agent.publishToWorkspaceConfirm', {
-                      defaultValue:
-                        'Other workspace members will be able to use this agent. ' +
-                        'You will not be able to make it private again.',
-                    }),
+                    content: <VisibilityConfirmContent variant="publish" />,
                     okText: t('agent.publishToWorkspace', {
                       defaultValue: 'Publish to Workspace',
                     }),
@@ -216,6 +229,38 @@ export const useAgentDropdownMenu = ({
                     title: t('agent.publishToWorkspace', {
                       defaultValue: 'Publish to Workspace',
                     }),
+                  });
+                },
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
+        ...(showMakePrivateAction
+          ? [
+              {
+                disabled: !canEdit,
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'makePrivate',
+                label: t('makePrivate', { ns: 'common' }),
+                onClick: async ({ domEvent }: any) => {
+                  domEvent?.stopPropagation();
+                  if (!canEdit) return;
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: <VisibilityConfirmContent variant="makePrivate" />,
+                    okButtonProps: { danger: true },
+                    okText: t('makePrivate.confirm.ok', { ns: 'common' }),
+                    onOk: async () => {
+                      try {
+                        await agentService.setAgentVisibility(id, 'private');
+                        await refreshAgentList();
+                        message.success(t('makePrivate.success', { ns: 'common' }));
+                      } catch (error) {
+                        console.error('Failed to make agent private:', error);
+                        message.error(t('makePrivate.error', { ns: 'common' }));
+                      }
+                    },
+                    title: t('makePrivate.confirm.title', { ns: 'common' }),
                   });
                 },
               },
@@ -260,6 +305,7 @@ export const useAgentDropdownMenu = ({
       message,
       transferMenuItems,
       showPublishAction,
+      showMakePrivateAction,
       refreshAgentList,
       t,
     ],

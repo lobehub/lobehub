@@ -1968,7 +1968,8 @@ When I am ___, I need ___
   'workspace.auditLog.upgrade.title': 'Unlock audit logs before issues become incidents',
   'workspace.create.title': 'Create a new workspace',
   'workspace.description.title': 'Description',
-  'workspace.general.avatar.description': "This is your workspace's avatar.",
+  'workspace.general.avatar.description':
+    "This is your workspace's avatar. Click on the avatar to upload a custom one from your files.",
   'workspace.general.avatar.hint': 'An avatar is optional but strongly recommended.',
   'workspace.general.avatar.title': 'Workspace Avatar',
   'workspace.general.avatar.tooLarge': 'Avatar file must be smaller than 5MB.',
