@@ -2091,6 +2091,89 @@ describe('TaskModel', () => {
       expect(historical.visibility).toBe('private');
     });
 
+    it('should cascade public→private demotion into task_comments and task_topics', async () => {
+      // Inverse of the two non-cascade tests above: comment/topic visibility
+      // is a write-time mirror of the task used as a JOIN-free authorization
+      // proxy. When the task is pulled back to private, public-era rows must
+      // follow — otherwise members who saved a comment/topic id while the
+      // task was public could keep reading/operating those historical rows.
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const bob = new TaskModel(serverDB, userId2, wsId);
+
+      const task = await alice.create({
+        instruction: 'will be demoted',
+        visibility: 'public',
+      });
+      await alice.addComment({
+        authorUserId: userId,
+        content: 'public-era comment',
+        taskId: task.id,
+        userId,
+      });
+
+      const publicTopicId = await createTopic('public-era-run-topic-id');
+      await serverDB.insert(taskTopics).values({
+        seq: 1,
+        status: 'completed',
+        taskId: task.id,
+        topicId: publicTopicId,
+        userId,
+        visibility: 'public',
+        workspaceId: wsId,
+      });
+
+      // Sanity: Bob sees the public-era comment while the task is public.
+      expect(await bob.getComments(task.id)).toHaveLength(1);
+
+      await alice.updateVisibility(task.id, 'private');
+
+      // Task and both child rows are private now — gone from Bob's scope.
+      expect(await bob.findById(task.id)).toBeNull();
+      expect(await bob.getComments(task.id)).toHaveLength(0);
+      const [demotedTopic] = await serverDB
+        .select({ visibility: taskTopics.visibility })
+        .from(taskTopics)
+        .where(eq(taskTopics.taskId, task.id));
+      expect(demotedTopic.visibility).toBe('private');
+
+      // Alice (creator) keeps access to her own rows.
+      expect(await alice.getComments(task.id)).toHaveLength(1);
+    });
+
+    it('should count public tasks by assignee across workspace members', async () => {
+      // Backs the agent demotion guard: public tasks created by ANY member
+      // must block the demotion, while private tasks and other agents' tasks
+      // must not.
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const bob = new TaskModel(serverDB, userId2, wsId);
+      const agentId = 'count-assignee-agent';
+      await serverDB
+        .insert(agents)
+        .values({ id: agentId, userId, visibility: 'public', workspaceId: wsId })
+        .onConflictDoNothing();
+
+      expect(await alice.countPublicTasksByAssignee(agentId)).toBe(0);
+
+      await alice.create({
+        assigneeAgentId: agentId,
+        instruction: 'Alice public',
+        visibility: 'public',
+      });
+      await bob.create({
+        assigneeAgentId: agentId,
+        instruction: 'Bob public',
+        visibility: 'public',
+      });
+      await alice.create({
+        assigneeAgentId: agentId,
+        instruction: 'Alice private',
+        visibility: 'private',
+      });
+      await alice.create({ instruction: 'Unassigned public', visibility: 'public' });
+
+      expect(await alice.countPublicTasksByAssignee(agentId)).toBe(2);
+    });
+
     it('should narrow list() to private tasks when visibility filter is set', async () => {
       const alice = new TaskModel(serverDB, userId, wsId);
       await alice.create({ instruction: 'Pub', visibility: 'public' });

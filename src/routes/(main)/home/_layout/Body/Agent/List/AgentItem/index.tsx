@@ -79,17 +79,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
-  const {
-    id,
-    avatar,
-    backgroundColor,
-    title,
-    pinned,
-    heterogeneousType,
-    slug,
-    userId,
-    visibility,
-  } = item;
+  const { id, avatar, backgroundColor, title, pinned, slug, userId, visibility } = item;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
   // aren't loaded into the chat store on this client.

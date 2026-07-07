@@ -12,6 +12,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
+import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -146,6 +147,24 @@ export const agentRouter = router({
           throw new TRPCError({
             code: 'FORBIDDEN',
             message: 'Only the agent creator or workspace owner can change visibility',
+          });
+        }
+      }
+
+      // A public task must never be assigned to a private agent — the task
+      // side rejects that combo on create/update/updateVisibility
+      // (`assertAgentVisibilityCompat`). Demoting an agent that still has
+      // public tasks would break the invariant from the agent side: members
+      // keep seeing the tasks but can no longer see or run the assignee.
+      // Reject early — reassign or demote those tasks first.
+      if (input.visibility === 'private' && ctx.workspaceId) {
+        const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+        const publicTaskCount = await taskModel.countPublicTasksByAssignee(input.id);
+        if (publicTaskCount > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot make this agent private while workspace tasks are assigned to it. Reassign or make those tasks private first.',
           });
         }
       }
