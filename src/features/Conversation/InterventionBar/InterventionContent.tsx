@@ -23,11 +23,14 @@ const InterventionContent = memo<InterventionContentProps>(
     return (
       <div className={styles.content}>
         <UserInterventionErrorBoundary
+          actionsPortalTarget={actionsPortalTarget}
           apiName={intervention.apiName}
+          assistantGroupId={intervention.assistantGroupId}
           identifier={intervention.identifier}
           key={boundaryKey}
           requestArgs={intervention.requestArgs}
           toolCallId={intervention.toolCallId}
+          toolMessageId={intervention.toolMessageId}
         >
           <Intervention
             actionsPortalTarget={actionsPortalTarget}

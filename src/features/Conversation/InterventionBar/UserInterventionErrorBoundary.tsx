@@ -6,7 +6,13 @@ import { createStaticStyles } from 'antd-style';
 import { AlertTriangle } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, memo, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { useUserStore } from '@/store/user';
+import { toolInterventionSelectors } from '@/store/user/selectors';
+
+import ApprovalActions from '../Messages/AssistantGroup/Tool/Detail/Intervention/ApprovalActions';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -42,14 +48,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface UserInterventionFallbackProps {
+  actionsPortalTarget?: HTMLDivElement | null;
   apiName: string;
+  assistantGroupId?: string;
   identifier: string;
   requestArgs: string;
+  toolCallId: string;
+  toolMessageId: string;
 }
 
 interface UserInterventionErrorBoundaryProps extends UserInterventionFallbackProps {
   children: ReactNode;
-  toolCallId: string;
 }
 
 interface UserInterventionErrorBoundaryState {
@@ -65,9 +74,30 @@ const formatRequestArgs = (requestArgs: string) => {
 };
 
 const UserInterventionFallback = memo<UserInterventionFallbackProps>(
-  ({ apiName, identifier, requestArgs }) => {
+  ({
+    actionsPortalTarget,
+    apiName,
+    assistantGroupId,
+    identifier,
+    requestArgs,
+    toolCallId,
+    toolMessageId,
+  }) => {
     const { t } = useTranslation('chat');
+    const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const json = useMemo(() => formatRequestArgs(requestArgs), [requestArgs]);
+    const actions = (
+      <Flexbox horizontal justify={'flex-end'}>
+        <ApprovalActions
+          apiName={apiName}
+          approvalMode={approvalMode}
+          assistantGroupId={assistantGroupId}
+          identifier={identifier}
+          messageId={toolMessageId}
+          toolCallId={toolCallId}
+        />
+      </Flexbox>
+    );
 
     return (
       <Flexbox gap={8}>
@@ -84,6 +114,7 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
         <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
           {json}
         </Highlighter>
+        {actionsPortalTarget ? createPortal(actions, actionsPortalTarget) : actions}
       </Flexbox>
     );
   },
@@ -115,9 +146,13 @@ class UserInterventionErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <UserInterventionFallback
+          actionsPortalTarget={this.props.actionsPortalTarget}
           apiName={this.props.apiName}
+          assistantGroupId={this.props.assistantGroupId}
           identifier={this.props.identifier}
           requestArgs={this.props.requestArgs}
+          toolCallId={this.props.toolCallId}
+          toolMessageId={this.props.toolMessageId}
         />
       );
     }
