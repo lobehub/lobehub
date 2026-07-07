@@ -2,6 +2,7 @@ import type { BuiltinInterventionProps } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { buildSubmitPayload, FREEFORM_PAYLOAD_KEY, isQuestionAnswered, readDraft } from './draft';
+import { normalizeAskUserQuestions } from './normalize';
 import type { AskUserDraft, AskUserQuestionArgs, AskUserQuestionItem } from './types';
 
 export interface UseAskUserFormParams {
@@ -57,7 +58,7 @@ export const useAskUserForm = ({
   persistedDraft,
   writeDraft,
 }: UseAskUserFormParams): AskUserFormApi => {
-  const questions = args?.questions ?? [];
+  const questions = useMemo(() => normalizeAskUserQuestions(args), [args]);
 
   // Plain const (not a hook) so it can read `persistedDraft` without tripping
   // exhaustive-deps; consumed only by the once-run useState initializers below.
@@ -252,9 +253,11 @@ export const useAskUserForm = ({
   ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
-  const isSubmitDisabled = inEscape
-    ? !escapeText.trim() || submitting || expired
-    : !allAnswered || expired || submitting;
+  const isSubmitDisabled =
+    questions.length === 0 ||
+    (inEscape
+      ? !escapeText.trim() || submitting || expired
+      : !allAnswered || expired || submitting);
 
   return {
     activeQuestion,
