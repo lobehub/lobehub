@@ -1190,7 +1190,32 @@ export const executeHeterogeneousAgent = async (
     // server handler). Stable per run; the copy makes a mid-topic fork visible.
     if (event.type === 'stream_start') {
       const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
-      if (typeof sid === 'string' && sid.length > 0) heteroSessionId = sid;
+      if (typeof sid === 'string' && sid.length > 0 && sid !== heteroSessionId) {
+        heteroSessionId = sid;
+        // Persist the resume token the MOMENT the CLI reports it — but only on
+        // a FRESH run. The success-path write below only runs when `sendPrompt`
+        // resolves; a rate-limit / API error rejects it and jumps straight to
+        // `catch`, so without this early write the token is lost and the next
+        // turn starts a fresh session (the `tpc_k9pUn1yf151P` regression). On a
+        // `--resume` run the id is already in metadata (it's where
+        // `resumeSessionId` came from), so skip — a failed resume is cleaned up
+        // by the retry/clear path, not re-stamped here. Fire-and-forget +
+        // guarded so it never throws past the persistQueue chain nor delays
+        // event processing; the success path re-writes it on completion.
+        if (!resumeSessionId && context.topicId && updateTopicMetadata) {
+          const topicMetadata = getTopicMetadataById(get(), context.topicId);
+          updateTopicMetadata(context.topicId, {
+            heteroSessionId: sid,
+            heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+              topicMetadata,
+              workingDirectory,
+              sid,
+            ),
+          }).catch((err) =>
+            console.error('[HeterogeneousAgent] Failed to early-persist resume session id:', err),
+          );
+        }
+      }
     }
 
     const ctx: MainAgentReduceCtx = {

@@ -912,6 +912,47 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeDefined();
     });
 
+    it('persists the resume session id from stream_start even when sendPrompt rejects (ratelimit regression)', async () => {
+      // Regression for tpc_k9pUn1yf151P: a rate-limit makes the CLI exit
+      // non-zero, so `sendPrompt` REJECTS and control jumps to `catch` —
+      // skipping the success-path metadata write. The session id used to be
+      // lost, so the next turn started a FRESH session and dropped ~41k of
+      // context. The stream_start early-write must land the resume token before
+      // the rejection, regardless of how the run ends.
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      // sendPrompt rejects (non-zero CLI exit) — drives the catch-block path,
+      // so the success-path getSessionInfo write never runs.
+      let rejectSendPrompt!: (e: unknown) => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((_, rej) => {
+          rejectSendPrompt = rej;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      // CC reports its session id via system:init → stream_start (the early
+      // resume-token write fires here), streams a little, then the run fails.
+      ipc.emitRawLine('ipc-sess-1', ccInit('cc-sess-ratelimit'));
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'partial content'));
+      await flush();
+
+      // Reject sendPrompt → catch block (success path skipped entirely).
+      rejectSendPrompt(new Error('rate limit exceeded'));
+      await executorPromise.catch(() => {});
+      await flush();
+
+      // The resume token was persisted at stream_start, BEFORE the catch block
+      // ran — so the next turn resumes this session instead of starting fresh.
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({ heteroSessionId: 'cc-sess-ratelimit' }),
+      );
+    });
+
     it('should not persist streamed auth error echoes as assistant content when the session errors', async () => {
       const rawAuthError =
         'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';

@@ -1066,6 +1066,13 @@ export class CodexAdapter implements AgentEventAdapter {
     return {
       ...(this.currentModel ? { model: this.currentModel } : {}),
       provider: CODEX_IDENTIFIER,
+      // Stamp the codex thread id on every stream_start (set from
+      // `thread.started`, which fires before `turn.started` emits this), so
+      // the resume token persists at stream_start on BOTH the server
+      // (HeterogeneousPersistenceHandler) and desktop renderer paths — matching
+      // claudeCode. Without it codex relied solely on `finish()`, so a
+      // rate-limit error (no finish / error branch) lost the session.
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...extra,
     };
   }
