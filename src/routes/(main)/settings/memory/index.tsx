@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import { Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { BrainCircuit } from 'lucide-react';
@@ -20,14 +21,20 @@ const Page = () => {
         // Config and management live on separate surfaces — give this settings
         // page the entry to actually view / edit / clear memory that its copy
         // promises, instead of dead-ending at a toggle + slider.
+        // Desktop-only: the `/memory` manager route is registered in the desktop
+        // router, not the mobile one (mobile renders this same tab via its
+        // generic settings route but has no `/memory`). Linking on mobile would
+        // hit an unmatched route / blank page.
         extra={
-          <Button
-            icon={<Icon icon={BrainCircuit} />}
-            size={'small'}
-            onClick={() => navigate('/memory')}
-          >
-            {t('memory.manageEntry')}
-          </Button>
+          isDesktop ? (
+            <Button
+              icon={<Icon icon={BrainCircuit} />}
+              size={'small'}
+              onClick={() => navigate('/memory')}
+            >
+              {t('memory.manageEntry')}
+            </Button>
+          ) : undefined
         }
       />
       <Memory />
