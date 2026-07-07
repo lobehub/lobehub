@@ -16,6 +16,11 @@ export default {
     'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
   'credit_balance_low_title': 'Your credit balance is running low',
+  'email.footer.manage': 'Manage notifications',
+  'email.footer.preference':
+    'You received this email because of your notification settings on LobeHub.',
+  'email.footer.system': 'This is an important account notification from LobeHub.',
+  'email.viewDetails': 'View Details',
   'image_generation_completed': 'Your image "{{prompt}}" is ready.',
   'image_generation_completed_title': 'Image generation completed',
   'inbox.archiveAll': 'Archive all',
