@@ -1,7 +1,7 @@
 'use client';
 
 import { safeParseJSON } from '@lobechat/utils';
-import { Highlighter, Icon } from '@lobehub/ui';
+import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlertTriangle } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
@@ -19,25 +19,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  fallback: css`
-    width: 100%;
-  `,
   icon: css`
     flex: none;
     color: ${cssVar.colorWarning};
-  `,
-  json: css`
-    margin-block-start: 6px;
-  `,
-  meta: css`
-    overflow: hidden;
-    flex: none;
-
-    max-width: 40%;
-
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   notice: css`
     display: flex;
@@ -86,23 +70,21 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
     const json = useMemo(() => formatRequestArgs(requestArgs), [requestArgs]);
 
     return (
-      <div className={styles.fallback}>
+      <Flexbox gap={8}>
         <div className={styles.notice}>
           <Icon className={styles.icon} icon={AlertTriangle} size={14} />
           <span className={styles.title}>{t('tool.intervention.renderFallback.title')}</span>
           <span className={styles.description}>
             {t('tool.intervention.renderFallback.description')}
           </span>
-          <span className={styles.meta}>
-            {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
-          </span>
         </div>
-        <div className={styles.json}>
-          <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
-            {json}
-          </Highlighter>
-        </div>
-      </div>
+        <Text fontSize={12} type="secondary">
+          {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
+        </Text>
+        <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
+          {json}
+        </Highlighter>
+      </Flexbox>
     );
   },
 );
