@@ -35,23 +35,20 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
     const json = useMemo(() => formatRequestArgs(requestArgs), [requestArgs]);
 
     return (
-      <Alert
-        showIcon
-        description={t('tool.intervention.renderFallback.description')}
-        extraIsolate={false}
-        title={t('tool.intervention.renderFallback.title')}
-        type="warning"
-        extra={
-          <Flexbox gap={8}>
-            <Text fontSize={12} type="secondary">
-              {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
-            </Text>
-            <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
-              {json}
-            </Highlighter>
-          </Flexbox>
-        }
-      />
+      <Flexbox gap={8}>
+        <Alert
+          showIcon
+          description={t('tool.intervention.renderFallback.description')}
+          title={t('tool.intervention.renderFallback.title')}
+          type="warning"
+        />
+        <Text fontSize={12} type="secondary">
+          {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
+        </Text>
+        <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
+          {json}
+        </Highlighter>
+      </Flexbox>
     );
   },
 );
