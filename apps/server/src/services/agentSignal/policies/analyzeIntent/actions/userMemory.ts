@@ -430,15 +430,10 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The message to attach the memory-agent child thread to, so its
-      // messages stay isolated from the main topic instead of being flattened
-      // into it. Prefer the assistant message that completed the turn (set by
-      // planUserMemory via extractAssistantMessageIdFromSourceId — only present
-      // for clientRuntimeComplete sources whose id is
-      // `${assistantMessageId}:completion:${parentMessageId}`). Other sources
-      // carry no assistant boundary, so fall back to the triggering user
-      // message id; without this fallback no thread is created and the run
-      // leaks into the active conversation.
+      // Attach the memory-agent child thread to the completed assistant turn
+      // when the planner has one, either from the normalized payload anchor or
+      // the legacy `:completion:` source id. Fall back to the triggering user
+      // message so the async run still stays out of the main topic.
       sourceMessageId: assistantMessageId ?? messageId,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
