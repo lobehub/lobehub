@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
+  resolveAgentWorkingDirectorySource,
   resolveTargetDeviceId,
 } from './agentWorkingDirectory';
 
@@ -121,6 +122,44 @@ describe('resolveAgentWorkingDirectory', () => {
 
   it('returns undefined when nothing is configured', () => {
     expect(resolveAgentWorkingDirectory({})).toBeUndefined();
+  });
+});
+
+describe('resolveAgentWorkingDirectorySource', () => {
+  it('resolves to the SOURCE repo path, ignoring the active worktree', () => {
+    // A worktree switch records `activeWorktree` but the directory label must
+    // keep showing the repo root (where hetero CLI sessions actually anchor).
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: {
+        cur: {
+          git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+          path: '/repo',
+          repoType: 'git',
+        },
+      },
+    });
+
+    expect(resolveAgentWorkingDirectorySource({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo',
+    );
+    // the effective resolver still yields the worktree — the two intentionally
+    // diverge, and git status (not the directory label) is what consumes it.
+    expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo-fix',
+    );
+  });
+
+  it('resolves the topic-level config to its source path', () => {
+    expect(
+      resolveAgentWorkingDirectorySource({
+        topicWorkingDirectory: '/topic-effective',
+        topicWorkingDirectoryConfig: {
+          git: { activeWorktree: '/repo-fix', isWorktree: true },
+          path: '/repo',
+        },
+      }),
+    ).toBe('/repo');
   });
 });
 

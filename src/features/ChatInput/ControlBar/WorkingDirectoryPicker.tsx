@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { WorkingDirEntry } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirSourcePath } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils';
 import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
 import {
-  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectorySource,
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
 import {
@@ -337,9 +337,12 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   );
   const legacyAgentWorkingDirectory = getWorkingDirectoryPathString(rawLegacyAgentWorkingDirectory);
 
-  // The explicitly-selected cwd (no home fallback) — drives the active check and
-  // the Reset affordance.
-  const resolvedSelectedDir = resolveAgentWorkingDirectory({
+  // The explicitly-selected REPO (no home fallback) — drives the directory label,
+  // the active check, and the Reset affordance. Resolves to the SOURCE path
+  // (repo root), never the active worktree: the label shows the repo the agent is
+  // bound to, while the worktree switcher in git status tracks the active
+  // worktree separately.
+  const resolvedSelectedDir = resolveAgentWorkingDirectorySource({
     agencyConfig,
     currentDeviceId,
     deviceDefaultCwd,
@@ -428,9 +431,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   };
 
   const renderRow = (entry: WorkingDirEntry) => {
-    const effectivePath = getWorkingDirEffectivePath(entry);
-    const isActive = effectivePath === selectedDir;
-    const isDefault = !!deviceDefaultCwd && effectivePath === deviceDefaultCwd;
+    const sourcePath = getWorkingDirSourcePath(entry);
+    const isActive = sourcePath === selectedDir;
+    const isDefault = !!deviceDefaultCwd && sourcePath === deviceDefaultCwd;
     return (
       <Flexbox
         horizontal
