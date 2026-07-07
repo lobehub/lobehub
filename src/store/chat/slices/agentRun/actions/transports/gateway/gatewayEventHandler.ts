@@ -22,6 +22,7 @@ import type {
   AgentRunLifecycle,
   RunScope,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
+import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
@@ -425,6 +426,45 @@ export const createGatewayEventHandler = (
             // Server-confirmed assistant id is durable state — preserve it on
             // interrupt instead of falling back to a placeholder-clobbering refetch.
             hasStreamedContent = true;
+
+            // The step_start uiMessages snapshot is resolved BEFORE the server
+            // creates this step's assistant row, so for every step after the
+            // first the message is NOT in the store yet. `updateMessage`
+            // dispatches on a missing id are silent no-ops, so without an
+            // insert here the whole step renders nothing until the next DB
+            // refetch — and the final step has none before agent_runtime_end,
+            // which is how "loading cleared but no text" happened (LOBE-11501).
+            const stored = dbMessageSelectors.getDbMessageById(newAssistantMessageId)(get());
+            if (!stored) {
+              const seed = data?.assistantMessage;
+              if (seed?.role) {
+                // Newer servers ship the message seed on stream_start — insert
+                // the shell locally so chunks land immediately, zero roundtrips.
+                get().internal_dispatchMessage(
+                  {
+                    id: newAssistantMessageId,
+                    type: 'createMessage',
+                    value: {
+                      agentId: seed.agentId ?? context.agentId,
+                      content: '',
+                      groupId: seed.groupId ?? undefined,
+                      model: seed.model ?? data?.model,
+                      parentId: seed.parentId ?? undefined,
+                      provider: seed.provider ?? data?.provider,
+                      role: 'assistant',
+                      threadId: seed.threadId ?? undefined,
+                      topicId: seed.topicId ?? context.topicId ?? undefined,
+                    },
+                  },
+                  dispatchContext,
+                );
+              } else {
+                // Older servers send only `{ id }` — fall back to a DB read.
+                // The row is inserted before stream_start is published, so the
+                // fetch is guaranteed to bring it into the store.
+                await fetchAndReplaceMessages(get, context).catch(console.error);
+              }
+            }
           }
 
           // Close any reasoning op carried over from the previous step.
@@ -438,12 +478,11 @@ export const createGatewayEventHandler = (
           accumulatedReasoning = '';
           get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
-          // Skip the DB read ONLY for native gateway streams — those carry
-          // `assistantMessage.id` directly on stream_start AND the preceding
-          // `step_start` already carried the SoT uiMessages snapshot, so
-          // chunks have a valid target in `dbMessagesMap` already. Removing
-          // the await here is what un-blocks the enqueue chain so live
-          // chunks can land mid-stream.
+          // Native gateway streams carry `assistantMessage.id` directly on
+          // stream_start and the shell-insert above guarantees a valid chunk
+          // target in `dbMessagesMap`, so they skip this DB read — that skip
+          // is what un-blocks the enqueue chain so live chunks can land
+          // mid-stream.
           //
           // Hetero CLI adapters (Claude Code / Codex) never set
           // `assistantMessage.id` on stream_start, so the DB read stays
@@ -584,6 +623,15 @@ export const createGatewayEventHandler = (
 
       case 'visible_output_end': {
         enqueue(() => {
+          // Guard: only clear visible loading when the streamed content has
+          // actually landed in the store. If the message shell is missing (or
+          // text streamed but never applied), clearing here would show
+          // "loading done" with the answer still invisible (LOBE-11501) —
+          // skip the hint instead and let agent_runtime_end reconcile content
+          // and loading in the same frame, i.e. the pre-early-hint behavior.
+          const stored = dbMessageSelectors.getDbMessageById(currentAssistantMessageId)(get());
+          if (!stored || (accumulatedContent && !stored.content)) return;
+
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
           // Example: CC/Codex may emit stream_end -> stream_start(newStep) for
