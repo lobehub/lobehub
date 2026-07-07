@@ -137,39 +137,29 @@ const styles = createStaticStyles(({ css }) => ({
   codingScope: css`
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
 
     max-width: 100%;
     margin-block-start: 8px;
   `,
   codingScopeMain: css`
     display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px 14px;
     align-items: center;
 
     min-width: 0;
-
-    @media (width <= 720px) {
-      flex-wrap: wrap;
-    }
   `,
   branchChip: css`
     display: inline-flex;
-    flex: 1 1 220px;
-    gap: 8px;
+    flex: 0 1 auto;
+    gap: 6px;
     align-items: center;
 
     min-width: 0;
-    max-width: 320px;
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
+    max-width: 360px;
 
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
+    color: ${cssVar.colorTextTertiary};
 
     code {
       overflow: hidden;
@@ -177,71 +167,67 @@ const styles = createStaticStyles(({ css }) => ({
       min-width: 0;
 
       font-family: ${cssVar.fontFamilyCode};
-      font-size: 13px;
-      color: ${cssVar.colorText};
+      font-size: 12px;
+      color: ${cssVar.colorTextSecondary};
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    svg {
+      flex: 0 0 auto;
+      color: ${cssVar.colorTextQuaternary};
     }
   `,
   commitChip: css`
     display: inline-flex;
     flex: 0 0 auto;
-    gap: 7px;
+    gap: 6px;
     align-items: center;
 
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
+    color: ${cssVar.colorTextTertiary};
 
     code {
       font-family: ${cssVar.fontFamilyCode};
       font-size: 12px;
-      color: ${cssVar.colorText};
+      color: ${cssVar.colorTextTertiary};
+    }
+
+    svg {
+      flex: 0 0 auto;
+      color: ${cssVar.colorTextQuaternary};
     }
   `,
   prChip: css`
     cursor: default;
 
     display: inline-flex;
-    flex: 1 1 280px;
-    gap: 7px;
+    flex: 0 1 auto;
+    gap: 6px;
     align-items: center;
 
     min-width: 0;
-    max-width: 100%;
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
+    max-width: 420px;
 
-    font-size: 13px;
-    color: ${cssVar.colorText};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
     text-decoration: none;
-
-    background: ${cssVar.colorBgContainer};
 
     &[data-link='true'] {
       cursor: pointer;
     }
 
     &[data-link='true']:hover {
-      border-color: ${cssVar.colorLink};
-      color: ${cssVar.colorText};
+      color: ${cssVar.colorLink};
     }
 
     > svg:first-child {
       flex: 0 0 auto;
-      color: ${cssVar.colorLink};
+      color: ${cssVar.colorTextQuaternary};
     }
   `,
   prNumber: css`
     flex: 0 0 auto;
-    color: ${cssVar.colorLink};
+    color: ${cssVar.colorTextSecondary};
   `,
   prTitle: css`
     overflow: hidden;
@@ -249,7 +235,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -1001,7 +987,7 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
 
   return (
     <div className={styles.codingScope}>
-      {(hasPullRequest || branch || commit) && (
+      {(hasPullRequest || branch || commit || date) && (
         <div className={styles.codingScopeMain}>
           {pullRequestContent &&
             (pullRequest?.url ? (
@@ -1032,10 +1018,16 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
               <code>{shortCommit}</code>
             </span>
           )}
+          {date && (
+            <span className={styles.scopeMetaItem}>
+              <Icon icon={CalendarClock} size={13} />
+              <span>{date}</span>
+            </span>
+          )}
         </div>
       )}
 
-      {(surfaces?.length || entry || date) && (
+      {(surfaces?.length || entry) && (
         <div className={styles.scopeMetaRow}>
           {surfaces && surfaces.length > 0 && (
             <span className={styles.scopeMetaItem}>
@@ -1053,12 +1045,6 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
             <span className={styles.scopeMetaItem} title={entry}>
               <Icon icon={Terminal} size={13} />
               <code>{entry}</code>
-            </span>
-          )}
-          {date && (
-            <span className={styles.scopeMetaItem}>
-              <Icon icon={CalendarClock} size={13} />
-              <span>{date}</span>
             </span>
           )}
         </div>
