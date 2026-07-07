@@ -1009,7 +1009,7 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
                 href={pullRequestUrl}
                 rel="noreferrer"
                 target="_blank"
-                title={pullRequest.title ?? pullRequestUrl}
+                title={pullRequest?.title ?? pullRequestUrl}
               >
                 {pullRequestContent}
               </a>
