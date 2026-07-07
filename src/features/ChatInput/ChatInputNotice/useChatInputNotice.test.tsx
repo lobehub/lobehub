@@ -134,7 +134,7 @@ describe('useChatInputNotice', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('returns the sandbox tip on desktop when the cloud sandbox is selected', () => {
+  it('does not show an input notice when the cloud sandbox is selected', () => {
     testState.isDesktop = true;
     testState.agent.agencyConfig = { executionTarget: 'sandbox' };
     testState.aiInfra.isInitAiProviderRuntimeState = true;
@@ -144,11 +144,7 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({
-      action: 'switchToLocal',
-      key: 'input.sandboxModeNotice',
-      type: 'info',
-    });
+    expect(result.current).toBeUndefined();
   });
 
   it('does not return the sandbox tip off desktop even when the sandbox is selected', () => {
@@ -164,7 +160,7 @@ describe('useChatInputNotice', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('shows the sandbox tip for heterogeneous agents that selected the sandbox', () => {
+  it('does not show an input notice for heterogeneous agents that selected the sandbox', () => {
     testState.isDesktop = true;
     testState.agent.agencyConfig = {
       executionTarget: 'sandbox',
@@ -174,14 +170,10 @@ describe('useChatInputNotice', () => {
 
     const { result } = renderHook(() => useChatInputNotice());
 
-    expect(result.current).toEqual({
-      action: 'switchToLocal',
-      key: 'input.sandboxModeNotice',
-      type: 'info',
-    });
+    expect(result.current).toBeUndefined();
   });
 
-  it('prioritizes the model warning over the sandbox tip when both apply', () => {
+  it('returns the model warning when a sandbox target also has an unavailable model', () => {
     testState.isDesktop = true;
     testState.agent.agencyConfig = { executionTarget: 'sandbox' };
     testState.aiInfra.isInitAiProviderRuntimeState = true;
