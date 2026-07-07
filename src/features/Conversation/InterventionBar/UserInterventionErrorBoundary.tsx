@@ -21,10 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   fallback: css`
     width: 100%;
-
-    &[open] {
-      padding-block-end: 4px;
-    }
   `,
   icon: css`
     flex: none;
@@ -43,9 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  summary: css`
-    cursor: pointer;
-
+  notice: css`
     display: flex;
     gap: 6px;
     align-items: center;
@@ -55,11 +49,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 12px;
     line-height: 1.5;
-    list-style: none;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
   `,
   title: css`
     flex: none;
@@ -97,8 +86,8 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
     const json = useMemo(() => formatRequestArgs(requestArgs), [requestArgs]);
 
     return (
-      <details className={styles.fallback}>
-        <summary className={styles.summary}>
+      <div className={styles.fallback}>
+        <div className={styles.notice}>
           <Icon className={styles.icon} icon={AlertTriangle} size={14} />
           <span className={styles.title}>{t('tool.intervention.renderFallback.title')}</span>
           <span className={styles.description}>
@@ -107,13 +96,13 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
           <span className={styles.meta}>
             {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
           </span>
-        </summary>
+        </div>
         <div className={styles.json}>
           <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
             {json}
           </Highlighter>
         </div>
-      </details>
+      </div>
     );
   },
 );
