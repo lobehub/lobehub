@@ -131,8 +131,11 @@ describe('connect service', () => {
     ]);
   });
 
-  it('imports the current environment by name and clears stale service env', () => {
+  it('imports only allowlisted service env and clears stale service env', () => {
     process.env.LOBEHUB_CLI_API_KEY = 'test-key';
+    // Unrelated shell secrets must never reach the systemd user manager —
+    // import-environment makes them inheritable by every other user service.
+    process.env.AWS_SECRET_ACCESS_KEY = 'shell-secret';
     delete process.env.LOBEHUB_CLI_HOME;
 
     installConnectService();
@@ -142,6 +145,9 @@ describe('connect service', () => {
     );
     expect(systemctlCalls).toContainEqual(
       expect.arrayContaining(['--user', 'import-environment', 'LOBEHUB_CLI_API_KEY']),
+    );
+    expect(systemctlCalls).not.toContainEqual(
+      expect.arrayContaining(['import-environment', 'AWS_SECRET_ACCESS_KEY']),
     );
     expect(systemctlCalls).not.toContainEqual(['--user', 'import-environment']);
   });

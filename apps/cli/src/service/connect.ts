@@ -8,7 +8,6 @@ import { CLI_API_KEY_ENV } from '../constants/auth';
 import { getRunningDaemonPid } from '../daemon/manager';
 
 const SERVICE_NAME = 'lobehub-connect.service';
-const ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
 const SERVICE_ENV_NAMES = [
   'AGENT_GATEWAY_URL',
   'DEBUG',
@@ -127,7 +126,11 @@ function importServiceEnvironment(): void {
     systemctl(['unset-environment', ...staleServiceEnvNames], 'inherit');
   }
 
-  const environmentNames = Object.keys(process.env).filter((name) => ENV_NAME_PATTERN.test(name));
+  // Only the allowlisted service vars: `import-environment` writes into the
+  // systemd user manager's environment, which every user service started
+  // afterwards inherits — importing all of process.env would leak unrelated
+  // shell secrets (AWS_*, GITHUB_TOKEN, ...) manager-wide.
+  const environmentNames = SERVICE_ENV_NAMES.filter((name) => process.env[name] !== undefined);
   if (environmentNames.length > 0) {
     systemctl(['import-environment', ...environmentNames], 'inherit');
   }
