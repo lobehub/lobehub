@@ -1226,9 +1226,11 @@ const ReportViewer = memo(() => {
           <div className={styles.checks}>
             {visible.map((r) => (
               <CheckRow
-                defaultOpen={checkVerdict(r) === 'failed' || r.evidence.some(isInlineEvidence)}
                 key={r.id}
                 result={r}
+                defaultOpen={
+                  checkVerdict(r) === 'failed' || r.evidence.some(isInlineVisualEvidence)
+                }
               />
             ))}
           </div>
