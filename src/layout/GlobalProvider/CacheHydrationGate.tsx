@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import type { PropsWithChildren } from 'react';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 
@@ -26,21 +27,22 @@ const HYDRATION_TIMEOUT = 1500;
  * `key={scope}` remount did) would unmount the whole app and expose a
  * full-screen white flash on login.
  *
- * The first paint additionally waits for a real `userId` — the universal
- * "must be signed in" gate. The anonymous scope is only ever a transient
- * pre-identity boot state, so painting under it would persist fetched data into
- * the `anon` partition and orphan it the moment the real scope resolves (the
- * stale-loading cache-miss bug). Blocking until `userId` lands closes that leak
- * at the root: no data UI ever mounts under the anonymous scope. `initState`
- * revalidates on focus/reconnect, so a transient network failure self-heals
- * into a release; only a persistently-unreachable identity keeps the loading
- * screen up. The 1500ms timeout backstop only covers a *hung cache hydration*
- * after the identity has already resolved — it never releases into the
- * anonymous scope.
+ * The first paint additionally waits for a real `userId` — but only where one
+ * is expected, i.e. where the identity round-trip actually runs: desktop
+ * (always resolves a `DESKTOP_USER` id) or a signed-in web session. The
+ * anonymous scope is only ever a transient pre-identity boot state, so painting
+ * under it would persist fetched data into the `anon` partition and orphan it
+ * the moment the real scope resolves (the stale-loading cache-miss bug).
+ * Blocking until `userId` lands closes that leak at the root: no data UI ever
+ * mounts under the anonymous scope. A no-auth / logged-out web deployment has
+ * no `userId` to wait for, so it is exempt and falls through to the
+ * timeout/ready backstop. `initState` revalidates on focus/reconnect, so a
+ * transient network failure self-heals into a release.
  */
 const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
   const isAuthLoaded = Boolean(useUserStore(authSelectors.isLoaded));
+  const isSignedIn = useUserStore(authSelectors.isLogin);
   const userId = useUserStore(userProfileSelectors.userId);
 
   const ready = useSyncExternalStore(
@@ -62,22 +64,27 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     if (released) return;
 
-    // Universal identity gate: never paint until a real `userId` resolves. This
-    // precedes the timeout backstop, so a slow or hung identity round-trip
-    // keeps the loading screen up rather than releasing into the anonymous scope.
-    if (!userId) return;
+    // A userId is expected only where the identity round-trip runs (desktop or a
+    // signed-in web session — the same condition that triggers `useInitUserState`).
+    // No-auth / logged-out web never produces one, so it must not be blocked here.
+    // Guard on `isAuthLoaded` so we don't act on a stale `isSignedIn` mid-load.
+    if (isAuthLoaded && (isDesktop || isSignedIn) && !userId) return;
 
-    // Backstop: identity resolved, but cache hydration is taking too long —
-    // release rather than hang. Safe because `userId` is present here.
+    // Block until the session check resolves (it always does — success, failure,
+    // or no-auth — so this isn't an infinite hang). Preceding the timeout means a
+    // slow session can't release into the anonymous scope.
+    if (!isAuthLoaded) return;
+
+    // Backstop: identity resolved, but cache hydration is hung — release rather
+    // than hang. Safe because a userId is either present or not expected here.
     if (timedOut) {
       setReleased(true);
       return;
     }
-    if (!isAuthLoaded) return;
     if (!ready) return;
 
     setReleased(true);
-  }, [userId, isAuthLoaded, ready, released, timedOut]);
+  }, [isAuthLoaded, isSignedIn, userId, ready, released, timedOut]);
 
   useLayoutEffect(() => {
     if (!released) return;
