@@ -1,10 +1,72 @@
 'use client';
 
 import { safeParseJSON } from '@lobechat/utils';
-import { Alert, Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { Highlighter, Icon } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { AlertTriangle } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  description: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  fallback: css`
+    width: 100%;
+
+    &[open] {
+      padding-block-end: 4px;
+    }
+  `,
+  icon: css`
+    flex: none;
+    color: ${cssVar.colorWarning};
+  `,
+  json: css`
+    margin-block-start: 6px;
+  `,
+  meta: css`
+    overflow: hidden;
+    flex: none;
+
+    max-width: 40%;
+
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  summary: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+    padding-block: 2px;
+
+    font-size: 12px;
+    line-height: 1.5;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  `,
+  title: css`
+    flex: none;
+    font-weight: 500;
+    color: ${cssVar.colorWarning};
+  `,
+}));
 
 interface UserInterventionFallbackProps {
   apiName: string;
@@ -35,20 +97,23 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
     const json = useMemo(() => formatRequestArgs(requestArgs), [requestArgs]);
 
     return (
-      <Flexbox gap={8}>
-        <Alert
-          showIcon
-          description={t('tool.intervention.renderFallback.description')}
-          title={t('tool.intervention.renderFallback.title')}
-          type="warning"
-        />
-        <Text fontSize={12} type="secondary">
-          {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
-        </Text>
-        <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
-          {json}
-        </Highlighter>
-      </Flexbox>
+      <details className={styles.fallback}>
+        <summary className={styles.summary}>
+          <Icon className={styles.icon} icon={AlertTriangle} size={14} />
+          <span className={styles.title}>{t('tool.intervention.renderFallback.title')}</span>
+          <span className={styles.description}>
+            {t('tool.intervention.renderFallback.description')}
+          </span>
+          <span className={styles.meta}>
+            {identifier} / {apiName} · {t('tool.intervention.renderFallback.rawJson')}
+          </span>
+        </summary>
+        <div className={styles.json}>
+          <Highlighter wrap actionIconSize="small" language="json" variant="borderless">
+            {json}
+          </Highlighter>
+        </div>
+      </details>
     );
   },
 );
