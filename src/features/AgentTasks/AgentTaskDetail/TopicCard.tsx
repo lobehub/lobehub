@@ -12,10 +12,19 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
-import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CircleDot,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  SquarePen,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +38,50 @@ import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
 import TopicStatusIcon from './TopicStatusIcon';
 
+const runContentStyles = createStaticStyles(({ css, cssVar }) => ({
+  clipInner: css`
+    padding-block-end: 36px;
+  `,
+  container: css`
+    position: relative;
+    width: 100%;
+  `,
+  toggleButton: css`
+    pointer-events: auto;
+
+    height: 28px;
+    padding-inline: 10px;
+    border-color: transparent;
+    border-radius: 999px;
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+
+    &:focus-visible,
+    &:hover:not(:disabled, [aria-disabled='true']) {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  toggleFloating: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 1;
+    inset-block-end: 4px;
+    inset-inline: 0;
+
+    display: flex;
+    justify-content: center;
+  `,
+  toggleInline: css`
+    display: flex;
+    justify-content: center;
+    margin-block-start: 4px;
+  `,
+}));
+
 const formatDuration = (ms: number): string => {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
@@ -40,15 +93,21 @@ const formatDuration = (ms: number): string => {
 
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
-// clamp overflow with a fade and let the whole card open the run drawer for the
-// full message (progressive disclosure). `pointerEvents: none` keeps every click
-// — including on links/code inside the markdown — falling through to the card.
+// clamp overflow with a fade, offer an inline expand affordance, and still let
+// the whole card open the run drawer for deeper reading. `pointerEvents: none`
+// keeps every click inside markdown falling through to the card.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
 const RunContent = memo<{ content: string }>(({ content }) => {
+  const { t } = useTranslation('chat');
   const ref = useRef<HTMLDivElement>(null);
   const size = useSize(ref);
+  const [expanded, setExpanded] = useState(false);
   const isOverflow = !!size && size.height > RUN_CONTENT_MAX_HEIGHT;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [content]);
 
   const markdown = (
     <Markdown ref={ref} style={{ overflow: 'unset', pointerEvents: 'none' }} variant={'chat'}>
@@ -56,12 +115,42 @@ const RunContent = memo<{ content: string }>(({ content }) => {
     </Markdown>
   );
 
-  return isOverflow ? (
-    <MaskShadow size={32} style={{ maxHeight: RUN_CONTENT_MAX_HEIGHT }}>
-      {markdown}
-    </MaskShadow>
-  ) : (
-    markdown
+  if (!isOverflow) return markdown;
+
+  const toggleButton = (
+    <Button
+      aria-expanded={expanded}
+      className={runContentStyles.toggleButton}
+      icon={expanded ? <ChevronUpIcon size={14} /> : <ChevronDownIcon size={14} />}
+      shape={'round'}
+      size={'small'}
+      type={'fill'}
+      onClick={() => setExpanded((value) => !value)}
+    >
+      {expanded ? t('messageLongCollapse.collapse') : t('messageLongCollapse.expand')}
+    </Button>
+  );
+
+  if (expanded) {
+    return (
+      <div className={runContentStyles.container}>
+        {markdown}
+        <div className={runContentStyles.toggleInline} onClick={stopPropagation}>
+          {toggleButton}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={runContentStyles.container}>
+      <MaskShadow size={40} style={{ maxHeight: RUN_CONTENT_MAX_HEIGHT }}>
+        <div className={runContentStyles.clipInner}>{markdown}</div>
+      </MaskShadow>
+      <div className={runContentStyles.toggleFloating} onClick={stopPropagation}>
+        {toggleButton}
+      </div>
+    </div>
   );
 });
 
