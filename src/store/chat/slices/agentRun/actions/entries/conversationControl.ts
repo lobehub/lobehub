@@ -305,11 +305,13 @@ export class ConversationControlActionImpl {
     // This ensures optimistic updates use the correct agentId/topicId
     const { operationId } = startOperation({
       type: 'approveToolCalling',
+      // Carry the full effective context (groupId / documentId / scope / …) so the
+      // interim op lands in the same messageMapKey bucket the UI queries. A cherry-
+      // picked context without groupId would bucket group conversations under
+      // `main_<agentId>` while the UI reads `group_<groupId>`, so the input-loading
+      // whitelist never matches there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });
@@ -458,11 +460,12 @@ export class ConversationControlActionImpl {
 
     const { operationId } = startOperation({
       type: 'submitToolInteraction',
+      // Carry the full effective context so the interim op is bucketed under the
+      // same messageMapKey the UI queries (group / page need groupId / documentId,
+      // not just agentId) — otherwise the input-loading whitelist never matches
+      // there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });
@@ -688,11 +691,12 @@ export class ConversationControlActionImpl {
 
     const { operationId } = startOperation({
       type: 'skipToolInteraction',
+      // Carry the full effective context so the interim op is bucketed under the
+      // same messageMapKey the UI queries (group / page need groupId / documentId,
+      // not just agentId) — otherwise the input-loading whitelist never matches
+      // there. Mirrors execServerAgentRuntime's execContext.
       context: {
-        agentId,
-        topicId: topicId ?? undefined,
-        threadId: threadId ?? undefined,
-        scope,
+        ...effectiveContext,
         messageId: toolMessageId,
       },
     });

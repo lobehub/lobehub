@@ -601,28 +601,39 @@ export const generationSlice: StateCreator<
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
     const item = displayMessages[currentIndex];
     if (!item) return;
-    const initialContext = mergeAgentRuntimeInitialContexts(
-      await resolveActiveTopicDocumentInitialContext(context),
-      buildRetryInitialContext(item.editorData),
-    );
-
-    // Get context messages up to and including the target message
-    const contextMessages = displayMessages.slice(0, currentIndex + 1);
-    if (contextMessages.length <= 0) return;
-
-    // ===== Hook: onBeforeRegenerate =====
-    if (hooks.onBeforeRegenerate) {
-      const shouldProceed = await hooks.onBeforeRegenerate(messageId);
-      if (shouldProceed === false) return;
-    }
-
-    // Create regenerate operation with context
+    // Start the interim regenerate op BEFORE the async preflight below
+    // (document-context resolve + onBeforeRegenerate hook). In page / bound-
+    // document contexts those reads are real round trips, so creating the op
+    // afterwards would leave the input/Stop state dead during exactly the
+    // pre-generation window the INPUT_LOADING_OPERATION_TYPES whitelist covers.
+    // Complete it if any preflight guard bails out before generation starts.
     const { operationId } = chatStore.startOperation({
       context: { ...context, messageId },
       type: 'regenerate',
     });
 
     try {
+      const initialContext = mergeAgentRuntimeInitialContexts(
+        await resolveActiveTopicDocumentInitialContext(context),
+        buildRetryInitialContext(item.editorData),
+      );
+
+      // Get context messages up to and including the target message
+      const contextMessages = displayMessages.slice(0, currentIndex + 1);
+      if (contextMessages.length <= 0) {
+        chatStore.completeOperation(operationId);
+        return;
+      }
+
+      // ===== Hook: onBeforeRegenerate =====
+      if (hooks.onBeforeRegenerate) {
+        const shouldProceed = await hooks.onBeforeRegenerate(messageId);
+        if (shouldProceed === false) {
+          chatStore.completeOperation(operationId);
+          return;
+        }
+      }
+
       // Calculate next branch index by counting children of this user message
       // We need to count how many assistant messages have this user message as parent
       const { dbMessages } = get();
