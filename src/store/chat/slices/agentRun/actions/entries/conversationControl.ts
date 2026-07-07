@@ -315,14 +315,15 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
 
-    this.#writeTopicStatus(effectiveContext, 'active');
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool's approval.
     this.#emitRunResumed(effectiveContext, {
       operationId,
       parentMessageId: toolMessageId,
-      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
+      runtimeType: shouldUseGatewayResume ? 'gateway' : 'client',
     });
 
     // 2. Update intervention status to approved
@@ -338,7 +339,7 @@ export class ConversationControlActionImpl {
     // message, persists `intervention=approved`, dispatches the approved
     // tool, and streams results back on the new op. No in-place resume of
     // the paused op — simpler state + avoids stepIndex races.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -364,6 +365,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
@@ -467,14 +469,15 @@ export class ConversationControlActionImpl {
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
     const shouldCreateUserMessage = options?.createUserMessage !== false;
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
 
-    this.#writeTopicStatus(effectiveContext, 'active');
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Park → resume: a new op continues the run paused on this tool interaction.
     this.#emitRunResumed(effectiveContext, {
       operationId,
       parentMessageId: toolMessageId,
-      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
+      runtimeType: shouldUseGatewayResume ? 'gateway' : 'client',
     });
 
     // 1. Mark intervention as approved and set tool result to user's response
@@ -506,7 +509,7 @@ export class ConversationControlActionImpl {
     // resumes from `phase: 'tool_result'` (NO re-execution). The synthetic user
     // message (2b) is not needed — the server continues from the answered tool
     // call. Mirrors approveToolCalling's gateway branch.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -533,6 +536,7 @@ export class ConversationControlActionImpl {
             ...(options?.pluginState ? { pluginState: options.pluginState } : {}),
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
@@ -1077,8 +1081,9 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
 
-    this.#writeTopicStatus(effectiveContext, 'active');
+    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
     // Optimistic update - update status to rejected and save reason
     const intervention = {
@@ -1108,7 +1113,7 @@ export class ConversationControlActionImpl {
     // `rejected_continue` share the same code path (both surface the
     // rejection to the LLM as user feedback), so a separate `rejected`
     // decision adds complexity without behavioural difference.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -1137,6 +1142,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
       } catch (error) {
         console.error('[rejectToolCalling][server] Gateway resume failed:', error);
@@ -1194,7 +1200,6 @@ export class ConversationControlActionImpl {
       });
 
       const optimisticContext = { operationId };
-      this.#writeTopicStatus(effectiveContext, 'active');
       // Park → resume: the new gateway op continues the run paused on this tool.
       this.#emitRunResumed(effectiveContext, {
         operationId,
@@ -1229,6 +1234,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {

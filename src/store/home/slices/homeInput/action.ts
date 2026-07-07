@@ -26,6 +26,7 @@ interface SendMessageWithEditorParams {
   groupId?: string;
   message: string;
   pageSelections?: PageSelection[];
+  workspaceSlug?: string | null;
 }
 
 /**
@@ -70,6 +71,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
@@ -135,7 +137,11 @@ export class HomeInputActionImpl {
 
         if (agentBuilderId) {
           await sendMessage({
-            context: { agentId: agentBuilderId, scope: 'agent_builder' },
+            context: {
+              agentId: agentBuilderId,
+              scope: 'agent_builder',
+              ...(workspaceSlug ? { workspaceSlug } : {}),
+            },
             contextSelections,
             editorData,
             message,
@@ -159,6 +165,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
@@ -210,7 +217,11 @@ export class HomeInputActionImpl {
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
-          context: { agentId: groupAgentBuilderId, scope: 'group_agent_builder' },
+          context: {
+            agentId: groupAgentBuilderId,
+            scope: 'group_agent_builder',
+            ...(workspaceSlug ? { workspaceSlug } : {}),
+          },
           contextSelections,
           editorData,
           message,
@@ -240,6 +251,7 @@ export class HomeInputActionImpl {
     editorData,
     message,
     pageSelections,
+    workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
@@ -280,7 +292,12 @@ export class HomeInputActionImpl {
           // has not mounted yet, so the page editor runtime singleton may still
           // be bound to the previously open document — relying on its fallback
           // here would scope server-side PageAgent tools to the wrong document.
-          context: { agentId: pageAgentId, documentId: newDoc.id, scope: 'page' },
+          context: {
+            agentId: pageAgentId,
+            documentId: newDoc.id,
+            scope: 'page',
+            ...(workspaceSlug ? { workspaceSlug } : {}),
+          },
           contextSelections,
           editorData,
           message,

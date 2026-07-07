@@ -76,6 +76,15 @@ describe('resolveNotificationNavigatePath', () => {
       path: AGENT_CHAT_TOPIC_URL('a1', 't1'),
     });
   });
+
+  it('marks workspace notification navigation as escaped after prefixing the path', () => {
+    expect(
+      resolveNotificationNavigate({ agentId: 'a1', topicId: 't1', workspaceSlug: 'team' }),
+    ).toEqual({
+      escape: true,
+      path: '/team/agent/a1/t1',
+    });
+  });
 });
 
 describe('resolveNotificationTitle', () => {
