@@ -17,7 +17,7 @@ import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
@@ -53,6 +53,12 @@ type RunningTopicForWatchdog = Omit<ChatTopic, 'updatedAt'> & {
   agentId?: string | null;
   groupId?: string | null;
   updatedAt: Date | number | string;
+};
+
+type TopicPatchScope = {
+  agentId?: string;
+  groupId?: string;
+  scope?: TopicMapScope;
 };
 
 /**
@@ -408,14 +414,18 @@ export class ChatTopicActionImpl {
   updateTopicStatus = async (params: {
     agentId?: string;
     groupId?: string;
+    scope?: TopicMapScope;
     status: ChatTopicStatus;
     topicId: string;
   }): Promise<void> => {
-    const { topicId, status, agentId, groupId } = params;
+    const { topicId, status, agentId, groupId, scope } = params;
     const state = this.#get();
+    const scopedAgentId = scope ? agentId : (agentId ?? state.activeAgentId);
+    const scopedGroupId = scope ? groupId : (groupId ?? state.activeGroupId);
     const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
+      agentId: scopedAgentId,
+      groupId: scopedGroupId,
+      scope,
     });
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
 
@@ -433,6 +443,7 @@ export class ChatTopicActionImpl {
       value: { status },
       agentId,
       groupId,
+      scope,
     });
 
     await topicService.updateTopic(topicId, { status }).catch((err) => {
@@ -461,26 +472,34 @@ export class ChatTopicActionImpl {
     });
   };
 
-  #clearStaleRunningOperationMetadata = async (topic: RunningTopicForWatchdog): Promise<void> => {
+  #getStaleRunningTopicPatchScope = (topic: RunningTopicForWatchdog): TopicPatchScope => {
+    const groupId = topic.groupId ?? undefined;
+
+    // Group main topic rows are persisted with the supervisor agentId, but the
+    // sidebar topic bucket is `group_${groupId}`. Patch that bucket explicitly
+    // instead of falling into `group_agent_${groupId}_${agentId}`.
+    if (groupId) return { groupId, scope: 'group' };
+
+    return { agentId: topic.agentId ?? undefined };
+  };
+
+  #clearStaleRunningOperationMetadata = async (
+    topic: RunningTopicForWatchdog,
+    patchScope: TopicPatchScope,
+  ): Promise<void> => {
     if (!topic.metadata?.runningOperation) return;
 
-    const key = topicMapKey({
-      agentId: topic.agentId ?? undefined,
-      groupId: topic.groupId ?? undefined,
-    });
+    const key = topicMapKey(patchScope);
     const currentTopic = this.#get().topicDataMap[key]?.items.find((item) => item.id === topic.id);
     const metadata = currentTopic?.metadata ?? topic.metadata;
 
+    await topicService.updateTopicMetadata(topic.id, { runningOperation: null });
+
     this.#get().internal_dispatchTopic({
-      agentId: topic.agentId ?? undefined,
-      groupId: topic.groupId ?? undefined,
+      ...patchScope,
       id: topic.id,
       type: 'updateTopic',
       value: { metadata: { ...metadata, runningOperation: null } },
-    });
-
-    await topicService.updateTopicMetadata(topic.id, { runningOperation: null }).catch((err) => {
-      console.error('[cleanupStaleRunningTopics] clear runningOperation failed:', err);
     });
   };
 
@@ -504,24 +523,34 @@ export class ChatTopicActionImpl {
         return !this.#hasAliveOperationForTopic(topic.id);
       });
 
-      await Promise.all(
+      const cleanedResults = await Promise.all(
         staleTopics.map(async (topic) => {
-          await this.updateTopicStatus({
-            agentId: topic.agentId ?? undefined,
-            groupId: topic.groupId ?? undefined,
-            status: 'active',
-            topicId: topic.id,
-          });
+          try {
+            const patchScope = this.#getStaleRunningTopicPatchScope(topic);
 
-          await this.#clearStaleRunningOperationMetadata(topic);
+            await this.#clearStaleRunningOperationMetadata(topic, patchScope);
+
+            await this.updateTopicStatus({
+              ...patchScope,
+              status: 'active',
+              topicId: topic.id,
+            });
+
+            return true;
+          } catch (err) {
+            console.error('[cleanupStaleRunningTopics] retire stale topic failed:', err);
+            return false;
+          }
         }),
       );
 
-      if (staleTopics.length > 0) {
+      const cleanedCount = cleanedResults.filter(Boolean).length;
+
+      if (cleanedCount > 0) {
         void getHomeStoreState().refreshAgentList?.();
       }
 
-      return staleTopics.length;
+      return cleanedCount;
     } catch (err) {
       console.error('[cleanupStaleRunningTopics] failed:', err);
       return 0;
@@ -1279,9 +1308,12 @@ export class ChatTopicActionImpl {
    */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
     const { activeAgentId, activeGroupId } = this.#get();
+    const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
+    const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);
     const key = topicMapKey({
-      agentId: payload.agentId ?? activeAgentId,
-      groupId: payload.groupId ?? activeGroupId,
+      agentId: scopedAgentId,
+      groupId: scopedGroupId,
+      scope: payload.scope,
     });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);

@@ -1500,8 +1500,10 @@ describe('topic action', () => {
       } as ChatTopic & { agentId: string };
 
       vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
-      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+      const updateTopicMock = vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue([]);
 
       act(() => {
         useChatStore.setState({
@@ -1532,13 +1534,137 @@ describe('topic action', () => {
         pageSize: 500,
         statuses: ['running'],
       });
-      expect(topicService.updateTopic).toHaveBeenCalledWith(topicId, { status: 'active' });
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith(topicId, {
+      expect(updateTopicMock).toHaveBeenCalledWith(topicId, { status: 'active' });
+      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, {
         runningOperation: null,
       });
+      expect(updateTopicMetadataMock.mock.invocationCallOrder[0]).toBeLessThan(
+        updateTopicMock.mock.invocationCallOrder[0],
+      );
       expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
         metadata: { runningOperation: null },
         status: 'active',
+      });
+    });
+
+    it('should patch group main topic scope when stale group rows include supervisor agent id', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'supervisor-agent';
+      const groupId = 'group-1';
+      const topicId = 'topic-1';
+      const groupKey = topicMapKey({ groupId });
+      const groupAgentKey = topicMapKey({ agentId, groupId });
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        groupId,
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'server-op-1',
+          },
+        },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale group topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string; groupId: string };
+
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+      vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
+      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeGroupId: groupId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [groupKey]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      let cleaned = 0;
+      await act(async () => {
+        cleaned = await result.current.cleanupStaleRunningTopics();
+      });
+
+      expect(cleaned).toBe(1);
+      expect(useChatStore.getState().topicDataMap[groupKey].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
+      expect(useChatStore.getState().topicDataMap[groupAgentKey]).toBeUndefined();
+    });
+
+    it('should not mark stale topics active when runningOperation metadata cleanup fails', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const topicId = 'topic-1';
+      const key = topicMapKey({ agentId });
+      const runningOperation = {
+        assistantMessageId: 'assistant-1',
+        operationId: 'server-op-1',
+      };
+      const topic = {
+        agentId,
+        createdAt: Date.now() - 3 * 60 * 60 * 1000,
+        id: topicId,
+        metadata: { runningOperation },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Stale running topic',
+        updatedAt: Date.now() - 3 * 60 * 60 * 1000,
+      } as ChatTopic & { agentId: string };
+
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([topic]);
+      const updateTopicMock = vi.spyOn(topicService, 'updateTopic').mockResolvedValue([]);
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockRejectedValue(new Error('metadata persist failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [topic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      let cleaned = 0;
+      await act(async () => {
+        cleaned = await result.current.cleanupStaleRunningTopics();
+      });
+
+      expect(cleaned).toBe(0);
+      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, { runningOperation: null });
+      expect(updateTopicMock).not.toHaveBeenCalled();
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation },
+        status: 'running',
       });
     });
 
