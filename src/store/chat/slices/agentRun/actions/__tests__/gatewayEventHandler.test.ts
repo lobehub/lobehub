@@ -112,14 +112,22 @@ describe('createGatewayEventHandler', () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', role: 'assistant' },
+        }),
+      );
       await flush();
 
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
-      // Native gateway streams carry the new assistant id directly + a SoT
-      // uiMessages snapshot on the preceding step_start, so stream_start must
-      // NOT trigger a DB refetch (the refetch is what clobbered the streamed
-      // assistantGroup with a stale placeholder).
+      // Native gateway ships the assistant seed on stream_start, so the client
+      // inserts the message shell locally (createMessage) and must NOT trigger a
+      // DB refetch — the refetch is what clobbered the streamed assistantGroup
+      // with a stale placeholder (LOBE-11501).
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'msg-step2', type: 'createMessage' }),
+        { operationId: 'op-1' },
+      );
       expect(messageService.getMessages).not.toHaveBeenCalled();
       expect(store.replaceMessages).not.toHaveBeenCalled();
       expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
@@ -516,6 +524,12 @@ describe('createGatewayEventHandler', () => {
   describe('visible_output_end', () => {
     it('marks visible loading done without completing the operation or clearing topic loading', async () => {
       const store = createMockStore();
+      // The streamed content has landed in the store — the visible_output_end
+      // guard (LOBE-11501) only clears loading once the assistant row is present
+      // with its content, so seed it here to represent that state.
+      store.dbMessagesMap['main_agent-1_topic-1'] = [
+        { content: 'hello back', id: 'msg-initial', role: 'assistant' },
+      ];
       const handler = createHandler(store);
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
@@ -1102,7 +1116,9 @@ describe('createGatewayEventHandler', () => {
 
       const handler = createHandler(store);
 
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-new' } }));
+      handler(
+        makeEvent('stream_start', { assistantMessage: { id: 'msg-new', role: 'assistant' } }),
+      );
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       await flush();
 
@@ -1143,7 +1159,7 @@ describe('createGatewayEventHandler', () => {
       const handler = createHandler(store);
 
       // Step 1: LLM call
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1' } }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1', role: 'assistant' } }));
       await flush();
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-1', 'op-1');
 
@@ -1175,7 +1191,7 @@ describe('createGatewayEventHandler', () => {
       // carries the id directly, so it must NOT trigger a DB refetch
       // Only the association switch happens.
       vi.clearAllMocks();
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2', role: 'assistant' } }));
       await flush();
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-2', 'op-1');
       expect(messageService.getMessages).not.toHaveBeenCalled();
