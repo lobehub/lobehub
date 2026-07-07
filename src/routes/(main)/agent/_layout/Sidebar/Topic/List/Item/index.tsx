@@ -20,6 +20,7 @@ import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -120,20 +121,18 @@ const cancelPendingSingleClick = () => {
   }
 };
 
-// Last non-empty path segment — the folder name. Also yields the repo name for
-// a web github URL (".../owner/repo" → "repo").
-const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
-
 const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => {
   const config = metadata?.workingDirectoryConfig;
   const workingDirectory = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
   if (!workingDirectory) return;
 
   const branch = config?.git?.branch;
-  const dirName = getDirName(workingDirectory);
+  const dirName = getWorkingDirectoryName(workingDirectory);
+  if (!dirName) return;
+
   const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
   const sourceName =
-    sourcePath && sourcePath !== workingDirectory ? getDirName(sourcePath) : undefined;
+    sourcePath && sourcePath !== workingDirectory ? getWorkingDirectoryName(sourcePath) : undefined;
   const pathLabel = sourceName && sourceName !== dirName ? `${sourceName}/${dirName}` : dirName;
 
   return {
