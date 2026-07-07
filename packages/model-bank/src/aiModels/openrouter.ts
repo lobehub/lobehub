@@ -3,6 +3,104 @@ import type { AIChatModelCard } from '../types/aiModel';
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
   {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'MiMo-V2.5-Pro by Xiaomi — a leap in agentic and long horizon coherence. Significant improvements in agentic capabilities, software engineering, and tasks spanning 1000+ tool calls.',
+    displayName: 'MiMo-V2.5 Pro',
+    enabled: true,
+    id: 'xiaomi/mimo-v2.5-pro',
+    maxOutput: 65_536,
+    organization: 'Xiaomi',
+    pricing: {
+      currency: 'USD',
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 0.256 },
+            { rate: 0.4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1, upTo: 0.256 },
+            { rate: 2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 3, upTo: 0.256 },
+            { rate: 6, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'MiMo-V2.5 by Xiaomi — a leap in agency and multimodality. Native visual and audio understanding with strong agentic performance.',
+    displayName: 'MiMo-V2.5',
+    enabled: false,
+    id: 'xiaomi/mimo-v2.5',
+    maxOutput: 65_536,
+    organization: 'Xiaomi',
+    pricing: {
+      currency: 'USD',
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.08, upTo: 0.256 },
+            { rate: 0.16, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.4, upTo: 0.256 },
+            { rate: 0.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 0.256 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    type: 'chat',
+  },
+  {
     contextWindowTokens: 2_000_000,
     description:
       'Based on context length, topic, and complexity, your request is routed to Llama 3 70B Instruct, Claude 3.5 Sonnet (self-moderated), or GPT-4o.',

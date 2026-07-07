@@ -1,35 +1,9 @@
 import { type AIChatModelCard } from '../types/aiModel';
 
 // ref: https://opencode.ai/go
-// Model data sourced from models.dev API (opencode-go provider)
+// Models synced from `opencode models opencode-go`
 
 const opencodeCodingPlanChatModels: AIChatModelCard[] = [
-  {
-    abilities: { functionCall: true, reasoning: true },
-    contextWindowTokens: 202_752,
-    description:
-      'GLM-5 by Zhipu AI — high-performance coding model with strong reasoning abilities.',
-    displayName: 'GLM-5',
-    enabled: false,
-    family: 'glm',
-    generation: 'glm-5',
-    id: 'glm-5',
-    maxOutput: 32_768,
-    organization: 'Zhipu',
-    pricing: {
-      currency: 'USD',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-02-11',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
   {
     abilities: { functionCall: true, reasoning: true },
     contextWindowTokens: 202_752,
@@ -51,37 +25,9 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-07',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
     type: 'chat',
   },
-  {
-    abilities: { functionCall: true, reasoning: true, vision: true },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi K2.5 by Moonshot AI — advanced reasoning model with vision support for images and video input.',
-    displayName: 'Kimi K2.5',
-    enabled: false,
-    family: 'kimi',
-    generation: 'kimi-k2.5',
-    id: 'kimi-k2.5',
-    maxOutput: 65_536,
-    organization: 'Moonshot',
-    pricing: {
-      currency: 'USD',
-      units: [
-        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-01-27',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
+
   {
     abilities: { functionCall: true, reasoning: true, vision: true },
     contextWindowTokens: 262_144,
@@ -103,9 +49,6 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-21',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
     type: 'chat',
   },
   {
@@ -160,32 +103,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: { functionCall: true, reasoning: true },
-    contextWindowTokens: 204_800,
-    description:
-      'MiniMax M2.5 — efficient coding model with strong reasoning and function call support.',
-    displayName: 'MiniMax M2.5',
-    enabled: false,
-    family: 'minimax',
-    generation: 'minimax-m2.5',
-    id: 'minimax-m2.5',
-    maxOutput: 65_536,
-    organization: 'MiniMax',
-    pricing: {
-      currency: 'USD',
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-02-12',
-    settings: {
-      extendParams: ['reasoningBudgetToken32k'],
-    },
-    type: 'chat',
-  },
+
   {
     abilities: { functionCall: true, reasoning: true },
     contextWindowTokens: 204_800,
@@ -206,9 +124,6 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-03-18',
-    settings: {
-      extendParams: ['reasoningBudgetToken32k'],
-    },
     type: 'chat',
   },
   {
@@ -233,7 +148,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-31',
     settings: {
-      extendParams: ['reasoningBudgetToken32k'],
+      extendParams: ['enableAdaptiveThinking'],
     },
     type: 'chat',
   },
@@ -259,9 +174,6 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-02',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
     type: 'chat',
   },
   {
@@ -286,9 +198,6 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-05-21',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
     type: 'chat',
   },
   {
@@ -341,6 +250,76 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: ['deepseekV4ReasoningEffort'],
     },
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, reasoning: true, vision: true },
+    contextWindowTokens: 262_144,
+    description:
+      "Kimi K2.7 Code is Moonshot AI's coding-focused agentic model built upon Kimi K2.6, with substantial improvements on real-world long-horizon coding tasks and roughly 30% lower thinking-token usage.",
+    displayName: 'Kimi K2.7 Code',
+    enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'kimi-k2.7-code',
+    maxOutput: 128_000,
+    organization: 'Moonshot',
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput', rate: 0.95, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, reasoning: true },
+    contextWindowTokens: 1_048_576,
+    description:
+      "GLM-5.2 is Z.ai's flagship model for the era of long-horizon tasks, with a truly usable 1M-token context window, stronger coding capabilities with multiple thinking effort levels, and an MIT open-source license.",
+    displayName: 'GLM-5.2',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'glm-5.2',
+    maxOutput: 32_768,
+    organization: 'Zhipu',
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
+    type: 'chat',
+  },
+
+  {
+    abilities: { functionCall: true, reasoning: true, vision: true },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.7 Plus by Alibaba — cost-effective multimodal model with 1M context, strong reasoning, and vision capabilities.',
+    displayName: 'Qwen3.7 Plus',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.7',
+    id: 'qwen3.7-plus',
+    maxOutput: 65_536,
+    organization: 'Alibaba',
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-01',
     type: 'chat',
   },
 ];
