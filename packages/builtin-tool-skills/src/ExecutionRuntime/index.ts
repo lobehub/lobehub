@@ -11,6 +11,7 @@ import type {
 import type {
   ActivateSkillParams,
   CommandResult,
+  ExecScriptActivatedSkill,
   ExecScriptParams,
   ExportFileParams,
   ReadReferenceParams,
@@ -85,6 +86,14 @@ export interface DeviceFileAccess {
 }
 
 export interface SkillsExecutionRuntimeOptions {
+  /**
+   * Activated skills resolved by the caller from the conversation history.
+   * Fallback for `execScript` when the args carry none: the client executor
+   * injects stepContext.activatedSkills into the args, but the server runtime
+   * registry passes the raw LLM args, so the server factory threads them here
+   * instead.
+   */
+  activatedSkills?: ExecScriptActivatedSkill[];
   builtinSkills?: BuiltinSkill[];
   /** Reads project skill files from the device (local-system over the gateway). */
   deviceFileAccess?: DeviceFileAccess;
@@ -144,6 +153,7 @@ const buildProjectDirectoryHint = (skillName: string, skillDir: string): string 
 This filesystem skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
+  private activatedSkills?: ExecScriptActivatedSkill[];
   private builtinSkills: BuiltinSkill[];
   private projectSkills: ProjectSkillRuntimeItem[];
   private deviceFileAccess?: DeviceFileAccess;
@@ -151,13 +161,17 @@ export class SkillsExecutionRuntime {
 
   constructor(options: SkillsExecutionRuntimeOptions) {
     this.service = options.service;
+    this.activatedSkills = options.activatedSkills;
     this.builtinSkills = options.builtinSkills || [];
     this.projectSkills = options.projectSkills || [];
     this.deviceFileAccess = options.deviceFileAccess;
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { activatedSkills, command, description } = args;
+    const { command, description } = args;
+    // Args win when the caller (client executor) already injected stepContext;
+    // the constructor option covers the server path where args are raw LLM output.
+    const activatedSkills = args.activatedSkills ?? this.activatedSkills;
 
     // Try new execScript method first (with cloud sandbox support)
     if (this.service.execScript) {

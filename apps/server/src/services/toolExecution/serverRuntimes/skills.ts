@@ -699,6 +699,10 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     }
 
     return new SkillsExecutionRuntime({
+      // Resolved by the runtime executors from the operation's message
+      // history (the server-side stepContext equivalent); execScript falls
+      // back to these because the raw LLM args never carry activatedSkills.
+      activatedSkills: context.activatedSkills,
       builtinSkills: [
         // Device-only skills resolve in device-capable runs — mirrors the
         // SkillEngine gate in aiAgent that builds <available_skills>, so a

@@ -1,6 +1,7 @@
 import {
   type AgentEvent,
   type AgentInstruction,
+  extractActivatedSkillsFromMessages,
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
@@ -116,6 +117,11 @@ export const callToolsBatch =
 
     // Execute server tools concurrently (skip client tools in mixed batch)
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
+    // Server-side equivalent of the client transport's computeStepContext
+    // (mirrors the single-tool `callTool` context): skills execScript resolves
+    // activated skill archives from the message history, which the raw LLM
+    // args never carry. Computed once — identical for every tool in the batch.
+    const runActivatedSkills = extractActivatedSkillsFromMessages(state.messages);
     await Promise.all(
       toolsToExecute.map(async (chatToolPayload: ChatToolPayload) => {
         const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
@@ -261,6 +267,7 @@ export const callToolsBatch =
               execution = await executeToolWithRetry(
                 () =>
                   toolExecutionService.executeTool(chatToolPayload, {
+                    activatedSkills: runActivatedSkills,
                     // Plan/policy-filtered: a preset or stale metadata id must not route
                     // tool execution (e.g. skills execScript) onto a device the resolved
                     // plan didn't authorize.
