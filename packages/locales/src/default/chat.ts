@@ -629,7 +629,6 @@ export default {
   'pageSelection.reference': 'Selected Text',
   'textSelection.added': 'Added to conversation context',
   'textSelection.addToConversation': 'Add to conversation',
-  'textSelection.askInSideChat': 'Ask in side chat',
   'textSelection.title': 'Message selection',
   'pin': 'Pin',
   'pinOff': 'Unpin',

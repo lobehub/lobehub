@@ -223,9 +223,7 @@ const MessageItem = memo<MessageItemProps>(
     );
 
     const selectableContent = supportsTextSelectionActions ? (
-      <TextSelectionActionLayer messageId={id} sideChatAvailable={!inPortalThread && !!topic}>
-        {content}
-      </TextSelectionActionLayer>
+      <TextSelectionActionLayer>{content}</TextSelectionActionLayer>
     ) : (
       content
     );

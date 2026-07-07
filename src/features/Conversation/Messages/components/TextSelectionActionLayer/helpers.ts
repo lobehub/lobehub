@@ -13,6 +13,7 @@ export interface TextSelectionContextParams {
 
 const TOOLBAR_OFFSET = 12;
 const VIEWPORT_MARGIN = 12;
+const LINE_TOP_TOLERANCE = 3;
 
 export const getSelectionPreview = (selectedText: string): string | undefined => {
   const preview = selectedText.replaceAll(/\s+/g, ' ').trim();
@@ -56,14 +57,7 @@ export const getSelectionToolbarPosition = (
   };
 };
 
-export const getRangeBoundingRect = (range: Range): DOMRect | undefined => {
-  const rects = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
-
-  if (rects.length === 0) {
-    const rect = range.getBoundingClientRect();
-    return rect.width > 0 || rect.height > 0 ? rect : undefined;
-  }
-
+const mergeRects = (rects: DOMRect[]): DOMRect => {
   const left = Math.min(...rects.map((rect) => rect.left));
   const right = Math.max(...rects.map((rect) => rect.right));
   const top = Math.min(...rects.map((rect) => rect.top));
@@ -75,4 +69,20 @@ export const getRangeBoundingRect = (range: Range): DOMRect | undefined => {
     x: left,
     y: top,
   });
+};
+
+export const getRangeFirstLineRect = (range: Range): DOMRect | undefined => {
+  const rects = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
+
+  if (rects.length === 0) {
+    const rect = range.getBoundingClientRect();
+    return rect.width > 0 || rect.height > 0 ? rect : undefined;
+  }
+
+  const firstTop = Math.min(...rects.map((rect) => rect.top));
+  const firstLineRects = rects.filter(
+    (rect) => Math.abs(rect.top - firstTop) <= LINE_TOP_TOLERANCE,
+  );
+
+  return mergeRects(firstLineRects);
 };
