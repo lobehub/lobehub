@@ -178,12 +178,31 @@ describe('verifyRouter', () => {
       modelMocks.updateRun.mockResolvedValueOnce(updatedRun);
 
       await createCaller().updateRun({
-        value: { context: { branch: 'feat/x', commit: 'abc123' }, goal: 'ship x' },
+        value: {
+          context: {
+            branch: 'feat/x',
+            commit: 'abc123',
+            pullRequest: {
+              number: 42,
+              title: 'Ship x',
+              url: 'https://github.com/lobehub/lobehub/pull/42',
+            },
+          },
+          goal: 'ship x',
+        },
         verifyRunId: 'run-1',
       });
 
       expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', {
-        context: { branch: 'feat/x', commit: 'abc123' },
+        context: {
+          branch: 'feat/x',
+          commit: 'abc123',
+          pullRequest: {
+            number: 42,
+            title: 'Ship x',
+            url: 'https://github.com/lobehub/lobehub/pull/42',
+          },
+        },
         goal: 'ship x',
       });
     });

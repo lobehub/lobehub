@@ -81,6 +81,8 @@ export default {
   'report.scope.date': 'Date',
   'report.scope.entry': 'Entry',
   'report.scope.focus': 'Focus',
+  'report.scope.pullRequest': 'Pull request',
+  'report.scope.pullRequestNumber': 'PR #{{number}}',
   'report.scope.surface': 'Surface',
   'report.sections.checks': 'Checks',
   'report.sections.details': 'Details',

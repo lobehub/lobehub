@@ -85,6 +85,15 @@ export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
  * Rendered as the report's scope header so the verify page reads as the final
  * report.
  */
+export interface VerifyCodingPullRequest {
+  /** Pull request number, e.g. 123. */
+  number?: number | string;
+  /** Pull request title. */
+  title?: string;
+  /** Web URL for opening the PR. */
+  url?: string;
+}
+
 export interface VerifyCodingScope {
   /** Git branch the report was produced against. */
   branch?: string;
@@ -94,6 +103,8 @@ export interface VerifyCodingScope {
   entry?: string;
   /** The focus / key risk of this round (free text). */
   focus?: string;
+  /** Associated pull request, when the verification run has one. */
+  pullRequest?: VerifyCodingPullRequest;
   /** Test surfaces exercised, e.g. ["cli", "web"]. */
   surfaces?: string[];
   /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */

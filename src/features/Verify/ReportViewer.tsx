@@ -1,6 +1,6 @@
 'use client';
 
-import type { VerifyEvidenceType, VerifyRunContext } from '@lobechat/types';
+import type { VerifyCodingScope, VerifyEvidenceType } from '@lobechat/types';
 import {
   Block,
   Center,
@@ -17,13 +17,21 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
+  CalendarClock,
   Check,
   ChevronRight,
   CircleHelp,
   Clock3,
+  ExternalLink,
   FileText,
+  GitBranch,
+  GitCommit,
+  GitPullRequest,
   Image as ImageIcon,
+  Layers,
   RefreshCw,
+  Target,
+  Terminal,
   Video,
   X,
 } from 'lucide-react';
@@ -125,6 +133,153 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorInfoText};
 
     background: ${cssVar.colorInfoBg};
+  `,
+  codingScope: css`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    margin-block-start: 4px;
+    padding-block: 12px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  codingScopeMain: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  branchChip: css`
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 100%;
+    height: 32px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusSM};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    code {
+      overflow: hidden;
+
+      min-width: 0;
+
+      font-family: ${cssVar.fontFamilyCode};
+      font-size: 13px;
+      color: ${cssVar.colorText};
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  `,
+  prChip: css`
+    cursor: default;
+
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 100%;
+    height: 32px;
+    padding-inline: 10px;
+    border: 1px solid color-mix(in srgb, ${cssVar.colorLink} 32%, ${cssVar.colorBorder});
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-size: 13px;
+    color: ${cssVar.colorLink};
+    text-decoration: none;
+
+    background: color-mix(in srgb, ${cssVar.colorLink} 8%, ${cssVar.colorBgContainer});
+
+    &[data-link='true'] {
+      cursor: pointer;
+    }
+
+    &[data-link='true']:hover {
+      border-color: ${cssVar.colorLink};
+      color: ${cssVar.colorLinkHover};
+    }
+  `,
+  prTitle: css`
+    overflow: hidden;
+
+    min-width: 0;
+
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  scopeGrid: css`
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 9px 14px;
+  `,
+  scopeGridItem: css`
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 7px;
+    align-items: start;
+
+    min-width: 0;
+
+    &[data-wide='true'] {
+      grid-column: 1 / -1;
+    }
+  `,
+  scopeGridIcon: css`
+    display: flex;
+    padding-block-start: 2px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  scopeGridBody: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  `,
+  scopeGridLabel: css`
+    font-size: 11px;
+    line-height: 1.3;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  scopeGridValue: css`
+    font-size: 13px;
+    line-height: 1.45;
+    color: ${cssVar.colorTextSecondary};
+    overflow-wrap: anywhere;
+
+    code {
+      font-family: ${cssVar.fontFamilyCode};
+      font-size: 12px;
+      color: ${cssVar.colorText};
+    }
+  `,
+  surfaceList: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  `,
+  surfaceChip: css`
+    padding-block: 1px;
+    padding-inline: 7px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
 
   /* sticky filter chips */
@@ -467,9 +622,13 @@ const VERDICT_META: Record<
 };
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
-/** Media that renders/plays inline in the check body (image + video), no click-to-open. */
-const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
+/** Visual media that renders/plays inline in the check body, no click-to-open. */
+const isInlineVisualEvidence = (evidence: VerifyEvidenceWithUrl) =>
   Boolean(evidence.fileUrl && (imageEvidenceTypes.has(evidence.type) || evidence.type === 'video'));
+
+/** Evidence with a directly renderable payload in the check body, no click-to-open. */
+const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
+  Boolean(evidence.content) || isInlineVisualEvidence(evidence);
 
 /** Coarse attachment bucket for the type marker: image / video / everything else. */
 type EvidenceCategory = 'file' | 'image' | 'video';
@@ -554,7 +713,7 @@ const EvidenceItem = memo<{ evidence: VerifyEvidenceWithUrl; index: number }>(
     const description = e.description && e.description !== label ? e.description : null;
     // Inline media (image/gif/video) speaks for itself — the raw filename header
     // is visual noise, so only keep a meaningful caption (description) for it.
-    const isMedia = isInlineEvidence(e);
+    const isMedia = isInlineVisualEvidence(e);
 
     return (
       <Flexbox gap={6}>
@@ -761,27 +920,164 @@ const ReportPageState = memo<{
   </Center>
 ));
 
-/** Build the meta row (branch / commit / surface / verified) from the run scope. */
-const scopeToMeta = (
-  context: VerifyRunContext | null | undefined,
-  scenario: string | null | undefined,
-  t: TFunction<'verify'>,
-): { label: string; value: string }[] => {
-  if (scenario !== 'coding' || !context) return [];
-  const { branch, commit, surfaces, entry, focus, testedAt } = context;
-  const surface = surfaces && surfaces.length > 0 ? surfaces.join(' / ') : undefined;
-  const date = testedAt ? new Date(testedAt).toLocaleString() : undefined;
-  return (
-    [
-      { label: t('report.scope.focus'), value: focus },
-      { label: t('report.scope.branch'), value: branch },
-      { label: t('report.scope.surface'), value: surface },
-      { label: t('report.scope.entry'), value: entry },
-      { label: t('report.scope.commit'), value: commit },
-      { label: t('report.scope.date'), value: date },
-    ] as { label: string; value?: string | null }[]
-  ).filter((m): m is { label: string; value: string } => Boolean(m.value));
+const formatScopeDate = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
+
+const pullRequestLabel = (
+  pullRequest: NonNullable<VerifyCodingScope['pullRequest']>,
+  t: TFunction<'verify'>,
+) => {
+  if (pullRequest.number === undefined || pullRequest.number === null)
+    return t('report.scope.pullRequest');
+
+  return t('report.scope.pullRequestNumber', {
+    number: String(pullRequest.number).replace(/^#/, ''),
+  });
+};
+
+interface CodingScopeGridItem {
+  icon: typeof FileText;
+  key: string;
+  label: string;
+  value: ReactNode;
+  wide?: boolean;
+}
+
+const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(({ context }) => {
+  const { t } = useTranslation('verify');
+  if (!context) return null;
+
+  const { branch, commit, entry, focus, pullRequest, surfaces, testedAt } = context;
+  const hasPullRequest = Boolean(
+    pullRequest && (pullRequest.number !== undefined || pullRequest.title || pullRequest.url),
+  );
+  const date = formatScopeDate(testedAt);
+  const hasScope =
+    Boolean(branch) ||
+    Boolean(commit) ||
+    Boolean(entry) ||
+    Boolean(focus) ||
+    hasPullRequest ||
+    Boolean(surfaces?.length) ||
+    Boolean(date);
+
+  if (!hasScope) return null;
+
+  const candidateItems: (CodingScopeGridItem | null)[] = [
+    commit
+      ? {
+          icon: GitCommit,
+          key: 'commit',
+          label: t('report.scope.commit'),
+          value: <code>{commit}</code>,
+        }
+      : null,
+    surfaces && surfaces.length > 0
+      ? {
+          icon: Layers,
+          key: 'surfaces',
+          label: t('report.scope.surface'),
+          value: (
+            <span className={styles.surfaceList}>
+              {surfaces.map((surface) => (
+                <span className={styles.surfaceChip} key={surface}>
+                  {surface}
+                </span>
+              ))}
+            </span>
+          ),
+        }
+      : null,
+    entry
+      ? {
+          icon: Terminal,
+          key: 'entry',
+          label: t('report.scope.entry'),
+          value: <code>{entry}</code>,
+        }
+      : null,
+    date
+      ? {
+          icon: CalendarClock,
+          key: 'date',
+          label: t('report.scope.date'),
+          value: date,
+        }
+      : null,
+    focus
+      ? {
+          icon: Target,
+          key: 'focus',
+          label: t('report.scope.focus'),
+          value: focus,
+          wide: true,
+        }
+      : null,
+  ];
+  const items = candidateItems.filter((item): item is CodingScopeGridItem => Boolean(item));
+  const pullRequestContent =
+    hasPullRequest && pullRequest ? (
+      <>
+        <Icon icon={GitPullRequest} size={15} />
+        <span>{pullRequestLabel(pullRequest, t)}</span>
+        {pullRequest.title && <span className={styles.prTitle}>{pullRequest.title}</span>}
+        {pullRequest.url && <Icon icon={ExternalLink} size={13} />}
+      </>
+    ) : null;
+
+  return (
+    <div className={styles.codingScope}>
+      {(branch || hasPullRequest) && (
+        <div className={styles.codingScopeMain}>
+          {branch && (
+            <span className={styles.branchChip} title={branch}>
+              <Icon icon={GitBranch} size={15} />
+              <code>{branch}</code>
+            </span>
+          )}
+          {pullRequestContent &&
+            (pullRequest?.url ? (
+              <a
+                className={styles.prChip}
+                data-link={true}
+                href={pullRequest.url}
+                rel="noreferrer"
+                target="_blank"
+                title={pullRequest.title ?? pullRequest.url}
+              >
+                {pullRequestContent}
+              </a>
+            ) : (
+              <span className={styles.prChip} title={pullRequest?.title}>
+                {pullRequestContent}
+              </span>
+            ))}
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className={styles.scopeGrid}>
+          {items.map((item) => (
+            <div className={styles.scopeGridItem} data-wide={item.wide} key={item.key}>
+              <span className={styles.scopeGridIcon}>
+                <Icon icon={item.icon} size={14} />
+              </span>
+              <span className={styles.scopeGridBody}>
+                <span className={styles.scopeGridLabel}>{item.label}</span>
+                <span className={styles.scopeGridValue}>{item.value}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+CodingScopeCard.displayName = 'CodingScopeCard';
 
 /**
  * The report detail pane. Renders the verdict hero, a sticky verdict-filter bar,
@@ -863,7 +1159,7 @@ const ReportViewer = memo(() => {
   const uncertain = report?.uncertainChecks ?? counts.uncertain;
   const verdict = (report?.verdict as Verdict | null) ?? null;
   const visible = filter === 'all' ? ordered : ordered.filter((r) => checkVerdict(r) === filter);
-  const meta = scopeToMeta(run.context, run.scenario, t);
+  const isCodingReport = run.scenario === 'coding';
 
   const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
     { count: total, key: 'all', label: t('report.filter.all') },
@@ -896,20 +1192,10 @@ const ReportViewer = memo(() => {
             </Text>
           </div>
 
-          {run.scenario !== 'coding' && run.goal && (
-            <Text className={styles.summary}>{run.goal}</Text>
-          )}
+          {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
           {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
 
-          {meta.length > 0 && (
-            <div className={styles.meta}>
-              {meta.map((m) => (
-                <span className={styles.metaItem} key={m.label}>
-                  {m.label} <code>{m.value}</code>
-                </span>
-              ))}
-            </div>
-          )}
+          {isCodingReport && <CodingScopeCard context={run.context} />}
 
           {liveStatus && (
             <div className={styles.liveBanner}>

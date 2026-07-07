@@ -70,6 +70,8 @@
   "report.scope.date": "日期",
   "report.scope.entry": "入口",
   "report.scope.focus": "重点",
+  "report.scope.pullRequest": "关联 PR",
+  "report.scope.pullRequestNumber": "PR #{{number}}",
   "report.scope.surface": "范围",
   "report.sections.checks": "检查项",
   "report.sections.details": "详情",
