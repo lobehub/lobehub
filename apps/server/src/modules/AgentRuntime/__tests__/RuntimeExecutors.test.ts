@@ -915,13 +915,27 @@ describe('RuntimeExecutors', () => {
           state,
         );
         // Drive the retry backoff sleeps to completion.
-        const settled = expect(promise).rejects.toBeInstanceOf(ModelEmptyError);
+        const rejection = promise.catch((error) => error);
         await vi.runAllTimersAsync();
         // Must throw (so the harness records a readable error state) instead of
         // silently finalizing to a completion with a blank assistant message.
-        await settled;
+        const error = await rejection;
+        expect(error).toBeInstanceOf(ModelEmptyError);
         // EMPTY_COMPLETION_MAX_RETRIES (2) retries → 3 total attempts.
         expect(mockChat).toHaveBeenCalledTimes(3);
+        expect(error.diagnostics).toMatchObject({
+          attempt: 3,
+          maxAttempts: 3,
+          model: 'deepseek-v4-pro',
+          outputTokens: 1,
+          provider: 'lobehub',
+          retryBudget: 2,
+          retryEvents: [
+            expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 3 }),
+            expect.objectContaining({ attempt: 3, delayMs: 2000, maxAttempts: 3 }),
+          ],
+          toolCallCount: 0,
+        });
       } finally {
         vi.useRealTimers();
       }
@@ -4738,7 +4752,7 @@ describe('RuntimeExecutors', () => {
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 6 }),
           }),
         );
       } finally {
@@ -4869,21 +4883,21 @@ describe('RuntimeExecutors', () => {
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 6 }),
           }),
         );
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 3, delayMs: 2000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 3, delayMs: 2000, maxAttempts: 6 }),
           }),
         );
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 4, delayMs: 4000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 4, delayMs: 4000, maxAttempts: 6 }),
           }),
         );
       } finally {

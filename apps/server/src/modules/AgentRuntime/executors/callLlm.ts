@@ -1414,7 +1414,19 @@ export const callLlm =
                   attempt,
                   maxAttempts,
                 );
-                throw new ModelEmptyError();
+                throw new ModelEmptyError(undefined, {
+                  attempt,
+                  contentLength: content.length,
+                  finishReason: currentStepFinishReason,
+                  imageCount: imageList.length,
+                  maxAttempts,
+                  model,
+                  outputTokens:
+                    typeof reportedOutputTokens === 'number' ? reportedOutputTokens : undefined,
+                  provider,
+                  reasoningLength: thinkingContent.length,
+                  toolCallCount: toolsCalling.length + tool_calls.length,
+                });
               }
 
               // Answer-in-thinking salvage: some thinking-mode models — notably
@@ -1708,8 +1720,20 @@ export const callLlm =
                   delayMs,
                 );
 
+                const retryEvent: AgentEvent = {
+                  data: {
+                    attempt: attempt + 1,
+                    delayMs,
+                    errorType: classified.code,
+                    kind: classified.kind,
+                    maxAttempts,
+                  },
+                  type: 'stream_retry',
+                };
+                events.push(retryEvent);
+
                 await streamManager.publishStreamEvent(operationId, {
-                  data: { attempt: attempt + 1, delayMs, maxAttempts },
+                  data: retryEvent.data,
                   stepIndex,
                   type: 'stream_retry',
                 });
@@ -1721,6 +1745,13 @@ export const callLlm =
                 }
 
                 continue;
+              }
+
+              if (error instanceof ModelEmptyError && error.diagnostics) {
+                error.diagnostics.retryBudget = retryBudget;
+                error.diagnostics.retryEvents = events
+                  .filter((event) => event.type === 'stream_retry')
+                  .map((event) => event.data);
               }
 
               // Cancel/interrupt path: when the user stops mid-stream, the model-runtime

@@ -83,7 +83,14 @@ describe('formatErrorForState', () => {
     });
 
     it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
-      const result = formatErrorForState(new ModelEmptyError());
+      const result = formatErrorForState(
+        new ModelEmptyError(undefined, {
+          attempt: 3,
+          maxAttempts: 3,
+          outputTokens: 1,
+          retryEvents: [{ attempt: 2, delayMs: 1000, maxAttempts: 3 }],
+        }),
+      );
 
       // The `errorType` field must win over the generic Error → InternalServerError
       // path so the terminal state is classified and dashboard-visible instead of
@@ -95,6 +102,14 @@ describe('formatErrorForState', () => {
       expect(result.countAsFailure).toBe(true);
       expect(result.numericId).toBe(8014);
       expect(result.message).toContain('empty completion');
+      expect(result.body).toMatchObject({
+        diagnostics: {
+          attempt: 3,
+          maxAttempts: 3,
+          outputTokens: 1,
+          retryEvents: [expect.objectContaining({ attempt: 2 })],
+        },
+      });
     });
 
     it('marks provider-side rate limits as retryable with provider attribution', () => {
