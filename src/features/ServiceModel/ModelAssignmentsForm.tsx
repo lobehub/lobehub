@@ -21,6 +21,7 @@ import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/se
 interface SystemAgentModelItem {
   contextLimit?: boolean;
   key: UserServiceModelConfigKey;
+  modelType?: 'chat' | 'embedding';
 }
 
 type LoadingKey = 'defaultAgent' | UserServiceModelConfigKey;
@@ -44,7 +45,7 @@ const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
 const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
   { contextLimit: true, key: 'memoryAnalysisAgentConfig' },
   { contextLimit: true, key: 'userMemoryPersonaWriter' },
-  { contextLimit: true, key: 'userMemoryEmbedding' },
+  { contextLimit: true, key: 'userMemoryEmbedding', modelType: 'embedding' },
 ];
 
 const ModelAssignmentsForm = memo(() => {
@@ -179,39 +180,42 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
-  const memoryModelItems: FormItemProps[] = MEMORY_MODEL_ITEMS.map(({ contextLimit, key }) => {
-    const value = systemAgentSettings[key];
+  const memoryModelItems: FormItemProps[] = MEMORY_MODEL_ITEMS.map(
+    ({ contextLimit, key, modelType }) => {
+      const value = systemAgentSettings[key];
 
-    return {
-      children: (
-        <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
-          <ModelSelect
-            showAbility={false}
-            style={{ minWidth: 0, width: '100%' }}
-            value={value}
-            onChange={(props) => updateSystemAgentModel(key, props)}
-          />
-          {contextLimit && (
-            <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
-              <InputNumber
-                min={1}
-                placeholder={t('serviceModel.contextLimit.placeholder')}
-                style={{ alignSelf: 'flex-end', width: 180 }}
-                value={value.contextLimit}
-                onChange={(contextLimit) =>
-                  updateSystemAgentModel(key, {
-                    contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
-                  })
-                }
-              />
-            </ConfigProvider>
-          )}
-        </Flexbox>
-      ),
-      desc: t(`systemAgent.${key}.modelDesc`),
-      label: t(`systemAgent.${key}.title`),
-    } satisfies FormItemProps;
-  });
+      return {
+        children: (
+          <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
+            <ModelSelect
+              modelType={modelType}
+              showAbility={false}
+              style={{ minWidth: 0, width: '100%' }}
+              value={value}
+              onChange={(props) => updateSystemAgentModel(key, props)}
+            />
+            {contextLimit && (
+              <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
+                <InputNumber
+                  min={1}
+                  placeholder={t('serviceModel.contextLimit.placeholder')}
+                  style={{ alignSelf: 'flex-end', width: 180 }}
+                  value={value.contextLimit}
+                  onChange={(contextLimit) =>
+                    updateSystemAgentModel(key, {
+                      contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
+                    })
+                  }
+                />
+              </ConfigProvider>
+            )}
+          </Flexbox>
+        ),
+        desc: t(`systemAgent.${key}.modelDesc`),
+        label: t(`systemAgent.${key}.title`),
+      } satisfies FormItemProps;
+    },
+  );
 
   const optionalFeatureItems: FormItemProps[] = OPTIONAL_FEATURE_ITEMS.map(({ key }) => {
     const value = systemAgentSettings[key];
