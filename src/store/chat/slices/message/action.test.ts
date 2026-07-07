@@ -1420,7 +1420,7 @@ describe('chatMessage actions', () => {
         topicId: 'dedupe-topic',
       };
       const messages = [{ id: 'deduped-message', role: 'user', content: 'hi' }] as any;
-      let resolveRequest!: (messages: typeof messages) => void;
+      let resolveRequest!: (value: unknown) => void;
 
       (messageService.getMessages as Mock).mockReturnValue(
         new Promise((resolve) => {

@@ -324,10 +324,10 @@ const TopicItem = memo<TopicItemProps>(
     );
 
     useEffect(() => {
-      if (!activeAgentId || !id || !isUnreadCompleted) return;
+      if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
 
       void prefetchMessages({ agentId: activeAgentId, scope: 'main', topicId: id });
-    }, [activeAgentId, id, isUnreadCompleted, prefetchMessages]);
+    }, [activeAgentId, hasLocalRunningRuntime, id, isUnreadCompleted, prefetchMessages]);
 
     // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
     // input. Drafts live in localStorage keyed by messageMapKey; the default

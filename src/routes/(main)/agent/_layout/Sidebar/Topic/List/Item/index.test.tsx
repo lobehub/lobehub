@@ -9,6 +9,7 @@ import TopicItem from './index';
 
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
 const prefetchMessagesMock = vi.hoisted(() => vi.fn());
+const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 
@@ -112,7 +113,7 @@ vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     getAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
     getVisibleAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
-    isAgentRuntimeRunningByContext: () => () => false,
+    isAgentRuntimeRunningByContext: () => () => agentRuntimeRunningMock.value,
     isAgentRuntimeVisiblyRunningByContext: () => () => false,
     isTopicUnreadCompleted: () => () => topicUnreadCompletedMock.value,
   },
@@ -151,6 +152,7 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 describe('TopicItem active state', () => {
   afterEach(() => {
     prefetchMessagesMock.mockClear();
+    agentRuntimeRunningMock.value = false;
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
     vi.useRealTimers();
@@ -228,6 +230,32 @@ describe('TopicItem active state', () => {
     });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
+
+    await waitFor(() => {
+      expect(prefetchMessagesMock).toHaveBeenCalledWith({
+        agentId: 'agt_test',
+        scope: 'main',
+        topicId: 'tpc_test',
+      });
+    });
+  });
+
+  it('prefetches unread completed messages after the runtime stops', async () => {
+    agentRuntimeRunningMock.value = true;
+    topicUnreadCompletedMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    const { rerender } = render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(prefetchMessagesMock).not.toHaveBeenCalled();
+
+    agentRuntimeRunningMock.value = false;
+    rerender(<TopicItem id="tpc_test" title="Topic done" />);
 
     await waitFor(() => {
       expect(prefetchMessagesMock).toHaveBeenCalledWith({
