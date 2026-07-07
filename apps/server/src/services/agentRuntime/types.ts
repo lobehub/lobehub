@@ -181,7 +181,8 @@ export interface AgentExecutionParams {
 export interface AgentExecutionResult {
   /**
    * When true, the step was already being executed by another instance (lock conflict).
-   * The caller should ACK duplicate queue deliveries as a no-op.
+   * Stale duplicates are handled before returning this; callers should keep
+   * this response retryable so fresh deliveries can run after the lock clears.
    */
   locked?: boolean;
   nextStepScheduled: boolean;

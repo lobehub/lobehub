@@ -247,10 +247,15 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     return service;
   };
 
-  it('should return locked=true when tryClaimStep returns false', async () => {
+  it('should return locked=true for a non-stale lock conflict', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;
     coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      status: 'running',
+      stepCount: 5,
+      lastModified: new Date().toISOString(),
+    });
 
     const result = await service.executeStep({
       operationId: 'op-locked',
@@ -258,10 +263,32 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     });
 
     expect(result.locked).toBe(true);
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.nextStepScheduled).toBe(false);
-    // Should NOT call loadAgentState since lock was not acquired
-    expect(coordinator.loadAgentState).not.toHaveBeenCalled();
+    expect(coordinator.loadAgentState).toHaveBeenCalledWith('op-locked');
+    expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
+  });
+
+  it('should ack stale duplicate deliveries even when the stale step lock is held', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      status: 'running',
+      stepCount: 10,
+      lastModified: new Date().toISOString(),
+    });
+
+    const result = await service.executeStep({
+      operationId: 'op-stale-locked',
+      stepIndex: 8,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.locked).toBeUndefined();
+    expect(result.stepResult).toBeNull();
+    expect(result.nextStepScheduled).toBe(false);
+    expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
   });
 
   it('should skip execution when stepCount > stepIndex (delayed retry after lock TTL)', async () => {

@@ -744,6 +744,34 @@ export class AgentRuntimeService {
       stepLockOwner,
     );
     if (!claimed) {
+      let currentState: AgentState | null | undefined = null;
+      try {
+        currentState = await this.coordinator.loadAgentState(operationId);
+      } catch (error) {
+        log(
+          '[%s][%d] Failed to load state while handling step lock conflict: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+
+      const currentStepCount = currentState?.stepCount;
+      if (currentState && typeof currentStepCount === 'number' && currentStepCount > stepIndex) {
+        log(
+          '[%s][%d] Step lock conflict is stale (stepCount=%d), skipping',
+          operationId,
+          stepIndex,
+          currentStepCount,
+        );
+        return {
+          nextStepScheduled: false,
+          state: currentState,
+          stepResult: null,
+          success: true,
+        };
+      }
+
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -753,7 +781,7 @@ export class AgentRuntimeService {
         locked: true,
         nextStepScheduled: false,
         state: {},
-        success: true,
+        success: false,
       };
     }
 

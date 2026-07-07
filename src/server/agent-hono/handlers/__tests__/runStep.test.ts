@@ -191,28 +191,26 @@ describe('runStep handler', () => {
     );
   });
 
-  it('returns a no-op ACK when the step is locked', async () => {
+  it('returns 429 with Retry-After header when the step is locked', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({
       locked: true,
       nextStepScheduled: false,
       state: {},
-      success: true,
+      success: false,
     });
 
     const { ctx, getCaptures } = buildContext({ body: validBody });
     const res = await runStep(ctx);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(429);
     const captured = getCaptures()[0];
-    expect(captured.body).toEqual({
-      locked: true,
-      nextStepScheduled: false,
+    expect(captured.body).toMatchObject({
+      error: 'Step is currently being executed, retry later',
       operationId: 'op-1',
       stepIndex: 2,
-      success: true,
     });
-    expect(captured.headers).toBeUndefined();
+    expect(captured.headers).toEqual({ 'Retry-After': '37' });
   });
 
   it('forwards the upstash-retried header to executeStep as externalRetryCount', async () => {
