@@ -20,7 +20,6 @@ import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider
 import QueryProvider from '@/layout/GlobalProvider/Query';
 import ServerVersionOutdatedAlert from '@/layout/GlobalProvider/ServerVersionOutdatedAlert';
 import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
-import TopicStatusWatchdog from '@/layout/GlobalProvider/TopicStatusWatchdog';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
 
@@ -58,7 +57,6 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 {isDesktop && <ServerVersionOutdatedAlert />}
                 <FaviconProvider>
                   <DynamicFavicon />
-                  <TopicStatusWatchdog />
                   <GroupWizardProvider>
                     <DragUploadProvider>
                       <LazyMotion features={domMax}>
