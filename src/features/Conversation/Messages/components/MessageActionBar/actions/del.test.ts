@@ -31,13 +31,16 @@ describe('delAction', () => {
     vi.clearAllMocks();
   });
 
-  it('deletes only the errored trailing step of an assistantGroup (keeps prior steps)', () => {
+  it('deletes only the errored tail step of a heterogeneous (CC/Codex) run', () => {
     const data = {
       id: 'group-1',
       role: 'assistantGroup',
       children: [
         { id: 'step-23', content: 'done' },
-        { id: 'step-24', error: { body: { message: 'overloaded' } } },
+        {
+          id: 'step-24',
+          error: { body: { agentType: 'claude-code', code: 'overloaded' } },
+        },
       ],
     } as unknown as UIChatMessage;
 
@@ -46,6 +49,24 @@ describe('delAction', () => {
     // Must target the failed step's DB id (a child block), not the group id.
     expect(deleteDBMessage).toHaveBeenCalledWith('step-24');
     expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('deletes the whole group when the tail error is NOT a heterogeneous-agent error', () => {
+    // A normal grouped reply that merely ends in a generic tool/provider error
+    // keeps the whole-group delete.
+    const data = {
+      id: 'group-1',
+      role: 'assistantGroup',
+      children: [
+        { id: 'step-1', content: 'done' },
+        { id: 'step-2', error: { type: 'PluginError', body: { message: 'boom' } } },
+      ],
+    } as unknown as UIChatMessage;
+
+    build(data).handleClick!();
+
+    expect(deleteMessage).toHaveBeenCalledWith('group-1');
+    expect(deleteDBMessage).not.toHaveBeenCalled();
   });
 
   it('deletes the whole group when no step errored', () => {
