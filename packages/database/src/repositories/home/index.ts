@@ -4,7 +4,7 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, count, desc, eq, not, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
@@ -19,6 +19,11 @@ import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+// Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
+// task_manager trigger. These topics are surfaced in their own product surfaces,
+// so counting them here can leave a badge the regular agent topic list cannot clear.
+const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
 
 // Re-export types for backward compatibility
 export type {
@@ -159,6 +164,10 @@ export class HomeRepository {
     groupUnread: Map<string, number>;
   }> {
     const isUnread = eq(topics.status, 'unread');
+    const isMainSidebarTopic = or(
+      isNull(topics.trigger),
+      not(inArray(topics.trigger, HOME_UNREAD_EXCLUDE_TRIGGERS)),
+    );
 
     const [byAgent, byGroup] = await Promise.all([
       this.db
@@ -168,6 +177,7 @@ export class HomeRepository {
           and(
             buildWorkspaceWhere(this.scope, topics),
             isUnread,
+            isMainSidebarTopic,
             sql`${topics.agentId} is not null`,
           ),
         )
@@ -179,6 +189,7 @@ export class HomeRepository {
           and(
             buildWorkspaceWhere(this.scope, topics),
             isUnread,
+            isMainSidebarTopic,
             sql`${topics.groupId} is not null`,
           ),
         )
@@ -267,25 +278,23 @@ export class HomeRepository {
           visibility: a.visibility,
         };
       }),
-      ...chatGroupItems.map(
-        (g): EnrichedItem => ({
-          // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
-          avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
-          backgroundColor: g.backgroundColor,
-          description: g.description,
-          groupAvatar: g.avatar,
-          groupId: g.groupId,
-          id: g.id,
-          isPrivate: g.visibility === 'private',
-          pinned: g.pinned ?? false,
-          sessionId: null,
-          title: g.title,
-          type: 'group' as const,
-          unreadCount: groupUnread.get(g.id) ?? 0,
-          updatedAt: g.updatedAt,
-          visibility: g.visibility,
-        }),
-      ),
+      ...chatGroupItems.map((g): EnrichedItem => ({
+        // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
+        avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
+        backgroundColor: g.backgroundColor,
+        description: g.description,
+        groupAvatar: g.avatar,
+        groupId: g.groupId,
+        id: g.id,
+        isPrivate: g.visibility === 'private',
+        pinned: g.pinned ?? false,
+        sessionId: null,
+        title: g.title,
+        type: 'group' as const,
+        unreadCount: groupUnread.get(g.id) ?? 0,
+        updatedAt: g.updatedAt,
+        visibility: g.visibility,
+      })),
     ];
 
     // Sort all items by updatedAt descending
