@@ -192,7 +192,8 @@ class GitService {
   /**
    * PR linked to `branch` on a GitHub repo. Shells out to `gh pr list` (8s
    * timeout), so callers throttle this far more aggressively than the branch
-   * read. Returns `undefined` when nothing is linked / the lookup is skipped.
+   * read. Includes merged/closed PRs so persisted snapshots can refresh after
+   * GitHub changes outside the app.
    */
   async getLinkedPullRequest({
     branch,

@@ -132,8 +132,10 @@ export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
 };
 
 /**
- * Query `gh` CLI for an open pull request whose head branch matches `branch`.
- * Returns `status: 'gh-missing'` when `gh` is unavailable / not authed.
+ * Query `gh` CLI for the pull request whose head branch matches `branch`,
+ * including merged/closed PRs so stale topic snapshots can refresh lifecycle
+ * state after GitHub changes outside the app. Returns `status: 'gh-missing'`
+ * when `gh` is unavailable / not authed.
  */
 export const getLinkedPullRequest = async (payload: {
   branch: string;
@@ -151,7 +153,7 @@ export const getLinkedPullRequest = async (payload: {
         '--head',
         branch,
         '--state',
-        'open',
+        'all',
         '--limit',
         '5',
         '--json',

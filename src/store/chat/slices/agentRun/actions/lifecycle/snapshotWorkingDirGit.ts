@@ -1,16 +1,16 @@
-import { isDesktop } from '@lobechat/const';
-import type { WorkingDirConfig, WorkingDirGithubState } from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
-import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { electronGitService } from '@/services/electron/git';
-import { type GitLinkedPRSummary, gitService } from '@/services/git';
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { gitService } from '@/services/git';
 import type { ChatStore } from '@/store/chat/store';
+import {
+  canReadTopicGitTransport,
+  mergeWorkingDirGithubState,
+  resolveTopicGitTransport,
+  toWorkingDirGithubState,
+} from '@/store/chat/utils/topicWorkingDirGit';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
-import { getElectronStoreState } from '@/store/electron';
 
 import { topicSelectors } from '../../../topic/selectors';
 
@@ -35,16 +35,6 @@ const resolveRepoType = async (params: {
   // A remote device's filesystem isn't reachable here — only probe the local one.
   if (isLocalDevice) return electronGitService.detectRepoType(path);
   return undefined;
-};
-
-const toGithubMetadata = (prData?: GitLinkedPRSummary): WorkingDirGithubState | undefined => {
-  if (!prData) return undefined;
-
-  return {
-    ...(prData.extraCount === undefined ? {} : { extraPullRequestCount: prData.extraCount }),
-    pullRequest: prData.pullRequest ?? null,
-    pullRequestStatus: prData.pullRequestStatus ?? (prData.ghMissing ? 'gh-missing' : 'ok'),
-  };
 };
 
 /**
@@ -73,16 +63,11 @@ export const snapshotTopicWorkingDirGit = async (
   const path = getWorkingDirEffectivePath(currentConfig) ?? topic.metadata?.workingDirectory;
   if (!path) return;
 
-  const agentState = getAgentStoreState();
-  const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
-  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
-  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
-  const deviceId = isLocalDevice ? undefined : targetDeviceId;
+  const { deviceId, isLocalDevice, targetDeviceId } = resolveTopicGitTransport(agentId);
 
   // Same transport gate as `gitHooks.isEnabled`: a local read needs `isDesktop`,
   // a remote read needs a `deviceId`. Neither → nothing to probe.
-  if (!deviceId && !isDesktop) return;
+  if (!canReadTopicGitTransport({ deviceId })) return;
 
   // Branch/PR snapshot is only meaningful for a GitHub repo — mirror GitStatus's
   // `isGithub` gate (non-github repos never show a PR chip). Resolve it live (the
@@ -99,27 +84,15 @@ export const snapshotTopicWorkingDirGit = async (
   if (!branch || detached) return;
 
   const prData = await gitService.getLinkedPullRequest({ branch, deviceId, path });
-  const github = toGithubMetadata(prData);
+  const github = toWorkingDirGithubState(prData);
   if (!github) return;
 
-  const source = currentConfig?.path ?? path;
-  const isWorktree = source !== path;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
+  const nextConfig = mergeWorkingDirGithubState({
     branch,
+    currentConfig,
     github,
-    isWorktree,
-  };
-  delete git.detached;
-  if (isWorktree) git.activeWorktree = path;
-  else delete git.activeWorktree;
-
-  const nextConfig: WorkingDirConfig = {
-    ...currentConfig,
-    git,
-    path: source,
-    repoType: 'github',
-  };
+    path,
+  });
 
   if (isEqual(currentConfig, nextConfig)) return;
   await get().updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
