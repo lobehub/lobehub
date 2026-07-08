@@ -1,5 +1,5 @@
 import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
-import { isNotNull, isNull } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -171,24 +171,15 @@ export const userConnectors = pgTable(
     ...timestamps,
   },
   (t) => [
-    /**
-     * Personal / workspace connectors (`agent_id IS NULL`): one row per
-     * (user, identifier). Partial index preserves the pre-agent-dimension
-     * uniqueness exactly (NULL agent_id would otherwise be treated as distinct
-     * and let duplicate personal rows through).
-     */
-    uniqueIndex('user_connectors_user_identifier_unique')
+    index('user_connectors_personal_identifier_idx')
       .on(t.userId, t.identifier)
-      .where(isNull(t.agentId)),
-    /**
-     * Agent-scoped connectors (`agent_id IS NOT NULL`): one row per
-     * (agent, identifier). `agent_id` is globally unique, so an agent row
-     * coexists with the personal/workspace row of the same identifier — that
-     * coexistence is what enables the Agent > Workspace > Personal fallback.
-     */
-    uniqueIndex('user_connectors_agent_identifier_unique')
+      .where(sql`${t.workspaceId} IS NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_workspace_identifier_idx')
+      .on(t.userId, t.workspaceId, t.identifier)
+      .where(sql`${t.workspaceId} IS NOT NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_agent_identifier_idx')
       .on(t.agentId, t.identifier)
-      .where(isNotNull(t.agentId)),
+      .where(sql`${t.agentId} IS NOT NULL`),
     index('user_connectors_user_id_idx').on(t.userId),
     /** Scanned by background token-refresh worker */
     index('user_connectors_token_expires_at_idx').on(t.tokenExpiresAt),

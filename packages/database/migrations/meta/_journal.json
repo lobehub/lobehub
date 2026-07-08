@@ -817,7 +817,7 @@
 			"idx": 116,
 			"version": "7",
 			"when": 1783164982287,
-			"tag": "0116_add_task_trigger_and_connector_agent_id",
+			"tag": "0116_add_task_connector_message_and_verify_updates",
 			"breakpoints": true
 		}
 	],

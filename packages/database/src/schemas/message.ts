@@ -156,6 +156,7 @@ export const messages = pgTable(
     index('messages_created_at_idx').on(table.createdAt),
     uniqueIndex('message_client_id_user_unique').on(table.clientId, table.userId),
     index('messages_topic_id_idx').on(table.topicId),
+    index('messages_topic_id_updated_at_idx').on(table.topicId, table.updatedAt),
     index('messages_parent_id_idx').on(table.parentId),
     index('messages_quota_id_idx').on(table.quotaId),
 

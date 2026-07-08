@@ -6329,8 +6329,8 @@
         }
       },
       "indexes": {
-        "user_connectors_user_identifier_unique": {
-          "name": "user_connectors_user_identifier_unique",
+        "user_connectors_personal_identifier_idx": {
+          "name": "user_connectors_personal_identifier_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -6345,14 +6345,42 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
-          "where": "\"user_connectors\".\"agent_id\" is null",
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
-          "with": {}
+          "with": {},
+          "where": "\"user_connectors\".\"workspace_id\" is null AND \"user_connectors\".\"agent_id\" is null"
         },
-        "user_connectors_agent_identifier_unique": {
-          "name": "user_connectors_agent_identifier_unique",
+        "user_connectors_workspace_identifier_idx": {
+          "name": "user_connectors_workspace_identifier_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "\"user_connectors\".\"workspace_id\" is not null AND \"user_connectors\".\"agent_id\" is null"
+        },
+        "user_connectors_agent_identifier_idx": {
+          "name": "user_connectors_agent_identifier_idx",
           "columns": [
             {
               "expression": "agent_id",
@@ -6367,11 +6395,11 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
-          "where": "\"user_connectors\".\"agent_id\" is not null",
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
-          "with": {}
+          "with": {},
+          "where": "\"user_connectors\".\"agent_id\" is not null"
         },
         "user_connectors_user_id_idx": {
           "name": "user_connectors_user_id_idx",
@@ -10941,6 +10969,27 @@
           "columns": [
             {
               "expression": "topic_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messages_topic_id_updated_at_idx": {
+          "name": "messages_topic_id_updated_at_idx",
+          "columns": [
+            {
+              "expression": "topic_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -21758,6 +21807,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "suggestion": {
           "name": "suggestion",
           "type": "text",
@@ -22317,6 +22372,12 @@
         "file_id": {
           "name": "file_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
