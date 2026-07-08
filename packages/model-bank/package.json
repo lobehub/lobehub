@@ -73,6 +73,7 @@
     "./streamlake": "./src/aiModels/streamlake.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
+    "./tokenlab": "./src/aiModels/tokenlab.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
     "./upstage": "./src/aiModels/upstage.ts",
     "./v0": "./src/aiModels/v0.ts",

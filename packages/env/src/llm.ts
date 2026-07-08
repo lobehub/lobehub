@@ -223,6 +223,10 @@ export const getLLMConfig = () => {
       AIHUBMIX_API_KEY: z.string().optional(),
       AIHUBMIX_PROXY_URL: z.string().optional(),
 
+      ENABLED_TOKENLAB: z.boolean(),
+      TOKENLAB_API_KEY: z.string().optional(),
+      TOKENLAB_PROXY_URL: z.string().optional(),
+
       ENABLED_NEWAPI: z.boolean(),
       NEWAPI_API_KEY: z.string().optional(),
       NEWAPI_PROXY_URL: z.string().optional(),
@@ -473,6 +477,10 @@ export const getLLMConfig = () => {
       ENABLED_AIHUBMIX: !!process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_PROXY_URL: process.env.AIHUBMIX_PROXY_URL,
+
+      ENABLED_TOKENLAB: !!process.env.TOKENLAB_API_KEY,
+      TOKENLAB_API_KEY: process.env.TOKENLAB_API_KEY,
+      TOKENLAB_PROXY_URL: process.env.TOKENLAB_PROXY_URL,
 
       ENABLED_NEWAPI: !!process.env.NEWAPI_API_KEY,
       NEWAPI_API_KEY: process.env.NEWAPI_API_KEY,

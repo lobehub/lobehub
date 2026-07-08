@@ -1,0 +1,45 @@
+---
+title: 在 LobeHub 中使用 TokenLab
+description: 在 LobeHub 中配置 TokenLab，通过 OpenAI-compatible、Responses、Anthropic Messages 和 Gemini-native 等端点使用前沿模型。
+tags:
+  - LobeHub
+  - TokenLab
+  - API 密钥
+  - Web UI
+---
+
+# 在 LobeHub 中使用 TokenLab
+
+[TokenLab](https://tokenlab.sh/) 是一个统一的 AI 模型网关。在 LobeHub 中，TokenLab 会提供一组精选默认模型，也可以通过 `https://api.tokenlab.sh/v1/models` 拉取完整模型目录。
+
+TokenLab 在同一个 provider 配置下支持多个 API 入口，包括 OpenAI-compatible Chat Completions、Responses API、Anthropic Messages、Gemini-native `generateContent`、embeddings、images、videos、audio、realtime 和 translations。
+
+<Steps>
+  ### 步骤一：获取 TokenLab API Key
+
+  - 登录 [TokenLab](https://tokenlab.sh/)。
+  - 在账户设置或开发者控制台中创建 API Key。
+  - 妥善保存密钥，LobeHub 会使用它调用 TokenLab 模型。
+
+  ### 步骤二：在 LobeHub 中配置 TokenLab
+
+  - 打开 LobeHub 的`设置`面板。
+  - 在`AI Providers`中找到 `TokenLab`。
+  - 启用 TokenLab，并填入你的 API Key。
+  - 除非你使用自定义 TokenLab 兼容网关，否则代理地址保持为 `https://api.tokenlab.sh/v1`。
+
+  ### 步骤三：选择或拉取模型
+
+  - 选择内置的 TokenLab 模型，例如 GPT-5.5、Claude Sonnet 5、Gemini 3.5 Flash、Grok 4 Fast、DeepSeek V4、GLM 5.2、Qwen 3.7、MiniMax M3 或 Kimi K2.7。
+  - 如果精选默认列表不够，可以使用模型拉取功能同步最新的 TokenLab 模型目录。
+
+  <Callout type={'info'}>
+    LobeHub 会尽量把兼容的 TokenLab 模型路由到原生 SDK 入口：Anthropic 系列可走 Messages，Gemini 系列可走 Gemini-native `generateContent`，OpenAI 系列可走 Chat Completions 或 Responses。
+  </Callout>
+
+  <Callout type={'warning'}>
+    使用 TokenLab API 可能产生费用。大量使用前请先确认 TokenLab 账户与模型价格。
+  </Callout>
+</Steps>
+
+现在你就可以在 LobeHub 中使用 TokenLab 模型了。
