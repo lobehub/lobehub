@@ -111,7 +111,7 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 bun run check [files...] [--lint] [--test] [--type]
 ```
 
-- `--lint` / `--test` / `--type` are composable selectors; no selector = lint + test. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
+- No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
 - Tests are auto-routed to the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
 - `--type` runs the full type-check. NEVER run `bun run test` — the full suite takes \~10 minutes.
 - Manual fallback when you need unusual flags or a single tool: `bunx vitest run --silent='passed-only' '[file-path]'` from the owning package directory, `bun run type-check` for types.
