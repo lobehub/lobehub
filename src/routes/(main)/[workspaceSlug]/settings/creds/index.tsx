@@ -47,7 +47,7 @@ const WorkspaceCredsSetting = () => {
   // Pre-flight check: detect "org not set up" before rendering the full page.
   // React Query deduplicates this against the identical call inside CredsList,
   // so only one network request is made.
-  const { error, isLoading } = lambdaQuery.workspaceCreds.list.useQuery(undefined, {
+  const { error, isLoading } = workspaceCredsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
