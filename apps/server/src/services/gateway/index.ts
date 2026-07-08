@@ -68,6 +68,16 @@ interface DesiredGatewayConnection {
   provider: DecryptedBotProvider;
 }
 
+interface ActualConnectionsSnapshot {
+  /**
+   * False when the registered-ids call failed and the snapshot only covers
+   * live stats — dormant/hibernated connections may be missing from the map.
+   */
+  complete: boolean;
+  /** connectionId → gateway status, or null for registered-only (pruned) ids. */
+  connections: Map<string, string | null>;
+}
+
 function mapGatewayStatusToRuntimeStatus(
   status: MessageGatewayConnectionStatus['state']['status'],
 ): BotRuntimeStatus {
@@ -169,10 +179,11 @@ export class GatewayService {
     const actual = await this.fetchActualConnections(client);
 
     // A partial desired set would make healthy connections look stale, so only
-    // run the disconnect pass when every platform loaded successfully.
+    // run the disconnect pass when every platform loaded successfully. A
+    // partial ACTUAL set is fine — the pass only disconnects ids it can see.
     let stale = 0;
     if (actual && desiredComplete) {
-      stale = await this.disconnectStaleConnections(client, serverDB, actual, desired);
+      stale = await this.disconnectStaleConnections(client, serverDB, actual.connections, desired);
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
     }
@@ -256,7 +267,7 @@ export class GatewayService {
       'Gateway sync complete in %dms: desired=%d actual=%s connected=%d skipped=%d gated=%d stale=%d failed=%d',
       Date.now() - startedAt,
       desired.size,
-      actual ? actual.size : 'unavailable',
+      actual ? actual.connections.size : 'unavailable',
       connected,
       skipped,
       gated,
@@ -362,30 +373,42 @@ export class GatewayService {
    * status) unioned with registered ids (dormant/hibernated connections the
    * AdminDO stats already pruned — status unknown, hence `null`).
    *
-   * Returns null when the admin endpoints are unavailable; callers then fall
-   * back to per-connection status checks and skip stale-connection cleanup.
+   * Returns null when stats are unavailable; callers then fall back to
+   * per-connection status checks and skip stale-connection cleanup. The
+   * registered-ids call is best-effort: an older gateway without the admin
+   * endpoint (mid-rollout) or a transient failure must not disable
+   * reconciliation for the live connections stats already covers — the stale
+   * pass only ever disconnects ids present in the snapshot, so a partial
+   * snapshot just cleans up less. `complete: false` marks the partial case so
+   * status resolution won't treat "missing from snapshot" as disconnected.
    */
   private async fetchActualConnections(
     client: ReturnType<typeof getMessageGatewayClient>,
-  ): Promise<Map<string, string | null> | null> {
-    try {
-      const actual = new Map<string, string | null>();
+  ): Promise<ActualConnectionsSnapshot | null> {
+    const connections = new Map<string, string | null>();
 
+    try {
       const stats = await client.getStats();
       for (const conn of stats.connections) {
-        actual.set(conn.connectionId, conn.state.status);
+        connections.set(conn.connectionId, conn.state.status);
       }
-
-      const { ids } = await client.getRegisteredIds();
-      for (const id of ids) {
-        if (!actual.has(id)) actual.set(id, null);
-      }
-
-      return actual;
     } catch (err) {
-      log('Gateway sync: failed to fetch gateway connection snapshot: %O', err);
+      log('Gateway sync: failed to fetch gateway stats snapshot: %O', err);
       return null;
     }
+
+    let complete = true;
+    try {
+      const { ids } = await client.getRegisteredIds();
+      for (const id of ids) {
+        if (!connections.has(id)) connections.set(id, null);
+      }
+    } catch (err) {
+      complete = false;
+      log('Gateway sync: registered-ids unavailable, using stats-only snapshot: %O', err);
+    }
+
+    return { complete, connections };
   }
 
   /**
@@ -430,10 +453,25 @@ export class GatewayService {
       staleIds,
       async (id) => {
         try {
+          const row = rowById.get(id);
+
+          // TOCTOU guard: a provider enabled (and connected) between the
+          // desired snapshot and the actual fetch shows up in `actual` but not
+          // in `desired`. These rows were queried after both snapshots, so
+          // trust them: an enabled persistent-mode row is not stale — leave it
+          // for the next round to classify with a fresh desired set.
+          if (
+            row?.enabled &&
+            resolveConnectionMode(platformRegistry.getPlatform(row.platform), row.settings) !==
+              'webhook'
+          ) {
+            log('Gateway sync: %s enabled during sync, skipping stale disconnect', id);
+            return;
+          }
+
           await client.disconnect(id);
           disconnected++;
 
-          const row = rowById.get(id);
           if (row) {
             await updateBotRuntimeStatus({
               applicationId: row.applicationId,
@@ -467,15 +505,18 @@ export class GatewayService {
   private async resolveGatewayStatus(
     client: ReturnType<typeof getMessageGatewayClient>,
     connectionId: string,
-    actual: Map<string, string | null> | null,
+    actual: ActualConnectionsSnapshot | null,
   ): Promise<string | undefined> {
     if (actual) {
-      const snapshot = actual.get(connectionId);
-      // Unknown to the gateway entirely → connect.
-      if (snapshot === undefined) return 'disconnected';
+      const snapshot = actual.connections.get(connectionId);
+      // Unknown to the gateway entirely → connect. Only trustworthy when the
+      // snapshot is complete — a stats-only snapshot misses dormant ids, and
+      // treating those as disconnected would reconnect sparse-polling DOs.
+      if (snapshot === undefined && actual.complete) return 'disconnected';
       // Known status from stats.
-      if (snapshot !== null) return snapshot;
-      // Registered but pruned from stats (likely dormant) — ask the DO itself.
+      if (snapshot !== undefined && snapshot !== null) return snapshot;
+      // Registered but pruned from stats (likely dormant), or missing from an
+      // incomplete snapshot — ask the DO itself.
     }
 
     try {

@@ -543,6 +543,76 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 
+    it('still cleans live stale connections when registered-ids is unavailable', async () => {
+      // Mid-rollout: gateway without /api/admin/registered-ids. The stats
+      // snapshot alone must keep the stale pass alive for live connections,
+      // while desired providers missing from the partial snapshot fall back
+      // to per-connection status checks instead of being treated as
+      // disconnected (which would wake dormant DOs).
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord' ? [provider] : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: {},
+        connections: [
+          {
+            connectionId: 'stale-live',
+            platform: 'wechat',
+            state: { status: 'connected' },
+            userId: 'gone',
+          },
+        ],
+        total: 1,
+      });
+      mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('404 not found'));
+      mockGatewayClient.getStatus.mockResolvedValue({ state: { status: 'dormant' } });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('stale-live');
+      // prov-1 missing from the incomplete snapshot → ask the DO, find it
+      // dormant, leave it alone.
+      expect(mockGatewayClient.getStatus).toHaveBeenCalledWith('prov-1');
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalledWith('prov-1');
+    });
+
+    it('does not disconnect a provider enabled after the desired snapshot was built', async () => {
+      // TOCTOU race: the user enables + connects a provider while the sync is
+      // between buildDesiredConnections and fetchActualConnections. It shows
+      // up in `actual` but not in `desired` — the fresh row recheck must keep
+      // it connected.
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: {},
+        connections: [
+          {
+            connectionId: 'prov-race',
+            platform: 'discord',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockFindByIds.mockResolvedValue([
+        {
+          applicationId: 'app-race',
+          enabled: true,
+          id: 'prov-race',
+          platform: 'discord',
+          settings: {},
+        },
+      ]);
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: 'app-race', status: 'disconnected' }),
+      );
+    });
+
     it('uses the stats snapshot instead of per-connection status calls', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
         platform === 'discord' ? [provider] : [],

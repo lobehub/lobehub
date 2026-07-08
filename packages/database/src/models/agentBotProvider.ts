@@ -261,7 +261,7 @@ export class AgentBotProviderModel {
     db: LobeChatDatabase,
     ids: string[],
   ): Promise<
-    Array<Pick<AgentBotProviderItem, 'applicationId' | 'enabled' | 'id' | 'platform'>>
+    Array<Pick<AgentBotProviderItem, 'applicationId' | 'enabled' | 'id' | 'platform' | 'settings'>>
   > => {
     const uuidIds = ids.filter((id) => UUID_RE.test(id));
     if (uuidIds.length === 0) return [];
@@ -272,6 +272,7 @@ export class AgentBotProviderModel {
         enabled: agentBotProviders.enabled,
         id: agentBotProviders.id,
         platform: agentBotProviders.platform,
+        settings: agentBotProviders.settings,
       })
       .from(agentBotProviders)
       .where(inArray(agentBotProviders.id, uuidIds));
