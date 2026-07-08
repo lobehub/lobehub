@@ -1,4 +1,19 @@
+import type {
+  AcceptanceConfig,
+  AcceptanceMetadata,
+  AcceptanceReportMetadata,
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyRubricConfig,
+  VerifyRunContext,
+  VerifyRunMetadata,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import {
+  acceptanceReportRunRoles,
+  acceptanceReportVerdicts,
+  acceptanceStatuses,
+  acceptanceSubjectTypes,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -9,14 +24,7 @@ import {
   verifyUserDecisions,
   verifyVerdicts,
 } from '@lobechat/const/verify';
-import type {
-  ToulminVerdict,
-  VerifyCheckItem,
-  VerifyRubricConfig,
-  VerifyRunContext,
-  VerifyRunMetadata,
-  VerifyRunScenario,
-} from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -174,7 +182,7 @@ export const verifyCheckResults = pgTable(
     id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     /**
-     * The verification session this result belongs to (the grouping key). The
+     * The verification round this result belongs to (the grouping key). The
      * plan snapshot lives on verify_runs.plan; results relate to its items via
      * check_item_id. Nullable as an additive column; the verify pipeline always
      * sets it.
@@ -183,7 +191,7 @@ export const verifyCheckResults = pgTable(
 
     /**
      * Denormalized direct link to the Agent Run, retained for the agent pipeline;
-     * null for standalone sessions. The canonical run link is `verify_runs`
+     * null for standalone rounds. The canonical run link is `verify_runs`
      * (addressed via verifyRunId) — this is convenience only, hence `set null`.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
@@ -332,7 +340,197 @@ export const verifyEvidence = pgTable(
 );
 
 // ============================================
-// 6. verify_reports — LLM-generated delivery-verification narrative for a run
+// 6. acceptances — business-level aggregate for one subject's acceptance lifecycle
+// ============================================
+export const acceptances = pgTable(
+  'acceptances',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /**
+     * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
+     * topic, document, or future subject types without reshaping this aggregate.
+     * Subject existence/ownership is validated in the service that creates it.
+     */
+    subjectType: text('subject_type', { enum: acceptanceSubjectTypes }).notNull(),
+    subjectId: text('subject_id').notNull(),
+
+    /** User-facing acceptance lifecycle state. */
+    status: text('status', { enum: acceptanceStatuses }).default('pending').notNull(),
+
+    /** One-sentence acceptance requirement the user configured for this subject. */
+    requirement: text('requirement'),
+
+    /** Policy/config snapshot used when instantiating verify rounds for this acceptance. */
+    config: jsonb('config').$type<AcceptanceConfig>().default({}),
+
+    /** First verify round in this acceptance chain (denormalized pointer). */
+    rootVerifyRunId: uuid('root_verify_run_id'),
+
+    /** Latest active or most recently settled verify round (denormalized pointer). */
+    currentVerifyRunId: uuid('current_verify_run_id'),
+
+    /** Terminal verify round that produced the latest accepted/rejected outcome. */
+    finalVerifyRunId: uuid('final_verify_run_id'),
+
+    /** Latest aggregate report version for this acceptance (denormalized pointer). */
+    latestReportId: uuid('latest_report_id'),
+
+    /** Generic aggregate extension bag for future subject-specific state. */
+    metadata: jsonb('metadata').$type<AcceptanceMetadata>(),
+
+    completedAt: timestamptz('completed_at'),
+    ...timestamps,
+  },
+  (t) => [
+    index('acceptances_user_id_idx').on(t.userId),
+    index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
+    index('acceptances_status_idx').on(t.status),
+    index('acceptances_root_verify_run_id_idx').on(t.rootVerifyRunId),
+    index('acceptances_current_verify_run_id_idx').on(t.currentVerifyRunId),
+    index('acceptances_final_verify_run_id_idx').on(t.finalVerifyRunId),
+    index('acceptances_latest_report_id_idx').on(t.latestReportId),
+    // One acceptance per subject in personal scope.
+    uniqueIndex('acceptances_personal_subject_unique')
+      .on(t.userId, t.subjectType, t.subjectId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    // One acceptance per subject in workspace scope.
+    uniqueIndex('acceptances_workspace_subject_unique')
+      .on(t.workspaceId, t.subjectType, t.subjectId)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
+  ],
+);
+
+export type NewAcceptance = typeof acceptances.$inferInsert;
+export type AcceptanceItem = typeof acceptances.$inferSelect;
+
+// ============================================
+// 7. acceptance_reports — versioned aggregate report across one or more verify rounds
+// ============================================
+export const acceptanceReports = pgTable(
+  'acceptance_reports',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** The acceptance lifecycle this report summarizes. */
+    acceptanceId: uuid('acceptance_id')
+      .references(() => acceptances.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this report belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Monotonic report version inside one acceptance; regeneration writes a new version. */
+    version: integer('version').default(1).notNull(),
+
+    /** First verify round covered by this report. */
+    rootVerifyRunId: uuid('root_verify_run_id').references(() => verifyRuns.id, {
+      onDelete: 'set null',
+    }),
+
+    /** Final/latest verify round covered by this report. */
+    finalVerifyRunId: uuid('final_verify_run_id').references(() => verifyRuns.id, {
+      onDelete: 'set null',
+    }),
+
+    // ---- Summary verdict ----
+    verdict: text('verdict', { enum: acceptanceReportVerdicts }),
+    overallConfidence: numeric('overall_confidence', { mode: 'number', precision: 3, scale: 2 }),
+
+    // ---- Statistics snapshot across all covered verify rounds ----
+    totalChecks: integer('total_checks'),
+    passedChecks: integer('passed_checks'),
+    failedChecks: integer('failed_checks'),
+    uncertainChecks: integer('uncertain_checks'),
+
+    // ---- LLM-generated narrative (a produced artifact, not a computed one) ----
+    /** Short 3-5 sentence summary, suitable for embedding in a chat message. */
+    summary: text('summary'),
+    /** Full Markdown report, shown in the expanded review view. */
+    content: text('content'),
+
+    /** Whether the user has acknowledged the report. */
+    reviewedByUser: boolean('reviewed_by_user').default(false),
+
+    /** Generic report extension bag for rendering / provenance extras. */
+    metadata: jsonb('metadata').$type<AcceptanceReportMetadata>(),
+
+    /** Producer of this report, e.g. 'system' / a model id. */
+    generatedBy: text('generated_by').default('system'),
+    generatedAt: timestamptz('generated_at').notNull().defaultNow(),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('acceptance_reports_acceptance_id_version_unique').on(t.acceptanceId, t.version),
+    index('acceptance_reports_acceptance_id_idx').on(t.acceptanceId),
+    index('acceptance_reports_user_id_idx').on(t.userId),
+    index('acceptance_reports_workspace_id_idx').on(t.workspaceId),
+    index('acceptance_reports_root_verify_run_id_idx').on(t.rootVerifyRunId),
+    index('acceptance_reports_final_verify_run_id_idx').on(t.finalVerifyRunId),
+  ],
+);
+
+export type NewAcceptanceReport = typeof acceptanceReports.$inferInsert;
+export type AcceptanceReportItem = typeof acceptanceReports.$inferSelect;
+
+// ============================================
+// 8. acceptance_report_runs — exact verify rounds covered by one report version
+// ============================================
+export const acceptanceReportRuns = pgTable(
+  'acceptance_report_runs',
+  {
+    reportId: uuid('report_id')
+      .references(() => acceptanceReports.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    verifyRunId: uuid('verify_run_id')
+      .references(() => verifyRuns.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this link belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Role of this run in the aggregate narrative (initial / repair / final / included). */
+    role: text('role', { enum: acceptanceReportRunRoles }),
+
+    /** Display ordering of the run within the report. */
+    sortOrder: integer('sort_order'),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.reportId, t.verifyRunId] }),
+    index('acceptance_report_runs_verify_run_id_idx').on(t.verifyRunId),
+    index('acceptance_report_runs_user_id_idx').on(t.userId),
+    index('acceptance_report_runs_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+export type NewAcceptanceReportRun = typeof acceptanceReportRuns.$inferInsert;
+export type AcceptanceReportRunItem = typeof acceptanceReportRuns.$inferSelect;
+
+// ============================================
+// 9. verify_reports — LLM-generated delivery-verification narrative for a run
 // ============================================
 export const verifyReports = pgTable(
   'verify_reports',
@@ -340,7 +538,7 @@ export const verifyReports = pgTable(
     id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     /**
-     * The verification session this report summarizes (the grouping key). One
+     * The verification round this report summarizes (the grouping key). One
      * report per run (regenerating overwrites in place via the unique index).
      * Nullable as an additive column; the report writer always sets it.
      */
@@ -348,7 +546,7 @@ export const verifyReports = pgTable(
 
     /**
      * Denormalized direct link to the Agent Run, retained for the agent pipeline;
-     * null for standalone sessions. Canonical run link is `verify_runs` — this is
+     * null for standalone rounds. Canonical run link is `verify_runs` — this is
      * convenience only, hence `set null`.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
@@ -389,7 +587,7 @@ export const verifyReports = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
-    // One report per verification session — regenerating overwrites in place.
+    // One report per verification round — regenerating overwrites in place.
     uniqueIndex('verify_reports_verify_run_id_unique').on(t.verifyRunId),
     index('verify_reports_operation_id_idx').on(t.operationId),
     index('verify_reports_user_id_idx').on(t.userId),
@@ -398,8 +596,8 @@ export const verifyReports = pgTable(
 );
 
 // ============================================
-// 7. verify_runs — a verification session (the run-anchor that decouples the
-//    chain from agent_operations)
+// 10. verify_runs — a verification round / attempt (the run-anchor that decouples
+//     the chain from agent_operations)
 // ============================================
 // The verify chain used to hang off agent_operations: the plan lived on
 // `agent_operations.verify_plan` and results/reports keyed on `operation_id`.
@@ -407,12 +605,11 @@ export const verifyReports = pgTable(
 // agent-testing harness ingesting results) — to mint a fake Agent Run, polluting
 // the operation analytics with rows that carry no real execution trace.
 //
-// `verify_runs` is the session entity instead: it owns the plan snapshot + the
-// rollup status and is what results/reports/evidence will anchor to. The link to
-// a real Agent Run is an OPTIONAL FK (`operation_id`) — set when verifying an
-// agent run, null for standalone sessions. Repointing verify_check_results /
-// verify_reports onto `verify_run_id` lands in a follow-up; this migration only
-// introduces the table.
+// `verify_runs` is the round/attempt entity instead: it owns the plan snapshot +
+// the rollup status and is what check results / evidence anchor to. A business
+// acceptance can aggregate several verify runs across repair iterations; the link
+// to a real Agent Run is still an OPTIONAL FK (`operation_id`) — set when verifying
+// an agent run, null for standalone rounds.
 export const verifyRuns = pgTable(
   'verify_runs',
   {
@@ -423,29 +620,40 @@ export const verifyRuns = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Workspace this session belongs to — scopes listing and cascades on workspace delete. */
+    /** Workspace this round belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
-     * Optional link to the Agent Run this session verifies. Null for standalone
-     * sessions (e.g. agent-testing). `set null` so deleting the run keeps the
-     * verification session and its results/report alive.
+     * Optional business-level acceptance aggregate this verify round belongs to.
+     * Null keeps standalone rounds (e.g. agent-testing) and legacy rows valid.
+     */
+    acceptanceId: uuid('acceptance_id').references(() => acceptances.id, {
+      onDelete: 'set null',
+    }),
+
+    /** Display / ordering index of this round inside an acceptance chain. */
+    roundIndex: integer('round_index'),
+
+    /**
+     * Optional link to the Agent Run this round verifies. Null for standalone
+     * rounds (e.g. agent-testing). `set null` so deleting the run keeps the
+     * verification round and its results/report alive.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
       onDelete: 'set null',
     }),
 
-    /** What produced this session — drives provenance + analytics filtering. */
+    /** What produced this round — drives provenance + analytics filtering. */
     source: text('source', { enum: verifyRunSources }).default('agent').notNull(),
 
     /**
-     * What kind of thing this session verifies (e.g. `coding`). Drives how the
+     * What kind of thing this round verifies (e.g. `coding`). Drives how the
      * report renders its scope header + scenario-specific detail. Null for
      * legacy/agent runs that predate scenarios.
      */
     scenario: text('scenario').$type<VerifyRunScenario>(),
 
-    /** Human-readable session title (report title / test name). */
+    /** Human-readable round title (report title / test name). */
     title: text('title'),
     /** The delivery goal being verified. */
     goal: text('goal'),
@@ -465,7 +673,7 @@ export const verifyRuns = pgTable(
     metadata: jsonb('metadata').$type<VerifyRunMetadata>(),
 
     /**
-     * Immutable check-plan snapshot for this session (instantiated from rubrics /
+     * Immutable check-plan snapshot for this round (instantiated from rubrics /
      * criteria / agent-generated / ingested). Results relate to its items via
      * check_item_id. Moved here off `agent_operations.verify_plan`.
      */
@@ -473,7 +681,7 @@ export const verifyRuns = pgTable(
     /** When the plan was confirmed (frozen). */
     planConfirmedAt: timestamptz('plan_confirmed_at'),
 
-    /** Denormalized rollup of the session's verify pipeline state. */
+    /** Denormalized rollup of the round's verify pipeline state. */
     status: text('status', { enum: verifyRunStatuses }),
 
     ...timestamps,
@@ -481,8 +689,10 @@ export const verifyRuns = pgTable(
   (t) => [
     index('verify_runs_user_id_idx').on(t.userId),
     index('verify_runs_workspace_id_idx').on(t.workspaceId),
-    // At most one verification session per Agent Run; NULLs are distinct in a
-    // unique index, so standalone (operation-less) sessions stay unconstrained.
+    index('verify_runs_acceptance_id_idx').on(t.acceptanceId),
+    uniqueIndex('verify_runs_acceptance_round_unique').on(t.acceptanceId, t.roundIndex),
+    // At most one verification round per Agent Run; NULLs are distinct in a
+    // unique index, so standalone (operation-less) rounds stay unconstrained.
     uniqueIndex('verify_runs_operation_id_unique').on(t.operationId),
     index('verify_runs_source_idx').on(t.source),
   ],

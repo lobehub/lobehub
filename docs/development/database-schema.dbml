@@ -2482,6 +2482,88 @@ table user_memory_persona_documents {
   }
 }
 
+table acceptance_report_runs {
+  report_id uuid [not null]
+  verify_run_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  role text
+  sort_order integer
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (report_id, verify_run_id) [pk]
+    verify_run_id [name: 'acceptance_report_runs_verify_run_id_idx']
+    user_id [name: 'acceptance_report_runs_user_id_idx']
+    workspace_id [name: 'acceptance_report_runs_workspace_id_idx']
+  }
+}
+
+table acceptance_reports {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  acceptance_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  version integer [not null, default: 1]
+  root_verify_run_id uuid
+  final_verify_run_id uuid
+  verdict text
+  overall_confidence "numeric(3, 2)"
+  total_checks integer
+  passed_checks integer
+  failed_checks integer
+  uncertain_checks integer
+  summary text
+  content text
+  reviewed_by_user boolean [default: false]
+  metadata jsonb
+  generated_by text [default: 'system']
+  generated_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (acceptance_id, version) [name: 'acceptance_reports_acceptance_id_version_unique', unique]
+    acceptance_id [name: 'acceptance_reports_acceptance_id_idx']
+    user_id [name: 'acceptance_reports_user_id_idx']
+    workspace_id [name: 'acceptance_reports_workspace_id_idx']
+    root_verify_run_id [name: 'acceptance_reports_root_verify_run_id_idx']
+    final_verify_run_id [name: 'acceptance_reports_final_verify_run_id_idx']
+  }
+}
+
+table acceptances {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text [not null]
+  status text [not null, default: 'pending']
+  requirement text
+  config jsonb [default: `{}`]
+  root_verify_run_id uuid
+  current_verify_run_id uuid
+  final_verify_run_id uuid
+  latest_report_id uuid
+  metadata jsonb
+  completed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'acceptances_user_id_idx']
+    workspace_id [name: 'acceptances_workspace_id_idx']
+    (subject_type, subject_id) [name: 'acceptances_subject_idx']
+    status [name: 'acceptances_status_idx']
+    root_verify_run_id [name: 'acceptances_root_verify_run_id_idx']
+    current_verify_run_id [name: 'acceptances_current_verify_run_id_idx']
+    final_verify_run_id [name: 'acceptances_final_verify_run_id_idx']
+    latest_report_id [name: 'acceptances_latest_report_id_idx']
+    (user_id, subject_type, subject_id) [name: 'acceptances_personal_subject_unique', unique]
+    (workspace_id, subject_type, subject_id) [name: 'acceptances_workspace_subject_unique', unique]
+  }
+}
+
 table verify_check_results {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   verify_run_id uuid
@@ -2634,6 +2716,8 @@ table verify_runs {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
+  acceptance_id uuid
+  round_index integer
   operation_id text
   source text [not null, default: 'agent']
   scenario text
@@ -2651,6 +2735,8 @@ table verify_runs {
   indexes {
     user_id [name: 'verify_runs_user_id_idx']
     workspace_id [name: 'verify_runs_workspace_id_idx']
+    acceptance_id [name: 'verify_runs_acceptance_id_idx']
+    (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
   }
