@@ -1251,6 +1251,57 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should enqueue behind a running interim approve/retry op (preflight window)', async () => {
+        // Interim ops (approve/submit/skip/regenerate) show input loading the
+        // instant the user clicks, but the real runtime op is only created 2–4
+        // tRPC round-trips later. A fast follow-up Enter in that window must
+        // queue behind the interim op — not fire a concurrent sendMessage that
+        // interleaves with the approve/retry flow. Guards QUEUE_BLOCKING staying
+        // in sync with INPUT_LOADING for INTERIM_LOADING_OPERATION_TYPES.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-regenerate': {
+                childOperationIds: [],
+                context,
+                id: 'op-regenerate',
+                metadata: {},
+                status: 'running',
+                type: 'regenerate',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-regenerate'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+        const sendMessageInServerSpy = vi.spyOn(aiChatService, 'sendMessageInServer');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'follow-up during regenerate preflight',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'follow-up during regenerate preflight',
+            interruptMode: 'soft',
+          }),
+          'op-regenerate',
+        );
+        // Must queue, not start a concurrent send.
+        expect(sendMessageInServerSpy).not.toHaveBeenCalled();
+      });
+
       it('should enqueue while the first new-topic message is still being persisted', async () => {
         const { result } = renderHook(() => useChatStore());
         const context = createTestContext();
