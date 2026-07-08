@@ -1674,6 +1674,47 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
     });
+
+    it('should bail before running if a Stop cancels the interim op during synthetic message creation', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        role: 'tool',
+        plugin: { identifier: 'test-plugin', type: 'default', arguments: '{}', apiName: 'test' },
+      });
+      const globalKey = messageMapKey({ agentId, topicId });
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [globalKey]: [toolMessage] },
+          messagesMap: { [globalKey]: [toolMessage] },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      // Stop lands while the synthetic user message is being created — a later
+      // await than the guard before it.
+      vi.spyOn(result.current, 'optimisticCreateMessage').mockImplementation(async (_msg, ctx) => {
+        if (ctx?.operationId) result.current.cancelOperation(ctx.operationId);
+        return { id: 'submitted-user-msg', messages: [] } as any;
+      });
+      const internal_createAgentStateSpy = vi.spyOn(result.current, 'internal_createAgentState');
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.submitToolInteraction('tool-msg-1', { answer: 'blue' });
+      });
+
+      expect(internal_createAgentStateSpy).not.toHaveBeenCalled();
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('skipToolInteraction', () => {
@@ -1914,6 +1955,47 @@ describe('ConversationControl actions', () => {
           parentMessageType: 'user',
         }),
       );
+    });
+
+    it('should bail before running if a Stop cancels the interim op during synthetic message creation', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        role: 'tool',
+        plugin: { identifier: 'test-plugin', type: 'default', arguments: '{}', apiName: 'test' },
+      });
+      const globalKey = messageMapKey({ agentId, topicId });
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [globalKey]: [toolMessage] },
+          messagesMap: { [globalKey]: [toolMessage] },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      // Stop lands while the synthetic user message is being created — a later
+      // await than the guard before it.
+      vi.spyOn(result.current, 'optimisticCreateMessage').mockImplementation(async (_msg, ctx) => {
+        if (ctx?.operationId) result.current.cancelOperation(ctx.operationId);
+        return { id: 'skipped-user-msg', messages: [] } as any;
+      });
+      const internal_createAgentStateSpy = vi.spyOn(result.current, 'internal_createAgentState');
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.skipToolInteraction('tool-msg-1', 'not needed');
+      });
+
+      expect(internal_createAgentStateSpy).not.toHaveBeenCalled();
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
     });
   });
 

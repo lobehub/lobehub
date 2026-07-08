@@ -658,6 +658,12 @@ export class ConversationControlActionImpl {
       return;
     }
 
+    // Bail if a Stop landed while the synthetic user message was being created:
+    // optimisticCreateMessage above is another await round-trip after the earlier
+    // guard, and executeClientAgent would otherwise start a fresh child run that
+    // wasn't present when the cancellation propagated.
+    if (this.#wasInterimOpStopped(operationId)) return;
+
     // 3. Resume agent from user message (not tool re-execution)
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
@@ -777,6 +783,12 @@ export class ConversationControlActionImpl {
       });
       return;
     }
+
+    // Bail if a Stop landed while the synthetic user message was being created:
+    // optimisticCreateMessage above is another await round-trip after the guard
+    // before it, and executeClientAgent would otherwise start a fresh child run
+    // that wasn't present when the cancellation propagated.
+    if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
