@@ -669,6 +669,58 @@ describe('Generation Actions', () => {
       expect(regenSpy).toHaveBeenCalledWith('msg-1');
       expect(mockCompleteOperation).toHaveBeenCalled();
     });
+
+    it('settles the wrapper op via failOperation when regeneration throws (no stuck loading)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      const chatState: any = {
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: vi.fn().mockResolvedValue(undefined),
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+        groupId: 'group-1',
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+        } as any);
+      });
+
+      // Regeneration blows up mid-retry. Because `regenerate` now drives input
+      // loading + queue blocking, the wrapper op MUST be settled — otherwise the
+      // input wedges in loading forever and future sends queue behind it.
+      vi.spyOn(store.getState(), 'regenerateUserMessage').mockRejectedValue(new Error('boom'));
+
+      await act(async () => {
+        await expect(store.getState().delAndRegenerateMessage('msg-2')).rejects.toThrow('boom');
+      });
+
+      expect(mockFailOperation).toHaveBeenCalledWith(
+        'test-op-id',
+        expect.objectContaining({ type: 'RegenerateError' }),
+      );
+      expect(mockCompleteOperation).not.toHaveBeenCalled();
+    });
   });
 
   describe('delAndResendThreadMessage', () => {

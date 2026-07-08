@@ -459,19 +459,30 @@ export const generationSlice: StateCreator<
       type: 'regenerate',
     });
 
-    // IMPORTANT: Delete first, then regenerate
-    // If we regenerate first, it switches to a new branch, causing the original
-    // message to no longer appear in displayMessages. Then deleteMessage cannot
-    // find the message and fails silently.
-    await chatStore.deleteMessage(messageId, { operationId });
+    try {
+      // IMPORTANT: Delete first, then regenerate
+      // If we regenerate first, it switches to a new branch, causing the original
+      // message to no longer appear in displayMessages. Then deleteMessage cannot
+      // find the message and fails silently.
+      await chatStore.deleteMessage(messageId, { operationId });
 
-    // NOTE: intentionally do NOT bail on Stop here. The old assistant message is
-    // already deleted above; returning early would leave the turn deleted with
-    // nothing regenerated — destructive data loss. Stop pressed in this
-    // sub-second window is best-effort; complete the retry atomically and honor
-    // the next Stop (on the fresh run) normally.
-    await get().regenerateUserMessage(userId);
-    chatStore.completeOperation(operationId);
+      // NOTE: intentionally do NOT bail on Stop here. The old assistant message is
+      // already deleted above; returning early would leave the turn deleted with
+      // nothing regenerated — destructive data loss. Stop pressed in this
+      // sub-second window is best-effort; complete the retry atomically and honor
+      // the next Stop (on the fresh run) normally.
+      await get().regenerateUserMessage(userId);
+      chatStore.completeOperation(operationId);
+    } catch (error) {
+      // Settle the wrapper op on failure. `regenerate` now drives input-loading +
+      // queue-blocking, so a never-settled op would wedge the input in loading
+      // forever and queue every future send behind it.
+      chatStore.failOperation(operationId, {
+        message: error instanceof Error ? error.message : String(error),
+        type: 'RegenerateError',
+      });
+      throw error;
+    }
   },
 
   delAndResendThreadMessage: async (messageId: string) => {
@@ -484,17 +495,28 @@ export const generationSlice: StateCreator<
       type: 'regenerate',
     });
 
-    // Resend then delete
-    await get().resendThreadMessage(messageId);
+    try {
+      // Resend then delete
+      await get().resendThreadMessage(messageId);
 
-    // Honor a Stop pressed during the resend: the whitelisted outer op gets
-    // cancelled by stopGenerating, so skip the follow-up delete and leave the
-    // original message intact rather than mutating state after Stop.
-    const outerOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
-    if (outerOp && outerOp.status !== 'running') return;
+      // Honor a Stop pressed during the resend: the whitelisted outer op gets
+      // cancelled by stopGenerating, so skip the follow-up delete and leave the
+      // original message intact rather than mutating state after Stop. The
+      // cancelled op is no longer `running`, so it stops driving loading — no
+      // need to settle it here.
+      const outerOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+      if (outerOp && outerOp.status !== 'running') return;
 
-    await chatStore.deleteMessage(messageId, { operationId });
-    chatStore.completeOperation(operationId);
+      await chatStore.deleteMessage(messageId, { operationId });
+      chatStore.completeOperation(operationId);
+    } catch (error) {
+      // Settle the wrapper op on failure — see delAndRegenerateMessage.
+      chatStore.failOperation(operationId, {
+        message: error instanceof Error ? error.message : String(error),
+        type: 'RegenerateError',
+      });
+      throw error;
+    }
   },
 
   openThreadCreator: (messageId: string) => {
