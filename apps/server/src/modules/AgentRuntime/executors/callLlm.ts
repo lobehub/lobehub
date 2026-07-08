@@ -616,6 +616,11 @@ export const callLlm =
                 description: cred.description,
                 key: cred.key,
                 name: cred.name,
+                // Only present on the workspace-merged list (organizations.creds().list())
+                // above — tells the AI whether this credential is the workspace's own or a
+                // member's shared one, so it never misrepresents whose secret it's using.
+                ownerDisplayName: cred.ownerDisplayName,
+                ownerType: cred.ownerType,
                 type: cred.type,
               })),
             );
