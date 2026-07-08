@@ -5,10 +5,29 @@ import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { operationSelectors } from '../selectors';
+import {
+  INPUT_LOADING_OPERATION_TYPES,
+  INTERIM_LOADING_OPERATION_TYPES,
+  QUEUE_BLOCKING_OPERATION_TYPES,
+} from '../types';
 
 describe('Operation Selectors', () => {
   beforeEach(() => {
     useChatStore.setState(useChatStore.getInitialState());
+  });
+
+  // Coherence invariant: interim approve/submit/skip/regenerate ops must live in
+  // BOTH whitelists. If the input shows loading for an op (INPUT_LOADING), a
+  // follow-up must queue behind it and "Send now" must be able to cancel it
+  // (QUEUE_BLOCKING). Dropping them from either set silently reintroduces the
+  // interleave / stuck-queue / no-op-send-now bugs.
+  describe('operation-type set invariants', () => {
+    it('keeps interim ops in both INPUT_LOADING and QUEUE_BLOCKING', () => {
+      for (const type of INTERIM_LOADING_OPERATION_TYPES) {
+        expect(INPUT_LOADING_OPERATION_TYPES).toContain(type);
+        expect(QUEUE_BLOCKING_OPERATION_TYPES).toContain(type);
+      }
+    });
   });
 
   describe('getOperationsByType', () => {
@@ -708,6 +727,31 @@ describe('Operation Selectors', () => {
       });
 
       expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should count a queued follow-up in a thread-scope context (QueueTray mounts)', () => {
+      const { result } = renderHook(() => useChatStore());
+      // queuedMessageCount gates whether QueueTray mounts. It must key off the
+      // same full context as getQueuedMessages/enqueue — a reduced
+      // agentId/topicId key would report 0 here and hide the tray even though a
+      // real queued message is pinning the input loading.
+      const context = {
+        agentId: 'agent1',
+        scope: 'thread' as const,
+        threadId: 'thread1',
+        topicId: 'topic1',
+      };
+
+      act(() => {
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.queuedMessageCount(context)(result.current)).toBe(1);
     });
 
     it('should keep visible loading for a normal running runtime operation', () => {

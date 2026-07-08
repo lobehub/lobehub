@@ -455,3 +455,19 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // through these branches is deferred.
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
+
+/**
+ * Operation types that block a fresh `sendMessage`: a send fired while one of
+ * these runs enqueues behind it instead of starting a concurrent run.
+ *
+ * Single source of truth shared by the enqueue check (conversationLifecycle) and
+ * the QueueTray "Send now" cancel path — so both agree on what a follow-up is
+ * queued behind. Kept in sync with INPUT_LOADING via the shared
+ * INTERIM_LOADING_OPERATION_TYPES: if the input shows loading for an op, a
+ * follow-up must queue behind it, and "Send now" must be able to cancel it.
+ */
+export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+  ...INTERIM_LOADING_OPERATION_TYPES,
+];

@@ -762,16 +762,14 @@ const unreadCompletedCountForTopics =
  * Get queued messages count for a context
  */
 const queuedMessageCount =
-  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
-  (s: ChatStoreState): number => {
-    if (!context.agentId) return 0;
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-    return s.queuedMessages[contextKey]?.length ?? 0;
-  };
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number =>
+    // Delegate to getQueuedMessages so the count keys off the SAME full context
+    // (threadId / scope / documentId / ...) the queue is stored under. A reduced
+    // agentId/groupId/topicId key here would report 0 for thread / page /
+    // group_agent follow-ups, so QueueTray would never mount even though the
+    // input is pinned loading by a real queued message.
+    getQueuedMessages(context)(s).length;
 
 /**
  * Get all queued messages for a context

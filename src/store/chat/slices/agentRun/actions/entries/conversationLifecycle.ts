@@ -52,10 +52,7 @@ import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycl
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { OperationType, QueuedFile } from '@/store/chat/slices/operation/types';
-import {
-  AI_RUNTIME_OPERATION_TYPES,
-  INTERIM_LOADING_OPERATION_TYPES,
-} from '@/store/chat/slices/operation/types';
+import { QUEUE_BLOCKING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -154,18 +151,7 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
 
-const QUEUE_BLOCKING_OPERATION_TYPES = new Set<OperationType>([
-  ...AI_RUNTIME_OPERATION_TYPES,
-  'sendMessage',
-  // Queue a fast follow-up Enter behind the approve/submit/skip/regenerate
-  // interim op instead of firing a concurrent sendMessage that interleaves with
-  // the in-flight preflight before the real runtime op exists. Kept in sync with
-  // INPUT_LOADING_OPERATION_TYPES: if the input shows loading for these ops, a
-  // follow-up must queue, not race. Drains on the runtime op's agent_runtime_end
-  // (the interim op bridges to it); on Stop the queue is preserved just like any
-  // other queue-blocking op.
-  ...INTERIM_LOADING_OPERATION_TYPES,
-]);
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
@@ -436,7 +422,9 @@ export class ConversationLifecycleActionImpl {
     const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
     const runningQueueBlockingOp = contextOpIds
       .map((id) => this.#get().operations[id])
-      .find((op) => op && QUEUE_BLOCKING_OPERATION_TYPES.has(op.type) && op.status === 'running');
+      .find(
+        (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
+      );
 
     if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
