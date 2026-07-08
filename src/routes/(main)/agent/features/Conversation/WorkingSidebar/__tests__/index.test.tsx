@@ -33,10 +33,16 @@ vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
 vi.mock('../ResourcesSection', () => ({ default: () => <div /> }));
 vi.mock('../ParamsSection', () => ({ default: () => <div /> }));
 
-vi.mock('@/store/agent', () => ({ useAgentStore: () => undefined }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ activeAgentId: undefined }),
+  useAgentStore: () => undefined,
+}));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {},
-  agentSelectors: { isCurrentAgentHeterogeneous: () => false },
+  agentSelectors: {
+    getAgentConfigById: () => () => undefined,
+    isCurrentAgentHeterogeneous: () => false,
+  },
   chatConfigByIdSelectors: {},
 }));
 vi.mock('@/store/global', () => ({ useGlobalStore: () => undefined }));

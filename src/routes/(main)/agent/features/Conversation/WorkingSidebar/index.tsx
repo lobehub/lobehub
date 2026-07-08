@@ -10,6 +10,7 @@ import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAgentStore } from '@/store/agent';
@@ -20,7 +21,6 @@ import {
 } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
-import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import Files from './Files';
 import ProgressSection from './ProgressSection';
@@ -115,7 +115,7 @@ const AgentWorkingSidebar = memo(() => {
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
-  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
+  const deviceRoutingAvailable = isGatewayModeEnabled(activeAgentId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

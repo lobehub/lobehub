@@ -18,13 +18,13 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
@@ -256,7 +256,7 @@ const GroupItem = memo<GroupItemComponentProps>(
 
     // Web can add a topic in a directory too when the agent targets a bound
     // device — the write goes to `workingDirByDevice`, no Electron dependency.
-    const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
+    const deviceRoutingAvailable = isGatewayModeEnabled(currentAgentId);
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       deviceRoutingAvailable,

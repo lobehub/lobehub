@@ -116,6 +116,7 @@ vi.mock('@/libs/router/navigation', () => ({
 }));
 
 vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => agentStoreStateMock,
   useAgentStore: (selector: (state: { activeAgentId?: string }) => unknown) =>
     selector(agentStoreStateMock),
 }));
@@ -124,6 +125,9 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById: () => () => ({ boundDeviceId: 'device-1' }),
     isAgentHeterogeneousById: () => () => true,
+  },
+  agentSelectors: {
+    getAgentConfigById: () => () => undefined,
   },
 }));
 

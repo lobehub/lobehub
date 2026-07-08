@@ -6,8 +6,8 @@ import {
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
 import { resolveRuntimeMode, resolveToolMode } from '@/helpers/executionTarget';
+import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { type AgentStoreState } from '@/store/agent/initialState';
-import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import { agentSelectors } from './selectors';
 
@@ -74,15 +74,10 @@ const getRuntimeModeById =
   (s: AgentStoreState): RuntimeEnvMode => {
     const config = agentSelectors.getAgentConfigById(agentId)(s);
 
-    // `serverConfig` is a static app-config snapshot (loaded once at startup),
-    // so a non-reactive `getState()` read is safe here — it never changes after
-    // hydration. On web a bound `local` target only surfaces as `device` (not
-    // `sandbox`) when the backend has a device-gateway to route it (LOBE-11473).
-    return resolveRuntimeMode(
-      config?.agencyConfig,
-      isDesktop,
-      !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl,
-    );
+    // On web a bound `local` target only surfaces as `device` (not `sandbox`)
+    // when Gateway mode is effectively enabled and can route to the device
+    // (LOBE-11473).
+    return resolveRuntimeMode(config?.agencyConfig, isDesktop, isGatewayModeEnabled(agentId));
   };
 
 const getSkillActivateModeById =
