@@ -18,7 +18,9 @@ Refs become **stale on every page change** (click that navigates, form submit, d
 
 If a page opens to an empty body or a verification/challenge screen, treat it as a block, not a slow load — go straight to the real-Chrome step below.
 
-When the task is done, run \`agent-browser close\` and quit any Chrome you launched for CDP — browsers opened for the task otherwise stay on the user's machine.
+If a page requires signing in (a login form, an account/password wall, or an OTP/verification step you have no credentials for), don't guess credentials or engineer a way around the gate. Open it in a visible browser — the real-Chrome CDP window below is one — ask the user to sign in themselves in that window, and continue once they confirm.
+
+When the task is done — every time, as the final step and without waiting to be asked — run \`agent-browser close\` and quit any Chrome you launched for CDP. A browser you opened for the task otherwise keeps running on the user's machine. See the teardown rule below for how to quit the CDP Chrome without touching the user's own browser.
 
 ## Blocked or dynamic pages — go straight to real Chrome
 
@@ -36,6 +38,8 @@ An empty body, a verification/challenge screen, or a page that is mostly obfusca
    \`\`\`
 
 **Commit to real Chrome; don't thrash.** Once step 1 comes back empty, do not sleep, reload, re-screenshot, switch to \`--headed\` (same automation browser — not an escalation), or reopen the session. And do NOT hand-roll the bypass yourself — no reversing the challenge JS, no computing clearance cookies with curl/python/node. Those are slow, per-site, and break on the next algorithm change; real Chrome is the general answer, so go there and see it through.
+
+**To stop the CDP Chrome, target the automation instance only — never kill by name.** Prefer \`agent-browser --cdp 9222 close\`. If a process lingers and you must force-kill it, match only its dedicated marker: \`pkill -f "user-data-dir=$HOME/.agent-browser-cdp"\` (or \`--remote-debugging-port=9222\`). NEVER \`pkill -f "Google Chrome"\` or \`killall "Google Chrome"\` — that pattern also matches the user's own everyday Chrome and will close all their windows and tabs. The same rule applies when a CDP connect fails and you need to relaunch: kill only the marked instance, never the user's Chrome.
 
 A JS-challenge cookie (\`cf_clearance\`, \`*_jsl_clearance*\`, \`acw_tc\`, …) next to an empty/challenge body confirms the block. The same cookie next to real content means the challenge already passed — keep the session and read the page. Dump large page output to a file first, then \`grep\`/\`head\` it.
 
