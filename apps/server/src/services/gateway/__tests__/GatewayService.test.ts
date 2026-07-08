@@ -577,6 +577,43 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalledWith('prov-1');
     });
 
+    it('disconnects the old DO of a webhook-switched provider without marking it disconnected', async () => {
+      // An enabled provider switched from persistent to webhook mode: its old
+      // gateway DO is stale and must go, but the row is served by the webhook
+      // registration now — writing `disconnected` would make a working
+      // channel look off (webhook-mode refreshes return the cached snapshot).
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockResolveConnectionMode.mockReturnValue('webhook');
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: {},
+        connections: [
+          {
+            connectionId: 'prov-webhook',
+            platform: 'discord',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockFindByIds.mockResolvedValue([
+        {
+          applicationId: 'app-webhook',
+          enabled: true,
+          id: 'prov-webhook',
+          platform: 'discord',
+          settings: {},
+        },
+      ]);
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('prov-webhook');
+      expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: 'app-webhook', status: 'disconnected' }),
+      );
+    });
+
     it('does not disconnect a provider enabled after the desired snapshot was built', async () => {
       // TOCTOU race: the user enables + connects a provider while the sync is
       // between buildDesiredConnections and fetchActualConnections. It shows

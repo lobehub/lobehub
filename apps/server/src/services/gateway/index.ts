@@ -472,7 +472,13 @@ export class GatewayService {
           await client.disconnect(id);
           disconnected++;
 
-          if (row) {
+          // Only disabled rows get their runtime snapshot marked
+          // disconnected. After the guard above, the remaining enabled rows
+          // are webhook-mode: they just lost their old persistent DO, but the
+          // webhook registration is what serves them now — and webhook-mode
+          // refreshes return the cached snapshot, so overwriting it would
+          // make a working channel look disconnected.
+          if (row && !row.enabled) {
             await updateBotRuntimeStatus({
               applicationId: row.applicationId,
               platform: row.platform,
@@ -482,7 +488,7 @@ export class GatewayService {
           log(
             'Gateway sync: disconnected stale connection %s (%s)',
             id,
-            row ? 'disabled provider' : 'no provider row',
+            row ? (row.enabled ? 'webhook-mode provider' : 'disabled provider') : 'no provider row',
           );
         } catch (err) {
           log('Gateway sync: failed to disconnect stale connection %s: %O', id, err);
