@@ -509,3 +509,65 @@
   a streaming loading state on screen, inject a server-side `await sleep(8000)` before the
   slow lookup in the page (\[AGENT-TEST], revert) — TTFB stays \~0.3s so loading.tsx renders
   while the route hangs, giving a wide static-capture window.
+
+---
+
+## F. Running the OSS web surface inside the CLOUD checkout (submodule)
+
+### F1. ✅ WORKS — vite dev EMFILE on a shared machine: serve a BUILT SPA behind a fake vite origin
+
+- **Situation**: `bun run dev` / `vite` in the lobehub submodule dies instantly with
+  `EMFILE: too many open files, watch` (node FSWatcher), even with `ulimit -n 245760`
+  and `CHOKIDAR_USEPOLLING=1` — happens when another worktree's dev server already
+  holds a huge watch set on the same machine.
+- **Works**: skip vite dev entirely. `bun run build:spa && bun run build:spa:copy`
+  (no watchers), then `PORT=<p> VITE_DEV_PORT=<q> init-dev-env.sh dev-next` (Next dev
+  alone starts fine), plus a tiny static server on `<q>` that returns
+  `dist/desktop/index.html` for `/` (Next's `fetchViteDevTemplate` fetches the HTML
+  template from the vite origin in dev). `build:spa:copy` puts assets under
+  `public/_spa` so Next serves the chunks itself.
+- **Gotcha**: with the built template, the inline importmap boot script does NOT
+  auto-import the entry — after every `open`, boot manually:
+  `agent-browser eval 'import("/_spa/assets/index-<hash>.js")'` (find the hash in
+  `public/_spa/assets`). Re-run after each rebuild (hash changes).
+
+### F2. Cloud pnpm overrides leak into the submodule app; shim the missing cloud aliases
+
+- **Situation**: in the cloud checkout, `@lobechat/business-*` resolves to CLOUD
+  packages; running the OSS Next app then fails with
+  `Module not found: Can't resolve '@/libs/redis-client'` (cloud-only module).
+- **Works**: create a minimal stub at `lobehub/src/libs/redis-client.ts`
+  (`isRedisClientEnabled=()=>false; getRedisClient=async()=>null`), marked
+  `[AGENT-TEST] REMOVE`; restart Next (Turbopack won't pick up the new file without
+  a restart). Revert after the run.
+- Also: better-auth needs a reachable `REDIS_URL`; ioredis failed against a leftover
+  redis on 6380 that redis-cli could reach — starting a fresh `redis:7-alpine` on
+  6379 and passing `REDIS_URL=redis://127.0.0.1:6379` fixed `Failed to get session`.
+
+### F3. ✅ WORKS — drive workspace-scoped behavior in the OSS build (no cloud UI)
+
+- The workspace context is the `X-Workspace-Id` request header
+  (`packages/trpc/src/lambda/context.ts`); the OSS client never sets it and the
+  workspace UI hooks are empty business slots (`useActiveWorkspaceId` → null).
+- **Works, three layers**:
+  1. **API-level**: `fetch("/trpc/lambda/<proc>", {headers:{"X-Workspace-Id": ws}})`
+     from `agent-browser eval` (cookies included) hits the real router with real
+     RBAC checks.
+  2. **RBAC**: workspace member needs rbac rows — seed `rbac_permissions`
+     (`agent:create:all` etc.), one `rbac_roles`, `rbac_role_permissions`, and a
+     workspace-scoped `rbac_user_roles` row; a 403 "No write access to target
+     workspace" proves the check is live.
+  3. **UI-level**: patch the slot `src/business/client/hooks/useActiveWorkspaceId.ts`
+     to read `localStorage.AGENT_TEST_WS` (keep ALL original exports —
+     `getActiveWorkspaceId` too, or the build fails with MISSING\_EXPORT), rebuild the
+     SPA, and pre-patch `window.fetch` (BEFORE the manual entry import — the TRPC
+     client captures fetch at creation) to add the header. The sidebar then renders
+     the real Private/Workspace sections.
+- **Production SPA build exposes NO `window.__LOBE_STORES`** — store-action eval is
+  dev-build-only; use the TRPC fetch path instead.
+
+### F4. curl "502" on localhost with nothing listening = shell proxy env
+
+- With `http_proxy`/`HTTP_PROXY` set, `curl http://localhost:<port>` returns the
+  proxy's 502 instead of connection-refused, faking a "server up but broken" signal.
+  Always `curl --noproxy '*'` for local port probes.
