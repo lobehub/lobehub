@@ -2,6 +2,12 @@
 import { MarketAPIError } from '@lobehub/market-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+interface MockOrgCredRow {
+  id: number;
+  key: string;
+  ownerType?: string;
+}
+
 const {
   mockOrgCredsList,
   mockPersonalCredsList,
@@ -9,7 +15,9 @@ const {
   mockPersonalCredsPublish,
   mockPersonalCredsUnshare,
 } = vi.hoisted(() => ({
-  mockOrgCredsList: vi.fn(async () => ({ data: [{ id: 1, key: 'ORG_SECRET' }] })),
+  mockOrgCredsList: vi.fn(async (): Promise<{ data: MockOrgCredRow[] }> => ({
+    data: [{ id: 1, key: 'ORG_SECRET' }],
+  })),
   mockPersonalCredsList: vi.fn(async () => ({ data: [{ id: 2, key: 'PERSONAL_SECRET' }] })),
   mockPersonalCredsPublish: vi.fn(async (id: number) => ({ id, visibility: 'public' })),
   mockPersonalCredsShare: vi.fn(async (id: number) => ({ id, visibility: 'private' })),
