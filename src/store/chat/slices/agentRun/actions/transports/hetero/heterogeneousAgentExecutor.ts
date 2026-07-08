@@ -393,6 +393,7 @@ const persistToolResult = async (
 
 const HETERO_MESSAGE_WRITE_BATCH_IDLE_MS = 5_000;
 const HETERO_MESSAGE_WRITE_BATCH_MAX_OPS = 50;
+const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 
 type MessageUpdateOperation = Extract<MessageBatchOperation, { type: 'updateMessage' }>;
 type ToolMessageUpdateOperation = Extract<MessageBatchOperation, { type: 'updateToolMessage' }>;
@@ -428,6 +429,38 @@ const mergeMessageUpdateValue = (
     ...next,
     ...(metadata ? { metadata } : {}),
   };
+};
+
+const waitForPersistQueue = async (
+  queue: Promise<void>,
+  label: string,
+  timeoutMs = HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS,
+): Promise<boolean> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const result = await Promise.race<
+    { error: unknown; status: 'rejected' } | { status: 'resolved' } | { status: 'timeout' }
+  >([
+    queue.then(
+      () => ({ status: 'resolved' }),
+      (error) => ({ error, status: 'rejected' }),
+    ),
+    new Promise<{ status: 'timeout' }>((resolve) => {
+      timeoutId = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs);
+    }),
+  ]);
+
+  if (timeoutId) clearTimeout(timeoutId);
+
+  if (result.status === 'rejected') throw result.error;
+  if (result.status === 'timeout') {
+    console.warn(
+      `[HeterogeneousAgent] persistQueue did not drain within ${timeoutMs}ms (${label}); continuing terminal flow.`,
+    );
+    return false;
+  }
+
+  return true;
 };
 
 const createMessageWriteBatcher = (deps: {
@@ -815,6 +848,42 @@ export const executeHeterogeneousAgent = async (
       workingDirectory: workingDirectory ?? '',
       workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
     });
+  };
+  let persistedResumeSessionId: string | undefined;
+  let pendingResumeSessionId: string | undefined;
+  let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
+  const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
+    const topicId = context.topicId ?? undefined;
+    if (!topicId || !updateTopicMetadata) return resumeSessionPersistQueue;
+    if (sessionId === persistedResumeSessionId || sessionId === pendingResumeSessionId) {
+      return resumeSessionPersistQueue;
+    }
+
+    pendingResumeSessionId = sessionId;
+    resumeSessionPersistQueue = resumeSessionPersistQueue
+      .catch(() => {})
+      .then(async () => {
+        const topicMetadata = getTopicMetadataById(get(), topicId);
+        await updateTopicMetadata(topicId, {
+          heteroSessionId: sessionId,
+          heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+            topicMetadata,
+            workingDirectory,
+            sessionId,
+          ),
+          workingDirectory: workingDirectory ?? '',
+          workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
+        });
+        persistedResumeSessionId = sessionId;
+      })
+      .catch((err) => {
+        console.error(`[HeterogeneousAgent] Failed to persist resume session id (${source}):`, err);
+      })
+      .finally(() => {
+        if (pendingResumeSessionId === sessionId) pendingResumeSessionId = undefined;
+      });
+
+    return resumeSessionPersistQueue;
   };
   const writeTopicStatus = (status: ChatTopicStatus): void => {
     if (!context.topicId) return;
@@ -1380,7 +1449,10 @@ export const executeHeterogeneousAgent = async (
     // server handler). Stable per run; the copy makes a mid-topic fork visible.
     if (event.type === 'stream_start') {
       const sid = (event.data as { sessionId?: string } | undefined)?.sessionId;
-      if (typeof sid === 'string' && sid.length > 0) heteroSessionId = sid;
+      if (typeof sid === 'string' && sid.length > 0) {
+        heteroSessionId = sid;
+        void persistResumeSessionId(sid, 'stream_start');
+      }
     }
 
     const ctx: MainAgentReduceCtx = {
@@ -1716,44 +1788,46 @@ export const executeHeterogeneousAgent = async (
           await reduceAndApplyMain(terminalEvent);
           await messageWriteBatcher.flush('terminal');
         });
-        await persistQueue;
+        const queueDrained = await waitForPersistQueue(persistQueue, 'terminal');
 
-        for (const [messageId, messageToCreate] of pendingMainCreates) {
-          try {
-            await messageService.createMessage(messageToCreate);
-            pendingMainCreates.delete(messageId);
-          } catch (err) {
-            console.error('[HeterogeneousAgent] Failed to replay main assistant create:', err);
+        if (queueDrained) {
+          for (const [messageId, messageToCreate] of pendingMainCreates) {
+            try {
+              await messageService.createMessage(messageToCreate);
+              pendingMainCreates.delete(messageId);
+            } catch (err) {
+              console.error('[HeterogeneousAgent] Failed to replay main assistant create:', err);
+            }
           }
-        }
 
-        for (const [messageId, update] of pendingMainFlush) {
-          try {
-            await updateMessageOrThrow(messageId, update);
-            pendingMainFlush.delete(messageId);
-          } catch (err) {
-            console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
+          for (const [messageId, update] of pendingMainFlush) {
+            try {
+              await updateMessageOrThrow(messageId, update);
+              pendingMainFlush.delete(messageId);
+            } catch (err) {
+              console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
+            }
           }
-        }
 
-        // Replay any subagent flush that failed transiently mid-stream, pinned
-        // to its original in-thread assistant (NOT the terminal row).
-        for (const [threadId, pending] of pendingSubagentFlush) {
-          const update: Record<string, any> = {};
-          if (pending.content) update.content = pending.content;
-          if (pending.reasoning) update.reasoning = { content: pending.reasoning };
-          if (Object.keys(update).length === 0) continue;
-          try {
-            await messageService.updateMessage(pending.messageId, update, {
-              agentId: context.agentId,
-              topicId: context.topicId,
-            });
-            subagentThreads.get(threadId)?.stream.update(pending.messageId, update);
-          } catch (err) {
-            console.error('[HeterogeneousAgent] Failed to replay subagent flush:', err);
+          // Replay any subagent flush that failed transiently mid-stream, pinned
+          // to its original in-thread assistant (NOT the terminal row).
+          for (const [threadId, pending] of pendingSubagentFlush) {
+            const update: Record<string, any> = {};
+            if (pending.content) update.content = pending.content;
+            if (pending.reasoning) update.reasoning = { content: pending.reasoning };
+            if (Object.keys(update).length === 0) continue;
+            try {
+              await messageService.updateMessage(pending.messageId, update, {
+                agentId: context.agentId,
+                topicId: context.topicId,
+              });
+              subagentThreads.get(threadId)?.stream.update(pending.messageId, update);
+            } catch (err) {
+              console.error('[HeterogeneousAgent] Failed to replay subagent flush:', err);
+            }
           }
+          pendingSubagentFlush.clear();
         }
-        pendingSubagentFlush.clear();
 
         if (!isErrorTerminal) {
           // Topic status was already reset ahead of the queue (top of
@@ -1761,6 +1835,7 @@ export const executeHeterogeneousAgent = async (
           // the final fetchAndReplaceMessages + completeOperation against the
           // now-persisted state.
           eventHandler(terminalEvent);
+          if (!queueDrained) get().completeOperation(operationId);
         }
 
         // Signal completion to the user — dock badge + (window-hidden) notification,
@@ -1815,7 +1890,7 @@ export const executeHeterogeneousAgent = async (
           }
           await messageWriteBatcher.flush('error');
         });
-        await persistQueue;
+        await waitForPersistQueue(persistQueue, 'error');
 
         // If the error came from a user-initiated cancel (SIGINT → non-zero
         // exit), don't surface it as a runtime error toast — the operation is
@@ -1864,24 +1939,13 @@ export const executeHeterogeneousAgent = async (
       .getSessionInfo(agentSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
-      const topicMetadata = getTopicMetadataById(get(), context.topicId);
-      // Best-effort: a rejected
-      // metadata save must NOT throw past the queue drain below — guarding the
-      // await here keeps the resume-id persistence from blocking the follow-up
-      // send. The save still runs BEFORE the drain so the next turn's
-      // `resolveHeteroResume` reads the just-finished session id.
-      await updateTopicMetadata?.(context.topicId, {
-        heteroSessionId: sessionInfo.agentSessionId,
-        heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
-          topicMetadata,
-          workingDirectory,
-          sessionInfo.agentSessionId,
-        ),
-        workingDirectory: workingDirectory ?? '',
-        workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
-      }).catch((err) =>
-        console.error('[HeterogeneousAgent] Failed to persist resume session id:', err),
-      );
+      // Best-effort: a rejected metadata save must NOT throw past the queue
+      // drain below — guarding the await here keeps the resume-id persistence
+      // from blocking the follow-up send. The same helper is also triggered as
+      // soon as stream_start reports a session id, so non-zero CLI exits still
+      // preserve resume context; this success-path await only ensures queued
+      // follow-up sends read the just-finished id.
+      await persistResumeSessionId(sessionInfo.agentSessionId, 'success-path');
     }
 
     // ━━━ Drain queued messages after a successful CC turn ━━━

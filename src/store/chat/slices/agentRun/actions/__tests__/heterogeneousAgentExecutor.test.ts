@@ -262,6 +262,13 @@ const flush = async () => {
   }
 };
 
+const flushFakeTimers = async () => {
+  for (let i = 0; i < 10; i++) {
+    await vi.advanceTimersByTimeAsync(10);
+  }
+  await Promise.resolve();
+};
+
 // ─── CC stream-json event factories ───
 
 const ccInit = (sessionId = 'cc-sess-1') => ({
@@ -535,6 +542,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete (globalThis as any).window;
   });
 
@@ -1494,6 +1502,51 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {
+      let topicMeta: ChatTopicMetadata = {};
+      const store = createMockStore({
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+      });
+      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+        topicMeta = { ...topicMeta, ...patch };
+        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+      });
+      const get = vi.fn(() => store);
+      let rejectSendPrompt!: (reason?: unknown) => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((_resolve, reject) => {
+          rejectSendPrompt = reject;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        workingDirectory: '/repo',
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-rate-limited'));
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'cc-session-rate-limited',
+        heteroSessionIdByWorkingDirectory: {
+          '/repo': 'cc-session-rate-limited',
+        },
+        workingDirectory: '/repo',
+        workingDirectoryConfig: { path: '/repo' },
+      });
+
+      rejectSendPrompt(new Error('rate limit'));
+      await executorPromise;
+      await flush();
+
+      expect(resolveHeteroResume(topicMeta, '/repo')).toEqual({
+        cwdChanged: false,
+        resumeSessionId: 'cc-session-rate-limited',
+      });
+    });
+
     // ────────────────────────────────────────────────────
     // Per-cwd session id lifecycle — executor keying primitive
     // ────────────────────────────────────────────────────
@@ -1635,8 +1688,21 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await flush();
 
       // Output already streamed → no second run, no resume-metadata clear.
+      // The fresh session id is still persisted early so the next turn can
+      // resume even if this non-retried run exits with an error.
       expect(startCount).toBe(1);
-      expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(store.updateTopicMetadata).not.toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({ heteroSessionId: undefined }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'cc-sess-1',
+        heteroSessionIdByWorkingDirectory: {
+          '/repo': 'cc-sess-1',
+        },
+        workingDirectory: '/repo',
+        workingDirectoryConfig: { path: '/repo' },
+      });
 
       releaseUpdate();
     });
@@ -4685,6 +4751,60 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       resolveSendPrompt();
       await executorPromise;
       await flush();
+    });
+
+    it('bounds clean terminal completion when the persist queue never drains', async () => {
+      vi.useFakeTimers();
+      const eventHandler = vi.fn();
+      vi.mocked(createGatewayEventHandler).mockReturnValueOnce(eventHandler);
+
+      // Never settles: mirrors a lost desktop IPC/network reply in the message
+      // write path. Terminal must still forward and complete the operation after
+      // the bounded drain timeout.
+      mockUpdateMessage.mockReturnValue(new Promise<void>(() => {}));
+
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flushFakeTimers();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccToolUse('msg_01', 'toolu_1', 'Read', { file_path: '/a' }));
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_1', 'file content'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flushFakeTimers();
+
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      expect(eventHandler).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'agent_runtime_end' }),
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+
+      expect(eventHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'agent_runtime_end' }),
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+
+      resolveSendPrompt();
+      await flushFakeTimers();
+      await executorPromise;
     });
   });
 });
