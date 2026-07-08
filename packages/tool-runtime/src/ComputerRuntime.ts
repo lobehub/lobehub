@@ -106,6 +106,30 @@ export abstract class ComputerRuntime {
       }
 
       const r = result.result || {};
+
+      // Image file: `local-file-shell`'s readLocalFile refuses binary, so the
+      // IPC layer resolves a desktop preview URL instead. Carry it on
+      // `state.images` — the MessageContent tool-message processor turns each
+      // into an `image_url` part so vision-capable models can actually see the
+      // image, rather than dumping base64 into the text content.
+      if (r.isImage && r.previewUrl) {
+        const filename = r.filename || args.path;
+        const placeholder = r.content || `[Image: ${filename}]`;
+        const state: ReadFileState = {
+          content: placeholder,
+          filename,
+          fileType: r.fileType,
+          images: [{ mediaType: r.fileType || 'image/png', url: r.previewUrl }],
+          path: args.path,
+        };
+
+        return {
+          content: placeholder,
+          state,
+          success: true,
+        };
+      }
+
       const fileContent = r.content || '';
 
       const state: ReadFileState = {

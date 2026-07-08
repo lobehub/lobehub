@@ -183,11 +183,24 @@ export interface LocalReadFileResult {
   filename: string;
   fileType: string;
   /**
+   * True when the path resolves to an image file. The binary is NOT placed in
+   * `content`; instead {@link LocalReadFileResult.previewUrl} carries a
+   * fetchable desktop preview URL that the tool layer turns into an
+   * `image_url` part so vision models can inspect the image.
+   */
+  isImage?: boolean;
+  /**
    * Line count of the content within the specified `loc` range.
    */
   lineCount: number;
   loc: [number, number];
   modifiedTime: Date;
+  /**
+   * Desktop local-file preview URL for an image result. Present only when
+   * {@link LocalReadFileResult.isImage} is true; consumers fetch base64 from
+   * it at send time to forward to vision models.
+   */
+  previewUrl?: string;
   /**
    * Total character count of the entire file.
    */

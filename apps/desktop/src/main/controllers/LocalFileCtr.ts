@@ -73,6 +73,27 @@ const logger = createLogger('controllers:LocalFileCtr');
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 const PROJECT_FILE_GLOB_LIMIT = 5000;
 
+/**
+ * Image extensions `readFile` resolves to a preview URL instead of refusing as
+ * binary. The agent then sees the image (vision) via an `image_url` part,
+ * rather than reading a base64 text dump or hitting "Unsupported binary file".
+ */
+const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  ico: 'image/x-icon',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  svg: 'image/svg+xml',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  webp: 'image/webp',
+};
+
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
   'application/javascript',
@@ -395,6 +416,54 @@ export default class LocalFileCtr extends ControllerModule {
       fullContent: params.fullContent,
       loc: params.loc,
     });
+
+    // Image files: `local-file-shell` refuses binary, and the agent should be
+    // able to actually *see* the image (vision) rather than hit "Unsupported
+    // binary file type". Resolve a desktop local-file preview URL; the tool
+    // layer carries it on `state.images` and the MessageContent processor turns
+    // it into an `image_url` part (fetching base64 at send time) for the LLM.
+    const ext = path.extname(params.path).toLowerCase().replace('.', '');
+    const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
+    if (imageMimeType) {
+      const filename = path.basename(params.path);
+      const workspaceRoot = params.cwd ?? path.dirname(params.path);
+      const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        filePath: params.path,
+        workspaceRoot,
+      });
+
+      if (!url) {
+        return {
+          charCount: 0,
+          content: `Error: Image file is outside the approved workspace and cannot be previewed: ${params.path}`,
+          createdTime: new Date(),
+          fileType: imageMimeType,
+          filename,
+          isImage: true,
+          lineCount: 0,
+          loc: [0, 0],
+          modifiedTime: new Date(),
+          totalCharCount: 0,
+          totalLineCount: 0,
+        };
+      }
+
+      return {
+        charCount: 0,
+        content: `[Image: ${filename}]`,
+        createdTime: new Date(),
+        fileType: imageMimeType,
+        filename,
+        isImage: true,
+        lineCount: 0,
+        loc: [0, 0],
+        modifiedTime: new Date(),
+        previewUrl: url,
+        totalCharCount: 0,
+        totalLineCount: 0,
+      };
+    }
+
     return readLocalFile(params);
   }
 

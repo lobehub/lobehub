@@ -114,6 +114,14 @@ export interface ListFilesState {
   totalCount?: number;
 }
 
+export interface ToolResultImage {
+  fileId?: string;
+  /** MIME type, e.g. `image/png`. */
+  mediaType: string;
+  /** Fetchable URL (uploaded or desktop preview URL). */
+  url: string;
+}
+
 export interface ReadFileState {
   /** Character count of the returned content */
   charCount?: number;
@@ -123,6 +131,13 @@ export interface ReadFileState {
   filename?: string;
   /** Detected file type (e.g., 'ts', 'md', 'json') */
   fileType?: string;
+  /**
+   * Images produced by reading an image file. Carried in `pluginState.images`
+   * on the tool message; the MessageContent tool-message processor turns each
+   * into an `image_url` part so vision-capable models can actually inspect the
+   * file the agent read. Empty/absent for text files.
+   */
+  images?: ToolResultImage[];
   /** Line range as tuple [start, end] */
   loc?: [number, number];
   path: string;

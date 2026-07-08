@@ -94,3 +94,46 @@ describe('LocalSystemExecutionRuntime.globFiles', () => {
     });
   });
 });
+
+describe('LocalSystemExecutionRuntime.readFile', () => {
+  it('routes image results onto state.images with the preview URL', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: '[Image: cat.png]',
+        fileType: 'image/png',
+        filename: 'cat.png',
+        isImage: true,
+        previewUrl: 'http://127.0.0.1:9999/cat.png?token=abc',
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/cat.png' });
+
+    expect(output.success).toBe(true);
+    // The preview URL flows onto state.images so the MessageContent tool-message
+    // processor can turn it into an image_url part for vision models.
+    expect(output.state?.images).toEqual([
+      { mediaType: 'image/png', url: 'http://127.0.0.1:9999/cat.png?token=abc' },
+    ]);
+    expect(output.content).toBe('[Image: cat.png]');
+  });
+
+  it('leaves text-file results unchanged (no images on state)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'hello',
+        fileType: 'txt',
+        filename: 'a.txt',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/a.txt' });
+
+    expect(output.state?.images).toBeUndefined();
+    expect(output.content).toContain('hello');
+  });
+});
