@@ -3,6 +3,7 @@ import debug from 'debug';
 import { z } from 'zod';
 
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
@@ -12,6 +13,13 @@ const log = debug('lambda-router:market:creds');
 // Creds procedure with market authentication
 const credsProcedure = publicProcedure
   .use(serverDatabase)
+  // `ctx.workspaceId` from the raw `X-Workspace-Id` header is NOT trustworthy on
+  // its own (createLambdaContext copies it verbatim, with no membership check).
+  // `cloudWorkspaceAuth` verifies the caller is actually a member before letting
+  // `workspaceId` through — demoting it to `undefined` otherwise — so the
+  // `credsAccessor` routing below can never be pointed at a workspace the
+  // caller doesn't belong to. Must run before any procedure reads `ctx.workspaceId`.
+  .use(cloudWorkspaceAuth)
   .use(marketUserInfo)
   .use(requireMarketAuth)
   .use(async ({ ctx, next }) => {
@@ -28,10 +36,10 @@ const credsManageProcedure = credsProcedure.use(withRbacPermission('workspace:up
 
 /**
  * Inside a workspace, reads/writes must hit the workspace's shared organization
- * credentials, never the operator's personal creds (LOBE-10978) — `ctx.workspaceId`
- * is populated generically from the `X-Workspace-Id` header for every lambda
- * request (see `packages/trpc/src/lambda/context.ts`), so this router only needs
- * to start honoring it. Falls back to the personal `market.creds` namespace
+ * credentials, never the operator's personal creds (LOBE-10978). `ctx.workspaceId`
+ * is only ever set here once `cloudWorkspaceAuth` (above) has confirmed the
+ * caller is a member of that workspace — never trust it directly off the raw
+ * `X-Workspace-Id` header. Falls back to the personal `market.creds` namespace
  * outside a workspace.
  *
  * NOTE: unlike `workspaceCreds.ts`, writes routed through here do not (yet) emit
