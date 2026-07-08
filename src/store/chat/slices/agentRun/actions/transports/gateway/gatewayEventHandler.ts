@@ -879,7 +879,21 @@ export const createGatewayEventHandler = (
               status,
             });
             if (!requeued && status === 'completed') {
-              await runLifecycle.afterRunComplete({ ...lifecycleEventBase, status });
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                // Pass the in-memory streamed report text so the desktop
+                // notification body isn't left on the generic "generation
+                // finished" fallback. The terminal `uiMessages` snapshot (or a
+                // racing DB fetch in `fetchAndReplaceMessages`) may not have the
+                // assistant content committed yet at this instant, so the store
+                // read in `afterRunComplete` would resolve empty and the banner
+                // would show the fallback. `accumulatedContent` is the
+                // optimistic stream (closure, untouched by `replaceMessages`),
+                // so it is the durable source — mirroring the hetero executor,
+                // which passes its `accContent` as `notification.content`.
+                notification: { content: accumulatedContent },
+                status,
+              });
             }
           } else {
             // hetero reuses this handler only for message reconciliation; its
