@@ -640,7 +640,7 @@ describe('ConversationControl actions', () => {
       expect(executeClientAgentSpy).not.toHaveBeenCalled();
     });
 
-    it('should bail before running if a Stop cancels the interim op mid optimistic write', async () => {
+    it('completes the approval even if a Stop lands mid optimistic write (best-effort Stop)', async () => {
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'global-agent';
@@ -666,12 +666,20 @@ describe('ConversationControl actions', () => {
 
       // Simulate a Stop pressed while the optimistic update is in flight: cancel
       // the just-created interim op from inside the awaited optimistic write.
+      // `intervention: approved` is already persisted, so bailing here would
+      // leave the tool approved-but-never-executed (stuck). The approval must
+      // complete atomically — Stop is best-effort in this sub-second window.
       vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockImplementation(
         async (_id, _value, ctx) => {
           if (ctx?.operationId) result.current.cancelOperation(ctx.operationId);
         },
       );
-      const internal_createAgentStateSpy = vi.spyOn(result.current, 'internal_createAgentState');
+      // Stub the runtime setup so the assertion targets "did we reach the run?",
+      // not the full agent-config resolution.
+      vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+        state: {},
+        context: {},
+      } as any);
       const executeClientAgentSpy = vi
         .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
@@ -680,9 +688,8 @@ describe('ConversationControl actions', () => {
         await result.current.approveToolCalling('tool-msg-1', 'group-1');
       });
 
-      // The run must not start once the op was cancelled.
-      expect(internal_createAgentStateSpy).not.toHaveBeenCalled();
-      expect(executeClientAgentSpy).not.toHaveBeenCalled();
+      // The run proceeds despite the cancelled op — no stuck approval.
+      expect(executeClientAgentSpy).toHaveBeenCalled();
     });
 
     describe('server-mode branch', () => {

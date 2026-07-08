@@ -609,10 +609,13 @@ describe('Generation Actions', () => {
       expect(mockDeleteMessage).not.toHaveBeenCalled();
     });
 
-    it('should bail before regenerating if a Stop cancelled the outer op during delete', async () => {
+    it('completes the retry even if a Stop cancels the outer op during delete (best-effort Stop)', async () => {
       const { useChatStore } = await import('@/store/chat');
       // The outer op is whitelisted (shows Stop); simulate a Stop landing while
       // deleteMessage is in flight by flipping the op to cancelled inside it.
+      // The old message is already deleted, so bailing here would be destructive
+      // data loss — regeneration must proceed regardless (Stop is best-effort in
+      // this sub-second window and applies to the fresh run instead).
       const chatState: any = {
         messagesMap: {},
         operations: {},
@@ -650,14 +653,21 @@ describe('Generation Actions', () => {
         } as any);
       });
 
+      // delAndRegenerate calls the slice's OWN regenerateUserMessage (via get()),
+      // not the useChatStore mock — spy on it to assert (and short-circuit) it.
+      const regenSpy = vi
+        .spyOn(store.getState(), 'regenerateUserMessage')
+        .mockResolvedValue(undefined);
+
       await act(async () => {
         await store.getState().delAndRegenerateMessage('msg-2');
       });
 
-      // Delete ran, but the cancelled outer op must stop the regeneration.
+      // Delete ran, and regeneration completes atomically despite the cancelled
+      // outer op — no orphaned deletion.
       expect(chatState.deleteMessage).toHaveBeenCalledWith('msg-2', { operationId: 'test-op-id' });
-      expect(mockRegenerateUserMessage).not.toHaveBeenCalled();
-      expect(mockCompleteOperation).not.toHaveBeenCalled();
+      expect(regenSpy).toHaveBeenCalledWith('msg-1');
+      expect(mockCompleteOperation).toHaveBeenCalled();
     });
   });
 

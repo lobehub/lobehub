@@ -465,13 +465,11 @@ export const generationSlice: StateCreator<
     // find the message and fails silently.
     await chatStore.deleteMessage(messageId, { operationId });
 
-    // Honor a Stop pressed while the delete was in flight: the outer op is
-    // whitelisted (shows Stop) and gets cancelled by stopGenerating, but
-    // regenerateUserMessage would otherwise start a fresh run regardless. Bail
-    // before regenerating so the click actually stops the retry.
-    const outerOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
-    if (outerOp && outerOp.status !== 'running') return;
-
+    // NOTE: intentionally do NOT bail on Stop here. The old assistant message is
+    // already deleted above; returning early would leave the turn deleted with
+    // nothing regenerated — destructive data loss. Stop pressed in this
+    // sub-second window is best-effort; complete the retry atomically and honor
+    // the next Stop (on the fresh run) normally.
     await get().regenerateUserMessage(userId);
     chatStore.completeOperation(operationId);
   },

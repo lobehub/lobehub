@@ -349,9 +349,11 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    // Bail if a Stop landed while the optimistic update above was in flight.
-    if (this.#wasInterimOpStopped(operationId)) return;
-
+    // NOTE: intentionally do NOT bail on Stop here. `intervention: approved` is
+    // already persisted above; returning early would leave the tool marked
+    // approved but never executed — a stuck conversation. Stop pressed in this
+    // sub-second window is best-effort (the paused run can't be aborted yet);
+    // let the approval complete atomically and honor the next Stop normally.
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
 
     // 2.5. Server-mode: start a **new** Gateway op carrying the approval
@@ -524,8 +526,11 @@ export class ConversationControlActionImpl {
       );
     }
 
-    // Bail if a Stop landed while the optimistic updates above were in flight.
-    if (this.#wasInterimOpStopped(operationId)) return;
+    // NOTE: intentionally do NOT bail on Stop here. `intervention: approved`
+    // and the tool result are already persisted above; returning early would
+    // leave the submission recorded but never resumed — a stuck conversation.
+    // Same best-effort rationale as approveToolCalling: complete atomically and
+    // honor the next Stop normally.
 
     // 1.5. Server-mode: start a **new** Gateway op carrying the human answer as
     // the tool result via `resumeToolResult`. The server writes the answer as
