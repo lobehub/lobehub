@@ -3,15 +3,18 @@ export const systemPrompt = `<agent_browser_guides>
 
 \`agent-browser\` is a fast browser automation CLI for AI agents — drives Chrome/Chromium via CDP and serves accessibility-tree snapshots with compact \`@eN\` element refs (so you act on the page in a few hundred tokens, not raw HTML).
 
-LobeHub desktop bundles \`agent-browser\` natively — no install needed. \`agent-browser\` lives on the user's device: when \`lobe-local-system\` runCommand is available, run all \`agent-browser\` commands through it — never through the skills exec APIs (their cloud sandbox has no browser and no \`agent-browser\` binary). Outside LobeHub, install with \`npm i -g agent-browser\` (or \`brew install agent-browser\` / \`cargo install agent-browser\`), then run \`agent-browser install\` once to fetch the bundled Chrome.
+\`agent-browser\` and Chrome are pre-installed — no setup needed.
 
 ## The core loop
 
 \`\`\`bash
-agent-browser open <url>     # 1. navigate
-agent-browser snapshot -i    # 2. see interactive elements (@e1, @e2, …)
-agent-browser click @e3      # 3. act on a ref
-agent-browser snapshot -i    # 4. re-snapshot after any page change
+agent-browser open example.com
+agent-browser snapshot -i                 # accessibility tree with interactive refs (@e1, @e2, …)
+agent-browser click @e2                   # click by ref
+agent-browser fill @e3 "test@example.com" # clear and fill by ref
+agent-browser get text @e1                # get text by ref
+agent-browser screenshot page.png
+agent-browser close
 \`\`\`
 
 Refs become **stale on every page change** (click that navigates, form submit, dynamic re-render, dialog open). Always re-snapshot before the next ref interaction.
@@ -22,26 +25,29 @@ If a page requires signing in (a login form, an account/password wall, or an OTP
 
 When the task is done — every time, as the final step and without waiting to be asked — run \`agent-browser close\` and quit any Chrome you launched for CDP. A browser you opened for the task otherwise keeps running on the user's machine. See the teardown rule below for how to quit the CDP Chrome without touching the user's own browser.
 
-## Blocked or dynamic pages — go straight to real Chrome
+## Blocked pages — escalate to real Chrome
 
-An empty body, a verification/challenge screen, or a page that is mostly obfuscated JS is **blocked, not still loading** — and no amount of waiting, reloading, or re-screenshotting changes a fingerprint. So this is one decision, not a ladder: did you get real text back? If not, drive the user's own Chrome over CDP and commit to it.
+Empty body, verification screen, or obfuscated JS means the page is **blocked, not loading**. This is a binary decision: got real text → proceed; no text → switch to real Chrome immediately.
 
-1. **One headless check** — \`agent-browser open <url>\`, one \`agent-browser wait --load networkidle\`, then \`agent-browser eval "document.body.innerText.length"\`. Real text → done.
-2. **Zero / near-zero → real Chrome over CDP now.** Its human fingerprint clears the JS challenge in one pass:
+1. **Verify once** — \`agent-browser open <url>\`, then \`agent-browser wait --fn "document.body.innerText.length > 100" --timeout 3000\`. If it succeeds, page is usable — continue.
+2. **Timed out → launch real Chrome over CDP.** Its human fingerprint bypasses JS challenges:
    \`\`\`bash
-   # macOS (Linux: use \`google-chrome\`) — launch the user's real Chrome with a debug port, in the background
+   # macOS (Linux: use \`google-chrome\`)
    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \\
      --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser-cdp" &
-   agent-browser --cdp 9222 open <url>                              # drive THAT browser
-   agent-browser --cdp 9222 wait --load networkidle                 # let the challenge run + reload settle
-   agent-browser --cdp 9222 eval "document.body.innerText.length"   # re-verify you got content
+   agent-browser --cdp 9222 open <url>
+   agent-browser --cdp 9222 wait --fn "document.body.innerText.length > 100" --timeout 3000
+   agent-browser --cdp 9222 read              # read rendered DOM as clean markdown
+   # when done, close the CDP Chrome (it keeps running otherwise):
+   agent-browser --cdp 9222 close
+   pkill -f "user-data-dir=$HOME/.agent-browser-cdp"  # kill only the automation instance
    \`\`\`
 
-**Commit to real Chrome; don't thrash.** Once step 1 comes back empty, do not sleep, reload, re-screenshot, switch to \`--headed\` (same automation browser — not an escalation), or reopen the session. And do NOT hand-roll the bypass yourself — no reversing the challenge JS, no computing clearance cookies with curl/python/node. Those are slow, per-site, and break on the next algorithm change; real Chrome is the general answer, so go there and see it through.
+**Once you switch, commit to real Chrome.** Do not loop back to retry headless, sleep-and-reload, switch to \`--headed\` (same automation browser, not an escalation), or hand-roll the bypass (reversing challenge JS, computing clearance cookies via curl/python/node). Real Chrome is the general answer.
 
-**To stop the CDP Chrome, target the automation instance only — never kill by name.** Prefer \`agent-browser --cdp 9222 close\`. If a process lingers and you must force-kill it, match only its dedicated user-data-dir marker: \`pkill -f "user-data-dir=$HOME/.agent-browser-cdp"\`. Do NOT match on \`--remote-debugging-port=9222\` alone — 9222 is the standard CDP port and may belong to a Chrome the user themselves opened for debugging. NEVER \`pkill -f "Google Chrome"\` or \`killall "Google Chrome"\` — that pattern also matches the user's own everyday Chrome and will close all their windows and tabs. The same rule applies when a CDP connect fails and you need to relaunch: kill only the marked instance, never the user's Chrome.
+**Recognizing JS-challenge blocks:** a challenge cookie (\`cf_clearance\`, \`*_jsl_clearance*\`, \`acw_tc\`, …) next to an empty body confirms the block. The same cookie next to real content means the challenge already passed — keep the session. For large page output, dump to a file first and inspect with \`grep\`/\`head\`.
 
-A JS-challenge cookie (\`cf_clearance\`, \`*_jsl_clearance*\`, \`acw_tc\`, …) next to an empty/challenge body confirms the block. The same cookie next to real content means the challenge already passed — keep the session and read the page. Dump large page output to a file first, then \`grep\`/\`head\` it.
+**Teardown safety:** \`agent-browser --cdp 9222 close\` only disconnects — the Chrome process stays alive, so always \`pkill\` by the \`user-data-dir\` marker. Do NOT match \`--remote-debugging-port=9222\` alone (may hit the user's own debugging Chrome). NEVER \`pkill -f "Google Chrome"\` or \`killall "Google Chrome"\` — these kill the user's everyday browser.
 
 ## Discovering everything else
 
