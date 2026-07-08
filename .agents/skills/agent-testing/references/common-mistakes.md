@@ -324,3 +324,47 @@ attach the static shot of the asserted state as the primary evidence. If the
 expected-failure terminal state is worth showing, say so explicitly in the
 case's `observation` ("ends in the error page because the test session id is
 fake — expected, not the assertion") so the viewer is told before they see it.
+
+---
+
+## Case 14 — Verifying only the entry compose surface when a shared component also appears in deeper pages
+
+**Wrong approach**: after changing a shared chat input component, publishing a
+passing UI report from the home compose surface only, even though the same
+component also renders after entering an agent/conversation page.
+
+**Why it's wrong**: shared components can be composed with different wrappers,
+slots, and responsive containers across surfaces. A fix that looks correct on the
+home input can still be misplaced on an inner conversation page.
+
+**What it breaks**: the verify report goes green while a deeper product path
+still shows the old or awkward warning placement, and the user has to point out
+that the page after entry was never checked.
+
+**Correct approach**: enumerate all product surfaces where the changed shared UI
+renders before publishing. For ChatInput placement changes, verify both the home
+input and an inner agent/conversation page, attach separate screenshot evidence
+for each, and mark any skipped surface explicitly blocked or untested.
+
+---
+
+## Case 15 — Verifying action-bar placement without covering collapsed toolbar state
+
+**Wrong approach**: after moving a warning into a chat input action bar, checking
+only the normal expanded toolbar state and publishing the layout as passed,
+without forcing the toolbar into its persisted collapsed / auto-collapsed state.
+
+**Why it's wrong**: action bars often have their own overflow behavior and saved
+user preference. Adding a warning beside the toolbar can shrink the measured
+available width enough to trigger a popup collapse, or a previously saved
+collapsed preference can hide the exact action the change is supposed to sit
+beside.
+
+**What it breaks**: the screenshot can look acceptable for a fresh profile while
+real users who have collapsed the toolbar, or narrower input containers, see the
+primary left action replaced by a chevron/popup icon.
+
+**Correct approach**: for any UI change inside an action/toolbar row, verify both
+the default state and the collapsed/overflow state. If the design requires a
+specific action to stay visible, disable or bypass the toolbar collapse logic for
+that surface and include evidence that no collapse chevron is rendered.
