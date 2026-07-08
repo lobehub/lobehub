@@ -438,13 +438,15 @@ export class GatewayService {
       );
     }
 
-    // Stale connections whose provider row still exists (disabled providers)
-    // get their runtime status snapshot updated; deleted providers have
-    // nothing to update.
+    // Fresh provider rows drive the TOCTOU guard and the status writes below.
+    // If the recheck itself fails, treating it as "no rows" would bypass both
+    // guards and could tear down a provider enabled mid-sync — skip the whole
+    // pass instead; next round retries with a healthy lookup.
     const rows = await AgentBotProviderModel.findByIds(serverDB, staleIds).catch((err) => {
-      log('Gateway sync: stale provider lookup failed: %O', err);
-      return [];
+      log('Gateway sync: stale provider recheck failed, skipping cleanup this round: %O', err);
+      return null;
     });
+    if (!rows) return 0;
     const rowById = new Map(rows.map((row) => [row.id, row]));
 
     let disconnected = 0;

@@ -577,6 +577,29 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalledWith('prov-1');
     });
 
+    it('skips stale cleanup entirely when the provider recheck query fails', async () => {
+      // Treating a failed recheck as "no rows" would bypass the TOCTOU guard
+      // and could tear down a provider enabled mid-sync.
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: {},
+        connections: [
+          {
+            connectionId: 'stale-1',
+            platform: 'discord',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockFindByIds.mockRejectedValue(new Error('db timeout'));
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+    });
+
     it('disconnects the old DO of a webhook-switched provider without marking it disconnected', async () => {
       // An enabled provider switched from persistent to webhook mode: its old
       // gateway DO is stale and must go, but the row is served by the webhook
