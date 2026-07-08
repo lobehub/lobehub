@@ -71,6 +71,14 @@ const homeDailyBriefState = vi.hoisted(() => ({
   pairs: [] as { hint: string; welcome: string }[],
 }));
 
+const activeWorkspaceSlugMock = vi.hoisted(() => ({
+  value: null as string | null,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => activeWorkspaceSlugMock.value,
+}));
+
 vi.mock('@/hooks/useQueryRoute', () => ({
   useQueryRoute: () => routerMock,
 }));
@@ -145,6 +153,7 @@ describe('Home InputArea useSend', () => {
     fileState.chatContextSelections = [];
     fileState.chatUploadFileList = [];
     homeState.inputActiveMode = null;
+    activeWorkspaceSlugMock.value = null;
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
@@ -178,6 +187,27 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.replace).toHaveBeenCalledWith('/agent/agt_inbox/tpc_created');
   });
 
+  it('captures the active workspace slug in default homepage sends', async () => {
+    activeWorkspaceSlugMock.value = 'team';
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'hello',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: { agentId: 'agt_inbox', isolatedTopic: true, workspaceSlug: 'team' },
+      }),
+    );
+  });
+
   it('drops editorData when sending the placeholder hint so the user message renders the markdown content', async () => {
     homeDailyBriefState.currentPair = {
       hint: '看下 Bug #14153 + #14112 Agent 手机端不同步/不显示...',
@@ -209,6 +239,7 @@ describe('Home InputArea useSend', () => {
 
   it('passes context selections through starter agent mode sends', async () => {
     homeState.inputActiveMode = 'agent';
+    activeWorkspaceSlugMock.value = 'team';
     fileState.chatContextSelections = [
       {
         content: 'const selected = true;',
@@ -245,6 +276,7 @@ describe('Home InputArea useSend', () => {
           }),
         ],
         message: 'use this selection',
+        workspaceSlug: 'team',
       }),
     );
     expect(clearChatContextSelectionsMock).toHaveBeenCalledTimes(1);

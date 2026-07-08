@@ -154,16 +154,25 @@ const ProxyForm = () => {
   );
 
   const handleSave = useCallback(async () => {
+    let values: NetworkProxySettings;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // Validation error — fields surface their own inline messages.
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const values = await form.validateFields();
       await setProxySettings(values);
-    } catch {
-      // validation error
+      toast.success(t('proxy.saveSuccess'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(t('proxy.saveFailed', { error: message }));
     } finally {
       setIsSaving(false);
     }
-  }, [form, setProxySettings]);
+  }, [form, setProxySettings, t]);
 
   const handleReset = useCallback(() => {
     if (proxySettings) form.setFieldsValue(proxySettings);

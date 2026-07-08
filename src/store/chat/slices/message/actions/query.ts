@@ -36,6 +36,7 @@ import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
  * conversation keeps its live gateway stream regardless of this window.
  */
 const MESSAGE_LIST_DEDUPING_INTERVAL = 30 * 1000;
+const prefetchingMessageKeys = new Set<string>();
 
 type Setter = StoreSetter<ChatStore>;
 export const messageQuery = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -62,6 +63,30 @@ export class MessageQueryActionImpl {
       const ctx = key[1] as ConversationContext | undefined;
       return !!ctx && ctx.agentId === agentId && ctx.topicId === topicId;
     });
+  };
+
+  prefetchMessages = async (context: ConversationContext): Promise<void> => {
+    if (!context.agentId || !context.topicId) return;
+
+    const messagesKey = messageMapKey(context);
+    if (operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) return;
+    if (prefetchingMessageKeys.has(messagesKey)) return;
+
+    prefetchingMessageKeys.add(messagesKey);
+
+    const request = messageService.getMessages(context).then((messages) => {
+      this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
+      return messages;
+    });
+
+    try {
+      await mutate(messageKeys.list(context), request, { revalidate: false });
+      await request;
+    } catch {
+      // Background warming should never surface an unhandled rejection.
+    } finally {
+      prefetchingMessageKeys.delete(messagesKey);
+    }
   };
 
   replaceMessages = (
@@ -159,9 +184,11 @@ export class MessageQueryActionImpl {
    * because an optimistic dispatch may have already applied this exact state to
    * the store while leaving the cache stale.
    *
-   * Skipped in two cases:
+   * Skipped in three cases:
    * - `useFetchMessages` onData — SWR already holds that exact value, so
    *   re-writing it would double the IndexedDB persist on every fetch.
+   * - `prefetchMessages` — the exact cache key is seeded by the prefetch
+   *   mutate call itself, while replaceMessages only hydrates ChatStore.
    * - while the context is streaming — `internal_dispatchMessage` bridges every
    *   token here via `onMessagesChange`, and a write-through per token would
    *   thrash. `agent_runtime_end` clears the running flag *before* its final
@@ -173,7 +200,7 @@ export class MessageQueryActionImpl {
     messages: UIChatMessage[],
     action?: string,
   ): void => {
-    if (action === 'useFetchMessages') return;
+    if (action === 'useFetchMessages' || action === 'prefetchMessages') return;
     if (operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())) return;
 
     // Match every `message:list` entry whose context resolves to the same bucket

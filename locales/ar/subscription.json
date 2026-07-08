@@ -347,6 +347,8 @@
   "plans.message.more": "المزيد من النماذج في مقارنة الخطط",
   "plans.message.normalLLM": "نماذج قياسية",
   "plans.message.tooltip": "تقدير بناءً على متوسط {{number}} رمز لكل رسالة",
+  "plans.messageChannels.title": "قنوات الرسائل",
+  "plans.messageChannels.wechat": "قناة WeChat",
   "plans.mostPicked": "الأكثر اختيارًا",
   "plans.navs.monthly": "شهريًا",
   "plans.navs.payonce": "دفع لمرة واحدة",

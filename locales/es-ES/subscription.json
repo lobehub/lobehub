@@ -347,6 +347,8 @@
   "plans.message.more": "Más modelos en comparación de planes",
   "plans.message.normalLLM": "Modelos Estándar",
   "plans.message.tooltip": "Estimado en base a un promedio de {{number}} tokens por mensaje",
+  "plans.messageChannels.title": "Canales de Mensajes",
+  "plans.messageChannels.wechat": "Canal de WeChat",
   "plans.mostPicked": "Más Popular",
   "plans.navs.monthly": "Mensual",
   "plans.navs.payonce": "Pago Único",

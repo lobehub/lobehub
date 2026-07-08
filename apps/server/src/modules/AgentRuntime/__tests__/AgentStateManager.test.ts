@@ -15,6 +15,7 @@ const { redisMock, pipelineMock } = vi.hoisted(() => {
   };
   const redisMock = {
     del: vi.fn(),
+    eval: vi.fn(),
     expire: vi.fn(),
     get: vi.fn(),
     hgetall: vi.fn(),
@@ -22,6 +23,7 @@ const { redisMock, pipelineMock } = vi.hoisted(() => {
     keys: vi.fn(),
     multi: vi.fn(() => pipelineMock),
     quit: vi.fn(),
+    set: vi.fn(),
     setex: vi.fn(),
   };
   return { pipelineMock, redisMock };
@@ -180,6 +182,49 @@ describe('AgentStateManager', () => {
       // The event envelope itself is preserved.
       expect(persistedEvents[0].type).toBe('done');
       expect(persistedEvents[0].finalState.status).toBe('done');
+    });
+  });
+
+  describe('step execution lock', () => {
+    it('claims an operation-scoped lock with the provided owner token', async () => {
+      redisMock.set.mockResolvedValue('OK');
+
+      await expect(stateManager.tryClaimStep('op-lock', 3, 120, 'owner-1')).resolves.toBe(true);
+
+      expect(redisMock.set).toHaveBeenCalledWith(
+        'agent_runtime_operation_lock:op-lock',
+        'owner-1',
+        'EX',
+        120,
+        'NX',
+      );
+    });
+
+    it('refreshes only the lock owned by the caller', async () => {
+      redisMock.eval.mockResolvedValue(1);
+
+      await expect(stateManager.refreshStepLock('op-lock', 4, 120, 'owner-1')).resolves.toBe(true);
+
+      expect(redisMock.eval).toHaveBeenCalledWith(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+        1,
+        'agent_runtime_operation_lock:op-lock',
+        'owner-1',
+        '120',
+      );
+    });
+
+    it('releases only the lock owned by the caller', async () => {
+      redisMock.eval.mockResolvedValue(1);
+
+      await stateManager.releaseStepLock('op-lock', 5, 'owner-1');
+
+      expect(redisMock.eval).toHaveBeenCalledWith(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        'agent_runtime_operation_lock:op-lock',
+        'owner-1',
+      );
     });
   });
 });

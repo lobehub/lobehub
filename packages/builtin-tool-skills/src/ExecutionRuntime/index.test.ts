@@ -96,6 +96,46 @@ describe('SkillsExecutionRuntime', () => {
         expect(result.success).toBe(false);
         expect(result.content).toBe('Failed to execute command: sandbox timeout');
       });
+
+      it('should fall back to constructor activatedSkills when args carry none', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const contextSkills = [{ description: 'PDF tools', id: 'skl_1', name: 'pdf' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: contextSkills,
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript(args);
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: contextSkills,
+          description: 'test command',
+        });
+      });
+
+      it('should prefer args activatedSkills over the constructor fallback', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const argsSkills = [{ id: 'skl_2', name: 'xlsx' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: [{ id: 'skl_1', name: 'pdf' }],
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript({ ...args, activatedSkills: argsSkills });
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: argsSkills,
+          description: 'test command',
+        });
+      });
     });
 
     describe('via runCommand fallback', () => {

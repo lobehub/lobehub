@@ -137,7 +137,7 @@ export const buildRunLifecycle = (
   adapter: RunAdapterContext,
 ): AgentRunLifecycle => {
   const { context, parentMessageId, parentMessageType } = adapter;
-  const { agentId, topicId, threadId, groupId } = context;
+  const { agentId, topicId, threadId, groupId, workspaceSlug } = context;
   const messageKey = messageMapKey(context);
   const contextKey = messageKey;
 
@@ -248,7 +248,7 @@ export const buildRunLifecycle = (
       if (adapter.runScope === 'sub_agent') return;
       if (!isDesktop) return;
 
-      const notificationContext = { agentId, groupId, topicId };
+      const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
       if (adapter.runtimeType === 'client') {
         // CLIENT: notify only OUTSIDE tool-calling mode; content comes from the

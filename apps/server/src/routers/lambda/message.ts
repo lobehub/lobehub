@@ -19,7 +19,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { MessageService } from '@/server/services/message';
+import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
@@ -54,6 +54,28 @@ const messageAnalyticsSchema = z.object({
   topicId: z.string().optional(),
 });
 
+const messageBatchOperationSchema = z.discriminatedUnion('type', [
+  z.object({
+    message: CreateNewMessageParamsSchema,
+    type: z.literal('createMessage'),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateMessage'),
+    value: UpdateMessageParamsSchema,
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateToolMessage'),
+    value: z.object({
+      content: z.string().optional(),
+      metadata: z.record(z.string(), z.any()).optional(),
+      pluginError: z.any().optional(),
+      pluginState: z.record(z.string(), z.any()).optional(),
+    }),
+  }),
+]);
+
 export const messageRouter = router({
   addFilesToMessage: messageProcedure
     .use(withScopedPermission('message:update'))
@@ -75,6 +97,45 @@ export const messageRouter = router({
       );
 
       return ctx.messageService.addFilesToMessage(id, fileIds, resolved);
+    }),
+
+  batchMutate: messageProcedure
+    .use(withScopedPermission('message:create'))
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        operations: z.array(messageBatchOperationSchema).min(1).max(200),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const operations: MessageBatchOperation[] = await Promise.all(
+        input.operations.map(async (operation): Promise<MessageBatchOperation> => {
+          if (
+            operation.type !== 'createMessage' ||
+            operation.message.agentId ||
+            !operation.message.sessionId
+          ) {
+            return operation as MessageBatchOperation;
+          }
+
+          const agentId = await resolveAgentIdFromSession(
+            operation.message.sessionId,
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
+
+          return {
+            ...operation,
+            message: {
+              ...operation.message,
+              agentId: agentId!,
+            },
+          } as MessageBatchOperation;
+        }),
+      );
+
+      return ctx.messageService.batchMutate(operations);
     }),
 
   /**
@@ -115,11 +176,9 @@ export const messageRouter = router({
       return ctx.messageModel.queryAll(input);
     }),
 
-  count: messageProcedure
-    .input(messageAnalyticsSchema.optional())
-    .query(async ({ ctx, input }) => {
-      return ctx.messageModel.count(input);
-    }),
+  count: messageProcedure.input(messageAnalyticsSchema.optional()).query(async ({ ctx, input }) => {
+    return ctx.messageModel.count(input);
+  }),
 
   /**
    * Count messages grouped by topic (server-side GROUP BY), sorted by count

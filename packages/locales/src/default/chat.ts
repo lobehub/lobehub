@@ -313,13 +313,10 @@ export default {
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
   'input.more': 'More',
-  'input.sandboxModeNotice':
-    'Running in a temporary Cloud Sandbox. Local runs are faster and can access your files.',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
   'input.stop': 'Stop',
-  'input.switchToLocal': 'Use local machine',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
@@ -530,8 +527,6 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
-  'agent.publishToWorkspaceConfirm':
-    'Other workspace members will be able to use this agent. You will not be able to make it private again.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
@@ -627,6 +622,9 @@ export default {
   'pageCopilot.welcome': `**Clearer, sharper writing**\n\nDraft, rewrite, or polish—tell me your intent and I'll refine the rest.`,
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
+  'textSelection.added': 'Added to conversation context',
+  'textSelection.addToConversation': 'Add to conversation',
+  'textSelection.title': 'Message selection',
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'rag.referenceChunks': 'Reference Source',
@@ -1020,8 +1018,6 @@ export default {
   'taskDetail.updateFailed': 'Failed to update task',
   'taskDetail.publishToWorkspace.menuLabel': 'Publish to Workspace',
   'taskDetail.publishToWorkspace.confirmTitle': 'Publish task to workspace?',
-  'taskDetail.publishToWorkspace.confirmContent':
-    'Once published, this task becomes visible to all workspace members and cannot be reverted to private.',
   'taskDetail.publishToWorkspace.confirmHint':
     'Past runs remain private. Only runs created after publishing will be visible to workspace members.',
   'taskDetail.publishToWorkspace.confirmOk': 'Publish',
@@ -1147,6 +1143,10 @@ export default {
   'tool.intervention.optionApprove': 'Approve',
   'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",
+  'tool.intervention.renderFallback.description':
+    'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
+  'tool.intervention.renderFallback.rawJson': 'Raw JSON',
+  'tool.intervention.renderFallback.title': 'Interaction display downgraded',
   'tool.intervention.submit': 'Submit',
   'tool.intervention.mode.allowList': 'Allow List',
   'tool.intervention.mode.allowListDesc': 'Only automatically execute approved tools',

@@ -347,6 +347,8 @@
   "plans.message.more": "مدل‌های بیشتر در مقایسه طرح‌ها",
   "plans.message.normalLLM": "مدل‌های استاندارد",
   "plans.message.tooltip": "بر اساس میانگین {{number}} توکن در هر پیام تخمین زده شده",
+  "plans.messageChannels.title": "کانال‌های پیام",
+  "plans.messageChannels.wechat": "کانال وی‌چت",
   "plans.mostPicked": "محبوب‌ترین",
   "plans.navs.monthly": "ماهانه",
   "plans.navs.payonce": "پرداخت یک‌باره",

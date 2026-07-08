@@ -1,6 +1,7 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
@@ -37,6 +38,7 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
 
 export const useSend = () => {
   const router = useQueryRoute();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
@@ -95,17 +97,35 @@ export const useSend = () => {
 
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent({ contextSelections, editorData, message, pageSelections });
+            await sendAsAgent({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
           case 'group': {
-            await sendAsGroup({ contextSelections, editorData, message, pageSelections });
+            await sendAsGroup({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
           case 'write': {
-            await sendAsWrite({ contextSelections, editorData, message, pageSelections });
+            await sendAsWrite({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
@@ -124,7 +144,11 @@ export const useSend = () => {
             await ensureAgentConfigLoaded(activeAgentId);
 
             sendMessage({
-              context: { agentId: activeAgentId, isolatedTopic: true },
+              context: {
+                agentId: activeAgentId,
+                isolatedTopic: true,
+                ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
+              },
               contextSelections,
               contexts: contextList,
               editorData,
@@ -148,6 +172,7 @@ export const useSend = () => {
     },
     [
       activeAgentId,
+      activeWorkspaceSlug,
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,

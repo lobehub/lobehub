@@ -787,6 +787,7 @@ export class TaskService {
       checkpoint: this.taskModel.getCheckpointConfig(task),
       config: taskConfig,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
+      createdByUserId: task.createdByUserId,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
         return {

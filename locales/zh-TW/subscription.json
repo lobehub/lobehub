@@ -347,6 +347,8 @@
   "plans.message.more": "更多模型請參見方案比較",
   "plans.message.normalLLM": "標準模型",
   "plans.message.tooltip": "依每則訊息平均 {{number}} tokens 預估",
+  "plans.messageChannels.title": "訊息頻道",
+  "plans.messageChannels.wechat": "微信頻道",
   "plans.mostPicked": "最受歡迎",
   "plans.navs.monthly": "月繳",
   "plans.navs.payonce": "一次性付款",

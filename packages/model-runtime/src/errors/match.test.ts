@@ -364,3 +364,120 @@ describe('matchErrorPattern — second residue convergence round', () => {
     expect(code).not.toBe(AgentRuntimeErrorType.ExceededContextWindow);
   });
 });
+
+describe('matchErrorPattern — gateway user/upstream residues by category', () => {
+  const groups: { cases: [string, string, string?][]; name: string }[] = [
+    {
+      cases: [
+        [
+          'Your balance is used up. Please top up to continue.',
+          AgentRuntimeErrorType.InsufficientQuota,
+        ],
+        ['have reached your weekly usage limit', AgentRuntimeErrorType.InsufficientQuota],
+        ['已达到 Token Plan 用量上限', AgentRuntimeErrorType.InsufficientQuota],
+        ['Token Plan usage limit reached', AgentRuntimeErrorType.InsufficientQuota],
+        ['The free quota has been exhausted', AgentRuntimeErrorType.InsufficientQuota],
+      ],
+      name: 'quota and plan limits',
+    },
+    {
+      cases: [
+        ['Too many requests', AgentRuntimeErrorType.RateLimitExceeded],
+        ['LLM stream error: Console API returned 429', AgentRuntimeErrorType.RateLimitExceeded],
+        ['rate limit exceeded: per-user model TPM limit', AgentRuntimeErrorType.RateLimitExceeded],
+        ['"quota exceeded"', AgentRuntimeErrorType.RateLimitExceeded],
+      ],
+      name: 'rate limiting',
+    },
+    {
+      cases: [
+        ['no channel available for model', AgentRuntimeErrorType.NoAvailableChannel],
+        ['"code":"NOT_FOUND","msg":"route not found"', AgentRuntimeErrorType.NoAvailableChannel],
+        ['Unknown Model, please check the model code', AgentRuntimeErrorType.ModelNotFound],
+        ['404 page not found', AgentRuntimeErrorType.UserConfigError],
+        ['OpenAIException - {"detail":"Not Found"}', AgentRuntimeErrorType.UserConfigError],
+      ],
+      name: 'routing, model, and endpoint configuration',
+    },
+    {
+      cases: [
+        [
+          'Authentication is not set up. Please provide either a project and location',
+          AgentRuntimeErrorType.InvalidVertexCredentials,
+          'vertexai',
+        ],
+        ['No active credentials for provider', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['<h1>403 Forbidden</h1>', AgentRuntimeErrorType.PermissionDenied],
+      ],
+      name: 'credentials and access',
+    },
+    {
+      cases: [
+        [
+          'The model rejected this request. It may not support the input you sent',
+          AgentRuntimeErrorType.CapabilityNotSupported,
+        ],
+        ['sensitive words detected', AgentRuntimeErrorType.ContentModeration],
+        ['请勿发送探测请求', AgentRuntimeErrorType.ContentModeration],
+      ],
+      name: 'capability and moderation',
+    },
+    {
+      cases: [
+        [
+          'Request body too large for deepseek-r1 model',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'error getting file type: failed to download file from https://example.com/a.png',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'error getting file type: failed to download file, status code: 404',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        ['422 status code (no body)', AgentRuntimeErrorType.InvalidRequestFormat],
+      ],
+      name: 'request format and file retrieval',
+    },
+    {
+      cases: [
+        ['503 "Service Unavailable"', AgentRuntimeErrorType.ProviderServiceUnavailable],
+        ['Hệ thống đang bận', AgentRuntimeErrorType.ProviderServiceUnavailable],
+      ],
+      name: 'service unavailable',
+    },
+  ];
+
+  for (const { cases, name } of groups) {
+    it.each(cases)(`classifies ${name}: %j`, (message, expected, provider) => {
+      expect(
+        matchErrorPattern({
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          message,
+          provider,
+        })?.code,
+      ).toBe(expected);
+      expect(isUserSideError(AgentRuntimeErrorType.ProviderBizError, message, provider)).toBe(true);
+    });
+  }
+
+  it('keeps Vertex setup errors on the Vertex credential code', () => {
+    const message =
+      'Authentication is not set up. Please provide either a project and location, or an API key, or a custom base URL.';
+
+    expect(
+      matchErrorPattern({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message,
+      }),
+    ).toBeUndefined();
+    expect(
+      matchErrorPattern({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message,
+        provider: 'vertexai',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.InvalidVertexCredentials);
+  });
+});

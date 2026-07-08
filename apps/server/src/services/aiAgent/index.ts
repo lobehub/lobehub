@@ -77,6 +77,7 @@ import {
   type ExecutionPlan,
   executionTargetToRuntimeMode,
   isDeviceCapablePlan,
+  isDeviceLockedPlan,
   resolveExecutionPlan,
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
@@ -130,7 +131,11 @@ import { MarketService } from '@/server/services/market';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
-import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
+import {
+  buildAllowedBuiltinTools,
+  isDeviceToolIdentifier,
+  REMOTE_DEVICE_TOOL_IDENTIFIERS,
+} from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
 import {
@@ -2496,6 +2501,11 @@ export class AiAgentService {
       // device-capable session — `none` and `sandbox` sessions must never see
       // them, not even the proxy that could activate a device mid-run.
       const deviceCapable = isDeviceCapablePlan(executionPlan);
+      // Locked = routed to a device, or explicitly bound but offline. Such a
+      // run has no device decision left, so the remote-device picker is
+      // physically stripped below (and in the engine walls) — the model must
+      // follow the user's choice, never re-list or switch machines mid-run.
+      const deviceLocked = isDeviceLockedPlan(executionPlan);
       activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
       log(
         'execAgent: execution plan → kind=%s deviceId=%s',
@@ -2631,8 +2641,19 @@ export class AiAgentService {
       // activator-discovery map and let an external bot sender enable it
       // (). Centralising the check at the ingest layer means
       // every future manifest source automatically inherits the wall.
-      const isManifestIngestAllowed = (identifier: string): boolean =>
-        canUseDevice || !isDeviceToolIdentifier(identifier);
+      //
+      // A device-LOCKED run (routed, or explicitly bound but offline) keeps
+      // local-system but must not expose the remote-device picker: leaving it
+      // discoverable lets the activator's explicit activation bypass the rule
+      // gate and re-surface the device list mid-run — inviting redundant
+      // activateDevice calls or switching to a machine the user never chose.
+      // Enforced here (not as a point deletion after the seed) so the later
+      // Skill/Composio ingest loops cannot re-add the identifier.
+      const isManifestIngestAllowed = (identifier: string): boolean => {
+        if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
+        if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
+        return true;
+      };
 
       // Start with the scoped manifest map (pluginIds + defaultToolIds)
       const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
@@ -2647,6 +2668,7 @@ export class AiAgentService {
       // internal infrastructure tools from being surfaced to the activator.
       const allowedBuiltinTools = buildAllowedBuiltinTools({
         canUseDevice,
+        deviceLocked,
         disableLocalSystem,
       });
       // Effective runtimeMode from the plan's resolved target — same value the
@@ -2826,7 +2848,7 @@ export class AiAgentService {
     if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
       toolManifestMap[RemoteDeviceManifest.identifier] = {
         ...toolManifestMap[RemoteDeviceManifest.identifier],
-        systemRole: generateSystemPrompt(onlineDevices, activeDeviceId),
+        systemRole: generateSystemPrompt(onlineDevices),
       };
     }
 

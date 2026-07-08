@@ -33,7 +33,11 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 });
 
 const OP = 'op1';
-const CONTEXT: ConversationContext = { agentId: 'a1', topicId: 't1' } as ConversationContext;
+const CONTEXT: ConversationContext = {
+  agentId: 'a1',
+  topicId: 't1',
+  workspaceSlug: 'team',
+} as ConversationContext;
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
   const store = {
@@ -50,7 +54,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     messagesMap: {},
     operations: {
       [OP]: {
-        context: { agentId: 'a1', topicId: 't1' },
+        context: CONTEXT,
         metadata: afterCompletionCallbacks ? { runtimeHooks: { afterCompletionCallbacks } } : {},
         status: 'running',
       },
@@ -234,7 +238,10 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(1);
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledWith(
       get,
-      expect.objectContaining({ content: 'second turn reply' }),
+      expect.objectContaining({
+        content: 'second turn reply',
+        context: expect.objectContaining({ workspaceSlug: 'team' }),
+      }),
     );
   });
 

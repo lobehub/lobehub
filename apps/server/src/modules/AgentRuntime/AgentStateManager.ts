@@ -12,6 +12,11 @@ import { stripFinalStateInEventData } from './StreamEventManager';
 
 const log = debug('lobe-server:agent-runtime:agent-state-manager');
 
+const REFRESH_OWNED_LOCK_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end";
+const RELEASE_OWNED_LOCK_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
 export interface StepResult {
   events?: AgentEvent[];
   executionTime: number;
@@ -468,19 +473,20 @@ export class AgentStateManager {
     }
   }
 
-  private stepLockKey(operationId: string, stepIndex: number): string {
-    return `agent_runtime_step_lock:${operationId}:${stepIndex}`;
+  private executionLockKey(operationId: string): string {
+    return `agent_runtime_operation_lock:${operationId}`;
   }
 
   async tryClaimStep(
     operationId: string,
-    stepIndex: number,
+    _stepIndex: number,
     ttlSeconds: number = 35,
+    ownerId: string = Date.now().toString(),
   ): Promise<boolean> {
     try {
       const result = await this.redis.set(
-        this.stepLockKey(operationId, stepIndex),
-        Date.now().toString(),
+        this.executionLockKey(operationId),
+        ownerId,
         'EX',
         ttlSeconds,
         'NX',
@@ -494,9 +500,42 @@ export class AgentStateManager {
     }
   }
 
-  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
+  async refreshStepLock(
+    operationId: string,
+    _stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
     try {
-      await this.redis.del(this.stepLockKey(operationId, stepIndex));
+      const key = this.executionLockKey(operationId);
+      if (!ownerId) {
+        return (await this.redis.expire(key, ttlSeconds)) === 1;
+      }
+
+      const result = await this.redis.eval(
+        REFRESH_OWNED_LOCK_SCRIPT,
+        1,
+        key,
+        ownerId,
+        ttlSeconds.toString(),
+      );
+
+      return result === 1;
+    } catch (error) {
+      console.error('Failed to refresh step lock:', error);
+      return false;
+    }
+  }
+
+  async releaseStepLock(operationId: string, _stepIndex: number, ownerId?: string): Promise<void> {
+    try {
+      const key = this.executionLockKey(operationId);
+      if (!ownerId) {
+        await this.redis.del(key);
+        return;
+      }
+
+      await this.redis.eval(RELEASE_OWNED_LOCK_SCRIPT, 1, key, ownerId);
     } catch (error) {
       console.error('Failed to release step lock:', error);
     }

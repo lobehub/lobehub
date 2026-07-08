@@ -802,10 +802,17 @@ export class ConversationLifecycleActionImpl {
         return;
       }
 
-      // Update context with server-created topicId
+      // Update context with server-created topicId. Once the server has returned a
+      // persisted topic, the hetero stream must target the real topic bucket; keeping
+      // `isNew` would route chunks to `main_<agent>_<topic>_new`.
+      const heteroTopicId = heteroData.topicId ?? operationContext.topicId;
+      const shouldResolveNewTopicKey = !!heteroTopicId && operationContext.scope !== 'thread';
       const heteroContext = {
         ...operationContext,
-        topicId: heteroData.topicId ?? operationContext.topicId,
+        // startOperation inherits from the parent op before merging this context.
+        // Use an explicit false so the child exec op does not inherit `isNew: true`.
+        ...(shouldResolveNewTopicKey ? { isNew: false } : {}),
+        topicId: heteroTopicId,
       };
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);

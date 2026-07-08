@@ -75,6 +75,7 @@ export default class GitController extends ControllerModule {
   async getLinkedPullRequest(payload: {
     branch: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return computeLinkedPullRequest(payload);
   }

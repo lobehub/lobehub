@@ -1,10 +1,10 @@
 'use client';
 
+import type { AskUserDraft, AskUserQuestionArgs } from '@lobechat/shared-tool-ui/ask-user';
 import {
-  type AskUserDraft,
-  type AskUserQuestionArgs,
   AskUserQuestionView,
   DRAFT_PLUGIN_STATE_KEY,
+  normalizeAskUserQuestions,
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
@@ -54,7 +54,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   // Read-only surfaces (resolved / historical messages) show a compact summary
   // of what was asked instead of the interactive form.
   if (interactionMode !== 'custom') {
-    const questions = args?.questions ?? [];
+    const questions = normalizeAskUserQuestions(args);
     return (
       <Flexbox gap={8}>
         {questions.map((q, idx) => (

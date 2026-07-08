@@ -92,6 +92,21 @@ export class DocumentService {
     return this.documentHistoryServiceInstance;
   }
 
+  /**
+   * Whether a document participates in collaborative edit locking. Only
+   * workspace documents other members can actually open need the lock:
+   * a `visibility: 'private'` row is creator-only (buildWorkspaceWhere hides it
+   * from everyone else), so locking it can only ever conflict the creator with
+   * themselves — e.g. a stale lease left behind by a publish → unpublish flip
+   * turning every autosave into a CONFLICT loop. NULL visibility is treated as
+   * public, mirroring buildWorkspaceWhere.
+   */
+  private isCollaborativeDocument(
+    doc: Pick<DocumentItem, 'visibility' | 'workspaceId'> | null | undefined,
+  ): boolean {
+    return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
+  }
+
   private async deleteFileRecordAndStorage(fileId: string) {
     const file = await this.fileModel.delete(fileId);
     if (!file?.url || file.url.startsWith('internal://')) return;
@@ -285,6 +300,13 @@ export class DocumentService {
     if (!this.workspaceId)
       return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
 
+    // Creator-only (private-visibility) documents never take a lease — see
+    // isCollaborativeDocument. Refusing here keeps a stale client from minting
+    // a lock the write guards would then trip over.
+    const doc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(doc))
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+
     const prevHolder = await this.editLockService.getActiveLock('document', id);
     const result = await this.editLockService.acquire('document', id, ownerId);
 
@@ -318,6 +340,12 @@ export class DocumentService {
    */
   async getDocumentLock(id: string, ownerId?: string): Promise<DocumentLockResult> {
     if (!this.workspaceId)
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+    // Private-visibility documents always read as unlocked (no lease can be
+    // taken on them), so a viewer of a just-unpublished page is never stranded
+    // read-only behind a leftover lease.
+    const doc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(doc))
       return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
     const holder = await this.editLockService.getActiveLock('document', id);
     const lockedByOther = holder
@@ -374,6 +402,14 @@ export class DocumentService {
       // Diagnostic: distinguishes "no-op because workspaceId is
       // missing at runtime" from "lock actually evaluated".
       log('runWithDocumentLock skip: no workspaceId (id=%s userId=%s)', id, this.userId);
+      return fn();
+    }
+
+    // Creator-only (private-visibility) documents have no collaborators to
+    // serialize against — run without a lease, same as personal mode.
+    const targetDoc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(targetDoc)) {
+      log('runWithDocumentLock skip: non-collaborative doc (id=%s userId=%s)', id, this.userId);
       return fn();
     }
 
@@ -459,7 +495,7 @@ export class DocumentService {
     // can't pollute the version timeline. The lock holder forwards its
     // `lockOwnerId` so it can still snapshot its own page (e.g. the pre-mutation
     // snapshot a Copilot edit takes) without being blocked by its own lease.
-    if (this.workspaceId) {
+    if (this.isCollaborativeDocument(currentDocument)) {
       const canWrite = await this.editLockService.canWrite('document', documentId, lockOwnerId);
       if (!canWrite) {
         throw new TRPCError({
@@ -610,7 +646,7 @@ export class DocumentService {
       const contentChanged =
         historyAppended ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (this.workspaceId && contentChanged) {
+      if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
           throw new TRPCError({

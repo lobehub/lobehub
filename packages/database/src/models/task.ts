@@ -17,6 +17,7 @@ import {
   isNull,
   ne,
   notInArray,
+  or,
   type SQL,
   sql,
 } from 'drizzle-orm';
@@ -26,7 +27,7 @@ import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
-import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
+import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -255,20 +256,24 @@ export class TaskModel {
   }
 
   /**
-   * Promote a task and its full subtree to a new visibility. The only legal
-   * transition is `private → public` — there is no `public → private` path
-   * (one-way commitment; enforced by the router-level guard).
+   * Move a task and its full subtree to a new visibility (both directions —
+   * LOBE-11551 added the `public → private` demotion; the router gates who
+   * may call it).
    *
-   * Cascades inside a single transaction across structural rows only:
+   * Cascades inside a single transaction:
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set.
    *
-   * `task_topics` and `task_comments` are deliberately **not** cascaded.
-   * They are event-shaped historical rows whose visibility was fixed at write
-   * time; promoting the task to public must not retroactively expose runs and
-   * discussions that happened while the task was private.
-   * Topics / comments created after promotion inherit the task's then-current
-   * visibility through their own create paths.
+   * `task_topics` and `task_comments` are direction-sensitive. Their
+   * `visibility` column is a write-time mirror of the parent task used as a
+   * JOIN-free authorization proxy, so:
+   *   - `private → public` deliberately does **not** cascade them: promoting
+   *     the task must not retroactively expose runs and discussions that
+   *     happened while it was private. Rows created after promotion inherit
+   *     the task's then-current visibility through their own create paths.
+   *   - `public → private` **does** cascade them: leaving public-era rows
+   *     public would let workspace members keep reading/operating historical
+   *     topics and comments of a task they can no longer see.
    *
    * Returns `null` if the root task is not visible to the current caller
    * (either missing or owned by another workspace member). Callers should
@@ -315,8 +320,79 @@ export class TaskModel {
         .set({ visibility })
         .where(and(inArray(taskDocuments.taskId, taskIds), this.docsOwnership()));
 
+      // Demotion-only cascade for the event-shaped child rows (see docstring):
+      // their visibility mirrors the task, so pulling the task back to private
+      // must also pull public-era topics/comments out of workspace scope.
+      if (visibility === 'private') {
+        await tx
+          .update(taskTopics)
+          .set({ visibility })
+          .where(and(inArray(taskTopics.taskId, taskIds), this.topicsOwnership()));
+
+        await tx
+          .update(taskComments)
+          .set({ visibility })
+          .where(and(inArray(taskComments.taskId, taskIds), this.commentsOwnership()));
+      }
+
       return updated ?? null;
     });
+  }
+
+  /**
+   * Count workspace tasks that would break if the given agent were demoted to
+   * private:
+   *   - public tasks assigned to it — a public task must never reference a
+   *     private agent (`assertAgentVisibilityCompat`);
+   *   - tasks created by anyone other than the agent's owner (any visibility)
+   *     — after demotion those creators can no longer resolve the assignee,
+   *     so their runs and assignee updates fail.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private tasks are invisible to the caller but still lose
+   * their assignee. Backs the router-level agent demotion guard.
+   */
+  async countTasksBlockingAgentDemotion(
+    assigneeAgentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, this.workspaceId),
+          eq(tasks.assigneeAgentId, assigneeAgentId),
+          or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
+        ),
+      );
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Whether the subtree rooted at `rootTaskId` (root excluded) contains tasks
+   * created by someone other than `creatorUserId`. Deliberately workspace-wide
+   * and visibility-blind: other members' private subtasks are invisible to the
+   * caller but would still be fractured by a public→private demotion (each row
+   * stays owned by its creator, so the root creator loses those descendants
+   * while their creators keep orphaned children whose parent is hidden).
+   * Backs the router-level task demotion guard.
+   */
+  async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
+    if (!this.workspaceId) return false;
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT id, created_by_user_id FROM tasks
+          WHERE id = ${rootTaskId} AND workspace_id = ${this.workspaceId}
+        UNION ALL
+        SELECT t.id, t.created_by_user_id FROM tasks t
+        JOIN task_tree tt ON t.parent_task_id = tt.id
+      )
+      SELECT 1 AS hit FROM task_tree
+      WHERE id <> ${rootTaskId} AND created_by_user_id <> ${creatorUserId}
+      LIMIT 1
+    `);
+    return result.rows.length > 0;
   }
 
   async deleteAll(): Promise<number> {
@@ -789,6 +865,15 @@ export class TaskModel {
       userId: taskDependencies.userId,
       visibility: taskDependencies.visibility,
       workspaceId: taskDependencies.workspaceId,
+    });
+
+  /** Only used by the demotion cascade in {@link updateVisibility} — regular
+   *  taskTopics reads/writes live in `TaskTopicModel`. */
+  private topicsOwnership = () =>
+    this.childOwnership({
+      userId: taskTopics.userId,
+      visibility: taskTopics.visibility,
+      workspaceId: taskTopics.workspaceId,
     });
 
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {

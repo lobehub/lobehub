@@ -85,7 +85,7 @@ export interface DeviceGitLinkedPullRequest {
 export type DeviceGitLinkedPullRequestLookupStatus = 'error' | 'gh-missing' | 'ok';
 
 export interface WorkingDirGithubState {
-  /** Additional open PRs targeting the same head branch, beyond the primary one. */
+  /** Additional PRs targeting the same head branch, beyond the primary one. */
   extraPullRequestCount?: number;
   /** GitHub PR linked to the effective working directory's branch. */
   pullRequest?: DeviceGitLinkedPullRequest | null;
@@ -269,9 +269,9 @@ export interface DeviceGitBranchInfo {
  * (when the repo is a GitHub remote). Mirrors the desktop shape.
  */
 export interface DeviceGitLinkedPullRequestResult {
-  /** Additional open PRs targeting the same head branch, beyond the primary one. */
+  /** Additional PRs targeting the same head branch, beyond the primary one. */
   extraCount?: number;
-  /** Null when no open PR is linked to the branch. */
+  /** Null when no PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;

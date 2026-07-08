@@ -11,13 +11,22 @@ import useSWR from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { cronKeys, topicKeys } from '@/libs/swr/keys';
+import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
+import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
+import {
+  canReadTopicGitTransport,
+  getTopicLinkedPullRequestBase,
+  isSuccessfulLinkedPullRequestLookup,
+  mergeWorkingDirGithubState,
+  resolveTopicGitTransport,
+  toWorkingDirGithubState,
+} from '@/store/chat/utils/topicWorkingDirGit';
 import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
@@ -84,6 +93,15 @@ export interface SwitchTopicOptions {
 }
 
 type Setter = StoreSetter<ChatStore>;
+
+interface TopicLinkedPullRequestRefreshParams {
+  branch: string;
+  deviceId?: string;
+  path: string;
+  pullRequestNumber?: number;
+  topicId: string;
+}
+
 export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ChatTopicActionImpl(set, get, _api);
 
@@ -104,6 +122,29 @@ export class ChatTopicActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  #resolveTopicLinkedPullRequestRefreshParams = (
+    topicId: string,
+    metadata?: ChatTopicMetadata,
+  ): TopicLinkedPullRequestRefreshParams | undefined => {
+    const sourceMetadata = metadata ?? topicSelectors.getTopicById(topicId)(this.#get())?.metadata;
+    const base = getTopicLinkedPullRequestBase(sourceMetadata);
+    if (!base) return undefined;
+
+    const { activeAgentId } = this.#get();
+    if (!activeAgentId) return undefined;
+
+    const transport = resolveTopicGitTransport(activeAgentId);
+    if (!canReadTopicGitTransport(transport)) return undefined;
+
+    return {
+      branch: base.branch,
+      deviceId: transport.deviceId,
+      path: base.path,
+      pullRequestNumber: base.pullRequestNumber,
+      topicId,
+    };
+  };
 
   closeAllTopicsDrawer = (): void => {
     this.#set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
@@ -557,6 +598,50 @@ export class ChatTopicActionImpl {
     } finally {
       this.#staleRunningTopicCleanupInFlight = false;
     }
+  };
+
+  useFetchTopicLinkedPullRequest = (
+    topicId?: string,
+    metadata?: ChatTopicMetadata,
+  ): SWRResponse<GitLinkedPRSummary | undefined> => {
+    const params = topicId
+      ? this.#resolveTopicLinkedPullRequestRefreshParams(topicId, metadata)
+      : undefined;
+
+    return useClientDataSWRWithSync<GitLinkedPRSummary | undefined>(
+      params
+        ? deviceKeys.gitLinkedPR(
+            params.deviceId ?? 'local',
+            params.path,
+            params.branch,
+            params.pullRequestNumber,
+          )
+        : null,
+      params
+        ? () =>
+            gitService.getLinkedPullRequest({
+              branch: params.branch,
+              deviceId: params.deviceId,
+              path: params.path,
+              pullRequestNumber: params.pullRequestNumber,
+            })
+        : null,
+      {
+        dedupingInterval: 60 * 1000,
+        focusThrottleInterval: 60 * 1000,
+        onData: (prData) => {
+          if (!params) return;
+
+          void this.#get()
+            .internal_updateTopicLinkedPullRequest(params, prData)
+            .catch((error) => {
+              console.error('[useFetchTopicLinkedPullRequest] sync failed:', error);
+            });
+        },
+        revalidateOnFocus: true,
+        shouldRetryOnError: false,
+      },
+    );
   };
 
   autoRenameTopicTitle = async (id: string): Promise<void> => {
@@ -1278,6 +1363,69 @@ export class ChatTopicActionImpl {
     } finally {
       // Rename "Topic" -> "New" can fail after opening a loading owner; always release it.
       this.#get().internal_updateTopicLoading(id, false);
+    }
+  };
+
+  internal_updateTopicLinkedPullRequest = async (
+    params: TopicLinkedPullRequestRefreshParams,
+    prData?: GitLinkedPRSummary,
+  ): Promise<void> => {
+    if (!isSuccessfulLinkedPullRequestLookup(prData)) return;
+
+    const topic = topicSelectors.getTopicById(params.topicId)(this.#get());
+    if (!topic) return;
+
+    const base = getTopicLinkedPullRequestBase(topic.metadata);
+    if (
+      !base ||
+      base.branch !== params.branch ||
+      base.path !== params.path ||
+      base.pullRequestNumber !== params.pullRequestNumber
+    ) {
+      return;
+    }
+
+    const github = toWorkingDirGithubState(prData);
+    if (!github) return;
+
+    if (
+      base.pullRequestNumber !== undefined &&
+      github.pullRequest?.number !== base.pullRequestNumber
+    ) {
+      return;
+    }
+
+    const nextConfig = mergeWorkingDirGithubState({
+      branch: base.branch,
+      currentConfig: base.currentConfig,
+      github,
+      path: base.path,
+    });
+
+    if (isEqual(base.currentConfig, nextConfig)) return;
+
+    this.#get().internal_dispatchTopic(
+      {
+        id: params.topicId,
+        type: 'updateTopic',
+        value: {
+          metadata: {
+            ...topic.metadata,
+            workingDirectoryConfig: nextConfig,
+          },
+        },
+      },
+      n('refreshTopicLinkedPullRequest'),
+    );
+
+    try {
+      await topicService.updateTopicMetadata(params.topicId, {
+        workingDirectoryConfig: nextConfig,
+      });
+      await this.#get().refreshTopic();
+    } catch (error) {
+      await this.#get().refreshTopic();
+      throw error;
     }
   };
 

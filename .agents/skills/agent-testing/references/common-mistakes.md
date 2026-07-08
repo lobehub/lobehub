@@ -255,3 +255,72 @@ verify run. Either drive the real app UI with agent-browser/Electron/Web and att
 a screenshot, or explicitly mark the UI screenshot case blocked with the measured
 environment blocker. Do not present a UI-touching report as complete with only CLI
 evidence.
+
+## Case 11 — Skipping the agent-testing entry point for a UI E2E check
+
+**Wrong approach**: after implementing a user-facing Markdown/chat interaction,
+running generic local checks and an ad-hoc browser probe without first reading and
+following the repo's `agent-testing` skill. The user had to ask why the test plan
+did not use the dedicated skill.
+
+**Why it's wrong**: `agent-testing` encodes LobeHub-specific surface choice, auth,
+isolated Electron dev instances, screenshot evidence rules, reporting, and known
+tooling traps. Bypassing it makes the validation weaker even when individual unit
+tests pass.
+
+**What it breaks**: the run can stop at DOM/text heuristics, use the wrong app
+surface, miss required screenshot/report evidence, or fail to publish a verify
+report that the user can inspect.
+
+**Correct approach**: for any local end-to-end or manual verification task,
+especially UI-facing changes, start with `agent-testing`: read this file and
+`probe-mock-patterns.md`, resolve the test env, choose the correct surface, run
+the app-specific probes, capture visually confirmed evidence, publish the verify
+report, and tear down processes started by the run.
+
+## Case 12 — Verifying the selection chip but not the final model payload
+
+**Wrong approach**: after adding a chat text-selection action, marking the feature
+verified because the floating toolbar appeared, the selected-text chip rendered,
+and the UI store contained a `contextSelections` entry — without checking the
+final message payload that the model receives.
+
+**Why it's wrong**: UI metadata can be saved and displayed while a later
+context-engine/runtime gate drops it before request construction. In this case,
+the user bubble showed the selected text, but the Anthropic request only carried
+the raw user question because generic `contextSelections` were gated behind page
+editor context injection.
+
+**What it breaks**: ships a feature that looks successful in the chat UI but has
+no effect on model behavior; the user must inspect DevTools to discover the
+selected context never reached the assistant.
+
+**Correct approach**: for any feature that claims to "inject" context, verify the
+last mile: add or run an integration-level assertion against the transformed
+messages/request body (e.g. `MessagesEngine` output or transport payload), and
+only treat the UI chip/store as supporting evidence.
+
+---
+
+## Case 13 — GIF evidence ending on an expected-failure frame reads as "the page failed to load"
+
+**Wrong approach**: for a loading-skeleton case, attaching a GIF that records the
+full timeline — skeleton (the asserted state) followed by the error page that the
+test data inevitably produces (fake ids / dummy provider keys mean the route can
+only end in its error state). The GIF loops and rests on its final frames, so the
+viewer opens the report and sees the error card, not the skeleton.
+
+**Why it's wrong**: same trap as Case 5 (unlabeled before-shot) in time-based
+form — the LAST frame of a GIF is its de-facto headline. An expected-failure
+terminal state without explanation reads as the case failing (" 这里怎么加载失败
+了 "), even when the asserted behavior (the skeleton) passed.
+
+**What it breaks**: the user reads a passed case as a load failure and a round is
+burned re-explaining the evidence.
+
+**Correct approach**: trim evidence to the asserted state — end the GIF on the
+skeleton/loading phase (cut the frames after the terminal state appears), or
+attach the static shot of the asserted state as the primary evidence. If the
+expected-failure terminal state is worth showing, say so explicitly in the
+case's `observation` ("ends in the error page because the test session id is
+fake — expected, not the assertion") so the viewer is told before they see it.

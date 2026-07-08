@@ -90,6 +90,7 @@ export default {
   'workingDirectory.removeWorktreeConfirm':
     'Delete worktree “{{name}}”? This removes the worktree directory but keeps its branch. Git will refuse if it has uncommitted changes.',
   'workingDirectory.removeWorktreeFailed': 'Delete worktree failed',
+  'workingDirectory.removeWorktreePending': 'Deleting worktree “{{name}}”…',
   'workingDirectory.removeWorktreeSuccess': 'Worktree deleted',
   'workingDirectory.removeWorktreeTitle': 'Delete worktree',
   'workingDirectory.worktreeSearchPlaceholder': 'Search worktrees',

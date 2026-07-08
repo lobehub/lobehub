@@ -148,12 +148,20 @@ export const deviceRouter = router({
     }),
 
   gitLinkedPullRequest: deviceProcedure
-    .input(z.object({ branch: z.string(), deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        branch: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+        pullRequestNumber: z.number().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitLinkedPullRequest({
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
+        pullRequestNumber: input.pullRequestNumber,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });

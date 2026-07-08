@@ -347,6 +347,8 @@
   "plans.message.more": "Nhiều mô hình hơn trong so sánh gói",
   "plans.message.normalLLM": "Mô hình tiêu chuẩn",
   "plans.message.tooltip": "Ước tính dựa trên trung bình {{number}} token mỗi tin nhắn",
+  "plans.messageChannels.title": "Kênh Tin Nhắn",
+  "plans.messageChannels.wechat": "Kênh WeChat",
   "plans.mostPicked": "Phổ biến nhất",
   "plans.navs.monthly": "Hàng tháng",
   "plans.navs.payonce": "Thanh toán một lần",

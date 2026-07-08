@@ -12,6 +12,7 @@ export {
   isQuestionAnswered,
   readDraft,
 } from './draft';
+export { normalizeAskUserQuestions } from './normalize';
 export { default as QuestionPanel } from './QuestionPanel';
 export type {
   AskUserDraft,

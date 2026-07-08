@@ -36,6 +36,9 @@ type GithubPullRequestPayload = {
   url: string;
 };
 
+const GITHUB_PULL_REQUEST_FIELDS =
+  'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup';
+
 const failureConclusions = new Set([
   'action_required',
   'cancelled',
@@ -132,17 +135,30 @@ export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
 };
 
 /**
- * Query `gh` CLI for an open pull request whose head branch matches `branch`.
- * Returns `status: 'gh-missing'` when `gh` is unavailable / not authed.
+ * Query `gh` CLI for a saved PR number when present; otherwise fall back to the
+ * PR whose head branch matches `branch`, including merged/closed PRs so stale
+ * topic snapshots can refresh lifecycle state after GitHub changes outside the
+ * app. Returns `status: 'gh-missing'` when `gh` is unavailable / not authed.
  */
 export const getLinkedPullRequest = async (payload: {
   branch: string;
   path: string;
+  pullRequestNumber?: number;
 }): Promise<GitLinkedPullRequestResult> => {
-  const { path: dirPath, branch } = payload;
-  if (!branch) return { pullRequest: null, status: 'ok' };
+  const { path: dirPath, branch, pullRequestNumber } = payload;
+  if (!branch && pullRequestNumber === undefined) return { pullRequest: null, status: 'ok' };
 
   try {
+    if (pullRequestNumber !== undefined) {
+      const { stdout } = await execFileAsync(
+        'gh',
+        ['pr', 'view', String(pullRequestNumber), '--json', GITHUB_PULL_REQUEST_FIELDS],
+        { cwd: dirPath, timeout: 8000 },
+      );
+      const parsed = JSON.parse(stdout.trim() || '{}') as GithubPullRequestPayload;
+      return { pullRequest: normalizeGithubPullRequest(parsed), status: 'ok' };
+    }
+
     const { stdout } = await execFileAsync(
       'gh',
       [
@@ -151,11 +167,11 @@ export const getLinkedPullRequest = async (payload: {
         '--head',
         branch,
         '--state',
-        'open',
+        'all',
         '--limit',
         '5',
         '--json',
-        'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup',
+        GITHUB_PULL_REQUEST_FIELDS,
       ],
       { cwd: dirPath, timeout: 8000 },
     );

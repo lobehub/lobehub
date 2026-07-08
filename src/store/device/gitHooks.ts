@@ -147,7 +147,8 @@ export const useFetchGitBranch = (deviceId: string | undefined, path?: string) =
  * so keep a long 60s dedupe + 60s focus throttle — unlike the cheap branch read,
  * this must NOT re-run on every remount or directory revisit. Keyed by branch,
  * so a checkout naturally re-keys into a fresh lookup; disabled for non-github
- * repos and detached HEAD (no branch ref to query).
+ * repos and detached HEAD (no branch ref to query). Includes merged/closed PRs
+ * so the lifecycle badge can refresh after GitHub changes outside the app.
  */
 export const useFetchGitLinkedPR = (
   deviceId: string | undefined,

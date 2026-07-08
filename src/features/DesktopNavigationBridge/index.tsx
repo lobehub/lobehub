@@ -9,9 +9,13 @@ const DesktopNavigationBridge = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   const handleNavigate = useCallback(
-    ({ path, replace }: { path: string; replace?: boolean }) => {
+    ({ escape, path, replace }: { escape?: boolean; path: string; replace?: boolean }) => {
       if (!path) return;
-      navigate(path, { replace: !!replace });
+      if (escape || replace !== undefined) {
+        navigate(path, { escape: !!escape, replace: !!replace });
+        return;
+      }
+      navigate(path);
     },
     [navigate],
   );

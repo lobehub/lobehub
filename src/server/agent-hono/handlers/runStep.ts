@@ -150,7 +150,8 @@ export async function runStep(c: Context): Promise<Response> {
       verifyAsyncToolBarrier,
     });
 
-    // Step is currently being executed by another instance — tell QStash to retry later
+    // A non-stale lock conflict means another delivery is still executing this
+    // operation. Keep the response retryable so QStash redelivers this step.
     if (result.locked) {
       log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
       return c.json(

@@ -1,9 +1,9 @@
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { messages, sessions, threads, topics, users } from '../../schemas';
+import { agentOperations, messages, sessions, threads, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
 
@@ -243,6 +243,41 @@ describe('ThreadModel', () => {
       expect(thread.metadata?.totalTokens).toBeUndefined();
       expect(thread.metadata?.totalToolCalls).toBeUndefined();
       expect(thread.metadata?.model).toBeUndefined();
+    });
+
+    it('hides agent-signal isolation threads from topic thread lists', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(threads).values([
+          {
+            id: 'visible-subagent-thread',
+            status: ThreadStatus.Active,
+            title: 'Visible subagent',
+            topicId,
+            type: ThreadType.Isolation,
+            userId,
+          },
+          {
+            id: 'agent-signal-thread',
+            status: ThreadStatus.Active,
+            title: 'Agent Signal Skill',
+            topicId,
+            type: ThreadType.Isolation,
+            userId,
+          },
+        ]);
+        await tx.insert(agentOperations).values({
+          id: 'agent-signal-operation',
+          status: 'done',
+          threadId: 'agent-signal-thread',
+          topicId,
+          trigger: RequestTrigger.AgentSignal,
+          userId,
+        });
+      });
+
+      const result = await threadModel.queryByTopicId(topicId);
+
+      expect(result.map((thread) => thread.id)).toEqual(['visible-subagent-thread']);
     });
   });
 

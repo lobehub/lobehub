@@ -1348,6 +1348,101 @@ describe('chatMessage actions', () => {
     });
   });
 
+  describe('prefetchMessages action', () => {
+    beforeEach(() => {
+      (mutate as Mock).mockClear();
+      useChatStore.setState({ dbMessagesMap: {}, messagesMap: {} });
+    });
+
+    it('fetches messages in the background and hydrates the message cache', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'prefetch-topic',
+      };
+      const messages = [{ id: 'prefetch-message', role: 'user', content: 'hi' }] as any;
+
+      (messageService.getMessages as Mock).mockResolvedValue(messages);
+
+      await act(async () => {
+        await result.current.prefetchMessages(context);
+      });
+
+      const key = messageMapKey(context);
+      expect(messageService.getMessages).toHaveBeenCalledWith(context);
+      expect(result.current.dbMessagesMap[key]).toEqual(messages);
+      expect(result.current.messagesMap[key]).toHaveLength(1);
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [swrKey, dataArg, options] = (mutate as Mock).mock.calls[0];
+      expect(swrKey).toEqual(['message:list', context, 1]);
+      await expect(dataArg).resolves.toEqual(messages);
+      expect(options).toEqual({ revalidate: false });
+    });
+
+    it('refreshes an already hydrated bucket with the completed server snapshot', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'cached-topic',
+      };
+      const key = messageMapKey(context);
+      const serverMessages = [{ id: 'server-message', role: 'assistant', content: 'done' }] as any;
+
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: {
+            [key]: [{ id: 'cached-message', role: 'user', content: 'hi' }] as any,
+          },
+        });
+      });
+      (messageService.getMessages as Mock).mockResolvedValue(serverMessages);
+
+      await act(async () => {
+        await result.current.prefetchMessages(context);
+      });
+
+      expect(messageService.getMessages).toHaveBeenCalledWith(context);
+      expect(result.current.dbMessagesMap[key]).toEqual(serverMessages);
+      expect(mutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('dedupes simultaneous prefetches for the same message bucket', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'dedupe-topic',
+      };
+      const messages = [{ id: 'deduped-message', role: 'user', content: 'hi' }] as any;
+      let resolveRequest!: (value: unknown) => void;
+
+      (messageService.getMessages as Mock).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+      );
+
+      const firstPrefetch = result.current.prefetchMessages(context);
+      const secondPrefetch = result.current.prefetchMessages(context);
+
+      expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveRequest(messages);
+        await firstPrefetch;
+        await secondPrefetch;
+      });
+
+      expect(result.current.dbMessagesMap[messageMapKey(context)]).toEqual(messages);
+    });
+  });
+
   describe('Public API with context parameter', () => {
     describe('deleteMessage with context', () => {
       it('should pass context to optimisticDeleteMessages', async () => {

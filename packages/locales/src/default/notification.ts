@@ -7,10 +7,20 @@ export default {
   'agent_cron_job_failed_title': 'Scheduled task failed',
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
+  'category.billing': 'Billing',
+  'category.generation': 'Generation',
+  'category.schedule': 'Scheduled tasks',
+  'category.system': 'System',
+  'category.workspace': 'Workspace',
   'credit_balance_low':
     'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
   'credit_balance_low_title': 'Your credit balance is running low',
+  'email.footer.manage': 'Manage notifications',
+  'email.footer.preference':
+    'You received this email because of your notification settings on LobeHub.',
+  'email.footer.system': 'This is an important account notification from LobeHub.',
+  'email.viewDetails': 'View Details',
   'image_generation_completed': 'Your image "{{prompt}}" is ready.',
   'image_generation_completed_title': 'Image generation completed',
   'inbox.archiveAll': 'Archive all',
@@ -19,6 +29,7 @@ export default {
   'inbox.filterUnread': 'Show unread only',
   'inbox.markAllRead': 'Mark all as read',
   'inbox.title': 'Notifications',
+  'inbox.viewDetail': 'View details',
   'storage_overage_cap_reached':
     'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',

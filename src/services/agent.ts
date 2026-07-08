@@ -124,14 +124,22 @@ class AgentService {
   };
 
   /**
-   * Publish a private agent to the workspace. One-way action — `private`
-   * agents cannot be re-privatized once shared, because other workspace
-   * members may already be using them. Caller should refresh the sidebar
-   * list afterwards so the agent moves from the Private bucket to the
-   * shared list.
+   * Publish a private agent to the workspace. Caller should refresh the
+   * sidebar list afterwards so the agent moves from the Private bucket to
+   * the shared list. The inverse (public → private) goes through
+   * {@link setAgentVisibility}.
    */
   publishAgentToWorkspace = async (id: string): Promise<void> => {
     await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
+  };
+
+  /**
+   * Bidirectional visibility switch (LOBE-11551). The server only allows the
+   * agent's creator or a workspace owner to pull a published agent back to
+   * private, and rejects builtin agents (LobeAI etc.) outright.
+   */
+  setAgentVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await lambdaClient.agent.setAgentVisibility.mutate({ id, visibility });
   };
 
   /**

@@ -1649,6 +1649,129 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const createdTopicId = 'created-topic-id';
+        const { result } = renderHook(() => useChatStore());
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              topicId: createdTopicId,
+            }),
+            createMockMessage({
+              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              role: 'assistant',
+              topicId: createdTopicId,
+            }),
+          ],
+          topicId: createdTopicId,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: { ...createTestContext(), isNew: true, scope: 'main' },
+          });
+        });
+
+        const executorParams = executeHeterogeneousAgentMock.mock.calls[0]?.[1];
+        expect(executorParams?.context).toEqual(
+          expect.objectContaining({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'main',
+            topicId: createdTopicId,
+          }),
+        );
+
+        const heteroOperation = Object.values(useChatStore.getState().operations).find(
+          (operation) => operation.type === 'execHeterogeneousAgent',
+        );
+        expect(heteroOperation?.context).toEqual(
+          expect.objectContaining({
+            isNew: false,
+            topicId: createdTopicId,
+          }),
+        );
+
+        const persistedTopicKey = messageMapKey({
+          agentId: TEST_IDS.SESSION_ID,
+          scope: 'main',
+          topicId: createdTopicId,
+        });
+        const leakedNewTopicKey = messageMapKey({
+          agentId: TEST_IDS.SESSION_ID,
+          isNew: true,
+          scope: 'main',
+          topicId: createdTopicId,
+        });
+
+        expect(useChatStore.getState().messagesMap[persistedTopicKey]).toHaveLength(2);
+        expect(useChatStore.getState().messagesMap[leakedNewTopicKey] ?? []).toHaveLength(0);
+      });
+
+      it('should preserve the isNew marker for heterogeneous new-thread contexts', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: {
+              ...createTestContext(),
+              isNew: true,
+              scope: 'thread',
+              sourceMessageId: 'source-message-id',
+              threadType: 'continuation',
+              topicId: TEST_IDS.TOPIC_ID,
+            },
+          });
+        });
+
+        const executorParams = executeHeterogeneousAgentMock.mock.calls[0]?.[1];
+        expect(executorParams?.context).toEqual(
+          expect.objectContaining({
+            isNew: true,
+            scope: 'thread',
+            topicId: TEST_IDS.TOPIC_ID,
+          }),
+        );
+      });
+
       it('should recover heterogeneous context selections from the persisted user message metadata', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({

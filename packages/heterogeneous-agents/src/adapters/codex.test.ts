@@ -25,6 +25,30 @@ describe('CodexAdapter', () => {
     expect(adapter.sessionId).toBe('thread-123');
   });
 
+  it('stamps the thread id on stream_start so the resume token persists early (ratelimit regression)', () => {
+    // Regression: codex used to emit stream_start WITHOUT a sessionId, so the
+    // resume token could only be persisted in `finish()` — a rate-limit error
+    // (no finish / error branch) lost the session. After thread.started sets
+    // it, every stream_start must carry it (matching claudeCode) so BOTH the
+    // server (HeterogeneousPersistenceHandler) and the desktop renderer persist
+    // it at stream_start time, before any error can short-circuit the run.
+
+    // Before thread.started reports an id, stream_start omits sessionId.
+    const withoutThread = new CodexAdapter();
+    const [startBefore] = withoutThread.adapt({ type: 'turn.started' });
+    expect(startBefore).toMatchObject({ data: { provider: 'codex' }, type: 'stream_start' });
+    expect((startBefore.data as { sessionId?: string }).sessionId).toBeUndefined();
+
+    // After thread.started, the stream_start carries the thread id.
+    const withThread = new CodexAdapter();
+    withThread.adapt({ thread_id: 'thread-xyz', type: 'thread.started' });
+    const [startAfter] = withThread.adapt({ type: 'turn.started' });
+    expect(startAfter).toMatchObject({
+      data: { provider: 'codex', sessionId: 'thread-xyz' },
+      type: 'stream_start',
+    });
+  });
+
   it('emits stream start and text chunks for turn + agent messages', () => {
     const adapter = new CodexAdapter();
 

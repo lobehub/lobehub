@@ -409,6 +409,8 @@ export default {
   'devices.remove.confirmMany': 'Remove {{count}} devices?',
   'devices.remove.confirmManyDesc':
     'This disconnects the selected devices from your account. They are not signed out, and each can re-register on next connect.',
+  'devices.remove.currentSessionWarning':
+    "This includes the device you're using right now — removing it disconnects your current session.",
   'devices.selection.selected': '{{count}} selected',
   'devices.selection.total': '{{count}} devices',
   'devices.status.offline': 'Offline',
@@ -531,6 +533,7 @@ export default {
   'memory.enabled.desc':
     'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
+  'memory.manageEntry': 'Manage memories',
   'memory.title': 'Memory Settings',
   'message.success': 'Update successful',
   'notification.enabled': 'Enabled',
@@ -1966,7 +1969,8 @@ When I am ___, I need ___
   'workspace.auditLog.upgrade.title': 'Unlock audit logs before issues become incidents',
   'workspace.create.title': 'Create a new workspace',
   'workspace.description.title': 'Description',
-  'workspace.general.avatar.description': "This is your workspace's avatar.",
+  'workspace.general.avatar.description':
+    "This is your workspace's avatar. Click on the avatar to upload a custom one from your files.",
   'workspace.general.avatar.hint': 'An avatar is optional but strongly recommended.',
   'workspace.general.avatar.title': 'Workspace Avatar',
   'workspace.general.avatar.tooLarge': 'Avatar file must be smaller than 5MB.',

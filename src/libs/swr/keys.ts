@@ -466,12 +466,16 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
-  gitLinkedPR: def('device:gitLinkedPR', (deviceId: string, path: string, branch: string) => [
+  gitLinkedPR: def(
     'device:gitLinkedPR',
-    deviceId,
-    path,
-    branch,
-  ]),
+    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
+      'device:gitLinkedPR',
+      deviceId,
+      path,
+      branch,
+      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,

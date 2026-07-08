@@ -1,6 +1,8 @@
 import {
   type AgentEvent,
   type AgentInstruction,
+  executeToolWithRetry,
+  extractActivatedSkillsFromMessages,
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
@@ -29,7 +31,6 @@ import {
   buildPostProcessUrl,
   buildServerAgentMemberRunner,
   buildServerVirtualSubAgentRunner,
-  executeToolWithRetry,
   GEN_AI_FUNCTION_TOOL_TYPE,
   isOperationInterrupted,
   log,
@@ -44,6 +45,8 @@ import {
   markPersistFatal,
 } from '../messagePersistErrors';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
+import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
+import { resolveRunProjectSkills } from './resolveRunProjectSkills';
 
 export const callToolsBatch =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -114,6 +117,11 @@ export const callToolsBatch =
 
     // Execute server tools concurrently (skip client tools in mixed batch)
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
+    // Server-side equivalent of the client transport's computeStepContext
+    // (mirrors the single-tool `callTool` context): skills execScript resolves
+    // activated skill archives from the message history, which the raw LLM
+    // args never carry. Computed once — identical for every tool in the batch.
+    const runActivatedSkills = extractActivatedSkillsFromMessages(state.messages);
     await Promise.all(
       toolsToExecute.map(async (chatToolPayload: ChatToolPayload) => {
         const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
@@ -259,7 +267,11 @@ export const callToolsBatch =
               execution = await executeToolWithRetry(
                 () =>
                   toolExecutionService.executeTool(chatToolPayload, {
-                    activeDeviceId: state.metadata?.activeDeviceId,
+                    activatedSkills: runActivatedSkills,
+                    // Plan/policy-filtered: a preset or stale metadata id must not route
+                    // tool execution (e.g. skills execScript) onto a device the resolved
+                    // plan didn't authorize.
+                    activeDeviceId: resolveRunActiveDeviceId(state.metadata),
                     agentId: state.metadata?.agentId,
                     agentMember: buildServerAgentMemberRunner(
                       ctx,
@@ -280,6 +292,10 @@ export const callToolsBatch =
                     memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
                     messageId: state.metadata?.sourceMessageId,
                     operationId,
+                    // Mirrors the single-tool `callTool` context: without these
+                    // a batched device execScript loses the SKILL.md / selected
+                    // working directory and runs from the daemon's default cwd.
+                    projectSkills: resolveRunProjectSkills(state.metadata),
                     scope: state.metadata?.scope,
                     serverDB: ctx.serverDB,
                     skipResultTruncation: true,
@@ -296,13 +312,24 @@ export const callToolsBatch =
                     toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
                     topicId: ctx.topicId,
                     userId: ctx.userId,
+                    // Device-bound cwd folded into deviceSystemInfo at operation
+                    // creation; resume-safe via computeDeviceContext (recovers it
+                    // from the prior tool message's pluginState.metadata).
+                    workingDirectory: state.metadata?.deviceSystemInfo?.workingDirectory,
                     workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
                   }),
                 {
                   isInterrupted: () => isOperationInterrupted(ctx),
                   maxRetries: TOOL_MAX_RETRIES,
-                  operationLogId,
-                  toolName,
+                  onRetry: ({ attempt, kind, maxAttempts }) =>
+                    log(
+                      '[%s] Tool %s failed with kind=%s (attempt %d/%d), retrying ...',
+                      operationLogId,
+                      toolName,
+                      kind,
+                      attempt,
+                      maxAttempts,
+                    ),
                 },
               );
             }

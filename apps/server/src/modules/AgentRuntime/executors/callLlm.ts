@@ -3,7 +3,11 @@ import {
   type AgentInstruction,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
+  getLLMRetryDelayMs,
   type InstructionExecutor,
+  resolveLLMMaxAttempts,
+  resolveLLMRetryBudget,
+  shouldRetryLLM,
   stripAssistantReasoningForReplay,
   UsageCounter,
 } from '@lobechat/agent-runtime';
@@ -72,11 +76,9 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { fileEnv } from '@/envs/file';
-import { type ExecutionPlan, isDeviceCapablePlan } from '@/helpers/executionTarget';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
-import { type DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -87,13 +89,9 @@ import { type RuntimeExecutorContext } from '../context';
 import {
   buildPostProcessUrl,
   buildToolDiscoveryConfig,
-  getLLMRetryDelayMs,
   isOperationInterrupted,
   log,
-  resolveLLMMaxAttempts,
-  resolveLLMRetryBudget,
   resolveRuntimeHistoryCount,
-  shouldRetryLLM,
   sleep,
   timing,
 } from '../executorHelpers';
@@ -101,6 +99,12 @@ import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
+
+const SERVER_LLM_RETRY_POLICY = {
+  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
+  noRetryProviders: [BRANDING_PROVIDER],
+};
 
 export const callLlm =
   (ctx: RuntimeExecutorContext): InstructionExecutor =>
@@ -118,20 +122,10 @@ export const callLlm =
     //
     // Single-track device gate: `buildStepToolDelta` treats activeDeviceId as
     // an independent activation signal (it only dedupes against already-
-    // enabled tools), so any id that reaches it WILL inject local-system. The
-    // execution plan is the only authority on whether this session may touch
-    // a device — swallow the id for non-device-capable plans (`none`,
-    // `sandbox`) and for denied senders, even if `state.metadata.activeDeviceId`
-    // was populated by a bug or a mid-run side effect. Plans absent on old /
-    // resumed operations fall back to the policy-only gate.
-    const devicePolicy = state.metadata?.deviceAccessPolicy as
-      { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
-    const executionPlan = state.metadata?.executionPlan as ExecutionPlan | undefined;
-    const planAllowsDevice = !executionPlan || isDeviceCapablePlan(executionPlan);
-    const activeDeviceId =
-      devicePolicy?.canUseDevice === false || !planAllowsDevice
-        ? undefined
-        : state.metadata?.activeDeviceId;
+    // enabled tools), so any id that reaches it WILL inject local-system.
+    // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
+    // forbids devices — the same filter the tool executors apply.
+    const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       executorMap: state.toolExecutorMap ?? {},
@@ -214,11 +208,18 @@ export const callLlm =
     // If assistantMessageId is provided in payload, use existing message instead of creating new one
     const existingAssistantMessageId = (llmPayload as any).assistantMessageId;
     let assistantMessageItem: { id: string };
+    // Seed fields for the client to insert this message into its local store.
+    // The step_start uiMessages snapshot is resolved BEFORE this row exists,
+    // so the client has no other way to learn about it until the next DB
+    // refetch — chunks would silently no-op against the missing id (LOBE-11501).
+    let assistantMessageSeed: Record<string, unknown> | undefined;
 
     if (existingAssistantMessageId) {
       // Use existing assistant message (created by execAgent)
       assistantMessageItem = { id: existingAssistantMessageId };
       log(`${stagePrefix} Using existing assistant message: %s`, existingAssistantMessageId);
+      const existingRow = await ctx.messageModel.findById(existingAssistantMessageId);
+      if (existingRow) assistantMessageSeed = existingRow;
     } else {
       // Create new assistant message (legacy behavior)
       assistantMessageItem = await ctx.messageModel.create({
@@ -232,6 +233,7 @@ export const callLlm =
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       });
+      assistantMessageSeed = assistantMessageItem as Record<string, unknown>;
       log(`${stagePrefix} Created new assistant message: %s`, assistantMessageItem.id);
     }
 
@@ -239,7 +241,20 @@ export const callLlm =
     const stepLabel = (instruction as any).stepLabel;
     await streamManager.publishStreamEvent(operationId, {
       data: {
-        assistantMessage: assistantMessageItem,
+        // Only the seed fields the client needs — not the whole DB row.
+        assistantMessage: {
+          id: assistantMessageItem.id,
+          ...(assistantMessageSeed && {
+            agentId: assistantMessageSeed.agentId,
+            groupId: assistantMessageSeed.groupId,
+            model: assistantMessageSeed.model,
+            parentId: assistantMessageSeed.parentId,
+            provider: assistantMessageSeed.provider,
+            role: assistantMessageSeed.role,
+            threadId: assistantMessageSeed.threadId,
+            topicId: assistantMessageSeed.topicId,
+          }),
+        },
         model,
         provider,
         ...(stepLabel && { stepLabel }),
@@ -1065,7 +1080,7 @@ export const callLlm =
           });
       };
 
-      const maxAttempts = resolveLLMMaxAttempts(provider);
+      const maxAttempts = resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
 
       // OTel chat span — wraps all retry attempts; TTFT recorded on the first
       // text/reasoning chunk regardless of which attempt produced it (the
@@ -1679,7 +1694,7 @@ export const callLlm =
               const classified = classifyLLMError(error);
               const interrupted = await isOperationInterrupted(ctx);
 
-              const retryBudget = resolveLLMRetryBudget(provider, error);
+              const retryBudget = resolveLLMRetryBudget(provider, error, SERVER_LLM_RETRY_POLICY);
 
               if (!interrupted && shouldRetryLLM(classified.kind, attempt, retryBudget)) {
                 const delayMs = getLLMRetryDelayMs(attempt);

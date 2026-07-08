@@ -46,6 +46,9 @@ vi.mock('@/utils/localStorage', () => {
 
 beforeEach(() => {
   resetTestEnvironment();
+  useChatStore.setState({
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
+  });
 });
 
 afterEach(() => {
@@ -495,6 +498,9 @@ describe('ConversationControl actions', () => {
 
       // Mock internal methods
       vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
         .mockReturnValue({
@@ -533,6 +539,13 @@ describe('ConversationControl actions', () => {
             topicId: builderTopicId,
             scope: 'agent_builder',
           }),
+        }),
+      );
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: builderAgentId,
+          status: 'active',
+          topicId: builderTopicId,
         }),
       );
     });
@@ -689,6 +702,8 @@ describe('ConversationControl actions', () => {
         const executeClientAgentSpy = vi
           .spyOn(result.current, 'executeClientAgent')
           .mockResolvedValue(undefined);
+        const updateTopicStatusMock = vi.mocked(result.current.updateTopicStatus);
+        updateTopicStatusMock.mockClear();
 
         await act(async () => {
           await result.current.approveToolCalling('tool-msg-1', 'group-1');
@@ -707,6 +722,9 @@ describe('ConversationControl actions', () => {
           }),
         );
         expect(executeClientAgentSpy).not.toHaveBeenCalled();
+        expect(updateTopicStatusMock).toHaveBeenCalledWith(
+          expect.objectContaining({ agentId, status: 'active', topicId }),
+        );
 
         // Fallback guard: the paused `execServerAgentRuntime` op in this
         // context must be completed so the loading state doesn't bleed
@@ -832,6 +850,8 @@ describe('ConversationControl actions', () => {
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
           .mockRejectedValue(new Error('network error'));
+        const updateTopicStatusMock = vi.mocked(result.current.updateTopicStatus);
+        updateTopicStatusMock.mockClear();
 
         await act(async () => {
           await result.current.approveToolCalling('tool-msg-1', 'group-1');
@@ -847,6 +867,9 @@ describe('ConversationControl actions', () => {
         );
         expect(serverOps).toHaveLength(1);
         expect(serverOps[0]!.status).toBe('running');
+        expect(
+          updateTopicStatusMock.mock.calls.some(([payload]) => payload.status === 'active'),
+        ).toBe(false);
 
         executeGatewayAgentSpy.mockRestore();
       });

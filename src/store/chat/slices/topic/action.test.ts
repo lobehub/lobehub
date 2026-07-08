@@ -1476,7 +1476,6 @@ describe('topic action', () => {
       expect(useChatStore.getState().topicLoadingIdCounts[topicId]).toBeUndefined();
     });
   });
-
   describe('cleanupStaleRunningTopics', () => {
     it('should mark stale running topics active when no alive operation exists', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1707,6 +1706,169 @@ describe('topic action', () => {
 
       expect(cleaned).toBe(0);
       expect(topicService.updateTopic).not.toHaveBeenCalledWith(topicId, { status: 'active' });
+    });
+  });
+
+  describe('internal_updateTopicLinkedPullRequest', () => {
+    const agentId = 'agent-1';
+    const topicId = 'topic-1';
+    const branch = 'fix/topic-running';
+    const path = '/repo';
+    const key = topicMapKey({ agentId });
+    const stalePR = {
+      number: 123,
+      state: 'OPEN',
+      title: 'fix: stop stale running topics',
+      url: 'https://github.com/lobehub/lobehub/pull/123',
+    };
+    const mergedPR = {
+      ...stalePR,
+      mergedAt: '2026-07-07T09:00:00Z',
+      state: 'MERGED',
+    };
+
+    const setupTopic = (
+      pullRequest: typeof stalePR | null = stalePR,
+      pullRequestStatus: 'error' | 'gh-missing' | 'ok' = 'ok',
+    ) => {
+      const topic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: topicId,
+        metadata: {
+          workingDirectory: path,
+          workingDirectoryConfig: {
+            git: {
+              branch,
+              github: { pullRequest, pullRequestStatus },
+              isWorktree: false,
+            },
+            path,
+            repoType: 'github',
+          },
+        },
+        sessionId: agentId,
+        title: 'Topic',
+        updatedAt: Date.now(),
+      };
+
+      useChatStore.setState({
+        activeAgentId: agentId,
+        topicDataMap: {
+          [key]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [topic],
+            pageSize: 20,
+            total: 1,
+          },
+        },
+        topicLoadingIdCounts: {},
+        topicLoadingIds: [],
+      });
+    };
+
+    it('silently patches the topic with the latest merged PR state', async () => {
+      const { result } = renderHook(() => useChatStore());
+      setupTopic();
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as never);
+
+      await act(async () => {
+        await result.current.internal_updateTopicLinkedPullRequest(
+          { branch, path, pullRequestNumber: 123, topicId },
+          { pullRequest: mergedPR, pullRequestStatus: 'ok' },
+        );
+      });
+
+      const updatedTopic = useChatStore.getState().topicDataMap[key]!.items[0]!;
+      expect(updatedTopic.metadata?.workingDirectoryConfig?.git?.github).toEqual({
+        pullRequest: mergedPR,
+        pullRequestStatus: 'ok',
+      });
+      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, {
+        workingDirectoryConfig: {
+          git: {
+            branch,
+            github: { pullRequest: mergedPR, pullRequestStatus: 'ok' },
+            isWorktree: false,
+          },
+          path,
+          repoType: 'github',
+        },
+      });
+      expect(useChatStore.getState().topicLoadingIds).toEqual([]);
+    });
+
+    it('updates empty PR metadata when no existing PR number is anchored', async () => {
+      const { result } = renderHook(() => useChatStore());
+      setupTopic(null, 'error');
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as never);
+
+      await act(async () => {
+        await result.current.internal_updateTopicLinkedPullRequest(
+          { branch, path, topicId },
+          { pullRequest: null, pullRequestStatus: 'ok' },
+        );
+      });
+
+      expect(
+        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
+          ?.github,
+      ).toEqual({ pullRequest: null, pullRequestStatus: 'ok' });
+      expect(updateTopicMetadataMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the existing PR snapshot when lookup returns a different PR number', async () => {
+      const { result } = renderHook(() => useChatStore());
+      setupTopic();
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as never);
+
+      await act(async () => {
+        await result.current.internal_updateTopicLinkedPullRequest(
+          { branch, path, pullRequestNumber: 123, topicId },
+          {
+            pullRequest: {
+              ...mergedPR,
+              number: 456,
+              url: 'https://github.com/lobehub/lobehub/pull/456',
+            },
+            pullRequestStatus: 'ok',
+          },
+        );
+      });
+
+      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
+      expect(
+        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
+          ?.github,
+      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
+    });
+
+    it('keeps the existing PR snapshot when gh is unavailable', async () => {
+      const { result } = renderHook(() => useChatStore());
+      setupTopic();
+      const updateTopicMetadataMock = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as never);
+
+      await act(async () => {
+        await result.current.internal_updateTopicLinkedPullRequest(
+          { branch, path, topicId },
+          { ghMissing: true, pullRequest: null, pullRequestStatus: 'gh-missing' },
+        );
+      });
+
+      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
+      expect(
+        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
+          ?.github,
+      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
     });
   });
   describe('updateTopicLoading', () => {

@@ -23,6 +23,7 @@ import {
   files,
   knowledgeBases,
   messages,
+  sessionGroups,
   sessions,
   taskComments,
   taskDependencies,
@@ -793,14 +794,14 @@ export class AgentModel {
   };
 
   /**
-   * Publish a private agent into the workspace. **One-way only** — once an
-   * agent has been shared with the workspace, other members may already be
-   * using it, so we never let it slip back to `private`. Likewise the
-   * `user_id = ?` + `visibility = 'private'` guards lock the operation to
-   * the creator's own still-private agent.
+   * Publish a private agent into the workspace. The `user_id = ?` +
+   * `visibility = 'private'` guards lock the operation to the creator's own
+   * still-private agent. The inverse transition (public → private) goes
+   * through {@link setVisibility}, which the router gates to the creator or
+   * a workspace owner (LOBE-11551).
    *
    * Use the existing `update` to change other fields; visibility is the only
-   * one with this asymmetric rule.
+   * one with these authorization rules.
    */
   publishToWorkspace = async (agentId: string) => {
     return this.db
@@ -814,6 +815,66 @@ export class AgentModel {
           eq(agents.visibility, 'private'),
         ),
       );
+  };
+
+  /**
+   * Lightweight lookup used to authorize visibility changes: the agent's
+   * creator, slug and current visibility, scoped by the ownership predicate
+   * (other members' private agents resolve to `null`).
+   */
+  getAgentVisibilityMeta = async (
+    id: string,
+  ): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {
+    const rows = await this.db
+      .select({ slug: agents.slug, userId: agents.userId, visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      slug: row.slug,
+      userId: row.userId,
+      visibility: (row.visibility as 'private' | 'public' | null) ?? 'public',
+    };
+  };
+
+  /**
+   * Bidirectional visibility switch (LOBE-11551). Authorization (creator OR
+   * workspace owner, builtin agents excluded) is the router's responsibility —
+   * this method only applies the ownership-scoped write.
+   *
+   * Uses UPDATE … RETURNING instead of a follow-up SELECT: when a workspace
+   * owner demotes another member's agent to private, the post-update row no
+   * longer matches the visibility-aware ownership predicate, so a read-back
+   * would return 0 rows even though the write succeeded (same pattern as
+   * TaskModel.updateVisibility).
+   */
+  setVisibility = async (agentId: string, visibility: 'private' | 'public') => {
+    // A sidebar folder cannot mix visibilities (HomeRepository.processAgentList
+    // buckets grouped items by item visibility under same-visibility groups),
+    // so an agent crossing scopes while keyed to a group of the OLD scope
+    // would be emitted nowhere and vanish from the sidebar. Rehome it to the
+    // ungrouped section of its new scope when the group no longer matches.
+    const [current] = await this.db
+      .select({ groupVisibility: sessionGroups.visibility })
+      .from(agents)
+      .leftJoin(sessionGroups, eq(agents.sessionGroupId, sessionGroups.id))
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .limit(1);
+    const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
+    const clearGroup = groupVisibility != null && groupVisibility !== visibility;
+
+    const [updated] = await this.db
+      .update(agents)
+      .set({
+        updatedAt: new Date(),
+        visibility,
+        ...(clearGroup ? { sessionGroupId: null } : {}),
+      })
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .returning();
+    return updated ?? null;
   };
 
   touchUpdatedAt = async (agentId: string) => {

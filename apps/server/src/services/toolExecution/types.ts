@@ -4,6 +4,7 @@ import {
   type ChatToolPayload,
   type ClientSecretPayload,
   type ExecSubAgentParams,
+  type StepActivatedSkill,
 } from '@lobechat/types';
 
 export interface ToolExecutionMemoryEmbeddingRuntime {
@@ -115,6 +116,15 @@ export interface ServerAgentMemberRunner {
 }
 
 export interface ToolExecutionContext {
+  /**
+   * Skills activated so far in the conversation (activateSkill /
+   * activateTools tool results), extracted by the runtime executors from the
+   * operation's message history — the server-side equivalent of the client
+   * transport's stepContext. The skills runtime uses this to resolve skill
+   * archives for `execScript` (device `prepareSkillDirectory` + sandbox
+   * `skillZipUrls`); the raw LLM args never carry it.
+   */
+  activatedSkills?: StepActivatedSkill[];
   /** Target device ID for device proxy tool calls */
   activeDeviceId?: string;
   /** Agent ID executing the tool call */

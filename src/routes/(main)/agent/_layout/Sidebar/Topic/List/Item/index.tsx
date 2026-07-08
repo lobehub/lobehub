@@ -198,6 +198,7 @@ const TopicItem = memo<TopicItemProps>(
     // topic semantics, so skip the default `#` placeholder icon for their rows.
     const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const addTab = useElectronStore((s) => s.addTab);
+    const prefetchMessages = useChatStore((s) => s.prefetchMessages);
 
     const loadingRingColor = isDarkMode
       ? cssVar.colorWarningBorder
@@ -321,6 +322,12 @@ const TopicItem = memo<TopicItemProps>(
         <span className={styles.unreadDot} />
       </span>
     );
+
+    useEffect(() => {
+      if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
+
+      void prefetchMessages({ agentId: activeAgentId, scope: 'main', topicId: id });
+    }, [activeAgentId, hasLocalRunningRuntime, id, isUnreadCompleted, prefetchMessages]);
 
     // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
     // input. Drafts live in localStorage keyed by messageMapKey; the default

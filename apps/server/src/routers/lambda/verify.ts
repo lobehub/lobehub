@@ -95,6 +95,10 @@ const checkItemSchema = z.object({
 });
 
 const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+const omitUndefined = <T extends Record<string, unknown>>(value: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== undefined),
+  ) as Partial<T>;
 
 // The scenario's context (coding scope), rendered as the report's scope header.
 // Shared by createRun and updateRun so a re-ingest can refresh the scope in place.
@@ -122,12 +126,15 @@ const runContextSchema = z.object({
   testedAt: z.string().optional(),
 });
 
+const runMetadataSchema = z.record(z.unknown());
+
 const updateRunInputSchema = verifyRunIdInputSchema.extend({
   // Every field optional — a re-ingest may refresh only the context/goal while
   // keeping the original title, so nothing here is required.
   value: z.object({
     context: runContextSchema.optional(),
     goal: z.string().optional(),
+    metadata: runMetadataSchema.optional(),
     scenario: z.enum(['coding']).optional(),
     title: z.string().trim().min(1).max(200).optional(),
   }),
@@ -490,6 +497,7 @@ export const verifyRouter = router({
         // The active scenario's context, rendered as the report's scope header.
         context: runContextSchema.optional(),
         goal: z.string().optional(),
+        metadata: runMetadataSchema.optional(),
         operationId: z.string().optional(),
         scenario: z.enum(['coding']).optional(),
         source: runSourceSchema.optional(),
@@ -500,6 +508,7 @@ export const verifyRouter = router({
       ctx.runModel.create({
         context: input.context,
         goal: input.goal,
+        metadata: input.metadata,
         operationId: input.operationId,
         scenario: input.scenario,
         source: input.source ?? 'agent-testing',
@@ -569,12 +578,16 @@ export const verifyRouter = router({
   updateRun: verifyProcedure.input(updateRunInputSchema).mutation(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
 
-    const updated = await ctx.runModel.update(run.id, {
-      context: input.value.context,
-      goal: input.value.goal,
-      scenario: input.value.scenario,
-      title: input.value.title,
-    });
+    const updated = await ctx.runModel.update(
+      run.id,
+      omitUndefined({
+        context: input.value.context,
+        goal: input.value.goal,
+        metadata: input.value.metadata,
+        scenario: input.value.scenario,
+        title: input.value.title,
+      }),
+    );
     return { data: updated, success: true };
   }),
 

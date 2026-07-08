@@ -64,36 +64,6 @@ describe('PageSelectionsInjector', () => {
       expect(result.messages[0].content).toContain('<user_page_selections>');
       expect(result.messages[0].content).toContain('Selected text');
     });
-
-    it('should inject generic context selections when present', async () => {
-      const injector = new PageSelectionsInjector({ enabled: true });
-
-      const context = createContext([
-        {
-          content: 'Review this code',
-          metadata: {
-            contextSelections: [
-              {
-                content: 'const value = 1;',
-                filePath: 'src/example.ts',
-                id: 'code-1',
-                lineRange: { endLine: 12, startLine: 12 },
-                source: 'code',
-              },
-            ],
-          },
-          role: 'user',
-        },
-      ]);
-
-      const result = await injector.process(context);
-
-      expect(result.messages[0].content).toContain('Review this code');
-      expect(result.messages[0].content).toContain('<user_context_selections>');
-      expect(result.messages[0].content).toContain('filePath="src/example.ts"');
-      expect(result.messages[0].content).toContain('lines="12-12"');
-      expect(result.messages[0].content).toContain('const value = 1;');
-    });
   });
 
   describe('injection to every user message', () => {

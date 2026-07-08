@@ -14,7 +14,8 @@ import { type RuntimeExecutorContext } from './context';
  * the host instead of the raw ctx.
  *
  * Grows as more executors migrate (tools / llm / context / blob / lifecycle
- * adapters get added here); today it covers the `finish` executor.
+ * adapters get added here); today it covers the transport-backed lightweight
+ * executors such as `finish`, `request_human_approve`, and `resolve_*`.
  */
 export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
   // Only present when the operation registered hooks — mirrors the prior
