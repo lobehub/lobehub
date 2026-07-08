@@ -17,6 +17,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     enableAgentSelfIteration: false,
     enableFleet: false,
     enableInputMarkdown: true,
+    enableMessageTextSelectionActions: false,
     enablePlatformAgent: false,
   },
   topicGroupMode: 'byTime',
