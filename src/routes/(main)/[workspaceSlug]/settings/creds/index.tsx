@@ -13,19 +13,31 @@ import {
   CredsApiProvider,
 } from '@/routes/(main)/settings/creds/features/useCredsApi';
 
+import PersonalCredsSection from './features/PersonalCredsSection';
+
 /**
  * Workspace credential management.
  *
- * Reuses the personal `<Page />` shell but rebinds every CredsApi consumer
- * to the cloud `workspaceCreds.*` tRPC namespace via {@link CredsApiProvider}.
- * `workspaceCreds` resolves the active workspace to its Market organization
- * mirror and acts on the org's credential set so every workspace member sees
- * the same shared creds.
+ * Two sections:
+ * - Top ("workspace"): reuses the personal `<Page />` shell but rebinds every
+ *   CredsApi consumer to the cloud `workspaceCreds.*` tRPC namespace via
+ *   {@link CredsApiProvider}. `workspaceCreds` resolves the active workspace to
+ *   its Market organization mirror; Market's `list` there already merges the
+ *   org's own credentials with every member's *published* (public-visibility)
+ *   personal credentials, so a shared credential surfaces here automatically
+ *   once its owner turns on {@link PersonalCredsSection}'s share toggle.
+ * - Bottom ("your personal credentials"): {@link PersonalCredsSection} — the
+ *   caller's own personal credentials, each with a switch to share/unshare it
+ *   into this workspace's organization (and a private/public visibility
+ *   choice once shared). Always personal-scoped, independent of the workspace
+ *   org's setup state.
  *
  * When the workspace has no Market organization yet (Community Profile not
- * completed), the backend returns NOT_FOUND. This component intercepts that
- * error and renders a setup prompt instead of letting it bubble up as a
- * generic error boundary.
+ * completed), the backend returns NOT_FOUND for the *workspace* section. This
+ * component intercepts that error and renders a setup prompt in its place —
+ * the personal section still renders below it, since sharing your own
+ * credential doesn't require the org to exist yet (it will simply fail with
+ * a normal error until Community Profile setup completes).
  */
 const WorkspaceCredsSetting = () => {
   const { t } = useTranslation('setting');
@@ -46,8 +58,18 @@ const WorkspaceCredsSetting = () => {
 
   // Pre-flight check: detect "org not set up" before rendering the full page.
   // React Query deduplicates this against the identical call inside CredsList,
-  // so only one network request is made.
-  const { error, isLoading } = workspaceCredsApi.query.list.useQuery(undefined, {
+  // so only one network request is made — which is also why `refetch` here
+  // refreshes the top section's list too: sharing/unsharing/re-visibility-ing
+  // a credential from `PersonalCredsSection` below changes what this org-scoped
+  // list should return, but that mutation lives in a different component with
+  // no direct handle on CredsList's own query. Since both hooks share the same
+  // query key (workspaceCreds.list, input undefined), refetching this one
+  // pushes the fresh result to every subscriber, including CredsList's.
+  const {
+    error,
+    isLoading,
+    refetch: refetchWorkspaceCreds,
+  } = workspaceCredsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
@@ -60,16 +82,22 @@ const WorkspaceCredsSetting = () => {
 
   if (isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND') {
     return (
-      <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-        <Empty description={t('creds.orgSetupRequired')} />
-      </Flexbox>
+      <>
+        <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
+          <Empty description={t('creds.orgSetupRequired')} />
+        </Flexbox>
+        <PersonalCredsSection onWorkspaceCredsChange={refetchWorkspaceCreds} />
+      </>
     );
   }
 
   return (
-    <CredsApiProvider value={workspaceCredsApi}>
-      <Page />
-    </CredsApiProvider>
+    <>
+      <CredsApiProvider value={workspaceCredsApi}>
+        <Page />
+      </CredsApiProvider>
+      <PersonalCredsSection onWorkspaceCredsChange={refetchWorkspaceCreds} />
+    </>
   );
 };
 
