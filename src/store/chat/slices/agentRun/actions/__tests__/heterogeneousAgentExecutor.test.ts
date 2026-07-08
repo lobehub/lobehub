@@ -184,7 +184,7 @@ function setupIpcCapture() {
       }
     },
     /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
-    emitStreamEvent: (sessionId: string, event: any) => {
+    emitStreamEvent: (sessionId: string, event: Record<string, unknown>) => {
       const handler = listeners.get('heteroAgentEvent');
       handler?.(null, {
         event: {
@@ -607,6 +607,69 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
     return { get, store };
   }
+
+  it('surfaces stream_retry metadata on the running operation and clears it on the next event', async () => {
+    const store = createMockStore();
+    const get = vi.fn(() => store);
+
+    let resolveSendPrompt: () => void;
+    mockSendPrompt.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSendPrompt = resolve;
+      }),
+    );
+
+    const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+    await flush();
+
+    ipc.emitStreamEvent('ipc-sess-1', {
+      data: {
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'anthropic',
+      },
+      type: 'stream_retry',
+    });
+    await flush();
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      streamRetry: expect.objectContaining({
+        agentType: 'claude-code',
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'anthropic',
+      }),
+    });
+    expect(store.operations['op-1'].metadata.streamRetry).toMatchObject({
+      attempt: 6,
+      error: 'overloaded',
+      errorStatus: 529,
+    });
+
+    ipc.emitStreamEvent('ipc-sess-1', {
+      data: {},
+      type: 'agent_runtime_init',
+    });
+    await flush();
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      streamRetry: undefined,
+    });
+    expect(store.operations['op-1'].metadata.streamRetry).toBeUndefined();
+
+    ipc.emitComplete('ipc-sess-1');
+    await flush();
+    resolveSendPrompt!();
+    await flush();
+    await executorPromise;
+    await flush();
+  });
 
   // ────────────────────────────────────────────────────
   // Tool 3-phase persistence

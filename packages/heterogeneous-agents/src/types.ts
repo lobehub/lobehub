@@ -20,6 +20,12 @@ export type HeterogeneousEventType =
   | 'stream_chunk'
   | 'stream_end'
   /**
+   * Producer is retrying the upstream model request after a transient failure.
+   * Mirrors the server/gateway `stream_retry` event so renderer-side running
+   * operation metadata can surface the otherwise silent wait.
+   */
+  | 'stream_retry'
+  /**
    * Producer-side boundary meaning this operation will not emit more visible
    * assistant/tool output. The operation may still wait for `agent_runtime_end`
    * to finish terminal bookkeeping.

@@ -625,6 +625,10 @@ export default {
   'operation.execClientSubAgent': 'Running sub-agent',
   'operation.execHeterogeneousAgent': '{{name}} is running',
   'operation.heterogeneousAgentFallback': 'External agent',
+  'operation.streamRetry': '{{name}} upstream is busy ({{status}}), retrying',
+  'operation.streamRetry.unknownStatus': 'unknown status',
+  'operation.streamRetry.withAttempt':
+    '{{name}} upstream is busy ({{status}}), retrying {{attempt}}/{{maxAttempts}}',
   'operation.execServerAgentRuntime':
     'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',

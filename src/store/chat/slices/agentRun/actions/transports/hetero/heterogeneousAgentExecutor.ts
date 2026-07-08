@@ -56,6 +56,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
+  type StreamRetryMetadata,
 } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
@@ -286,6 +287,32 @@ const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
   if (cmd.includes('kimi')) return 'kimi-cli';
 
   return 'claude-code'; // default
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+const pickString = (...values: unknown[]): string | undefined =>
+  values.find((value): value is string => typeof value === 'string' && value.length > 0);
+
+const pickFiniteNumber = (...values: unknown[]): number | undefined =>
+  values.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+const toStreamRetryMetadata = (
+  event: AgentStreamEvent,
+  fallbackAgentType: string,
+): StreamRetryMetadata => {
+  const data = asRecord(event.data);
+
+  return {
+    agentType: pickString(data.agentType, fallbackAgentType),
+    attempt: pickFiniteNumber(data.attempt),
+    delayMs: pickFiniteNumber(data.delayMs),
+    error: pickString(data.error, data.errorType, data.kind, data.message),
+    errorStatus: pickFiniteNumber(data.errorStatus, data.status, data.statusCode, data.httpStatus),
+    maxAttempts: pickFiniteNumber(data.maxAttempts),
+    provider: pickString(data.provider),
+  };
 };
 
 /**
@@ -1703,6 +1730,17 @@ export const executeHeterogeneousAgent = async (
 
       // Record for debugging
       trace.push({ event, timestamp: Date.now() });
+
+      if (event.type === 'stream_retry') {
+        get().updateOperationMetadata?.(operationId, {
+          streamRetry: toStreamRetryMetadata(event, adapterType),
+        });
+        return;
+      }
+
+      if (get().operations?.[operationId]?.metadata?.streamRetry) {
+        get().updateOperationMetadata?.(operationId, { streamRetry: undefined });
+      }
 
       // ─── agent_intervention_request: CC AskUserQuestion needs user input ───
       // Stamp the canonical `pluginIntervention.status='pending'` on the
