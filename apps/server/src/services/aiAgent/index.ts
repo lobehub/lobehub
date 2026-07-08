@@ -1632,10 +1632,15 @@ export class AiAgentService {
       const githubCredKey =
         agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
       try {
-        const list = await this.marketService.market.creds.list();
+        // Inside a workspace, the GitHub cred must come from the workspace's shared
+        // organization credentials, not the operator's personal creds (LOBE-10978).
+        const credsAccessor = this.workspaceId
+          ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
+          : this.marketService.market.creds;
+        const list = await credsAccessor.list();
         const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
         if (cred) {
-          const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
+          const full = await credsAccessor.get(cred.id, { decrypt: true });
           const vals = (full as any).plaintext ?? (full as any).values ?? {};
           githubToken = vals.access_token ?? vals.token;
         }

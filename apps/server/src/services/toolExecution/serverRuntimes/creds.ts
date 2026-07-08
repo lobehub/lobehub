@@ -17,9 +17,22 @@ const log = debug('lobe-server:creds-runtime');
  */
 class ServerCredsService implements ICredsService {
   private marketService: MarketService;
+  private workspaceId?: string;
 
-  constructor(marketService: MarketService) {
+  constructor(marketService: MarketService, workspaceId?: string) {
     this.marketService = marketService;
+    this.workspaceId = workspaceId;
+  }
+
+  /**
+   * Inside a workspace, reads/writes must hit the workspace's shared organization
+   * credentials, never the operator's personal creds (LOBE-10978). Falls back to
+   * the personal `market.creds` namespace outside a workspace.
+   */
+  private credsAccessor() {
+    return this.workspaceId
+      ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
+      : this.marketService.market.creds;
   }
 
   async getByKey(
@@ -36,7 +49,7 @@ class ServerCredsService implements ICredsService {
     log('getByKey: key=%s, decrypt=%s', key, options?.decrypt);
 
     // First find the credential by key from the list
-    const listResult = await this.marketService.market.creds.list();
+    const listResult = await this.credsAccessor().list();
     const cred = listResult.data?.find((c) => c.key === key);
 
     if (!cred) {
@@ -44,7 +57,7 @@ class ServerCredsService implements ICredsService {
     }
 
     // Then get the full credential with optional decryption
-    const result = await this.marketService.market.creds.get(cred.id, {
+    const result = await this.credsAccessor().get(cred.id, {
       decrypt: options?.decrypt,
     });
 
@@ -98,6 +111,10 @@ class ServerCredsService implements ICredsService {
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
+    // NOTE: stays on the personal `market.creds.inject` even inside a workspace.
+    // The Market SDK's org-scoped creds service has no `inject`/`injectForSkill`
+    // equivalent yet (see LOBE-10978) — sandbox injection cannot be routed to the
+    // workspace's organization credentials until Market adds that endpoint.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -115,7 +132,7 @@ class ServerCredsService implements ICredsService {
   }> {
     log('listCreds');
 
-    const result = await this.marketService.market.creds.list();
+    const result = await this.credsAccessor().list();
 
     log('listCreds success: %d credentials', result.data?.length || 0);
 
@@ -131,7 +148,7 @@ class ServerCredsService implements ICredsService {
   }): Promise<{ id: number }> {
     log('saveKVCred: key=%s, name=%s, type=%s', params.key, params.name, params.type);
 
-    const result = await this.marketService.market.creds.createKV(params);
+    const result = await this.credsAccessor().createKV(params);
 
     log('saveKVCred success: id=%d', result.id);
 
@@ -150,13 +167,14 @@ export const credsRuntime: ServerRuntimeRegistration = {
     }
 
     log(
-      'Creating CredsExecutionRuntime for userId=%s, topicId=%s',
+      'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
       context.userId,
       context.topicId,
+      context.workspaceId,
     );
 
     const marketService = new MarketService({ userInfo: { userId: context.userId } });
-    const credsService = new ServerCredsService(marketService);
+    const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

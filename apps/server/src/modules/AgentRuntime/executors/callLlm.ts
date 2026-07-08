@@ -603,7 +603,13 @@ export const callLlm =
         if (ctx.userId) {
           try {
             const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
-            const credsResult = await marketService.market.creds.list();
+            // Inside a workspace, the agent must only see the workspace's shared
+            // organization credentials — personal creds are not visible here (LOBE-10978).
+            const credsResult = ctx.workspaceId
+              ? await marketService.market.organizations
+                  .creds({ workspaceId: ctx.workspaceId })
+                  .list()
+              : await marketService.market.creds.list();
             const userCreds = (credsResult as any)?.data ?? [];
             credsListStr = generateCredsList(
               userCreds.map((cred: any): CredSummary => ({
