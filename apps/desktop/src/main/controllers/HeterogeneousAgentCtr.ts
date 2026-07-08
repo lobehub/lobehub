@@ -109,6 +109,10 @@ const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
 const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
 const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
+const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
+
+const waitForHeteroSessionCompleteGrace = () =>
+  new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
 
 // ─── IPC types ───
 
@@ -1277,6 +1281,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             signal,
           });
           await this.flushCliTrace(traceSession);
+          await waitForHeteroSessionCompleteGrace();
 
           logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
           session.process = undefined;

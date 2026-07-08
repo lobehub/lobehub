@@ -1116,6 +1116,81 @@ describe('HeterogeneousAgentCtr', () => {
       const toolEnds = events.filter((b) => (b.data as any)?.event?.type === 'tool_end');
       expect(toolEnds.length).toBeGreaterThan(0);
     });
+
+    it('delivers late final Codex stdout chunks BEFORE heteroAgentSessionComplete', async () => {
+      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
+      const turnStarted = `${JSON.stringify({ type: 'turn.started' })}\n`;
+      const finalMessage = `${JSON.stringify({
+        item: {
+          id: 'item_103',
+          text: 'Final report after late stdout.',
+          type: 'agent_message',
+        },
+        type: 'item.completed',
+      })}\n`;
+      const turnCompleted = `${JSON.stringify({
+        type: 'turn.completed',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })}\n`;
+
+      const proc = new EventEmitter() as any;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      proc.stdout = stdout;
+      proc.stderr = stderr;
+      proc.stdin = {
+        end: vi.fn(),
+        write: vi.fn((_chunk: any, cb?: () => void) => {
+          cb?.();
+          return true;
+        }),
+      };
+      proc.kill = vi.fn();
+      proc.killed = false;
+      proc.__start = () => {
+        setImmediate(() => {
+          stdout.write(threadStarted);
+          stdout.write(turnStarted);
+          stderr.end();
+          proc.emit('exit', 0);
+          setImmediate(() => {
+            stdout.write(finalMessage);
+            stdout.write(turnCompleted);
+            stdout.end();
+          });
+        });
+      };
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      const sendStartedAt = Date.now();
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+      const sendDurationMs = Date.now() - sendStartedAt;
+
+      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
+      const finalChunkIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'stream_chunk' &&
+          (b.data as any)?.event?.data?.content === 'Final report after late stdout.',
+      );
+      const runtimeEndIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'agent_runtime_end',
+      );
+
+      expect(completeIdx).toBeGreaterThan(-1);
+      expect(finalChunkIdx).toBeGreaterThan(-1);
+      expect(runtimeEndIdx).toBeGreaterThan(-1);
+      expect(finalChunkIdx).toBeLessThan(completeIdx);
+      expect(runtimeEndIdx).toBeLessThan(completeIdx);
+      expect(sendDurationMs).toBeGreaterThanOrEqual(900);
+    });
   });
 
   describe('app-quit cleanup of AskUserQuestion temp configs ()', () => {

@@ -121,7 +121,9 @@ function setupIpcCapture() {
         on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
           listeners.set(channel, handler);
         }),
-        removeListener: vi.fn(),
+        removeListener: vi.fn((channel: string, handler: (...args: any[]) => void) => {
+          if (listeners.get(channel) === handler) listeners.delete(channel);
+        }),
       },
     },
   };
@@ -1783,6 +1785,68 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         model: 'gpt-5.5',
         provider: 'codex',
       });
+    });
+
+    it('waits for late Codex terminal events when Electron complete arrives before stdout tail', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      let executorSettled = false;
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      }).finally(() => {
+        executorSettled = true;
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', codexThreadStarted());
+      ipc.emitRawLine('ipc-sess-1', codexTurnStarted());
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_0', 'Checking prior state.'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandStarted('item_1', '/bin/zsh -lc pwd'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'));
+
+      // Reproduce the Electron race: completion notification reaches the
+      // renderer before the final agent_message + turn.completed stdout tail.
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      // Main resolves sendPrompt immediately after broadcasting complete. The
+      // executor must keep the IPC subscription alive while onComplete is
+      // waiting for the late terminal stdout tail.
+      resolveSendPrompt!();
+      await flush();
+      expect(executorSettled).toBe(false);
+      expect(ipc.getListeners().has('heteroAgentEvent')).toBe(true);
+
+      ipc.emitRawLine(
+        'ipc-sess-1',
+        codexAgentMessage('item_2', 'Final report after late stdout.'),
+      );
+      ipc.emitRawLine('ipc-sess-1', codexTurnCompleted({ input_tokens: 10, output_tokens: 5 }));
+      await flush();
+
+      await executorPromise;
+      await flush();
+
+      const finalWrite = mockUpdateMessage.mock.calls.find(
+        ([, value]: any) => value.content === 'Final report after late stdout.',
+      );
+      expect(finalWrite).toBeDefined();
+
+      const finalAssistantId = finalWrite![0];
+      expect(
+        mockCreateMessage.mock.calls.some(
+          ([params]: any) => params.role === 'assistant' && params.id === finalAssistantId,
+        ),
+      ).toBe(true);
     });
 
     it('should switch to a new assistant before persisting the next turn tool', async () => {
