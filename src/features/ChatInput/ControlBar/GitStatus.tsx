@@ -1,7 +1,7 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -308,14 +308,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
 
   const branchTrigger = (
     <div className={styles.trigger}>
-      <Icon icon={GitBranchIcon} size={12} />
       <span className={styles.branchLabel}>{branch}</span>
     </div>
   );
 
-  const hasMultipleWorktrees = worktrees.length > 1;
+  const hasWorktreeMenu = worktrees.length > 0;
 
-  const branchNode = hasMultipleWorktrees ? (
+  const worktreeNode = hasWorktreeMenu ? (
     <WorktreeSwitcher
       agentId={agentId}
       currentBranch={branch}
@@ -327,7 +326,9 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       worktrees={worktrees}
       onWorktreesChange={mutateWorktrees}
     />
-  ) : detached ? (
+  ) : null;
+
+  const branchNode = detached ? (
     // Detached HEAD → plain branch label (nothing to switch to).
     <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
   ) : (
@@ -423,6 +424,7 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   return (
     <>
       <div className={styles.separator} />
+      {worktreeNode}
       {branchNode}
       {pullNode}
       {pushNode}
