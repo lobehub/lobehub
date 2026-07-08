@@ -4,7 +4,9 @@ import { ServerLifecycleSink } from './adapters/ServerLifecycleSink';
 import { ServerMessageTransport } from './adapters/ServerMessageTransport';
 import { ServerOperationStore } from './adapters/ServerOperationStore';
 import { ServerStreamSink } from './adapters/ServerStreamSink';
-import { type RuntimeExecutorContext } from './context';
+import { ServerToolTransport } from './adapters/ServerToolTransport';
+import type { RuntimeExecutorContext } from './context';
+import { buildPostProcessUrl } from './executorHelpers';
 
 /**
  * Build the {@link AgentRuntimeHost} from the server's `RuntimeExecutorContext`:
@@ -31,7 +33,9 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
     workspaceId: ctx.workspaceId,
   },
   transports: {
-    messages: new ServerMessageTransport(ctx.messageModel),
+    messages: new ServerMessageTransport(ctx.messageModel, {
+      postProcessUrl: buildPostProcessUrl(ctx),
+    }),
     operationStore: new ServerOperationStore(
       ctx.serverDB,
       ctx.userId,
@@ -39,5 +43,6 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
       ctx.topicId,
     ),
     stream: new ServerStreamSink(ctx.streamManager, ctx.operationId),
+    tools: new ServerToolTransport(ctx),
   },
 });

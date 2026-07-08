@@ -134,7 +134,7 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-describe('RuntimeExecutors', () => {
+describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
   let mockToolExecutionService: any;

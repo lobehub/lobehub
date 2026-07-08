@@ -15,6 +15,17 @@ export interface QueryMessagesInput {
   topicId?: string;
 }
 
+export interface QueryMessagesOptions {
+  /**
+   * Return the flattened conversation-flow list. Server adapters can implement
+   * this with `@lobechat/conversation-flow`; package executors stay unaware of
+   * that dependency.
+   */
+  flatten?: boolean;
+  /** Resolve file-backed fields to external URLs before the next LLM call. */
+  resolveAssetUrls?: boolean;
+}
+
 export interface UpdateToolMessageInput {
   content?: string;
   metadata?: Record<string, any>;
@@ -40,7 +51,7 @@ export interface MessageTransport {
   deleteMessage: (id: string) => Promise<void>;
   /** Existence / parent preflight; returns the id when present. */
   findById: (id: string) => Promise<RuntimeMessageRef | undefined>;
-  query: (params?: QueryMessagesInput) => Promise<UIChatMessage[]>;
+  query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;
   updateToolMessage: (id: string, params: UpdateToolMessageInput) => Promise<void>;
