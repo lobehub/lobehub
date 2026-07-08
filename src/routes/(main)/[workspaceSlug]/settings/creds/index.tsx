@@ -50,7 +50,12 @@ const WorkspaceCredsSetting = () => {
   const { error, isLoading } = lambdaQuery.workspaceCreds.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
-    retry: (_, err) => (err as { data?: { code?: string } })?.data?.code !== 'NOT_FOUND',
+    // Cap retries for other errors (500s, network) so failures surface instead of looping.
+    retry: (failureCount, err) => {
+      const code = (err as { data?: { code?: string } })?.data?.code;
+      if (code === 'NOT_FOUND') return false;
+      return failureCount < 3;
+    },
   });
 
   if (isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND') {
