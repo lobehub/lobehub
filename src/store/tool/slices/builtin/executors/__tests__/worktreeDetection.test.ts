@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseWorktreeAddPath, recordWorktreeAdd } from '../worktreeDetection';
+import {
+  parseWorktreeAddPath,
+  recordGitCommandEffects,
+  recordWorktreeAdd,
+} from '../worktreeDetection';
 
 const chatMocks = vi.hoisted(() => ({
   topics: {} as Record<string, { metadata?: Record<string, any> }>,
@@ -21,6 +25,13 @@ describe('parseWorktreeAddPath', () => {
   it('resolves a relative path against the source cwd', () => {
     expect(parseWorktreeAddPath('git worktree add ../wt', '/repo')).toBe('/wt');
     expect(parseWorktreeAddPath('git worktree add wt', '/repo')).toBe('/repo/wt');
+  });
+
+  it('accepts absolute git executable paths', () => {
+    expect(parseWorktreeAddPath('/usr/bin/git worktree add ../wt', '/repo')).toBe('/wt');
+    expect(parseWorktreeAddPath(['/usr/bin/git', 'worktree', 'add', '/tmp/wt'], '/repo')).toBe(
+      '/tmp/wt',
+    );
   });
 
   it('keeps an absolute path as-is', () => {
@@ -89,6 +100,27 @@ describe('recordWorktreeAdd', () => {
     });
   });
 
+  it('records the explicit created branch from worktree add', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordWorktreeAdd({
+      command: '/usr/bin/git worktree add -b codex/claude-task-notification-callback ../wt HEAD',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          activeWorktree: '/wt',
+          branch: 'codex/claude-task-notification-callback',
+          isWorktree: true,
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
   it('targets the passed topicId, not the active one', async () => {
     chatMocks.topics = { other: PR_TOPIC, t1: PR_TOPIC };
 
@@ -122,5 +154,137 @@ describe('recordWorktreeAdd', () => {
     chatMocks.topics = { t1: PR_TOPIC };
     await recordWorktreeAdd({ command: 'ls -la', topicId: 't1' });
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe('recordGitCommandEffects', () => {
+  it('updates the topic branch when the agent switches branch with git switch', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          workingDirectoryConfig: {
+            git: {
+              branch: 'canary',
+              github: {
+                pullRequest: {
+                  number: 1,
+                  state: 'OPEN',
+                  title: 'old',
+                  url: 'https://github.com/lobehub/lobehub/pull/1',
+                },
+                pullRequestStatus: 'ok',
+              },
+            },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { branch: 'fix/topic' },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('updates the topic branch from confirmed git checkout output', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git checkout fix/from-output',
+      resultContent: "Switched to branch 'fix/from-output'",
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { branch: 'fix/from-output' },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('does not infer ambiguous bare git checkout without confirming output', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({ command: 'git checkout package.json', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('binds a created GitHub PR from gh pr create output', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          workingDirectoryConfig: {
+            git: { branch: 'fix/topic' },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({
+      command: 'gh pr create --title "Fix topic" --draft',
+      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'fix/topic',
+          github: {
+            pullRequest: {
+              isDraft: true,
+              number: 456,
+              state: 'OPEN',
+              title: 'Fix topic',
+              url: 'https://github.com/lobehub/lobehub/pull/456',
+            },
+            pullRequestStatus: 'ok',
+          },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('uses gh pr create --head as the topic branch when present', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'gh pr create --head arvinxx:fix/head-branch --title "Head branch"',
+      resultContent: 'Created pull request: https://github.com/lobehub/lobehub/pull/789',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'fix/head-branch',
+          github: {
+            pullRequest: {
+              number: 789,
+              state: 'OPEN',
+              title: 'Head branch',
+              url: 'https://github.com/lobehub/lobehub/pull/789',
+            },
+            pullRequestStatus: 'ok',
+          },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
   });
 });

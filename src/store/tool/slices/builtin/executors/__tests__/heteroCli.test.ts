@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { claudeCodeExecutor, codexExecutor } from '../heteroCli';
 
-const detectMocks = vi.hoisted(() => ({ recordWorktreeAdd: vi.fn() }));
+const detectMocks = vi.hoisted(() => ({ recordGitCommandEffects: vi.fn() }));
 
 vi.mock('../worktreeDetection', () => ({
-  recordWorktreeAdd: detectMocks.recordWorktreeAdd,
+  recordGitCommandEffects: detectMocks.recordGitCommandEffects,
 }));
 
 const call = (over: Record<string, any> = {}) => ({
@@ -30,8 +30,9 @@ describe('heteroCli executors', () => {
 
   it('records the worktree for a successful shell call, keyed by the run topic', async () => {
     await claudeCodeExecutor.onAfterCall!(call());
-    expect(detectMocks.recordWorktreeAdd).toHaveBeenCalledWith({
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: 'git worktree add /wt',
+      resultContent: '',
       topicId: 't1',
     });
   });
@@ -44,20 +45,39 @@ describe('heteroCli executors', () => {
         params: { command: ['git', 'worktree', 'add', '/tmp/my wt'] },
       }),
     );
-    expect(detectMocks.recordWorktreeAdd).toHaveBeenCalledWith({
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: ['git', 'worktree', 'add', '/tmp/my wt'],
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('passes shell output through for branch and PR detection', async () => {
+    await claudeCodeExecutor.onAfterCall!(
+      call({
+        params: { command: 'gh pr create --title "fix thing"' },
+        result: {
+          content: 'https://github.com/lobehub/lobehub/pull/123',
+          success: true,
+        },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'gh pr create --title "fix thing"',
+      resultContent: 'https://github.com/lobehub/lobehub/pull/123',
       topicId: 't1',
     });
   });
 
   it('skips a failed call', async () => {
     await claudeCodeExecutor.onAfterCall!(call({ result: { content: 'fatal', success: false } }));
-    expect(detectMocks.recordWorktreeAdd).not.toHaveBeenCalled();
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
 
   it('skips when there is no run topic', async () => {
     await claudeCodeExecutor.onAfterCall!(call({ topicId: undefined }));
-    expect(detectMocks.recordWorktreeAdd).not.toHaveBeenCalled();
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
 
   it('is constrained to the shell tool — ignores other tools', async () => {
@@ -65,13 +85,13 @@ describe('heteroCli executors', () => {
     await claudeCodeExecutor.onAfterCall!(
       call({ apiName: 'Write', params: { command: 'git worktree add /wt' } }),
     );
-    expect(detectMocks.recordWorktreeAdd).not.toHaveBeenCalled();
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
 
   it('reads only command/cmd, never content', async () => {
     await claudeCodeExecutor.onAfterCall!(
       call({ params: { content: 'git worktree add /wt', file_path: 'a.md' } }),
     );
-    expect(detectMocks.recordWorktreeAdd).not.toHaveBeenCalled();
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
 });

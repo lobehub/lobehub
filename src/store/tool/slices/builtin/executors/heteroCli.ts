@@ -1,7 +1,7 @@
 import type { ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
-import { recordWorktreeAdd } from './worktreeDetection';
+import { recordGitCommandEffects } from './worktreeDetection';
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
@@ -61,7 +61,7 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
     const command = readShellCommand(params);
     if (command === undefined) return;
 
-    await recordWorktreeAdd({ command, topicId });
+    await recordGitCommandEffects({ command, resultContent: result.content, topicId });
   };
 }
 
