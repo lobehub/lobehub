@@ -15,6 +15,7 @@ import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
 import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSkills/initialState';
@@ -69,9 +70,11 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
+  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;

@@ -20,6 +20,7 @@ import {
 } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import Files from './Files';
 import ProgressSection from './ProgressSection';
@@ -114,9 +115,11 @@ const AgentWorkingSidebar = memo(() => {
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
+  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
   });
 
   // Running against a bound device (remote, or this machine as a device): file

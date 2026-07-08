@@ -19,6 +19,7 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { standardizeIdentifier } from '@/utils/identifier';
 
 type AgentDocumentPanelTab = 'documents' | 'skills';
@@ -81,9 +82,11 @@ const AgentDocumentRightPanel = memo(() => {
   const agencyConfig = useAgentStore((s) =>
     activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
   );
+  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
   });
   const remoteDeviceId =
     effectiveTarget === 'device' && agencyConfig?.boundDeviceId

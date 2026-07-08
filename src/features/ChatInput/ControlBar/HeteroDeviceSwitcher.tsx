@@ -30,6 +30,7 @@ import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -371,9 +372,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Effective target: shared with server dispatch. In particular, a hetero
   // desktop "local" selection that carries this desktop's boundDeviceId becomes
   // a device target when the same agent is opened from web.
+  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
   });
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);

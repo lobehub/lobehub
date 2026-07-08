@@ -5,6 +5,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import { useProjectSkills } from './useProjectSkills';
 
@@ -48,8 +49,10 @@ export const useProjectSkillResolver = (
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
+  const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
     isHetero,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;

@@ -45,11 +45,12 @@ describe('resolveExecutionTarget', () => {
     ).toBe('local');
   });
 
-  it('routes a bound desktop-local selection to the bound device on web (plain and hetero)', () => {
+  it('routes a bound desktop-local selection to the bound device on web when device routing is available (plain and hetero)', () => {
     // LOBE-11473: a `local` pick pins this desktop's own deviceId as
     // `boundDeviceId`; on web that config still runs on the bound device
     // server-side, so surface it honestly as `device` instead of masquerading
-    // as `sandbox`. This applies to plain agents too, not just hetero.
+    // as `sandbox`. Hetero agents always route here; plain agents need a
+    // device-gateway (`deviceRoutingAvailable`) to actually reach the machine.
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
@@ -60,8 +61,22 @@ describe('resolveExecutionTarget', () => {
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
+        deviceRoutingAvailable: true,
       }),
     ).toBe('device');
+  });
+
+  it('keeps a bound `local` as `sandbox` when no device routing is available (LOBE-11473 regression)', () => {
+    // A plain agent with a bound `local` target but no device-gateway to route
+    // it (self-host without DEVICE_GATEWAY_URL, or any server call that leaves
+    // `deviceRoutingAvailable` unset) must fall back to the cloud sandbox — it
+    // cannot reach the bound device. Guards against resolving to
+    // `device`/`device-unrouted` and stripping sandbox tools server-side.
+    expect(
+      resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+        clientExecutionAvailable: false,
+      }),
+    ).toBe('sandbox');
   });
 
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
@@ -195,6 +210,14 @@ describe('resolveRuntimeMode', () => {
     // executionTarget=local synced from desktop, resolved on web → sandbox → cloud
     expect(resolveRuntimeMode(cfg({ executionTarget: 'local' }), false)).toBe('cloud');
   });
+
+  it('routes a bound web `local` to device (runtimeMode none) only when device routing is available', () => {
+    const boundLocal = cfg({ boundDeviceId: 'device-a', executionTarget: 'local' });
+    // with a device-gateway → device → runtimeMode none (routed via the plan)
+    expect(resolveRuntimeMode(boundLocal, false, true)).toBe('none');
+    // without one → sandbox → cloud (LOBE-11473 regression guard)
+    expect(resolveRuntimeMode(boundLocal, false)).toBe('cloud');
+  });
 });
 
 describe('resolveExecutionPlan', () => {
@@ -229,6 +252,20 @@ describe('resolveExecutionPlan', () => {
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'sandbox' }),
           clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+
+    it('keeps a bound `local` as sandbox on a no-gateway backend (LOBE-11473 regression)', () => {
+      // No device-gateway: `clientExecutionAvailable` is false and the plan
+      // never passes `deviceRoutingAvailable`, so a bound `local` target must
+      // resolve to the sandbox — not `device`/`device-unrouted`, which would
+      // strip cloud-sandbox tools on a self-host without device routing.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
+          clientExecutionAvailable: false,
+          onlineDeviceIds: [],
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });

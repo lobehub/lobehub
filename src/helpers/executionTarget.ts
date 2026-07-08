@@ -41,6 +41,26 @@ export interface ResolveExecutionTargetOptions {
    */
   clientExecutionAvailable: boolean;
   /**
+   * Whether a device-gateway can route the run to a registered device in this
+   * environment. Orthogonal to {@link clientExecutionAvailable} (in-process
+   * `local` capability): the two coincide on a server (both equal
+   * `gatewayConfigured`), but split on the web client — the browser can't run
+   * `local` in-process (`clientExecutionAvailable` false) yet its backend may
+   * still have a device-gateway that routes to a `lh connect`-ed machine
+   * (`deviceRoutingAvailable` true).
+   *
+   * Gates ONLY the web-display upgrade of a bound `local` target to `device`
+   * (see `resolveExecutionTarget`). Server execution never relies on it: with a
+   * gateway `clientExecutionAvailable` is already true (branch skipped, `local`
+   * routes to a device via `resolveExecutionPlan`); without one the target must
+   * stay `sandbox`. So server callers leave it `undefined` (false) and the
+   * branch is a no-op there — only web display sites pass
+   * `!!serverConfig.agentGatewayUrl` to keep the honest device display
+   * (LOBE-11473). `isHetero` also satisfies the gate: a hetero agent's bound
+   * `local` was always surfaced as `device` on web regardless of gateway state.
+   */
+  deviceRoutingAvailable?: boolean;
+  /**
    * Heterogeneous agents (Claude Code / Codex) bring their own toolchain and
    * must execute somewhere, so `'none'` is not a valid target for them: it
    * coerces to `'local'` on desktop and `'sandbox'` on web.
@@ -80,10 +100,18 @@ export interface ResolveExecutionTargetOptions {
  * `deviceId` as `boundDeviceId` (see `useSelectExecutionTarget`), and the
  * server routes such a config to that bound device — so on web we resolve it
  * to `device`, surfacing honestly that it runs on the user's machine (via
- * `lh connect`) instead of masquerading as `sandbox`. Only an UNBOUND `local`
- * (no `boundDeviceId`) falls back to `sandbox` on web. This applies to plain
+ * `lh connect`) instead of masquerading as `sandbox`. This applies to plain
  * agents too, not just heterogeneous CLI agents (LOBE-11473: plain agents used
  * to leak here, showing "cloud sandbox" while the server ran on the device).
+ *
+ * This upgrade is gated on `deviceRoutingAvailable` (or `isHetero`): the run
+ * can only reach the bound device if a device-gateway exists to route it. Web
+ * display sites pass `!!serverConfig.agentGatewayUrl` (cloud always has one);
+ * a no-gateway self-host has no route, so its bound `local` stays `sandbox`.
+ * An UNBOUND `local` (no `boundDeviceId`) always falls back to `sandbox` on web.
+ * Server callers leave `deviceRoutingAvailable` unset — with a gateway they
+ * already pass `clientExecutionAvailable: true` and skip this branch, so it is
+ * inert server-side and never diverts a no-gateway run away from `sandbox`.
  *
  * Bot triggers (`trigger === bot`) upgrade a `local` target (a bot has no UI
  * to pick a device and `local` in-process IPC is unreachable from the cloud
@@ -93,11 +121,21 @@ export interface ResolveExecutionTargetOptions {
  */
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
-  { clientExecutionAvailable, isHetero, trigger }: ResolveExecutionTargetOptions,
+  {
+    clientExecutionAvailable,
+    deviceRoutingAvailable,
+    isHetero,
+    trigger,
+  }: ResolveExecutionTargetOptions,
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (clientExecutionAvailable ? 'local' : 'none');
-  if (!clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
+  if (
+    !clientExecutionAvailable &&
+    (isHetero || deviceRoutingAvailable) &&
+    stored === 'local' &&
+    agencyConfig?.boundDeviceId
+  ) {
     return 'device';
   }
   if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';
@@ -144,8 +182,11 @@ export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): Run
 export const resolveRuntimeMode = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   clientExecutionAvailable: boolean,
+  deviceRoutingAvailable?: boolean,
 ): RuntimeEnvMode =>
-  executionTargetToRuntimeMode(resolveExecutionTarget(agencyConfig, { clientExecutionAvailable }));
+  executionTargetToRuntimeMode(
+    resolveExecutionTarget(agencyConfig, { clientExecutionAvailable, deviceRoutingAvailable }),
+  );
 
 export type ExecutionPlanUnroutedReason =
   /** `auto` mode with more than one device online — the model must pick one */

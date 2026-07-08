@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
@@ -36,9 +37,11 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
     const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+    const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      isHetero: isHeterogeneous,
       clientExecutionAvailable: isDesktop,
+      deviceRoutingAvailable,
+      isHetero: isHeterogeneous,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
 

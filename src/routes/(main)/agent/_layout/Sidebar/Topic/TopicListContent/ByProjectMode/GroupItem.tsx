@@ -24,6 +24,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
@@ -255,9 +256,11 @@ const GroupItem = memo<GroupItemComponentProps>(
 
     // Web can add a topic in a directory too when the agent targets a bound
     // device — the write goes to `workingDirByDevice`, no Electron dependency.
+    const deviceRoutingAvailable = !!getServerConfigStoreState()?.serverConfig?.agentGatewayUrl;
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      isHetero: isHeterogeneous,
       clientExecutionAvailable: isDesktop,
+      deviceRoutingAvailable,
+      isHetero: isHeterogeneous,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
     const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
