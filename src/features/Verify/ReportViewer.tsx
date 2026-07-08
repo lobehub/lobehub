@@ -11,6 +11,7 @@ import { toRecord } from '@lobechat/utils/object';
 import {
   Block,
   Center,
+  Drawer,
   Empty,
   Flexbox,
   Highlighter,
@@ -19,7 +20,7 @@ import {
   Markdown,
   Text,
 } from '@lobehub/ui';
-import { Button, Modal } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -1230,31 +1231,50 @@ const EvidenceFileButton = memo<{
 
 EvidenceFileButton.displayName = 'EvidenceFileButton';
 
-/** Modal gallery of one check's evidence — one section per artifact, by type. */
-const EvidenceModal = memo<{
+/** Right-side evidence gallery — one section per artifact, by type. */
+const EvidenceDrawer = memo<{
   evidence: VerifyEvidenceWithUrl[];
   onClose: () => void;
   open: boolean;
   title: string;
 }>(({ evidence, onClose, open, title }) => (
-  <Modal
-    footer={null}
+  <Drawer
+    destroyOnHidden
+    containerMaxWidth={'100%'}
     open={open}
+    placement={'right'}
     title={title}
-    width={'min(760px, 92vw)'}
-    onCancel={() => onClose()}
+    width={'min(1120px, calc(100vw - 48px))'}
+    styles={{
+      body: {
+        height: '100%',
+        padding: 0,
+      },
+      bodyContent: {
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+      },
+    }}
+    onClose={onClose}
   >
-    <Flexbox gap={20} style={{ maxHeight: '68vh', overflow: 'auto', paddingBlock: 4 }}>
+    <Flexbox
+      gap={20}
+      height={'100%'}
+      paddingBlock={12}
+      paddingInline={16}
+      style={{ overflow: 'auto' }}
+    >
       {evidence.map((e, index) => (
         <EvidenceItem evidence={e} index={index + 1} key={e.id} />
       ))}
     </Flexbox>
-  </Modal>
+  </Drawer>
 ));
 
 EvidenceItem.displayName = 'EvidenceItem';
 
-EvidenceModal.displayName = 'EvidenceModal';
+EvidenceDrawer.displayName = 'EvidenceDrawer';
 
 /** One check — an expandable row; evidence opens one artifact at a time. */
 const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }>(
@@ -1337,7 +1357,7 @@ const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }
                   )}
                 </div>
                 {selectedEvidence && (
-                  <EvidenceModal
+                  <EvidenceDrawer
                     evidence={[selectedEvidence]}
                     open={Boolean(selectedEvidence)}
                     title={evidenceDisplayName(selectedEvidence, t, selectedEvidenceIndex + 1)}

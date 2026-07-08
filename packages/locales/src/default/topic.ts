@@ -31,8 +31,6 @@ export default {
   'duplicateSuccess': 'Topic Copied Successfully',
   'failedStatusTip': 'This run hit an error — open it to take a look.',
   'favorite': 'Favorite',
-  'metaCard.branchNote':
-    'The chat branch reflects the active branch from your last session; sending a message updates it.',
   'metaCard.ci.failure': 'CI failed',
   'metaCard.ci.none': 'No CI checks',
   'metaCard.ci.pending': 'CI running',

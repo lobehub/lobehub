@@ -3,7 +3,6 @@ import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { Clock } from 'lucide-react';
 import {
-  CircleAlert,
   CircleCheck,
   CircleSlash,
   CircleX,
@@ -69,20 +68,6 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-  `,
-  warnRow: css`
-    align-items: flex-start;
-    color: ${cssVar.colorWarning};
-  `,
-  warnIcon: css`
-    flex: none;
-    margin-block-start: 1px;
-    color: ${cssVar.colorWarning};
-  `,
-  warnText: css`
-    min-width: 0;
-    line-height: 18px;
-    white-space: normal;
   `,
   prLink: css`
     cursor: pointer;
@@ -193,11 +178,6 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
           {worktreeName}
         </DetailRow>
       )}
-
-      <div className={`${styles.row} ${styles.warnRow}`}>
-        <Icon className={styles.warnIcon} icon={CircleAlert} size={15} />
-        <span className={styles.warnText}>{t('metaCard.branchNote')}</span>
-      </div>
 
       {pullRequest &&
         (() => {
