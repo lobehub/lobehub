@@ -28,8 +28,8 @@ const HYDRATION_TIMEOUT = 1500;
  * full-screen white flash on login.
  *
  * The first paint additionally waits for a real `userId` — but only where one
- * is expected, i.e. where the identity round-trip actually runs: desktop
- * (always resolves a `DESKTOP_USER` id) or a signed-in web session. The
+ * is expected, i.e. where the identity round-trip actually runs: normal desktop
+ * app paths (which resolve a `DESKTOP_USER` id) or a signed-in web session. The
  * anonymous scope is only ever a transient pre-identity boot state, so painting
  * under it would persist fetched data into the `anon` partition and orphan it
  * the moment the real scope resolves (the stale-loading cache-miss bug).
@@ -44,6 +44,8 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   const isAuthLoaded = Boolean(useUserStore(authSelectors.isLoaded));
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const userId = useUserStore(userProfileSelectors.userId);
+  const isDesktopOnboarding =
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/desktop-onboarding');
 
   const ready = useSyncExternalStore(
     cacheHydration.subscribe,
@@ -68,7 +70,7 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
     // signed-in web session — the same condition that triggers `useInitUserState`).
     // No-auth / logged-out web never produces one, so it must not be blocked here.
     // Guard on `isAuthLoaded` so we don't act on a stale `isSignedIn` mid-load.
-    if (isAuthLoaded && (isDesktop || isSignedIn) && !userId) return;
+    if (isAuthLoaded && ((isDesktop && !isDesktopOnboarding) || isSignedIn) && !userId) return;
 
     // Block until the session check resolves (it always does — success, failure,
     // or no-auth — so this isn't an infinite hang). Preceding the timeout means a
@@ -84,7 +86,7 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
     if (!ready) return;
 
     setReleased(true);
-  }, [isAuthLoaded, isSignedIn, userId, ready, released, timedOut]);
+  }, [isAuthLoaded, isDesktopOnboarding, isSignedIn, userId, ready, released, timedOut]);
 
   useLayoutEffect(() => {
     if (!released) return;

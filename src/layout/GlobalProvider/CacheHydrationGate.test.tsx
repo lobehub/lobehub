@@ -67,6 +67,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.history.replaceState(null, '', '/');
   resetHydration();
   document.getElementById('loading-screen')?.remove();
   vi.useRealTimers();
@@ -174,6 +175,22 @@ describe('CacheHydrationGate', () => {
       cacheHydration.markReady('anon:personal');
     });
     expect(screen.queryByTestId('app')).not.toBeNull();
+  });
+
+  it('releases desktop onboarding without waiting for userId', () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/desktop-onboarding');
+    mockIsDesktop = true;
+    mockIsSignedIn = false;
+    mockUserId = undefined;
+    renderGate();
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(screen.queryByTestId('app')).not.toBeNull();
+    expect(document.getElementById('loading-screen')).toBeNull();
   });
 
   it('REGRESSION: signed-in web stays blocked past the timeout when userId is unresolved', () => {
