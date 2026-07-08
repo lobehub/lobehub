@@ -414,7 +414,41 @@ export const credsRouter = router({
     try {
       const result = await ctx.marketService.market.creds.list();
       log('list success: %d credentials', result.data?.length ?? 0);
-      return result;
+
+      if (!ctx.workspaceId) return result;
+
+      // A personal credential carries at most one `organizationAccountId` link
+      // at a time (sharing again just overwrites it) — so `organizationAccountId
+      // != null` alone can't tell the frontend "shared to *this* workspace" from
+      // "shared to some other workspace I visited previously". Cross-reference
+      // against the active workspace's own merged view (which already lists the
+      // caller's shared/draft-linked credentials by id) to scope it correctly.
+      // Best-effort: if the workspace has no Market org yet (Community Profile
+      // not set up), don't fail the whole personal list over it — just skip
+      // the enrichment.
+      try {
+        const orgList = await ctx.marketService.market.organizations
+          .creds({ workspaceId: ctx.workspaceId })
+          .list();
+        // `ownerType` is a real field on the Market API response, but the
+        // installed @lobehub/market-sdk's UserCredSummary type hasn't caught
+        // up to it yet — same gap as `injectForSkill` below.
+        const activeWorkspaceCredIds = new Set(
+          (orgList.data as Array<{ id: number; ownerType?: string }> | undefined)
+            ?.filter((c) => c.ownerType === 'user')
+            .map((c) => c.id) ?? [],
+        );
+
+        return {
+          data: result.data?.map((cred) => ({
+            ...cred,
+            sharedToActiveWorkspace: activeWorkspaceCredIds.has(cred.id),
+          })),
+        };
+      } catch (orgListError) {
+        log('list: failed to resolve active-workspace share scope: %O', orgListError);
+        return result;
+      }
     } catch (error) {
       log('list error: %O', error);
       throw new TRPCError({

@@ -36,7 +36,14 @@ interface ShareToggleProps {
 const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
   const { t } = useTranslation('setting');
   const { message } = App.useApp();
-  const isShared = cred.organizationAccountId != null;
+  // A personal credential can only be linked to one organization at a time,
+  // so `organizationAccountId != null` alone can't tell "shared to *this*
+  // workspace" apart from "shared to some other workspace previously" — the
+  // list procedure resolves that distinction server-side. Defaults to false
+  // (safe: never surfaces an unshare/visibility control for a link that
+  // actually belongs to a different workspace) when unset, e.g. outside a
+  // workspace context or when the active workspace's org isn't set up yet.
+  const isShared = cred.sharedToActiveWorkspace ?? false;
 
   // `cred` only reflects the real server state once the parent's list(s)
   // refetch — which we deliberately wait on inside the mutations below, so

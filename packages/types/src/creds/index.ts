@@ -49,6 +49,18 @@ export interface UserCredSummary {
    * draft-linked (`organizationAccountId` set, `visibility` still 'private').
    */
   sharedAt?: string;
+  /**
+   * Cloud-computed enrichment on personal-scoped list responses only
+   * (`market.creds.list`, when called with an active workspace context):
+   * whether `organizationAccountId` actually points at the *current* active
+   * workspace's organization, as opposed to some other workspace the
+   * credential was previously shared to. A personal credential can only be
+   * linked to one organization at a time, so `organizationAccountId != null`
+   * alone can't distinguish "shared here" from "shared elsewhere" — always
+   * prefer this field over `organizationAccountId` for workspace-scoped UI.
+   * Absent entirely outside a workspace context.
+   */
+  sharedToActiveWorkspace?: boolean;
   type: CredType;
   updatedAt: string;
   /**

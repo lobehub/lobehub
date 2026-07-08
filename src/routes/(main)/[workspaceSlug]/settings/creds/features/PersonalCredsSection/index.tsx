@@ -64,7 +64,13 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
 
   const { data, error, isLoading, refetch } = lambdaQuery.market.creds.list.useQuery(undefined);
 
-  const handleShareChange = async () => {
+  // Refreshes both this personal list and the workspace section above.
+  // Deleting or editing a credential that's currently shared/public changes
+  // what the workspace's merged list should show (a removed credential, or
+  // updated name/description) just as much as share/unshare/visibility does
+  // — the workspace section has no way to know on its own, since it reads a
+  // disjoint (org-scoped) query.
+  const refetchLists = async () => {
     await Promise.all([refetch(), onWorkspaceCredsChange()]);
   };
 
@@ -72,7 +78,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
     mutationFn: async (id: number) => {
       await lambdaClient.market.creds.delete.mutate({ id });
     },
-    onSuccess: () => refetch(),
+    onSuccess: refetchLists,
   });
 
   const credentials = data?.data ?? [];
@@ -81,7 +87,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
     createEditCredModal({
       credsApi: personalCredsApi,
       cred,
-      onSuccess: () => refetch(),
+      onSuccess: refetchLists,
     });
   };
 
@@ -111,7 +117,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
           {credentials.map((cred) => (
             <CredItem
               cred={cred}
-              extra={<ShareToggle cred={cred} onChange={handleShareChange} />}
+              extra={<ShareToggle cred={cred} onChange={refetchLists} />}
               key={cred.id}
               onDelete={(id) => deleteMutation.mutate(id)}
               onEdit={handleEdit}
