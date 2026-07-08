@@ -71,6 +71,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('lucide-react', () => ({
   ChevronsUpDownIcon: () => <span data-testid="chevron" />,
+  Circle: () => <span data-testid="circle" />,
 }));
 
 vi.mock('react-i18next', () => ({
