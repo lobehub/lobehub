@@ -464,6 +464,14 @@ export const generationSlice: StateCreator<
     // message to no longer appear in displayMessages. Then deleteMessage cannot
     // find the message and fails silently.
     await chatStore.deleteMessage(messageId, { operationId });
+
+    // Honor a Stop pressed while the delete was in flight: the outer op is
+    // whitelisted (shows Stop) and gets cancelled by stopGenerating, but
+    // regenerateUserMessage would otherwise start a fresh run regardless. Bail
+    // before regenerating so the click actually stops the retry.
+    const outerOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+    if (outerOp && outerOp.status !== 'running') return;
+
     await get().regenerateUserMessage(userId);
     chatStore.completeOperation(operationId);
   },
@@ -480,6 +488,13 @@ export const generationSlice: StateCreator<
 
     // Resend then delete
     await get().resendThreadMessage(messageId);
+
+    // Honor a Stop pressed during the resend: the whitelisted outer op gets
+    // cancelled by stopGenerating, so skip the follow-up delete and leave the
+    // original message intact rather than mutating state after Stop.
+    const outerOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+    if (outerOp && outerOp.status !== 'running') return;
+
     await chatStore.deleteMessage(messageId, { operationId });
     chatStore.completeOperation(operationId);
   },

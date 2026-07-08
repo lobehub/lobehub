@@ -608,6 +608,57 @@ describe('Generation Actions', () => {
       expect(mockStartOperation).not.toHaveBeenCalled();
       expect(mockDeleteMessage).not.toHaveBeenCalled();
     });
+
+    it('should bail before regenerating if a Stop cancelled the outer op during delete', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      // The outer op is whitelisted (shows Stop); simulate a Stop landing while
+      // deleteMessage is in flight by flipping the op to cancelled inside it.
+      const chatState: any = {
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        regenerateUserMessage: mockRegenerateUserMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      chatState.deleteMessage = vi.fn().mockImplementation(async () => {
+        chatState.operations = { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } };
+      });
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+        groupId: 'group-1',
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().delAndRegenerateMessage('msg-2');
+      });
+
+      // Delete ran, but the cancelled outer op must stop the regeneration.
+      expect(chatState.deleteMessage).toHaveBeenCalledWith('msg-2', { operationId: 'test-op-id' });
+      expect(mockRegenerateUserMessage).not.toHaveBeenCalled();
+      expect(mockCompleteOperation).not.toHaveBeenCalled();
+    });
   });
 
   describe('delAndResendThreadMessage', () => {

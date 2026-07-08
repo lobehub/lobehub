@@ -32,7 +32,10 @@ vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
-  operationSelectors: { isMessageProcessing: () => () => false },
+  operationSelectors: {
+    getOperationById: () => () => undefined,
+    isMessageProcessing: () => () => false,
+  },
 }));
 
 vi.mock('@/services/message', () => ({
