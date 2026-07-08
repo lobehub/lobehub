@@ -71,6 +71,15 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
   });
 };
 
+/**
+ * Resolve the timestamp a topic sorts/groups by for the given field. For
+ * `updatedAt` this is the server-provided `sortUpdatedAt` (latest message
+ * activity), falling back to the raw `updatedAt` when absent — so the sidebar
+ * order matches the server ORDER BY and doesn't jump. (LOBE-11543)
+ */
+export const getTopicSortTime = (topic: ChatTopic, field: 'createdAt' | 'updatedAt'): number =>
+  field === 'updatedAt' ? (topic.sortUpdatedAt ?? topic.updatedAt) : topic.createdAt;
+
 // Generic time-based grouping parameterized by field
 const groupTopicsByField = (
   topics: ChatTopic[],
@@ -78,11 +87,13 @@ const groupTopicsByField = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const sortedTopics = [...topics].sort((a, b) => b[field] - a[field]);
+  const sortedTopics = [...topics].sort(
+    (a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field),
+  );
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(topic[field]);
+    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -162,7 +173,7 @@ export const groupTopicsByProject = (
 
   // Sort topics inside each group by chosen field desc
   for (const group of groupsMap.values()) {
-    group.children.sort((a, b) => b[field] - a[field]);
+    group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
@@ -177,8 +188,8 @@ export const groupTopicsByProject = (
   return groups.sort((a, b) => {
     if (a.id === NO_PROJECT_GROUP_ID) return 1;
     if (b.id === NO_PROJECT_GROUP_ID) return -1;
-    const aTime = a.children[0]?.[field] ?? 0;
-    const bTime = b.children[0]?.[field] ?? 0;
+    const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+    const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
     return bTime - aTime;
   });
 };
@@ -251,7 +262,7 @@ export const groupTopicsByStatus = (
 
   // Sort topics inside each group by chosen field desc
   for (const children of groupsMap.values()) {
-    children.sort((a, b) => b[field] - a[field]);
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
   // Emit only non-empty groups, in the fixed priority order

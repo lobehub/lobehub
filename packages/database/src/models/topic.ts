@@ -297,13 +297,15 @@ export class TopicModel {
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                // Sidebar sorts topics client-side by this `updatedAt`. Return the same
-                // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
-                // fallback to the row's own updatedAt) so the client-side sort key
-                // matches the server order — otherwise returning the raw
-                // `topics.updatedAt` column makes the two sorts disagree and the list
-                // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
-                updatedAt: topicActivityAt,
+                updatedAt: topics.updatedAt,
+                // Sidebar sorts/groups topics client-side by this `sortUpdatedAt` — the
+                // same `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+                // fallback to the row's own updatedAt). Keeping it separate from the
+                // display `updatedAt` above matches the client-side sort key to the server
+                // order (otherwise the two disagree and the list visibly jumps) while a
+                // rename/favorite edit still shows its real edit time. See rankTopics for
+                // the same activity-time pattern. (LOBE-11543)
+                sortUpdatedAt: topicActivityAt,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -365,13 +367,15 @@ export class TopicModel {
                 metadata: topics.metadata,
                 status: topics.status,
                 title: topics.title,
-                // Sidebar sorts topics client-side by this `updatedAt`. Return the same
-                // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
-                // fallback to the row's own updatedAt) so the client-side sort key
-                // matches the server order — otherwise returning the raw
-                // `topics.updatedAt` column makes the two sorts disagree and the list
-                // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
-                updatedAt: topicActivityAt,
+                updatedAt: topics.updatedAt,
+                // Sidebar sorts/groups topics client-side by this `sortUpdatedAt` — the
+                // same `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+                // fallback to the row's own updatedAt). Keeping it separate from the
+                // display `updatedAt` above matches the client-side sort key to the server
+                // order (otherwise the two disagree and the list visibly jumps) while a
+                // rename/favorite edit still shows its real edit time. See rankTopics for
+                // the same activity-time pattern. (LOBE-11543)
+                sortUpdatedAt: topicActivityAt,
                 ...detailColumns,
               } as any)
               .from(topics)
@@ -429,13 +433,15 @@ export class TopicModel {
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,
-              // Sidebar sorts topics client-side by this `updatedAt`. Return the same
-              // `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
-              // fallback to the row's own updatedAt) so the client-side sort key
-              // matches the server order — otherwise returning the raw
-              // `topics.updatedAt` column makes the two sorts disagree and the list
-              // visibly jumps. See rankTopics for the same pattern. (LOBE-11543)
-              updatedAt: topicActivityAt,
+              updatedAt: topics.updatedAt,
+              // Sidebar sorts/groups topics client-side by this `sortUpdatedAt` — the
+              // same `topicActivityAt` the ORDER BY uses (latest message time, COALESCE
+              // fallback to the row's own updatedAt). Keeping it separate from the
+              // display `updatedAt` above matches the client-side sort key to the server
+              // order (otherwise the two disagree and the list visibly jumps) while a
+              // rename/favorite edit still shows its real edit time. See rankTopics for
+              // the same activity-time pattern. (LOBE-11543)
+              sortUpdatedAt: topicActivityAt,
               ...detailColumns,
             } as any)
             .from(topics)

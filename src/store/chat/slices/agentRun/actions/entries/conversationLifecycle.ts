@@ -1189,11 +1189,14 @@ export class ConversationLifecycleActionImpl {
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
-        // Optimistically update topic's updatedAt so sidebar re-groups immediately
+        // Optimistically bump the sort key (`sortUpdatedAt`, the sidebar's activity-time
+        // sort/group key) so the topic jumps to the top immediately, before the SWR
+        // refetch returns the server's fresh `topicActivityAt`. Bumping `updatedAt` here
+        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`. (LOBE-11543)
         this.#get().internal_dispatchTopic({
           type: 'updateTopic',
           id: operationContext.topicId,
-          value: { updatedAt: Date.now() },
+          value: { sortUpdatedAt: Date.now() },
         });
       }
 
