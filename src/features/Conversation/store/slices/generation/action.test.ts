@@ -872,6 +872,55 @@ describe('Generation Actions', () => {
       expect(mockExecuteClientAgent).not.toHaveBeenCalled();
     });
 
+    it('should bail out if the interim op was cancelled during switchMessageBranch (Stop pressed)', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      // The op passes the preflight guard as 'running', then a Stop lands while
+      // switchMessageBranch is awaiting — flip it to cancelled inside the mock.
+      const chatState: any = {
+        messagesMap: {},
+        operations: { 'test-op-id': { id: 'test-op-id', status: 'running' } },
+        operationsByMessage: {},
+        dbMessages: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+      };
+      chatState.switchMessageBranch = vi.fn().mockImplementation(async () => {
+        chatState.operations = { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } };
+      });
+      vi.mocked(useChatStore.getState).mockReturnValue(chatState);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // The branch switch ran (preflight passed), but the Stop during it must
+      // stop the runtime from starting.
+      expect(chatState.switchMessageBranch).toHaveBeenCalled();
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
+    });
+
     it('should restore mention-based initialContext when regenerating a user message', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({

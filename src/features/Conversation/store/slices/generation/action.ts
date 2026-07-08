@@ -670,6 +670,15 @@ export const generationSlice: StateCreator<
         operationId,
       });
 
+      // Re-check after switchMessageBranch: it is another await round-trip, so a
+      // Stop pressed during it lands *after* the preflight guard above. Bail
+      // before starting the runtime so the Stop isn't swallowed. The branch is
+      // already switched, which is harmless — no assistant turn has started yet.
+      const postSwitchOp = operationSelectors.getOperationById(operationId)(
+        useChatStore.getState(),
+      );
+      if (postSwitchOp && postSwitchOp.status !== 'running') return;
+
       const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
       const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
