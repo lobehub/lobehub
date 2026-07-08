@@ -109,8 +109,8 @@ running, the run fails at operation creation with `fetch failed` /
 recorded. So before running an agent, start QStash and gate on the preflight:
 
 ```bash
-./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # separate terminal — keep running
-./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # non-zero exit if QStash/Redis is down
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash      # separate terminal — keep running
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight    # non-zero exit if QStash/Redis is down
 ```
 
 ```bash

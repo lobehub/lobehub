@@ -460,7 +460,6 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 - [ ] Grouping at scale reuses `Accordion` / `GroupedAccordion` (by-project / status / time), not a flat ungrouped dump once the list grows past a screen. _(Natural)_
 - [ ] Search box, inline-rename, and row actions reuse the shared input / editing / action-reveal patterns, not raw `<input>` / `<label>` + hand CSS. _(Certainty)_
 - [ ] Spacing/padding expressed as `Flexbox` / `Block` `gap` / `padding` props (inherits the sidebar rhythm), not hand-picked px constants. _(Natural)_
-
 ## 1.11 A persistent composer above a list must not bury the records・Meaningful・Natural
 
 A list surface with an **always-visible create / compose affordance above the records** (an
