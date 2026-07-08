@@ -121,6 +121,30 @@ export const normalizeVerifySurface = (value: string): VerifySurface | null => {
   return VERIFY_SURFACE_ALIASES[key] ?? null;
 };
 
+/**
+ * The product object being accepted. Kept polymorphic so the acceptance aggregate
+ * is not coupled to task-only workflows: a future run can accept a topic,
+ * document, artifact, release, etc. without another schema reshape.
+ */
+export const acceptanceSubjectTypes = ['task', 'topic', 'document'] as const;
+export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+
+/**
+ * Business-level acceptance state. Check-level and run-level verdicts stay in the
+ * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
+ * outcome language (`accepted` / `rejected`).
+ */
+export const acceptanceStatuses = [
+  'pending',
+  'planned',
+  'verifying',
+  'repairing',
+  'accepted',
+  'rejected',
+  'errored',
+] as const;
+export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
+
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [
   'screenshot',

@@ -49,32 +49,15 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document'] as const;
-export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
  * outcome language (`accepted` / `rejected`).
  */
-export const acceptanceStatuses = [
-  'pending',
-  'planned',
-  'verifying',
-  'repairing',
-  'accepted',
-  'rejected',
-  'errored',
-] as const;
-export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
-
-/** Acceptance-level report verdict, distinct from per-check verify verdicts. */
-export const acceptanceReportVerdicts = ['accepted', 'rejected', 'uncertain'] as const;
-export type AcceptanceReportVerdict = (typeof acceptanceReportVerdicts)[number];
-
-/** Role of a verify run in one generated acceptance report. */
-export const acceptanceReportRunRoles = ['initial', 'repair', 'final', 'included'] as const;
-export type AcceptanceReportRunRole = (typeof acceptanceReportRunRoles)[number];
+export type AcceptanceStatus =
+  'pending' | 'planned' | 'verifying' | 'repairing' | 'accepted' | 'rejected' | 'errored';
 
 /**
  * Acceptance policy/config snapshot. The source may be a task's `config.verify`,
@@ -91,11 +74,6 @@ export interface AcceptanceConfig {
 
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
-  [key: string]: unknown;
-}
-
-/** Generic acceptance-report extension bag for rendering / provenance extras. */
-export interface AcceptanceReportMetadata {
   [key: string]: unknown;
 }
 

@@ -1,7 +1,6 @@
 import type {
   AcceptanceConfig,
   AcceptanceMetadata,
-  AcceptanceReportMetadata,
   ToulminVerdict,
   VerifyCheckItem,
   VerifyRubricConfig,
@@ -10,8 +9,6 @@ import type {
   VerifyRunScenario,
 } from '@lobechat/types';
 import {
-  acceptanceReportRunRoles,
-  acceptanceReportVerdicts,
   acceptanceStatuses,
   acceptanceSubjectTypes,
   verifierTypes,
@@ -372,16 +369,16 @@ export const acceptances = pgTable(
     /** Policy/config snapshot used when instantiating verify rounds for this acceptance. */
     config: jsonb('config').$type<AcceptanceConfig>().default({}),
 
-    /** First verify round in this acceptance chain (denormalized pointer). */
+    /** First verify round in this acceptance chain (denormalized pointer to verify_runs.id). */
     rootVerifyRunId: uuid('root_verify_run_id'),
 
-    /** Latest active or most recently settled verify round (denormalized pointer). */
+    /** Latest active or most recently settled verify round (denormalized pointer to verify_runs.id). */
     currentVerifyRunId: uuid('current_verify_run_id'),
 
-    /** Terminal verify round that produced the latest accepted/rejected outcome. */
+    /** Terminal verify round that produced the latest accepted/rejected outcome (verify_runs.id). */
     finalVerifyRunId: uuid('final_verify_run_id'),
 
-    /** Latest aggregate report version for this acceptance (denormalized pointer). */
+    /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
     latestReportId: uuid('latest_report_id'),
 
     /** Generic aggregate extension bag for future subject-specific state. */
@@ -414,123 +411,7 @@ export type NewAcceptance = typeof acceptances.$inferInsert;
 export type AcceptanceItem = typeof acceptances.$inferSelect;
 
 // ============================================
-// 7. acceptance_reports — versioned aggregate report across one or more verify rounds
-// ============================================
-export const acceptanceReports = pgTable(
-  'acceptance_reports',
-  {
-    id: uuid('id').defaultRandom().primaryKey().notNull(),
-
-    /** The acceptance lifecycle this report summarizes. */
-    acceptanceId: uuid('acceptance_id')
-      .references(() => acceptances.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    /** Redundant ownership column — required for list queries / access control. */
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    /** Workspace this report belongs to — scopes listing and cascades on workspace delete. */
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-
-    /** Monotonic report version inside one acceptance; regeneration writes a new version. */
-    version: integer('version').default(1).notNull(),
-
-    /** First verify round covered by this report. */
-    rootVerifyRunId: uuid('root_verify_run_id').references(() => verifyRuns.id, {
-      onDelete: 'set null',
-    }),
-
-    /** Final/latest verify round covered by this report. */
-    finalVerifyRunId: uuid('final_verify_run_id').references(() => verifyRuns.id, {
-      onDelete: 'set null',
-    }),
-
-    // ---- Summary verdict ----
-    verdict: text('verdict', { enum: acceptanceReportVerdicts }),
-    overallConfidence: numeric('overall_confidence', { mode: 'number', precision: 3, scale: 2 }),
-
-    // ---- Statistics snapshot across all covered verify rounds ----
-    totalChecks: integer('total_checks'),
-    passedChecks: integer('passed_checks'),
-    failedChecks: integer('failed_checks'),
-    uncertainChecks: integer('uncertain_checks'),
-
-    // ---- LLM-generated narrative (a produced artifact, not a computed one) ----
-    /** Short 3-5 sentence summary, suitable for embedding in a chat message. */
-    summary: text('summary'),
-    /** Full Markdown report, shown in the expanded review view. */
-    content: text('content'),
-
-    /** Whether the user has acknowledged the report. */
-    reviewedByUser: boolean('reviewed_by_user').default(false),
-
-    /** Generic report extension bag for rendering / provenance extras. */
-    metadata: jsonb('metadata').$type<AcceptanceReportMetadata>(),
-
-    /** Producer of this report, e.g. 'system' / a model id. */
-    generatedBy: text('generated_by').default('system'),
-    generatedAt: timestamptz('generated_at').notNull().defaultNow(),
-
-    createdAt: timestamptz('created_at').notNull().defaultNow(),
-  },
-  (t) => [
-    uniqueIndex('acceptance_reports_acceptance_id_version_unique').on(t.acceptanceId, t.version),
-    index('acceptance_reports_acceptance_id_idx').on(t.acceptanceId),
-    index('acceptance_reports_user_id_idx').on(t.userId),
-    index('acceptance_reports_workspace_id_idx').on(t.workspaceId),
-    index('acceptance_reports_root_verify_run_id_idx').on(t.rootVerifyRunId),
-    index('acceptance_reports_final_verify_run_id_idx').on(t.finalVerifyRunId),
-  ],
-);
-
-export type NewAcceptanceReport = typeof acceptanceReports.$inferInsert;
-export type AcceptanceReportItem = typeof acceptanceReports.$inferSelect;
-
-// ============================================
-// 8. acceptance_report_runs — exact verify rounds covered by one report version
-// ============================================
-export const acceptanceReportRuns = pgTable(
-  'acceptance_report_runs',
-  {
-    reportId: uuid('report_id')
-      .references(() => acceptanceReports.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    verifyRunId: uuid('verify_run_id')
-      .references(() => verifyRuns.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    /** Redundant ownership column — required for list queries / access control. */
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    /** Workspace this link belongs to — scopes listing and cascades on workspace delete. */
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-
-    /** Role of this run in the aggregate narrative (initial / repair / final / included). */
-    role: text('role', { enum: acceptanceReportRunRoles }),
-
-    /** Display ordering of the run within the report. */
-    sortOrder: integer('sort_order'),
-
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.reportId, t.verifyRunId] }),
-    index('acceptance_report_runs_verify_run_id_idx').on(t.verifyRunId),
-    index('acceptance_report_runs_user_id_idx').on(t.userId),
-    index('acceptance_report_runs_workspace_id_idx').on(t.workspaceId),
-  ],
-);
-
-export type NewAcceptanceReportRun = typeof acceptanceReportRuns.$inferInsert;
-export type AcceptanceReportRunItem = typeof acceptanceReportRuns.$inferSelect;
-
-// ============================================
-// 9. verify_reports — LLM-generated delivery-verification narrative for a run
+// 7. verify_reports — LLM-generated delivery-verification narrative for a run
 // ============================================
 export const verifyReports = pgTable(
   'verify_reports',
@@ -596,7 +477,7 @@ export const verifyReports = pgTable(
 );
 
 // ============================================
-// 10. verify_runs — a verification round / attempt (the run-anchor that decouples
+// 8. verify_runs — a verification round / attempt (the run-anchor that decouples
 //     the chain from agent_operations)
 // ============================================
 // The verify chain used to hang off agent_operations: the plan lived on

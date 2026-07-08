@@ -1,4 +1,6 @@
 import type {
+  AcceptanceStatus,
+  AcceptanceSubjectType,
   VerifierType,
   VerifyCheckResultStatus,
   VerifyEvidenceCapturedBy,
@@ -15,6 +17,8 @@ import type {
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type {
+  acceptanceStatuses,
+  acceptanceSubjectTypes,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -55,6 +59,8 @@ describe('verify vocabulary', () => {
       (typeof verifyEvidenceCapturedBy)[number]
     >().toEqualTypeOf<VerifyEvidenceCapturedBy>();
     expectTypeOf<VerifyRunOrigin>().toEqualTypeOf<VerifyRunOriginType>();
+    expectTypeOf<(typeof acceptanceSubjectTypes)[number]>().toEqualTypeOf<AcceptanceSubjectType>();
+    expectTypeOf<(typeof acceptanceStatuses)[number]>().toEqualTypeOf<AcceptanceStatus>();
   });
 });
 
