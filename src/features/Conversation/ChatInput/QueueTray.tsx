@@ -10,7 +10,6 @@ import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
-  QUEUE_BLOCKING_OPERATION_TYPES,
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
@@ -188,17 +187,15 @@ const QueueTray = memo(() => {
   const handleSendNow = useCallback(
     (msg: QueuedMessage) => {
       const chat = useChatStore.getState();
-      // Cancel whatever the item is queued behind — including interim
-      // approve/submit/skip/regenerate ops. Matching only AI_RUNTIME here would
-      // miss an interim blocker, so removeQueuedMessage + sendMessage below would
-      // just re-queue the item behind the same still-running interim op and
-      // "Send now" would be a no-op. Uses the shared queue-blocking set so this
-      // stays in sync with the enqueue check.
-      const runningOpId = chat.operationsByContext[contextKey]?.find((id) => {
-        const op = chat.operations[id];
-        return op && QUEUE_BLOCKING_OPERATION_TYPES.includes(op.type) && op.status === 'running';
-      });
-      if (runningOpId) chat.cancelOperation(runningOpId, 'send_now');
+      // Cancel EVERY running blocker the item could be queued behind, not just the
+      // first: matching one op would miss an interim blocker or the second of the
+      // two concurrent `regenerate` ops a delAndRegenerate/delAndResendThread
+      // retry runs (outer wrapper + inner regenerateUserMessage). Leaving any
+      // blocker running would make the sendMessage below re-enqueue the item, so
+      // "Send now" becomes a no-op. The selector shares the queue-blocking
+      // predicate with the enqueue check.
+      const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
+      for (const id of runningOpIds) chat.cancelOperation(id, 'send_now');
       removeQueuedMessage(contextKey, msg.id);
 
       // Reconstruct UploadFileItem-shaped objects so the optimistic temp message

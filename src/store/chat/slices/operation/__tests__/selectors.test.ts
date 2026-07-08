@@ -30,6 +30,47 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('getRunningQueueBlockingOperationIds', () => {
+    it('returns every running queue-blocking op, not just the first', () => {
+      // A delAndRegenerate/delAndResendThread retry runs two concurrent
+      // `regenerate` ops (outer wrapper + inner regenerateUserMessage). "Send now"
+      // must cancel BOTH — returning only the first would leave the queue blocked.
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let outerId = '';
+      let innerId = '';
+
+      act(() => {
+        outerId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+        innerId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+      });
+
+      const ids = operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current);
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(expect.arrayContaining([outerId, innerId]));
+    });
+
+    it('excludes non-running and non-blocking ops', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let runningId = '';
+
+      act(() => {
+        runningId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+        // Different queue-blocking op, but completed → excluded.
+        const doneId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+        }).operationId;
+        result.current.completeOperation(doneId);
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([runningId]);
+    });
+  });
+
   describe('getOperationsByType', () => {
     it('should return operations of specific type', () => {
       const { result } = renderHook(() => useChatStore());
@@ -58,6 +99,49 @@ describe('Operation Selectors', () => {
 
       expect(generateOps).toHaveLength(2);
       expect(reasoningOps).toHaveLength(1);
+    });
+  });
+
+  describe('getRunningQueueBlockingOperationIds', () => {
+    it('returns every running queue blocker for send-now in the same context', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let outerRegenerate: string;
+      let innerRegenerate: string;
+
+      act(() => {
+        outerRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        innerRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        const completedRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'toolCalling',
+        });
+        result.current.startOperation({
+          context: { agentId: 'agent-2', topicId: 'topic-2' },
+          type: 'regenerate',
+        });
+        result.current.completeOperation(completedRegenerate);
+      });
+
+      // Regression: delAndRegenerate/delAndResendThread can leave both an outer
+      // wrapper regenerate and an inner regenerateUserMessage running. Send-now
+      // must cancel both; cancelling only the first makes it re-queue.
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds({
+          agentId: 'agent-1',
+          topicId: 'topic-1',
+        })(result.current),
+      ).toEqual([outerRegenerate!, innerRegenerate!]);
     });
   });
 

@@ -3,7 +3,11 @@ import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messa
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { type Operation, type OperationType } from './types';
-import { AI_RUNTIME_OPERATION_TYPES, INPUT_LOADING_OPERATION_TYPES } from './types';
+import {
+  AI_RUNTIME_OPERATION_TYPES,
+  INPUT_LOADING_OPERATION_TYPES,
+  QUEUE_BLOCKING_OPERATION_TYPES,
+} from './types';
 
 // === Basic Queries ===
 /**
@@ -242,6 +246,23 @@ const isAgentRuntimeVisiblyRunningByContext =
     return operations.some(
       (op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
     );
+  };
+
+/**
+ * All running queue-blocking operation ids in a context (see
+ * QUEUE_BLOCKING_OPERATION_TYPES). "Send now" cancels every one of them, not just
+ * the first: a retry via delAndRegenerate/delAndResendThread runs an outer
+ * wrapper `regenerate` op AND an inner regenerateUserMessage `regenerate` op at
+ * once, so cancelling only one would leave the queue blocked and make "Send now"
+ * a no-op during that retry window.
+ */
+const getRunningQueueBlockingOperationIds =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): string[] => {
+    if (!context.agentId) return [];
+    return getOperationsByContext(context)(s)
+      .filter((op) => QUEUE_BLOCKING_OPERATION_TYPES.includes(op.type) && op.status === 'running')
+      .map((op) => op.id);
   };
 
 /**
@@ -805,6 +826,7 @@ export const operationSelectors = {
   getOperationsByMessage,
   getOperationsByType,
   getRunningOperations,
+  getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
   hasRunningOperationByContext,
