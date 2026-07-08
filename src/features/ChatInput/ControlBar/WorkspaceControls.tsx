@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { memo } from 'react';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
@@ -37,7 +37,7 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
     const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-    const deviceRoutingAvailable = isGatewayModeEnabled(agentId);
+    const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       deviceRoutingAvailable,

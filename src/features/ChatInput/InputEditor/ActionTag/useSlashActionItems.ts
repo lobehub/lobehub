@@ -10,7 +10,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
@@ -70,7 +70,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
-  const deviceRoutingAvailable = isGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -372,7 +372,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Effective target: shared with server dispatch. In particular, a hetero
   // desktop "local" selection that carries this desktop's boundDeviceId becomes
   // a device target when the same agent is opened from web.
-  const deviceRoutingAvailable = isGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

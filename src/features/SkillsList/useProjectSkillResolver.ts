@@ -2,7 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { isGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -49,7 +49,7 @@ export const useProjectSkillResolver = (
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
-  const deviceRoutingAvailable = isGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
