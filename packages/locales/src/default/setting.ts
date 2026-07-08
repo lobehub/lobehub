@@ -290,7 +290,16 @@ export default {
   'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
-  'creds.orgSetupRequired': 'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
+  'creds.orgSetupRequired':
+    'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
+  'creds.owner.sharedBy': 'Shared by {{name}}',
+  'creds.personalSection.desc':
+    'These are your own credentials. Turn on sharing to make one available to this workspace.',
+  'creds.personalSection.title': 'Your Personal Credentials',
+  'creds.share.error': 'Failed to update sharing for this credential. Please try again.',
+  'creds.share.toggle': 'Share to this workspace',
+  'creds.share.visibility.private': 'Private',
+  'creds.share.visibility.public': 'Public',
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
   'creds.form.addPair': 'Add Key-Value Pair',

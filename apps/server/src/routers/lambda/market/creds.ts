@@ -1,3 +1,4 @@
+import { MarketAPIError, orgRefToPathSegment } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -10,15 +11,38 @@ import { MarketService } from '@/server/services/market';
 
 const log = debug('lambda-router:market:creds');
 
+const MARKET_STATUS_TO_TRPC_CODE: Record<number, TRPCError['code']> = {
+  400: 'BAD_REQUEST',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+};
+
+/**
+ * Maps a Market API error (share/publish/unshare return structured 400/403/404
+ * responses — invalid org, not a member, credential/org not found) to the
+ * matching tRPC error code so the frontend can distinguish them instead of
+ * seeing a blanket 500.
+ */
+function mapMarketShareError(error: unknown, fallbackMessage: string): TRPCError {
+  if (error instanceof MarketAPIError) {
+    return new TRPCError({
+      cause: error,
+      code: MARKET_STATUS_TO_TRPC_CODE[error.status] ?? 'INTERNAL_SERVER_ERROR',
+      message: error.message || fallbackMessage,
+    });
+  }
+  return new TRPCError({ cause: error, code: 'INTERNAL_SERVER_ERROR', message: fallbackMessage });
+}
+
 // Creds procedure with market authentication
 const credsProcedure = publicProcedure
   .use(serverDatabase)
   // `ctx.workspaceId` from the raw `X-Workspace-Id` header is NOT trustworthy on
   // its own (createLambdaContext copies it verbatim, with no membership check).
   // `cloudWorkspaceAuth` verifies the caller is actually a member before letting
-  // `workspaceId` through — demoting it to `undefined` otherwise — so the
-  // `credsAccessor` routing below can never be pointed at a workspace the
-  // caller doesn't belong to. Must run before any procedure reads `ctx.workspaceId`.
+  // `workspaceId` through — demoting it to `undefined` otherwise. `share` below
+  // is the only procedure here that reads `ctx.workspaceId`; this guarantees it
+  // can never target a workspace the caller doesn't belong to.
   .use(cloudWorkspaceAuth)
   .use(marketUserInfo)
   .use(requireMarketAuth)
@@ -33,23 +57,6 @@ const credsProcedure = publicProcedure
     });
   });
 const credsManageProcedure = credsProcedure.use(withRbacPermission('workspace:update:all'));
-
-/**
- * Inside a workspace, reads/writes must hit the workspace's shared organization
- * credentials, never the operator's personal creds (LOBE-10978). `ctx.workspaceId`
- * is only ever set here once `cloudWorkspaceAuth` (above) has confirmed the
- * caller is a member of that workspace — never trust it directly off the raw
- * `X-Workspace-Id` header. Falls back to the personal `market.creds` namespace
- * outside a workspace.
- *
- * NOTE: unlike `workspaceCreds.ts`, writes routed through here do not (yet) emit
- * a `CloudWorkspaceAuditLogModel` entry — audit logging for this path is a
- * follow-up, tracked alongside LOBE-10978.
- */
-const credsAccessor = (ctx: { marketService: MarketService; workspaceId?: string | null }) =>
-  ctx.workspaceId
-    ? ctx.marketService.market.organizations.creds({ workspaceId: ctx.workspaceId })
-    : ctx.marketService.market.creds;
 
 export const credsRouter = router({
   // Create file credential
@@ -67,7 +74,7 @@ export const credsRouter = router({
       log('createFile input: %O', { ...input, fileHashId: '[HIDDEN]' });
 
       try {
-        const result = await credsAccessor(ctx).createFile(input);
+        const result = await ctx.marketService.market.creds.createFile(input);
         log('createFile success: id=%d', result.id);
         return result;
       } catch (error) {
@@ -95,7 +102,7 @@ export const credsRouter = router({
       log('createKV input: %O', { ...input, values: '[HIDDEN]' });
 
       try {
-        const result = await credsAccessor(ctx).createKV(input);
+        const result = await ctx.marketService.market.creds.createKV(input);
         log('createKV success: id=%d', result.id);
         return result;
       } catch (error) {
@@ -122,7 +129,7 @@ export const credsRouter = router({
       log('createOAuth input: %O', input);
 
       try {
-        const result = await credsAccessor(ctx).createOAuth(input);
+        const result = await ctx.marketService.market.creds.createOAuth(input);
         log('createOAuth success: id=%d', result.id);
         return result;
       } catch (error) {
@@ -142,7 +149,7 @@ export const credsRouter = router({
       log('delete input: %O', input);
 
       try {
-        const result = await credsAccessor(ctx).delete(input.id);
+        const result = await ctx.marketService.market.creds.delete(input.id);
         log('delete success');
         return result;
       } catch (error) {
@@ -162,7 +169,7 @@ export const credsRouter = router({
       log('deleteByKey input: %O', input);
 
       try {
-        const result = await credsAccessor(ctx).deleteByKey(input.key);
+        const result = await ctx.marketService.market.creds.deleteByKey(input.key);
         log('deleteByKey success');
         return result;
       } catch (error) {
@@ -187,7 +194,7 @@ export const credsRouter = router({
       log('get input: %O', input);
 
       try {
-        const result = await credsAccessor(ctx).get(input.id, {
+        const result = await ctx.marketService.market.creds.get(input.id, {
           decrypt: input.decrypt,
         });
         log('get success: id=%d', input.id);
@@ -215,7 +222,7 @@ export const credsRouter = router({
 
       try {
         // First find the credential by key from the list
-        const listResult = await credsAccessor(ctx).list();
+        const listResult = await ctx.marketService.market.creds.list();
         const cred = listResult.data?.find((c) => c.key === input.key);
 
         if (!cred) {
@@ -226,7 +233,7 @@ export const credsRouter = router({
         }
 
         // Then get the full credential with optional decryption
-        const result = await credsAccessor(ctx).get(cred.id, {
+        const result = await ctx.marketService.market.creds.get(cred.id, {
           decrypt: input.decrypt,
         });
         log('getByKey success: key=%s, id=%d', input.key, cred.id);
@@ -249,7 +256,9 @@ export const credsRouter = router({
       log('getSkillCredStatus input: %O', input);
 
       try {
-        const result = await credsAccessor(ctx).getSkillCredStatus(input.skillIdentifier);
+        const result = await ctx.marketService.market.creds.getSkillCredStatus(
+          input.skillIdentifier,
+        );
         log('getSkillCredStatus success: %d items', result.length);
         return result;
       } catch (error) {
@@ -262,11 +271,70 @@ export const credsRouter = router({
       }
     }),
 
+  // Publish a draft-linked credential (visibility 'private') so the rest of
+  // the workspace's organization can see it. Owner-only — no orgId needed,
+  // the credential is already linked from a prior `share` call.
+  publish: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('publish input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.publish(input.id);
+      log('publish success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('publish error: %O', error);
+      throw mapMarketShareError(error, 'Failed to publish credential');
+    }
+  }),
+
+  // Share one of the caller's own personal credentials into the current
+  // workspace's Market organization. Always targets `ctx.workspaceId` — never
+  // accepts an org id from client input — so `cloudWorkspaceAuth`'s membership
+  // check (above) guarantees a caller can never share into a workspace they
+  // don't belong to. Re-callable to change `visibility` on an already-shared
+  // credential (Market's `shareCred` unconditionally overwrites).
+  share: credsProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Sharing a credential requires an active workspace context',
+        });
+      }
+      log('share input: id=%d, visibility=%s', input.id, input.visibility);
+      try {
+        const result = await ctx.marketService.market.creds.share(input.id, {
+          orgId: orgRefToPathSegment({ workspaceId: ctx.workspaceId }),
+          visibility: input.visibility,
+        });
+        log('share success: id=%d', result.id);
+        return result;
+      } catch (error) {
+        log('share error: %O', error);
+        throw mapMarketShareError(error, 'Failed to share credential');
+      }
+    }),
+
+  // Unshare a credential from its organization (flips back to private,
+  // clears the link). Does not delete the credential.
+  unshare: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('unshare input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.unshare(input.id);
+      log('unshare success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('unshare error: %O', error);
+      throw mapMarketShareError(error, 'Failed to unshare credential');
+    }
+  }),
+
   // Inject credentials by keys (explicit injection).
-  // NOTE: intentionally NOT routed through `credsAccessor` — the Market SDK's
-  // org-scoped creds service has no `inject` equivalent yet (LOBE-10978), so
-  // this always resolves against the operator's personal credentials, even
-  // inside a workspace.
   inject: credsProcedure
     .input(
       z.object({
@@ -344,7 +412,7 @@ export const credsRouter = router({
     log('list called');
 
     try {
-      const result = await credsAccessor(ctx).list();
+      const result = await ctx.marketService.market.creds.list();
       log('list success: %d credentials', result.data?.length ?? 0);
       return result;
     } catch (error) {
@@ -388,10 +456,7 @@ export const credsRouter = router({
       log('uploadFile input: fileName=%s, fileType=%s', input.fileName, input.fileType);
 
       try {
-        const result = await ctx.marketService.uploadCredFile({
-          ...input,
-          orgId: ctx.workspaceId ? { workspaceId: ctx.workspaceId } : undefined,
-        });
+        const result = await ctx.marketService.uploadCredFile(input);
         log('uploadFile success: fileHashId=%s', result.fileHashId);
         return result;
       } catch (error) {
@@ -422,7 +487,7 @@ export const credsRouter = router({
       });
 
       try {
-        const result = await credsAccessor(ctx).update(id, data);
+        const result = await ctx.marketService.market.creds.update(id, data);
         log('update success');
         return result;
       } catch (error) {
