@@ -107,14 +107,14 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 ### Quality Check
 
 ```bash
-# Lint (autofix) + related tests. Defaults to changed files; pass [files...] to target specific paths.
-bun run check [files...] [--lint] [--test] [--type]
+bun run check [changed-files...]
 ```
 
 - No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
-- Tests are auto-routed to the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
+- `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
+- `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
 - `--type` runs the full type-check. NEVER run `bun run test` — the full suite takes \~10 minutes.
-- Manual fallback when you need unusual flags or a single tool: `bunx vitest run --silent='passed-only' '[file-path]'` from the owning package directory, `bun run type-check` for types.
+- To run tests manually (e.g. a single file or unusual flags), `cd` into the owning package first: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
 
 ### i18n
 
