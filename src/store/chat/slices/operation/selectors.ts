@@ -330,9 +330,24 @@ const isInputVisiblyLoadingByContext =
 
     const operations = getOperationsByContext(context)(s);
 
-    return operations.some(
+    const hasVisiblyRunning = operations.some(
       (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
     );
+    if (hasVisiblyRunning) return true;
+
+    // A queued message is a follow-up the user already sent while a prior op was
+    // running; it gets no op of its own until that op ends and the queue drains.
+    // In the window where the prior op has finished its *visible* output
+    // (visibleLoadingDone) but hasn't reached its terminal end yet, there is no
+    // visibly-running op and no op for the queued message, so the input would
+    // look idle even though a send is pending. Keep the visible loading on while
+    // some INPUT_LOADING op is still running to absorb the queue. Gate on a
+    // still-running op so a stale queue left by a cancelled/errored run (which
+    // never drains) doesn't pin the indicator on forever.
+    const hasRunning = operations.some(
+      (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isRunningOperation(op),
+    );
+    return hasRunning && getQueuedMessages(context)(s).length > 0;
   };
 
 // === Backward Compatibility ===

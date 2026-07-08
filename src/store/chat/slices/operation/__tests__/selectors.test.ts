@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { operationSelectors } from '../selectors';
 
@@ -610,6 +611,74 @@ describe('Operation Selectors', () => {
       expect(
         operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
       ).toBeUndefined();
+    });
+
+    it('should keep visible loading when a queued message waits behind a visibly-done op', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+
+        // Prior op has finished its visible output but hasn't reached its
+        // terminal end yet (visibleLoadingDone), so it is not visibly running.
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        });
+      });
+
+      // Sanity: without a queued message the input reads idle in this window.
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
+
+      // User sends a follow-up while the op is still running: it queues without
+      // its own op. The visible loading must stay on so the input doesn't look idle.
+      act(() => {
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should not pin visible loading on a stale queue once the op is no longer running', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      let opId!: string;
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        }).operationId;
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+
+      // A cancelled/errored run never drains its queue; with no running op left,
+      // the leftover queue must not keep the indicator pinned on.
+      act(() => {
+        result.current.cancelOperation(opId);
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
     });
 
     it('should keep visible loading for a normal running runtime operation', () => {
