@@ -776,17 +776,16 @@ const queuedMessageCount =
 /**
  * Get all queued messages for a context
  */
-const getQueuedMessages =
-  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
-  (s: ChatStoreState) => {
-    if (!context.agentId) return [];
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-    return s.queuedMessages[contextKey] ?? [];
-  };
+const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
+  if (!context.agentId) return [];
+  // Build the key from the FULL context (threadId / scope / subAgentId /
+  // documentId), matching both the enqueue side (`messageMapKey(operationContext)`
+  // in conversationLifecycle) and getOperationsByContext. A reduced
+  // agentId/groupId/topicId key collapses thread / page / group_agent
+  // conversations onto the main-scope bucket, so their queued follow-ups would
+  // never be found.
+  return s.queuedMessages[messageMapKey(context)] ?? [];
+};
 
 /**
  * Operation Selectors

@@ -681,6 +681,35 @@ describe('Operation Selectors', () => {
       );
     });
 
+    it('should find a queued follow-up in a thread-scope context (full context key)', () => {
+      const { result } = renderHook(() => useChatStore());
+      // Thread scope keys on threadId/scope; a reduced agentId/topicId key would
+      // collapse to the main-scope bucket and miss the queue.
+      const context = {
+        agentId: 'agent1',
+        scope: 'thread' as const,
+        threadId: 'thread1',
+        topicId: 'topic1',
+      };
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
     it('should keep visible loading for a normal running runtime operation', () => {
       const { result } = renderHook(() => useChatStore());
 
