@@ -65,12 +65,13 @@ const CredsList: FC = () => {
   const handleEdit = (cred: UserCredSummary) => {
     createEditCredModal({
       cred,
+      credsApi,
       onSuccess: () => refetch(),
     });
   };
 
   const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred });
+    createViewCredModal({ cred, credsApi });
   };
 
   if (isAuthLoading) {

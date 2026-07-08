@@ -8,7 +8,7 @@ import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -20,6 +20,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface FileCredFormProps {
+  credsApi: CredsApi;
   disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
@@ -31,13 +32,12 @@ interface FormValues {
   name: string;
 }
 
-const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) => {
+const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
-  const credsApi = useCredsApi();
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -75,7 +75,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) =>
       }
       const base64 = btoa(binary);
 
-      // Upload via TRPC (personal or workspace, based on active CredsApi context)
+      // Upload via TRPC (personal or workspace, based on the credsApi passed in by the caller)
       const result = await credsApi.client.uploadFile.mutate({
         file: base64,
         fileName: file.name,

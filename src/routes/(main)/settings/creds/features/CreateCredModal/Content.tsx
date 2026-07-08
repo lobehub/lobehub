@@ -7,6 +7,7 @@ import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type CredsApi } from '../useCredsApi';
 import CredTypeSelector from './CredTypeSelector';
 import FileCredForm from './FileCredForm';
 import KVCredForm from './KVCredForm';
@@ -19,10 +20,18 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface CreateCredModalContentProps {
+  /**
+   * Bound explicitly by the caller (rendered inline, inside CredsApiProvider)
+   * instead of read via useCredsApi() here — this content tree is portaled by
+   * createModal() to a global ModalHost that sits outside CredsApiProvider,
+   * so a local useCredsApi() call would silently fall back to the personal
+   * (market.creds) API even on the workspace creds page.
+   */
+  credsApi: CredsApi;
   onSuccess?: () => void;
 }
 
-const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ onSuccess }) => {
+const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onSuccess }) => {
   const { t } = useTranslation('setting');
   const { close } = useModalContext();
   const [step, setStep] = useState(0);
@@ -47,13 +56,20 @@ const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ onSuccess }) 
     switch (credType) {
       case 'kv-env':
       case 'kv-header': {
-        return <KVCredForm type={credType} onBack={handleBack} onSuccess={handleSuccess} />;
+        return (
+          <KVCredForm
+            credsApi={credsApi}
+            type={credType}
+            onBack={handleBack}
+            onSuccess={handleSuccess}
+          />
+        );
       }
       case 'oauth': {
-        return <OAuthCredForm onBack={handleBack} onSuccess={handleSuccess} />;
+        return <OAuthCredForm credsApi={credsApi} onBack={handleBack} onSuccess={handleSuccess} />;
       }
       case 'file': {
-        return <FileCredForm onBack={handleBack} onSuccess={handleSuccess} />;
+        return <FileCredForm credsApi={credsApi} onBack={handleBack} onSuccess={handleSuccess} />;
       }
       default: {
         return null;
