@@ -431,18 +431,16 @@ export default {
   'downloads.desktop.desc':
     'Use the native desktop app for local files, system tools, and focused work on your computer.',
   'downloads.desktop.title': 'Desktop App',
-  'downloads.heroDesc':
-    'Install LobeHub on your phone or desktop, or connect it to the messaging apps your team already uses.',
-  'downloads.heroTitle': 'Do more with LobeHub everywhere you work',
+  'downloads.messenger.empty': 'No Messenger integrations are available.',
   'downloads.messenger.cta': 'Open Messenger settings',
   'downloads.messenger.desc':
     'Connect Telegram, Slack, and Discord to keep agent conversations close to your daily chats.',
+  'downloads.messenger.loadFailed': 'Messenger integrations could not be loaded.',
   'downloads.messenger.title': 'Messenger integration',
   'downloads.mobile.cta': 'Open mobile app',
   'downloads.mobile.desc':
     'Start conversations from your phone and keep LobeHub available when you are away from the desk.',
   'downloads.mobile.title': 'Mobile App',
-  'downloads.title': 'Apps and integrations',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
