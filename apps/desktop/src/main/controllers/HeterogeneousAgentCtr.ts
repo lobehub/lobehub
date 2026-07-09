@@ -214,8 +214,8 @@ interface AgentSession {
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
    * when the configured command is bare: detection can find the CLI through
-   * the login-shell PATH or a well-known install location (e.g. the Codex.app
-   * bundled CLI) that plain spawn() with the inherited env can't resolve.
+   * the login-shell PATH or a well-known install location (e.g. an app-bundled
+   * Codex CLI) that plain spawn() with the inherited env can't resolve.
    */
   resolvedCommandPath?: string;
   /**
@@ -513,7 +513,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     if (!status || status.available) {
       // Spawn through the detector-resolved absolute path when the configured
       // command is bare — detection may have located the CLI somewhere plain
-      // spawn() can't (login-shell PATH, Codex.app bundled CLI, …).
+      // spawn() can't (login-shell PATH, app-bundled Codex CLI, …).
       const useResolvedPath = Boolean(status?.path) && !command.includes(path.sep);
       session.resolvedCommandPath = useResolvedPath ? status!.path : undefined;
       // Carry the login-shell PATH the detector resolved through, so a

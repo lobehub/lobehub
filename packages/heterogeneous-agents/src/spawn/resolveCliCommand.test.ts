@@ -75,7 +75,7 @@ describe('resolveCliCommand', () => {
       expect(execMock).not.toHaveBeenCalled();
     });
 
-    it('falls through a PATH `codex` that fails validation to the Codex.app bundled CLI', async () => {
+    it('falls through a PATH `codex` that fails validation to the ChatGPT.app bundled CLI', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       // Deterministic env: no SHELL → no login-shell lookup.
@@ -87,15 +87,42 @@ describe('resolveCliCommand', () => {
         callExecFile('/Users/x/Library/pnpm/codex\n');
         // ...but its `--version` errors (ENOENT-style broken wrapper).
         callExecFileError(new Error('spawn ENOENT'));
-        // Fallback: the Codex.app bundled CLI validates.
+        // Fallback: the ChatGPT.app bundled CLI validates.
         callExecFile('codex-cli 0.142.5');
 
         const { detectHeterogeneousCliCommand } = await importModule();
         const status = await detectHeterogeneousCliCommand('codex', 'codex');
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
         expect(execFileMock.mock.calls[2]![0]).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex',
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls back to the legacy Codex.app bundle when ChatGPT.app is unavailable', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which codex
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFile('codex-cli 0.142.5'); // /Applications/Codex.app
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(execFileMock.mock.calls[3]![0]).toBe(
           '/Applications/Codex.app/Contents/Resources/codex',
         );
       } finally {
@@ -118,7 +145,7 @@ describe('resolveCliCommand', () => {
         const status = await detectHeterogeneousCliCommand('codex', 'codex-beta');
 
         expect(status.available).toBe(false);
-        // Only the custom command's own `which` runs — no Codex.app fallback.
+        // Only the custom command's own `which` runs — no app-bundle fallback.
         expect(execFileMock).toHaveBeenCalledTimes(1);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
       } finally {
@@ -252,8 +279,10 @@ describe('resolveCliCommand', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications candidate
-        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
 
         const { resolveHeteroSpawnCommand } = await importModule();
         const resolved = await resolveHeteroSpawnCommand('codex', 'codex');
