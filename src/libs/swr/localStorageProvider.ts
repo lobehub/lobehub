@@ -26,7 +26,7 @@
 import { bootTiming } from '@/libs/bootTiming';
 
 import { buildLocalDataKey, localDataCache } from './localDataCache';
-import { isAnonymousScope } from './useCacheScope';
+import { isScopeTrusted } from './useCacheScope';
 
 interface CacheEntry<T = unknown> {
   /** Cached data */
@@ -510,16 +510,15 @@ export const swrCacheProvider = (
   return createCacheProvider({
     getScope,
     idbPatterns: [...CACHE_TIERS.idb],
-    // Desktop's anonymous scope is a transient pre-identity boot state (a
-    // successful `getUserState` always resolves a real `userId`), so quarantine
-    // its writes from persistence — otherwise a slow identity round-trip lets
-    // real data land in the `anon` partition and get orphaned on the scope flip.
-    // The anonymous scope is only ever a transient pre-identity boot state —
-    // quarantine its writes from persistence so a slow identity round-trip
-    // can't land real data in the `anon` partition and orphan it on the scope
-    // flip. (The CacheHydrationGate now blocks paint until `userId` resolves, so
-    // this is defense-in-depth for any fetcher that mounts outside the gate.)
-    isEphemeralScope: isAnonymousScope,
+    // Quarantine writes until the session check resolves (`isScopeTrusted`).
+    // The active scope is optimistic (persisted last-known user) before the
+    // session confirms it, so a write made then could land in the wrong
+    // partition on an account switch / first-ever boot and get orphaned. Once the
+    // session resolves the scope is definitive and writes persist — including
+    // no-auth, where the check completes to "not signed in" and the anonymous
+    // scope is a legitimate durable context. `reloadScope` clears the dirty set
+    // on a real scope flip, so quarantined writes never survive a switch.
+    isEphemeralScope: () => !isScopeTrusted(),
     localPatterns: [...CACHE_TIERS.local],
     onScopeHydrated,
     // Governs the localStorage tier only (recents-style shells); the IndexedDB
