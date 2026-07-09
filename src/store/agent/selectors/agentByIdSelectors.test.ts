@@ -79,7 +79,7 @@ describe('agentByIdSelectors', () => {
 
       const context = agentByIdSelectors.getAgentBuilderContextById('agent-1')(state);
 
-      expect(context.config.plugins).toEqual(['search']);
+      expect(context.config).toMatchObject({ plugins: ['search'] });
     });
   });
 
