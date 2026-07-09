@@ -1,6 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { type UploadedImageOutcome, rewriteImagePlaceholders } from '../imageEcho';
+import { rewriteImagePlaceholders, type UploadedImageOutcome } from '../imageEcho';
 import { createAdapter } from '../registry';
 import type {
   AgentEventAdapter,
@@ -117,6 +117,17 @@ export class AgentStreamPipeline {
         type: 'session_configured',
       }),
     );
+  }
+
+  completeRuntime(data: Record<string, any> = {}): AgentStreamEvent[] {
+    return this.toStreamEvents([
+      {
+        data,
+        stepIndex: 0,
+        timestamp: Date.now(),
+        type: 'agent_runtime_end',
+      },
+    ]);
   }
 
   private async processPayloads(payloads: unknown[]): Promise<AgentStreamEvent[]> {

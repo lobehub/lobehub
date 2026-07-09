@@ -44,6 +44,65 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { claudeSdkSessionCloseMock, claudeSdkSessionConstructMock } = vi.hoisted(() => ({
+  claudeSdkSessionCloseMock: vi.fn(),
+  claudeSdkSessionConstructMock: vi.fn(),
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+
+  class MockClaudeAgentSdkSession {
+    constructor(private readonly options: any) {
+      claudeSdkSessionConstructMock(options);
+    }
+
+    close() {
+      claudeSdkSessionCloseMock();
+    }
+
+    async run() {
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [
+          {
+            lastEventAt: now,
+            startedAt: now,
+            taskId: 'task_1',
+          },
+        ],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        staleDeadlineAt: now + 300_000,
+        state: 'monitoring',
+        transport: 'claude-sdk',
+      });
+      this.options.onSessionId('sess_sdk');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'claude-sdk' },
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'claude-sdk',
+      });
+    }
+  }
+
+  return {
+    ...actual,
+    ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
+  };
+});
+
 const { fetchCodexQuotaMock } = vi.hoisted(() => ({
   fetchCodexQuotaMock: vi.fn(),
 }));
@@ -126,13 +185,21 @@ const getFlagValues = (args: string[], flag: string) =>
 
 describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
+  let originalClaudeSdkLabEnv: string | undefined;
 
   beforeEach(async () => {
+    originalClaudeSdkLabEnv = process.env.LOBE_CLAUDE_CODE_SDK;
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
     fetchCodexQuotaMock.mockReset();
+    claudeSdkSessionCloseMock.mockReset();
+    claudeSdkSessionConstructMock.mockReset();
+    mockGetAllWindows.mockReset();
+    delete process.env.LOBE_CLAUDE_CODE_SDK;
   });
 
   afterEach(async () => {
+    if (originalClaudeSdkLabEnv === undefined) delete process.env.LOBE_CLAUDE_CODE_SDK;
+    else process.env.LOBE_CLAUDE_CODE_SDK = originalClaudeSdkLabEnv;
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
@@ -344,6 +411,54 @@ describe('HeterogeneousAgentCtr', () => {
         { text: 'selected code context', type: 'text' },
         { text: 'user task', type: 'text' },
       ]);
+    });
+
+    it('uses Claude SDK streaming lab instead of spawning claude -p', async () => {
+      process.env.LOBE_CLAUDE_CODE_SDK = '1';
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        args: ['--model', 'claude-sonnet-4-6', '--effort', 'medium'],
+        command: 'claude',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'watch ci', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(claudeSdkSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'claude-sonnet-4-6', '--effort', 'medium'],
+          commandPath: 'claude',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-test',
+          stdinPayload: expect.stringContaining('watch ci'),
+        }),
+      );
+
+      const statusPayloads = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentRuntimeStatus')
+        .map(([, payload]) => payload);
+      expect(statusPayloads.some((payload) => payload.state === 'monitoring')).toBe(true);
+      expect(statusPayloads.at(-1)).toMatchObject({
+        state: 'closed',
+        transport: 'claude-sdk',
+      });
+
+      const streamEvents = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentEvent')
+        .map(([, payload]) => payload.event);
+      expect(streamEvents.some((event) => event.type === 'agent_runtime_end')).toBe(true);
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
     it.each([
@@ -1180,8 +1295,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       const runtimeEndIdx = broadcasts.findIndex(
         (b) =>
-          b.channel === 'heteroAgentEvent' &&
-          (b.data as any)?.event?.type === 'agent_runtime_end',
+          b.channel === 'heteroAgentEvent' && (b.data as any)?.event?.type === 'agent_runtime_end',
       );
 
       expect(completeIdx).toBeGreaterThan(-1);

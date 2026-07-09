@@ -41,6 +41,7 @@ describe('parseWorktreeAddPath', () => {
   it('skips flags and their values', () => {
     expect(parseWorktreeAddPath('git worktree add -b feature ../feat', '/repo')).toBe('/feat');
     expect(parseWorktreeAddPath('git worktree add --detach /tmp/wt', '/repo')).toBe('/tmp/wt');
+    expect(parseWorktreeAddPath('git worktree add --orphan ../orphan', '/repo')).toBe('/orphan');
   });
 
   it('stops at a shell separator', () => {
@@ -217,6 +218,41 @@ describe('recordGitCommandEffects', () => {
     await recordGitCommandEffects({ command: 'git checkout package.json', topicId: 't1' });
 
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('marks detached switch commands without recording the commit-ish as a branch', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          workingDirectoryConfig: {
+            git: {
+              branch: 'canary',
+              github: {
+                pullRequest: {
+                  number: 1,
+                  state: 'OPEN',
+                  title: 'old',
+                  url: 'https://github.com/lobehub/lobehub/pull/1',
+                },
+                pullRequestStatus: 'ok',
+              },
+            },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ command: 'git switch --detach HEAD', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { detached: true },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
   });
 
   it('binds a created GitHub PR from gh pr create output', async () => {
