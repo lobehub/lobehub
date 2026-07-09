@@ -1,6 +1,5 @@
 import type * as LobeChatConst from '@lobechat/const';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type * as Antd from 'antd';
 import type * as LucideReact from 'lucide-react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,8 +85,13 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
+interface AntdMockModule {
+  App: Record<PropertyKey, unknown>;
+  Modal: Record<PropertyKey, unknown>;
+}
+
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof Antd>();
+  const actual = await importOriginal<AntdMockModule>();
 
   return {
     ...actual,

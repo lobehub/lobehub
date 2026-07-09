@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input, InputNumber, Select, Space } from 'antd';
+import { Select, useModalContext } from '@lobehub/ui/base-ui';
+import { App, Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -121,7 +121,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
             <span>{agent.title}</span>
           </span>
         ),
-        searchLabel: agent.title || '',
+        title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
@@ -197,9 +197,6 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
             options={agentOptions}
             placeholder={t('run.create.agent.placeholder')}
             variant="filled"
-            filterOption={(input, option) =>
-              (option?.searchLabel as string)?.toLowerCase().includes(input.toLowerCase())
-            }
             optionRender={(option) => (
               <span
                 style={{

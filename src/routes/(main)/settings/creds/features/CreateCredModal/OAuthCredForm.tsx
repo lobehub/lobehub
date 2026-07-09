@@ -1,8 +1,9 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Avatar, Empty, Form, Input, Select, Spin } from 'antd';
+import { Avatar, Empty, Form, Input, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -50,6 +51,24 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
   const { data: connectionsData, isLoading } = credsApi.query.listOAuthConnections.useQuery();
 
   const connections = connectionsData?.connections ?? [];
+  const connectionOptions = connections.map((conn: any) => {
+    const provider = conn.providerId || 'OAuth';
+    const displayName = conn.providerName || conn.providerUserName || conn.email || conn.name;
+
+    return {
+      label: (
+        <span className={styles.connectionOption}>
+          {conn.avatar && <Avatar size="small" src={conn.avatar} />}
+          <span>
+            <span className={styles.provider}>{provider}</span>
+            {displayName && <span className={styles.username}> - {displayName}</span>}
+          </span>
+        </span>
+      ),
+      title: [provider, displayName].filter(Boolean).join(' '),
+      value: conn.id,
+    };
+  });
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -99,24 +118,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
         name="oauthConnectionId"
         rules={[{ required: true, message: t('creds.form.connectionRequired') }]}
       >
-        <Select disabled={disabled} placeholder={t('creds.form.selectConnectionPlaceholder')}>
-          {connections.map((conn: any) => {
-            const provider = conn.providerId || 'OAuth';
-            const displayName =
-              conn.providerName || conn.providerUserName || conn.email || conn.name;
-            return (
-              <Select.Option key={conn.id} value={conn.id}>
-                <span className={styles.connectionOption}>
-                  {conn.avatar && <Avatar size="small" src={conn.avatar} />}
-                  <span>
-                    <span className={styles.provider}>{provider}</span>
-                    {displayName && <span className={styles.username}> - {displayName}</span>}
-                  </span>
-                </span>
-              </Select.Option>
-            );
-          })}
-        </Select>
+        <Select
+          disabled={disabled}
+          options={connectionOptions}
+          placeholder={t('creds.form.selectConnectionPlaceholder')}
+        />
       </Form.Item>
 
       <Form.Item
