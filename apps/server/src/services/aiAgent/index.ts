@@ -2769,25 +2769,30 @@ export class AiAgentService {
         toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
       }
 
-      // Include lobehub skill and composio manifests for activator discovery
-      for (const manifest of lobehubSkillManifests) {
+      // Include lobehub skill and composio manifests for activator discovery.
+      // Uses the disabled-filtered `active*Manifests` (not the raw
+      // lobehubSkillManifests/composioManifests) — otherwise a disabled
+      // skill/composio integration would be re-ingested here and shown to
+      // the model as discoverable in <available_tools>, even though it was
+      // correctly excluded from the actual invocation pool above.
+      for (const manifest of activeLobehubSkillManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
         }
       }
-      for (const manifest of composioManifests) {
+      for (const manifest of activeComposioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
         }
       }
 
-      for (const manifest of lobehubSkillManifests) {
+      for (const manifest of activeLobehubSkillManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
       }
-      for (const manifest of composioManifests) {
+      for (const manifest of activeComposioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'composio';
       }
@@ -3443,9 +3448,17 @@ export class AiAgentService {
       // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
       // can only collide with each other — but we still dedupe by name to keep
       // a single shape for the SkillEngine input.
+      //
+      // Disabled skills are dropped here, not just rule-gated later: this
+      // `skills` array is the sole candidate pool SkillEngine/SkillResolver
+      // build `<available_skills>` from AND the pool `activateSkill` resolves
+      // against, so a disabled identifier absent here is neither listed nor
+      // activatable — mirrors the tool-manifest treatment above (installedPlugins/
+      // additionalManifests), which this array had never received.
       const seenNames = new Set<string>();
       const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
         (skill) => {
+          if (disabledPluginIds.includes(skill.identifier)) return false;
           if (seenNames.has(skill.name)) return false;
           seenNames.add(skill.name);
           return true;

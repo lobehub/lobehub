@@ -9,6 +9,8 @@ const {
   mockCreateOperation,
   mockCreateServerAgentToolsEngine,
   mockGetAgentConfig,
+  mockGetComposioManifests,
+  mockGetLobehubSkillManifests,
   mockMessageCreate,
   mockPluginQuery,
 } = vi.hoisted(() => ({
@@ -20,6 +22,8 @@ const {
     getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
   }),
   mockGetAgentConfig: vi.fn(),
+  mockGetComposioManifests: vi.fn().mockResolvedValue([]),
+  mockGetLobehubSkillManifests: vi.fn().mockResolvedValue([]),
   mockMessageCreate: vi.fn(),
   mockPluginQuery: vi.fn().mockResolvedValue([]),
 }));
@@ -93,13 +97,13 @@ vi.mock('@/server/services/agentRuntime', () => ({
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    getLobehubSkillManifests: mockGetLobehubSkillManifests,
   })),
 }));
 
 vi.mock('@/server/services/composio', () => ({
   ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
+    getComposioManifests: mockGetComposioManifests,
   })),
 }));
 
@@ -134,11 +138,20 @@ const pluginManifest = (identifier: string) => ({
   manifest: { api: [{ description: 'x', name: 'x', parameters: {} }], identifier },
 });
 
+const toolManifest = (identifier: string) => ({
+  api: [{ description: 'x', name: 'x', parameters: {} }],
+  identifier,
+  meta: { description: 'x', title: identifier },
+});
+
 const installedPluginsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][0].installedPlugins as any[];
 
 const agentConfigPluginsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins as string[];
+
+const toolManifestMapArg = () =>
+  mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
 
 describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disabled)', () => {
   let service: AiAgentService;
@@ -212,5 +225,30 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     const installed = installedPluginsArg().map((p) => p.identifier);
     expect(installed).toEqual(['plugin-a', 'plugin-b', 'plugin-c']);
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+  });
+
+  it('excludes a disabled composio/lobehub-skill manifest from the activator-discovery toolManifestMap', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [
+        { identifier: 'composio-disabled', mode: 'disabled' },
+        { identifier: 'skill-disabled', mode: 'disabled' },
+      ],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+    mockGetComposioManifests.mockResolvedValue([toolManifest('composio-disabled')]);
+    mockGetLobehubSkillManifests.mockResolvedValue([toolManifest('skill-disabled')]);
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    // The disabled entries must not resurface in the map the activator uses
+    // to build <available_tools> — even though they're excluded from the
+    // actual invocation pool (additionalManifests), a separate ingest loop
+    // used to re-add them here from the raw (unfiltered) manifest arrays.
+    expect(toolManifestMapArg()).not.toHaveProperty('composio-disabled');
+    expect(toolManifestMapArg()).not.toHaveProperty('skill-disabled');
   });
 });
