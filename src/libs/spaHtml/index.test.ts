@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildAnalyticsConfig, renderSpaHtml } from './spaHtml';
+import { buildAnalyticsConfig, renderSpaHtml } from '.';
 
 describe('renderSpaHtml', () => {
   it('injects server config, seo meta and strips the analytics placeholder', async () => {

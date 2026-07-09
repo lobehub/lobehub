@@ -69,7 +69,7 @@ export const buildSlackOpenBotUrl = (tenantId: string, appId?: string): string =
  * `/api/agent/messenger/discord/install` (OAuth code-grant) rather than a
  * hardcoded `discord.com/oauth2/authorize` URL, so the callback can persist
  * the guild as an audit row. Bot scopes / permissions live in
- * `src/server/services/messenger/platforms/discord/oauth.ts`.
+ * `apps/server/src/services/messenger/platforms/discord/oauth.ts`.
  */
 export const buildDiscordOpenBotUrl = (applicationId: string): string =>
   `https://discord.com/users/${applicationId}`;

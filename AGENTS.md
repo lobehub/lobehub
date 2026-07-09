@@ -19,7 +19,7 @@ lobehub/
 ├── apps/
 │   ├── desktop/            # Electron desktop app
 │   ├── cli/                # LobeHub CLI
-│   └── server/             # Server service
+│   └── server/             # Backend service (Hono app + server routers/services)
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
 │   ├── agent-runtime/      # Agent runtime
@@ -27,8 +27,8 @@ lobehub/
 │   ├── env/                # env schemas (@/envs/* → packages/env/src/*)
 │   └── ...
 ├── src/
-│   ├── app/                # Next.js App Router (backend API + auth shell)
-│   │   ├── (backend)/      # API routes (trpc, webapi, etc.)
+│   ├── app/                # Next.js App Router (route shell + auth)
+│   │   ├── (backend)/      # Backend route shells
 │   │   ├── spa/            # SPA HTML template service
 │   │   └── spa-auth/       # Auth HTML shell (SSR)
 │   ├── routes/             # SPA page segments (thin — delegate to features/)
@@ -40,7 +40,7 @@ lobehub/
 │   │   └── router/         # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
-│   ├── server/             # standalone-Hono pieces only (main backend: apps/server)
+│   ├── libs/               # Shared client/server helpers for the app shell
 │   └── ...
 └── e2e/                    # E2E tests (Cucumber + Playwright)
 ```
@@ -76,7 +76,16 @@ bun run dev:spa
 
 # Full-stack dev (Next.js + Vite SPA concurrently)
 bun run dev
+
+# Standalone Hono backend service
+pnpm --filter @lobechat/server dev
 ```
+
+### Backend Architecture
+
+- Backend runtime code lives under `apps/server/src` and is imported through `@/server/*`.
+- `src/app/(backend)` contains Next.js route shells. Do not add backend business logic there.
+- Web shell helpers belong under `src/libs/*` or the relevant `src/app` segment, not under `src/server`.
 
 After `dev:spa` starts, the terminal prints a **Debug Proxy** URL:
 

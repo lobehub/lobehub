@@ -469,7 +469,7 @@ describe('messageRuntime', () => {
 
   // ==================== System Bot management () ====================
   // Each test exercises both layers in one shot:
-  //  1. `botProvider.<method>` in `src/server/services/toolExecution/serverRuntimes/message/index.ts`
+  //  1. `botProvider.<method>` in `apps/server/src/services/toolExecution/serverRuntimes/message/index.ts`
   //  2. `MessageExecutionRuntime.<method>` formatting in
   //     `packages/builtin-tool-message/src/ExecutionRuntime/index.ts`
   // …because the factory returns a runtime where the botProvider impl is

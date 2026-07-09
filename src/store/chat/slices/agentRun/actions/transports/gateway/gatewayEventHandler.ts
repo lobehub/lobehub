@@ -167,7 +167,7 @@ const dispatchOnBeforeCall = async (
 /**
  * Real gateway `tool_end` events ship `data.payload` as the
  * `{ parentMessageId, toolCalling }` wrapper, NOT a flat `ChatToolPayload`
- * (see `src/server/modules/AgentRuntime/RuntimeExecutors.ts` — both the
+ * (see `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts` — both the
  * single-tool and batch publish sites). Unwrap defensively, falling back to
  * the flat shape so we tolerate test fixtures / future emission paths that
  * pass the payload directly.

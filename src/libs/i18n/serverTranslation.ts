@@ -2,8 +2,7 @@ import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, type NS } from '@/locales/resources';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
-
-import { loadI18nNamespaceModuleWithFallback } from '../utils/i18n/loadI18nNamespaceModule';
+import { loadI18nNamespaceModuleWithFallback } from '@/utils/i18n/loadI18nNamespaceModule';
 
 export const getLocale = async (hl?: string): Promise<Locales> => {
   if (hl) return normalizeLocale(hl) as Locales;
