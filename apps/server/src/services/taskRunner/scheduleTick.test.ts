@@ -111,6 +111,9 @@ describe('runScheduleTick', () => {
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
+    expect(mockBriefModel.hasUnresolvedUrgentByTask).toHaveBeenCalledWith(taskId, {
+      excludeTypes: ['error'],
+    });
     expect(mockTaskTopicModel.countByTask).not.toHaveBeenCalled();
     expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId, trigger: 'schedule' });
   });
@@ -177,6 +180,9 @@ describe('runScheduleTick', () => {
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: false, reason: 'human-waiting' });
+    expect(mockBriefModel.hasUnresolvedUrgentByTask).toHaveBeenCalledWith(taskId, {
+      excludeTypes: ['error'],
+    });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 });

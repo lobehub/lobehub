@@ -60,7 +60,7 @@ export async function runHeartbeatTick(
 
   const wsId = task.workspaceId ?? undefined;
   const briefModel = new BriefModel(db, userId, wsId);
-  if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
+  if (await briefModel.hasUnresolvedUrgentByTask(taskId, { excludeTypes: ['error'] })) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
   }
