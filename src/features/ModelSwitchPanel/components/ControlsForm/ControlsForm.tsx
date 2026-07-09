@@ -25,6 +25,7 @@ import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import { GPT56ReasoningEffortSlider } from './GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from './Grok45ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
@@ -35,6 +36,7 @@ import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import Opus47EffortSlider from './Opus47EffortSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
+import ReasoningModeSegmented from './ReasoningModeSegmented';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import ReasoningTokenSlider32k from './ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from './ReasoningTokenSlider80k';
@@ -240,6 +242,21 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <ReasoningModeSegmented />,
+        desc: isNarrow ? (
+          <span style={descNarrow}>{t('extendParams.reasoningMode.desc')}</span>
+        ) : (
+          t('extendParams.reasoningMode.desc')
+        ),
+        label: t('extendParams.reasoningMode.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'reasoningMode',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <EffortSlider />,
         desc: isNarrow ? (
           <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
@@ -298,6 +315,17 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'gpt5_2ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <GPT56ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'gpt5_6ReasoningEffort',
         style: {
           paddingBottom: 0,
         },
