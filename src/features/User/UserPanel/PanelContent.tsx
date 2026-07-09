@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import UserLoginOrSignup from '../UserLoginOrSignup';
+import GetAppButton from './GetAppButton';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
@@ -62,6 +63,7 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       )}
 
       <Menu items={mainItems} onClick={closePopover} />
+      {!isDesktop && <GetAppButton placement={'right' as any} onSelect={closePopover} />}
       <LangButton placement={'right' as any} />
       <Menu items={logoutItems} onClick={handleSignOut} />
     </Flexbox>
