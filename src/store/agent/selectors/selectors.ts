@@ -16,7 +16,7 @@ import {
   type MetaData,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, KnowledgeType } from '@lobechat/types';
+import { getActivePluginIds, getWorkingDirEffectivePath, KnowledgeType } from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -119,10 +119,16 @@ const currentAgentModelProvider = (s: AgentStoreState) => {
   return config?.provider || DEFAULT_PROVIDER;
 };
 
+/**
+ * Pinned plugin identifiers for the current agent — disabled entries are
+ * excluded. Matches the pre-tri-state semantics where array-membership meant
+ * pinned; consumers that need the disabled set use `getDisabledPluginIds`
+ * directly.
+ */
 const currentAgentPlugins = (s: AgentStoreState) => {
   const config = currentAgentConfig(s);
 
-  return config?.plugins || [];
+  return getActivePluginIds(config?.plugins);
 };
 
 /**

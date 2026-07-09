@@ -224,6 +224,23 @@ describe('agentSelectors', () => {
 
       expect(agentSelectors.currentAgentPlugins(state)).toEqual([]);
     });
+
+    it('should exclude disabled entries in a mixed-shape plugins array', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            plugins: [
+              'plugin-1',
+              { identifier: 'plugin-2', mode: 'disabled' },
+              { identifier: 'plugin-3', mode: 'pinned' },
+            ],
+          } as any,
+        },
+      });
+
+      expect(agentSelectors.currentAgentPlugins(state)).toEqual(['plugin-1', 'plugin-3']);
+    });
   });
 
   describe('currentAgentKnowledgeBases', () => {
