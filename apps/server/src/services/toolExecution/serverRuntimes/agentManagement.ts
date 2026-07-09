@@ -11,7 +11,12 @@ import {
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
-import type { HeterogeneousProviderConfig } from '@lobechat/types';
+import {
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
@@ -200,8 +205,15 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           if (detail.meta.description) parts.push(detail.meta.description);
           if (detail.config.model)
             parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-          if (detail.config.plugins?.length)
-            parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+          if (detail.config.plugins?.length) {
+            // Annotate non-pinned entries so the LLM sees a disabled plugin as
+            // disabled, not as a plain enabled identifier.
+            const pluginSummaries = detail.config.plugins.map((entry) => {
+              const { identifier, mode } = parsePluginEntry(entry);
+              return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+            });
+            parts.push(`Plugins: ${pluginSummaries.join(', ')}`);
+          }
           if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
 
           return {
@@ -229,10 +241,16 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             await pluginModel.create({ identifier, type: 'plugin' });
           }
 
-          const currentPlugins = (agent.plugins as string[] | null) || [];
-          if (!currentPlugins.includes(identifier)) {
+          // upsertPluginMode preserves an already-pinned entry (string or
+          // object) as-is and flips a disabled entry back to pinned in place,
+          // instead of blindly pushing a duplicate bare-string identifier.
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
             await agentModel.updateConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
             });
           }
 
