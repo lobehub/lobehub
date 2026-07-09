@@ -223,7 +223,12 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
     // 1. Execute update
-    await this.agentModel.updateConfig(agentId, value);
+    // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
+    // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer
+    // AgentItem, whose `plugins` column type is intentionally left as
+    // `string[]` (only the domain types are widened for the tri-state
+    // rollout, not the JSONB column's compile-time annotation).
+    await this.agentModel.updateConfig(agentId, value as any);
 
     // 2. Query and return updated data (with default config merged)
     const agent = await this.getAgentConfigById(agentId);

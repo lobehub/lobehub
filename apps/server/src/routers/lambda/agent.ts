@@ -88,6 +88,11 @@ export const agentRouter = router({
     .mutation(async ({ input, ctx }) => {
       const agent = await ctx.agentModel.create({
         ...input.config,
+        // The DB-layer AgentItem (packages/database/src/schemas/agent.ts) is
+        // intentionally still typed `plugins?: string[]` — the JSONB column
+        // itself isn't widened, only the domain-level `@lobechat/types`
+        // shapes. Bridges the tri-state object shape through.
+        plugins: input.config?.plugins as unknown as string[] | undefined,
         sessionGroupId: input.groupId,
         // Router-level `visibility` wins over any nested config value so the
         // sidebar's "Create in Private" entry can't be overridden by a stale

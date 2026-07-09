@@ -1070,15 +1070,19 @@ export class AiAgentService {
       agentConfig.provider,
     );
 
-    // Capture disabled identifiers before collapsing `agentConfig.plugins` to
-    // pinned-only ids below — everything from here on (builtin runtime merge,
-    // page/task/sub-agent injection, the `agentPlugins` build further down)
-    // expects a plain pinned-id string[], matching pre-tri-state behavior.
+    // Capture disabled identifiers before collapsing to pinned-only ids below
+    // — everything from here on (builtin runtime merge, page/task/sub-agent
+    // injection, the `agentPlugins` build further down) expects a plain
+    // pinned-id string[], matching pre-tri-state behavior. Operating on a
+    // local `string[]` (rather than repeatedly re-reading/writing
+    // `agentConfig.plugins`, whose declared type is the wider
+    // `AgentPluginEntry[]`) keeps this whole block free of per-line casts;
+    // `agentConfig.plugins` is written back once, at the end.
     // `disabledPluginIds` is consumed later to filter the auto-discovery
     // candidate pool (installedPlugins) so disabled plugins can't be
     // rediscovered/activated by the auto activator.
     const disabledPluginIds = getDisabledPluginIds(agentConfig.plugins);
-    agentConfig.plugins = getActivePluginIds(agentConfig.plugins);
+    let activePluginIds: string[] = getActivePluginIds(agentConfig.plugins);
 
     // 2. Merge builtin agent runtime config (systemRole, plugins)
     // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
@@ -1095,7 +1099,7 @@ export class AiAgentService {
 
       const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
         userLocale,
       });
       if (runtimeConfig) {
@@ -1106,7 +1110,7 @@ export class AiAgentService {
         }
         // Runtime plugins merged (runtime plugins take priority if provided)
         if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
-          agentConfig.plugins = runtimeConfig.plugins;
+          activePluginIds = runtimeConfig.plugins;
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
         if (runtimeConfig.agencyConfig) {
@@ -1120,13 +1124,13 @@ export class AiAgentService {
     }
 
     if (appContext?.scope !== 'page') {
-      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== PageAgentIdentifier);
+      activePluginIds = activePluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
     if (appContext?.scope === 'page' && agentSlug !== BUILTIN_AGENT_SLUGS.pageAgent) {
       const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
       });
       const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
 
@@ -1136,9 +1140,9 @@ export class AiAgentService {
           : pageAgentSystemRole;
       }
 
-      agentConfig.plugins = agentConfig.plugins?.includes(PageAgentIdentifier)
-        ? agentConfig.plugins
-        : [PageAgentIdentifier, ...(agentConfig.plugins ?? [])];
+      activePluginIds = activePluginIds.includes(PageAgentIdentifier)
+        ? activePluginIds
+        : [PageAgentIdentifier, ...activePluginIds];
       agentConfig.chatConfig = {
         ...agentConfig.chatConfig,
         enableHistoryCount: false,
@@ -1149,7 +1153,7 @@ export class AiAgentService {
     if (appContext?.scope === 'task' && agentSlug !== BUILTIN_AGENT_SLUGS.taskAgent) {
       const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
       });
       const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
 
@@ -1159,15 +1163,17 @@ export class AiAgentService {
           : taskAgentSystemRole;
       }
 
-      agentConfig.plugins = agentConfig.plugins?.includes(TaskIdentifier)
-        ? agentConfig.plugins
-        : [TaskIdentifier, ...(agentConfig.plugins ?? [])];
+      activePluginIds = activePluginIds.includes(TaskIdentifier)
+        ? activePluginIds
+        : [TaskIdentifier, ...activePluginIds];
       log('execAgent: injected task-agent runtime for task scope');
     }
 
     if (appContext?.isSubAgent) {
-      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== LobeAgentIdentifier);
+      activePluginIds = activePluginIds.filter((id) => id !== LobeAgentIdentifier);
     }
+
+    agentConfig.plugins = activePluginIds;
 
     await throwIfExecutionAborted('agent configuration');
 
