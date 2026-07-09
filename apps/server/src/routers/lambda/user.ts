@@ -19,7 +19,6 @@ import {
   UserSettingsSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
@@ -40,6 +39,7 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
 
 const usernameSchema = z
   .string()
@@ -111,7 +111,7 @@ export const userRouter = router({
 
   getUserState: userProcedure.query(async ({ ctx }): Promise<UserInitializationState> => {
     try {
-      after(async () => {
+      scheduleAfterResponse(async () => {
         try {
           const currentTime = new Date();
           const transition = await ctx.userModel.advanceLastActiveAt(currentTime);

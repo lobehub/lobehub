@@ -125,8 +125,8 @@ export const aiChatRouter = router({
     log('schema: %O', input.schema);
 
     // Pre-allocate the tracing row id so we can return it to the client even
-    // though the actual `service.record()` call happens in Next's `after()`
-    // (after the response has been sent). Honour the caller-supplied id when
+    // though the actual `service.record()` call happens after the response has
+    // been sent. Honour the caller-supplied id when
     // one was passed via `tracing.tracingId` — the schema already validates
     // it as UUID, so a malformed value never reaches here.
     const tracingId = input.tracing?.tracingId ?? randomUUID();

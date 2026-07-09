@@ -18,8 +18,8 @@ import { userRouter } from '../user';
 const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 
 // Mock modules
-vi.mock('next/server', () => ({
-  after: (callback: () => Promise<void> | void) => {
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  scheduleAfterResponse: (callback: () => Promise<void> | void) => {
     mockAfterTasks.push(Promise.resolve(callback()));
   },
 }));
