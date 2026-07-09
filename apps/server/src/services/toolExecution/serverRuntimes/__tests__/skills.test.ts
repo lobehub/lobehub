@@ -26,17 +26,26 @@ const mocks = vi.hoisted(() => {
     findAll: vi.fn(),
     findById: vi.fn(),
     findByName: vi.fn(),
+    getAgentConfigById: vi.fn(),
     getAgentSkills: vi.fn(),
     getUserSettings: vi.fn(),
     marketService: {},
     prepareSkillDirectory: vi.fn(),
+    preprocessLhCommand: vi.fn(),
     readResource: vi.fn(),
+    resolveRunWorkspaceId: vi.fn(),
     sandboxService,
   };
 });
 
 vi.mock('@lobechat/builtin-skills', () => ({
   builtinSkills: [],
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(() => ({
+    getAgentConfigById: mocks.getAgentConfigById,
+  })),
 }));
 
 vi.mock('@/database/models/agentSkill', () => ({
@@ -92,6 +101,10 @@ vi.mock('@/server/services/skill/resource', () => ({
   })),
 }));
 
+vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
+  preprocessLhCommand: mocks.preprocessLhCommand,
+}));
+
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     executeToolCall: mocks.executeToolCall,
@@ -100,7 +113,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 }));
 
 vi.mock('../resolveWorkspaceScope', () => ({
-  resolveRunWorkspaceId: vi.fn(async () => undefined),
+  resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
 }));
 
 describe('skillsRuntime', () => {
@@ -111,6 +124,7 @@ describe('skillsRuntime', () => {
     mocks.fileService.getFullFileUrl.mockResolvedValue('https://files.example.com/user-skill.zip');
     mocks.findAll.mockResolvedValue({ data: [], total: 0 });
     mocks.findById.mockResolvedValue(undefined);
+    mocks.getAgentConfigById.mockResolvedValue(undefined);
     mocks.findByName.mockImplementation(async (name: string) => {
       if (name === 'user-skill') {
         return {
@@ -124,6 +138,12 @@ describe('skillsRuntime', () => {
     });
     mocks.getAgentSkills.mockResolvedValue([]);
     mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
+    mocks.preprocessLhCommand.mockResolvedValue({
+      command: 'echo ok',
+      isLhCommand: false,
+      skipSkillLookup: false,
+    });
+    mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.sandboxService.callTool.mockResolvedValue({
       result: {
         exitCode: 0,
@@ -135,6 +155,9 @@ describe('skillsRuntime', () => {
     });
   });
 
+  // First dynamic `import('../skills')` in the file pays the real transform
+  // cost for this (now larger) module — default 5s timeout is marginal for
+  // that cold cost alone, independent of test logic.
   it('executes scripts through the sandbox service and only attaches persisted skill zips', async () => {
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
@@ -167,7 +190,7 @@ describe('skillsRuntime', () => {
         },
       }),
     );
-  });
+  }, 20_000);
 
   it('tags sandbox exec results with executionEnv for plugin-state observability', async () => {
     const { skillsRuntime } = await import('../skills');
@@ -185,6 +208,116 @@ describe('skillsRuntime', () => {
     });
 
     expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+  });
+
+  it('passes workspace scope when preprocessing sandbox lh commands', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+    );
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+    });
+  });
+
+  it('recovers workspace scope for sandbox lh commands when context lost it', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+    mocks.resolveRunWorkspaceId.mockResolvedValueOnce('workspace-1');
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      agentId: 'agent-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.resolveRunWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1' }),
+    );
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+    );
+  });
+
+  describe('disabled skill enforcement', () => {
+    it('refuses to activate a DB skill the agent has disabled, even though it exists', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'disabled' }],
+      });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? { id: 'user-skill-id', identifier: 'user-skill-identifier', name: 'user-skill' }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('still activates the skill when it is not disabled', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+            }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+    });
   });
 
   // Regression guard for the server/gateway migration: when the execution plan

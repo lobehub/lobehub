@@ -6,6 +6,7 @@ import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
+import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 /**
@@ -64,9 +65,13 @@ export interface LobeAgentConfig {
    */
   params: LLMParams;
   /**
-   * Enabled plugins
+   * Enabled plugins. Each entry is either a legacy bare identifier string
+   * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
+   * `AgentPluginEntry` / `parsePluginEntry`. Prefer the read helpers
+   * (`getActivePluginIds`, `getPinnedPluginIds`, `getDisabledPluginIds`,
+   * `getPluginMode`) over reading this field directly.
    */
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
 
   /**
    *  Model provider
@@ -114,7 +119,7 @@ export const CreateAgentSchema = z.object({
   openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
   params: z.record(z.unknown()).optional(),
-  plugins: z.array(z.string()).optional(),
+  plugins: z.array(AgentPluginEntrySchema).optional(),
   provider: z.string().nullish(),
   sessionGroupId: z.string().nullish(),
   systemRole: z.string().nullish(),
@@ -150,7 +155,7 @@ export interface AgentItem {
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
   provider?: string | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;

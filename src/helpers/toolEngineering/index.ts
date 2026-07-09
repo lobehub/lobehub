@@ -44,6 +44,14 @@ export interface ToolsEngineConfig {
   additionalManifests?: ToolManifest[];
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
+  /**
+   * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
+   * Dropped from the combined manifest pool entirely — not just the
+   * enableChecker rule map — because `allowExplicitActivation` lets the
+   * activator resolve/enable any manifest present in `manifestSchemas`
+   * regardless of the rules, bypassing a rule-only gate.
+   */
+  disabledPluginIds?: string[];
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
   /**
@@ -96,7 +104,13 @@ const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: s
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
-  const { enableChecker, additionalManifests = [], defaultToolIds, manifestContext } = config;
+  const {
+    enableChecker,
+    additionalManifests = [],
+    defaultToolIds,
+    disabledPluginIds = [],
+    manifestContext,
+  } = config;
 
   const toolStoreState = getToolStoreState();
 
@@ -159,7 +173,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   // Combine all manifests, dropping entries that would crash ToolsEngine.
   // Each source is filtered separately so the warning pinpoints the origin.
-  const allManifests = [
+  const combinedManifests = [
     ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
     ...dropInvalidManifests(builtinManifests, 'builtinTools'),
     ...dropInvalidManifests(composioManifests, 'composio'),
@@ -167,6 +181,15 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     ...dropInvalidManifests(connectorManifests, 'connectors'),
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
+
+  // Disabled identifiers are dropped from the pool outright (not left for the
+  // enableChecker rules) — a plugin, skill, connector, or user-toggleable
+  // builtin tool the agent has explicitly disabled must not be discoverable/
+  // activatable at all, matching the server-side (aiAgent gateway) treatment.
+  const allManifests =
+    disabledPluginIds.length === 0
+      ? combinedManifests
+      : combinedManifests.filter((m) => !disabledPluginIds.includes(m.identifier));
 
   return new ToolsEngine({
     defaultToolIds,
@@ -185,7 +208,10 @@ export const createAgentToolsEngine = (
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
+  // `currentAgentPlugins` already resolves to pinned-only identifiers — disabled
+  // entries never reach the tools-engine whitelist.
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  const disabledPluginIds = agentSelectors.currentAgentDisabledPlugins(agentState);
   const isChatMode =
     agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
     !isCanUseFC(workingModel.model, workingModel.provider);
@@ -224,6 +250,7 @@ export const createAgentToolsEngine = (
 
   return createToolsEngine({
     defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
+    disabledPluginIds,
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: !isChatMode,

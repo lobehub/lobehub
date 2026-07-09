@@ -1,5 +1,5 @@
 import { Alert, Skeleton } from '@lobehub/ui';
-import { Button } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
 import { RotateCcw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +47,7 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
             color="default"
             icon={<RotateCcw size={14} />}
             size="small"
-            variant="filled"
+            type="fill"
             onClick={onRegenerate}
           >
             {t('regenerate')}

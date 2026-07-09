@@ -1,4 +1,9 @@
-import type { SkillItem, SkillListItem, SkillResourceMeta } from '@lobechat/types';
+import {
+  getActivePluginIds,
+  type SkillItem,
+  type SkillListItem,
+  type SkillResourceMeta,
+} from '@lobechat/types';
 
 import type { AgentModel } from '@/database/models/agent';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
@@ -35,7 +40,7 @@ export class ProviderSkillsInstalledActive implements SkillMountProvider {
 
   private async getEnabledIdentifiers(agentId: string) {
     const agent = await this.deps.agentModel.getAgentConfigById(agentId);
-    return new Set(agent?.plugins ?? []);
+    return new Set(getActivePluginIds(agent?.plugins ?? undefined));
   }
 
   private async findSkillByIdentifier(

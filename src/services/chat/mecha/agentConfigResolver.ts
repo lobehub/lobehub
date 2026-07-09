@@ -5,6 +5,7 @@ import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type ChatCompletionTool,
+  getActivePluginIds,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
@@ -185,8 +186,8 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
   const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
 
-  // Base plugins from agent config
-  const basePlugins = agentConfig?.plugins ?? [];
+  // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
+  const basePlugins = getActivePluginIds(agentConfig?.plugins);
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug

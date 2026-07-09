@@ -14,9 +14,16 @@ import {
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
-import type { BuiltinSkill, SkillItem, SkillListItem, SkillResourceContent } from '@lobechat/types';
+import {
+  type BuiltinSkill,
+  getDisabledPluginIds,
+  type SkillItem,
+  type SkillListItem,
+  type SkillResourceContent,
+} from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
@@ -88,7 +95,12 @@ const LEGACY_DEVICE_CLIENT = Symbol('legacy-device-client');
 const LEGACY_FALLBACK_NOTE =
   "Note: the user's device client is outdated and does not support on-device skill execution, so this command ran in the cloud sandbox instead. Tell the user to update their LobeHub app to run skills on their device.";
 
+const LH_COMMAND_PATTERN = /(?:^|&&|\|\||;)\s*lh(?:\s|$)/;
+
+const isLhCommand = (command: string) => LH_COMMAND_PATTERN.test(command);
+
 class SkillServerRuntimeService implements SkillRuntimeService {
+  private agentId?: string;
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
   private marketService: MarketService;
@@ -97,10 +109,20 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private serverDB: LobeChatDatabase;
   private topicId?: string;
   private userId: string;
+  private workspaceId?: string;
   private device?: SkillDeviceExecution;
+  private disabledSkillIds: Set<string>;
 
   constructor(options: {
+    agentId?: string;
     device?: SkillDeviceExecution;
+    /**
+     * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state)
+     * — findById/findByName resolve to `undefined` for these, so a disabled
+     * DB/market skill can't be activated even by a model that already knows
+     * its name, independent of whatever's listed in `<available_skills>`.
+     */
+    disabledSkillIds?: Set<string>;
     fileModel: FileModel;
     fileService: FileService;
     marketService: MarketService;
@@ -109,7 +131,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     skillModel: AgentSkillModel;
     topicId?: string;
     userId: string;
+    workspaceId?: string;
   }) {
+    this.agentId = options.agentId;
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
     this.marketService = options.marketService;
@@ -118,19 +142,31 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
     this.device = options.device;
+    this.disabledSkillIds = options.disabledSkillIds ?? new Set();
   }
 
   findAll = (): Promise<{ data: SkillListItem[]; total: number }> => {
     return this.skillModel.findAll();
   };
 
-  findById = (id: string): Promise<SkillItem | undefined> => {
-    return this.skillModel.findById(id);
+  findById = async (id: string): Promise<SkillItem | undefined> => {
+    const skill = await this.skillModel.findById(id);
+    return skill && this.disabledSkillIds.has(skill.identifier) ? undefined : skill;
   };
 
-  findByName = (name: string): Promise<SkillItem | undefined> => {
-    return this.skillModel.findByName(name);
+  findByName = async (name: string): Promise<SkillItem | undefined> => {
+    const skill = await this.skillModel.findByName(name);
+    return skill && this.disabledSkillIds.has(skill.identifier) ? undefined : skill;
+  };
+
+  private resolveWorkspaceId = async (): Promise<string | undefined> => {
+    return resolveRunWorkspaceId({
+      agentId: this.agentId,
+      serverDB: this.serverDB,
+      workspaceId: this.workspaceId,
+    });
   };
 
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
@@ -161,7 +197,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
-    const lhResult = await preprocessLhCommand(options.command, this.userId);
+    const workspaceId =
+      this.workspaceId ??
+      (isLhCommand(options.command) ? await this.resolveWorkspaceId() : undefined);
+    const lhResult = await preprocessLhCommand(options.command, this.userId, workspaceId);
     if (lhResult.error) {
       return {
         executionEnv: 'sandbox',
@@ -585,6 +624,18 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
     }
 
+    // Independent of `<available_skills>` (built once, earlier, in
+    // aiAgent/index.ts) — this runtime resolves skills fresh by name/id, so a
+    // model that already knows a disabled skill's name (prior turn, or a
+    // guess) could otherwise still activate/run it. Re-derive the disabled
+    // set here so this path enforces the same tri-state.
+    let disabledSkillIds = new Set<string>();
+    if (context.agentId) {
+      const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+      const agentConfig = await agentModel.getAgentConfigById(context.agentId);
+      disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
+    }
+
     const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
     const resourceService = new SkillResourceService(
       context.serverDB,
@@ -620,7 +671,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : undefined;
 
     const service = new SkillServerRuntimeService({
+      agentId: context.agentId,
       device,
+      disabledSkillIds,
       fileModel,
       fileService,
       marketService,
@@ -629,6 +682,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       skillModel,
       topicId: context.topicId,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
 
     // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped
@@ -645,14 +699,16 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       ? await new AgentDocumentsService(context.serverDB, context.userId, context.workspaceId)
           .getAgentSkills(context.agentId)
           .then((skills) =>
-            skills.map((skill) => ({
-              content: skill.content,
-              description: skill.description,
-              identifier: skill.identifier,
-              name: skill.name,
-              source: 'builtin' as const,
-              ...(skill.title && { title: skill.title }),
-            })),
+            skills
+              .filter((skill) => !disabledSkillIds.has(skill.identifier))
+              .map((skill) => ({
+                content: skill.content,
+                description: skill.description,
+                identifier: skill.identifier,
+                name: skill.name,
+                source: 'builtin' as const,
+                ...(skill.title && { title: skill.title }),
+              })),
           )
           .catch((error) => {
             log('failed to load agent skills for agent %s: %O', context.agentId, error);
@@ -733,7 +789,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
         // execution plan.
         ...filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
-        }),
+        }).filter((skill) => !disabledSkillIds.has(skill.identifier)),
         ...agentSkillBuiltins,
       ],
       deviceFileAccess,

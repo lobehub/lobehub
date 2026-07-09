@@ -3,6 +3,7 @@ import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/co
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
+  getActivePluginIds,
   getWorkingDirEffectivePath,
   type LobeAgentAgencyConfig,
   type LobeAgentTTSConfig,
@@ -30,10 +31,16 @@ const getAgentModelProviderById =
   (s: AgentStoreState): string =>
     agentSelectors.getAgentConfigById(agentId)(s)?.provider || DEFAULT_PROVIDER;
 
+/**
+ * Pinned plugin identifiers for the agent — disabled entries are excluded.
+ * Every current consumer (token estimation, share-image preview, auth alerts,
+ * the Skills panel) wants "what's actually configured/active", matching the
+ * pre-tri-state semantics where array-membership meant pinned.
+ */
 const getAgentPluginsById =
   (agentId: string) =>
   (s: AgentStoreState): string[] =>
-    agentSelectors.getAgentConfigById(agentId)(s)?.plugins || [];
+    getActivePluginIds(agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
 
 const getAgentSystemRoleById =
   (agentId: string) =>
@@ -147,7 +154,9 @@ const getAgentBuilderContextById =
         openingMessage: config?.openingMessage,
         openingQuestions: config?.openingQuestions,
         params: config?.params,
-        plugins: config?.plugins,
+        // Pinned identifiers only — AgentBuilderContext.config.plugins is a
+        // display DTO (still string[]); a disabled plugin isn't "enabled".
+        plugins: getActivePluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: config?.systemRole,
       },

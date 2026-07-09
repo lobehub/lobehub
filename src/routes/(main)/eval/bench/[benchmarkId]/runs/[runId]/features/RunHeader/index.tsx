@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
 import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Button, Tag } from 'antd';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { App, Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -105,9 +105,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   agentLink: css`
     cursor: pointer;
-
     border-radius: ${cssVar.borderRadiusSM};
-
     transition: color 0.15s ease;
 
     &:hover {
@@ -134,7 +132,6 @@ const styles = createStaticStyles(({ css }) => ({
   headerBand: css`
     padding: 20px;
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   metaItem: css`
@@ -165,6 +162,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   runName: css`
     margin: 0;
+
     font-size: ${cssVar.fontSizeHeading3};
     font-weight: 600;
     line-height: 1.2;

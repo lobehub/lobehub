@@ -39,55 +39,66 @@ const buildDbSkillContent = (detail: SkillItem): string | undefined => {
  * Uses isBuiltinSkillAvailableInCurrentEnv as the enableChecker to
  * filter platform-specific skills (e.g., agent-browser on desktop only).
  */
-export const resolveClientSkills = async (pluginIds?: string[]): Promise<OperationSkillSet> => {
+export const resolveClientSkills = async (
+  pluginIds?: string[],
+  disabledIds?: string[],
+): Promise<OperationSkillSet> => {
   const toolState = getToolStoreState();
   const pinnedIds = new Set(pluginIds ?? []);
+  const disabledIdSet = new Set(disabledIds ?? []);
 
   // Builtin skills keep their full content in the store, so it is always cheap
   // to carry along. Pinned skills are marked `activated` so SkillContextProvider
   // injects their content directly; non-pinned ones stay in <available_skills>.
-  const builtinMetas = (toolState.builtinSkills || []).map((s) => ({
-    activated: pinnedIds.has(s.identifier) && !!s.content,
-    content: s.content,
-    description: s.description,
-    identifier: s.identifier,
-    name: s.name,
-  }));
+  // Disabled skills are dropped from the candidate pool entirely — not just
+  // left unpinned — so a disabled skill is neither listed nor resolvable by
+  // name via `activateSkill`.
+  const builtinMetas = (toolState.builtinSkills || [])
+    .filter((s) => !disabledIdSet.has(s.identifier))
+    .map((s) => ({
+      activated: pinnedIds.has(s.identifier) && !!s.content,
+      content: s.content,
+      description: s.description,
+      identifier: s.identifier,
+      name: s.name,
+    }));
 
   const dbMetas = await Promise.all(
-    (toolState.agentSkills || []).map(async (s) => {
-      const meta = {
-        description: s.description ?? '',
-        identifier: s.identifier,
-        name: s.name,
-      };
+    (toolState.agentSkills || [])
+      .filter((s) => !disabledIdSet.has(s.identifier))
+      .map(async (s) => {
+        const meta = {
+          description: s.description ?? '',
+          identifier: s.identifier,
+          name: s.name,
+        };
 
-      // Only pinned DB skills need full content for direct injection; the list
-      // query (SkillListItem) does not carry content, so fetch it on demand.
-      if (!pinnedIds.has(s.identifier)) return meta;
+        // Only pinned DB skills need full content for direct injection; the list
+        // query (SkillListItem) does not carry content, so fetch it on demand.
+        if (!pinnedIds.has(s.identifier)) return meta;
 
-      // Skills bundled as a ZIP (scripts/resources) must be activated via the
-      // activateSkill tool so the server mounts their bundle for execScript /
-      // readReference — that runtime mount is keyed off stepContext.activatedSkills,
-      // which operation-level pinning does not populate. Pre-injecting their
-      // content would instruct the model to run scripts from an unmounted bundle,
-      // so leave bundled skills in <available_skills> and let the model activate them.
-      if (s.zipFileHash) return meta;
+        // Skills bundled as a ZIP (scripts/resources) must be activated via the
+        // activateSkill tool so the server mounts their bundle for execScript /
+        // readReference — that runtime mount is keyed off stepContext.activatedSkills,
+        // which operation-level pinning does not populate. Pre-injecting their
+        // content would instruct the model to run scripts from an unmounted bundle,
+        // so leave bundled skills in <available_skills> and let the model activate them.
+        if (s.zipFileHash) return meta;
 
-      try {
-        const detail =
-          toolState.agentSkillDetailMap?.[s.id] ?? (await agentSkillService.getById(s.id));
-        const content = detail && buildDbSkillContent(detail);
-        // Mark activated only when content is available, otherwise the skill would
-        // be excluded from both the activated and the <available_skills> lists.
-        return content ? { ...meta, activated: true, content } : meta;
-      } catch (error) {
-        // A single skill's content fetch must never break the whole request;
-        // degrade gracefully by listing the skill without injected content.
-        log('Failed to load content for pinned skill %s: %O', s.identifier, error);
-        return meta;
-      }
-    }),
+        try {
+          const detail =
+            toolState.agentSkillDetailMap?.[s.id] ?? (await agentSkillService.getById(s.id));
+          const content = detail && buildDbSkillContent(detail);
+          // Mark activated only when content is available, otherwise the skill would
+          // be excluded from both the activated and the <available_skills> lists.
+          return content ? { ...meta, activated: true, content } : meta;
+        } catch (error) {
+          // A single skill's content fetch must never break the whole request;
+          // degrade gracefully by listing the skill without injected content.
+          log('Failed to load content for pinned skill %s: %O', s.identifier, error);
+          return meta;
+        }
+      }),
   );
 
   const skillEngine = new SkillEngine({
