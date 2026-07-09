@@ -25,6 +25,8 @@ const lobeHubOnlineModelLocales = {
   'grok-4.20-beta-0309-non-reasoning.description': 'A non-reasoning variant for simple use cases',
   'grok-4.20-beta-0309-reasoning.description':
     'Intelligent, blazing-fast model that reasons before responding',
+  'grok-4.5.description':
+    "SpaceXAI's flagship model for coding, agentic tasks, and knowledge work — configurable reasoning (low/medium/high, always on).",
   'lobehub-glm-5.2-fast.description':
     'Fast variant of GLM-5.2 with substantially lower latency. Same capabilities as GLM-5.2 — costs more, but responds much faster.',
   'seedance-1-5-pro-251215.description':
