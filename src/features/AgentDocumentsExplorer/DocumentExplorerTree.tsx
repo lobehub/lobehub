@@ -1,8 +1,9 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileTextIcon, Maximize2Icon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +16,9 @@ import type {
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import {
+  DISABLE_ROW_TEXT_SELECTION_CSS,
+  DOCUMENT_TREE_ICON_CSS,
   ExplorerTree,
-  FOLDER_ICON_CSS,
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
@@ -33,7 +35,7 @@ import { canDropDocument } from './utils/canDrop';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-const DOCUMENT_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}\n${DISABLE_ROW_TEXT_SELECTION_CSS}`;
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
@@ -314,6 +316,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
       if (!isSkill && !isMulti) {
         items.push({
+          icon: <PenLineIcon size={14} />,
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
@@ -337,6 +340,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
       if (isConvertibleToSkill && !isMulti) {
         items.push({
+          icon: <Icon icon={SkillsIcon} size={14} />,
           key: 'convert-to-skill',
           label: t('workingPanel.resources.tree.convertToSkill'),
           onClick: () => handleConvertToSkill(node.data!),

@@ -14,8 +14,6 @@ export const API_ENDPOINTS = {
 
   // TTS
   tts: (provider: string) => `/webapi/tts/${provider}`,
-  edge: '/webapi/tts/edge',
-  microsoft: '/webapi/tts/microsoft',
 };
 
 export const MARKET_OIDC_ENDPOINTS = {

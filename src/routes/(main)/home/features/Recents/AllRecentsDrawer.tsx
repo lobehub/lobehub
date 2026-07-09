@@ -11,6 +11,7 @@ import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { recentService } from '@/services/recent';
 
 import RecentListItem from './Item';
@@ -23,9 +24,10 @@ interface AllRecentsDrawerProps {
 const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const scope = useCacheScope();
 
   const { data: recents, isLoading } = useClientDataSWR(
-    open ? recentKeys.allDrawer(open) : null,
+    open ? recentKeys.allDrawer(open, scope) : null,
     () => recentService.getAll(50),
   );
 

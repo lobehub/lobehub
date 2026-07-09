@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatStore } from '@/store/chat/store';
 
+import { messageMapKey } from '../../../../utils/messageMapKey';
 import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
@@ -15,8 +16,28 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
 }));
 
+const desktopNotificationMock = vi.hoisted(() => ({
+  notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/store/chat/utils/desktopNotification', () => ({
+  notifyDesktopAgentCompleted: desktopNotificationMock.notifyDesktopAgentCompleted,
+}));
+
+// Force the desktop branch of afterRunComplete on (isDesktop is false in the
+// test env). Only afterRunComplete reads isDesktop, and it early-returns for
+// sub_agent runs before the check, so this is inert for every other test.
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, isDesktop: true };
+});
+
 const OP = 'op1';
-const CONTEXT: ConversationContext = { agentId: 'a1', topicId: 't1' } as ConversationContext;
+const CONTEXT: ConversationContext = {
+  agentId: 'a1',
+  topicId: 't1',
+  workspaceSlug: 'team',
+} as ConversationContext;
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
   const store = {
@@ -33,7 +54,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     messagesMap: {},
     operations: {
       [OP]: {
-        context: { agentId: 'a1', topicId: 't1' },
+        context: CONTEXT,
         metadata: afterCompletionCallbacks ? { runtimeHooks: { afterCompletionCallbacks } } : {},
         status: 'running',
       },
@@ -74,6 +95,7 @@ const completeEvent = (
 
 beforeEach(() => {
   agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mockClear();
+  desktopNotificationMock.notifyDesktopAgentCompleted.mockClear();
 });
 
 describe('buildRunLifecycle.completeRun — transport-driven disposition', () => {
@@ -181,6 +203,73 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
         completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
       ),
     ).resolves.toBeUndefined();
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — client desktop notification body', () => {
+  const KEY = messageMapKey(CONTEXT);
+  // parentMessageId for the run under test is 'u1' (see `lifecycle` helper), so
+  // the assistant this run produced is the child of 'u1'.
+  const thisTurnAssistant = {
+    content: 'second turn reply',
+    id: 'a-this',
+    parentId: 'u1',
+    role: 'assistant',
+  } as any;
+  const prevTurnAssistant = {
+    content: 'first turn reply',
+    id: 'a-prev',
+    parentId: 'u-prev',
+    role: 'assistant',
+  } as any;
+
+  it('anchors the body to THIS run reply even when messagesMap still ends on the previous turn', async () => {
+    const { get, store } = makeStore();
+    // messagesMap lags: its last assistant is the PREVIOUS turn. The current
+    // run's assistant has only settled into dbMessagesMap so far.
+    store.messagesMap = { [KEY]: [prevTurnAssistant] } as any;
+    store.dbMessagesMap = { [KEY]: [prevTurnAssistant, thisTurnAssistant] } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(1);
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledWith(
+      get,
+      expect.objectContaining({
+        content: 'second turn reply',
+        context: expect.objectContaining({ workspaceSlug: 'team' }),
+      }),
+    );
+  });
+
+  it('uses this run reply when it is present in messagesMap (linear happy path)', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [prevTurnAssistant, thisTurnAssistant] } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledWith(
+      get,
+      expect.objectContaining({ content: 'second turn reply' }),
+    );
+  });
+
+  it('suppresses the notification while this run assistant is still tool-calling', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ ...thisTurnAssistant, content: 'partial', tools: [{ id: 'tool-1' }] }],
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
   });
 });
 
@@ -209,6 +298,38 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     );
 
     expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('dev-slice title update does not clear the client runtime loading owner', async () => {
+    const previous = process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+    process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = '1';
+
+    try {
+      const { get, store } = makeStore();
+      const messages = [
+        { content: '阅读下面的材料，根据要求写作。', id: 'm1', role: 'user' } as any,
+      ];
+
+      await lifecycle('client', get, 'top_level').afterUserMessagePersisted(
+        persistedEvent('client', 'top_level', {
+          isCreateNewTopic: true,
+          messages,
+          topicId: 't1',
+        }),
+      );
+
+      expect(store.internal_updateTopic).toHaveBeenCalledWith('t1', {
+        title: '阅读下面的材料，根据要求写作。',
+      });
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('t1', false);
+      expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+      } else {
+        process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = previous;
+      }
+    }
   });
 
   it('loads the topic first when it is absent from the store (gateway fire-and-forget refreshTopic race)', async () => {

@@ -44,6 +44,14 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { fetchCodexQuotaMock } = vi.hoisted(() => ({
+  fetchCodexQuotaMock: vi.fn(),
+}));
+
+vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
+  fetchCodexQuota: fetchCodexQuotaMock,
+}));
+
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
@@ -121,6 +129,7 @@ describe('HeterogeneousAgentCtr', () => {
 
   beforeEach(async () => {
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
+    fetchCodexQuotaMock.mockReset();
   });
 
   afterEach(async () => {
@@ -209,6 +218,62 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('getCodexQuota', () => {
+    beforeEach(() => {
+      execFileMock.mockReset();
+    });
+
+    it('forwards desktop proxy env to the Codex quota RPC', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      fetchCodexQuotaMock.mockResolvedValue({
+        error: null,
+        provider: 'codex',
+        session: null,
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      });
+      const networkProxy = {
+        enableProxy: true,
+        proxyPort: '7890',
+        proxyServer: '127.0.0.1',
+        proxyType: 'http',
+      };
+      const storeGet = vi.fn((key: string) => (key === 'networkProxy' ? networkProxy : undefined));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: storeGet },
+      } as any);
+
+      await ctr.getCodexQuota({
+        command: '/custom/bin/codex',
+        env: { CODEX_HOME: '/tmp/codex-home', PATH: '/custom/bin' },
+      });
+
+      expect(storeGet).toHaveBeenCalledWith('networkProxy');
+      expect(fetchCodexQuotaMock).toHaveBeenCalledWith({
+        command: '/custom/bin/codex',
+        env: expect.objectContaining({
+          CODEX_HOME: '/tmp/codex-home',
+          HTTPS_PROXY: 'http://127.0.0.1:7890',
+          HTTP_PROXY: 'http://127.0.0.1:7890',
+          PATH: '/custom/bin',
+        }),
+      });
+    });
+  });
+
   describe('sendPrompt (claude-code)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -219,7 +284,10 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
-      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
+      sendPromptOverrides: Partial<{
+        imageList: Array<{ id: string; url: string }>;
+        systemContext: string;
+      }> = {},
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
@@ -263,6 +331,19 @@ describe('HeterogeneousAgentCtr', () => {
         },
         type: 'user',
       });
+    });
+
+    it('places system context before the user prompt in stream-json content blocks', async () => {
+      const { writes } = await runSendPrompt('user task', {}, [], {
+        systemContext: 'selected code context',
+      });
+
+      expect(writes).toHaveLength(1);
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([
+        { text: 'selected code context', type: 'text' },
+        { text: 'user task', type: 'text' },
+      ]);
     });
 
     it.each([
@@ -381,7 +462,10 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
-      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
+      sendPromptOverrides: Partial<{
+        imageList: Array<{ id: string; url: string }>;
+        systemContext: string;
+      }> = {},
       storeGet?: (key: string, defaultValue?: any) => any,
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
@@ -578,6 +662,14 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
+    });
+
+    it('places system context before the user prompt in codex stdin', async () => {
+      const { writes } = await runSendPrompt('user task', {}, [], {
+        systemContext: 'selected code context',
+      });
+
+      expect(writes).toEqual(['selected code context\n\nuser task']);
     });
 
     it('materializes image attachments into local files and forwards them via --image', async () => {
@@ -1023,6 +1115,81 @@ describe('HeterogeneousAgentCtr', () => {
       // execution (emitted only by adapter.flush()) is in the broadcast.
       const toolEnds = events.filter((b) => (b.data as any)?.event?.type === 'tool_end');
       expect(toolEnds.length).toBeGreaterThan(0);
+    });
+
+    it('delivers late final Codex stdout chunks BEFORE heteroAgentSessionComplete', async () => {
+      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
+      const turnStarted = `${JSON.stringify({ type: 'turn.started' })}\n`;
+      const finalMessage = `${JSON.stringify({
+        item: {
+          id: 'item_103',
+          text: 'Final report after late stdout.',
+          type: 'agent_message',
+        },
+        type: 'item.completed',
+      })}\n`;
+      const turnCompleted = `${JSON.stringify({
+        type: 'turn.completed',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })}\n`;
+
+      const proc = new EventEmitter() as any;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      proc.stdout = stdout;
+      proc.stderr = stderr;
+      proc.stdin = {
+        end: vi.fn(),
+        write: vi.fn((_chunk: any, cb?: () => void) => {
+          cb?.();
+          return true;
+        }),
+      };
+      proc.kill = vi.fn();
+      proc.killed = false;
+      proc.__start = () => {
+        setImmediate(() => {
+          stdout.write(threadStarted);
+          stdout.write(turnStarted);
+          stderr.end();
+          proc.emit('exit', 0);
+          setImmediate(() => {
+            stdout.write(finalMessage);
+            stdout.write(turnCompleted);
+            stdout.end();
+          });
+        });
+      };
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      const sendStartedAt = Date.now();
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+      const sendDurationMs = Date.now() - sendStartedAt;
+
+      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
+      const finalChunkIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'stream_chunk' &&
+          (b.data as any)?.event?.data?.content === 'Final report after late stdout.',
+      );
+      const runtimeEndIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'agent_runtime_end',
+      );
+
+      expect(completeIdx).toBeGreaterThan(-1);
+      expect(finalChunkIdx).toBeGreaterThan(-1);
+      expect(runtimeEndIdx).toBeGreaterThan(-1);
+      expect(finalChunkIdx).toBeLessThan(completeIdx);
+      expect(runtimeEndIdx).toBeLessThan(completeIdx);
+      expect(sendDurationMs).toBeGreaterThanOrEqual(900);
     });
   });
 

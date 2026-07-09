@@ -9,9 +9,9 @@ import { useTranslation } from 'react-i18next';
 const styles = createStaticStyles(({ css }) => ({
   previewBlock: css`
     padding: 12px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorText};
 
@@ -20,9 +20,10 @@ const styles = createStaticStyles(({ css }) => ({
   previewLabel: css`
     margin: 0;
 
-    font-size: 12px;
-    font-weight: 500;
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 600;
     color: ${cssVar.colorTextTertiary};
+    letter-spacing: 0.02em;
     text-transform: uppercase;
   `,
 }));
@@ -50,7 +51,7 @@ const getDifficultyBadge = (difficulty: string) => {
         backgroundColor: c.bg,
         borderColor: c.color + '30',
         color: c.color,
-        fontSize: 11,
+        fontSize: 12,
         textTransform: 'capitalize',
       }}
     >

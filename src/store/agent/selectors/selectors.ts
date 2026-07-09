@@ -16,8 +16,7 @@ import {
   type MetaData,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
-import { KnowledgeType } from '@lobechat/types';
-import { VoiceList } from '@lobehub/tts';
+import { getWorkingDirEffectivePath, KnowledgeType } from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -153,28 +152,8 @@ const currentAgentTTS = (s: AgentStoreState): LobeAgentTTSConfig => {
   return config?.tts || DEFAUTT_AGENT_TTS_CONFIG;
 };
 
-const currentAgentTTSVoice =
-  (lang: string) =>
-  (s: AgentStoreState): string => {
-    const { voice, ttsService } = currentAgentTTS(s);
-    const voiceList = new VoiceList(lang);
-    let currentVoice;
-    switch (ttsService) {
-      case 'openai': {
-        currentVoice = voice.openai || (VoiceList.openaiVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'edge': {
-        currentVoice = voice.edge || (voiceList.edgeVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'microsoft': {
-        currentVoice = voice.microsoft || (voiceList.microsoftVoiceOptions?.[0].value as string);
-        break;
-      }
-    }
-    return currentVoice || 'alloy';
-  };
+const currentAgentTTSVoice = (s: AgentStoreState): string =>
+  currentAgentTTS(s).voice?.openai || 'alloy';
 
 const currentEnabledKnowledge = (s: AgentStoreState) => {
   const knowledgeBases = currentAgentKnowledgeBases(s);
@@ -295,7 +274,7 @@ const currentAgentWorkingDirectory =
     const agencyConfig = currentAgentConfig(s)?.agencyConfig;
     const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
     const agentChoice = targetDeviceId
-      ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+      ? getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[targetDeviceId])
       : undefined;
 
     return agentChoice ?? s.localAgentWorkingDirectoryMap[activeAgentId] ?? homePath;

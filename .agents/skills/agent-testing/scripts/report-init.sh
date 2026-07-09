@@ -54,6 +54,7 @@ cat > "$DIR/result.json" << EOF
   "entry": "",
   "focus": "",
   "cases": [],
+  "interactionCost": null,
   "summary": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "verdict": "pending", "conclusion": "", "score": null }
 }
 EOF

@@ -1,12 +1,14 @@
 'use client';
 
-import { Button, Flexbox, Modal, stopPropagation } from '@lobehub/ui';
+import { Flexbox, stopPropagation } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { groupKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
@@ -118,7 +120,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
 
   return (
     <div onClick={stopPropagation}>
-      <Modal
+      <ImperativeModal
         allowFullscreen
         destroyOnHidden
         open={open}
@@ -156,7 +158,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
             />
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     </div>
   );
 });

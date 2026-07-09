@@ -7,6 +7,16 @@ export interface CredSummary {
   description?: string;
   key: string;
   name: string;
+  /**
+   * Only populated when the list comes from a workspace's merged
+   * organization-scoped view (org-owned creds + members' shared creds):
+   * 'organization' for a credential the workspace created directly, 'user'
+   * for one a member shared in. The AI needs this to tell the user whose
+   * credential it's actually using — never silently treat a member's shared
+   * key as if the workspace owns it. Absent entirely for a personal-only list.
+   */
+  ownerDisplayName?: string;
+  ownerType?: 'organization' | 'user';
   type: CredType;
 }
 
@@ -41,7 +51,13 @@ export const groupCredsByType = (creds: CredSummary[]): Record<CredType, CredSum
  */
 const formatCred = (cred: CredSummary): string => {
   const desc = cred.description ? ` - ${cred.description}` : '';
-  return `  - ${cred.name} (key: ${cred.key})${desc}`;
+  const ownership =
+    cred.ownerType === 'user'
+      ? ` [shared by ${cred.ownerDisplayName ?? 'a workspace member'}]`
+      : cred.ownerType === 'organization'
+        ? ' [workspace credential]'
+        : '';
+  return `  - ${cred.name} (key: ${cred.key})${desc}${ownership}`;
 };
 
 /**

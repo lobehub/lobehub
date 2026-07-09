@@ -28,7 +28,7 @@ const chatState = vi.hoisted(() => ({
 }));
 
 const fileState = vi.hoisted(() => ({
-  chatContextSelections: [],
+  chatContextSelections: [] as any[],
   chatUploadFileList: [],
   clearChatContextSelections: clearChatContextSelectionsMock,
   clearChatUploadFileList: clearChatUploadFileListMock,
@@ -37,9 +37,11 @@ const fileState = vi.hoisted(() => ({
 const homeState = vi.hoisted(() => ({
   agentGroups: [],
   homeInputLoading: false,
-  inputActiveMode: null,
+  inputActiveMode: null as any,
   isAgentListInit: true,
   pinnedAgents: [],
+  privateAgentGroups: [],
+  privateUngroupedAgents: [],
   sendAsAgent: vi.fn(),
   sendAsGroup: vi.fn(),
   sendAsResearch: vi.fn(),
@@ -67,6 +69,14 @@ const homeDailyBriefState = vi.hoisted(() => ({
   currentIndex: 0,
   currentPair: undefined as { hint: string; welcome: string } | undefined,
   pairs: [] as { hint: string; welcome: string }[],
+}));
+
+const activeWorkspaceSlugMock = vi.hoisted(() => ({
+  value: null as string | null,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => activeWorkspaceSlugMock.value,
 }));
 
 vi.mock('@/hooks/useQueryRoute', () => ({
@@ -140,6 +150,10 @@ describe('Home InputArea useSend', () => {
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
+    fileState.chatContextSelections = [];
+    fileState.chatUploadFileList = [];
+    homeState.inputActiveMode = null;
+    activeWorkspaceSlugMock.value = null;
   });
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
@@ -173,6 +187,27 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.replace).toHaveBeenCalledWith('/agent/agt_inbox/tpc_created');
   });
 
+  it('captures the active workspace slug in default homepage sends', async () => {
+    activeWorkspaceSlugMock.value = 'team';
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'hello',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: { agentId: 'agt_inbox', isolatedTopic: true, workspaceSlug: 'team' },
+      }),
+    );
+  });
+
   it('drops editorData when sending the placeholder hint so the user message renders the markdown content', async () => {
     homeDailyBriefState.currentPair = {
       hint: '看下 Bug #14153 + #14112 Agent 手机端不同步/不显示...',
@@ -200,5 +235,50 @@ describe('Home InputArea useSend', () => {
     expect(sentPayload.message).toBe('看下 Bug #14153 + #14112 Agent 手机端不同步/不显示');
     expect(sentPayload.editorData).toBeUndefined();
     expect(homeDailyBriefState.advance).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes context selections through starter agent mode sends', async () => {
+    homeState.inputActiveMode = 'agent';
+    activeWorkspaceSlugMock.value = 'team';
+    fileState.chatContextSelections = [
+      {
+        content: 'const selected = true;',
+        filePath: 'src/example.ts',
+        id: 'code-selection',
+        lineRange: { endLine: 12, startLine: 10 },
+        preview: 'src/example.ts:10-12',
+        source: 'code',
+        title: 'src/example.ts:10-12',
+        workingDirectory: '/repo',
+      },
+    ];
+
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => 'use this selection',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(homeState.sendAsAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextSelections: [
+          expect.objectContaining({
+            content: 'const selected = true;',
+            filePath: 'src/example.ts',
+            lineRange: { endLine: 12, startLine: 10 },
+            source: 'code',
+          }),
+        ],
+        message: 'use this selection',
+        workspaceSlug: 'team',
+      }),
+    );
+    expect(clearChatContextSelectionsMock).toHaveBeenCalledTimes(1);
   });
 });

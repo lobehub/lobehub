@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "فشل في تطبيق البذرة",
   "generation.actions.seedCopied": "تم نسخ البذرة إلى الحافظة",
   "generation.actions.seedCopyFailed": "فشل في نسخ البذرة",
+  "generation.metadata.by": "بواسطة {{name}}",
   "generation.metadata.count": "{{count}} صورة",
+  "generation.metadata.createdAt": "تم الإنشاء في {{time}}",
   "generation.status.failed": "فشل في الإنشاء",
   "generation.status.generating": "جارٍ الإنشاء...",
   "notSupportGuide.desc": "وضع النشر الحالي لا يدعم إنشاء الصور بالذكاء الاصطناعي. قم بالتبديل إلى <1>وضع نشر قاعدة بيانات الخادم</1>، أو استخدم <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "دعم متعدد المزودين",
   "notSupportGuide.title": "وضع النشر الحالي لا يدعم إنشاء الصور بالذكاء الاصطناعي",
   "topic.createNew": "إنشاء موضوع جديد",
+  "topic.createdBy": "تم الإنشاء بواسطة {{name}}",
   "topic.deleteConfirm": "حذف موضوع الإنشاء",
   "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الإنشاء هذا. لا يمكن التراجع عن هذا الإجراء، يرجى المتابعة بحذر.",
   "topic.empty": "لا توجد مواضيع إنشاء",
+  "topic.privateTitle": "خاص",
   "topic.title": "موضوع الرسم",
-  "topic.untitled": "موضوع افتراضي"
+  "topic.untitled": "موضوع افتراضي",
+  "topic.visibility.existingLocked": "تم تثبيت الرؤية للموضوع الحالي. قم بإنشاء موضوع جديد لاختيار مساحة مختلفة.",
+  "topic.workspaceTitle": "مساحة العمل"
 }

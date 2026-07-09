@@ -46,6 +46,12 @@ export const InsertChatGroupSchema = z.object({
   marketIdentifier: z.string().nullish(),
   pinned: z.boolean().nullish(),
   title: z.string().nullish(),
+  /**
+   * `private` keeps the chat group visible only to its creator within the
+   * workspace; `public` (default) makes it visible to every workspace member.
+   * Ignored in personal mode.
+   */
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 export type InsertChatGroup = z.infer<typeof InsertChatGroupSchema>;

@@ -1,9 +1,11 @@
-import { ActionIcon, Button, Modal , Skeleton } from '@lobehub/ui';
+import { ActionIcon, Icon, Skeleton } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useResponsive } from 'antd-style';
 import { Brush } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import dynamic from '@/libs/next/dynamic';
 
@@ -25,7 +27,7 @@ const CreateButton = memo<{ mobile?: boolean }>(({ mobile }) => {
         onClick={() => setIsModalOpen(true)}
       />
     ) : (
-      <Button icon={Brush} onClick={() => setIsModalOpen(true)}>
+      <Button icon={<Icon icon={Brush} />} onClick={() => setIsModalOpen(true)}>
         {t('create')}
       </Button>
     );
@@ -33,7 +35,7 @@ const CreateButton = memo<{ mobile?: boolean }>(({ mobile }) => {
   return (
     <>
       {buttonContent}
-      <Modal
+      <ImperativeModal
         allowFullscreen
         footer={null}
         open={isModalOpen}
@@ -41,7 +43,7 @@ const CreateButton = memo<{ mobile?: boolean }>(({ mobile }) => {
         onCancel={() => setIsModalOpen(false)}
       >
         <Inner />
-      </Modal>
+      </ImperativeModal>
     </>
   );
 });

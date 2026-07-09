@@ -49,11 +49,6 @@ export class SessionActionImpl {
     this.#get = get;
   }
 
-  clearSessions = async (): Promise<void> => {
-    await sessionService.removeAllSessions();
-    await this.#get().refreshSessions();
-  };
-
   closeAllAgentsDrawer = (): void => {
     this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
   };
@@ -262,6 +257,7 @@ export class SessionActionImpl {
               title: session.meta?.title || 'Untitled Group',
               updatedAt: session.updatedAt,
               userId: '', // Use updatedAt as accessedAt fallback
+              visibility: 'public' as const,
               workspaceId: null,
             }));
 

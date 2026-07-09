@@ -67,6 +67,10 @@ export const UserLabSchema = z.object({
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
+   * enable selecting message text and adding it to the next conversation context
+   */
+  enableMessageTextSelectionActions: z.boolean().optional(),
+  /**
    * show the "Add Platform Agent" entry in the create menu
    */
   enablePlatformAgent: z.boolean().optional(),
@@ -115,11 +119,7 @@ export interface UserPreference {
 }
 
 export type ReferralStatusString =
-  | 'pending_reward'
-  | 'registered'
-  | 'suspected'
-  | 'rewarded'
-  | 'revoked';
+  'pending_reward' | 'registered' | 'suspected' | 'rewarded' | 'revoked';
 
 export interface UserInitializationState {
   agentOnboarding?: UserAgentOnboarding;

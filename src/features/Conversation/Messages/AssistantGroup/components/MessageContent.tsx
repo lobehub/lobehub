@@ -32,17 +32,27 @@ const MessageContent = memo<MessageContentProps>(
     const content = contentOverride ?? storeContent;
     const hasTools = hasToolsOverride ?? storeHasTools;
 
+    // Anchor the loading timer to this block's own createdAt (the freshest
+    // message) rather than the run-start operation startTime, so an in-flight
+    // block counts "time since this step began" instead of the whole run.
+    const createdAt = useConversationStore((s) => {
+      const value = dataSelectors.getDbMessageById(id)(s)?.createdAt;
+      if (value == null) return undefined;
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : undefined;
+    });
+
     const message = normalizeThinkTags(processWithArtifact(content ?? ''));
     // Once a tool call exists below this block's text, the text is already
     // finalized — skip the streaming/fade-in animation so settled content above
     // a tool doesn't keep re-animating.
     const { drawer, markdownProps } = useMarkdown(id, disableStreaming || hasTools);
 
-    if (!content && !hasTools) return <ContentLoading id={id} />;
+    if (!content && !hasTools) return <ContentLoading id={id} startTime={createdAt} />;
 
     if (content === LOADING_FLAT) {
       if (hasTools) return null;
-      return <ContentLoading id={id} />;
+      return <ContentLoading id={id} startTime={createdAt} />;
     }
 
     const isSingleLine = (message || '').split('\n').length <= 2;

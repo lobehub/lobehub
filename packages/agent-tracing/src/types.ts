@@ -2,12 +2,7 @@ export interface ExecutionSnapshot {
   agentId?: string;
   completedAt?: number;
   completionReason?:
-    | 'done'
-    | 'error'
-    | 'interrupted'
-    | 'max_steps'
-    | 'cost_limit'
-    | 'waiting_for_human';
+    'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
   error?: { type: string; message: string };
   externalRetryCount?: number;
   model?: string;
@@ -117,9 +112,10 @@ export interface StepSnapshot {
     isSuccess?: boolean;
     output?: string;
   }>;
+  // Cost incurred by this step, not the whole operation.
   totalCost: number;
 
-  // Cumulative
+  // Total tokens consumed by this step, not the whole operation.
   totalTokens: number;
 }
 

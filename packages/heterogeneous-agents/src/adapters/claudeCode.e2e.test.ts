@@ -204,9 +204,9 @@ describe('ClaudeCodeAdapter E2E', () => {
     // No `result.usage` in this fixture, so none emitted either.
     expect(resultUsage.length).toBe(0);
 
-    // 6. Should end with stream_end + agent_runtime_end (from result)
+    // 6. Should end with visible_output_end + agent_runtime_end (from result)
     const lastTwo = types.slice(-2);
-    expect(lastTwo).toEqual(['stream_end', 'agent_runtime_end']);
+    expect(lastTwo).toEqual(['visible_output_end', 'agent_runtime_end']);
 
     // 7. Session ID should be captured
     expect(adapter.sessionId).toBe('sess_abc123');

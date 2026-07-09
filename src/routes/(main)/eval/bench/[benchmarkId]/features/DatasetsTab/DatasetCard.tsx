@@ -1,7 +1,7 @@
-import { Button, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,22 +14,56 @@ import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
 import TestCaseTable from './TestCaseTable';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     .ant-card-body {
       padding: 0;
     }
   `,
+  // Tonal figure block that leads with the dataset's headline metric — its
+  // test-case count — given mono weight so it reads as a result at a glance.
   caseCount: css`
-    font-size: 12px;
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-end;
+
+    padding-block: 6px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  caseCountLabel: css`
+    font-size: ${cssVar.fontSizeSM};
+    line-height: 1;
     color: ${cssVar.colorTextTertiary};
+  `,
+  caseCountValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeLG};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
+  chevron: css`
+    flex-shrink: 0;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: transform 0.15s ease;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   datasetDescription: css`
     overflow: hidden;
 
     margin: 0;
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -49,10 +83,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: transparent;
 
-    transition: background 0.2s;
+    transition: background 0.15s ease;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -1px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   datasetIcon: css`
@@ -63,21 +106,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorPrimaryBg};
   `,
   datasetName: css`
     margin: 0;
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     color: ${cssVar.colorText};
-  `,
-  dropdownButton: css`
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    color: ${cssVar.colorTextTertiary};
   `,
   expandedSection: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -158,30 +195,39 @@ const DatasetCard = memo<DatasetCardProps>(
 
     return (
       <Card className={styles.card}>
-        <div className={styles.datasetHeader} onClick={onExpand}>
+        <div
+          className={styles.datasetHeader}
+          role="button"
+          tabIndex={0}
+          onClick={onExpand}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onExpand();
+            }
+          }}
+        >
           <div className={styles.datasetIcon}>
-            <Database size={16} style={{ color: 'var(--ant-color-primary)' }} />
+            <Database size={16} style={{ color: cssVar.colorPrimary }} />
           </div>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align="center" gap={8}>
               <p className={styles.datasetName}>{dataset.name}</p>
               {dataset.metadata?.preset && DATASET_PRESETS[dataset.metadata.preset] && (
-                <Tag style={{ fontSize: 10 }}>{DATASET_PRESETS[dataset.metadata.preset].name}</Tag>
+                <Tag size="small">{DATASET_PRESETS[dataset.metadata.preset].name}</Tag>
               )}
             </Flexbox>
             {dataset.description && (
               <p className={styles.datasetDescription}>{dataset.description}</p>
             )}
           </Flexbox>
-          <span className={styles.caseCount}>
-            {dataset.testCaseCount || 0} {t('benchmark.detail.stats.cases').toLowerCase()}
-          </span>
+          <div className={styles.caseCount}>
+            <span className={styles.caseCountValue}>{dataset.testCaseCount || 0}</span>
+            <span className={styles.caseCountLabel}>{t('benchmark.detail.stats.cases')}</span>
+          </div>
           <Button
             icon={Play}
             size="small"
-            style={{
-              height: 28,
-            }}
             onClick={(e) => {
               e.stopPropagation();
               onRun();
@@ -208,21 +254,12 @@ const DatasetCard = memo<DatasetCardProps>(
               },
             ]}
           >
-            <Button
-              className={styles.dropdownButton}
-              icon={Ellipsis}
-              size="small"
-              variant="text"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <ActionIcon icon={Ellipsis} size="small" onClick={(e) => e.stopPropagation()} />
           </DropdownMenu>
           <ChevronRight
+            className={styles.chevron}
             size={16}
-            style={{
-              color: 'var(--ant-color-text-tertiary)',
-              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s',
-            }}
+            style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
           />
         </div>
 

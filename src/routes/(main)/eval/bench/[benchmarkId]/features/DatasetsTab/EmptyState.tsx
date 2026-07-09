@@ -1,11 +1,11 @@
-import { Button, Empty, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Card } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Database, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   emptyCard: css`
     .ant-card-body {
       display: flex;
@@ -16,6 +16,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       padding-block: 64px;
       padding-inline: 24px;
     }
+  `,
+  iconBox: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 56px;
+    height: 56px;
+    margin-block-end: 16px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorPrimaryBg};
   `,
 }));
 
@@ -28,36 +40,18 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
 
   return (
     <Card className={styles.emptyCard}>
-      <Empty
-        icon={Database}
-        description={
-          <Flexbox gap={4}>
-            <p
-              style={{
-                color: 'var(--ant-color-text)',
-                fontSize: 14,
-                fontWeight: 500,
-                margin: 0,
-              }}
-            >
-              {t('dataset.empty.title')}
-            </p>
-            <p
-              style={{
-                color: 'var(--ant-color-text-tertiary)',
-                fontSize: 12,
-                margin: 0,
-              }}
-            >
-              {t('dataset.empty.description')}
-            </p>
-          </Flexbox>
-        }
-      >
-        <Button icon={Plus} size="small" style={{ marginTop: 16 }} type="primary" onClick={onAddDataset}>
-          {t('dataset.actions.addDataset')}
-        </Button>
-      </Empty>
+      <div className={styles.iconBox}>
+        <Icon icon={Database} size={24} style={{ color: cssVar.colorPrimary }} />
+      </div>
+      <Flexbox align="center" gap={4}>
+        <Text weight={600}>{t('dataset.empty.title')}</Text>
+        <Text color={cssVar.colorTextTertiary} fontSize={12}>
+          {t('dataset.empty.description')}
+        </Text>
+      </Flexbox>
+      <Button icon={Plus} size="small" style={{ marginTop: 16 }} type="primary" onClick={onAddDataset}>
+        {t('dataset.actions.addDataset')}
+      </Button>
     </Card>
   );
 });

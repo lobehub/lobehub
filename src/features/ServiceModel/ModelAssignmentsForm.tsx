@@ -1,17 +1,19 @@
 'use client';
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Form, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
+import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
@@ -19,9 +21,12 @@ import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/se
 interface SystemAgentModelItem {
   contextLimit?: boolean;
   key: UserServiceModelConfigKey;
+  modelType?: 'chat' | 'embedding';
 }
 
 type LoadingKey = 'defaultAgent' | UserServiceModelConfigKey;
+
+type SavingGroup = 'assignments' | 'memory' | 'optional';
 
 const SYSTEM_AGENT_MODEL_ITEMS: SystemAgentModelItem[] = [
   { key: 'topic' },
@@ -40,7 +45,7 @@ const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
 const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
   { contextLimit: true, key: 'memoryAnalysisAgentConfig' },
   { contextLimit: true, key: 'userMemoryPersonaWriter' },
-  { contextLimit: true, key: 'userMemoryEmbedding' },
+  { contextLimit: true, key: 'userMemoryEmbedding', modelType: 'embedding' },
 ];
 
 const ModelAssignmentsForm = memo(() => {
@@ -50,18 +55,47 @@ const ModelAssignmentsForm = memo(() => {
     (s) => [settingsSelectors.defaultAgent(s), settingsSelectors.currentSystemAgent(s)],
     isEqual,
   );
-  const [updateDefaultAgent, updateSystemAgent, isUserStateInit] = useUserStore((s) => [
+  const [
+    updateDefaultAgent,
+    updateSystemAgent,
+    isUserStateInit,
+    isUserStateInitError,
+    refreshUserState,
+  ] = useUserStore((s) => [
     s.updateDefaultAgent,
     s.updateSystemAgent,
     s.isUserStateInit,
+    s.isUserStateInitError,
+    s.refreshUserState,
   ]);
   const [loadingKey, setLoadingKey] = useState<LoadingKey>();
+  // Track which group last saved so its AutoSaveHint (and only its) reflects the
+  // shared save-state — the write-side counterpart to the read-side AsyncError above.
+  const [savingGroup, setSavingGroup] = useState<SavingGroup>();
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   useEffect(() => {
     if (loadingKey === 'defaultAgent') setLoadingKey(undefined);
   }, [defaultAgent.config.model, defaultAgent.config.provider, loadingKey]);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+  const groupOfKey = (key: UserServiceModelConfigKey): SavingGroup => {
+    if (MEMORY_MODEL_ITEMS.some((item) => item.key === key)) return 'memory';
+    if (OPTIONAL_FEATURE_ITEMS.some((item) => item.key === key)) return 'optional';
+    return 'assignments';
+  };
+
+  if (!isUserStateInit) {
+    // A failed user-state init must show error + Retry, not a permanent skeleton
+    if (isUserStateInitError)
+      return (
+        <AsyncError
+          error={isUserStateInitError}
+          variant={'block'}
+          onRetry={() => refreshUserState()}
+        />
+      );
+    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+  }
 
   const updateDefaultAgentModel = async ({
     model,
@@ -72,9 +106,10 @@ const ModelAssignmentsForm = memo(() => {
   }) => {
     if (!canManageServiceModel) return;
 
+    setSavingGroup('assignments');
     setLoadingKey('defaultAgent');
     try {
-      await updateDefaultAgent({ config: { model, provider } });
+      await save(() => updateDefaultAgent({ config: { model, provider } }));
     } finally {
       setLoadingKey(undefined);
     }
@@ -86,9 +121,10 @@ const ModelAssignmentsForm = memo(() => {
   ) => {
     if (!canManageServiceModel) return;
 
+    setSavingGroup(groupOfKey(key));
     setLoadingKey(key);
     try {
-      await updateSystemAgent(key, value);
+      await save(() => updateSystemAgent(key, value));
     } finally {
       setLoadingKey(undefined);
     }
@@ -144,39 +180,42 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
-  const memoryModelItems: FormItemProps[] = MEMORY_MODEL_ITEMS.map(({ contextLimit, key }) => {
-    const value = systemAgentSettings[key];
+  const memoryModelItems: FormItemProps[] = MEMORY_MODEL_ITEMS.map(
+    ({ contextLimit, key, modelType }) => {
+      const value = systemAgentSettings[key];
 
-    return {
-      children: (
-        <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
-          <ModelSelect
-            showAbility={false}
-            style={{ minWidth: 0, width: '100%' }}
-            value={value}
-            onChange={(props) => updateSystemAgentModel(key, props)}
-          />
-          {contextLimit && (
-            <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
-              <InputNumber
-                min={1}
-                placeholder={t('serviceModel.contextLimit.placeholder')}
-                style={{ alignSelf: 'flex-end', width: 180 }}
-                value={value.contextLimit}
-                onChange={(contextLimit) =>
-                  updateSystemAgentModel(key, {
-                    contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
-                  })
-                }
-              />
-            </ConfigProvider>
-          )}
-        </Flexbox>
-      ),
-      desc: t(`systemAgent.${key}.modelDesc`),
-      label: t(`systemAgent.${key}.title`),
-    } satisfies FormItemProps;
-  });
+      return {
+        children: (
+          <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
+            <ModelSelect
+              modelType={modelType}
+              showAbility={false}
+              style={{ minWidth: 0, width: '100%' }}
+              value={value}
+              onChange={(props) => updateSystemAgentModel(key, props)}
+            />
+            {contextLimit && (
+              <ConfigProvider theme={{ token: { controlHeight: 32 } }}>
+                <InputNumber
+                  min={1}
+                  placeholder={t('serviceModel.contextLimit.placeholder')}
+                  style={{ alignSelf: 'flex-end', width: 180 }}
+                  value={value.contextLimit}
+                  onChange={(contextLimit) =>
+                    updateSystemAgentModel(key, {
+                      contextLimit: typeof contextLimit === 'number' ? contextLimit : undefined,
+                    })
+                  }
+                />
+              </ConfigProvider>
+            )}
+          </Flexbox>
+        ),
+        desc: t(`systemAgent.${key}.modelDesc`),
+        label: t(`systemAgent.${key}.title`),
+      } satisfies FormItemProps;
+    },
+  );
 
   const optionalFeatureItems: FormItemProps[] = OPTIONAL_FEATURE_ITEMS.map(({ key }) => {
     const value = systemAgentSettings[key];
@@ -223,34 +262,26 @@ const ModelAssignmentsForm = memo(() => {
     } satisfies FormItemProps;
   });
 
-  const isOptionalFeatureLoading =
-    loadingKey === 'followUpAction' ||
-    loadingKey === 'inputCompletion' ||
-    loadingKey === 'promptRewrite';
-  const isMemoryModelLoading = MEMORY_MODEL_ITEMS.some(({ key }) => loadingKey === key);
-  const isModelAssignmentLoading = loadingKey && !isOptionalFeatureLoading && !isMemoryModelLoading;
+  const renderSaveHint = (group: SavingGroup) =>
+    savingGroup === group && (
+      <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+    );
 
   const modelAssignments: FormGroupItemType = {
     children: [defaultAgentItem, ...systemModelItems],
-    extra: isModelAssignmentLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('assignments'),
     title: t('serviceModel.modelAssignments.title'),
   };
 
   const optionalFeatures: FormGroupItemType = {
     children: optionalFeatureItems,
-    extra: isOptionalFeatureLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('optional'),
     title: t('serviceModel.optionalFeatures.title'),
   };
 
   const memoryModels: FormGroupItemType = {
     children: memoryModelItems,
-    extra: isMemoryModelLoading && (
-      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
-    ),
+    extra: renderSaveHint('memory'),
     title: t('serviceModel.memoryModels.title'),
   };
 

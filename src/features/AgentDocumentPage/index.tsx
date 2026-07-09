@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 
 import FloatingChatPanel from '@/features/FloatingChatPanel';
@@ -13,6 +13,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import Header from './Header';
+import { buildAgentDocumentsPath } from './navigation';
 import { useAgentDocumentItem } from './useAgentDocumentItem';
 
 interface AgentDocumentPageProps {
@@ -31,7 +32,13 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   const { aid } = useParams<{ aid: string }>();
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
-  const { item, mutate, skillBundle } = useAgentDocumentItem(agentId, documentId);
+  const {
+    error: itemError,
+    isNotFound,
+    item,
+    mutate,
+    skillBundle,
+  } = useAgentDocumentItem(agentId, documentId);
 
   const enableFloatingChatPanel = useUserStore(
     labPreferSelectors.enableAgentDocumentFloatingChatPanel,
@@ -50,6 +57,23 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     [agentId, navigate],
   );
 
+  // Deleting the open document lands on the docs index (empty-state guidance +
+  // the persistent document tree) rather than the deleted doc's now-404 route.
+  const backToDocs = useCallback(
+    () => navigate(agentId ? buildAgentDocumentsPath(agentId) : '/agent'),
+    [agentId, navigate],
+  );
+
+  // The doc backing this route can vanish while the page is open — most often
+  // deleted from the working-sidebar tree (which optimistically drops the row
+  // from the same list this reads). Redirect to the docs index rather than
+  // stranding the user on a 404 for a doc they just removed. `isNotFound` is
+  // precise (list resolved, doc genuinely absent — not a load error), so a bad
+  // deep link also lands on the index instead of a dead end.
+  useEffect(() => {
+    if (isNotFound && agentId) navigate(buildAgentDocumentsPath(agentId), { replace: true });
+  }, [isNotFound, agentId, navigate]);
+
   // A skill index doc is stored as `SKILL.md`; show the skill name (bundle title) instead.
   const isSkillIndex = !!skillBundle;
   const title = skillBundle
@@ -62,14 +86,20 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         agentDocumentId={item?.id}
         agentId={agentId}
         documentId={documentId}
+        itemError={itemError}
         title={title}
         updatedAt={item?.updatedAt}
         onBack={backToChat}
-        onDeleted={backToChat}
+        onDeleted={backToDocs}
       />
     ),
-    [agentId, backToChat, documentId, item?.id, item?.updatedAt, title],
+    [agentId, backToChat, backToDocs, documentId, item?.id, item?.updatedAt, itemError, title],
   );
+
+  // Genuinely-absent doc (deleted or bad deep link): render nothing while the
+  // redirect effect above sends the user to the docs index, instead of flashing
+  // a 404 for a doc that simply moved to the empty-state landing.
+  if (isNotFound) return null;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }} width={'100%'}>

@@ -1,15 +1,27 @@
 import { isDesktop } from '@lobechat/const';
 import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
-import dayjs from 'dayjs';
-import { Clock3Icon, CopyPlus, Download, Link2, Maximize2, Trash2, UserRound } from 'lucide-react';
-import { useMemo } from 'react';
+import {
+  Clock3Icon,
+  CopyPlus,
+  Download,
+  EyeOffIcon,
+  Link2,
+  Maximize2,
+  Trash2,
+  UserRound,
+  UsersIcon,
+} from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
@@ -17,17 +29,21 @@ import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageSelectors, usePageStore } from '@/store/page';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { formatPageEditorInfoTime } from '../formatPageEditorInfoTime';
 import { usePageEditorStore, useStoreApi } from '../store';
 
 /**
  * Action menu for the page editor.
  */
 export const useMenu = (): { menuItems: any[] } => {
-  const { t } = useTranslation(['file', 'common', 'chat']);
+  const { i18n, t } = useTranslation(['file', 'common', 'chat']);
   const { message } = App.useApp();
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
+  const dateLocale = i18n.resolvedLanguage || i18n.language;
 
   const documentId = usePageEditorStore((s) => s.documentId);
   const { allowed: canCreatePage } = usePermission('create_content');
@@ -48,6 +64,20 @@ export const useMenu = (): { menuItems: any[] } => {
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
   const transferMenuItems = useDocumentTransferMenuItem(documentId) as DropdownItem[] | null;
 
+  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
+  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  // Visibility toggles are creator-only — the backend rejects non-owner writes,
+  // but the menu entry itself is the wrong affordance on someone else's page.
+  const isOwnPage = Boolean(currentUserId && pageDocument?.userId === currentUserId);
+  const canPublish = Boolean(
+    activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'private' && canEditPage,
+  );
+  const canMakePrivate = Boolean(
+    activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'public' && canEditPage,
+  );
+
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,
     systemStatusSelectors.wideScreen(s),
@@ -57,7 +87,7 @@ export const useMenu = (): { menuItems: any[] } => {
   // Wide screen mode only makes sense when screen is large enough
   const showViewModeSwitch = lg;
 
-  const handleDuplicate = async () => {
+  const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
     if (!documentId) return;
     try {
@@ -67,9 +97,48 @@ export const useMenu = (): { menuItems: any[] } => {
       console.error('Failed to duplicate page:', error);
       message.error(t('pageEditor.duplicateError'));
     }
-  };
+  }, [canCreatePage, documentId, duplicateDocument, message, t]);
 
-  const handleExportMarkdown = async () => {
+  const handlePublish = useCallback(() => {
+    if (!canPublish || !documentId) return;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: <VisibilityConfirmContent variant="publish" />,
+      okText: t('continue', { ns: 'common' }),
+      onOk: async () => {
+        try {
+          await publishPageToWorkspace(documentId);
+          message.success(t('pageList.publishSuccess'));
+        } catch (error) {
+          console.error('Failed to publish page:', error);
+          message.error(t('pageList.publishError'));
+        }
+      },
+      title: t('pageList.publishConfirm.title'),
+    });
+  }, [canPublish, documentId, publishPageToWorkspace, message, t]);
+
+  const handleMakePrivate = useCallback(() => {
+    if (!canMakePrivate || !documentId) return;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: <VisibilityConfirmContent variant="makePrivate" />,
+      okButtonProps: { danger: true },
+      okText: t('continue', { ns: 'common' }),
+      onOk: async () => {
+        try {
+          await setPageVisibility(documentId, 'private');
+          message.success(t('makePrivate.success', { ns: 'common' }));
+        } catch (error) {
+          console.error('Failed to make page private:', error);
+          message.error(t('makePrivate.error', { ns: 'common' }));
+        }
+      },
+      title: t('makePrivate.confirm.title', { ns: 'common' }),
+    });
+  }, [canMakePrivate, documentId, setPageVisibility, message, t]);
+
+  const handleExportMarkdown = useCallback(async () => {
     const state = storeApi.getState();
     const { editor, title } = state;
 
@@ -101,7 +170,7 @@ export const useMenu = (): { menuItems: any[] } => {
       console.error('Failed to export markdown:', error);
       message.error(t('pageEditor.exportError'));
     }
-  };
+  }, [storeApi, message, t]);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [
@@ -161,6 +230,26 @@ export const useMenu = (): { menuItems: any[] } => {
         type: 'divider' as const,
       },
       ...((transferMenuItems ?? []) as DropdownItem[]),
+      ...(canPublish
+        ? [
+            {
+              icon: <Icon icon={UsersIcon} />,
+              key: 'publish-to-workspace',
+              label: t('pageList.publishToWorkspace'),
+              onClick: handlePublish,
+            } as DropdownItem,
+          ]
+        : []),
+      ...(canMakePrivate
+        ? [
+            {
+              icon: <Icon icon={EyeOffIcon} />,
+              key: 'make-private',
+              label: t('makePrivate', { ns: 'common' }),
+              onClick: handleMakePrivate,
+            } as DropdownItem,
+          ]
+        : []),
       {
         children: [
           {
@@ -190,7 +279,7 @@ export const useMenu = (): { menuItems: any[] } => {
                 authorName,
                 lastUpdatedTime
                   ? t('pageEditor.editedAt', {
-                      time: dayjs(lastUpdatedTime).format('MMMM D, YYYY [at] h:mm A'),
+                      time: formatPageEditorInfoTime(lastUpdatedTime, dateLocale),
                     })
                   : '',
               ]
@@ -207,15 +296,20 @@ export const useMenu = (): { menuItems: any[] } => {
     authorName,
     canCreatePage,
     canEditPage,
+    canPublish,
+    canMakePrivate,
     storeApi,
     t,
     message,
     setRightPanelMode,
     wideScreen,
+    dateLocale,
     toggleWideScreen,
     togglePageAgentPanel,
     showViewModeSwitch,
     handleDuplicate,
+    handlePublish,
+    handleMakePrivate,
     handleExportMarkdown,
     transferMenuItems,
   ]);

@@ -18,15 +18,18 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { topics } from '@/database/schemas';
+import { agentOperations, topics } from '@/database/schemas';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+
+import { workingDirConfigSchema } from './workingDirSchema';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -145,6 +148,7 @@ const ExecAgentSchema = z
           .object({
             repos: z.array(z.string()).optional(),
             workingDirectory: z.string().optional(),
+            workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
         /**
@@ -190,6 +194,42 @@ const ExecAgentSchema = z
         toolCallId: z.string(),
       })
       .optional(),
+    /**
+     * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
+     * lobe-agent `askUserQuestion`). When set, the new op writes the
+     * human-provided answer as the target tool message's result and resumes from
+     * `phase: 'tool_result'` — the tool is NOT re-executed, so the runtime never
+     * overwrites the answer with a fresh "pending" placeholder. Mutually
+     * exclusive with `resumeApproval`.
+     */
+    resumeToolResult: z
+      .object({
+        /** The human-provided tool result (the answer text). */
+        content: z.string(),
+        /** ID of the pending `role='tool'` message this result targets. */
+        parentMessageId: z.string(),
+        /** Optional plugin state to persist on the tool message. */
+        pluginState: z.record(z.unknown()).optional(),
+        /** tool_call_id of the pending tool call being answered. */
+        toolCallId: z.string(),
+      })
+      .optional(),
+    /**
+     * Tool identifiers the user @-mentioned in this message. Enabled for this
+     * run in addition to the agent's pinned plugins, so a mentioned tool that
+     * isn't pinned to the agent (e.g. a custom MCP connector picked from the @
+     * list) is callable. Scoped to the caller's own installed tools/connectors
+     * by the user-scoped lookups downstream, so it can't enable others' tools.
+     */
+    selectedToolIds: z.array(z.string()).optional(),
+    /**
+     * Agents the user @-mentioned in this message (multi-mention). When present
+     * (and non-group), the run enables the callAgent tool and injects the
+     * mentioned-agents delegation context so the supervisor delegates to them
+     * instead of answering itself. Mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected callAgent manifest.
+     */
+    mentionedAgents: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
     /**
@@ -364,6 +404,7 @@ const AgentStreamEventSchema = z.object({
     'stream_start',
     'stream_chunk',
     'stream_end',
+    'visible_output_end',
     'stream_retry',
     'tool_start',
     'tool_end',
@@ -412,6 +453,38 @@ const HeteroFinishSchema = z.object({
   result: z.enum(['success', 'error', 'cancelled']),
   sessionId: z.string().optional(),
   topicId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.waitInterventionResponse` — the exec-side long-poll. The
+ * `lh hetero exec` producer calls this in a loop while an `AskUserBridge`
+ * pending is in flight, draining `agent_intervention_response` events off the
+ * op's Redis stream (which the sandbox can't read directly). `lastEventId`
+ * threads the cursor forward across polls; `'$'` on the first call means
+ * "only events published from now on".
+ */
+const WaitInterventionResponseSchema = z.object({
+  blockMs: z.number().int().positive().max(30_000).default(25_000),
+  lastEventId: z.string().default('$'),
+  operationId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
+ * Human-in-the-loop. The user's answer to an `agent_intervention_request` is
+ * published back onto the op's Redis stream as an `agent_intervention_response`,
+ * where both the renderer (card → resolved) and the exec long-poll converge on
+ * it by `toolCallId`. Mutually exclusive: `result` on submit, `cancelled` on
+ * skip/cancel.
+ */
+const SubmitHeteroInterventionSchema = z.object({
+  cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
+  cancelled: z.boolean().optional(),
+  operationId: z.string().min(1),
+  result: z.unknown().optional(),
+  /** Producer step index; harmless placeholder — correlation is by toolCallId. */
+  stepIndex: z.number().int().nonnegative().default(0),
+  toolCallId: z.string().min(1),
 });
 
 const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -644,8 +717,11 @@ export const aiAgentRouter = router({
       deviceId,
       existingMessageIds = [],
       fileIds,
+      mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeToolResult,
+      selectedToolIds,
       trigger,
       userInterventionConfig,
     } = input;
@@ -660,12 +736,15 @@ export const aiAgentRouter = router({
         deviceId,
         existingMessageIds,
         fileIds,
+        mentionedAgents,
         parentMessageId,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeToolResult,
+        selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
         userInterventionConfig,
@@ -1315,6 +1394,94 @@ export const aiAgentRouter = router({
       });
     }
   }),
+
+  /**
+   * Exec-side long-poll for remote Human-in-the-loop (op-JWT auth, same as
+   * `heteroIngest`). The `lh hetero exec` producer — which holds only an
+   * op-scoped JWT + tRPC and never the server's Redis — pulls
+   * `agent_intervention_response` events off the op's Redis stream through this
+   * server-mediated read, then resolves its in-process `AskUserBridge`. One
+   * bounded `XREAD BLOCK` per call; the producer loops while a pending is in
+   * flight, threading `lastEventId` forward so nothing is missed between polls.
+   */
+  waitInterventionResponse: heteroAgentProcedure
+    .input(WaitInterventionResponseSchema)
+    .query(async ({ input, ctx }) => {
+      const { operationId, lastEventId, blockMs } = input;
+
+      // Ownership guard, mirroring heteroIngest / heteroFinish. The op stream is
+      // read by `operationId` alone, so an owner-token caller (a logged-in
+      // desktop reusing its own OIDC session) must prove it owns THIS operation
+      // — otherwise any signed-in user could long-poll another run's
+      // `agent_intervention_response` payloads by id. Bind the guard to the
+      // operation row directly (tighter than the topic-level guard the write
+      // paths use, since the read has no topicId to key on). The operation-token
+      // path is exempt: it's server-minted and handed only to the sandbox /
+      // device running this op.
+      if (ctx.heteroAuthKind === 'user') {
+        const [operationRow] = await ctx.serverDB
+          .select({ userId: agentOperations.userId })
+          .from(agentOperations)
+          .where(eq(agentOperations.id, operationId))
+          .limit(1);
+
+        if (operationRow?.userId !== ctx.userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Operation not found or not owned by the caller',
+          });
+        }
+      }
+
+      const streamEventManager = createStreamEventManager();
+      const { events, lastEventId: nextEventId } = await streamEventManager.readEventsOnce(
+        operationId,
+        lastEventId,
+        blockMs,
+      );
+
+      // Only intervention responses matter to the producer; everything else on
+      // the stream is already going out via its own outbound ingest path.
+      return {
+        events: events.filter((e) => e.type === 'agent_intervention_response'),
+        lastEventId: nextEventId,
+      };
+    }),
+
+  /**
+   * Browser leg of remote Human-in-the-loop (user auth). Publishes the user's
+   * answer to an `agent_intervention_request` back onto the op's Redis stream
+   * as an `agent_intervention_response`. Two consumers converge on it by
+   * `toolCallId`: the renderer (card → resolved) and the exec long-poll
+   * (`waitInterventionResponse` → `bridge.resolve`). Symmetric with the
+   * desktop path, which resolves the bridge over Electron IPC instead.
+   */
+  submitHeteroIntervention: aiAgentWriteProcedure
+    .input(SubmitHeteroInterventionSchema)
+    .mutation(async ({ input }) => {
+      const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
+
+      log(
+        'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
+        operationId,
+        toolCallId,
+        cancelled ?? false,
+      );
+
+      const streamEventManager = createStreamEventManager();
+      await streamEventManager.publishStreamEvent(operationId, {
+        data: {
+          cancelReason: cancelled ? (cancelReason ?? 'user_cancelled') : undefined,
+          cancelled,
+          result: cancelled ? undefined : result,
+          toolCallId,
+        },
+        stepIndex,
+        type: 'agent_intervention_response',
+      });
+
+      return { success: true as const };
+    }),
 
   processHumanIntervention: aiAgentWriteProcedure
     .input(ProcessHumanInterventionSchema)

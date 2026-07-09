@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "應用種子失敗",
   "generation.actions.seedCopied": "種子已複製到剪貼簿",
   "generation.actions.seedCopyFailed": "複製種子失敗",
+  "generation.metadata.by": "由 {{name}}",
   "generation.metadata.count": "{{count}} 張圖片",
+  "generation.metadata.createdAt": "建立於 {{time}}",
   "generation.status.failed": "生成失敗",
   "generation.status.generating": "生成中...",
   "notSupportGuide.desc": "當前部署實例為客戶端資料庫模式，無法使用 AI 圖像生成功能。請切換到<1>服務端資料庫部署模式</1>，或直接使用 <3>LobeChat Cloud</3>",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "多 Providers 支援",
   "notSupportGuide.title": "當前部署模式不支援 AI 繪畫",
   "topic.createNew": "建立新主題",
+  "topic.createdBy": "由 {{name}} 建立",
   "topic.deleteConfirm": "刪除生成主題",
   "topic.deleteConfirmDesc": "即將刪除該生成主題，刪除後將無法復原，請謹慎操作。",
   "topic.empty": "暫無生成主題",
+  "topic.privateTitle": "私人",
   "topic.title": "繪畫主題",
-  "topic.untitled": "預設主題"
+  "topic.untitled": "預設主題",
+  "topic.visibility.existingLocked": "當前主題的可見性已固定。請創建一個新主題以選擇不同的空間。",
+  "topic.workspaceTitle": "工作區"
 }

@@ -3,6 +3,7 @@ import { Newspaper } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
@@ -21,13 +22,27 @@ const DailyBrief = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  useFetchBriefs(isLogin);
+  const briefsSWR = useFetchBriefs(isLogin);
 
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
   const recommendationsVisible = useRecommendationsVisible();
 
   if (!isLogin) return null;
+
+  if (briefsSWR.error && !isInit && !briefsSWR.isLoading) {
+    return (
+      <GroupBlock icon={Newspaper} title={t('brief.title')}>
+        <AsyncError
+          error={briefsSWR.error}
+          variant={'block'}
+          onRetry={() => {
+            void briefsSWR.mutate();
+          }}
+        />
+      </GroupBlock>
+    );
+  }
 
   if (!isInit) {
     return (

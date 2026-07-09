@@ -66,10 +66,6 @@ vi.mock('./formatTaskItemDate', () => ({
   formatTaskItemDate: () => 'today',
 }));
 
-vi.mock('./TaskLatestActivity', () => ({
-  default: () => null,
-}));
-
 vi.mock('./TaskPriorityTag', () => ({
   default: () => <span>priority</span>,
 }));

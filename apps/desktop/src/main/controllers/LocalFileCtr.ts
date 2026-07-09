@@ -1,7 +1,12 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  defaultSearchProjectFiles,
+  prepareSkillDirectory,
+  type SkillDirectoryDeps,
+} from '@lobechat/device-control';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -30,6 +35,8 @@ import {
   type ProjectFileIndexEntry,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
   type RenameLocalFileResult,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -52,7 +59,6 @@ import {
 } from '@lobechat/local-file-shell';
 import { dialog, shell } from 'electron';
 import { execa } from 'execa';
-import { unzipSync } from 'fflate';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
@@ -65,6 +71,7 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -490,66 +497,25 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
+  /**
+   * Host deps for the shared skill-archive cache: this keeps the renderer-IPC
+   * path (here) and the gateway RPC path (`GatewayConnectionCtr` →
+   * `@lobechat/device-control`) on ONE cache directory and one proxy-aware
+   * fetch, so a skill prepared by either entry point is a cache hit for the
+   * other.
+   */
+  getSkillDirectoryDeps(): SkillDirectoryDeps {
+    return {
+      fetchSkillArchive: netFetch,
+      skillCacheRoot: path.join(this.app.appStoragePath, 'file-storage', 'skills'),
+    };
+  }
+
   @IpcMethod()
-  async handlePrepareSkillDirectory({
-    forceRefresh,
-    url,
-    zipHash,
-  }: PrepareSkillDirectoryParams): Promise<PrepareSkillDirectoryResult> {
-    const cacheRoot = path.join(this.app.appStoragePath, 'file-storage', 'skills');
-    const extractedDir = path.join(cacheRoot, 'extracted', zipHash);
-    const markerPath = path.join(extractedDir, '.prepared');
-    const zipPath = path.join(cacheRoot, 'archives', `${zipHash}.zip`);
-
-    try {
-      if (!forceRefresh) {
-        await access(markerPath, constants.F_OK);
-        return { extractedDir, success: true, zipPath };
-      }
-    } catch {
-      // Cache miss, continue preparing the local copy.
-    }
-
-    try {
-      const response = await netFetch(url);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to download skill package: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const extractedFiles = unzipSync(new Uint8Array(buffer));
-
-      await rm(extractedDir, { force: true, recursive: true });
-      await mkdir(path.dirname(zipPath), { recursive: true });
-      await mkdir(extractedDir, { recursive: true });
-      await writeFile(zipPath, buffer);
-
-      for (const [relativePath, fileContent] of Object.entries(extractedFiles)) {
-        if (relativePath.endsWith('/')) continue;
-
-        const targetPath = path.resolve(extractedDir, relativePath);
-        const normalizedRoot = `${path.resolve(extractedDir)}${path.sep}`;
-        if (targetPath !== path.resolve(extractedDir) && !targetPath.startsWith(normalizedRoot)) {
-          throw new Error(`Unsafe file path in skill archive: ${relativePath}`);
-        }
-
-        await mkdir(path.dirname(targetPath), { recursive: true });
-        await writeFile(targetPath, Buffer.from(fileContent as Uint8Array));
-      }
-
-      await writeFile(markerPath, JSON.stringify({ preparedAt: Date.now(), url, zipHash }), 'utf8');
-
-      return { extractedDir, success: true, zipPath };
-    } catch (error) {
-      return {
-        error: (error as Error).message,
-        extractedDir,
-        success: false,
-        zipPath,
-      };
-    }
+  async handlePrepareSkillDirectory(
+    params: PrepareSkillDirectoryParams,
+  ): Promise<PrepareSkillDirectoryResult> {
+    return prepareSkillDirectory(params, this.getSkillDirectoryDeps());
   }
 
   @IpcMethod()
@@ -659,7 +625,6 @@ export default class LocalFileCtr extends ControllerModule {
           indexedAt: new Date().toISOString(),
           root,
           source: 'git',
-          totalCount: entries.length,
         };
       }
     } catch (error) {
@@ -669,7 +634,11 @@ export default class LocalFileCtr extends ControllerModule {
       });
     }
 
-    const fallback = await this.searchService.glob({ pattern: '**/*', scope: requestedScope });
+    const fallback = await this.searchService.glob({
+      limit: PROJECT_FILE_GLOB_LIMIT,
+      pattern: '**/*',
+      scope: requestedScope,
+    });
     const files = fallback.files.map((filePath) => path.resolve(filePath));
     const entries = await Promise.all(
       files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
@@ -688,8 +657,25 @@ export default class LocalFileCtr extends ControllerModule {
       indexedAt: new Date().toISOString(),
       root: requestedScope,
       source: 'glob',
-      totalCount: entries.length,
     };
+  }
+
+  @IpcMethod()
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    const startedAt = Date.now();
+    const result = await defaultSearchProjectFiles(params);
+
+    logger.debug('Project file search completed', {
+      duration: Date.now() - startedAt,
+      entries: result.entries.length,
+      query: params.query,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
+    });
+    await this.approveProjectRootForPreview(result.root);
+
+    return result;
   }
 
   /**

@@ -10,6 +10,7 @@ import {
   agentsFiles,
   agentsKnowledgeBases,
   agentsToSessions,
+  devices,
   documents,
   files,
   knowledgeBases,
@@ -233,6 +234,40 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('getAgentSnapshotForTaskCreate', () => {
+    it('returns model/provider snapshot + visibility in one call', async () => {
+      const agentId = 'snap-task-create-1';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+        userId,
+        visibility: 'private',
+      });
+
+      const result = await agentModel.getAgentSnapshotForTaskCreate(agentId);
+
+      expect(result).toEqual({
+        snapshot: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        visibility: 'private',
+      });
+    });
+
+    it('returns null when the agent is not visible to the current caller', async () => {
+      const agentId = 'snap-task-create-other-user';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        model: 'gpt-4o',
+        provider: 'openai',
+        userId: userId2,
+      });
+
+      const result = await agentModel.getAgentSnapshotForTaskCreate(agentId);
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';
@@ -390,6 +425,88 @@ describe('AgentModel', () => {
 
       expect(result.knowledgeBases).toHaveLength(0);
       expect(result.files).toHaveLength(0);
+    });
+
+    it('nulls out a mounted KB / file that the caller can no longer read', async () => {
+      // Workspace: A owns a public KB + public file and mounts them onto a
+      // public agent. B (another member) sees both mounts in the editor.
+      // After A flips both back to `private`, the mount rows
+      // should stay (so the UI can render an "unavailable" placeholder), but
+      // the joined entity fields must be nulled so no name / description
+      // leaks and the runtime skips the KB via its `k.id` filter.
+      const wsId = 'agent-knowledge-vis-ws';
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'kv-ws',
+        primaryOwnerId: userId,
+        slug: wsId,
+      });
+
+      await serverDB.insert(knowledgeBases).values({
+        id: 'kb-vis',
+        userId,
+        workspaceId: wsId,
+        name: 'Shared KB',
+        visibility: 'public',
+      });
+      await serverDB.insert(files).values({
+        id: 'file-vis',
+        userId,
+        workspaceId: wsId,
+        name: 'shared.pdf',
+        url: 'https://a.com/shared.pdf',
+        size: 42,
+        fileType: 'application/pdf',
+        visibility: 'public',
+      });
+
+      const agentId = 'agent-vis';
+      await serverDB.insert(agents).values({
+        id: agentId,
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+      await serverDB.insert(agentsKnowledgeBases).values({
+        agentId,
+        knowledgeBaseId: 'kb-vis',
+        userId,
+        workspaceId: wsId,
+        enabled: true,
+      });
+      await serverDB.insert(agentsFiles).values({
+        agentId,
+        fileId: 'file-vis',
+        userId,
+        workspaceId: wsId,
+        enabled: true,
+      });
+
+      const wsMemberModel = new AgentModel(serverDB, userId2, wsId);
+
+      const beforeUnpublish = await wsMemberModel.getAgentAssignedKnowledge(agentId);
+      expect(beforeUnpublish.knowledgeBases[0]?.id).toBe('kb-vis');
+      expect(beforeUnpublish.files[0]?.id).toBe('file-vis');
+
+      // Creator flips both back to private
+      await serverDB
+        .update(knowledgeBases)
+        .set({ visibility: 'private' })
+        .where(eq(knowledgeBases.id, 'kb-vis'));
+      await serverDB.update(files).set({ visibility: 'private' }).where(eq(files.id, 'file-vis'));
+
+      const afterUnpublish = await wsMemberModel.getAgentAssignedKnowledge(agentId);
+      // Mount rows still present (so UI can render an "unavailable" tile) but
+      // the joined KB / file entity is missing — the `leftJoin`'s null side
+      // spreads to nothing, leaving only the mount metadata (`enabled`). UI
+      // checks `!item.id` and the runtime's `k.id` filter naturally skips.
+      expect(afterUnpublish.knowledgeBases).toHaveLength(1);
+      expect(afterUnpublish.knowledgeBases[0]?.id).toBeUndefined();
+      expect(afterUnpublish.knowledgeBases[0]?.name).toBeUndefined();
+      expect(afterUnpublish.knowledgeBases[0]?.enabled).toBe(true);
+      expect(afterUnpublish.files).toHaveLength(1);
+      expect(afterUnpublish.files[0]?.id).toBeUndefined();
+      expect(afterUnpublish.files[0]?.name).toBeUndefined();
     });
   });
 
@@ -697,6 +814,73 @@ describe('AgentModel', () => {
 
       expect(result?.title).toBe('Original Title');
     });
+
+    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, {
+        avatar: 'hacked-avatar',
+        backgroundColor: 'hacked-color',
+        description: 'hacked description',
+        marketIdentifier: 'hacked-market-id',
+        model: 'gpt-4', // non-protected field should still be applied
+        tags: ['hacked'],
+        title: 'Hacked Builder Title',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBeNull();
+      expect(result?.description).toBeNull();
+      expect(result?.avatar).toBeNull();
+      expect(result?.backgroundColor).toBeNull();
+      expect(result?.marketIdentifier).toBeNull();
+      expect(result?.tags).toEqual([]);
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should strip systemRole when the gateway updatePrompt path writes it via update()', async () => {
+      // Mirrors apps/server/.../serverRuntimes/agentBuilder.ts's updatePrompt, which calls
+      // agentModel.update(agentId, { editorData: null, systemRole }) directly.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, {
+        editorData: null,
+        systemRole: 'You are now a pirate.',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.systemRole).toBeNull();
+    });
+
+    it('should not strip identity fields for a regular agent whose slug happens to differ', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'my-custom-agent', userId, title: 'Original' })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.update(agent.id, { title: 'Updated Title' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBe('Updated Title');
+    });
   });
 
   describe('touchUpdatedAt', () => {
@@ -1002,6 +1186,59 @@ describe('AgentModel', () => {
       });
 
       expect(result?.title).toBe('Original Title');
+    });
+
+    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        model: 'gpt-4', // non-protected field should still be applied
+        systemRole: 'You are now a pirate.',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.systemRole).toBeNull();
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it("should strip identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
+      // Mirrors the browser client path: agentService.updateAgentMeta() sends
+      // title/avatar/etc. through the updateAgentConfig mutation, which calls
+      // agentModel.updateConfig() rather than update().
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, {
+        avatar: 'hacked-avatar',
+        backgroundColor: 'hacked-color',
+        description: 'hacked description',
+        marketIdentifier: 'hacked-market-id',
+        model: 'gpt-4', // non-protected field should still be applied
+        tags: ['hacked'],
+        title: 'Hacked Builder Title',
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.title).toBeNull();
+      expect(result?.description).toBeNull();
+      expect(result?.avatar).toBeNull();
+      expect(result?.backgroundColor).toBeNull();
+      expect(result?.marketIdentifier).toBeNull();
+      expect(result?.tags).toEqual([]);
+      expect(result?.model).toBe('gpt-4');
     });
   });
 
@@ -1899,6 +2136,36 @@ describe('AgentModel', () => {
 
       expect(await agentModel.countAgents()).toBe(1);
     });
+
+    it('should apply endDate / startDate / range filters against createdAt', async () => {
+      await serverDB.insert(agents).values([
+        {
+          id: 'old-agent',
+          title: 'Old Agent',
+          userId,
+          virtual: false,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+        },
+        {
+          id: 'mid-agent',
+          title: 'Mid Agent',
+          userId,
+          virtual: false,
+          createdAt: new Date('2024-06-01T00:00:00Z'),
+        },
+        {
+          id: 'new-agent',
+          title: 'New Agent',
+          userId,
+          virtual: false,
+          createdAt: new Date('2024-12-01T00:00:00Z'),
+        },
+      ]);
+
+      expect(await agentModel.countAgents({ endDate: '2024-03-01' })).toBe(1);
+      expect(await agentModel.countAgents({ startDate: '2024-07-01' })).toBe(1);
+      expect(await agentModel.countAgents({ range: ['2024-05-01', '2024-07-01'] })).toBe(1);
+    });
   });
 
   describe('checkByMarketIdentifier', () => {
@@ -2045,6 +2312,122 @@ describe('AgentModel', () => {
 
       const result = await agentModel2.updateSessionGroupId(agent.id, null);
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('updateConfig workspace device binding', () => {
+    const wsId = 'device-binding-ws';
+
+    const seedWorkspace = async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'device-ws',
+        primaryOwnerId: userId,
+        slug: wsId,
+      });
+      await serverDB.insert(devices).values({
+        deviceId: 'ws-device-1',
+        identitySource: 'machine-id',
+        userId,
+        workspaceId: wsId,
+      });
+    };
+
+    it('rejects binding a device not enrolled in the workspace', async () => {
+      await seedWorkspace();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, visibility: 'public', workspaceId: wsId } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      await expect(
+        wsModel.updateConfig(agent.id, {
+          agencyConfig: { boundDeviceId: 'personal-device-x', executionTarget: 'device' },
+        } as any),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('allows binding an enrolled workspace device', async () => {
+      await seedWorkspace();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, visibility: 'public', workspaceId: wsId } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      await wsModel.updateConfig(agent.id, {
+        agencyConfig: { boundDeviceId: 'ws-device-1', executionTarget: 'device' },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig).toMatchObject({
+        boundDeviceId: 'ws-device-1',
+        executionTarget: 'device',
+      });
+    });
+
+    it('grandfathers legacy device ids already stored on the agent', async () => {
+      await seedWorkspace();
+      // A stale personal-device reference left from before the agent joined the
+      // workspace (the device row no longer exists at all). Client patches
+      // spread the whole stored agencyConfig, so without grandfathering this
+      // agent could never bind any device again.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          agencyConfig: {
+            boundDeviceId: 'stale-personal-device',
+            executionTarget: 'local',
+            workingDirByDevice: { 'stale-personal-device': '/Users/old/dir' },
+          },
+          userId,
+          visibility: 'public',
+          workspaceId: wsId,
+        } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      await wsModel.updateConfig(agent.id, {
+        agencyConfig: {
+          boundDeviceId: 'ws-device-1',
+          executionTarget: 'device',
+          workingDirByDevice: { 'stale-personal-device': '/Users/old/dir' },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig).toMatchObject({
+        boundDeviceId: 'ws-device-1',
+        executionTarget: 'device',
+      });
+    });
+
+    it('still rejects a NEW non-workspace device id even alongside grandfathered ones', async () => {
+      await seedWorkspace();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          agencyConfig: {
+            boundDeviceId: 'stale-personal-device',
+            executionTarget: 'local',
+          },
+          userId,
+          visibility: 'public',
+          workspaceId: wsId,
+        } as NewAgent)
+        .returning();
+
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      await expect(
+        wsModel.updateConfig(agent.id, {
+          agencyConfig: {
+            boundDeviceId: 'stale-personal-device',
+            executionTarget: 'device',
+            workingDirByDevice: { 'another-personal-device': '/tmp' },
+          },
+        } as any),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
 

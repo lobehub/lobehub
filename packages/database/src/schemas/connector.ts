@@ -1,4 +1,5 @@
 import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -12,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz, varchar255 } from './_helpers';
+import { agents } from './agent';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -123,6 +125,16 @@ export const userConnectors = pgTable(
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /**
+     * Agent-scoped connector. When set, this connector belongs to a specific
+     * agent and takes priority over the workspace/personal connector of the
+     * same identifier at resolution time (Agent > Workspace > Personal). Null
+     * for personal/workspace connectors. Composio agent-specific accounts live
+     * on this row's `metadata`, so the whole agent dimension stays on this
+     * table (no `agent_id` on `user_installed_plugins`).
+     */
+    agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+
     // ── Connector identity ────────────────────────────────────────────────
     /** Fixed slug for built-ins (e.g. "linear"); nanoid for custom ones */
     identifier: varchar('identifier', { length: 255 }).notNull(),
@@ -159,11 +171,20 @@ export const userConnectors = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('user_connectors_user_identifier_unique').on(t.userId, t.identifier),
+    index('user_connectors_personal_identifier_idx')
+      .on(t.userId, t.identifier)
+      .where(sql`${t.workspaceId} IS NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_workspace_identifier_idx')
+      .on(t.userId, t.workspaceId, t.identifier)
+      .where(sql`${t.workspaceId} IS NOT NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_agent_identifier_idx')
+      .on(t.agentId, t.identifier)
+      .where(sql`${t.agentId} IS NOT NULL`),
     index('user_connectors_user_id_idx').on(t.userId),
     /** Scanned by background token-refresh worker */
     index('user_connectors_token_expires_at_idx').on(t.tokenExpiresAt),
     index('user_connectors_workspace_id_idx').on(t.workspaceId),
+    index('user_connectors_agent_id_idx').on(t.agentId),
   ],
 );
 

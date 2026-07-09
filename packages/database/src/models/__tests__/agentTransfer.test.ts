@@ -7,10 +7,18 @@ import {
   agentBotProviders,
   agents,
   agentsToSessions,
+  briefs,
   chatGroups,
   chatGroupsAgents,
+  documents,
   messages,
+  sessionGroups,
   sessions,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
   topics,
   users,
   workspaces,
@@ -21,15 +29,16 @@ import { AgentModel } from '../agent';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'transfer-test-user';
+const targetUserId = 'transfer-test-target-user';
 const wsId1 = 'transfer-test-ws-1';
 const wsId2 = 'transfer-test-ws-2';
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: userId }]);
+  await serverDB.insert(users).values([{ id: userId }, { id: targetUserId }]);
   await serverDB.insert(workspaces).values([
     { id: wsId1, name: 'WS 1', slug: 'ws-1', primaryOwnerId: userId },
-    { id: wsId2, name: 'WS 2', slug: 'ws-2', primaryOwnerId: userId },
+    { id: wsId2, name: 'WS 2', slug: 'ws-2', primaryOwnerId: targetUserId },
   ]);
 });
 
@@ -122,6 +131,32 @@ describe('AgentModel.transferAgent', () => {
     expect(link.workspaceId).toBe(wsId1);
   });
 
+  it('should clear stale session group references on transfer', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Grouped Agent' });
+
+    // Personal-scope sidebar folder the agent and its session lived in
+    await serverDB.insert(sessionGroups).values({ id: 'sg-personal', name: 'Folder', userId });
+    await serverDB
+      .update(agents)
+      .set({ sessionGroupId: 'sg-personal' })
+      .where(eq(agents.id, agent.id));
+    await serverDB
+      .insert(sessions)
+      .values({ id: 'sess-grouped', userId, type: 'agent', groupId: 'sg-personal' });
+    await serverDB
+      .insert(agentsToSessions)
+      .values({ agentId: agent.id, sessionId: 'sess-grouped', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+    expect(updated?.sessionGroupId).toBeNull();
+
+    const [session] = await serverDB.select().from(sessions).where(eq(sessions.id, 'sess-grouped'));
+    expect(session.groupId).toBeNull();
+  });
+
   it('should update topics and messages', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Agent' });
@@ -160,6 +195,249 @@ describe('AgentModel.transferAgent', () => {
       .where(eq(agentBotProviders.agentId, agent.id));
     expect(bot.workspaceId).toBe(wsId1);
     expect(bot.userId).toBe(userId);
+  });
+
+  it('should transfer tasks assigned to the agent and their child records', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Task Agent' });
+
+    await serverDB.insert(tasks).values([
+      {
+        assigneeAgentId: agent.id,
+        automationMode: 'schedule',
+        createdByAgentId: agent.id,
+        createdByUserId: userId,
+        id: 'task-assigned-to-agent',
+        identifier: 'T-1',
+        instruction: 'Run scheduled work',
+        schedulePattern: '0 * * * *',
+        seq: 1,
+        workspaceId: wsId1,
+      },
+      {
+        createdByUserId: userId,
+        id: 'task-blocker',
+        identifier: 'T-2',
+        instruction: 'External blocker',
+        seq: 2,
+        workspaceId: wsId1,
+      },
+    ]);
+    await serverDB.insert(taskDependencies).values({
+      dependsOnId: 'task-blocker',
+      taskId: 'task-assigned-to-agent',
+      type: 'blocks',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'text/plain',
+      id: 'task-doc',
+      source: 'test',
+      sourceType: 'file',
+      title: 'Task doc',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-doc',
+      taskId: 'task-assigned-to-agent',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(topics).values({
+      id: 'task-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskTopics).values({
+      seq: 1,
+      status: 'completed',
+      taskId: 'task-assigned-to-agent',
+      topicId: 'task-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(briefs).values({
+      agentId: agent.id,
+      id: 'task-brief',
+      summary: 'Done',
+      taskId: 'task-assigned-to-agent',
+      title: 'Result',
+      type: 'result',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(taskComments).values({
+      authorAgentId: agent.id,
+      content: 'Comment',
+      id: 'task-comment',
+      taskId: 'task-assigned-to-agent',
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [task] = await serverDB
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, 'task-assigned-to-agent'));
+    expect(task.createdByUserId).toBe(targetUserId);
+    expect(task.workspaceId).toBe(wsId2);
+    expect(task.assigneeAgentId).toBe(agent.id);
+    expect(task.createdByAgentId).toBe(agent.id);
+
+    const [dependency] = await serverDB
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.taskId, 'task-assigned-to-agent'));
+    expect(dependency.userId).toBe(targetUserId);
+    expect(dependency.workspaceId).toBe(wsId2);
+
+    const [taskDocument] = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'task-assigned-to-agent'));
+    expect(taskDocument.userId).toBe(targetUserId);
+    expect(taskDocument.workspaceId).toBe(wsId2);
+
+    const [taskTopic] = await serverDB
+      .select()
+      .from(taskTopics)
+      .where(eq(taskTopics.taskId, 'task-assigned-to-agent'));
+    expect(taskTopic.userId).toBe(targetUserId);
+    expect(taskTopic.workspaceId).toBe(wsId2);
+
+    const [brief] = await serverDB
+      .select()
+      .from(briefs)
+      .where(eq(briefs.taskId, 'task-assigned-to-agent'));
+    expect(brief.userId).toBe(targetUserId);
+    expect(brief.workspaceId).toBe(wsId2);
+
+    const [comment] = await serverDB
+      .select()
+      .from(taskComments)
+      .where(eq(taskComments.taskId, 'task-assigned-to-agent'));
+    expect(comment.userId).toBe(targetUserId);
+    expect(comment.workspaceId).toBe(wsId2);
+  });
+
+  it('should cascade targetVisibility to moved tasks and their child rows', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Personal Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'task-vis',
+      identifier: 'T-vis',
+      instruction: 'Do the thing',
+      seq: 1,
+      // Row starts at the schema default `visibility='public'`, which is
+      // ignored in personal scope but honored once moved into a workspace.
+    });
+    await serverDB.insert(tasks).values({
+      createdByUserId: userId,
+      id: 'task-vis-blocker',
+      identifier: 'T-vis-blocker',
+      instruction: 'Blocker',
+      seq: 2,
+    });
+    await serverDB.insert(taskDependencies).values({
+      dependsOnId: 'task-vis-blocker',
+      taskId: 'task-vis',
+      type: 'blocks',
+      userId,
+    });
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'text/plain',
+      id: 'task-vis-doc',
+      source: 'test',
+      sourceType: 'file',
+      title: 'Doc',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-vis-doc',
+      taskId: 'task-vis',
+      userId,
+    });
+    await serverDB.insert(topics).values({ id: 'task-vis-topic', userId });
+    await serverDB.insert(taskTopics).values({
+      seq: 1,
+      status: 'completed',
+      taskId: 'task-vis',
+      topicId: 'task-vis-topic',
+      userId,
+    });
+    await serverDB.insert(taskComments).values({
+      authorAgentId: agent.id,
+      content: 'Comment',
+      id: 'task-vis-comment',
+      taskId: 'task-vis',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, 'task-vis'));
+    expect(task.workspaceId).toBe(wsId1);
+    expect(task.visibility).toBe('private');
+
+    const [dep] = await serverDB
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.taskId, 'task-vis'));
+    expect(dep.visibility).toBe('private');
+
+    const [doc] = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'task-vis'));
+    expect(doc.visibility).toBe('private');
+
+    const [topic] = await serverDB
+      .select()
+      .from(taskTopics)
+      .where(eq(taskTopics.taskId, 'task-vis'));
+    expect(topic.visibility).toBe('private');
+
+    const [comment] = await serverDB
+      .select()
+      .from(taskComments)
+      .where(eq(taskComments.taskId, 'task-vis'));
+    expect(comment.visibility).toBe('private');
+  });
+
+  it('should not touch visibility when moving to personal scope', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'WS Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'task-personal',
+      identifier: 'T-personal',
+      instruction: 'Task',
+      seq: 1,
+      visibility: 'public',
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, null, userId, 'private');
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, 'task-personal'));
+    expect(task.workspaceId).toBeNull();
+    // targetVisibility is a no-op when the destination is personal scope.
+    expect(task.visibility).toBe('public');
   });
 
   it('should remove chat group associations', async () => {

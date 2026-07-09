@@ -9,14 +9,18 @@ import { memo, Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import SafeBoundary from '@/components/ErrorBoundary';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
+import MessageSelectionWrapper from '../MessageForward/MessageSelectionWrapper';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
 import type { WorkflowExpandLevelDefault } from './AssistantGroup/components/WorkflowCollapse';
+import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
 import TaskMessage from './Task';
@@ -68,6 +72,9 @@ const MessageItem = memo<MessageItemProps>(
     isLatestItem,
   }) => {
     const topic = useConversationStore((s) => s.context.topicId);
+    const enableMessageTextSelectionActions = useUserStore(
+      labPreferSelectors.enableMessageTextSelectionActions,
+    );
 
     // Get message from ConversationStore
     const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
@@ -89,6 +96,9 @@ const MessageItem = memo<MessageItemProps>(
     // render the same anchored footer (e.g. AgentSignalReceiptList) a second time.
     const shouldInjectFooter =
       role === 'assistant' || role === 'assistantGroup' || role === 'supervisor';
+    const supportsTextSelectionActions =
+      role === 'user' || role === 'assistant' || role === 'assistantGroup';
+    const shouldDimCreatingMessage = isMessageCreating && role !== 'user';
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
@@ -212,17 +222,30 @@ const MessageItem = memo<MessageItemProps>(
 
     if (!role) return;
 
+    const content = (
+      <SafeBoundary variant="alert">
+        <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
+      </SafeBoundary>
+    );
+
+    const selectableContent =
+      enableMessageTextSelectionActions && supportsTextSelectionActions ? (
+        <TextSelectionActionLayer>{content}</TextSelectionActionLayer>
+      ) : (
+        content
+      );
+
     return (
       <>
         {enableHistoryDivider && <History />}
         <Flexbox
-          className={cx(styles.message, className, isMessageCreating && styles.loading)}
+          className={cx(styles.message, className, shouldDimCreatingMessage && styles.loading)}
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <SafeBoundary variant="alert">
-            <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
-          </SafeBoundary>
+          <MessageSelectionWrapper id={id} role={role}>
+            {selectableContent}
+          </MessageSelectionWrapper>
           {!shouldInjectFooter && footerRender}
           {endRender}
         </Flexbox>

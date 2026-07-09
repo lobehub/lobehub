@@ -18,6 +18,7 @@ import {
   messages,
   messagesFiles,
   topics,
+  users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -45,8 +46,11 @@ export class FileModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files);
+  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+    buildWorkspaceWhere(
+      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      files,
+    );
 
   /**
    * Get file by ID without userId filter (public access)
@@ -300,9 +304,18 @@ export class FileModel {
     sorter,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
-  }: QueryFileListParams = {}) => {
+    callerAgentVisibility,
+    visibility,
+  }: QueryFileListParams & {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    visibility?: 'private' | 'public';
+  } = {}) => {
     // 1. Build where clause
-    let whereClause = and(q ? ilike(files.name, `%${q}%`) : undefined, this.ownership());
+    let whereClause = and(
+      q ? ilike(files.name, `%${q}%`) : undefined,
+      this.ownership(callerAgentVisibility),
+      visibility ? eq(files.visibility, visibility) : undefined,
+    );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
       if (Array.isArray(fileTypePrefix)) {
@@ -344,10 +357,18 @@ export class FileModel {
         name: files.name,
         size: files.size,
         updatedAt: files.updatedAt,
+        uploader: {
+          avatar: users.avatar,
+          fullName: users.fullName,
+          id: users.id,
+          username: users.username,
+        },
         url: files.url,
         userId: files.userId,
+        visibility: files.visibility,
       })
-      .from(files);
+      .from(files)
+      .leftJoin(users, eq(files.userId, users.id));
 
     // 4. Add knowledge base query if needed
     if (knowledgeBaseId) {
@@ -373,7 +394,14 @@ export class FileModel {
     }
 
     // Otherwise, we are just filtering in the global files
-    return query.where(whereClause).orderBy(orderByClause);
+    const rows = await query.where(whereClause).orderBy(orderByClause);
+    // LEFT JOIN yields a fully-null uploader row when the user record is missing
+    // (e.g. deleted account). Collapse those to `null` so the client can rely on
+    // `uploader?.id` as the presence check.
+    return rows.map((row) => ({
+      ...row,
+      uploader: row.uploader?.id ? row.uploader : null,
+    }));
   };
 
   findByIds = async (ids: string[]) => {
@@ -443,6 +471,39 @@ export class FileModel {
       .update(files)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(files.id, id), this.ownership()));
+
+  /**
+   * Publish a private file into the workspace. Thin wrapper around
+   * `setVisibility(fileId, 'public')`; kept as a named method for the TRPC
+   * `publishFileToWorkspace` procedure and existing callers.
+   */
+  publishToWorkspace = async (fileId: string) => this.setVisibility(fileId, 'public');
+
+  /**
+   * Flip a file's `visibility`. Bidirectional companion to `publishToWorkspace`.
+   * The combined `user_id = ?` + `visibility = fromVisibility` guards lock the
+   * operation to the creator's own row and make it idempotent against rows
+   * already at the target visibility.
+   *
+   * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere` and
+   * any downstream file-access checks hide the file from other members on the
+   * next read; blobs already fetched by clients stay cached until they expire.
+   */
+  setVisibility = async (fileId: string, visibility: 'private' | 'public') => {
+    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+
+    return this.db
+      .update(files)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(files.id, fileId),
+          this.ownership(),
+          eq(files.userId, this.userId),
+          eq(files.visibility, fromVisibility),
+        ),
+      );
+  };
 
   /**
    * get the corresponding file type prefix according to FilesTabs
@@ -537,6 +598,7 @@ export class FileModel {
     fileId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ fileId: string }> => {
     return this.db.transaction(async (trx) => {
       const file = await trx.query.files.findFirst({
@@ -545,10 +607,13 @@ export class FileModel {
       if (!file) throw new Error('File not found');
 
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      // Visibility only applies when landing in a workspace.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       await trx
         .update(files)
-        .set({ ...ownershipUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
         .where(eq(files.id, fileId));
 
       // Knowledge base links are scoped per-user; keep them pointed at the new owner.
@@ -571,12 +636,17 @@ export class FileModel {
     fileId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ fileId: string }> => {
     return this.db.transaction(async (trx) => {
       const file = await trx.query.files.findFirst({
         where: and(eq(files.id, fileId), this.ownership()),
       });
       if (!file) throw new Error('File not found');
+
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       const inserted = (await trx
         .insert(files)
@@ -595,6 +665,7 @@ export class FileModel {
           url: file.url,
           userId: targetUserId,
           workspaceId: targetWorkspaceId,
+          ...visibilityOverride,
         } as NewFile)
         .returning({ id: files.id })) as { id: string }[];
 

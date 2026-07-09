@@ -67,9 +67,9 @@ export async function executeToolCallInWorker(
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       finish({
-        content: '',
-        error: `Isolated tool worker timed out for ${apiName} after ${workerTimeout}ms`,
-        success: false,
+        content: `Isolated tool worker timed out for ${apiName} after ${workerTimeout}ms`,
+        state: { failureType: 'timeout', success: false, timeoutMs: workerTimeout },
+        success: true,
       });
     }, workerTimeout);
 
@@ -93,9 +93,9 @@ export async function executeToolCallInWorker(
         const output = stdout.trim();
         if (!output) {
           finish({
-            content: '',
-            error: `Isolated tool worker produced no output for ${apiName}`,
-            success: false,
+            content: `Isolated tool worker produced no output for ${apiName}`,
+            state: { failureType: 'no_output', success: false },
+            success: true,
           });
           return;
         }
@@ -107,9 +107,9 @@ export async function executeToolCallInWorker(
           const errorMsg = error instanceof Error ? error.message : String(error);
           const workerOutput = summarizeOutput();
           finish({
-            content: '',
-            error: `Isolated tool worker returned invalid JSON for ${apiName}: ${errorMsg}. Output: ${workerOutput}`,
-            success: false,
+            content: `Isolated tool worker returned invalid JSON for ${apiName}: ${errorMsg}. Output: ${workerOutput}`,
+            state: { failureType: 'invalid_json', success: false },
+            success: true,
           });
           return;
         }
@@ -122,9 +122,9 @@ export async function executeToolCallInWorker(
           : 'unknown exit';
       const workerOutput = summarizeOutput();
       finish({
-        content: '',
-        error: `Isolated tool worker failed for ${apiName} with ${exitReason}: ${workerOutput}`,
-        success: false,
+        content: `Isolated tool worker failed for ${apiName} with ${exitReason}: ${workerOutput}`,
+        state: { failureType: 'worker_exit', success: false },
+        success: true,
       });
     });
   });

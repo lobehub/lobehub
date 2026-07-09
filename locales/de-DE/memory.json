@@ -34,6 +34,8 @@
   "context.description": "Beschreibung",
   "context.empty": "Keine kontextuellen Erinnerungen verfügbar",
   "context.source": "Quelle",
+  "detail.notFound.desc": "Dieser Speicher wurde möglicherweise gelöscht oder ist nicht mehr verfügbar.",
+  "detail.notFound.title": "Speicher nicht gefunden",
   "empty.description": "Das Abrufen von Erinnerungen ist ein schrittweiser Prozess. Führen Sie mehr Gespräche, um den abrufbaren Inhalt zu bereichern. Versuchen Sie, tiefere Interaktionen mit dem Agenten zu führen, um wertvolle Informationen besser zu erfassen und zu speichern.",
   "empty.search": "Keine passenden Erinnerungen gefunden",
   "empty.title": "Noch keine Erinnerungen",

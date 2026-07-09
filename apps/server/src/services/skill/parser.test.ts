@@ -472,6 +472,136 @@ Root content`;
     });
   });
 
+  // Regression tests for the ReDoS vulnerability reported in lobehub/lobehub#16494.
+  // `basePath` is derived from the fully user-controlled GitHub URL path segment
+  // (https://github.com/owner/repo/tree/branch/<path>) and used to be interpolated
+  // directly into `new RegExp('^[^/]+/<basePath>/SKILL\\.md$')` inside findSkillMd.
+  // That allowed catastrophic backtracking (event-loop DoS) and SyntaxError crashes.
+  describe('findSkillMd basePath security (ReDoS regression, #16494)', () => {
+    it('should not hang on a malicious ReDoS basePath', async () => {
+      // A long run of "a" followed by a non-matching char makes the old
+      // `^[^/]+/(a+)+/SKILL\.md$` regex backtrack exponentially (~2^40 steps).
+      const evilDecoy = 'a'.repeat(40);
+      const testFiles = {
+        [`repo-main/${evilDecoy}X/data.txt`]: new TextEncoder().encode('x'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const start = performance.now();
+      // No SKILL.md exists, so it should reject with "not found" — the point is that
+      // it does so quickly instead of blocking the event loop for tens of seconds.
+      await expect(parser.parseZipPackage(buffer, { basePath: '(a+)+' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(1000);
+    });
+
+    it('should not throw SyntaxError for a basePath with invalid regex syntax', async () => {
+      // `[invalid` is not a valid RegExp; the old code threw a SyntaxError (HTTP 500).
+      // It must now be treated as a literal string and fail gracefully as "not found".
+      const testFiles = {
+        'repo-main/skills/demo/SKILL.md': new TextEncoder().encode(
+          '---\nname: demo\ndescription: demo\n---\nDemo',
+        ),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      await expect(parser.parseZipPackage(buffer, { basePath: '[invalid' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should treat regex metacharacters in basePath as literals (no "any char" matching)', async () => {
+      // Path uses "aXb"; basePath "a.b" must NOT match it (the old regex treated "." as
+      // "any char" and would have matched). The literal directory "a.b" does not exist.
+      const testFiles = {
+        'repo-main/aXb/SKILL.md': new TextEncoder().encode(
+          '---\nname: axb\ndescription: axb\n---\naXb',
+        ),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      await expect(parser.parseZipPackage(buffer, { basePath: 'a.b' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should still match a directory whose literal name contains regex metacharacters', async () => {
+      // A real directory literally named "a.b" must be found (via exact-path lookup).
+      const skillMd = `---
+name: literal-dot-skill
+description: Skill in a dir literally named a.b
+---
+Literal dot content`;
+
+      const testFiles = {
+        'repo-main/a.b/SKILL.md': new TextEncoder().encode(skillMd),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, { basePath: 'a.b' });
+      expect(result.manifest.name).toBe('literal-dot-skill');
+    });
+
+    it('should report "not found" (not silently import the root skill) when basePath misses', async () => {
+      // User explicitly requested a subdirectory via the GitHub URL path, but no SKILL.md
+      // exists there. Even though the repo has a root-level SKILL.md, we must NOT fall
+      // through and silently import that unrelated skill — it must be reported as missing.
+      const testFiles = {
+        'repo-main/SKILL.md': new TextEncoder().encode(
+          '---\nname: root\ndescription: root\n---\nRoot',
+        ),
+        'repo-main/README.md': new TextEncoder().encode('# Repo'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      // Nonexistent subpath
+      await expect(
+        parser.parseZipPackage(buffer, { basePath: 'skills/does-not-exist' }),
+      ).rejects.toThrow('SKILL.md not found');
+
+      // Invalid-regex-looking subpath must behave the same (no silent root import)
+      await expect(parser.parseZipPackage(buffer, { basePath: '[invalid' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should still resolve the basePath via the fallback when the root prefix differs', async () => {
+      // When findGitHubRootPrefix picks a prefix that does not match the SKILL.md's
+      // top-level directory, the exact lookup misses and the fallback must still find
+      // `<single-segment>/<basePath>/SKILL.md`. Insert the decoy first so it becomes
+      // the detected root prefix.
+      const skillMd = `---
+name: fallback-skill
+description: Found via fallback
+---
+Fallback content`;
+
+      const testFiles = {
+        'decoy-dir/other.txt': new TextEncoder().encode('decoy'),
+        'repo-main/skills/demo/SKILL.md': new TextEncoder().encode(skillMd),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, { basePath: 'skills/demo' });
+      expect(result.manifest.name).toBe('fallback-skill');
+    });
+  });
+
   describe('parseZipPackage with repackSkillZip', () => {
     it('should not return skillZipBuffer when repackSkillZip is false/undefined', async () => {
       const skillMd = `---

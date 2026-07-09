@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Áp dụng hạt giống thất bại",
   "generation.actions.seedCopied": "Đã sao chép hạt giống vào bộ nhớ tạm",
   "generation.actions.seedCopyFailed": "Sao chép hạt giống thất bại",
+  "generation.metadata.by": "bởi {{name}}",
   "generation.metadata.count": "{{count}} ảnh",
+  "generation.metadata.createdAt": "Được tạo vào {{time}}",
   "generation.status.failed": "Tạo ảnh thất bại",
   "generation.status.generating": "Đang tạo...",
   "notSupportGuide.desc": "Chế độ triển khai hiện tại không hỗ trợ tạo ảnh AI. Hãy chuyển sang <1>chế độ triển khai cơ sở dữ liệu máy chủ</1>, hoặc sử dụng <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Hỗ trợ nhiều nhà cung cấp",
   "notSupportGuide.title": "Chế độ triển khai hiện tại không hỗ trợ tạo ảnh AI",
   "topic.createNew": "Tạo Chủ Đề Mới",
+  "topic.createdBy": "Được tạo bởi {{name}}",
   "topic.deleteConfirm": "Xóa chủ đề tạo ảnh",
   "topic.deleteConfirmDesc": "Bạn sắp xóa chủ đề tạo ảnh này. Hành động này không thể hoàn tác, vui lòng cẩn trọng.",
   "topic.empty": "Chưa có chủ đề tạo ảnh",
+  "topic.privateTitle": "Riêng tư",
   "topic.title": "Chủ đề tranh vẽ",
-  "topic.untitled": "Chủ đề mặc định"
+  "topic.untitled": "Chủ đề mặc định",
+  "topic.visibility.existingLocked": "Chế độ hiển thị đã được cố định cho chủ đề hiện tại. Tạo một chủ đề mới để chọn không gian khác.",
+  "topic.workspaceTitle": "Không gian làm việc"
 }

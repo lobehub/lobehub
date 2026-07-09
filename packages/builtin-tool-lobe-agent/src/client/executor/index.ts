@@ -1,3 +1,4 @@
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@lobechat/types';
 import { BaseExecutor, RequestTrigger } from '@lobechat/types';
 
@@ -7,6 +8,7 @@ import { useNotebookStore } from '@/store/notebook';
 import { LobeAgentManifest } from '../../manifest';
 import type {
   AnalyzeVisualMediaParams,
+  AskUserQuestionArgs,
   CallSubAgentParams,
   ClearTodosParams,
   CreatePlanParams,
@@ -151,6 +153,16 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   protected readonly apiEnum = LobeAgentApiName;
 
   private planRuntime = new PlanExecutionRuntime(clientPlanService);
+
+  // Reused from the standalone user-interaction tool — askUserQuestion is
+  // human-intervention 'always', so in normal flows the user's UI submit
+  // becomes the tool result and this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
+
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: AskUserQuestionArgs): Promise<BuiltinToolResult> =>
+    this.interactionRuntime.askUserQuestion(params);
 
   // ==================== Plan / Todo ====================
 

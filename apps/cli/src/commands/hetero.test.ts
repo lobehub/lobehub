@@ -39,11 +39,13 @@ vi.mock('../utils/logger', () => ({
  */
 const createFakeHandle = ({
   events = [] as any[],
+  eventsError,
   exitCode = 0,
   signal = null as NodeJS.Signals | null,
   stderrChunks = [] as string[],
 }: {
   events?: any[];
+  eventsError?: Error;
   exitCode?: number | null;
   signal?: NodeJS.Signals | null;
   stderrChunks?: string[];
@@ -60,6 +62,7 @@ const createFakeHandle = ({
       return {
         async next() {
           if (i < events.length) return { done: false, value: events[i++] };
+          if (eventsError) throw eventsError;
           return { done: true, value: undefined };
         },
       };
@@ -233,6 +236,50 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
       extraArgs: ['--model', 'gpt-5.5', '-c', 'model_reasoning_effort="xhigh"'],
+    });
+  });
+
+  it('translates Codex --speed to native service_tier config', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--model',
+      'gpt-5.5',
+      '--speed',
+      'fast',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'gpt-5.5', '-c', 'service_tier="fast"'],
+    });
+  });
+
+  it('ignores --speed for Claude Code runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--model',
+      'opus',
+      '--speed',
+      'fast',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      extraArgs: ['--model', 'opus'],
     });
   });
 
@@ -414,6 +461,65 @@ describe('hetero exec command', () => {
       '/missing.png',
     ]);
 
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('finishes server-ingest runs with error when spawnAgent rejects before streaming', async () => {
+    mockSpawnAgent.mockReturnValue(Promise.reject(new Error('spawn claude ENOENT')));
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      agentType: 'claude-code',
+      error: { message: 'spawn claude ENOENT', type: 'AgentRuntimeError' },
+      operationId: 'op-server',
+      result: 'error',
+      topicId: 'topic-1',
+    });
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('finishes server-ingest runs with error when the agent event stream fails', async () => {
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({ eventsError: new Error('spawn claude ENOENT') }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: { message: 'Error: spawn claude ENOENT', type: 'stream_error' },
+      operationId: 'op-server',
+      result: 'error',
+      topicId: 'topic-1',
+    });
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

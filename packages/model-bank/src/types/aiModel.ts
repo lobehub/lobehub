@@ -308,6 +308,7 @@ export type ExtendParamsType =
   | 'glm5_2ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
+  | 'grok4_5ReasoningEffort'
   | 'hy3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
   | 'codexMaxReasoningEffort'
@@ -361,6 +362,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'glm5_2ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
+  'grok4_5ReasoningEffort',
   'hy3ReasoningEffort',
   'ring2_6ReasoningEffort',
   'codexMaxReasoningEffort',

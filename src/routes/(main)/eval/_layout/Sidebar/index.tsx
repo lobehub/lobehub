@@ -3,18 +3,14 @@
 import { memo } from 'react';
 
 import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
-import Body from './Body';
-import Header from './Header';
+import EvalSidebarContent from './Content';
 
-const Sidebar = memo(() => {
-  return (
-    <NavPanelPortal navKey="eval">
-      <SideBarLayout body={<Body />} header={<Header />} />
-    </NavPanelPortal>
-  );
-});
+const Sidebar = memo(() => (
+  <NavPanelPortal navKey="eval">
+    <EvalSidebarContent />
+  </NavPanelPortal>
+));
 
 Sidebar.displayName = 'EvalSidebar';
 

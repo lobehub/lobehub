@@ -1,10 +1,16 @@
-import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_URL,
+  AGENT_CHAT_URL,
+  GROUP_CHAT_TOPIC_URL,
+  GROUP_CHAT_URL,
+} from '@lobechat/const';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatStore } from '@/store/chat/store';
 
 import {
   buildNotificationBody,
+  resolveNotificationNavigate,
   resolveNotificationNavigatePath,
   resolveNotificationTitle,
 } from './desktopNotification';
@@ -27,24 +33,65 @@ describe('resolveNotificationNavigatePath', () => {
     );
   });
 
+  it('preserves the originating workspace for agent topics', () => {
+    expect(
+      resolveNotificationNavigatePath({ agentId: 'a1', topicId: 't1', workspaceSlug: 'team' }),
+    ).toBe('/team/agent/a1/t1');
+  });
+
   it('falls back to the agent root when there is no topic', () => {
     expect(resolveNotificationNavigatePath({ agentId: 'a1' })).toBe(AGENT_CHAT_URL('a1'));
   });
 
-  it('lands a group chat on the group root, taking precedence over agent/topic', () => {
+  it('deep-links a group chat to the specific topic, taking precedence over agent/topic', () => {
+    expect(resolveNotificationNavigatePath({ agentId: 'a1', groupId: 'g1', topicId: 't1' })).toBe(
+      GROUP_CHAT_TOPIC_URL('g1', 't1'),
+    );
+  });
+
+  it('preserves the originating workspace for group topics', () => {
     expect(
-      resolveNotificationNavigatePath({ agentId: 'a1', groupId: 'g1', topicId: 't1' }),
-    ).toBe(GROUP_CHAT_URL('g1'));
+      resolveNotificationNavigatePath({
+        agentId: 'a1',
+        groupId: 'g1',
+        topicId: 't1',
+        workspaceSlug: 'team',
+      }),
+    ).toBe('/team/group/g1/t1');
+  });
+
+  it('falls back to the group root when there is no topic', () => {
+    expect(resolveNotificationNavigatePath({ agentId: 'a1', groupId: 'g1' })).toBe(
+      GROUP_CHAT_URL('g1'),
+    );
   });
 
   it('returns undefined when there is no routable context', () => {
     expect(resolveNotificationNavigatePath({})).toBeUndefined();
   });
+
+  it('marks notification navigation as escaped so renderer uses the path literally', () => {
+    expect(resolveNotificationNavigate({ agentId: 'a1', topicId: 't1' })).toEqual({
+      escape: true,
+      path: AGENT_CHAT_TOPIC_URL('a1', 't1'),
+    });
+  });
+
+  it('marks workspace notification navigation as escaped after prefixing the path', () => {
+    expect(
+      resolveNotificationNavigate({ agentId: 'a1', topicId: 't1', workspaceSlug: 'team' }),
+    ).toEqual({
+      escape: true,
+      path: '/team/agent/a1/t1',
+    });
+  });
 });
 
 describe('resolveNotificationTitle', () => {
-  const makeGet = (topicDataMap: unknown): (() => ChatStore) =>
-    (() => ({ topicDataMap }) as unknown as ChatStore);
+  const makeGet =
+    (topicDataMap: unknown): (() => ChatStore) =>
+    () =>
+      ({ topicDataMap }) as unknown as ChatStore;
 
   it('prefers the topic title', () => {
     const key = topicMapKey({ agentId: 'agent-named' });

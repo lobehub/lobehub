@@ -469,7 +469,11 @@ export class App {
       };
     });
 
-    this.ipcServer = new ElectronIPCServer(name, ipcServerEvents);
+    // Socket path is derived from this id (`${id}-electron-ipc.sock`). Keep the
+    // package name by default; override with LOBE_IPC_ID so concurrent dev
+    // instances get distinct sockets instead of the last one hijacking the path.
+    const ipcId = process.env.LOBE_IPC_ID || name;
+    this.ipcServer = new ElectronIPCServer(ipcId, ipcServerEvents);
   }
 
   // Add before-quit handler function

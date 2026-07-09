@@ -21,6 +21,7 @@ import {
   ConfigAction,
   GenerationMediaModeSegment,
   GenerationPromptInput,
+  GenerationVisibilitySelector,
   InlineVideoFrames,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
@@ -30,7 +31,11 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
-import { createVideoSelectors, videoGenerationConfigSelectors } from '@/store/video/selectors';
+import {
+  createVideoSelectors,
+  videoGenerationConfigSelectors,
+  videoGenerationTopicSelectors,
+} from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 import { generateUniqueSeeds } from '@/utils/number';
 
@@ -299,6 +304,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const activeGenerationTopicId = useVideoStore(
+    videoGenerationTopicSelectors.activeGenerationTopicId,
+  );
+  const activeGenerationTopic = useVideoStore((s) =>
+    activeGenerationTopicId
+      ? videoGenerationTopicSelectors.getGenerationTopicById(activeGenerationTopicId)(s)
+      : undefined,
+  );
+  const newGenerationTopicVisibility = useVideoStore(
+    videoGenerationTopicSelectors.newGenerationTopicVisibility,
+  );
+  const setNewGenerationTopicVisibility = useVideoStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
@@ -382,6 +399,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const displayVisibility = activeGenerationTopic
+    ? activeGenerationTopic.visibility === 'private'
+      ? 'private'
+      : 'public'
+    : newGenerationTopicVisibility;
+  const visibilityLockedReason = activeGenerationTopicId
+    ? t('topic.visibility.existingLocked')
+    : undefined;
   const maxCount = useMemo(() => {
     let count = 0;
     if (isSupportImageUrl) count += 1;
@@ -489,6 +514,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
             >
               <GenerationMediaModeSegment mode={'video'} />
+              <GenerationVisibilitySelector
+                disabledReason={visibilityLockedReason}
+                visibility={displayVisibility}
+                onChange={setNewGenerationTopicVisibility}
+              />
               <ModelSwitchPanel
                 ModelItemComponent={VideoModelItem}
                 enabledList={enabledVideoModelList}

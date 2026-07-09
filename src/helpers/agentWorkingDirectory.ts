@@ -1,4 +1,9 @@
-import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import type {
+  LobeAgentAgencyConfig,
+  WorkingDirConfig,
+  WorkingDirConfigValue,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 
 /**
  * The device a run targets: an explicitly bound remote device, this machine,
@@ -16,6 +21,13 @@ export const resolveTargetDeviceId = (
       ? currentDeviceId || agencyConfig?.boundDeviceId
       : currentDeviceId;
 
+const toWorkingDirConfig = (
+  value: WorkingDirConfigValue | null | undefined,
+): WorkingDirConfig | undefined => {
+  if (!value) return;
+  return typeof value === 'string' ? { path: value } : value;
+};
+
 /**
  * Unified working-directory precedence (mirrors the server's resolution):
  *
@@ -28,14 +40,15 @@ export const resolveTargetDeviceId = (
  * The legacy slot keeps existing desktop users' selections working until they
  * next pick a directory (which writes the new per-device map).
  */
-export const resolveAgentWorkingDirectory = (params: {
+export const resolveAgentWorkingDirectoryConfig = (params: {
   agencyConfig?: LobeAgentAgencyConfig;
   currentDeviceId?: string;
   deviceDefaultCwd?: string;
   fallback?: string;
   legacyAgentWorkingDirectory?: string;
   topicWorkingDirectory?: string;
-}): string | undefined => {
+  topicWorkingDirectoryConfig?: WorkingDirConfig;
+}): WorkingDirConfig | undefined => {
   const {
     agencyConfig,
     currentDeviceId,
@@ -43,17 +56,42 @@ export const resolveAgentWorkingDirectory = (params: {
     fallback,
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
+    topicWorkingDirectoryConfig,
   } = params;
+  if (topicWorkingDirectoryConfig) return topicWorkingDirectoryConfig;
+  if (topicWorkingDirectory) return { path: topicWorkingDirectory };
+
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
-  const agentChoice = targetDeviceId
-    ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
-    : undefined;
-  return (
-    topicWorkingDirectory ||
-    agentChoice ||
-    legacyAgentWorkingDirectory ||
-    deviceDefaultCwd ||
-    fallback ||
-    undefined
+  const agentChoice = toWorkingDirConfig(
+    targetDeviceId ? agencyConfig?.workingDirByDevice?.[targetDeviceId] : undefined,
   );
+  if (agentChoice) return agentChoice;
+  if (legacyAgentWorkingDirectory) return { path: legacyAgentWorkingDirectory };
+  if (deviceDefaultCwd) return { path: deviceDefaultCwd };
+  if (fallback) return { path: fallback };
+};
+
+export const resolveAgentWorkingDirectory = (
+  params: Parameters<typeof resolveAgentWorkingDirectoryConfig>[0],
+): string | undefined => {
+  const config = resolveAgentWorkingDirectoryConfig(params);
+  return getWorkingDirEffectivePath(config);
+};
+
+/**
+ * Same precedence as {@link resolveAgentWorkingDirectory}, but resolves to the
+ * SOURCE repo path (`config.path`) — the repo root, ignoring any active
+ * worktree recorded in `config.git.activeWorktree`.
+ *
+ * Use this for the directory-picker DISPLAY, which shows the repo the agent is
+ * bound to. The effective (worktree) path belongs to git status / the worktree
+ * switcher, not the directory label: heterogeneous CLI agents anchor their
+ * session cwd to the source repo (see `conversationLifecycle`), so showing the
+ * worktree here would misrepresent where the run actually executes.
+ */
+export const resolveAgentWorkingDirectorySource = (
+  params: Parameters<typeof resolveAgentWorkingDirectoryConfig>[0],
+): string | undefined => {
+  const config = resolveAgentWorkingDirectoryConfig(params);
+  return getWorkingDirSourcePath(config);
 };

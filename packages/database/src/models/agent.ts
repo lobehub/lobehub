@@ -1,4 +1,4 @@
-import { getAgentPersistConfig } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
@@ -16,19 +16,54 @@ import {
   agentsFiles,
   agentsKnowledgeBases,
   agentsToSessions,
+  briefs,
   chatGroupsAgents,
   devices,
   documents,
   files,
   knowledgeBases,
   messages,
+  sessionGroups,
   sessions,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
   threads,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Fields the Agent Builder's own row (`slug = BUILTIN_AGENT_SLUGS.agentBuilder`) must never
+ * carry. Its `persist` config only stores `model`/`provider`/`chatConfig` — title, avatar,
+ * systemRole, etc. are rendered from i18n / the static systemRoleTemplate at runtime, never
+ * from this row.
+ *
+ * Before PR #16420, `lobe-agent-management`'s self-management prompt could make the builder
+ * mistake an ambiguous "update this" request for editing itself instead of the target agent.
+ * Depending on caller (browser client tool executor vs. gateway server runtime in
+ * `apps/server/src/services/toolExecution/serverRuntimes/agentBuilder.ts`), these fields can
+ * arrive through *either* `AgentModel.update()` or `updateConfig()` — e.g. the gateway's
+ * `updatePrompt` writes `systemRole` via `update()`, while the browser client's meta editor
+ * writes `title`/`avatar`/etc. via `updateConfig()`. So both methods must strip the full list,
+ * not just the fields each historically happened to receive. Clients on builds older than
+ * PR #16420 can still hit this path, so enforce it here (the single write chokepoint)
+ * regardless of caller.
+ */
+const AGENT_BUILDER_PROTECTED_FIELDS = [
+  'title',
+  'description',
+  'avatar',
+  'backgroundColor',
+  'tags',
+  'marketIdentifier',
+  'systemRole',
+] as const;
 
 export class AgentModel {
   private userId: string;
@@ -69,11 +104,20 @@ export class AgentModel {
 
   /**
    * Compat-mode ownership predicate for the `agents` table.
-   * - team mode (workspaceId set): `workspace_id = ?` (every member sees the same agents)
-   * - personal mode: `user_id = ? AND workspace_id IS NULL`
+   * - team mode (workspaceId set): `workspace_id = ?` plus visibility-aware
+   *   filtering — public agents are visible to every member, private agents
+   *   are only visible to their creator.
+   * - personal mode: `user_id = ? AND workspace_id IS NULL`.
    */
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents);
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+        visibility: agents.visibility,
+      },
+    );
 
   /** Same predicate but for the `sessions` table (used in delete cascade). */
   private sessionsOwnership = () =>
@@ -123,15 +167,24 @@ export class AgentModel {
    * by their owning user, so a workspace member who isn't that owner would get
    * a broken agent. Rejects at write time rather than at execution time.
    *
+   * Only device ids INTRODUCED by this patch are checked — ids already present
+   * in `storedConfig` are grandfathered. Client patches spread the whole stored
+   * `agencyConfig` (device picker, working-dir writes), so a legacy
+   * personal-device reference left from before the agent joined the workspace
+   * (or before this guard existed) would otherwise poison every future save,
+   * including binding a perfectly valid workspace device.
+   *
    * No-op when `agentWorkspaceId` is null (personal agent — any device OK) or
    * when the patch carries no new device ids.
    */
   private assertWorkspaceDeviceBinding = async (
     agentWorkspaceId: string | null,
     agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
+    storedConfig?: LobeAgentAgencyConfig | null,
   ): Promise<void> => {
     if (!agentWorkspaceId) return;
-    const candidates = this.collectBoundDeviceIds(agencyConfig);
+    const existing = new Set(this.collectBoundDeviceIds(storedConfig));
+    const candidates = this.collectBoundDeviceIds(agencyConfig).filter((id) => !existing.has(id));
     if (candidates.length === 0) return;
 
     const rows = await this.db
@@ -159,6 +212,21 @@ export class AgentModel {
     if (!agent) return null;
 
     return this.enrichAgentWithKnowledge(agent);
+  };
+
+  /**
+   * Returns the agent's visibility, scoped by the model's ownership filter, or
+   * `null` when the agent is missing or not visible to the current caller.
+   * Used by the task service to inherit a private agent's visibility onto
+   * tasks created against it.
+   */
+  getAgentVisibility = async (id: string): Promise<'private' | 'public' | null> => {
+    const rows = await this.db
+      .select({ visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+    return (rows[0]?.visibility as 'private' | 'public' | undefined) ?? null;
   };
 
   existsById = async (id: string): Promise<boolean> => {
@@ -190,6 +258,39 @@ export class AgentModel {
     const row = rows[0];
     if (!row || !row.model || !row.provider) return null;
     return { model: row.model, provider: row.provider };
+  };
+
+  /**
+   * Single-SELECT lookup of the fields `TaskService.createTask` needs in one
+   * round-trip: the model/provider snapshot (for `task.config`) and the
+   * visibility (for inference + cross-table invariant assertion). Replaces
+   * the previous two-query path (`getAgentModelConfig` + `getAgentVisibility`).
+   *
+   * Returns `null` when the agent is not visible to the current caller. When
+   * found, `snapshot` is non-null only if both `model` and `provider` are set
+   * — same contract as `getAgentModelConfig`.
+   */
+  getAgentSnapshotForTaskCreate = async (
+    idOrSlug: string,
+  ): Promise<{
+    snapshot: { model: string; provider: string } | null;
+    visibility: 'private' | 'public';
+  } | null> => {
+    const rows = await this.db
+      .select({
+        model: agents.model,
+        provider: agents.provider,
+        visibility: agents.visibility,
+      })
+      .from(agents)
+      .where(and(this.ownership(), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))))
+      .limit(1);
+
+    const row = rows[0];
+    if (!row) return null;
+    const snapshot =
+      row.model && row.provider ? { model: row.model, provider: row.provider } : null;
+    return { snapshot, visibility: row.visibility as 'private' | 'public' };
   };
 
   /**
@@ -251,12 +352,33 @@ export class AgentModel {
   /**
    * Count non-virtual agents matching the same conditions as queryAgents.
    * Used to report real totals (and pagination) when queryAgents is limited.
+   * Accepts the same date filters as SessionModel.count so callers can compare
+   * current vs. prior-period totals without falling back to the legacy
+   * sessions table.
    */
-  countAgents = async (params?: { keyword?: string }): Promise<number> => {
+  countAgents = async (params?: {
+    endDate?: string;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }): Promise<number> => {
     const result = await this.db
       .select({ count: count() })
       .from(agents)
-      .where(this.buildQueryAgentsWhere(params?.keyword));
+      .where(
+        genWhere([
+          this.buildQueryAgentsWhere(params?.keyword),
+          params?.range
+            ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.endDate
+            ? genEndDateWhere(params.endDate, agents.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.startDate
+            ? genStartDateWhere(params.startDate, agents.createdAt, (date) => date.toDate())
+            : undefined,
+        ]),
+      );
 
     return result[0]?.count ?? 0;
   };
@@ -393,21 +515,47 @@ export class AgentModel {
   };
 
   getAgentAssignedKnowledge = async (id: string) => {
-    // Run both queries in parallel for better performance
-    // Include userId check to ensure user can only access their own agent's knowledge
+    // The junction tables carry the mount (created by whoever wired the agent
+    // to the KB / file); the ownership() predicates below match the caller's
+    // own mount rows within the same workspace.
+    //
+    // The joined `knowledgeBases` / `files` rows also need a visibility guard
+    // in the `leftJoin` ON clause: without it, a KB or file that was later
+    // flipped back to `private` via `setVisibility` would keep
+    // leaking its name / description into every mounted-agent view across the
+    // workspace. Enforcing the guard on the ON clause (rather than WHERE)
+    // keeps the mount row in the result but nulls out the referenced entity —
+    // callers can then treat `id === null` as "unavailable" and render a
+    // placeholder in the editor list, while `resolveAgentKnowledgeBaseIds` in
+    // the runtime naturally skips such rows via its `k.id` filter.
     const [knowledgeBaseResult, fileResult] = await Promise.all([
       this.db
         .select({ enabled: agentsKnowledgeBases.enabled, knowledgeBases })
         .from(agentsKnowledgeBases)
         .where(and(eq(agentsKnowledgeBases.agentId, id), this.agentsKnowledgeBasesOwnership()))
         .orderBy(desc(agentsKnowledgeBases.createdAt))
-        .leftJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId)),
+        .leftJoin(
+          knowledgeBases,
+          and(
+            eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              knowledgeBases,
+            ),
+          ),
+        ),
       this.db
         .select({ enabled: agentsFiles.enabled, files })
         .from(agentsFiles)
         .where(and(eq(agentsFiles.agentId, id), this.agentsFilesOwnership()))
         .orderBy(desc(agentsFiles.createdAt))
-        .leftJoin(files, eq(files.id, agentsFiles.fileId)),
+        .leftJoin(
+          files,
+          and(
+            eq(files.id, agentsFiles.fileId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+          ),
+        ),
     ]);
 
     return {
@@ -622,10 +770,120 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
+    const sanitizedData = await this.stripAgentBuilderProtectedFields(agentId, data);
+
     return this.db
       .update(agents)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...sanitizedData, updatedAt: new Date() })
       .where(and(eq(agents.id, agentId), this.ownership()));
+  };
+
+  /**
+   * Strip fields the Agent Builder's own row must never carry (see
+   * {@link AGENT_BUILDER_PROTECTED_FIELDS}). Only looks up the target row's `slug` when the
+   * incoming patch actually touches a protected field, so normal updates pay no extra query.
+   */
+  private stripAgentBuilderProtectedFields = async <T extends Record<string, any>>(
+    agentId: string,
+    data: T,
+    protectedFields: readonly string[] = AGENT_BUILDER_PROTECTED_FIELDS,
+  ): Promise<T> => {
+    if (!protectedFields.some((field) => field in data)) return data;
+
+    const agent = await this.db.query.agents.findFirst({
+      columns: { slug: true },
+      where: and(eq(agents.id, agentId), this.ownership()),
+    });
+
+    if (agent?.slug !== BUILTIN_AGENT_SLUGS.agentBuilder) return data;
+
+    const sanitized = { ...data };
+    for (const field of protectedFields) delete sanitized[field];
+    return sanitized;
+  };
+
+  /**
+   * Publish a private agent into the workspace. The `user_id = ?` +
+   * `visibility = 'private'` guards lock the operation to the creator's own
+   * still-private agent. The inverse transition (public → private) goes
+   * through {@link setVisibility}, which the router gates to the creator or
+   * a workspace owner (LOBE-11551).
+   *
+   * Use the existing `update` to change other fields; visibility is the only
+   * one with these authorization rules.
+   */
+  publishToWorkspace = async (agentId: string) => {
+    return this.db
+      .update(agents)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(agents.id, agentId),
+          this.ownership(),
+          eq(agents.userId, this.userId),
+          eq(agents.visibility, 'private'),
+        ),
+      );
+  };
+
+  /**
+   * Lightweight lookup used to authorize visibility changes: the agent's
+   * creator, slug and current visibility, scoped by the ownership predicate
+   * (other members' private agents resolve to `null`).
+   */
+  getAgentVisibilityMeta = async (
+    id: string,
+  ): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {
+    const rows = await this.db
+      .select({ slug: agents.slug, userId: agents.userId, visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      slug: row.slug,
+      userId: row.userId,
+      visibility: (row.visibility as 'private' | 'public' | null) ?? 'public',
+    };
+  };
+
+  /**
+   * Bidirectional visibility switch (LOBE-11551). Authorization (creator OR
+   * workspace owner, builtin agents excluded) is the router's responsibility —
+   * this method only applies the ownership-scoped write.
+   *
+   * Uses UPDATE … RETURNING instead of a follow-up SELECT: when a workspace
+   * owner demotes another member's agent to private, the post-update row no
+   * longer matches the visibility-aware ownership predicate, so a read-back
+   * would return 0 rows even though the write succeeded (same pattern as
+   * TaskModel.updateVisibility).
+   */
+  setVisibility = async (agentId: string, visibility: 'private' | 'public') => {
+    // A sidebar folder cannot mix visibilities (HomeRepository.processAgentList
+    // buckets grouped items by item visibility under same-visibility groups),
+    // so an agent crossing scopes while keyed to a group of the OLD scope
+    // would be emitted nowhere and vanish from the sidebar. Rehome it to the
+    // ungrouped section of its new scope when the group no longer matches.
+    const [current] = await this.db
+      .select({ groupVisibility: sessionGroups.visibility })
+      .from(agents)
+      .leftJoin(sessionGroups, eq(agents.sessionGroupId, sessionGroups.id))
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .limit(1);
+    const groupVisibility = current?.groupVisibility as 'private' | 'public' | null | undefined;
+    const clearGroup = groupVisibility != null && groupVisibility !== visibility;
+
+    const [updated] = await this.db
+      .update(agents)
+      .set({
+        updatedAt: new Date(),
+        visibility,
+        ...(clearGroup ? { sessionGroupId: null } : {}),
+      })
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .returning();
+    return updated ?? null;
   };
 
   touchUpdatedAt = async (agentId: string) => {
@@ -683,7 +941,11 @@ export class AgentModel {
 
     if (!agent) return;
 
-    await this.assertWorkspaceDeviceBinding(agent.workspaceId, data.agencyConfig);
+    await this.assertWorkspaceDeviceBinding(
+      agent.workspaceId,
+      data.agencyConfig,
+      agent.agencyConfig,
+    );
 
     // First process the params field: undefined means delete, null means disable flag
     const existingParams = agent.params ?? {};
@@ -708,6 +970,13 @@ export class AgentModel {
     // Build data to be merged, excluding params (processed separately)
 
     const { params: _params, ...restData } = data;
+
+    // See AGENT_BUILDER_PROTECTED_FIELDS: some callers (e.g. the browser client's meta
+    // editor) route title/avatar/etc. through updateConfig() rather than update().
+    if (agent.slug === BUILTIN_AGENT_SLUGS.agentBuilder) {
+      for (const field of AGENT_BUILDER_PROTECTED_FIELDS) delete restData[field];
+    }
+
     const mergedValue = merge(agent, restData);
 
     // Apply the processed parameters
@@ -886,11 +1155,16 @@ export class AgentModel {
   /**
    * Transfer an agent and all its associated data to a different workspace or personal account.
    * Runs in a single transaction to ensure atomicity.
+   *
+   * When moving into a workspace, `targetVisibility` picks the resulting scope
+   * within that workspace (`private` = only the target user sees it,
+   * `public` = every member does). Ignored when moving to a personal account.
    */
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
     return this.db.transaction(async (trx) => {
       // 1. Verify agent exists and belongs to current scope
@@ -970,12 +1244,21 @@ export class AgentModel {
         }
       }
 
-      // 4. Update the agent record
+      // 4. Update the agent record.
+      //    Only apply visibility when moving into a workspace — visibility is
+      //    a no-op in personal scope where every row is implicitly private.
+      //    `sessionGroupId` is cleared because sidebar folders belong to the
+      //    source scope (same rationale as dropping chatGroupsAgents below);
+      //    a stale reference would orphan the agent out of the target sidebar.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       await trx
         .update(agents)
         .set({
           ...ownershipUpdate,
+          ...visibilityUpdate,
           agencyConfig: nextAgencyConfig,
+          sessionGroupId: null,
           slug,
           updatedAt: new Date(),
         })
@@ -990,7 +1273,12 @@ export class AgentModel {
       const sessionIds = links.map((l) => l.sessionId);
 
       if (sessionIds.length > 0) {
-        await trx.update(sessions).set(ownershipUpdate).where(inArray(sessions.id, sessionIds));
+        // `groupId` is cleared for the same reason as the agent's
+        // `sessionGroupId`: folders stay in the source scope.
+        await trx
+          .update(sessions)
+          .set({ ...ownershipUpdate, groupId: null })
+          .where(inArray(sessions.id, sessionIds));
       }
 
       await trx
@@ -1030,13 +1318,55 @@ export class AgentModel {
         .set(ownershipUpdate)
         .where(eq(agentCronJobs.agentId, agentId));
 
-      // 12. Update agent bot providers (transfer, not delete)
+      // 12. Update tasks assigned to or created by this agent. The scheduled
+      // task dispatcher uses `createdByUserId` as the execution owner, so tasks
+      // must move with the agent instead of staying under the old owner.
+      // Visibility is cascaded to tasks and child rows so a `private` transfer
+      // does not leak previously-personal task data to every workspace member:
+      // personal rows keep the schema default (`visibility='public'`) but ignore
+      // it, whereas workspace rows honor it — without this cascade a `private`
+      // transfer would silently downgrade to workspace-public.
+      const movedTasks = await trx
+        .update(tasks)
+        .set({
+          createdByUserId: targetUserId,
+          updatedAt: new Date(),
+          workspaceId: targetWorkspaceId,
+          ...visibilityUpdate,
+        })
+        .where(or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)))
+        .returning({ id: tasks.id });
+      const movedTaskIds = movedTasks.map((task) => task.id);
+
+      if (movedTaskIds.length > 0) {
+        await trx
+          .update(taskDependencies)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .where(inArray(taskDependencies.taskId, movedTaskIds));
+        await trx
+          .update(taskDocuments)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .where(inArray(taskDocuments.taskId, movedTaskIds));
+        await trx
+          .update(taskTopics)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .where(inArray(taskTopics.taskId, movedTaskIds));
+        await trx
+          .update(taskComments)
+          .set({ ...ownershipUpdate, ...visibilityUpdate })
+          .where(inArray(taskComments.taskId, movedTaskIds));
+        await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.taskId, movedTaskIds));
+      }
+
+      await trx.update(briefs).set(ownershipUpdate).where(eq(briefs.agentId, agentId));
+
+      // 13. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
         .set(ownershipUpdate)
         .where(eq(agentBotProviders.agentId, agentId));
 
-      // 13. Remove chat group associations (groups belong to source workspace context)
+      // 14. Remove chat group associations (groups belong to source workspace context)
       await trx.delete(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, agentId));
 
       return { agentId, slug };

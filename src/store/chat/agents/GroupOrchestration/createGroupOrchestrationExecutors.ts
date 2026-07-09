@@ -697,6 +697,7 @@ export const createGroupOrchestrationExecutors = (
           topicId,
           threadId,
           scope: 'thread',
+          workspaceSlug: messageContext.workspaceSlug,
         };
 
         // 4. Create a child operation for task execution (now with threadId)

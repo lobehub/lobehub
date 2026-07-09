@@ -19,6 +19,24 @@ const usageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 });
 
 export const usageRouter = router({
+  getAgentUsageStats: usageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        endAt: z.string(),
+        granularity: z.enum(['day', 'week']).default('day'),
+        startAt: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return await ctx.usageRecordService.getAgentUsageStats(
+        input.agentId,
+        input.startAt,
+        input.endAt,
+        input.granularity,
+      );
+    }),
+
   findAndGroupByDateRange: usageProcedure
     .input(
       z.object({

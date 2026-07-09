@@ -7,7 +7,7 @@ import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   connectionOption: css`
@@ -30,6 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface OAuthCredFormProps {
+  credsApi: CredsApi;
   disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
@@ -42,10 +43,9 @@ interface FormValues {
   oauthConnectionId: number;
 }
 
-const OAuthCredForm: FC<OAuthCredFormProps> = ({ disabled, onBack, onSuccess }) => {
+const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
-  const credsApi = useCredsApi();
 
   const { data: connectionsData, isLoading } = credsApi.query.listOAuthConnections.useQuery();
 

@@ -46,9 +46,9 @@ describe('executeToolCallInWorker', () => {
     const result = await executeToolCallInWorker('searchFiles', '{"keywords":""}');
 
     expect(result).toEqual({
-      content: '',
-      error: 'Isolated tool worker failed for searchFiles with exit code 1: worker stderr',
-      success: false,
+      content: 'Isolated tool worker failed for searchFiles with exit code 1: worker stderr',
+      state: { failureType: 'worker_exit', success: false },
+      success: true,
     });
   });
 
@@ -77,9 +77,9 @@ describe('executeToolCallInWorker', () => {
     const result = await executeToolCallInWorker('globFiles', '{"pattern":"*.ts"}');
 
     expect(result).toEqual({
-      content: '',
-      error: 'Isolated tool worker failed for globFiles with exit code 1: No Output',
-      success: false,
+      content: 'Isolated tool worker failed for globFiles with exit code 1: No Output',
+      state: { failureType: 'worker_exit', success: false },
+      success: true,
     });
   });
 
@@ -108,9 +108,10 @@ describe('executeToolCallInWorker', () => {
     const { executeToolCallInWorker } = await import('./isolatedWorker');
     const result = await executeToolCallInWorker('listFiles', '{"path":"/tmp"}');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Isolated tool worker returned invalid JSON for listFiles:');
-    expect(result.error).toContain('Output: not-json');
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Isolated tool worker returned invalid JSON for listFiles:');
+    expect(result.content).toContain('Output: not-json');
+    expect(result.state).toEqual({ failureType: 'invalid_json', success: false });
   });
 
   it('should timeout and kill the worker when it exceeds the timeout', async () => {
@@ -136,9 +137,9 @@ describe('executeToolCallInWorker', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     await expect(resultPromise).resolves.toEqual({
-      content: '',
-      error: 'Isolated tool worker timed out for grepContent after 1000ms',
-      success: false,
+      content: 'Isolated tool worker timed out for grepContent after 1000ms',
+      state: { failureType: 'timeout', success: false, timeoutMs: 1000 },
+      success: true,
     });
     expect(kill).toHaveBeenCalledWith('SIGKILL');
   });

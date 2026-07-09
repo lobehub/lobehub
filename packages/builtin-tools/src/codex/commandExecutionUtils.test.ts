@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getCodexCommandProgram,
   getCodexGrepCommandDisplay,
   getCodexReadFileCommandDisplay,
 } from './commandExecutionUtils';
@@ -96,5 +97,38 @@ describe('getCodexGrepCommandDisplay', () => {
     expect(getCodexGrepCommandDisplay('rg "foo" src > /tmp/out')).toBeUndefined();
     expect(getCodexGrepCommandDisplay('rg --files src | sort | rg "foo"')).toBeUndefined();
     expect(getCodexGrepCommandDisplay('rg --files src')).toBeUndefined();
+  });
+});
+
+describe('getCodexCommandProgram', () => {
+  it('classifies node commands', () => {
+    expect(getCodexCommandProgram('node packages/cli/dist/index.js message-gateway stats')).toBe(
+      'node',
+    );
+    expect(getCodexCommandProgram('node -e "const fs=require(\'fs\')"')).toBe('node');
+  });
+
+  it('classifies git commands', () => {
+    expect(getCodexCommandProgram('git diff -- package.json')).toBe('git');
+    expect(getCodexCommandProgram('git status --short')).toBe('git');
+  });
+
+  it('classifies python commands, including python3 and absolute paths', () => {
+    expect(getCodexCommandProgram('python analyze.py')).toBe('python');
+    expect(getCodexCommandProgram('python3 -m http.server')).toBe('python');
+    expect(getCodexCommandProgram('/usr/bin/python3 script.py')).toBe('python');
+  });
+
+  it('unwraps shell wrappers and skips env assignments', () => {
+    expect(getCodexCommandProgram('bash -lc "git log --oneline"')).toBe('git');
+    expect(getCodexCommandProgram('NODE_ENV=production node app.js')).toBe('node');
+  });
+
+  it('returns undefined for unknown or empty programs', () => {
+    expect(getCodexCommandProgram('pnpm install')).toBeUndefined();
+    expect(getCodexCommandProgram('ls -la')).toBeUndefined();
+    expect(getCodexCommandProgram('cat foo | node bar.js')).toBeUndefined();
+    expect(getCodexCommandProgram('')).toBeUndefined();
+    expect(getCodexCommandProgram(undefined)).toBeUndefined();
   });
 });

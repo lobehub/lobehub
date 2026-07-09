@@ -87,6 +87,16 @@ export default {
   'betterAuth.signin.continueWithWechat': 'Sign in with WeChat',
   'betterAuth.signin.continueWithZitadel': 'Sign in with Zitadel',
   'betterAuth.signin.emailPlaceholder': 'Enter your email or username',
+  'betterAuth.signin.emailSent.changeEmail': 'Use a different email',
+  'betterAuth.signin.emailSent.checkSpam':
+    "Didn't get the email? Check your spam folder, or resend it.",
+  'betterAuth.signin.emailSent.magicLinkDescription':
+    'We sent a sign-in link to {{email}}. Open it to finish signing in.',
+  'betterAuth.signin.emailSent.resend': 'Resend email',
+  'betterAuth.signin.emailSent.resent': 'Email resent — please check your inbox',
+  'betterAuth.signin.emailSent.resetPasswordDescription':
+    'We sent a password reset link to {{email}}. Open it to set a new password.',
+  'betterAuth.signin.emailSent.title': 'Check your inbox',
   'betterAuth.signin.emailStep.title': 'Sign In',
   'betterAuth.signin.error': 'Sign in failed, please check your email and password',
   'betterAuth.signin.forgotPassword': 'Forgot password?',
@@ -104,6 +114,7 @@ export default {
   'betterAuth.signin.orContinueWith': 'OR',
   'betterAuth.signin.passwordPlaceholder': 'Enter your password',
   'betterAuth.signin.passwordStep.subtitle': 'Enter your password to continue',
+  'betterAuth.signin.passwordStep.title': 'Enter your password',
   'betterAuth.signin.setPassword': 'set a password',
   'betterAuth.signin.signupLink': 'Sign up now',
   'betterAuth.signin.socialError': 'Social sign in failed, please try again',

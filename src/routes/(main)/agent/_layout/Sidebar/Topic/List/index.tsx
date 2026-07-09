@@ -15,6 +15,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import AllTopicsDrawer from '../AllTopicsDrawer';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import ByProjectMode from '../TopicListContent/ByProjectMode';
+import ByStatusMode from '../TopicListContent/ByStatusMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
@@ -54,6 +55,8 @@ const TopicList = memo(() => {
         <FlatMode />
       ) : topicGroupMode === 'byProject' ? (
         <ByProjectMode />
+      ) : topicGroupMode === 'byStatus' ? (
+        <ByStatusMode />
       ) : (
         <ByTimeMode />
       )}

@@ -1,10 +1,11 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
 import { ConfigProvider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { useCallback, useState } from 'react';
+
+import ImperativeModal from '@/components/ImperativeModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -67,7 +68,7 @@ const FullscreenModal = ({ children, detail, onClose }: FullscreenModalProps) =>
   return (
     <>
       <ConfigProvider theme={{ token: { motion: false } }}>
-        <Modal
+        <ImperativeModal
           className={cx(styles.modal, showDetail && styles.modal_withDetail)}
           classNames={{ body: styles.body, header: styles.header, wrapper: styles.content }}
           footer={false}
@@ -76,7 +77,7 @@ const FullscreenModal = ({ children, detail, onClose }: FullscreenModalProps) =>
           onCancel={handleCancel}
         >
           {children}
-        </Modal>
+        </ImperativeModal>
       </ConfigProvider>
       {!!detail && <div className={styles.extra}>{detail}</div>}
     </>

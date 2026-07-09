@@ -13,6 +13,12 @@ export interface TopicData {
   isLoadingMore?: boolean;
   items: ChatTopic[];
   /**
+   * Last page-fetch failure. Kept separate from the first-page SWR `error` so
+   * infinite-scroll surfaces can render an inline Retry row instead of silently
+   * dropping the loading-more row while `hasMore` remains true.
+   */
+  loadMoreError?: unknown;
+  /**
    * Last fetched/used page size for this topic container.
    * Used to detect "pageSize expansion" (user increases pageSize) without being affected by SWR revalidation
    * or cases where total items < pageSize.
@@ -51,6 +57,11 @@ export interface ChatTopicState {
    * Contains items, total count, pagination state, and loading states
    */
   topicDataMap: Record<string, TopicData>;
+  /**
+   * Internal ref-count for topic loading owners. A topic can be loading because
+   * the agent is running and because title-summary is streaming at the same time.
+   */
+  topicLoadingIdCounts: Record<string, number>;
   topicLoadingIds: string[];
   topicRenamingId?: string;
   topicSearchKeywords: string;
@@ -64,6 +75,7 @@ export const initialTopicState: ChatTopicState = {
   isSearchingTopic: false,
   searchTopics: [],
   topicDataMap: {},
+  topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicSearchKeywords: '',
 };

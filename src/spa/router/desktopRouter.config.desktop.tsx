@@ -19,7 +19,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -34,6 +34,7 @@ import WorkspaceSlugSettingsIndexPage from '@/routes/(main)/[workspaceSlug]/sett
 import WorkspaceSlugSettingsContentLayout from '@/routes/(main)/[workspaceSlug]/settings/_content-layout';
 import WorkspaceSlugSettingsLayout from '@/routes/(main)/[workspaceSlug]/settings/_layout';
 import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/settings/apikey';
+import WorkspaceSlugSettingsAuditLogPage from '@/routes/(main)/[workspaceSlug]/settings/audit-log';
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
 import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
@@ -52,10 +53,12 @@ import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
+import AgentDocumentsIndexRoute from '@/routes/(main)/agent/docs';
 import AgentDocumentLayout from '@/routes/(main)/agent/docs/_layout';
 import AgentDocumentRoute from '@/routes/(main)/agent/docs/[docId]';
-import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
+import AgentStatsPage from '@/routes/(main)/agent/stats';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
 import AgentScopedTasksRoute from '@/routes/(main)/agent/tasks';
 import AgentTopicsPage from '@/routes/(main)/agent/topics';
@@ -120,6 +123,8 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import VerifyWorkspace from '@/routes/(main)/verify';
+import VerifyEmptyDetail from '@/routes/(main)/verify/empty';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
@@ -163,6 +168,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             children: [
               {
+                element: <AgentDocumentsIndexRoute />,
+                index: true,
+              },
+              {
                 element: <AgentDocumentRoute />,
                 handle: { meta: agentDocumentRouteMeta },
                 path: ':docId',
@@ -181,7 +190,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: <AgentTopicsPage />,
+            handle: { meta: topicsRouteMeta },
             path: 'topics',
+          },
+          {
+            element: <AgentStatsPage />,
+            path: 'stats',
           },
           {
             element: <AgentScopedTasksRoute />,
@@ -684,6 +698,7 @@ export const desktopRoutes: RouteObject[] = [
                   { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
                   { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
                   { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
+                  { element: <WorkspaceSlugSettingsAuditLogPage />, path: 'audit-log' },
                   { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
                   { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },
                 ],
@@ -761,12 +776,23 @@ export const desktopRoutes: RouteObject[] = [
     path: '/verify-im',
   },
 
-  // Standalone verification-report viewer (outside main layout)
+  // Verify report workspace — standalone master-detail (outside main layout)
   {
-    element: <VerifyReportPage />,
+    children: [
+      {
+        element: <VerifyEmptyDetail />,
+        index: true,
+      },
+      {
+        element: <VerifyReportPage />,
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: <VerifyWorkspace />,
     errorElement: <ErrorBoundary />,
-    handle: { meta: verifyRouteMeta },
-    path: '/verify/:runId',
+    handle: { meta: verifyReportsRouteMeta },
+    path: '/verify',
   },
 
   // Devtools route (outside main layout, dev-only)

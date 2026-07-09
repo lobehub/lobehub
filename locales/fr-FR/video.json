@@ -27,8 +27,12 @@
   "generation.status.generating": "Génération en cours...",
   "generation.validation.endFrameRequiresStartFrame": "L'image de fin ne peut pas être utilisée sans image de début. Veuillez d'abord définir une image de début.",
   "topic.createNew": "Créer un nouveau sujet",
+  "topic.createdBy": "Créé par {{name}}",
   "topic.deleteConfirm": "Supprimer le sujet vidéo",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet vidéo. Cette action est irréversible.",
+  "topic.privateTitle": "Privé",
   "topic.title": "Sujets vidéo",
-  "topic.untitled": "Sujet par défaut"
+  "topic.untitled": "Sujet par défaut",
+  "topic.visibility.existingLocked": "La visibilité est fixée pour le sujet actuel. Créez un nouveau sujet pour choisir un espace différent.",
+  "topic.workspaceTitle": "Espace de travail"
 }

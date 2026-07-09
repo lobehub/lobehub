@@ -6,13 +6,14 @@ import { ActionIcon, Avatar } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
+import MarkdownMessage from '@/features/Conversation/Markdown';
 import { type ConversationContext } from '@/features/Conversation/types';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -38,8 +39,8 @@ interface ApprovalCardProps {
 const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const { context, interventions } = group;
   const { t } = useTranslation('chat');
-  const navigate = useNavigate();
-  const workspaceSlug = useActiveWorkspaceSlug();
+  const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const chatKey = useMemo(() => messageMapKey(context), [context]);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
@@ -97,8 +98,17 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
       path = AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId);
     }
     if (!path) return;
-    navigate(buildWorkspaceAwarePath(path, workspaceSlug));
-  }, [context.agentId, context.groupId, context.topicId, navigate, workspaceSlug]);
+    navigate(buildWorkspaceAwarePath(path, context.workspaceSlug ?? activeWorkspaceSlug), {
+      escape: true,
+    });
+  }, [
+    activeWorkspaceSlug,
+    context.agentId,
+    context.groupId,
+    context.topicId,
+    context.workspaceSlug,
+    navigate,
+  ]);
 
   const canOpenConversation = !!(context.groupId || context.topicId);
 
@@ -162,7 +172,9 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
         {userRequest && (
           <div className={styles.userRequest}>
             <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
-            <span className={styles.userRequestText}>{userRequest}</span>
+            <div className={styles.userRequestBody}>
+              <MarkdownMessage>{userRequest}</MarkdownMessage>
+            </div>
           </div>
         )}
 

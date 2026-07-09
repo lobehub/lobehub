@@ -1,5 +1,6 @@
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type { DeviceChannel, DeviceListItem, DeviceScope, WorkingDirEntry } from '@lobechat/types';
+import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -18,6 +19,7 @@ import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGa
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 import { assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
+import { workingDirConfigSchema } from './workingDirSchema';
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
@@ -146,12 +148,20 @@ export const deviceRouter = router({
     }),
 
   gitLinkedPullRequest: deviceProcedure
-    .input(z.object({ branch: z.string(), deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        branch: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+        pullRequestNumber: z.number().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitLinkedPullRequest({
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
+        pullRequestNumber: input.pullRequestNumber,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
@@ -292,6 +302,56 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Remove a worktree in a directory's repository on a remote device,
+   * via the device's `removeGitWorktree` RPC.
+   */
+  removeGitWorktree: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string(),
+        worktreePath: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.removeGitWorktree({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        worktreePath: input.worktreePath,
+      }),
+    ),
+
+  /**
+   * Add a linked worktree on a fresh branch in a directory's repository on a
+   * remote device, via the device's `addGitWorktree` RPC.
+   *
+   * The target directory is derived here from the trusted `path` + `branch`
+   * (a `<repo>-<branch>` sibling) rather than accepted from the request, so a
+   * crafted web call can't ask the device to check out at an arbitrary absolute
+   * path — the branch is folded to `-` in the folder name, so it can't traverse.
+   */
+  addGitWorktree: deviceProcedure
+    .input(
+      z.object({
+        branch: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.addGitWorktree({
+        branch: input.branch,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        worktreePath: deriveWorktreePath(input.path, input.branch),
+      }),
+    ),
+
+  /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */
@@ -398,6 +458,31 @@ export const deviceRouter = router({
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.getProjectFileIndex({
         deviceId: input.deviceId,
+        scope: input.scope,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * Search project files on a remote device. The device performs the match and
+   * returns only the result subtree needed by the UI.
+   */
+  searchProjectFiles: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        limit: z.number().int().positive().max(500).optional(),
+        query: z.string(),
+        scope: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.searchProjectFiles({
+        deviceId: input.deviceId,
+        limit: input.limit,
+        query: input.query,
         scope: input.scope,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
@@ -688,31 +773,35 @@ export const deviceRouter = router({
           platform: d.platform ?? live?.platform ?? null,
           registered: true,
           scope,
-          workingDirs: d.workingDirs ?? [],
+          // Strip the heavy `workspace` scan (AGENTS.md + project skills, up to
+          // ~30KB per dir) from the list payload. It's a server-owned cache for
+          // the agent runtime (restored from the DB row on run start, never from
+          // this response) and no client UI renders it from the list — skills are
+          // re-derived live via `device.listProjectSkills`. Keep `workspaceScannedAt`
+          // (a cheap number) so clients can still show scan freshness.
+          workingDirs: (d.workingDirs ?? []).map(({ workspace: _workspace, ...rest }) => rest),
         };
       });
 
       // Online but not yet persisted — transient until the client auto-registers.
       const ghosts = [...channelsByDevice.entries()]
         .filter(([deviceId]) => !seen.has(deviceId))
-        .map(
-          ([deviceId, channels]): DeviceListItem => ({
-            channels,
-            defaultCwd: null,
-            deviceId,
-            // No row yet → no enroller; UI gates treat this as not-editable.
-            enroller: null,
-            friendlyName: null,
-            hostname: channels[0]?.hostname ?? null,
-            identitySource: null,
-            lastSeen: channels[0]?.connectedAt ?? new Date().toISOString(),
-            online: true,
-            platform: channels[0]?.platform ?? null,
-            registered: false,
-            scope,
-            workingDirs: [] as WorkingDirEntry[],
-          }),
-        );
+        .map(([deviceId, channels]): DeviceListItem => ({
+          channels,
+          defaultCwd: null,
+          deviceId,
+          // No row yet → no enroller; UI gates treat this as not-editable.
+          enroller: null,
+          friendlyName: null,
+          hostname: channels[0]?.hostname ?? null,
+          identitySource: null,
+          lastSeen: channels[0]?.connectedAt ?? new Date().toISOString(),
+          online: true,
+          platform: channels[0]?.platform ?? null,
+          registered: false,
+          scope,
+          workingDirs: [] as WorkingDirEntry[],
+        }));
 
       return [...fromDb, ...ghosts];
     };
@@ -776,10 +865,7 @@ export const deviceRouter = router({
         defaultCwd: z.string().nullish(),
         deviceId: z.string(),
         friendlyName: z.string().max(100).nullish(),
-        workingDirs: z
-          .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
-          .max(20)
-          .optional(),
+        workingDirs: z.array(workingDirConfigSchema).max(20).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -864,10 +950,7 @@ export const deviceRouter = router({
         defaultCwd: z.string().nullish(),
         deviceId: z.string(),
         friendlyName: z.string().max(100).nullish(),
-        workingDirs: z
-          .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
-          .max(20)
-          .optional(),
+        workingDirs: z.array(workingDirConfigSchema).max(20).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

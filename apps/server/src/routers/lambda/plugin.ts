@@ -75,12 +75,6 @@ export const pluginRouter = router({
     return pluginModel.query();
   }),
 
-  removeAllPlugins: pluginProcedure
-    .use(withScopedPermission('agent:update'))
-    .mutation(async ({ ctx }) => {
-      return ctx.pluginModel.deleteAll();
-    }),
-
   removePlugin: pluginProcedure
     .use(withScopedPermission('agent:update'))
     .input(z.object({ id: z.string() }))

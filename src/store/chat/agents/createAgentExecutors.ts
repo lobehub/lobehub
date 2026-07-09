@@ -15,6 +15,7 @@ import type {
   InstructionExecutor,
   SubAgentResultPayload,
   SubAgentsBatchResultPayload,
+  SubAgentTask,
 } from '@lobechat/agent-runtime';
 import { UsageCounter } from '@lobechat/agent-runtime';
 import { countContextTokens, type ToolsEngine } from '@lobechat/context-engine';
@@ -126,6 +127,21 @@ const localizeError = (error: ChatMessageError): ChatMessageError => {
 
   return error;
 };
+
+const formatSubAgentBatchResultContent = (
+  tasks: SubAgentTask[],
+  results: SubAgentsBatchResultPayload['results'],
+) =>
+  results
+    .map((result, index) => {
+      const title = tasks[index]?.description ?? `Task ${index + 1}`;
+      const content = result.success
+        ? (result.result ?? 'Completed successfully.')
+        : `Failed: ${result.error ?? 'Unknown error'}`;
+
+      return `${index + 1}. ${title}\n${content}`;
+    })
+    .join('\n\n');
 
 /**
  * Creates custom executors for the Chat Agent Runtime
@@ -1306,11 +1322,10 @@ export const createAgentExecutors = (context: {
      * Dispatches a single sub-agent
      *
      * Flow:
-     * 1. Create a task message (role: 'task') as placeholder
-     * 2. Call execSubAgentTask API (backend creates thread)
-     * 3. Poll for sub-agent completion
-     * 4. Update task message content with result on completion
-     * 5. Return sub_agent_result phase with result
+     * 1. Call execSubAgentTask API (backend creates thread)
+     * 2. Poll for sub-agent completion
+     * 3. Update the source tool message with result on completion
+     * 4. Return sub_agent_result phase with result
      */
     exec_sub_agent: async (instruction, state) => {
       const { parentMessageId, task } = (instruction as AgentInstructionExecSubAgent).payload;
@@ -1339,7 +1354,6 @@ export const createAgentExecutors = (context: {
               result: {
                 error: 'No valid context available',
                 success: false,
-                taskMessageId: '',
                 threadId: '',
               },
             } as SubAgentResultPayload,
@@ -1366,63 +1380,16 @@ export const createAgentExecutors = (context: {
       const taskLogId = `${sessionLogId}:task`;
 
       try {
-        // 1. Create task message as placeholder
-        // IMPORTANT: Use operation context's agentId (current agent) for message creation
-        // This ensures the task message appears in the current conversation
-        const taskMessageResult = await context.get().optimisticCreateMessage(
-          {
-            agentId, // Use current agent's ID (not targetAgentId)
-            content: '',
-            metadata: {
-              instruction: task.instruction,
-              taskTitle: task.description,
-              // Store targetAgentId in metadata for UI display
-              ...(targetAgentId && { targetAgentId }),
-            },
-            parentId: parentMessageId,
-            role: 'task',
-            topicId,
-          },
-          { operationId: state.operationId },
-        );
+        const resultMessageId = parentMessageId;
 
-        if (!taskMessageResult) {
-          log('[%s] Failed to create task message', taskLogId);
-          return {
-            events,
-            newState: state,
-            nextContext: {
-              payload: {
-                parentMessageId,
-                result: {
-                  error: 'Failed to create task message',
-                  success: false,
-                  taskMessageId: '',
-                  threadId: '',
-                },
-              } as SubAgentResultPayload,
-              phase: 'sub_agent_result',
-              session: {
-                messageCount: state.messages.length,
-                sessionId: state.operationId,
-                status: 'running',
-                stepCount: state.stepCount + 1,
-              },
-            } as AgentRuntimeContext,
-          };
-        }
-
-        const taskMessageId = taskMessageResult.id;
-        log('[%s] Created task message: %s', taskLogId, taskMessageId);
-
-        // 2. Create and execute task on server
+        // 1. Create and execute task on server
         // IMPORTANT: Use executionAgentId here (targetAgentId if in callAgent mode)
         // This ensures the task executes with the correct agent's config
         log('[%s] Using server-side execution with agentId: %s', taskLogId, executionAgentId);
         const createResult = await aiAgentService.execSubAgentTask({
           agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for sub-agent dispatch
           instruction: task.instruction,
-          parentMessageId: taskMessageId,
+          parentMessageId: resultMessageId,
           title: task.description,
           topicId,
         });
@@ -1432,7 +1399,7 @@ export const createAgentExecutors = (context: {
           await context
             .get()
             .optimisticUpdateMessageContent(
-              taskMessageId,
+              resultMessageId,
               `Task creation failed: ${createResult.error}`,
               undefined,
               { operationId: state.operationId },
@@ -1446,7 +1413,6 @@ export const createAgentExecutors = (context: {
                 result: {
                   error: createResult.error,
                   success: false,
-                  taskMessageId,
                   threadId: '',
                 },
               } as SubAgentResultPayload,
@@ -1463,7 +1429,7 @@ export const createAgentExecutors = (context: {
 
         log('[%s] Task created with threadId: %s', taskLogId, createResult.threadId);
 
-        // 3. Poll for task completion
+        // 2. Poll for task completion
         const pollInterval = 3000; // 3 seconds
         const maxWait = task.timeout || 1_800_000; // Default 30 minutes
         const startTime = Date.now();
@@ -1482,11 +1448,11 @@ export const createAgentExecutors = (context: {
               log('[%s] Failed to interrupt cancelled task: %O', taskLogId, err);
             }
 
-            // Update task message to cancelled state
+            // Update the source tool message to cancelled state.
             await context
               .get()
               .optimisticUpdateMessageContent(
-                taskMessageId,
+                resultMessageId,
                 'Task was cancelled by user.',
                 undefined,
                 { operationId: state.operationId },
@@ -1502,7 +1468,6 @@ export const createAgentExecutors = (context: {
                   result: {
                     error: 'Operation cancelled',
                     success: false,
-                    taskMessageId,
                     threadId: createResult.threadId,
                   },
                 } as SubAgentResultPayload,
@@ -1521,17 +1486,17 @@ export const createAgentExecutors = (context: {
             threadId: createResult.threadId,
           });
 
-          // Update taskDetail in message if available
+          // Update taskDetail on the source tool message if available.
           if (status.taskDetail) {
             context.get().internal_dispatchMessage(
               {
-                id: taskMessageId,
+                id: resultMessageId,
                 type: 'updateMessage',
                 value: { taskDetail: status.taskDetail },
               },
               { operationId: state.operationId },
             );
-            log('[%s] Updated task message with taskDetail', taskLogId);
+            log('[%s] Updated source tool message with taskDetail', taskLogId);
           }
 
           if (status.status === 'completed') {
@@ -1539,7 +1504,7 @@ export const createAgentExecutors = (context: {
             if (status.result) {
               await context
                 .get()
-                .optimisticUpdateMessageContent(taskMessageId, status.result, undefined, {
+                .optimisticUpdateMessageContent(resultMessageId, status.result, undefined, {
                   operationId: state.operationId,
                 });
             }
@@ -1553,7 +1518,6 @@ export const createAgentExecutors = (context: {
                   result: {
                     result: status.result,
                     success: true,
-                    taskMessageId,
                     threadId: createResult.threadId,
                   },
                 } as SubAgentResultPayload,
@@ -1575,7 +1539,7 @@ export const createAgentExecutors = (context: {
             await context
               .get()
               .optimisticUpdateMessageContent(
-                taskMessageId,
+                resultMessageId,
                 `Task failed: ${errorMessage}`,
                 undefined,
                 { operationId: state.operationId },
@@ -1590,7 +1554,6 @@ export const createAgentExecutors = (context: {
                   result: {
                     error: status.error,
                     success: false,
-                    taskMessageId,
                     threadId: createResult.threadId,
                   },
                 } as SubAgentResultPayload,
@@ -1608,10 +1571,10 @@ export const createAgentExecutors = (context: {
           if (status.status === 'cancel') {
             log('[%s] Task was cancelled', taskLogId);
             // Note: Don't fail the operation here - it was cancelled intentionally
-            // The cancel handler already updated the message
+            // The source tool message update records the cancellation.
             await context
               .get()
-              .optimisticUpdateMessageContent(taskMessageId, 'Task was cancelled', undefined, {
+              .optimisticUpdateMessageContent(resultMessageId, 'Task was cancelled', undefined, {
                 operationId: state.operationId,
               });
             const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
@@ -1624,7 +1587,6 @@ export const createAgentExecutors = (context: {
                   result: {
                     error: 'Task was cancelled',
                     success: false,
-                    taskMessageId,
                     threadId: createResult.threadId,
                   },
                 } as SubAgentResultPayload,
@@ -1657,7 +1619,7 @@ export const createAgentExecutors = (context: {
         await context
           .get()
           .optimisticUpdateMessageContent(
-            taskMessageId,
+            resultMessageId,
             `Task timeout after ${maxWait}ms`,
             undefined,
             { operationId: state.operationId },
@@ -1673,7 +1635,6 @@ export const createAgentExecutors = (context: {
               result: {
                 error: `Task timeout after ${maxWait}ms`,
                 success: false,
-                taskMessageId,
                 threadId: createResult.threadId,
               },
             } as SubAgentResultPayload,
@@ -1697,7 +1658,6 @@ export const createAgentExecutors = (context: {
               result: {
                 error: error instanceof Error ? error.message : 'Unknown error',
                 success: false,
-                taskMessageId: '',
                 threadId: '',
               },
             } as SubAgentResultPayload,
@@ -1718,11 +1678,10 @@ export const createAgentExecutors = (context: {
      * Dispatches one or more sub-agents in parallel
      *
      * Flow:
-     * 1. For each sub-agent, create a task message (role: 'task') as placeholder
-     * 2. Call execSubAgentTask API (backend creates thread)
-     * 3. Poll for sub-agent completion
-     * 4. Update task message content with result on completion
-     * 5. Return sub_agents_batch_result phase with all results
+     * 1. Call execSubAgentTask API for each task
+     * 2. Poll for sub-agent completion
+     * 3. Update the source tool message once with aggregated results
+     * 4. Return sub_agents_batch_result phase with all results
      */
     exec_sub_agents: async (instruction, state) => {
       const { parentMessageId, tasks } = (instruction as AgentInstructionExecSubAgents).payload;
@@ -1747,7 +1706,6 @@ export const createAgentExecutors = (context: {
               results: tasks.map(() => ({
                 error: 'No valid context available',
                 success: false,
-                taskMessageId: '',
                 threadId: '',
               })),
             } as SubAgentsBatchResultPayload,
@@ -1770,65 +1728,30 @@ export const createAgentExecutors = (context: {
           log('[%s] Starting task: %s', taskLogId, task.description);
 
           try {
-            // 1. Create task message as placeholder
-            const taskMessageResult = await context.get().optimisticCreateMessage(
-              {
-                agentId,
-                content: '',
-                createdAt: Date.now() + taskIndex,
-                metadata: { instruction: task.instruction },
-                parentId: parentMessageId,
-                role: 'task',
-                topicId,
-              },
-              { operationId: state.operationId },
-            );
+            const resultMessageId = parentMessageId;
 
-            if (!taskMessageResult) {
-              log('[%s] Failed to create task message', taskLogId);
-              return {
-                error: 'Failed to create task message',
-                success: false,
-                taskMessageId: '',
-                threadId: '',
-              };
-            }
-
-            const taskMessageId = taskMessageResult.id;
-            log('[%s] Created task message: %s', taskLogId, taskMessageId);
-
-            // 2. Create and execute task on server
+            // 1. Create and execute task on server
             log('[%s] Using server-side execution', taskLogId);
             const createResult = await aiAgentService.execSubAgentTask({
               agentId,
               instruction: task.instruction,
-              parentMessageId: taskMessageId,
+              parentMessageId: resultMessageId,
               title: task.description,
               topicId,
             });
 
             if (!createResult.success) {
               log('[%s] Failed to create task: %s', taskLogId, createResult.error);
-              // Update task message with error
-              await context
-                .get()
-                .optimisticUpdateMessageContent(
-                  taskMessageId,
-                  `Task creation failed: ${createResult.error}`,
-                  undefined,
-                  { operationId: state.operationId },
-                );
               return {
                 error: createResult.error,
                 success: false,
-                taskMessageId,
                 threadId: '',
               };
             }
 
             log('[%s] Task created with threadId: %s', taskLogId, createResult.threadId);
 
-            // 4. Poll for task completion
+            // 2. Poll for task completion
             const pollInterval = 3000; // 3 seconds
             const maxWait = task.timeout || 1_800_000; // Default 30 minutes
             const startTime = Date.now();
@@ -1847,20 +1770,9 @@ export const createAgentExecutors = (context: {
                   log('[%s] Failed to interrupt cancelled task: %O', taskLogId, err);
                 }
 
-                // Update task message to cancelled state
-                await context
-                  .get()
-                  .optimisticUpdateMessageContent(
-                    taskMessageId,
-                    'Task was cancelled by user.',
-                    undefined,
-                    { operationId: state.operationId },
-                  );
-
                 return {
                   error: 'Operation cancelled',
                   success: false,
-                  taskMessageId,
                   threadId: createResult.threadId,
                 };
               }
@@ -1869,33 +1781,24 @@ export const createAgentExecutors = (context: {
                 threadId: createResult.threadId,
               });
 
-              // Update taskDetail in message if available
+              // Update taskDetail on the source tool message if available.
               if (status.taskDetail) {
                 context.get().internal_dispatchMessage(
                   {
-                    id: taskMessageId,
+                    id: resultMessageId,
                     type: 'updateMessage',
                     value: { taskDetail: status.taskDetail },
                   },
                   { operationId: state.operationId },
                 );
-                log('[%s] Updated task message with taskDetail', taskLogId);
+                log('[%s] Updated source tool message with taskDetail', taskLogId);
               }
 
               if (status.status === 'completed') {
                 log('[%s] Task completed successfully', taskLogId);
-                // 5. Update task message with result
-                if (status.result) {
-                  await context
-                    .get()
-                    .optimisticUpdateMessageContent(taskMessageId, status.result, undefined, {
-                      operationId: state.operationId,
-                    });
-                }
                 return {
                   result: status.result,
                   success: true,
-                  taskMessageId,
                   threadId: createResult.threadId,
                 };
               }
@@ -1903,19 +1806,9 @@ export const createAgentExecutors = (context: {
               if (status.status === 'failed') {
                 const errorMessage = status.error || 'Unknown error';
                 log('[%s] Task failed: %s', taskLogId, errorMessage);
-                // Update task message with error
-                await context
-                  .get()
-                  .optimisticUpdateMessageContent(
-                    taskMessageId,
-                    `Task failed: ${errorMessage}`,
-                    undefined,
-                    { operationId: state.operationId },
-                  );
                 return {
                   error: status.error,
                   success: false,
-                  taskMessageId,
                   threadId: createResult.threadId,
                 };
               }
@@ -1923,16 +1816,10 @@ export const createAgentExecutors = (context: {
               if (status.status === 'cancel') {
                 log('[%s] Task was cancelled', taskLogId);
                 // Note: Don't fail the operation here - it was cancelled intentionally
-                // The cancel handler already updated the message
-                await context
-                  .get()
-                  .optimisticUpdateMessageContent(taskMessageId, 'Task was cancelled', undefined, {
-                    operationId: state.operationId,
-                  });
+                // The aggregate result update below records the cancellation.
                 return {
                   error: 'Task was cancelled',
                   success: false,
-                  taskMessageId,
                   threadId: createResult.threadId,
                 };
               }
@@ -1952,20 +1839,9 @@ export const createAgentExecutors = (context: {
               log('[%s] Failed to interrupt timed out task: %O', taskLogId, err);
             }
 
-            // Update task message with timeout error
-            await context
-              .get()
-              .optimisticUpdateMessageContent(
-                taskMessageId,
-                `Task timeout after ${maxWait}ms`,
-                undefined,
-                { operationId: state.operationId },
-              );
-
             return {
               error: `Task timeout after ${maxWait}ms`,
               success: false,
-              taskMessageId,
               threadId: createResult.threadId,
             };
           } catch (error) {
@@ -1973,7 +1849,6 @@ export const createAgentExecutors = (context: {
             return {
               error: error instanceof Error ? error.message : 'Unknown error',
               success: false,
-              taskMessageId: '',
               threadId: '',
             };
           }
@@ -1982,6 +1857,15 @@ export const createAgentExecutors = (context: {
       );
 
       log('[%s][exec_sub_agents] All tasks completed, results: %O', sessionLogId, results);
+
+      await context
+        .get()
+        .optimisticUpdateMessageContent(
+          parentMessageId,
+          formatSubAgentBatchResultContent(tasks, results),
+          undefined,
+          { operationId: state.operationId },
+        );
 
       // Get latest messages from store
       const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];

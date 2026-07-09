@@ -15,6 +15,8 @@
   "features.imessage.title": "iMessage 渠道",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
+  "features.messageTextSelectionActions.desc": "在聊天消息中选中文本时显示快捷操作，可将选中的文本加入下一次对话上下文。",
+  "features.messageTextSelectionActions.title": "消息文本选择操作",
   "features.platformAgent.desc": "在创建菜单中显示「接入助理」入口。接入的助理（如 OpenClaw、Hermes）运行在你自己的设备上，通过 lh connect 与 LobeHub 通信。",
   "features.platformAgent.title": "接入助理",
   "features.taskVerify.desc": "在任务详情里增加「交付验收」模块：一句话描述验收要求，AI 自动生成可编辑的验收项。",

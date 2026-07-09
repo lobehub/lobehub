@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
+import { Loader2Icon, LockIcon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
@@ -22,10 +22,12 @@ interface KnowledgeBaseItemProps {
   id: string;
   name: string;
   style?: CSSProperties;
+  userId?: string;
+  visibility?: 'private' | 'public';
 }
 
 const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
-  ({ id, name, description, active, style, className }) => {
+  ({ id, name, description, active, style, className, userId, visibility }) => {
     const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -51,7 +53,7 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
         navigate(`/resource/library/${id}`);
         setLibraryId(id);
       }
-    }, [editing, navigate, id]);
+    }, [editing, navigate, id, setLibraryId]);
 
     const handleDoubleClick = useCallback(
       (e: React.MouseEvent) => {
@@ -62,23 +64,29 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
       [canEdit, toggleEditing],
     );
 
-    // Icon (show loader when updating)
+    // Icon: loader while pending, lock for private KBs, repo icon otherwise.
+    // Lock signals "only you can see this" — mirrors the private-agent / private-task visual.
     const icon = useMemo(() => {
       if (isLoading) {
         return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
       }
+      if (visibility === 'private') {
+        return <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={18} />;
+      }
       return <RepoIcon size={18} />;
-    }, [isLoading]);
+    }, [isLoading, visibility]);
 
     const dropdownMenu = useDropdownMenu({
       description,
       id,
       name,
       toggleEditing,
+      userId,
+      visibility,
     });
 
     return (
-      <>
+      <div style={{ position: 'relative' }}>
         <NavItem
           actions={<Actions dropdownMenu={dropdownMenu} />}
           active={active}
@@ -89,12 +97,11 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
           key={id}
           loading={isLoading}
           style={style}
-          title={name}
+          title={editing ? <Editing id={id} name={name} toggleEditing={toggleEditing} /> : name}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
         />
-        <Editing id={id} name={name} toggleEditing={toggleEditing} />
-      </>
+      </div>
     );
   },
 );

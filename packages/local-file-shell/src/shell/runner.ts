@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
-import type { ShellProcess, ShellProcessManager } from './process-manager';
+import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
 import { getShellConfig } from './utils';
 
 export interface RunCommandOptions {
@@ -33,31 +33,25 @@ export async function runCommand(
 
   const shellConfig = getShellConfig(command);
   const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+  let outputFiles: ShellOutputFiles | undefined;
 
   try {
     const shellId = processManager.createShellId();
+    const shellOutputFiles = processManager.createOutputFiles(shellId);
+    outputFiles = shellOutputFiles;
     const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
       cwd,
+      detached: process.platform !== 'win32',
       env: childEnv,
       shell: false,
+      stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
     });
 
     const shellProcess: ShellProcess = {
       exitCode: null,
-      lastReadStderr: 0,
-      lastReadStdout: 0,
+      outputFiles: shellOutputFiles,
       process: childProcess,
-      stderr: [],
-      stdout: [],
     };
-
-    childProcess.stdout?.on('data', (data) => {
-      shellProcess.stdout.push(data.toString());
-    });
-
-    childProcess.stderr?.on('data', (data) => {
-      shellProcess.stderr.push(data.toString());
-    });
 
     childProcess.on('exit', (code) => {
       logger?.debug(`${logPrefix} Process exited`, { code, shellId });
@@ -66,18 +60,24 @@ export async function runCommand(
 
     childProcess.on('error', (error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
-      shellProcess.stderr.push(error.message);
       shellProcess.exitCode = 1;
     });
 
     processManager.register(shellId, shellProcess);
+    // Close our fd copy only after error/close listeners are registered; spawn errors are asynchronous.
+    processManager.closeOutputFiles(shellOutputFiles);
     logger?.info?.(`${logPrefix} Started session`, { background: run_in_background, shellId });
 
     if (run_in_background) {
-      return { shell_id: shellId, success: true };
+      return {
+        output: '',
+        output_files: processManager.getOutputFilesInfo(shellOutputFiles),
+        shell_id: shellId,
+        success: true,
+      };
     }
 
-    const observation = await processManager.getOutput({
+    const observation = await processManager.getRunCommandOutput({
       shell_id: shellId,
       timeout,
     });
@@ -87,6 +87,7 @@ export async function runCommand(
       shell_id: shellId,
     };
   } catch (error) {
+    if (outputFiles) processManager.closeOutputFiles(outputFiles);
     return { error: (error as Error).message, success: false };
   }
 }

@@ -12,11 +12,12 @@ import { useTranslation } from 'react-i18next';
 
 import { type CodexWebSearchArgs, getWebSearchQuery } from './webSearchUtils';
 
-const WebSearchInspector = memo<BuiltinInspectorProps<CodexWebSearchArgs>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+const WebSearchInspector = memo<BuiltinInspectorProps<CodexWebSearchArgs, CodexWebSearchArgs>>(
+  ({ args, partialArgs, pluginState, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
     const label = t('builtins.codex.apiName.web_search', { defaultValue: 'Search the web' });
-    const query = getWebSearchQuery(args) || getWebSearchQuery(partialArgs);
+    const query =
+      getWebSearchQuery(args) || getWebSearchQuery(partialArgs) || getWebSearchQuery(pluginState);
 
     if (isArgumentsStreaming && !query) {
       return <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{label}</div>;

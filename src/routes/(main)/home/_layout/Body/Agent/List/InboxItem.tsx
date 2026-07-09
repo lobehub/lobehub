@@ -54,7 +54,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId!));
 
   const isLoading = useChatStore(
-    inboxAgentId ? operationSelectors.isAgentRunning(inboxAgentId) : () => false,
+    inboxAgentId ? operationSelectors.isAgentVisiblyRunning(inboxAgentId) : () => false,
   );
   const prefetchAgent = usePrefetchAgent();
   const inboxAgentTitle = inboxMeta.title || 'Lobe AI';

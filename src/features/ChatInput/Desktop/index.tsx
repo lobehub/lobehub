@@ -9,7 +9,7 @@ import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import CurrentModelNotice from '@/features/ChatInput/CurrentModelNotice';
+import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -24,6 +24,7 @@ import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
+import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -57,6 +58,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   inputFullscreen: css`
     border: none;
     border-radius: 0 !important;
+  `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
   `,
 }));
 
@@ -132,6 +146,18 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
+    const workspaceFileDrop = useWorkspaceFileDrop();
+
+    // Fan a single drag event out to every custom-MIME drop handler. Each one
+    // no-ops unless its own MIME is present, so ordering is irrelevant.
+    const handleDragOver = (event: React.DragEvent) => {
+      skillDrop.onDragOver(event);
+      workspaceFileDrop.onDragOver(event);
+    };
+    const handleDrop = (event: React.DragEvent) => {
+      skillDrop.onDrop(event);
+      workspaceFileDrop.onDrop(event);
+    };
 
     useEffect(() => {
       if (editor) editor.focus();
@@ -156,6 +182,27 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         style={{ height: 32, minWidth: 64, width: 64 }}
       />
     ) : null;
+    const noticeNode = !isConfigLoading && <ChatInputNotice />;
+    const leftSlotContent = (
+      <Flexbox horizontal align={'center'} className={styles.leftActions}>
+        {leftContent ?? (
+          <ActionBar
+            disableCollapse
+            borderRadius={borderRadius}
+            dropdownPlacement={dropdownPlacement}
+            extraActionItems={extraActionItems}
+          />
+        )}
+      </Flexbox>
+    );
+    const leftSlot = noticeNode ? (
+      <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+        {leftSlotContent}
+        {noticeNode}
+      </Flexbox>
+    ) : (
+      leftSlotContent
+    );
 
     const content = (
       <Flexbox
@@ -163,10 +210,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
-        onDragOver={skillDrop.onDragOver}
-        onDrop={skillDrop.onDrop}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
-        {!isConfigLoading && <CurrentModelNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}
@@ -178,17 +224,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           footer={
             compact ? undefined : (
               <ChatInputActionBar
+                left={loadingLeftSlot ?? leftSlot}
                 style={actionBarStyle ?? { paddingRight: 8 }}
-                left={
-                  loadingLeftSlot ??
-                  leftContent ?? (
-                    <ActionBar
-                      borderRadius={borderRadius}
-                      dropdownPlacement={dropdownPlacement}
-                      extraActionItems={extraActionItems}
-                    />
-                  )
-                }
                 right={
                   loadingRightSlot ??
                   rightContent ??

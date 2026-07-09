@@ -5,6 +5,7 @@ import debug from 'debug';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -136,7 +137,7 @@ export const buildRunLifecycle = (
   adapter: RunAdapterContext,
 ): AgentRunLifecycle => {
   const { context, parentMessageId, parentMessageType } = adapter;
-  const { agentId, topicId, threadId, groupId } = context;
+  const { agentId, topicId, threadId, groupId, workspaceSlug } = context;
   const messageKey = messageMapKey(context);
   const contextKey = messageKey;
 
@@ -183,6 +184,12 @@ export const buildRunLifecycle = (
       const { isCreateNewTopic, topicId, assistantMessageId } = event;
       if (!topicId) return;
 
+      // Snapshot the working directory's live branch + linked PR onto the topic.
+      // Anchored HERE (send) rather than in the ControlBar's mount effect so that
+      // merely opening a topic never re-stamps its historical branch/PR. Slow gh
+      // leg → fire-and-forget; it only patches topic metadata, idempotently.
+      void snapshotTopicWorkingDirGit(get, { agentId, topicId }).catch(() => {});
+
       // Dev-only fast path: slice the first user message instead of calling the
       // LLM. Only honored in non-production builds. Relocated verbatim.
       const shouldSliceTopicTitle =
@@ -195,9 +202,10 @@ export const buildRunLifecycle = (
         }
         const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
         const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        // `internal_updateTopic` already balances its own loading owner. For a
+        // new client-runtime topic like "阅读下面...", an extra `false` here would
+        // consume the runtime's loading owner and hide the sidebar spinner early.
         await get().internal_updateTopic(tid, { title });
-        // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
-        get().internal_updateTopicLoading(tid, false);
         console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
       };
 
@@ -240,13 +248,28 @@ export const buildRunLifecycle = (
       if (adapter.runScope === 'sub_agent') return;
       if (!isDesktop) return;
 
-      const notificationContext = { agentId, groupId, topicId };
+      const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
       if (adapter.runtimeType === 'client') {
         // CLIENT: notify only OUTSIDE tool-calling mode; content comes from the
         // in-memory store. No badge (preserves the prior client behavior).
+        //
+        // Anchor to the assistant message THIS run produced (walk from
+        // parentMessageId), NOT a positional findLast on the topic. On a later
+        // turn the fresh assistant can still be settling into messagesMap while
+        // the previous turn's assistant is the last populated one — a naive
+        // findLast then surfaces the PRIOR turn's reply as the notification body.
+        // Mirror emitComplete's dual-map (messagesMap → dbMessagesMap) lookup so
+        // the body is pinned to this run's freshest persisted content.
         const finalMessages = get().messagesMap[messageKey] || [];
-        const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
+        const dbMessages = get().dbMessagesMap[messageKey] || [];
+        const assistantId =
+          findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
+          findCompletionAssistantMessageId(dbMessages, parentMessageId, parentMessageType);
+        const lastAssistant = assistantId
+          ? (finalMessages.find((m) => m.id === assistantId) ??
+            dbMessages.find((m) => m.id === assistantId))
+          : undefined;
         if (!lastAssistant?.content || lastAssistant?.tools) return;
 
         await notifyDesktopAgentCompleted(get, {
@@ -268,7 +291,7 @@ export const buildRunLifecycle = (
 
       await notifyDesktopAgentCompleted(get, {
         badge: true,
-        content: event.notification?.content ?? fallbackContent,
+        content: event.notification?.content || fallbackContent,
         context: notificationContext,
       });
     },

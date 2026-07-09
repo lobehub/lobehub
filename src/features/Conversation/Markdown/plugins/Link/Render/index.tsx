@@ -4,6 +4,9 @@ import { Github } from '@lobehub/icons';
 import { Mail } from 'lucide-react';
 import { memo } from 'react';
 
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+
 import { type MarkdownElementProps } from '../../type';
 import { type LobeLinkKind } from '../parse';
 import FaviconIcon from './FaviconIcon';
@@ -21,8 +24,13 @@ interface LobeLinkProperties {
 
 const Render = memo<MarkdownElementProps<LobeLinkProperties>>(({ node }) => {
   const { linkHref, linkKind, linkLabel, linkDomain } = node?.properties || {};
+  const showIcon = useUserStore(userGeneralSettingsSelectors.enableMessageLinkIcon);
 
   const label = linkLabel || linkHref || '';
+
+  if (!showIcon) {
+    return <LinkChip href={linkHref} label={label} />;
+  }
 
   if (linkKind === 'github') {
     return <LinkChip href={linkHref} icon={<Github size={ICON_SIZE} />} label={label} />;

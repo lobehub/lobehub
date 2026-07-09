@@ -1,10 +1,12 @@
-import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type AiProviderModelListItem } from 'model-bank';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 
@@ -40,7 +42,7 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
 
   const [items, setItems] = useState(defaultItems);
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       footer={null}
       open={open}
@@ -95,7 +97,7 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
           {t('sortModal.update')}
         </Button>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

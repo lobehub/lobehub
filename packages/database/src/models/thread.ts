@@ -1,9 +1,9 @@
 import type { CreateThreadParams } from '@lobechat/types';
-import { ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { RequestTrigger, ThreadStatus } from '@lobechat/types';
+import { and, desc, eq, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
-import { messages, threads } from '../schemas';
+import { agentOperations, messages, threads } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -121,7 +121,29 @@ export class ThreadModel {
       .select({ ...queryColumns, ...subagentMetricColumns })
       .from(threads)
       .leftJoin(messages, eq(messages.threadId, threads.id))
-      .where(and(eq(threads.topicId, topicId), this.ownership()))
+      .where(
+        and(
+          eq(threads.topicId, topicId),
+          this.ownership(),
+          // NOTICE:
+          // Agent Signal self-iteration runs create isolation threads to keep
+          // internal memory/skill traces out of the main chat transcript.
+          // Those traces are persisted for audit/debugging through
+          // `agent_operations.trigger = agent_signal`, but should not appear as
+          // user-facing sub-agent attachments in the topic thread list.
+          notExists(
+            this.db
+              .select({ id: agentOperations.id })
+              .from(agentOperations)
+              .where(
+                and(
+                  eq(agentOperations.threadId, threads.id),
+                  eq(agentOperations.trigger, RequestTrigger.AgentSignal),
+                ),
+              ),
+          ),
+        ),
+      )
       .groupBy(threads.id)
       .orderBy(desc(threads.updatedAt));
 

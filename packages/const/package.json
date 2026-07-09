@@ -14,7 +14,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
-    "query-string": "^9.3.1",
+    "query-string": "^9.4.1",
     "url-join": "^5.0.0"
   },
   "devDependencies": {

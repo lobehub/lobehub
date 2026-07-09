@@ -79,5 +79,17 @@ describe('preferenceSelectors', () => {
 
       expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(true);
     });
+
+    it('returns false for message text selection actions by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(false);
+    });
+
+    it('returns the configured message text selection actions preference', () => {
+      store.preference.lab = { enableMessageTextSelectionActions: true };
+
+      expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
+    });
   });
 });

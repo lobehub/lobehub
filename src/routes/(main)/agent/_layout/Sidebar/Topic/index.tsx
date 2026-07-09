@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo, Suspense } from 'react';
+import React, { memo, Suspense, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -17,14 +17,24 @@ import ToggleGroups from './ToggleGroups';
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
 
 interface TopicProps {
+  expanded: boolean;
   itemKey: string;
 }
 
-const Topic = memo<TopicProps>(({ itemKey }) => {
+const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
   const { t } = useTranslation(['topic', 'common']);
-  const [topicCount] = useChatStore((s) => [topicSelectors.currentTopicCount(s)]);
+  const topicCount = useChatStore((s) => topicSelectors.currentTopicCount(s));
+  const cleanupStaleRunningTopics = useChatStore((s) => s.cleanupStaleRunningTopics);
   const dropdownMenu = useTopicActionsDropdownMenu();
   const { isRevalidating } = useFetchChatTopics();
+  const hasRunWatchdogRef = useRef(false);
+
+  useEffect(() => {
+    if (!expanded || hasRunWatchdogRef.current) return;
+
+    hasRunWatchdogRef.current = true;
+    void cleanupStaleRunningTopics();
+  }, [cleanupStaleRunningTopics, expanded]);
 
   return (
     <AccordionItem

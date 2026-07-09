@@ -122,6 +122,7 @@
   "responseLanguage.auto": "자동 (시스템 언어 따르기)",
   "responseLanguage.desc": "AI 도우미가 응답할 때 사용할 언어를 선택하세요",
   "responseLanguage.hint": "언어를 선택하면 AI의 응답 언어와 인터페이스 언어가 함께 변경됩니다",
+  "responseLanguage.saveFailed": "저장에 실패했습니다. 다시 시도해 주세요.",
   "responseLanguage.title": "어떤 언어로 대화할까요?",
   "responseLanguage.title2": "언어에서 시작되는 진정한 이해",
   "responseLanguage.title3": "명확하게 말하고, 정확히 이해할 수 있도록~",

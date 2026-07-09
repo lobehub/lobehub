@@ -115,6 +115,8 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
       sourceType: item.sourceType,
       url: item.url,
+      userId: item.userId,
+      visibility: item.visibility,
     });
 
     const isDragActive = useDragActive();

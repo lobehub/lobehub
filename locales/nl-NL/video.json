@@ -27,8 +27,12 @@
   "generation.status.generating": "Bezig met genereren...",
   "generation.validation.endFrameRequiresStartFrame": "Eindframe kan niet worden gebruikt zonder een startframe. Stel eerst een startframe in.",
   "topic.createNew": "Nieuw Onderwerp Maken",
+  "topic.createdBy": "Gemaakt door {{name}}",
   "topic.deleteConfirm": "Videothema Verwijderen",
   "topic.deleteConfirmDesc": "Je staat op het punt dit videothema te verwijderen. Deze actie kan niet ongedaan worden gemaakt.",
+  "topic.privateTitle": "Privé",
   "topic.title": "Videothema's",
-  "topic.untitled": "Standaardonderwerp"
+  "topic.untitled": "Standaardonderwerp",
+  "topic.visibility.existingLocked": "De zichtbaarheid is vastgezet voor het huidige onderwerp. Maak een nieuw onderwerp om een andere ruimte te kiezen.",
+  "topic.workspaceTitle": "Werkruimte"
 }

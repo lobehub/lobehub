@@ -15,6 +15,7 @@ import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { useGlobalStore } from '@/store/global';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { APP_VERSION } from './appVersion';
 
@@ -26,14 +27,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
-  const [latestVersion, serverVersion, useCheckServerVersion] = useGlobalStore((s) => [
-    s.latestVersion,
-    s.serverVersion,
-    s.useCheckServerVersion,
-  ]);
+  const [latestVersion, serverVersion, useCheckServerVersion, useCheckLatestVersion] =
+    useGlobalStore((s) => [
+      s.latestVersion,
+      s.serverVersion,
+      s.useCheckServerVersion,
+      s.useCheckLatestVersion,
+    ]);
   const { t } = useTranslation(['common', 'setting']);
 
   useCheckServerVersion();
+
+  // Read the shared latest-version check state (deduped by key, no extra fetch)
+  // so a failed update check can surface a retry instead of silently rendering
+  // nothing — which is indistinguishable from "up to date".
+  const { enableCheckUpdates } = useServerConfigStore(featureFlagsSelectors);
+  const {
+    error: updateCheckError,
+    isValidating: isCheckingUpdate,
+    mutate: recheckUpdate,
+  } = useCheckLatestVersion(enableCheckUpdates);
 
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
@@ -64,6 +77,14 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
               {t('upgradeVersion.action')}
             </Button>
           </a>
+        );
+      }
+      // A failed update check must not read as "up to date" — offer a retry.
+      if (updateCheckError) {
+        return (
+          <Button block={mobile} loading={isCheckingUpdate} onClick={() => recheckUpdate()}>
+            {t('checkForUpdates')}
+          </Button>
         );
       }
       return null;

@@ -1,8 +1,18 @@
 'use client';
 
+import SettingsContextProvider from '@/routes/(main)/settings/_layout/ContextProvider';
 import Page from '@/routes/(main)/settings/provider/(list)';
 
-const WorkspaceProviderSetting = () => <Page />;
+const WorkspaceProviderSetting = () => (
+  <SettingsContextProvider
+    value={{
+      showOpenAIApiKey: true,
+      showOpenAIProxyUrl: true,
+    }}
+  >
+    <Page />
+  </SettingsContextProvider>
+);
 
 WorkspaceProviderSetting.displayName = 'WorkspaceProviderSetting';
 

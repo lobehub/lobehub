@@ -7,9 +7,13 @@ description: 'Build or extend LobeHub Agent Signal pipelines. Use for signal sou
 
 Use this skill to implement event-driven background work for agents without coupling the work to the foreground chat request.
 
-Agent Signal has one consistent shape:
+Agent Signal has one consistent runtime shape:
 
 `source event` -> `signal interpretation` -> `action execution` -> built-in result signals
+
+Durable self-iteration work has one extra completion branch:
+
+`memory/skill action` -> `execAgent` enqueue -> `agent.execution.completed` -> `selfIteration` receipt projection
 
 ## Start Here
 
@@ -48,13 +52,15 @@ Keep the boundaries strict:
 ## Implementation Workflow
 
 1. Decide whether the use case is synchronous or quiet background work.
-2. Define or reuse a source type in `apps/server/src/services/agentSignal/sourceTypes.ts`.
+2. Define or reuse a source type in `packages/agent-signal/src/source/sourceTypes.ts`.
 3. Define or reuse signal and action types in `apps/server/src/services/agentSignal/policies/types.ts`.
 4. Implement handlers with `defineSourceHandler`, `defineSignalHandler`, or `defineActionHandler`.
-5. Bundle handlers with `defineAgentSignalHandlers(...)`.
-6. Register the policy in `apps/server/src/services/agentSignal/policies/index.ts` and pass it into the runtime factory if needed.
-7. Add or update ingress code that emits or enqueues the source event.
-8. Add observability and tests before considering the flow complete.
+5. Add source normalization or hydration under `apps/server/src/services/agentSignal/sources/**` when the producer payload needs shaping.
+6. Bundle handlers with `defineAgentSignalHandlers(...)`.
+7. Register the policy in `apps/server/src/services/agentSignal/policies/index.ts` and pass it into the runtime factory if needed.
+8. Add or update ingress code that emits or enqueues the source event.
+9. For async self-iteration writes, stamp an Agent Signal operation marker and project user-visible receipts from the completion path.
+10. Add observability and tests before considering the flow complete.
 
 ## Default Reading Set
 
@@ -62,6 +68,8 @@ Keep the boundaries strict:
   `packages/agent-signal/src/index.ts`
   `packages/agent-signal/src/base/builders.ts`
   `packages/agent-signal/src/base/types.ts`
+  `packages/agent-signal/src/source/sourceTypes.ts`
+  `packages/agent-signal/src/source/sourceEvent.ts`
 - Server-owned runtime and middleware:
   `apps/server/src/services/agentSignal/runtime/AgentSignalRuntime.ts`
   `apps/server/src/services/agentSignal/runtime/AgentSignalScheduler.ts`
@@ -73,6 +81,11 @@ Keep the boundaries strict:
   `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
   `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
   `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/skillManagement.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/completionSkillSynthesis.ts`
+  `apps/server/src/services/agentSignal/policies/completionPolicy.ts`
+  `apps/server/src/services/agentSignal/services/selfIteration/completion/buildSelfIterationReceipts.ts`
+  `apps/server/src/services/agentSignal/services/selfIteration/completion/selfIterationCompletionHandler.ts`
 - Observability:
   `apps/server/src/services/agentSignal/observability/projector.ts`
   `apps/server/src/services/agentSignal/observability/traceEvents.ts`
@@ -82,11 +95,12 @@ Keep the boundaries strict:
 
 - Reuse existing source, signal, and action types before adding new ones.
 - Keep source handlers focused on interpretation and fan-out, not heavy side effects.
-- Keep action handlers responsible for side effects, idempotency, and executor-style result reporting.
+- Keep action handlers responsible for side effects, idempotency, and executor-style result reporting. For memory/skill self-iteration actions, the side effect is enqueueing `execAgent`; the durable write and receipt projection happen after completion.
 - Use stable ids and idempotency keys when the same source can arrive more than once.
 - Preserve scope discipline. The runtime uses `scopeKey` to serialize related background work.
 - Prefer the dedicated shared package types and builders from `@lobechat/agent-signal` for normalized nodes and result contracts.
-- Add focused tests near the touched runtime, policy, or store module. Existing tests under `apps/server/src/services/agentSignal/**/__tests__` are the reference pattern.
+- Do not project memory or skill receipts from the enqueue action. Use `agent.execution.completed` + `selfIteration` finalState via `createSelfIterationCompletionHandler(...)`.
+- Add focused tests near the touched runtime, policy, or store module. Existing tests under `apps/server/src/services/agentSignal/**/__test__` and `**/__tests__` are the reference pattern.
 
 ## References
 

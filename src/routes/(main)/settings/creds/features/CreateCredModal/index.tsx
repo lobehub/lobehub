@@ -5,7 +5,7 @@ import { t } from 'i18next';
 
 import CreateCredModalContent, { type CreateCredModalContentProps } from './Content';
 
-export const createCreateCredModal = (props?: CreateCredModalContentProps): ModalInstance =>
+export const createCreateCredModal = (props: CreateCredModalContentProps): ModalInstance =>
   createModal({
     content: <CreateCredModalContent {...props} />,
     footer: null,

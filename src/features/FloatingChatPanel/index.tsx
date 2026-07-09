@@ -28,7 +28,7 @@ import ChatBody from './ChatBody';
 import { useSingleInstanceGuard } from './guard';
 import InputRow from './InputRow';
 
-const SNAP_POINTS = [420, 800] as const;
+const SNAP_POINTS = [320, 800] as const;
 const MID_SNAP_POINT = SNAP_POINTS[0];
 const MAX_SNAP_POINT = SNAP_POINTS.at(-1)!;
 
@@ -56,7 +56,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   sheetSeamless: css`
     border: none;
     border-radius: 0;
-    background: transparent;
     box-shadow: none;
   `,
   titleSpacer: css`

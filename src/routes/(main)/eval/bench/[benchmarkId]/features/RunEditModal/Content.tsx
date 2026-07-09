@@ -5,7 +5,7 @@ import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form, Input, InputNumber, Select, Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { useEvalStore } from '@/store/eval';
 
 const MAX_TIMEOUT_MINUTES = 240;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   agentSelect: css`
     .ant-select-content-value {
       height: 22px !important;
@@ -26,7 +26,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextQuaternary};
   `,
 }));
@@ -164,7 +164,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
         <Space>
           <span>{currentDataset?.name || run.datasetId}</span>
           {currentDataset?.testCaseCount !== undefined && (
-            <span style={{ color: 'var(--ant-color-text-quaternary)', fontSize: 12 }}>
+            <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
               {t('run.create.caseCount', { count: currentDataset.testCaseCount })}
             </span>
           )}
@@ -224,7 +224,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       <Accordion defaultExpandedKeys={[]}>
         <AccordionItem
           itemKey="advanced"
-          paddingBlock={6}
+          paddingBlock={8}
           paddingInline={4}
           title={t('run.create.advanced')}
         >

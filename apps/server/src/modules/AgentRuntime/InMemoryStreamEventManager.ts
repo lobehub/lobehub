@@ -139,6 +139,30 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return stream.slice(-count).reverse();
   }
 
+  /**
+   * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
+   * The in-memory manager is non-blocking: it returns immediately with whatever
+   * is already buffered after `lastEventId`. `'$'` means "from now", so the
+   * first poll returns nothing and hands back the current tail cursor; later
+   * polls return events appended since. `blockMs` is ignored (tests/local dev
+   * only — the Redis manager provides the real blocking wait).
+   */
+  async readEventsOnce(
+    operationId: string,
+    lastEventId: string = '$',
+    _blockMs: number = 0,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    const stream = this.streams.get(operationId) ?? [];
+
+    if (lastEventId === '$') {
+      return { events: [], lastEventId: stream.at(-1)?.id ?? '0' };
+    }
+
+    const idx = stream.findIndex((e) => e.id === lastEventId);
+    const events = idx >= 0 ? stream.slice(idx + 1) : stream.slice();
+    return { events, lastEventId: events.at(-1)?.id ?? lastEventId };
+  }
+
   async cleanupOperation(operationId: string): Promise<void> {
     this.streams.delete(operationId);
     this.subscribers.delete(operationId);

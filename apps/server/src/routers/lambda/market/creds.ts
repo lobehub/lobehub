@@ -1,17 +1,49 @@
+import { MarketAPIError, orgRefToPathSegment } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
 
 const log = debug('lambda-router:market:creds');
 
+const MARKET_STATUS_TO_TRPC_CODE: Record<number, TRPCError['code']> = {
+  400: 'BAD_REQUEST',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+};
+
+/**
+ * Maps a Market API error (share/publish/unshare return structured 400/403/404
+ * responses — invalid org, not a member, credential/org not found) to the
+ * matching tRPC error code so the frontend can distinguish them instead of
+ * seeing a blanket 500.
+ */
+function mapMarketShareError(error: unknown, fallbackMessage: string): TRPCError {
+  if (error instanceof MarketAPIError) {
+    return new TRPCError({
+      cause: error,
+      code: MARKET_STATUS_TO_TRPC_CODE[error.status] ?? 'INTERNAL_SERVER_ERROR',
+      message: error.message || fallbackMessage,
+    });
+  }
+  return new TRPCError({ cause: error, code: 'INTERNAL_SERVER_ERROR', message: fallbackMessage });
+}
+
 // Creds procedure with market authentication
 const credsProcedure = publicProcedure
   .use(serverDatabase)
+  // `ctx.workspaceId` from the raw `X-Workspace-Id` header is NOT trustworthy on
+  // its own (createLambdaContext copies it verbatim, with no membership check).
+  // `cloudWorkspaceAuth` verifies the caller is actually a member before letting
+  // `workspaceId` through — demoting it to `undefined` otherwise. `share` below
+  // is the only procedure here that reads `ctx.workspaceId`; this guarantees it
+  // can never target a workspace the caller doesn't belong to.
+  .use(cloudWorkspaceAuth)
   .use(marketUserInfo)
   .use(requireMarketAuth)
   .use(async ({ ctx, next }) => {
@@ -239,7 +271,70 @@ export const credsRouter = router({
       }
     }),
 
-  // Inject credentials by keys (explicit injection)
+  // Publish a draft-linked credential (visibility 'private') so the rest of
+  // the workspace's organization can see it. Owner-only — no orgId needed,
+  // the credential is already linked from a prior `share` call.
+  publish: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('publish input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.publish(input.id);
+      log('publish success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('publish error: %O', error);
+      throw mapMarketShareError(error, 'Failed to publish credential');
+    }
+  }),
+
+  // Share one of the caller's own personal credentials into the current
+  // workspace's Market organization. Always targets `ctx.workspaceId` — never
+  // accepts an org id from client input — so `cloudWorkspaceAuth`'s membership
+  // check (above) guarantees a caller can never share into a workspace they
+  // don't belong to. Re-callable to change `visibility` on an already-shared
+  // credential (Market's `shareCred` unconditionally overwrites).
+  share: credsProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Sharing a credential requires an active workspace context',
+        });
+      }
+      log('share input: id=%d, visibility=%s', input.id, input.visibility);
+      try {
+        const result = await ctx.marketService.market.creds.share(input.id, {
+          orgId: orgRefToPathSegment({ workspaceId: ctx.workspaceId }),
+          visibility: input.visibility,
+        });
+        log('share success: id=%d', result.id);
+        return result;
+      } catch (error) {
+        log('share error: %O', error);
+        throw mapMarketShareError(error, 'Failed to share credential');
+      }
+    }),
+
+  // Unshare a credential from its organization (flips back to private,
+  // clears the link). Does not delete the credential.
+  unshare: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('unshare input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.unshare(input.id);
+      log('unshare success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('unshare error: %O', error);
+      throw mapMarketShareError(error, 'Failed to unshare credential');
+    }
+  }),
+
+  // Inject credentials by keys (explicit injection).
   inject: credsProcedure
     .input(
       z.object({
@@ -282,7 +377,8 @@ export const credsRouter = router({
       }
     }),
 
-  // Inject credentials for skill execution (auto-inject based on skill declaration)
+  // Inject credentials for skill execution (auto-inject based on skill declaration).
+  // NOTE: same Market SDK gap as `inject` above — stays personal-only for now.
   injectForSkill: credsProcedure
     .input(
       z.object({
@@ -318,7 +414,41 @@ export const credsRouter = router({
     try {
       const result = await ctx.marketService.market.creds.list();
       log('list success: %d credentials', result.data?.length ?? 0);
-      return result;
+
+      if (!ctx.workspaceId) return result;
+
+      // A personal credential carries at most one `organizationAccountId` link
+      // at a time (sharing again just overwrites it) — so `organizationAccountId
+      // != null` alone can't tell the frontend "shared to *this* workspace" from
+      // "shared to some other workspace I visited previously". Cross-reference
+      // against the active workspace's own merged view (which already lists the
+      // caller's shared/draft-linked credentials by id) to scope it correctly.
+      // Best-effort: if the workspace has no Market org yet (Community Profile
+      // not set up), don't fail the whole personal list over it — just skip
+      // the enrichment.
+      try {
+        const orgList = await ctx.marketService.market.organizations
+          .creds({ workspaceId: ctx.workspaceId })
+          .list();
+        // `ownerType` is a real field on the Market API response, but the
+        // installed @lobehub/market-sdk's UserCredSummary type hasn't caught
+        // up to it yet — same gap as `injectForSkill` below.
+        const activeWorkspaceCredIds = new Set(
+          (orgList.data as Array<{ id: number; ownerType?: string }> | undefined)
+            ?.filter((c) => c.ownerType === 'user')
+            .map((c) => c.id) ?? [],
+        );
+
+        return {
+          data: result.data?.map((cred) => ({
+            ...cred,
+            sharedToActiveWorkspace: activeWorkspaceCredIds.has(cred.id),
+          })),
+        };
+      } catch (orgListError) {
+        log('list: failed to resolve active-workspace share scope: %O', orgListError);
+        return result;
+      }
     } catch (error) {
       log('list error: %O', error);
       throw new TRPCError({

@@ -9,7 +9,6 @@ import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
 import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
@@ -18,6 +17,7 @@ import { documentSelectors } from '@/store/file/slices/document/selectors';
 import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
 import UploadDock from './components/UploadDock';
+import { useTopLevelFileUpload } from './hooks/useTopLevelFileUpload';
 
 const ChunkDrawer = dynamic(() => import('./components/ChunkDrawer'), { ssr: false });
 
@@ -60,7 +60,6 @@ export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 const ResourceManager = memo(() => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
-  const currentFolderId = useCurrentFolderId();
   const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
       s.mode,
@@ -71,16 +70,16 @@ const ResourceManager = memo(() => {
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
-  const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const updateDocumentOptimistically = useFileStore((s) => s.updateDocumentOptimistically);
   const { allowed: canUpload } = usePermission('create_content');
+  const uploadTopLevel = useTopLevelFileUpload();
 
   const handleUploadFiles = useCallback(
     (files: File[]) => {
       if (!canUpload) return;
-      pushDockFileList(files, libraryId, currentFolderId ?? undefined);
+      void uploadTopLevel(files);
     },
-    [canUpload, currentFolderId, libraryId, pushDockFileList],
+    [canUpload, uploadTopLevel],
   );
 
   const cssVariables = useMemo<Record<string, string>>(

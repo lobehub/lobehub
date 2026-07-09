@@ -393,13 +393,22 @@ export const useMessengerData = (platform: MessengerPlatform) => {
   const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
   const tenantNameByTenantId = new Map(installations.map((i) => [i.tenantId, i.tenantName]));
   const isInitialLoading = linksSWR.data === undefined || installationsSWR.data === undefined;
+  // A failed links / installations fetch leaves `data === undefined`, which the
+  // callers otherwise read as a permanent skeleton — surface the error so the
+  // detail renders a failure + Retry instead (ux Read §1.1).
+  const error = linksSWR.error ?? installationsSWR.error;
 
   return {
+    error,
     installations,
     installationsMutate: installationsSWR.mutate,
     isInitialLoading,
     links,
     linksMutate: linksSWR.mutate,
+    mutate: () => {
+      void linksSWR.mutate();
+      void installationsSWR.mutate();
+    },
     tenantNameByTenantId,
   };
 };

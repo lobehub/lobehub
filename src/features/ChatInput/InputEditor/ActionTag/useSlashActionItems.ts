@@ -10,6 +10,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
@@ -45,9 +46,9 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const editorInstance = useChatInputStore((s) => s.editor);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
-  // Resolve the active working directory so we can surface filesystem project
-  // skills. Topic-level override takes precedence over the agent's configured
-  // cwd. Both homogeneous and heterogeneous runtimes accept project skills now
+  // Resolve the active working directory so we can surface filesystem skills.
+  // Topic-level override takes precedence over the agent's configured cwd.
+  // Both homogeneous and heterogeneous runtimes accept filesystem skills now
   // (see commit dd4a4e7595), so we no longer gate on the hetero provider.
   const agentId = useAgentId();
   // Unified cwd: topic > agent's per-device choice > device default > home.
@@ -55,7 +56,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // set (and for local-device runs), not just an explicit agent/topic pick.
   const workingDirectory = useEffectiveWorkingDirectory(agentId);
 
-  // Device-bound (remote) runs scan project skills on that device over the
+  // Device-bound (remote) runs scan filesystem skills on that device over the
   // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
   // Mirror the WorkingSidebar exactly: resolve the EFFECTIVE target first, then
   // treat it as remote only when it lands on `device` with a bound device. The
@@ -69,15 +70,21 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
 
   // Local desktop reads over IPC; a bound device reads over RPC. Either path
-  // makes project skills reachable even when this client isn't the desktop app
+  // makes filesystem skills reachable even when this client isn't the desktop app
   // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
   const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
   const { data: projectSkillsData } = useFetchProjectSkills(
@@ -112,7 +119,11 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         icon: COMMAND_ICONS[action.type],
         key: `action-${action.type}`,
         label: t(`slash.${action.type}` as any),
-        metadata: { category: action.category, type: action.type },
+        metadata: {
+          category: action.category,
+          description: t(`slash.${action.type}.desc` as any, { defaultValue: '' }),
+          type: action.type,
+        },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
             category: action.category,
@@ -148,7 +159,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         icon: SkillsIcon,
         key: `skill-${skill.type}`,
         label: skill.label,
-        metadata: { category: 'skill', type: skill.type },
+        metadata: { category: 'skill', description: skill.description, type: skill.type },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
             category: 'skill',
@@ -238,10 +249,9 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         allItems.push(makeAgentSkillItem(skill) as SlashItem);
       }
 
-      // Filesystem project skills (`.agents/skills/` / `.claude/skills/` under
-      // the working directory). Both homogeneous and heterogeneous runtimes
-      // resolve them — the homogeneous runtime treats them as additional
-      // `<available_skills>` entries.
+      // Filesystem skills from the project and execution device. Both
+      // homogeneous and heterogeneous runtimes resolve them — the homogeneous
+      // runtime treats them as additional `<available_skills>` entries.
       if (projectSkills && projectSkills.length > 0) {
         for (const skill of projectSkills) {
           allItems.push(makeProjectSkillItem(skill) as SlashItem);
@@ -250,7 +260,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       // Fuzzy filtering
       if (search?.matchingString && search.matchingString.length > 0) {
-        const fuse = new Fuse(allItems, { keys: ['key', 'label'], threshold: 0.4 });
+        const fuse = new Fuse(allItems, {
+          keys: ['key', 'label', 'metadata.description'],
+          threshold: 0.4,
+        });
         return fuse.search(search.matchingString).map((r) => r.item);
       }
 

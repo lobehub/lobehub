@@ -14,6 +14,7 @@ import Glob from './Glob';
 import Grep from './Grep';
 import { LinearMcpRenders } from './LinearMcp';
 import Read from './Read';
+import SendMessage from './SendMessage';
 import Skill from './Skill';
 import Task from './Task';
 import TodoWrite from './TodoWrite';
@@ -37,6 +38,7 @@ const FixedClaudeCodeRenders = {
   [ClaudeCodeApiName.Glob]: Glob,
   [ClaudeCodeApiName.Grep]: Grep,
   [ClaudeCodeApiName.Read]: Read,
+  [ClaudeCodeApiName.SendMessage]: SendMessage,
   [ClaudeCodeApiName.Skill]: Skill,
   // Task panel renders the adapter-synthesized `pluginState.todos` snapshot.
   // Only TaskUpdate / TaskList show it — those events express list-level
@@ -71,6 +73,7 @@ export const ClaudeCodeRenders = new Proxy(FixedClaudeCodeRenders, {
  */
 const FixedClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
   [ClaudeCodeApiName.Edit]: 'expand',
+  [ClaudeCodeApiName.SendMessage]: 'expand',
   [ClaudeCodeApiName.TaskList]: 'expand',
   [ClaudeCodeApiName.TaskUpdate]: 'expand',
   [ClaudeCodeApiName.TodoWrite]: 'expand',

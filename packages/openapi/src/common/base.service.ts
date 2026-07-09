@@ -252,6 +252,18 @@ export abstract class BaseService implements IBaseService {
 
         // Query providers table
         case !!target?.targetProviderId: {
+          if (this.workspaceId) {
+            const workspaceProvider = await this.db.query.aiProviders.findFirst({
+              columns: { userId: true },
+              where: and(
+                eq(aiProviders.id, target.targetProviderId),
+                this.buildWorkspaceWhere(aiProviders),
+              ),
+            });
+
+            return workspaceProvider?.userId;
+          }
+
           const currentUserProvider = await this.db.query.aiProviders.findFirst({
             columns: { userId: true },
             where: and(
@@ -305,6 +317,15 @@ export abstract class BaseService implements IBaseService {
 
         // Query aiModels table
         case !!target?.targetModelId: {
+          if (this.workspaceId) {
+            const workspaceModel = await this.db.query.aiModels.findFirst({
+              columns: { userId: true },
+              where: and(eq(aiModels.id, target.targetModelId), this.buildWorkspaceWhere(aiModels)),
+            });
+
+            return workspaceModel?.userId;
+          }
+
           const targetModel = await this.db.query.aiModels.findFirst({
             columns: { userId: true },
             where: eq(aiModels.id, target.targetModelId),

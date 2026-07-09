@@ -5,12 +5,14 @@ import { FileService } from '@/server/services/file';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  deleteResult: vi.fn(),
   deleteRun: vi.fn(),
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
+  updateRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
 
@@ -20,6 +22,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
   VerifyCheckResultModel: vi.fn(() => ({
+    delete: modelMocks.deleteResult,
     findById: modelMocks.findResultById,
     upsertByCheckItem: modelMocks.upsertByCheckItem,
   })),
@@ -30,6 +33,7 @@ vi.mock('@/database/models/verifyRun', () => ({
     delete: modelMocks.deleteRun,
     findByOperation: modelMocks.findRunByOperation,
     findById: modelMocks.findRunById,
+    update: modelMocks.updateRun,
   })),
 }));
 
@@ -92,6 +96,29 @@ describe('verifyRouter', () => {
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
       expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
     });
+
+    it('records an infra failure as status `errored` with no verdict', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-err' });
+
+      await createCaller().ingestResult({
+        checkItemId: 'check-1',
+        status: 'errored',
+        toulmin: { limitation: 'Agent verifier failed to start.' },
+        verifyRunId: 'run-1',
+      });
+
+      const written = modelMocks.upsertByCheckItem.mock.calls[0][0];
+      expect(written).toMatchObject({ status: 'errored', verifyRunId: 'run-1' });
+      expect(written.verdict).toBeUndefined();
+    });
+
+    it('rejects a result with neither a verdict nor an explicit status', async () => {
+      await expect(
+        createCaller().ingestResult({ checkItemId: 'check-1', verifyRunId: 'run-1' } as any),
+      ).rejects.toThrow();
+      expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteRun', () => {
@@ -113,6 +140,113 @@ describe('verifyRouter', () => {
 
       expect(modelMocks.deleteRun).toHaveBeenCalledWith('run-1');
       expect(res).toEqual({ id: 'run-1', success: true });
+    });
+  });
+
+  describe('updateRun', () => {
+    it("rejects a run outside the caller's scope before updating", async () => {
+      modelMocks.findRunById.mockResolvedValueOnce(undefined);
+
+      await expect(
+        createCaller().updateRun({
+          value: { title: 'Renamed report' },
+          verifyRunId: 'other-user-run',
+        }),
+      ).rejects.toThrow('Verification run not found');
+
+      expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
+      expect(modelMocks.updateRun).not.toHaveBeenCalled();
+    });
+
+    it('renames a run the caller owns', async () => {
+      const updatedRun = { id: 'run-1', title: 'Renamed report' };
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.updateRun.mockResolvedValueOnce(updatedRun);
+
+      const res = await createCaller().updateRun({
+        value: { title: 'Renamed report' },
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', { title: 'Renamed report' });
+      expect(res).toEqual({ data: updatedRun, success: true });
+    });
+
+    it('refreshes the scope context in place on a re-ingest', async () => {
+      const updatedRun = { id: 'run-1' };
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+      modelMocks.updateRun.mockResolvedValueOnce(updatedRun);
+
+      await createCaller().updateRun({
+        value: {
+          context: {
+            branch: 'feat/x',
+            commit: 'abc123',
+            pullRequest: {
+              number: 42,
+              title: 'Ship x',
+              url: 'https://github.com/lobehub/lobehub/pull/42',
+            },
+          },
+          goal: 'ship x',
+        },
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.updateRun).toHaveBeenCalledWith('run-1', {
+        context: {
+          branch: 'feat/x',
+          commit: 'abc123',
+          pullRequest: {
+            number: 42,
+            title: 'Ship x',
+            url: 'https://github.com/lobehub/lobehub/pull/42',
+          },
+        },
+        goal: 'ship x',
+      });
+    });
+
+    it('rejects non-web pull request URLs before storing report context', async () => {
+      await expect(
+        createCaller().updateRun({
+          value: {
+            context: {
+              pullRequest: {
+                number: 42,
+                title: 'Unsafe PR',
+                url: 'javascript:alert(1)',
+              },
+            },
+          },
+          verifyRunId: 'run-1',
+        }),
+      ).rejects.toThrow();
+
+      expect(modelMocks.findRunById).not.toHaveBeenCalled();
+      expect(modelMocks.updateRun).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteResult', () => {
+    it("rejects a result outside the caller's scope before deleting", async () => {
+      modelMocks.findResultById.mockResolvedValueOnce(undefined);
+
+      await expect(createCaller().deleteResult({ id: 'other-user-result' })).rejects.toThrow(
+        'Verification check result not found',
+      );
+
+      expect(modelMocks.findResultById).toHaveBeenCalledWith('other-user-result');
+      expect(modelMocks.deleteResult).not.toHaveBeenCalled();
+    });
+
+    it('prunes a result the caller owns', async () => {
+      modelMocks.findResultById.mockResolvedValueOnce({ id: 'result-1' });
+
+      const res = await createCaller().deleteResult({ id: 'result-1' });
+
+      expect(modelMocks.deleteResult).toHaveBeenCalledWith('result-1');
+      expect(res).toEqual({ id: 'result-1', success: true });
     });
   });
 
@@ -306,7 +440,11 @@ describe('verifyRouter', () => {
       const serverDB = {
         query: {
           files: {
-            findFirst: vi.fn(async () => ({ id: 'file-1', url: 'verify/evidence.png' })),
+            findFirst: vi.fn(async () => ({
+              id: 'file-1',
+              name: 'evidence.png',
+              url: 'verify/evidence.png',
+            })),
           },
           verifyReports: {
             findFirst: vi.fn(async () => report),
@@ -333,6 +471,7 @@ describe('verifyRouter', () => {
             evidence: [
               {
                 fileId: 'file-1',
+                fileName: 'evidence.png',
                 fileUrl: 'https://cdn.example.com/verify/evidence.png',
               },
             ],
@@ -377,7 +516,11 @@ describe('verifyRouter', () => {
       const serverDB = {
         query: {
           files: {
-            findFirst: vi.fn(async () => ({ id: 'file-1', url: 'verify/evidence.png' })),
+            findFirst: vi.fn(async () => ({
+              id: 'file-1',
+              name: 'evidence.png',
+              url: 'verify/evidence.png',
+            })),
           },
           verifyReports: {
             findFirst: vi.fn(async () => null),
@@ -401,6 +544,7 @@ describe('verifyRouter', () => {
             evidence: [
               {
                 fileId: 'file-1',
+                fileName: 'evidence.png',
                 fileUrl: null,
               },
             ],
@@ -409,7 +553,7 @@ describe('verifyRouter', () => {
         run,
       });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[verify:getReportBundle:resolveFileUrl]',
+        '[verify:getReportBundle:resolveFileMeta]',
         expect.any(Error),
       );
       consoleErrorSpy.mockRestore();

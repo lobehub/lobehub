@@ -8,6 +8,9 @@
 
 // ─── Workspace scan ───
 
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
 export interface ProjectSkillItem {
   description?: string;
   /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
@@ -17,10 +20,14 @@ export interface ProjectSkillItem {
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope: ProjectSkillScope;
   /** Directory containing the SKILL.md. */
   skillDir: string;
   /** Source directory the skill was discovered in. */
-  source: '.agents/skills' | '.claude/skills';
+  source: ProjectSkillSource;
 }
 
 export interface InitWorkspaceParams {
@@ -47,8 +54,8 @@ export interface ListProjectSkillsParams {
 export interface ListProjectSkillsResult {
   root: string;
   skills: ProjectSkillItem[];
-  /** Source directory actually scanned (after fallback resolution). */
-  source: ProjectSkillItem['source'] | null;
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
 }
 
 export interface StatPathResult {
@@ -85,9 +92,7 @@ export interface LocalFilePreviewUnsupported {
 }
 
 export type LocalFilePreview =
-  | LocalFilePreviewImage
-  | LocalFilePreviewText
-  | LocalFilePreviewUnsupported;
+  LocalFilePreviewImage | LocalFilePreviewText | LocalFilePreviewUnsupported;
 
 export interface LocalFilePreviewResult {
   error?: string;
@@ -114,7 +119,48 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
+}
+
+// ─── Skill directory ───
+
+export interface PrepareSkillDirectoryParams {
+  forceRefresh?: boolean;
+  /** Presigned download URL of the skill zip archive. */
+  url: string;
+  /** Content hash of the archive — the idempotency key for the local cache. */
+  zipHash: string;
+}
+
+export interface PrepareSkillDirectoryResult {
+  error?: string;
+  /** Device-local directory the archive was extracted into. */
+  extractedDir: string;
+  success: boolean;
+  zipPath: string;
+}
+
+/**
+ * Host hooks for the skill-archive cache. Both are optional: the CLI daemon
+ * runs on the portable defaults; the desktop injects both so the gateway RPC
+ * path shares the cache (and proxy-aware fetch) with its renderer-IPC path.
+ */
+export interface SkillDirectoryDeps {
+  /** Fetch used to download skill archives. Desktop injects Electron's `net` fetch (proxy-aware); defaults to global `fetch`. */
+  fetchSkillArchive?: (url: string) => Promise<Response>;
+  /** Skill zip cache root. Desktop: `<appStoragePath>/file-storage/skills`; defaults to `~/.lobehub/skills`. */
+  skillCacheRoot?: string;
 }
 
 /**
@@ -140,9 +186,11 @@ export interface WorkspaceScanDeps {
  * - The CLI uses the portable defaults exported from this package
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
-export interface DeviceControlDeps extends WorkspaceScanDeps {
+export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /** Search project files without shipping the whole index to the caller. */
+  searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
 }

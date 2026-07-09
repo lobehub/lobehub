@@ -17,6 +17,6 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "tsx": "^4.20.6"
+    "tsx": "^4.22.4"
   }
 }

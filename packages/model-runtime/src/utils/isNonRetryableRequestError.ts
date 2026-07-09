@@ -1,6 +1,7 @@
 import { toRecord } from '@lobechat/utils';
 
 import { AgentRuntimeErrorType } from '../types/error';
+import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
 const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
   AgentRuntimeErrorType.ExceededContextWindow,
@@ -165,6 +166,8 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
     const errorType = (error as { errorType?: unknown }).errorType;
     if (typeof errorType === 'string' && NON_RETRYABLE_ERROR_TYPES.has(errorType)) return true;
   }
+
+  if (isErrorCausedByContentFilter(error)) return true;
 
   if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
   if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;

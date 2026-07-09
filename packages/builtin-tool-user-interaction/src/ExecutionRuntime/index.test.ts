@@ -2,92 +2,98 @@ import { describe, expect, it } from 'vitest';
 
 import { UserInteractionExecutionRuntime } from './index';
 
+const sampleArgs = {
+  questions: [
+    {
+      header: 'Scope',
+      options: [
+        { description: 'Only the current file', label: 'This file' },
+        { description: 'The entire project', label: 'Whole project' },
+      ],
+      question: 'Which scope should I apply the change to?',
+    },
+  ],
+};
+
 describe('UserInteractionExecutionRuntime', () => {
-  it('creates a pending interaction request', async () => {
+  it('creates a pending interaction request storing the questions', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    const result = await runtime.askUserQuestion({
-      question: { id: 'q1', mode: 'freeform', prompt: 'What is your name?' },
-    });
+    const result = await runtime.askUserQuestion(sampleArgs);
 
     expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      requestId: 'q1',
-      status: 'pending',
-      question: { id: 'q1', mode: 'freeform', prompt: 'What is your name?' },
+    expect(result.state.status).toBe('pending');
+    expect(typeof result.state.requestId).toBe('string');
+    expect(result.state.question).toEqual(sampleArgs);
+  });
+
+  it('rejects invalid args (fewer than 2 options)', async () => {
+    const runtime = new UserInteractionExecutionRuntime();
+    const result = await runtime.askUserQuestion({
+      questions: [
+        {
+          header: 'Scope',
+          options: [{ description: 'Only the current file', label: 'This file' }],
+          question: 'Which scope?',
+        },
+      ],
     });
+
+    expect(result.success).toBe(false);
   });
 
   it('marks interaction as submitted with response', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    await runtime.askUserQuestion({
-      question: {
-        fields: [{ key: 'name', kind: 'text' as const, label: 'Name', required: true }],
-        id: 'q2',
-        mode: 'form' as const,
-        prompt: 'Fill this form',
-      },
-    });
+    const created = await runtime.askUserQuestion(sampleArgs);
+    const { requestId } = created.state;
 
     const result = await runtime.submitUserResponse({
-      requestId: 'q2',
-      response: { name: 'Alice' },
+      requestId,
+      response: { [sampleArgs.questions[0].question]: 'This file' },
     });
 
     expect(result.success).toBe(true);
     expect(result.state).toMatchObject({
-      requestId: 'q2',
+      requestId,
+      response: { [sampleArgs.questions[0].question]: 'This file' },
       status: 'submitted',
-      response: { name: 'Alice' },
     });
   });
 
   it('marks interaction as skipped with reason', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    await runtime.askUserQuestion({
-      question: { id: 'q3', mode: 'freeform', prompt: 'Optional question' },
-    });
+    const created = await runtime.askUserQuestion(sampleArgs);
+    const { requestId } = created.state;
 
-    const result = await runtime.skipUserResponse({
-      requestId: 'q3',
-      reason: 'Not relevant',
-    });
+    const result = await runtime.skipUserResponse({ reason: 'Not relevant', requestId });
 
     expect(result.success).toBe(true);
     expect(result.state).toMatchObject({
-      requestId: 'q3',
-      status: 'skipped',
+      requestId,
       skipReason: 'Not relevant',
+      status: 'skipped',
     });
   });
 
   it('marks interaction as cancelled', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    await runtime.askUserQuestion({
-      question: { id: 'q4', mode: 'freeform', prompt: 'Will be cancelled' },
-    });
+    const created = await runtime.askUserQuestion(sampleArgs);
+    const { requestId } = created.state;
 
-    const result = await runtime.cancelUserResponse({ requestId: 'q4' });
+    const result = await runtime.cancelUserResponse({ requestId });
 
     expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      requestId: 'q4',
-      status: 'cancelled',
-    });
+    expect(result.state).toMatchObject({ requestId, status: 'cancelled' });
   });
 
   it('gets current interaction state', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    await runtime.askUserQuestion({
-      question: { id: 'q5', mode: 'freeform', prompt: 'Check state' },
-    });
+    const created = await runtime.askUserQuestion(sampleArgs);
+    const { requestId } = created.state;
 
-    const result = await runtime.getInteractionState({ requestId: 'q5' });
+    const result = await runtime.getInteractionState({ requestId });
 
     expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      requestId: 'q5',
-      status: 'pending',
-    });
+    expect(result.state).toMatchObject({ requestId, status: 'pending' });
   });
 
   it('returns error for non-existent interaction', async () => {
@@ -99,15 +105,11 @@ describe('UserInteractionExecutionRuntime', () => {
 
   it('prevents submitting a non-pending interaction', async () => {
     const runtime = new UserInteractionExecutionRuntime();
-    await runtime.askUserQuestion({
-      question: { id: 'q6', mode: 'freeform', prompt: 'Already done' },
-    });
-    await runtime.cancelUserResponse({ requestId: 'q6' });
+    const created = await runtime.askUserQuestion(sampleArgs);
+    const { requestId } = created.state;
+    await runtime.cancelUserResponse({ requestId });
 
-    const result = await runtime.submitUserResponse({
-      requestId: 'q6',
-      response: { late: true },
-    });
+    const result = await runtime.submitUserResponse({ requestId, response: { late: true } });
 
     expect(result.success).toBe(false);
   });

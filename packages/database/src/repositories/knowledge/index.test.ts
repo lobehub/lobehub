@@ -330,6 +330,87 @@ describe('KnowledgeRepo', () => {
     });
   });
 
+  describe('query - workspace visibility', () => {
+    const workspaceId = 'knowledge-visibility-workspace';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Visibility Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(documents).values([
+        {
+          content: 'Public workspace document',
+          fileType: 'application/pdf',
+          filename: 'public-doc.pdf',
+          source: 'public-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          content: 'Caller private document',
+          fileType: 'application/pdf',
+          filename: 'caller-private-doc.pdf',
+          source: 'caller-private-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          content: 'Other member private document',
+          fileType: 'application/pdf',
+          filename: 'other-private-doc.pdf',
+          source: 'other-private-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+    });
+
+    it('should hide other members private documents in All view', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.query({ category: FilesTabs.All })).map((item) => item.name).sort();
+
+      expect(names).toEqual(['caller-private-doc.pdf', 'public-doc.pdf']);
+      expect(names).not.toContain('other-private-doc.pdf');
+    });
+
+    it('should only return caller-owned private documents when visibility=private', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.query({ category: FilesTabs.All, visibility: 'private' })).map(
+        (item) => item.name,
+      );
+
+      expect(names).toEqual(['caller-private-doc.pdf']);
+    });
+
+    it('should hide other members private documents in queryRecent', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.queryRecent(10)).map((item) => item.name).sort();
+
+      expect(names).toContain('caller-private-doc.pdf');
+      expect(names).toContain('public-doc.pdf');
+      expect(names).not.toContain('other-private-doc.pdf');
+    });
+  });
+
   describe('query - search filtering', () => {
     beforeEach(async () => {
       await serverDB.insert(files).values([
