@@ -6,6 +6,7 @@ import type {
   CallLLMPayload,
   InstructionExecutor,
 } from '../types';
+import type { RuntimeMessageRef } from './message';
 
 export interface LLMStreamPayload {
   [key: string]: unknown;
@@ -38,8 +39,13 @@ export interface LLMStreamHandlers {
 }
 
 export interface LLMCallExecuteInput {
+  assistantMessage: RuntimeMessageRef;
   instruction: AgentInstructionCallLlm;
+  model: string;
+  parentId?: string;
+  provider: string;
   state: AgentState;
+  stepLabel?: string;
 }
 
 /**

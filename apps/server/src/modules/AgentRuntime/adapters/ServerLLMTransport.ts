@@ -29,7 +29,13 @@ export class ServerLLMTransport implements LLMTransport {
   constructor(private readonly ctx: RuntimeExecutorContext) {}
 
   executeCall(input: LLMCallExecuteInput): ReturnType<NonNullable<LLMTransport['executeCall']>> {
-    return createServerCallLlmExecutor(this.ctx)(input.instruction, input.state);
+    return createServerCallLlmExecutor(this.ctx, {
+      assistantMessage: input.assistantMessage,
+      model: input.model,
+      parentId: input.parentId,
+      provider: input.provider,
+      stepLabel: input.stepLabel,
+    })(input.instruction, input.state);
   }
 
   async stream(

@@ -109,13 +109,21 @@ import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 
+interface PreparedCallLLMContext {
+  assistantMessage: { id: string };
+  model: string;
+  parentId?: string;
+  provider: string;
+  stepLabel?: string;
+}
+
 const SERVER_LLM_RETRY_POLICY = {
   isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
 export const callLlm =
-  (ctx: RuntimeExecutorContext): InstructionExecutor =>
+  (ctx: RuntimeExecutorContext, prepared?: PreparedCallLLMContext): InstructionExecutor =>
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
     const llmPayload = payload as CallLLMPayload;
@@ -124,8 +132,9 @@ export const callLlm =
     let visibleOutputEndPublishedStepIndex: number | undefined;
 
     // Fallback to state's modelRuntimeConfig if not in payload
-    const model = llmPayload.model || state.modelRuntimeConfig?.model;
-    const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
+    const model = prepared?.model ?? llmPayload.model ?? state.modelRuntimeConfig?.model;
+    const provider =
+      prepared?.provider ?? llmPayload.provider ?? state.modelRuntimeConfig?.provider;
     // Resolve tools via ToolResolver (unified tool injection).
     //
     // Single-track device gate: `buildStepToolDelta` treats activeDeviceId as
@@ -191,7 +200,8 @@ export const callLlm =
     log(`${stagePrefix} Starting operation`);
 
     // Get parentId from payload (parentId or parentMessageId depending on payload type)
-    const parentId = llmPayload.parentId || (llmPayload as any).parentMessageId;
+    const parentId =
+      prepared?.parentId ?? llmPayload.parentId ?? (llmPayload as any).parentMessageId;
 
     // Parent existence preflight ():
     // If the parent was deleted concurrently (e.g. user deleted topic mid-run),
@@ -199,7 +209,7 @@ export const callLlm =
     // already done the LLM call and spent tokens. Check first — fail fast,
     // save cost, and surface a typed error the frontend can act on instead of
     // a raw SQL error.
-    if (parentId) {
+    if (!prepared && parentId) {
       const parentExists = await ctx.messageModel.findById(parentId);
       if (!parentExists) {
         const error = createConversationParentMissingError(parentId);
@@ -222,7 +232,10 @@ export const callLlm =
     // refetch — chunks would silently no-op against the missing id (LOBE-11501).
     let assistantMessageSeed: Record<string, unknown> | undefined;
 
-    if (existingAssistantMessageId) {
+    if (prepared) {
+      assistantMessageItem = prepared.assistantMessage;
+      log(`${stagePrefix} Using prepared assistant message: %s`, assistantMessageItem.id);
+    } else if (existingAssistantMessageId) {
       // Use existing assistant message (created by execAgent)
       assistantMessageItem = { id: existingAssistantMessageId };
       log(`${stagePrefix} Using existing assistant message: %s`, existingAssistantMessageId);
@@ -246,30 +259,32 @@ export const callLlm =
     }
 
     // Publish stream start event
-    const stepLabel = (instruction as any).stepLabel;
-    await streamManager.publishStreamEvent(operationId, {
-      data: {
-        // Only the seed fields the client needs — not the whole DB row.
-        assistantMessage: {
-          id: assistantMessageItem.id,
-          ...(assistantMessageSeed && {
-            agentId: assistantMessageSeed.agentId,
-            groupId: assistantMessageSeed.groupId,
-            model: assistantMessageSeed.model,
-            parentId: assistantMessageSeed.parentId,
-            provider: assistantMessageSeed.provider,
-            role: assistantMessageSeed.role,
-            threadId: assistantMessageSeed.threadId,
-            topicId: assistantMessageSeed.topicId,
-          }),
+    const stepLabel = prepared?.stepLabel ?? (instruction as any).stepLabel;
+    if (!prepared) {
+      await streamManager.publishStreamEvent(operationId, {
+        data: {
+          // Only the seed fields the client needs — not the whole DB row.
+          assistantMessage: {
+            id: assistantMessageItem.id,
+            ...(assistantMessageSeed && {
+              agentId: assistantMessageSeed.agentId,
+              groupId: assistantMessageSeed.groupId,
+              model: assistantMessageSeed.model,
+              parentId: assistantMessageSeed.parentId,
+              provider: assistantMessageSeed.provider,
+              role: assistantMessageSeed.role,
+              threadId: assistantMessageSeed.threadId,
+              topicId: assistantMessageSeed.topicId,
+            }),
+          },
+          model,
+          provider,
+          ...(stepLabel && { stepLabel }),
         },
-        model,
-        provider,
-        ...(stepLabel && { stepLabel }),
-      },
-      stepIndex,
-      type: 'stream_start',
-    });
+        stepIndex,
+        type: 'stream_start',
+      });
+    }
 
     try {
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
