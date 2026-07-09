@@ -1,0 +1,70 @@
+import type { LLMStreamPayload, LLMStreamResult, LLMTransport } from '@lobechat/agent-runtime';
+import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+
+import type { LobeChatDatabase } from '@/database/type';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error) return error;
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return JSON.stringify(error);
+};
+
+/**
+ * Server {@link LLMTransport} adapter — wraps model-runtime streaming and
+ * returns the aggregated content/usage that package executors need.
+ */
+export class ServerLLMTransport implements LLMTransport {
+  constructor(
+    private readonly serverDB: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {}
+
+  async stream(
+    payload: LLMStreamPayload,
+    handlers?: Parameters<LLMTransport['stream']>[1],
+  ): Promise<LLMStreamResult> {
+    const runtime = await initModelRuntimeFromDB(
+      this.serverDB,
+      this.userId,
+      payload.provider,
+      this.workspaceId,
+    );
+    const { provider: _provider, ...runtimePayload } = payload;
+    let content = '';
+    let usage: LLMStreamResult['usage'];
+    let streamError: unknown;
+
+    const response = await runtime.chat(runtimePayload as any, {
+      callback: {
+        onCompletion: async (data: any) => {
+          if (data.usage) usage = data.usage;
+        },
+        onError: async (errorData: unknown) => {
+          streamError = errorData;
+          handlers?.onError?.(errorData);
+        },
+        onText: async (text: string) => {
+          content += text;
+          handlers?.onText?.(text);
+        },
+      },
+      user: this.userId,
+    });
+
+    await consumeStreamUntilDone(response);
+
+    if (streamError) {
+      throw new Error(getErrorMessage(streamError));
+    }
+
+    const result = { content, usage };
+    handlers?.onFinish?.(result);
+    return result;
+  }
+}

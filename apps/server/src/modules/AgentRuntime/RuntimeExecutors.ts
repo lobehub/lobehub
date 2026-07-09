@@ -2,6 +2,7 @@ import type { AgentInstruction, InstructionExecutor } from '@lobechat/agent-runt
 import {
   callTool as createCallToolExecutor,
   callToolsBatch as createCallToolsBatchExecutor,
+  compressContext as createCompressContextExecutor,
   execSubAgent as createExecSubAgentExecutor,
   execSubAgents as createExecSubAgentsExecutor,
   finish as createFinishExecutor,
@@ -13,7 +14,6 @@ import {
 import { buildHost } from './buildHost';
 import type { RuntimeExecutorContext } from './context';
 import { callLlm } from './executors/callLlm';
-import { compressContext } from './executors/compressContext';
 
 export { type RuntimeExecutorContext } from './context';
 
@@ -28,7 +28,7 @@ export const createRuntimeExecutors = (
     call_llm: callLlm(ctx),
     call_tool: createCallToolExecutor(host),
     call_tools_batch: createCallToolsBatchExecutor(host),
-    compress_context: compressContext(ctx),
+    compress_context: createCompressContextExecutor(host),
     exec_sub_agent: createExecSubAgentExecutor(host),
     exec_sub_agents: createExecSubAgentsExecutor(host),
     // Migrated into @lobechat/agent-runtime as part of the IO transport port

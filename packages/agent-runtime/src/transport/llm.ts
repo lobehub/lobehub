@@ -1,4 +1,15 @@
+import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
+
 import type { CallLLMPayload } from '../types';
+
+export interface LLMStreamPayload {
+  [key: string]: unknown;
+  messages: OpenAIChatMessage[] | CallLLMPayload['messages'];
+  model: string;
+  provider: string;
+  stream?: boolean;
+  tools?: CallLLMPayload['tools'];
+}
 
 /**
  * Aggregated result of one model turn.
@@ -11,12 +22,14 @@ export interface LLMStreamResult {
   [key: string]: unknown;
   content: string;
   reasoning?: string;
+  usage?: ModelUsage;
 }
 
 export interface LLMStreamHandlers {
   onChunk?: (chunk: unknown) => void;
   onError?: (error: unknown) => void;
   onFinish?: (result: LLMStreamResult) => void;
+  onText?: (text: string) => void;
 }
 
 /**
@@ -30,7 +43,7 @@ export interface LLMStreamHandlers {
  */
 export interface LLMTransport {
   stream: (
-    payload: CallLLMPayload,
+    payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,
     signal?: AbortSignal,
   ) => Promise<LLMStreamResult>;
