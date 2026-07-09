@@ -3,19 +3,132 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { getServerComposioAuthConfigId } from '@/config/composio';
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
+import {
+  type ComposioConnectorMetadata,
+  type ConnectorMetadata,
+  ConnectorSourceType,
+  ConnectorStatus,
+} from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
+import { inferCrudType } from '@/libs/mcp/utils';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const client = getComposioClient();
   const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
+  // Personal-scoped (no workspaceId/gateKeeper), matching PluginModel above:
+  // Composio connections are personal today, and the runtime reads them back
+  // with the same scoping (ComposioService is constructed with { db, userId }).
+  const connectorModel = new ConnectorModel(opts.ctx.serverDB, opts.ctx.userId);
+  const connectorToolModel = new ConnectorToolModel(opts.ctx.serverDB, opts.ctx.userId);
 
   return opts.next({
-    ctx: { ...opts.ctx, composioClient: client, pluginModel },
+    ctx: { ...opts.ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
   });
 });
+
+type ComposioToolInput = {
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  name: string;
+};
+
+/**
+ * Dual-write helper: mirror a Composio connection into `user_connectors`
+ * (+ `user_connector_tools`) so the runtime can resolve it without touching the
+ * plugin table. Idempotent on (userId, identifier). The plugin-table write is
+ * kept by the callers for backward compatibility; this only adds the connector
+ * projection so new connections run off metadata while old ones fall back.
+ */
+async function upsertComposioConnector(
+  connectorModel: ConnectorModel,
+  connectorToolModel: ConnectorToolModel,
+  params: {
+    composio: ComposioConnectorMetadata;
+    identifier: string;
+    label: string;
+    /**
+     * When true, the connector's tool set is REPLACED by `tools`: rows missing
+     * from the latest list are deleted. Use for the authoritative refresh
+     * (updateComposioPlugin), where the runtime manifest is built from these
+     * rows, so a shrunk/emptied tool list must not leave stale tools advertised.
+     * Leave false for the pre-auth seed (createConnection), whose tool list may
+     * be incomplete or empty before authorization.
+     */
+    replaceTools?: boolean;
+    tools?: ComposioToolInput[];
+  },
+): Promise<void> {
+  const metadata: ConnectorMetadata = {
+    avatar: '🔌',
+    composio: params.composio,
+    description: `Composio: ${params.label}`,
+  };
+
+  const status =
+    params.composio.status === 'ACTIVE'
+      ? ConnectorStatus.connected
+      : params.composio.status === 'FAILED'
+        ? ConnectorStatus.error
+        : ConnectorStatus.disconnected;
+
+  const [existing] = await connectorModel.queryByIdentifiers([params.identifier]);
+  let connectorId: string;
+  if (existing) {
+    await connectorModel.update(existing.id, {
+      metadata,
+      name: params.label,
+      sourceType: ConnectorSourceType.marketplace,
+      status,
+    });
+    connectorId = existing.id;
+  } else {
+    const created = await connectorModel.create({
+      identifier: params.identifier,
+      isEnabled: true,
+      metadata,
+      name: params.label,
+      sourceType: ConnectorSourceType.marketplace,
+      status,
+    });
+    connectorId = created.id;
+  }
+
+  if (params.tools) {
+    if (params.tools.length > 0) {
+      await connectorToolModel.upsertMany(
+        connectorId,
+        params.tools.map((t) => ({
+          crudType: inferCrudType(t.name),
+          description: t.description,
+          inputSchema: t.inputSchema,
+          toolName: t.name,
+        })),
+      );
+    }
+
+    // Replace (not merge) so tools removed upstream stop being advertised.
+    if (params.replaceTools) {
+      await connectorToolModel.deleteToolsNotIn(
+        connectorId,
+        params.tools.map((t) => t.name),
+      );
+    }
+  }
+}
+
+/** Remove the connector projection for a Composio identifier (tools cascade). */
+async function deleteComposioConnector(
+  connectorModel: ConnectorModel,
+  identifier: string,
+): Promise<void> {
+  const [existing] = await connectorModel.queryByIdentifiers([identifier]);
+  if (existing) await connectorModel.delete(existing.id);
+}
 
 export const composioRouter = router({
   createConnection: composioProcedure
@@ -113,6 +226,26 @@ export const composioRouter = router({
         type: 'plugin',
       });
 
+      // Dual-write: mirror the (pending) connection into user_connectors so the
+      // runtime can resolve it off metadata once it goes ACTIVE. Tools sync on
+      // updateComposioPlugin; seed them here too when already fetched.
+      await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
+        composio: {
+          appSlug,
+          authConfigId,
+          connectedAccountId: connReq.id,
+          redirectUrl: connReq.redirectUrl,
+          status: 'PENDING',
+        },
+        identifier,
+        label,
+        tools: manifest.api.map((a) => ({
+          description: a.description,
+          inputSchema: a.parameters as Record<string, unknown>,
+          name: a.name,
+        })),
+      });
+
       return {
         authConfigId,
         connectedAccountId: connReq.id,
@@ -136,6 +269,7 @@ export const composioRouter = router({
       }
 
       await ctx.pluginModel.delete(input.identifier);
+      await deleteComposioConnector(ctx.connectorModel, input.identifier);
 
       return { success: true };
     }),
@@ -182,6 +316,7 @@ export const composioRouter = router({
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       await ctx.pluginModel.delete(input.identifier);
+      await deleteComposioConnector(ctx.connectorModel, input.identifier);
       return { success: true };
     }),
 
@@ -248,6 +383,17 @@ export const composioRouter = router({
           type: 'plugin',
         });
       }
+
+      // Dual-write: project the active connection + tool list into the connector
+      // tables so the runtime resolves this Composio server without the plugin
+      // table. `tools` already carries the full manifest from the client.
+      await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
+        composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
+        identifier,
+        label,
+        replaceTools: true,
+        tools,
+      });
 
       return { savedCount: tools.length };
     }),
