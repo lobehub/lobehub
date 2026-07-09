@@ -2,7 +2,7 @@ import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import type { ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -102,6 +102,18 @@ export const useMenu = () => {
     },
   ].filter(Boolean) as ItemType[];
 
+  const getApp: MenuProps['items'] = [
+    {
+      icon: <Icon icon={Download} />,
+      key: 'get-app',
+      label: (
+        <WorkspaceLink escape to="/downloads">
+          {t('getApp')}
+        </WorkspaceLink>
+      ),
+    },
+  ];
+
   const mainItems = [
     {
       type: 'divider',
@@ -122,6 +134,7 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
+    ...(!isDesktop ? getApp : []),
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines

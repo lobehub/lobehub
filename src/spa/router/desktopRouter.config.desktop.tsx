@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   Home,
   Image,
@@ -89,6 +90,7 @@ import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_la
 import DevtoolsIndexPage from '@/routes/(main)/devtools';
 import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
 import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
+import DownloadsPage from '@/routes/(main)/downloads';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -615,6 +617,14 @@ export const desktopRoutes: RouteObject[] = [
   {
     children: [
       ...sharedMainAreaChildren,
+
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: <DownloadsPage />,
+        errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+        path: 'downloads',
+      },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
