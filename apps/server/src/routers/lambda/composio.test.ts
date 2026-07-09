@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   connectorCreate: vi.fn(),
   connectorDelete: vi.fn(),
   connectorQueryByIdentifiers: vi.fn(),
+  connectorToolDeleteToolsNotIn: vi.fn(),
   connectorToolUpsertMany: vi.fn(),
   connectorUpdate: vi.fn(),
   getRawComposioTools: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('@/database/models/connector', () => ({
 
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: vi.fn().mockImplementation(() => ({
+    deleteToolsNotIn: mocks.connectorToolDeleteToolsNotIn,
     upsertMany: mocks.connectorToolUpsertMany,
   })),
 }));
@@ -94,6 +96,8 @@ describe('composioRouter.createConnection dual-write', () => {
     expect(mocks.connectorToolUpsertMany).toHaveBeenCalledWith('conn-new', [
       expect.objectContaining({ toolName: 'GMAIL_SEND' }),
     ]);
+    // pre-auth seed must NOT prune (tool list may be incomplete before auth)
+    expect(mocks.connectorToolDeleteToolsNotIn).not.toHaveBeenCalled();
   });
 });
 
@@ -122,6 +126,8 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
     expect(mocks.connectorToolUpsertMany).toHaveBeenCalledWith('conn-new', [
       expect.objectContaining({ toolName: 'GMAIL_SEND' }),
     ]);
+    // authoritative refresh prunes to exactly the provided set
+    expect(mocks.connectorToolDeleteToolsNotIn).toHaveBeenCalledWith('conn-new', ['GMAIL_SEND']);
   });
 
   it('updates an existing connector projection instead of duplicating it', async () => {
@@ -140,6 +146,19 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
       }),
     );
     expect(mocks.connectorToolUpsertMany).toHaveBeenCalledWith('conn-existing', expect.any(Array));
+    expect(mocks.connectorToolDeleteToolsNotIn).toHaveBeenCalledWith('conn-existing', [
+      'GMAIL_SEND',
+    ]);
+  });
+
+  it('prunes all connector tools when the refreshed list is empty', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+
+    await caller().updateComposioPlugin({ ...input, tools: [] });
+
+    // nothing to upsert, but the stale set is fully cleared
+    expect(mocks.connectorToolUpsertMany).not.toHaveBeenCalled();
+    expect(mocks.connectorToolDeleteToolsNotIn).toHaveBeenCalledWith('conn-existing', []);
   });
 });
 

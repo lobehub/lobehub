@@ -51,6 +51,15 @@ async function upsertComposioConnector(
     composio: ComposioConnectorMetadata;
     identifier: string;
     label: string;
+    /**
+     * When true, the connector's tool set is REPLACED by `tools`: rows missing
+     * from the latest list are deleted. Use for the authoritative refresh
+     * (updateComposioPlugin), where the runtime manifest is built from these
+     * rows, so a shrunk/emptied tool list must not leave stale tools advertised.
+     * Leave false for the pre-auth seed (createConnection), whose tool list may
+     * be incomplete or empty before authorization.
+     */
+    replaceTools?: boolean;
     tools?: ComposioToolInput[];
   },
 ): Promise<void> {
@@ -89,16 +98,26 @@ async function upsertComposioConnector(
     connectorId = created.id;
   }
 
-  if (params.tools && params.tools.length > 0) {
-    await connectorToolModel.upsertMany(
-      connectorId,
-      params.tools.map((t) => ({
-        crudType: inferCrudType(t.name),
-        description: t.description,
-        inputSchema: t.inputSchema,
-        toolName: t.name,
-      })),
-    );
+  if (params.tools) {
+    if (params.tools.length > 0) {
+      await connectorToolModel.upsertMany(
+        connectorId,
+        params.tools.map((t) => ({
+          crudType: inferCrudType(t.name),
+          description: t.description,
+          inputSchema: t.inputSchema,
+          toolName: t.name,
+        })),
+      );
+    }
+
+    // Replace (not merge) so tools removed upstream stop being advertised.
+    if (params.replaceTools) {
+      await connectorToolModel.deleteToolsNotIn(
+        connectorId,
+        params.tools.map((t) => t.name),
+      );
+    }
   }
 }
 
@@ -372,6 +391,7 @@ export const composioRouter = router({
         composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
         identifier,
         label,
+        replaceTools: true,
         tools,
       });
 
