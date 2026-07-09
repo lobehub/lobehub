@@ -136,4 +136,15 @@ describe('upsertPluginMode', () => {
       { identifier: 'a', mode: 'pinned' },
     ]);
   });
+
+  it('removes the entry (legacy string or object) when set to auto, instead of persisting it', () => {
+    expect(upsertPluginMode(['a', 'b'], 'a', 'auto')).toEqual(['b']);
+    expect(
+      upsertPluginMode([{ identifier: 'a', mode: 'disabled' as const }, 'b'], 'a', 'auto'),
+    ).toEqual(['b']);
+  });
+
+  it('is a no-op when setting auto on an identifier that is already absent', () => {
+    expect(upsertPluginMode(['a'], 'not-there', 'auto')).toEqual(['a']);
+  });
 });
