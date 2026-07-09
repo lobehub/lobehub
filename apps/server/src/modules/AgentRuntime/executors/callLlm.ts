@@ -65,6 +65,7 @@ import {
 import {
   type ChatToolPayload,
   getActivePluginIds,
+  getDisabledPluginIds,
   type MessageToolCall,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -651,11 +652,21 @@ export const callLlm =
                 )
                 .map((p) => p.identifier),
             );
-            const connected: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter((t) =>
-              connectedIds.has(t.identifier),
+            // Disabled services are dropped from both lists — not surfaced as
+            // "connected, use directly" (this agent shouldn't use it) nor as
+            // "available to connect" (the account-level OAuth connection, if
+            // any, is untouched; this agent just isn't meant to see it).
+            let disabledIdSet = new Set<string>();
+            if (agentId) {
+              const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+              const agentConfig = await agentModel.getAgentConfigById(agentId);
+              disabledIdSet = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
+            }
+            const connected: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
+              (t) => connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
             const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-              (t) => !connectedIds.has(t.identifier),
+              (t) => !connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
             composioServicesListStr = generateComposioServicesList(connected, available);
             log(

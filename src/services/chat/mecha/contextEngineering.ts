@@ -435,14 +435,19 @@ export const contextEngineering = async ({
     try {
       const toolState = getToolStoreState();
       const allComposioServers = composioStoreSelectors.getServers(toolState);
+      const disabledIdSet = new Set(disabledPluginIds ?? []);
 
+      // Disabled services are dropped from both lists — not surfaced as
+      // "connected, use directly" (this agent shouldn't use it) nor as
+      // "available to connect" (the user's account-level OAuth connection,
+      // if any, is untouched; this agent just isn't meant to see it).
       const connected: ComposioServiceSummary[] = allComposioServers
-        .filter((s) => s.status === ComposioServerStatus.ACTIVE)
+        .filter((s) => s.status === ComposioServerStatus.ACTIVE && !disabledIdSet.has(s.identifier))
         .map((s) => ({ identifier: s.identifier, name: s.label }));
 
       const connectedIds = new Set(connected.map((s) => s.identifier));
       const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-        (t) => !connectedIds.has(t.identifier),
+        (t) => !connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
       ).map((t) => ({ identifier: t.identifier, name: t.label }));
 
       composioServicesList = generateComposioServicesList(connected, available);
