@@ -1,5 +1,4 @@
-import { DropdownMenu } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useState } from 'react';

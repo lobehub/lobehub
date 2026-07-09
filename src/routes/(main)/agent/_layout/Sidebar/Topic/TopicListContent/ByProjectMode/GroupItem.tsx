@@ -232,6 +232,9 @@ const GroupItem = memo<GroupItemComponentProps>(
     const isHeterogeneous = useAgentStore((s) =>
       currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
     );
+    const isWorkspaceAgent = useAgentStore((s) =>
+      currentAgentId ? agentByIdSelectors.isWorkspaceAgentById(currentAgentId)(s) : false,
+    );
     const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
 
     const handleAddTopic = useCallback(async () => {
@@ -261,6 +264,7 @@ const GroupItem = memo<GroupItemComponentProps>(
       clientExecutionAvailable: isDesktop,
       deviceRoutingAvailable,
       isHetero: isHeterogeneous,
+      workspaceScoped: isWorkspaceAgent,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
     const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;

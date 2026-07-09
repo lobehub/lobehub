@@ -70,6 +70,7 @@ const HeteroControlBar = memo(() => {
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
 
   // On web there's no full-access badge / skeleton — just the workspace controls
   // (the cloud repo switcher is rendered inside WorkspaceControls). The CLI
@@ -106,6 +107,7 @@ const HeteroControlBar = memo(() => {
     resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       isHetero: true,
+      workspaceScoped: isWorkspaceAgent,
     }) === 'local';
   const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowClaudeQuota = heteroProvider?.type === 'claude-code' && isLocalHeteroExecution;

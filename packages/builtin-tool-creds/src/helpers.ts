@@ -113,6 +113,37 @@ export interface ComposioServiceSummary {
   name: string;
 }
 
+export interface ComposioAppTypeLike {
+  identifier: string;
+  label: string;
+}
+
+/**
+ * Drops services the agent has disabled (tri-state `agents.plugins`) from a
+ * Composio service list. Shared by both the client (contextEngineering.ts)
+ * and server (callLlm.ts) prompt-building paths so a disabled integration
+ * never surfaces as "connected — use tools directly" in either one.
+ */
+export const excludeDisabledComposioServices = <T extends { identifier: string }>(
+  services: T[],
+  disabledIds: Set<string>,
+): T[] => services.filter((s) => !disabledIds.has(s.identifier));
+
+/**
+ * Builds the "available to connect" list: every known Composio app type
+ * that's neither already connected nor disabled for this agent. The client
+ * and server paths compute this identically off the static
+ * `COMPOSIO_APP_TYPES` catalog, so it's extracted once here.
+ */
+export const resolveAvailableComposioServices = (
+  appTypes: ComposioAppTypeLike[],
+  connectedIds: Set<string>,
+  disabledIds: Set<string>,
+): ComposioServiceSummary[] =>
+  appTypes
+    .filter((t) => !connectedIds.has(t.identifier) && !disabledIds.has(t.identifier))
+    .map((t) => ({ identifier: t.identifier, name: t.label }));
+
 /**
  * Generate the Composio services list string for injection into the prompt
  */

@@ -190,8 +190,6 @@ export interface SubAgentResultPayload {
     result?: string;
     /** Whether the sub-agent completed successfully */
     success: boolean;
-    /** Sub-agent message ID */
-    taskMessageId: string;
     /** Thread ID where the sub-agent was executed */
     threadId: string;
   };
@@ -211,8 +209,6 @@ export interface SubAgentsBatchResultPayload {
     result?: string;
     /** Whether the sub-agent completed successfully */
     success: boolean;
-    /** Sub-agent message ID */
-    taskMessageId: string;
     /** Thread ID where the sub-agent was executed */
     threadId: string;
   }>;

@@ -16,7 +16,5 @@ export function withWorkspaceHeader(
   workspaceId?: string,
 ): Record<string, string> {
   const resolvedWorkspaceId = resolveWorkspaceId(workspaceId);
-  return resolvedWorkspaceId
-    ? { ...headers, [WORKSPACE_ID_HEADER]: resolvedWorkspaceId }
-    : headers;
+  return resolvedWorkspaceId ? { ...headers, [WORKSPACE_ID_HEADER]: resolvedWorkspaceId } : headers;
 }

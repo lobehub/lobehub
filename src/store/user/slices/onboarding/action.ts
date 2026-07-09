@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { getPluginMode, MAX_ONBOARDING_STEPS, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
@@ -138,27 +138,21 @@ export class OnboardingActionImpl {
 
   toggleInboxAgentDefaultPlugin = async (id: string, open?: boolean): Promise<void> => {
     const currentSettings = settingsSelectors.currentSettings(this.#get());
-    const currentPlugins = currentSettings.defaultAgent?.config?.plugins || [];
-
-    const index = currentPlugins.indexOf(id);
-    const shouldOpen = open !== undefined ? open : index === -1;
+    const isDefaultPinned =
+      getPluginMode(currentSettings.defaultAgent?.config?.plugins, id) === 'pinned';
+    const shouldOpen = open !== undefined ? open : !isDefaultPinned;
 
     const agentStore = getAgentStoreState();
     const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
+    if (!inboxAgentId) return;
 
-    // Calculate inbox agent's new plugins
-    const inboxPlugins = inboxAgentId ? agentStore.agentMap[inboxAgentId]?.plugins || [] : [];
-    const inboxIndex = inboxPlugins.indexOf(id);
-    let newInboxPlugins: string[];
-    if (shouldOpen) {
-      newInboxPlugins = inboxIndex === -1 ? [...inboxPlugins, id] : inboxPlugins;
-    } else {
-      newInboxPlugins = inboxIndex !== -1 ? inboxPlugins.filter((p) => p !== id) : inboxPlugins;
-    }
-
-    if (inboxAgentId) {
-      await agentStore.updateAgentConfigById(inboxAgentId, { plugins: newInboxPlugins });
-    }
+    // upsertPluginMode preserves an already-matching entry as-is and flips a
+    // disabled entry back to pinned in place, instead of blindly pushing a
+    // duplicate bare-string identifier.
+    const inboxRawPlugins = agentStore.agentMap[inboxAgentId]?.plugins;
+    await agentStore.updateAgentConfigById(inboxAgentId, {
+      plugins: upsertPluginMode(inboxRawPlugins, id, shouldOpen ? 'pinned' : 'auto'),
+    });
   };
 
   updateDefaultModel = async (model: string, provider: string): Promise<void> => {

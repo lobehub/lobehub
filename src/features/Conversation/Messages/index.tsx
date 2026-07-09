@@ -98,6 +98,7 @@ const MessageItem = memo<MessageItemProps>(
       role === 'assistant' || role === 'assistantGroup' || role === 'supervisor';
     const supportsTextSelectionActions =
       role === 'user' || role === 'assistant' || role === 'assistantGroup';
+    const shouldDimCreatingMessage = isMessageCreating && role !== 'user';
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
@@ -238,7 +239,7 @@ const MessageItem = memo<MessageItemProps>(
       <>
         {enableHistoryDivider && <History />}
         <Flexbox
-          className={cx(styles.message, className, isMessageCreating && styles.loading)}
+          className={cx(styles.message, className, shouldDimCreatingMessage && styles.loading)}
           data-index={index}
           onContextMenu={onContextMenu}
         >

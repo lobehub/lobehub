@@ -711,7 +711,7 @@ export class GeneralChatAgent implements Agent {
         // Single sub-agent completed, continue to call LLM with result
         const { parentMessageId } = context.payload as SubAgentResultPayload;
 
-        // Continue to call LLM with updated messages (task message is already in state)
+        // Continue to call LLM with the latest state after the sub-agent run.
         return this.toLLMCall(
           {
             messages: state.messages,
@@ -732,9 +732,9 @@ export class GeneralChatAgent implements Agent {
           return { reason: 'queued_message_interrupt', type: 'finish' };
         }
 
-        // Inject a virtual user message to force the model to summarize or continue
+        // Inject a virtual user message to force the model to summarize or continue.
         // This fixes an issue where some models (e.g., Kimi K2) return empty content
-        // when the last message is a task result, thinking the task is already done
+        // when the last message is a sub-agent result, thinking the task is already done.
         const messagesWithPrompt = [
           ...state.messages,
           {
@@ -744,7 +744,7 @@ export class GeneralChatAgent implements Agent {
           },
         ];
 
-        // Continue to call LLM with updated messages (task messages are already in state)
+        // Continue to call LLM with the latest state after the sub-agent runs.
         return this.toLLMCall(
           {
             messages: messagesWithPrompt,

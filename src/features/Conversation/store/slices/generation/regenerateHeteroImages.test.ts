@@ -45,7 +45,10 @@ vi.mock('@/services/message', () => ({
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgentWorkingDirectoryById: () => () => '/work/dir' },
+  agentByIdSelectors: {
+    getAgentWorkingDirectoryById: () => () => '/work/dir',
+    isWorkspaceAgentById: () => () => false,
+  },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {

@@ -14,8 +14,10 @@ import {
 import {
   type ComposioServiceSummary,
   type CredSummary,
+  excludeDisabledComposioServices,
   generateComposioServicesList,
   generateCredsList,
+  resolveAvailableComposioServices,
 } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { builtinTools } from '@lobechat/builtin-tools';
@@ -62,7 +64,13 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
@@ -646,12 +654,25 @@ export const callLlm =
                 )
                 .map((p) => p.identifier),
             );
-            const connected: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter((t) =>
-              connectedIds.has(t.identifier),
+            // Disabled services are dropped from both lists — not surfaced as
+            // "connected, use directly" (this agent shouldn't use it) nor as
+            // "available to connect" (the account-level OAuth connection, if
+            // any, is untouched; this agent just isn't meant to see it).
+            let disabledIdSet = new Set<string>();
+            if (agentId) {
+              const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+              const agentConfig = await agentModel.getAgentConfigById(agentId);
+              disabledIdSet = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
+            }
+            const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
+              COMPOSIO_APP_TYPES.filter((t) => connectedIds.has(t.identifier)),
+              disabledIdSet,
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
-            const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-              (t) => !connectedIds.has(t.identifier),
-            ).map((t) => ({ identifier: t.identifier, name: t.label }));
+            const available = resolveAvailableComposioServices(
+              COMPOSIO_APP_TYPES,
+              connectedIds,
+              disabledIdSet,
+            );
             composioServicesListStr = generateComposioServicesList(connected, available);
             log(
               'Fetched Composio services for {{COMPOSIO_SERVICES_LIST}}: connected=%d, available=%d',
@@ -688,9 +709,9 @@ export const callLlm =
               // search API — can't see installable builtin/Composio tools or their
               // enabled/connected status, so the model may pick invalid ids or
               // claim a supported tool is unavailable.
-              const enabledPlugins: string[] = Array.isArray(editingConfig.plugins)
-                ? (editingConfig.plugins as string[])
-                : [];
+              const enabledPlugins: string[] = getActivePluginIds(
+                Array.isArray(editingConfig.plugins) ? editingConfig.plugins : undefined,
+              );
               const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
               const officialTools: OfficialToolItem[] = [];
 
@@ -747,7 +768,7 @@ export const callLlm =
                   openingMessage: editingConfig.openingMessage ?? undefined,
                   openingQuestions: editingConfig.openingQuestions ?? undefined,
                   params: editingConfig.params ?? undefined,
-                  plugins: editingConfig.plugins ?? undefined,
+                  plugins: enabledPlugins,
                   provider: editingConfig.provider ?? undefined,
                   systemRole: editingConfig.systemRole ?? undefined,
                 },

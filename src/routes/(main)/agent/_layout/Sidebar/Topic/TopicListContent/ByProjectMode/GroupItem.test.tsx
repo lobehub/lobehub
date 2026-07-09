@@ -125,6 +125,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById: () => () => ({ boundDeviceId: 'device-1' }),
     isAgentHeterogeneousById: () => () => true,
+    isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
     getAgentConfigById: () => () => undefined,

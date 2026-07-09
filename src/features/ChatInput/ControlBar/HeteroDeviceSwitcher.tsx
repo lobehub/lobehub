@@ -377,6 +377,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
@@ -393,11 +394,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  const deviceRows = devices ?? [];
-  const hasNoDevices = deviceRows.length === 0;
-  // On web with no device, the prominent download card below replaces the small
-  // header link — avoid showing the same CTA twice.
-  const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
 
   // Workspace agents drop the personal section entirely — only workspace
   // devices are reachable to every member, so no one should see (let alone
@@ -409,6 +405,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Only split into Personal / Workspace sections once a workspace device exists;
   // otherwise (personal mode / OSS) the list stays flat, exactly as before.
   const showDeviceGroups = workspaceDevices.length > 0;
+
+  // Empty-state accounting must use the rows the CURRENT agent can actually
+  // pick (post scope filtering) — a workspace agent whose members only have
+  // personal devices would otherwise render neither devices nor an empty state.
+  const deviceRows = [...personalDevices, ...workspaceDevices];
+  const hasNoDevices = deviceRows.length === 0;
+  // On web with no device, the prominent download card below replaces the small
+  // header link — avoid showing the same CTA twice. Workspace agents get the
+  // enroll hint instead: downloading the desktop app wouldn't help until the
+  // machine is enrolled into the workspace pool.
+  const showWebDownloadCard = !isDesktop && !isWorkspaceAgent && hasNoDevices && !isLoading;
+  const showWorkspaceEnrollHint = isWorkspaceAgent && hasNoDevices && !isLoading;
 
   // Compute chip
   let chipIcon: ReactNode = <Icon icon={BoxIcon} size={14} />;
@@ -517,7 +525,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {isDesktop ? (
+      {/* `local` pins this machine's PERSONAL deviceId, which a workspace agent
+          can never bind (the server only accepts workspace-enrolled device ids),
+          so hide it there — same policy as hiding personal devices above. */}
+      {isDesktop && !isWorkspaceAgent ? (
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
@@ -559,6 +570,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
+      {/* Workspace agent with no workspace device: personal machines are
+          suppressed above, so guide the user to enroll one into the shared
+          pool instead of showing a bare menu. */}
+      {showWorkspaceEnrollHint ? (
+        <div className={styles.empty}>
+          {t('heteroAgent.executionTarget.noWorkspaceDevices', {
+            cmd: `lh connect --workspace ${agentWorkspaceId}`,
+          })}
+        </div>
+      ) : null}
       {/* On web with no remote device, guide the user to the desktop app (which
           unlocks local execution + `lh connect`) rather than a muted dead-end. */}
       {showWebDownloadCard ? (
@@ -582,7 +603,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
         </a>
       ) : null}
-      {hasNoDevices && !isLoading && isDesktop ? (
+      {hasNoDevices && !isLoading && isDesktop && !isWorkspaceAgent ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>

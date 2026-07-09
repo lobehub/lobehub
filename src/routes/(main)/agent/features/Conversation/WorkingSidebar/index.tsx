@@ -116,10 +116,14 @@ const AgentWorkingSidebar = memo(() => {
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
 
   // Running against a bound device (remote, or this machine as a device): file

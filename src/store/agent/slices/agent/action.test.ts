@@ -2,6 +2,7 @@ import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { message } from '@/components/AntdStaticMethods';
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
@@ -36,6 +37,12 @@ vi.mock('@/services/agentDocument', () => ({
     documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
   },
   resolveAgentDocumentsContext: vi.fn(),
+}));
+
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: {
+    error: vi.fn(),
+  },
 }));
 
 // Mock sessionStore
@@ -389,6 +396,32 @@ describe('AgentSlice Actions', () => {
         { model: 'gpt-4' },
         expect.any(AbortSignal),
       );
+    });
+
+    it('should surface the failure and roll back to server truth when the save is rejected', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(
+        new Error('Workspace agent can only bind devices enrolled in the same workspace.'),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      const refreshSpy = vi.spyOn(result.current, 'internal_refreshAgentConfig');
+
+      await act(async () => {
+        await result.current.updateAgentConfig({
+          agencyConfig: { boundDeviceId: 'personal-device', executionTarget: 'device' },
+        });
+      });
+
+      expect(message.error).toHaveBeenCalled();
+      // Optimistic value must not survive a rejected write — refetch server truth.
+      expect(refreshSpy).toHaveBeenCalledWith('agent-1');
+      expect(result.current.saveStatus).toBe('idle');
     });
   });
 

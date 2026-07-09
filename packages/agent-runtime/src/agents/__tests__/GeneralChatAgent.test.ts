@@ -1663,7 +1663,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1671,7 +1671,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: true,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           result: 'Task result',
         },
@@ -1702,7 +1701,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1710,7 +1709,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: false,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           error: 'Task timeout after 1800000ms',
         },
@@ -1737,7 +1735,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1763,16 +1761,16 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
-          { success: true, taskMessageId: 'task-2', threadId: 'thread-2', result: 'Task 2 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-2', result: 'Task 2 result' },
         ],
       });
 
@@ -1808,18 +1806,17 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
           {
             success: false,
-            taskMessageId: 'task-2',
             threadId: 'thread-2',
             error: 'Task timeout after 1800000ms',
           },
@@ -1854,8 +1851,8 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 

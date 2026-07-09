@@ -21,7 +21,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
@@ -90,9 +90,11 @@ const HeterogeneousChatInput = memo(() => {
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig,
   );
   const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
+    workspaceScoped: isWorkspaceAgent,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
 

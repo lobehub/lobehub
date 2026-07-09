@@ -1,3 +1,4 @@
+import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -10,7 +11,7 @@ import { useStore } from '../../store';
 const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
   const pluginManifestLoading = useToolStore((s) => s.pluginInstallLoading, isEqual);
   const [userEnabledPlugins, hasPlugin, disabled, toggleAgentPlugin] = useStore((s) => [
-    s.config.plugins || [],
+    getActivePluginIds(s.config.plugins),
     !!s.config.plugins,
     s.disabled,
     s.toggleAgentPlugin,

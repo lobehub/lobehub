@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import type * as Antd from 'antd';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,8 +21,12 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+interface AntdMockModule {
+  Breadcrumb: (props: { items: Array<{ title: ReactNode }> }) => ReactNode;
+}
+
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof Antd>();
+  const actual = await importOriginal<AntdMockModule>();
 
   return {
     ...actual,

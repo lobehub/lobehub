@@ -50,10 +50,14 @@ export const useProjectSkillResolver = (
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
