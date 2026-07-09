@@ -1,4 +1,5 @@
 import type { ModelUsage } from '@lobechat/types';
+import { imageUrlToBase64, parseDataUri } from '@lobechat/utils';
 import createDebug from 'debug';
 
 import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
@@ -59,10 +60,24 @@ const sniffImageMimeType = (b64: string): string => {
   return 'image/png';
 };
 
-const buildRequestBody = (
+/**
+ * Inline a reference image so OpenRouter never has to reach back into the
+ * deployment. Lobe uploads are forwarded as `${APP_URL}/f/:id` proxy URLs,
+ * which are unreachable from OpenRouter on self-hosted/private deployments;
+ * convert those to base64 data URLs before sending. Data URLs pass through
+ * untouched.
+ */
+const inlineReferenceUrl = async (url: string): Promise<string> => {
+  if (parseDataUri(url).type === 'base64') return url;
+
+  const { base64, mimeType } = await imageUrlToBase64(url);
+  return `data:${mimeType};base64,${base64}`;
+};
+
+const buildRequestBody = async (
   model: string,
   params: CreateImagePayload['params'],
-): OpenRouterImageRequest => {
+): Promise<OpenRouterImageRequest> => {
   const body: OpenRouterImageRequest = {
     model,
     prompt: params.prompt,
@@ -81,7 +96,8 @@ const buildRequestBody = (
   ].filter(Boolean);
 
   if (referenceUrls.length > 0) {
-    body.input_references = referenceUrls.map((url) => ({
+    const inlinedUrls = await Promise.all(referenceUrls.map(inlineReferenceUrl));
+    body.input_references = inlinedUrls.map((url) => ({
       image_url: { url },
       type: 'image_url' as const,
     }));
@@ -107,7 +123,7 @@ export async function createOpenRouterImage(
 
   try {
     const endpoint = `${(baseURL || DEFAULT_BASE_URL).replace(/\/+$/, '')}/images`;
-    const requestBody = buildRequestBody(requestModel, params);
+    const requestBody = await buildRequestBody(requestModel, params);
 
     log('Calling OpenRouter image API: %s with model: %s', endpoint, requestModel);
 

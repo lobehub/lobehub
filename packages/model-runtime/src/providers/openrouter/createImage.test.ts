@@ -1,9 +1,16 @@
 // @vitest-environment node
+import type * as LobeUtils from '@lobechat/utils';
+import { imageUrlToBase64 } from '@lobechat/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateImagePayload } from '../../types/image';
 import { createOpenRouterImage } from './createImage';
+
+vi.mock('@lobechat/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobeUtils>()),
+  imageUrlToBase64: vi.fn(),
+}));
 
 const mockOptions: CreateImageOptions = {
   apiKey: 'test-api-key',
@@ -109,23 +116,49 @@ describe('createOpenRouterImage', () => {
       });
     });
 
-    it('should map imageUrls to input_references for image editing', async () => {
+    it('should inline proxy reference URLs to base64 data URLs for image editing', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce(mockSuccessResponse());
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
+        base64: PNG_B64,
+        mimeType: 'image/png',
+      });
 
       const payload: CreateImagePayload = {
         model: 'google/gemini-3.1-flash-image',
         params: {
-          imageUrls: ['https://example.com/ref.png'],
+          imageUrls: ['https://app.example.com/f/abc123'],
           prompt: 'Make it blue',
         },
       };
 
       await createOpenRouterImage(payload, mockOptions);
 
+      expect(imageUrlToBase64).toHaveBeenCalledWith('https://app.example.com/f/abc123');
+
       const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
       expect(body.input_references).toEqual([
-        { image_url: { url: 'https://example.com/ref.png' }, type: 'image_url' },
+        { image_url: { url: `data:image/png;base64,${PNG_B64}` }, type: 'image_url' },
       ]);
+    });
+
+    it('should pass through data URL references without fetching', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce(mockSuccessResponse());
+
+      const dataUrl = `data:image/png;base64,${PNG_B64}`;
+      const payload: CreateImagePayload = {
+        model: 'google/gemini-3.1-flash-image',
+        params: {
+          imageUrls: [dataUrl],
+          prompt: 'Make it blue',
+        },
+      };
+
+      await createOpenRouterImage(payload, mockOptions);
+
+      expect(imageUrlToBase64).not.toHaveBeenCalled();
+
+      const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+      expect(body.input_references).toEqual([{ image_url: { url: dataUrl }, type: 'image_url' }]);
     });
 
     it('should convert usage to modelUsage with cost', async () => {
