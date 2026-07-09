@@ -1042,6 +1042,8 @@
   "tab.usage": "用量",
   "tools.activation.auto": "自动",
   "tools.activation.auto.desc": "智能调用",
+  "tools.activation.disabled": "已禁用",
+  "tools.activation.disabled.desc": "不会启用",
   "tools.activation.fixed.hint": "由应用强制开启，始终可用，无法关闭",
   "tools.activation.pinned": "固定启用",
   "tools.activation.pinned.desc": "始终注入",
