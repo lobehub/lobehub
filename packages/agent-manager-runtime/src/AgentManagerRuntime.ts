@@ -319,12 +319,23 @@ export class AgentManagerRuntime {
       // orchestrator can reason about what the external agent can actually do.
       const runtime = describeHeterogeneousAgent(config.agencyConfig);
 
+      // Normalize to identifier strings (annotated with mode when not
+      // pinned) — `config.plugins` is the raw AgentPluginEntry[] (string |
+      // {identifier, mode}), but both the LLM-facing summary and the
+      // GetAgentDetailState.config.plugins contract expect string[]. Passing
+      // object-shaped entries through would break GetAgentDetailRender's
+      // <Tag key={plugin}>{plugin}</Tag>.
+      const pluginSummaries = config.plugins?.map((entry) => {
+        const { identifier, mode } = parsePluginEntry(entry);
+        return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+      });
+
       const detail = {
         config: {
           model: config.model,
           openingMessage: config.openingMessage,
           openingQuestions: config.openingQuestions,
-          plugins: config.plugins,
+          plugins: pluginSummaries,
           provider: config.provider,
           ...(runtime && { runtime }),
           systemRole: config.systemRole,
@@ -344,13 +355,7 @@ export class AgentManagerRuntime {
       if (detail.config.model)
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
       if (detail.config.plugins?.length) {
-        // Annotate non-pinned entries so the LLM sees a disabled plugin as
-        // disabled, not as a plain enabled identifier.
-        const pluginSummaries = detail.config.plugins.map((entry) => {
-          const { identifier, mode } = parsePluginEntry(entry);
-          return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
-        });
-        parts.push(`Plugins: ${pluginSummaries.join(', ')}`);
+        parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
       }
       parts.push(...renderHeteroRuntimeLines(runtime));
       if (detail.config.systemRole) {

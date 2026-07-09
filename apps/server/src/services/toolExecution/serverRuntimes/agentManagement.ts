@@ -182,12 +182,23 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${params.agentId}" not found.`, success: false };
           }
 
+          // Normalize to identifier strings (annotated with mode when not
+          // pinned) — `agent.plugins` is the raw AgentPluginEntry[] (string |
+          // {identifier, mode}), but both the LLM-facing summary and the
+          // GetAgentDetailState.config.plugins contract expect string[].
+          // Passing object-shaped entries through to the client would break
+          // GetAgentDetailRender's <Tag key={plugin}>{plugin}</Tag>.
+          const pluginSummaries = agent.plugins?.map((entry) => {
+            const { identifier, mode } = parsePluginEntry(entry);
+            return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+          });
+
           const detail = {
             config: {
               model: agent.model,
               openingMessage: agent.openingMessage,
               openingQuestions: agent.openingQuestions,
-              plugins: agent.plugins,
+              plugins: pluginSummaries,
               provider: agent.provider,
               systemRole: agent.systemRole,
             },
@@ -206,13 +217,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           if (detail.config.model)
             parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
           if (detail.config.plugins?.length) {
-            // Annotate non-pinned entries so the LLM sees a disabled plugin as
-            // disabled, not as a plain enabled identifier.
-            const pluginSummaries = detail.config.plugins.map((entry) => {
-              const { identifier, mode } = parsePluginEntry(entry);
-              return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
-            });
-            parts.push(`Plugins: ${pluginSummaries.join(', ')}`);
+            parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
           }
           if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
 
