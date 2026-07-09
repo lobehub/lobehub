@@ -1,3 +1,4 @@
+import type { TaskRunTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -15,6 +16,8 @@ export interface OnTopicCompletePayload {
   lastAssistantContent?: string;
   operationId: string;
   reason?: string;
+  // Static body field set by TaskRunnerService — what triggered the run.
+  runTrigger?: TaskRunTrigger;
   taskId: string;
   taskIdentifier: string;
   topicId?: string;
@@ -29,6 +32,7 @@ export async function onTopicComplete(c: Context) {
       lastAssistantContent,
       operationId,
       reason,
+      runTrigger,
       taskId,
       taskIdentifier,
       topicId,
@@ -63,6 +67,7 @@ export async function onTopicComplete(c: Context) {
       lastAssistantContent,
       operationId,
       reason: reason || 'done',
+      runTrigger,
       taskId,
       taskIdentifier,
       topicId,

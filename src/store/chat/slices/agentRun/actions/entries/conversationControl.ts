@@ -19,6 +19,7 @@ import {
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -99,6 +100,36 @@ export class ConversationControlActionImpl {
       (op) =>
         op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
     );
+  };
+
+  #resolveHeteroInterventionExecutionOperation = (
+    initialOperationId: string,
+  ): { operation?: Operation; operationId: string } => {
+    const operations: ChatStore['operations'] = this.#get().operations;
+    const visited = new Set<string>();
+    let currentOperationId: string | undefined = initialOperationId;
+    let lastResolved: { operation?: Operation; operationId: string } | undefined;
+
+    while (currentOperationId && !visited.has(currentOperationId)) {
+      visited.add(currentOperationId);
+      const operation: Operation | undefined = operations[currentOperationId];
+      lastResolved = { operation, operationId: currentOperationId };
+
+      if (!operation) break;
+
+      // `sendMessage` is the tree root, but it does not own the AskUser bridge.
+      // Stop at the runtime execution node that produced this intervention.
+      if (
+        operation.type === 'execHeterogeneousAgent' ||
+        operation.type === 'execServerAgentRuntime'
+      ) {
+        return { operation, operationId: currentOperationId };
+      }
+
+      currentOperationId = operation.parentOperationId;
+    }
+
+    return lastResolved ?? { operationId: initialOperationId };
   };
 
   /**
@@ -915,18 +946,25 @@ export class ConversationControlActionImpl {
       return;
     }
 
-    // Walk up to the assistant that owns this tool — its operation is the
-    // running CC stream we need to address. Falls through to the tool
-    // message id itself if a producer ever associated it directly.
+    // Walk up to the assistant that owns this tool. `messageOperationMap` is a
+    // most-granular pointer, so it may reference a transient child op
+    // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
+    // the AskUser bridge.
     const { messageOperationMap } = this.#get();
-    const operationId =
+    const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
       messageOperationMap?.[toolMessageId];
 
-    if (!operationId) {
+    if (!candidateOperationId) {
       console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
       return;
     }
+
+    // Resolve the runtime execution op before choosing IPC vs remote transport.
+    // For local CC this is `execHeterogeneousAgent`; for gateway/device runs
+    // this is `execServerAgentRuntime`.
+    const { operation, operationId } =
+      this.#resolveHeteroInterventionExecutionOperation(candidateOperationId);
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -940,7 +978,6 @@ export class ConversationControlActionImpl {
     // matches the active conversation the user just clicked in. The IPC
     // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
     // toolCallIds, so it's safe to fire even when the bridge is gone.
-    const operation = this.#get().operations[operationId];
     const operationAlive = !!operation;
     if (!operationAlive) {
       console.warn(

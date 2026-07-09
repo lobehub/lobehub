@@ -1,7 +1,7 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { ExecAgentResult, TaskItem } from '@lobechat/types';
+import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -22,6 +22,13 @@ export interface RunTaskParams {
   continueTopicId?: string;
   extraPrompt?: string;
   taskId: string;
+  /**
+   * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
+   * path (TRPC `task.run`, agent `runTask` tool). The scheduler ticks pass
+   * `'schedule'` / `'heartbeat'` so the lifecycle can tell an ad-hoc run apart
+   * from an automation tick (LOBE-11388/11391).
+   */
+  trigger?: TaskRunTrigger;
 }
 
 export interface RunTaskResult extends ExecAgentResult {
@@ -59,7 +66,7 @@ export class TaskRunnerService {
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
-    const { taskId: idOrIdentifier, continueTopicId, extraPrompt } = params;
+    const { taskId: idOrIdentifier, continueTopicId, extraPrompt, trigger = 'manual' } = params;
 
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) {
@@ -194,6 +201,7 @@ export class TaskRunnerService {
                 lastAssistantContent: event.lastAssistantContent,
                 operationId: event.operationId,
                 reason: event.reason || 'done',
+                runTrigger: trigger,
                 taskId,
                 taskIdentifier,
                 topicId: event.topicId,
@@ -202,7 +210,10 @@ export class TaskRunnerService {
             id: 'task-on-complete',
             type: 'onComplete' as const,
             webhook: {
-              body: { taskId, taskIdentifier, userId },
+              // `runTrigger` rides in the static body so the production webhook
+              // callback (which reconstructs onTopicComplete params server-side)
+              // knows whether this was a manual run or an automation tick.
+              body: { runTrigger: trigger, taskId, taskIdentifier, userId },
               delivery: 'qstash' as const,
               url: '/api/workflows/task/on-topic-complete',
             },
@@ -228,6 +239,7 @@ export class TaskRunnerService {
           await this.taskTopicModel.add(task.id, result.topicId, {
             operationId: result.operationId,
             seq: (task.totalTopics || 0) + 1,
+            trigger,
           });
         }
       }
@@ -244,9 +256,18 @@ export class TaskRunnerService {
         try {
           const failedTask = await this.taskModel.resolve(idOrIdentifier);
           if (failedTask && failedTask.status === 'running') {
-            await this.taskModel.updateStatus(failedTask.id, 'paused', {
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            const errorText = error instanceof Error ? error.message : 'Unknown error';
+            // A failed kickoff must not kill an automation task's schedule: the
+            // scheduling state is not a per-run health signal. Restore the
+            // resting 'scheduled' state so the next tick still fires (this is
+            // the sync mirror of the async onTopicComplete error handling —
+            // LOBE-11388/11389). Non-automation (ad-hoc / dependency) tasks keep
+            // the legacy pause-for-attention behavior.
+            if (failedTask.automationMode) {
+              await this.taskModel.updateStatus(failedTask.id, 'scheduled', { error: errorText });
+            } else {
+              await this.taskModel.updateStatus(failedTask.id, 'paused', { error: errorText });
+            }
           }
         } catch {
           // Rollback itself failed, ignore

@@ -2,7 +2,15 @@ import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@l
 
 /** Minimal reference an executor needs back after creating a message. */
 export interface RuntimeMessageRef {
+  agentId?: string | null;
+  groupId?: string | null;
   id: string;
+  model?: string | null;
+  parentId?: string | null;
+  provider?: string | null;
+  role?: string;
+  threadId?: string | null;
+  topicId?: string | null;
 }
 
 export interface QueryMessagesInput {

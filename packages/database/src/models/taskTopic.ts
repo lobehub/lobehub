@@ -63,7 +63,11 @@ export class TaskTopicModel {
   async add(
     taskId: string,
     topicId: string,
-    params: { operationId?: string; seq: number },
+    params: {
+      operationId?: string;
+      seq: number;
+      trigger?: 'manual' | 'schedule' | 'heartbeat';
+    },
   ): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
@@ -73,6 +77,7 @@ export class TaskTopicModel {
         seq: params.seq,
         taskId,
         topicId,
+        trigger: params.trigger,
         userId: this.userId,
         visibility,
         workspaceId: this.workspaceId ?? null,
@@ -211,9 +216,22 @@ export class TaskTopicModel {
     return result[0] || null;
   }
 
-  async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
+  /**
+   * Count a task's runs, optionally scoped by creation time and/or trigger
+   * source.
+   *
+   * `triggers` filters on the `trigger` column so the maxExecutions quota can
+   * count only automation ticks and ignore ad-hoc manual runs (LOBE-11391).
+   * Legacy rows have a NULL trigger; they are excluded whenever `triggers` is
+   * passed (they predate the column and can't be attributed to a schedule).
+   */
+  async countByTask(
+    taskId: string,
+    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat'> },
+  ): Promise<number> {
     const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
+    if (options?.triggers?.length) conditions.push(inArray(taskTopics.trigger, options.triggers));
 
     const rows = await this.db
       .select({ value: count() })

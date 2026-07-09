@@ -109,6 +109,109 @@ describe('createGatewayEventHandler', () => {
     expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
   });
 
+  it('skips tool_end DB refetch for hetero events that already reconciled frontend state', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(makeEvent('tool_end', { isSuccess: true, skipMessageFetch: true }));
+    await flush();
+
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('keeps gateway tool_end on the DB-refetch path even if the skip flag is present', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('tool_end', { isSuccess: true, skipMessageFetch: true }));
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledWith(context);
+    expect(store.replaceMessages).toHaveBeenCalledWith([], { context });
+  });
+
+  it('skips hetero execution_complete DB refetch when frontend state is the snapshot', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(makeEvent('step_complete', { phase: 'execution_complete', skipMessageFetch: true }));
+    await flush();
+
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('preserves existing result_msg_id when a tools_calling chunk omits result links', async () => {
+    const store = createStore({
+      key: [
+        {
+          content: '',
+          id: 'seed-msg',
+          role: 'assistant',
+          tools: [
+            { apiName: 'Read', id: 'tc-1', result_msg_id: 'tool-msg-1' },
+            { apiName: 'Write', id: 'tc-2', result_msg_id: 'tool-msg-2' },
+          ],
+        } as unknown as UIChatMessage,
+      ],
+    });
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tools_calling',
+        toolsCalling: [
+          { apiName: 'Read', id: 'tc-1' },
+          { apiName: 'Write', id: 'tc-2', result_msg_id: 'server-tool-msg-2' },
+        ],
+      }),
+    );
+    await flush();
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'seed-msg',
+        type: 'updateMessage',
+        value: {
+          tools: [
+            { apiName: 'Read', id: 'tc-1', result_msg_id: 'tool-msg-1' },
+            { apiName: 'Write', id: 'tc-2', result_msg_id: 'server-tool-msg-2' },
+          ],
+        },
+      },
+      { operationId: 'op-1' },
+    );
+  });
+
   it('does not insert a shell when the assistant row is already in the store', async () => {
     const store = createStore({
       key: [{ content: 'existing', id: 'step2-msg', role: 'assistant' } as UIChatMessage],

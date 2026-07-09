@@ -1,5 +1,6 @@
 import type { ACPBroadcastEvents } from './acp';
 import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
+import type { HeterogeneousAgentBroadcastEvents } from './heterogeneousAgent';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
@@ -18,6 +19,7 @@ export interface MainBroadcastEvents
     ACPBroadcastEvents,
     AutoUpdateBroadcastEvents,
     GatewayConnectionBroadcastEvents,
+    HeterogeneousAgentBroadcastEvents,
     NavigationBroadcastEvents,
     RemoteServerBroadcastEvents,
     ScreenCaptureBroadcastEvents,
