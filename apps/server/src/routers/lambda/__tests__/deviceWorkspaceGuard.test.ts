@@ -5,7 +5,12 @@ import type { DeviceModel } from '@/database/models/device';
 
 import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 
-const mockModel = (row: { defaultCwd?: string | null; workingDirs?: { path: string }[] } | null) =>
+const mockModel = (
+  row: {
+    defaultCwd?: string | null;
+    workingDirs?: Array<{ path: string; git?: { activeWorktree?: string } }>;
+  } | null,
+) =>
   ({
     findByDeviceId: vi.fn().mockResolvedValue(row),
   }) as unknown as DeviceModel;
@@ -44,6 +49,15 @@ describe('assertWorkspaceRootApproved', () => {
     await expect(
       assertWorkspaceRootApproved(model, 'dev-1', '/Users/me/proj-evil'),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('allows a root that matches a worktree activeWorktree', async () => {
+    const model = mockModel({
+      workingDirs: [{ path: '/Users/me/proj', git: { activeWorktree: '/Users/me/proj-feat-x' } }],
+    });
+    await expect(
+      assertWorkspaceRootApproved(model, 'dev-1', '/Users/me/proj-feat-x'),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects when the device has no approved roots at all', async () => {

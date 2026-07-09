@@ -366,11 +366,16 @@ export class LocalFileProtocolManager {
     const workspaceRootApproved =
       this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) ||
       this.indexedProjectRoots.has(normalizedRealWorkspaceRoot);
-    if (
-      workspaceRootApproved &&
-      isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)
-    ) {
-      return normalizedRealFilePath;
+    if (workspaceRootApproved) {
+      // Realpath containment: file resolved inside the real workspace root.
+      if (isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
+      // Non-resolved containment: file appears inside the workspace root even
+      // when the resolved path points elsewhere (symlinked directories).
+      if (isPathWithinRoot(normalizedFilePath, normalizedWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
     }
 
     if (this.hasExternalPreviewApproval(normalizedRealFilePath)) return normalizedRealFilePath;

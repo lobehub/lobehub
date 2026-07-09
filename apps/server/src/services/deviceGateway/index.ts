@@ -54,7 +54,8 @@ const log = debug('lobe-server:device-gateway');
  * with Windows semantics rather than being mangled by `path.posix`.
  */
 export const isPathWithinRoot = (root: string, target: string): boolean => {
-  const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
+  const isWinPath = /^[A-Z]:[/\\]/i.test(root) || /^\\\\/.test(root);
+  const p = isWinPath ? path.win32 : path.posix;
   if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
   const relative = p.relative(p.resolve(root), p.resolve(target));
   return relative === '' || (!relative.startsWith('..') && !p.isAbsolute(relative));

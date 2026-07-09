@@ -101,10 +101,11 @@ export const defaultGetLocalFilePreview = async (
       return { error: 'Missing working directory', success: false };
     }
 
+    const withinRoot = (a: string, b: string) => a === b || a.startsWith(`${b}${path.sep}`);
+
     const realRoot = await safeRealpath(workingDirectory);
     const realFile = await safeRealpath(filePath);
-    const withinRoot = realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`);
-    if (!withinRoot) {
+    if (!withinRoot(realFile, realRoot) && !withinRoot(path.resolve(filePath), workingDirectory)) {
       return { error: 'File is outside the approved workspace', success: false };
     }
 
