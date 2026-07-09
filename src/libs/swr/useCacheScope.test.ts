@@ -10,10 +10,21 @@ import {
 
 let mockUserId: string | null | undefined = undefined;
 let mockIsAuthLoaded = false;
+let mockIsUserStateInit = false;
 let mockWorkspaceId: string | null = null;
+let mockIsDesktop = false;
 
+vi.mock('@lobechat/const', () => ({
+  get isDesktop() {
+    return mockIsDesktop;
+  },
+}));
 vi.mock('@/store/user', () => ({
-  getUserStoreState: () => ({ user: { id: mockUserId }, isLoaded: mockIsAuthLoaded }),
+  getUserStoreState: () => ({
+    isLoaded: mockIsAuthLoaded,
+    isUserStateInit: mockIsUserStateInit,
+    user: { id: mockUserId },
+  }),
 }));
 vi.mock('@/store/user/selectors', () => ({
   authSelectors: { isLoaded: (s: any) => s.isLoaded },
@@ -53,7 +64,9 @@ describe('activeScopeKey + optimistic scope', () => {
     localStorage.clear();
     mockUserId = undefined;
     mockIsAuthLoaded = false;
+    mockIsUserStateInit = false;
     mockWorkspaceId = null;
+    mockIsDesktop = false;
   });
 
   afterEach(() => {
@@ -77,6 +90,22 @@ describe('activeScopeKey + optimistic scope', () => {
     expect(getCacheScope()).toBe('user_real:w2');
   });
 
+  it('getCacheScope ignores the persisted scope once the session resolves signed-out', () => {
+    // expired cookie / sign-out in another tab: session settled, but no user
+    localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
+    mockIsAuthLoaded = true;
+    expect(getCacheScope()).toBe('anon:personal');
+  });
+
+  it('getCacheScope keeps the persisted scope on desktop until user state initializes', () => {
+    // desktop hardcodes isLoaded=true on mount; userId lands with useInitUserState
+    localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
+    mockIsDesktop = true;
+    mockIsAuthLoaded = true;
+    mockIsUserStateInit = false;
+    expect(getCacheScope()).toBe('user_abc:w1');
+  });
+
   it('clearActiveScopeKey removes the persisted scope (logout)', () => {
     localStorage.setItem('lobehub:active-scope', 'user_abc:personal');
     clearActiveScopeKey();
@@ -89,6 +118,8 @@ describe('activeScopeKey + optimistic scope', () => {
 describe('isScopeTrusted', () => {
   beforeEach(() => {
     mockIsAuthLoaded = false;
+    mockIsUserStateInit = false;
+    mockIsDesktop = false;
   });
 
   it('is untrusted while the session check is in flight', () => {
@@ -98,6 +129,20 @@ describe('isScopeTrusted', () => {
 
   it('is trusted once the session check resolves (covers both signed-in and no-auth)', () => {
     mockIsAuthLoaded = true;
+    expect(isScopeTrusted()).toBe(true);
+  });
+
+  it('on desktop, is untrusted until user state initializes even though isLoaded is true', () => {
+    mockIsDesktop = true;
+    mockIsAuthLoaded = true;
+    mockIsUserStateInit = false;
+    expect(isScopeTrusted()).toBe(false);
+  });
+
+  it('on desktop, is trusted once user state initializes', () => {
+    mockIsDesktop = true;
+    mockIsAuthLoaded = true;
+    mockIsUserStateInit = true;
     expect(isScopeTrusted()).toBe(true);
   });
 });
