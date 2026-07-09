@@ -10,12 +10,12 @@ tags:
 
 # 添加新的 Bot 平台
 
-本指南介绍如何向 LobeHub 的渠道系统添加新的 Bot 平台。平台架构是模块化的 —— 每个平台是 `src/server/services/bot/platforms/` 下的一个独立目录。
+本指南介绍如何向 LobeHub 的渠道系统添加新的 Bot 平台。平台架构是模块化的 —— 每个平台是 `apps/server/src/services/bot/platforms/` 下的一个独立目录。
 
 ## 架构概览
 
 ```
-src/server/services/bot/platforms/
+apps/server/src/services/bot/platforms/
 ├── types.ts            # 核心接口（FieldSchema、PlatformClient、ClientFactory 等）
 ├── registry.ts         # PlatformRegistry 类
 ├── index.ts            # 单例注册表 + 平台注册
@@ -83,7 +83,7 @@ packages/chat-adapter-<platform>/
 ## 第一步：创建平台目录
 
 ```bash
-mkdir src/server/services/bot/platforms/<platform-name>
+mkdir apps/server/src/services/bot/platforms/<platform-name>
 ```
 
 需要创建四个文件：
@@ -350,7 +350,7 @@ export const myPlatform: PlatformDefinition = {
 
 ## 第六步：注册平台
 
-编辑 `src/server/services/bot/platforms/index.ts`：
+编辑 `apps/server/src/services/bot/platforms/index.ts`：
 
 ```ts
 import { myPlatform } from './<platform>/definition';
@@ -364,7 +364,7 @@ platformRegistry.register(myPlatform);
 
 ## 第七步：添加 i18n 键
 
-### 默认键（`src/locales/default/agent.ts`）
+### 默认键（`packages/locales/src/default/agent.ts`）
 
 添加平台特有键。尽量复用通用键：
 
@@ -414,13 +414,13 @@ POST /api/agent/webhooks/[platform]/[appId]
 ## 检查清单
 
 - [ ] 确保 Chat SDK Adapter 可用（npm 上的 `@chat-adapter/*` 或自定义的 `packages/chat-adapter-<platform>`）
-- [ ] 创建 `src/server/services/bot/platforms/<platform>/`
+- [ ] 创建 `apps/server/src/services/bot/platforms/<platform>/`
   - [ ] `schema.ts` — 凭据和设置的字段定义
   - [ ] `api.ts` — 出站 API 客户端
   - [ ] `client.ts` — `ClientFactory` + `PlatformClient`
   - [ ] `definition.ts` — `PlatformDefinition` 导出
-- [ ] 在 `src/server/services/bot/platforms/index.ts` 中注册
-- [ ] 在 `src/locales/default/agent.ts` 中添加 i18n 键
+- [ ] 在 `apps/server/src/services/bot/platforms/index.ts` 中注册
+- [ ] 在 `packages/locales/src/default/agent.ts` 中添加 i18n 键
 - [ ] 在 `locales/zh-CN/agent.json` 和 `locales/en-US/agent.json` 中添加翻译
 - [ ] 在 `docs/usage/channels/<platform>.mdx` 中添加配置教程（中英文）
 - [ ] 验证图标在 `const.ts` 中能正确解析（或添加别名）

@@ -48,22 +48,22 @@ When using the `turn` mode, the API Keys will be retrieved in a polling manner a
 - Type: Optional
 - Description: Used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more.
 - Default: -
-- Example: `'model=gpt-4-1106-preview;params.max_tokens=300;plugins=search-engine,lobe-image-designer'`
+- Example: `'model=gpt-4o;params.max_tokens=300;plugins=search-engine,lobe-image-designer'`
 
 The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more. The table below provides detailed information on the configuration options, examples, and corresponding explanations for the `DEFAULT_AGENT_CONFIG` environment variable:
 
-| Configuration Type      | Example                                                                                                            | Explanation                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Basic Key-Value Pair    | `model=gpt-4`                                                                                                      | Set the model to `gpt-4`.                                                                                          |
-| Nested Field            | `tts.sttLocale=en-US`                                                                                              | Set the language locale for the text-to-speech service to `en-US`.                                                 |
-| Array                   | `plugins=search-engine,lobe-image-designer`                                                                        | Enable the `search-engine` and `lobe-image-designer` plugins.                                                      |
-| Chinese Comma           | `plugins=search-engine，lobe-image-designer`                                                                        | Same as above, demonstrating support for Chinese comma separation.                                                 |
-| Multiple Configurations | `model=glm-4;provider=zhipu`                                                                                       | Set the model to `glm-4` and the model provider to `zhipu`.                                                        |
-| Numeric Value           | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                               | Set the maximum tokens to `300`, Set the number of historical messages to 5.                                       |
-| Boolean Value           | `chatConfig.enableHistoryCount=true`, `chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | Enable history length limit, history length compression threshold, and streaming output.                           |
-| Special Characters      | `inputTemplate="Hello; I am a bot;"`                                                                               | Set the input template to `Hello; I am a bot;`.                                                                    |
-| Error Handling          | `model=gpt-4;maxToken`                                                                                             | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                                      |
-| Value Override          | `model=gpt-4;model=gpt-4-1106-preview`                                                                             | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4-1106-preview`. |
+| Configuration Type      | Example                                                                                                            | Explanation                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Basic Key-Value Pair    | `model=gpt-4`                                                                                                      | Set the model to `gpt-4`.                                                                              |
+| Nested Field            | `tts.sttLocale=en-US`                                                                                              | Set the language locale for the text-to-speech service to `en-US`.                                     |
+| Array                   | `plugins=search-engine,lobe-image-designer`                                                                        | Enable the `search-engine` and `lobe-image-designer` plugins.                                          |
+| Chinese Comma           | `plugins=search-engine，lobe-image-designer`                                                                        | Same as above, demonstrating support for Chinese comma separation.                                     |
+| Multiple Configurations | `model=glm-4;provider=zhipu`                                                                                       | Set the model to `glm-4` and the model provider to `zhipu`.                                            |
+| Numeric Value           | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                               | Set the maximum tokens to `300`, Set the number of historical messages to 5.                           |
+| Boolean Value           | `chatConfig.enableHistoryCount=true`, `chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | Enable history length limit, history length compression threshold, and streaming output.               |
+| Special Characters      | `inputTemplate="Hello; I am a bot;"`                                                                               | Set the input template to `Hello; I am a bot;`.                                                        |
+| Error Handling          | `model=gpt-4;maxToken`                                                                                             | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                          |
+| Value Override          | `model=gpt-4;model=gpt-4o`                                                                                         | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4o`. |
 
 Further reading:
 
@@ -74,7 +74,7 @@ Further reading:
 - Type: Optional
 - Description: Used to configure models and providers for LobeHub system agents (such as topic generation, translation, etc.).
 - Default value: `-`
-- Example: `default=ollama/deepseek-v3` or `topic=openai/gpt-4,translation=anthropic/claude-1`
+- Example: `default=ollama/deepseek-v3` or `topic=openai/gpt-4,translation=anthropic/claude-sonnet-4-5-20250929`
 
 The `SYSTEM_AGENT` environment variable supports two configuration methods:
 
@@ -91,17 +91,18 @@ Configuration details:
 
 Available system agents and their functions:
 
-| System Agent        | Key Name          | Function Description                                                                   |
-| ------------------- | ----------------- | -------------------------------------------------------------------------------------- |
-| Topic Generation    | `topic`           | Automatically generates topic names and summaries based on chat content                |
-| Translation         | `translation`     | Handles text translation between multiple languages                                    |
-| Metadata Generation | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
-| History Compression | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
-| Branch Conversation | `thread`          | Automatically generate titles for branch conversations                                 |
-| Image Generation Naming   | `generationTopic`          | AI image automatic topic naming                                         |
-| Input Auto-completion  | `inputCompletion`       | Input auto-completion suggestions (similar to GitHub Copilot ghost text)      |
-| Prompt Rewrite      | `promptRewrite`   | Optimize prompts before generation                                                              |
-| Image Generation Naming   | `generationTopic`          | AI image automatic topic naming                                         |
+| System Agent            | Key Name          | Function Description                                                                   |
+| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
+| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content                |
+| Translation             | `translation`     | Handles text translation between multiple languages                                    |
+| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
+| History Compression     | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
+| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                                 |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text)               |
+| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                                     |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+
 ### `FEATURE_FLAGS`
 
 - Type: Optional
@@ -147,13 +148,6 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
   try using `host.docker.internal` instead of `localhost`. Use `http://user:password@127.0.0.1:7890`
   to connect to an authenticated proxy server.
 </Callout>
-
-### `ENABLE_PROXY_DNS`
-
-- Type: Optional
-- Description: Used to control whether to send DNS queries to the proxy server. When configured as `0`, all DNS queries are resolved locally. If you encounter API access failures or timeouts in your network environment, try setting this option to `1`.
-- Default: `0`
-- Example: `1` or `0`
 
 ### `SSRF_ALLOW_PRIVATE_IP_ADDRESS`
 
@@ -253,11 +247,11 @@ When this feature is enabled, users can upload images or videos while using a mo
 
 - Type: Optional
 - Description: Sets the default number of images to generate for AI image generation. Users can still override this value in their settings.
-- Default: `4`
+- Default: `2`
 - Example: `6`
 - Range: `1-20`
 
-This environment variable allows administrators to customize the default image generation count for their deployment. The value must be between 1 and 20. If not set, it defaults to 4. Users can still adjust this value in their personal settings.
+This environment variable allows administrators to customize the default image generation count for their deployment. The value must be between 1 and 20. If not set, it defaults to 2. Users can still adjust this value in their personal settings.
 
 ## Plugin Service
 
@@ -265,7 +259,7 @@ This environment variable allows administrators to customize the default image g
 
 - Type: Optional
 - Description: Index address of the LobeHub plugin market. If you have deployed the plugin market service on your own, you can use this variable to override the default plugin market address.
-- Default: `https://chat-plugins.lobehub.com`
+- Default: `https://registry.npmmirror.com/@lobehub/plugins-index/v1/files/public`
 
 ### `PLUGIN_SETTINGS`
 
@@ -294,4 +288,4 @@ The above example sets the `SERPAPI_API_KEY` of the `search-engine` plugin to `x
 
 - Type: Optional
 - Description: Index address of the LobeHub assistant market. If you have deployed the assistant market service on your own, you can use this variable to override the default market address.
-- Default: `https://chat-agents.lobehub.com`
+- Default: `https://registry.npmmirror.com/@lobehub/agents-index/v1/files/public`

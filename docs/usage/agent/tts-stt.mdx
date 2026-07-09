@@ -22,7 +22,7 @@ Voice features in LobeHub provide:
 - **Text-to-Speech (TTS)**: Convert AI text responses into spoken audio
 - **Speech-to-Text (STT)**: Speak your messages instead of typing
 - **Hands-Free Mode**: Continuous voice conversations combining both
-- **Multiple Providers**: Choose from various voice styles and languages
+- **Multiple Voices**: Choose from a range of OpenAI voice styles
 - **Per-Agent Voices**: Configure unique voices for different agents
 
 ## Text-to-Speech (TTS)
@@ -35,32 +35,22 @@ To have AI read text aloud, simply highlight any content in the chat window and 
 
 You can also configure an Agent to automatically read all responses as soon as each message completes — useful for hands-free workflows.
 
-### Voice Providers and Options
+### Voice Provider and Options
 
-LobeHub supports two voice providers:
+LobeHub's TTS runs on OpenAI's voice models — premium neural voices with natural prosody and intonation:
 
-<Tabs>
-  <Tab title="OpenAI Voices">
-    Premium neural voices with natural prosody and intonation:
+| Voice   | Character           |
+| ------- | ------------------- |
+| Alloy   | Neutral, balanced   |
+| Echo    | Clear, professional |
+| Fable   | Warm, friendly      |
+| Onyx    | Deep, authoritative |
+| Nova    | Energetic, engaging |
+| Shimmer | Soft, gentle        |
 
-    | Voice   | Character           |
-    | ------- | ------------------- |
-    | Alloy   | Neutral, balanced   |
-    | Echo    | Clear, professional |
-    | Fable   | Warm, friendly      |
-    | Onyx    | Deep, authoritative |
-    | Nova    | Energetic, engaging |
-    | Shimmer | Soft, gentle        |
+You can pick which OpenAI TTS model powers playback — `tts-1` (optimized for speed), `tts-1-hd` (optimized for quality), or `gpt-4o-mini-tts` — alongside the voice.
 
-    **Best for**: Long-form content listening, professional use cases, content requiring natural flow.
-  </Tab>
-
-  <Tab title="Microsoft Edge Speech">
-    Azure Neural Voices — an extensive library with 100+ voices across languages, regional accents (US, UK, AU, and more), and male/female options.
-
-    **Best for**: Specific accent requirements, multi-language content, variety.
-  </Tab>
-</Tabs>
+**Best for**: Long-form content listening, professional use cases, content requiring natural flow.
 
 ### Playback Controls
 
@@ -82,9 +72,9 @@ You can customize the voice conversion experience by selecting your preferred mo
 
 - Open the `Settings` panel
 - Navigate to the `Text-to-Speech` section
-- Choose your desired voice service and AI model
+- Choose your desired OpenAI TTS model and voice
 
-Each Agent can have its own voice. To configure per-Agent: open Agent settings → TTS section → select voice provider → choose a voice → test with sample text → save.
+Each Agent can have its own voice. To configure per-Agent: open Agent settings → TTS section → choose a voice → test with sample text → save.
 
 ## Speech-to-Text (STT)
 

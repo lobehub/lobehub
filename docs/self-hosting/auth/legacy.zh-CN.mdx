@@ -1,6 +1,6 @@
 ---
 title: 旧版身份验证（NextAuth 和 Clerk）
-description: 关于 NextAuth 和 Clerk 等旧版身份验证方法的文档。对于新部署，我们建议使用 Better Auth。
+description: NextAuth 和 Clerk 这两种旧版身份验证方法的历史参考文档，二者均已从 LobeHub 移除，请改用 Better Auth。
 tags:
   - 身份验证服务
   - Next Auth
@@ -11,10 +11,10 @@ tags:
 # 旧版身份验证
 
 <Callout type={'warning'}>
-  **旧版提示**：NextAuth 和 Clerk 是旧版身份验证方案。对于新部署，我们强烈建议使用 [Better Auth](/zh/docs/self-hosting/auth)，它更简洁、更灵活。
+  **旧版提示**：NextAuth 和 Clerk 已从 LobeHub 中完全移除。配置下文相关环境变量会导致部署在构建 / 启动阶段失败。本页仅供历史迁移参考，请改用 [Better Auth](/zh/docs/self-hosting/auth)。
 </Callout>
 
-本页面为仍在使用这些服务的用户提供旧版身份验证方案（NextAuth 和 Clerk）的文档。
+以下认证方式（NextAuth、Clerk）已从 LobeHub 移除，配置相关变量会导致部署失败，本页面仅供历史迁移参考。
 
 ## Clerk
 
@@ -40,13 +40,13 @@ LobeHub 与 Clerk 做了深度集成，能够为用户提供安全、便捷的�
 
 在使用 NextAuth 之前，请先在 LobeHub 的环境变量中设置以下变量：
 
-| 环境变量                             | 类型 | 描述                                                                                                           |
-| -------------------------------- | -- | ------------------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | 必选 | 用于启用 NextAuth 服务，设置为 `1` 以启用，更改此项需要重新编译应用。使用 `lobehub/lobehub` 镜像部署的用户已经默认添加了该项配置。                           |
-| `NEXT_AUTH_SECRET`               | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令： `openssl rand -base64 32`，或者访问 `https://generate-secret.vercel.app/32` 生成秘钥。 |
-| `AUTH_URL`                       | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://example.com/api/auth`                  |
-| `NEXT_AUTH_SSO_PROVIDERS`        | 可选 | 该环境变量用于同时启用多个身份验证源，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。                                       |
-| `NEXT_AUTH_SSO_SESSION_STRATEGY` | 可选 | Auth.js 的会话策略。选项为 `jwt` 或 `database`。默认值为 `jwt`。                                                             |
+| 环境变量                             | 类型      | 描述                                                                                                           |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | *(已废弃)* | 用于启用 NextAuth 服务。NextAuth 已从 LobeHub 中移除，设置该变量会导致部署在构建 / 启动阶段失败。                                             |
+| `NEXT_AUTH_SECRET`               | 必选      | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令： `openssl rand -base64 32`，或者访问 `https://generate-secret.vercel.app/32` 生成秘钥。 |
+| `AUTH_URL`                       | *(已废弃)* | 曾用于指定 Auth.js 在执行 OAuth 验证时的回调地址。设置该变量会导致部署在构建 / 启动阶段失败。                                                     |
+| `NEXT_AUTH_SSO_PROVIDERS`        | *(已废弃)* | 曾用于同时启用多个身份验证源，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。设置该变量会导致部署在构建 / 启动阶段失败。                    |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | *(已废弃)* | Auth.js 的会话策略。设置该变量会导致部署在构建 / 启动阶段失败。                                                                        |
 
 目前支持的身份验证服务有：
 

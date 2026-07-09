@@ -13,12 +13,12 @@ tags:
 
 # Adding a New Bot Platform
 
-This guide walks through the steps to add a new bot platform to LobeHub's channel system. The platform architecture is modular — each platform is a self-contained directory under `src/server/services/bot/platforms/`.
+This guide walks through the steps to add a new bot platform to LobeHub's channel system. The platform architecture is modular — each platform is a self-contained directory under `apps/server/src/services/bot/platforms/`.
 
 ## Architecture Overview
 
 ```
-src/server/services/bot/platforms/
+apps/server/src/services/bot/platforms/
 ├── types.ts            # Core interfaces (FieldSchema, PlatformClient, ClientFactory, etc.)
 ├── registry.ts         # PlatformRegistry class
 ├── index.ts            # Singleton registry + platform registration
@@ -86,7 +86,7 @@ Key points for developing a custom adapter:
 ## Step 1: Create the Platform Directory
 
 ```bash
-mkdir src/server/services/bot/platforms/<platform-name>
+mkdir apps/server/src/services/bot/platforms/<platform-name>
 ```
 
 You will create four files:
@@ -353,7 +353,7 @@ export const myPlatform: PlatformDefinition = {
 
 ## Step 6: Register the Platform
 
-Edit `src/server/services/bot/platforms/index.ts`:
+Edit `apps/server/src/services/bot/platforms/index.ts`:
 
 ```ts
 import { myPlatform } from './<platform>/definition';
@@ -367,7 +367,7 @@ platformRegistry.register(myPlatform);
 
 ## Step 7: Add i18n Keys
 
-### Default keys (`src/locales/default/agent.ts`)
+### Default keys (`packages/locales/src/default/agent.ts`)
 
 Add platform-specific keys. Reuse generic keys where possible:
 
@@ -417,13 +417,13 @@ The `BotMessageRouter` handles routing, on-demand bot loading, and Chat SDK inte
 ## Checklist
 
 - [ ] Ensure a Chat SDK adapter exists (`@chat-adapter/*` on npm or custom `packages/chat-adapter-<platform>`)
-- [ ] Create `src/server/services/bot/platforms/<platform>/`
+- [ ] Create `apps/server/src/services/bot/platforms/<platform>/`
   - [ ] `schema.ts` — Field definitions for credentials and settings
   - [ ] `api.ts` — Outbound API client
   - [ ] `client.ts` — `ClientFactory` + `PlatformClient`
   - [ ] `definition.ts` — `PlatformDefinition` export
-- [ ] Register in `src/server/services/bot/platforms/index.ts`
-- [ ] Add i18n keys in `src/locales/default/agent.ts`
+- [ ] Register in `apps/server/src/services/bot/platforms/index.ts`
+- [ ] Add i18n keys in `packages/locales/src/default/agent.ts`
 - [ ] Add translations in `locales/zh-CN/agent.json` and `locales/en-US/agent.json`
 - [ ] Add setup docs in `docs/usage/channels/<platform>.mdx` (en + zh-CN)
 - [ ] Verify icon resolves in `const.ts` (or add alias)

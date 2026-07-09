@@ -1,42 +1,39 @@
 ---
-title: GTD Tools
+title: Task Tools
 description: >-
-  Manage tasks through conversation — GTD methodology built in. Capture ideas,
-  track progress, focus on what matters.
+  Manage tasks through conversation with the built-in Task tool — capture
+  work, track progress, assign subtasks, and automate follow-through.
 tags:
   - LobeHub
-  - GTD
+  - Task
   - Task Management
-  - Getting Things Done
+  - Subtasks
+  - Automation
 ---
 
-# GTD Tools
+# Task Tools
 
-GTD Tools is a built-in Skill that brings the classic GTD (Getting Things Done) methodology into your conversations. Once enabled, your Agent becomes a task management partner — helping you capture ideas, track progress, and focus on what matters. Manage your schedule directly through natural language: sudden inspiration, household chores, or serious work plans — your Agent records and tracks it all.
+Task Tools (`lobe-task`) is the built-in Skill that turns your Agent into a task management partner. It's enabled by default for every Agent — no setup required. Capture ideas, track progress, break work into subtasks, assign them to other Agents, and automate recurring follow-through, all through natural conversation. Sudden inspiration, a household chore, or a multi-step project plan — your Agent records it, structures it, and helps drive it to completion.
 
-## Enabling GTD Tools
+## Task Tools Is On by Default
 
-GTD Tools is a built-in Skill. Enable it for your Agent before use.
-
-**From Agent Profile** — Go to the Agent Profile page, click **+ Add Skill**, and check **GTD Tools**.
-
-**In a conversation** — Click the Skill icon below the chat input and check **GTD Tools**.
+Unlike marketplace Skills, `lobe-task` ships as one of the default tools every Agent has available — you don't need to open Agent Profile and click **+ Add Skill** to turn it on. If you've customized an Agent's tool list and removed it, you can re-enable it from Agent Profile → **+ Add Skill** → **Task Tools**, but for a fresh Agent it's already active.
 
 ## Creating Tasks
 
-Send your plans in the conversation — your Agent automatically recognizes and confirms the task. No forms, no extra steps.
+Send your plans in the conversation — your Agent recognizes intent and creates a task automatically. No forms, no extra steps.
 
 **Examples:**
 
 - "Add 'Review Q1 report' to my tasks for tomorrow"
 - "I need to call the dentist this week"
 - "Remind me to submit the proposal by Friday"
-- "Put 'Finish the design mockup' on my list for next Monday"
-- "I have a meeting with the client at 3pm — add it to my calendar"
+- "Break this into subtasks: design mockup, get feedback, finalize"
+- "Assign the SEO review subtask to my Marketing Agent"
 
 ## Completing and Updating Tasks
 
-Update tasks through conversational commands. Your Agent handles the updates automatically.
+Update tasks through conversational commands, or let a run finish and update its own status. Your Agent handles the details.
 
 **Examples:**
 
@@ -46,31 +43,60 @@ Update tasks through conversational commands. Your Agent handles the updates aut
 - "Show me all my pending tasks"
 - "Remove the proposal task — I already submitted it"
 
+## Subtasks and Delegation
+
+Tasks can have subtasks and dependencies, and each task can be assigned to a specific Agent:
+
+- **Subtasks** — Split a large task into ordered pieces (e.g. chapter 1, chapter 2, chapter 3) that show up nested under the parent.
+- **Dependencies** — Mark a task as blocked on another so it only starts once its blocker completes.
+- **Assignment** — Assign a task to any Agent by ID; that Agent runs the task when it's triggered.
+- **Verification** — Turn on a delivery-acceptance gate so a separate reviewer checks the work against a stated requirement before the task counts as done.
+
+## Automating Tasks
+
+A task can be turned into a recurring job instead of a one-off: give it a cron schedule or a fixed heartbeat interval, and the Agent runs it automatically going forward. See [Scheduled Tasks](/docs/usage/agent/scheduled-task) for the full walkthrough — from the Agent conversation, open **Tasks** in the left panel, select a task, and use its **Automation** section to configure the schedule.
+
+## Using the CLI
+
+If you use the LobeHub CLI, the same task system is available from the command line via `lh task`:
+
+```
+lh task list                                   # list your tasks
+lh task view T-1                               # view a task's details
+lh task create -i "Draft the release notes"    # create a task
+lh task edit T-1 --status completed            # update a task's status
+```
+
+This is useful for scripting task creation, checking status from automation, or managing tasks alongside coding sessions without switching to the UI.
+
 ## Use Cases
 
 **Capture on the fly** — An idea strikes during a meeting? Tell your Agent in one sentence. No need to switch apps or open a task manager.
 
-**Weekly planning** — Start a conversation: "Here's what I need to do this week…" Your Agent structures it into a manageable list.
+**Weekly planning** — Start a conversation: "Here's what I need to do this week…" Your Agent structures it into a manageable list of tasks and subtasks.
 
 **Context switching** — Moving from one project to another? Ask "What did I leave unfinished on the marketing project?" and pick up where you left off.
 
+**Delegated work** — Break a project into subtasks and assign each one to the Agent best suited for it, then let dependencies and the Automation schedule drive execution.
+
 **Collaboration prep** — Before a team sync, ask "What are my action items from last week?" and show up prepared.
 
-## GTD Tools vs. Other Features
+## Task Tools vs. Other Features
 
-| Feature                                             | Best For                                                                |
-| --------------------------------------------------- | ----------------------------------------------------------------------- |
-| **GTD Tools**                                       | Task lists, deadlines, progress tracking — managed through conversation |
-| [Notebook](/docs/usage/agent/notebook)              | Saving notes, reports, research — documents linked to a Topic           |
-| [Scheduled Tasks](/docs/usage/agent/scheduled-task) | Automated workflows — Agents run on a schedule without you              |
+| Feature                                             | Best For                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Task Tools**                                      | Task lists, subtasks, deadlines, delegation, progress tracking — through conversation |
+| [Notebook](/docs/usage/agent/notebook)              | Saving notes, reports, research — documents linked to a Topic                         |
+| [Scheduled Tasks](/docs/usage/agent/scheduled-task) | Automated recurring runs — driven by a task's Automation schedule                     |
 
-Use GTD for personal task management; use Scheduled Tasks when you want the Agent to execute something automatically at a set time.
+Use Task Tools for everyday task management and delegation; use a task's Automation section when you want it to run itself on a schedule.
 
 ## Tips
 
 - **Be specific about timing** — "Tomorrow at 9am" or "by end of week" helps the Agent prioritize and remind you at the right moment.
 - **Review regularly** — Ask "What's due this week?" at the start of each week to stay on top of commitments.
-- **Combine with Notebook** — Save meeting notes to the Notebook, then ask your Agent to extract action items into GTD tasks.
+- **Combine with Notebook** — Save meeting notes to the Notebook, then ask your Agent to extract action items into tasks.
+- **Use subtasks for anything multi-step** — Breaking work into subtasks with dependencies keeps larger projects organized and lets you delegate pieces independently.
 
 <Cards>
   <Card href={'/docs/usage/agent/notebook'} title={'Notebook'} />
