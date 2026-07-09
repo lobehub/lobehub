@@ -39,7 +39,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
     compression: ctx.userId
       ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
       : undefined,
-    llm: ctx.userId ? new ServerLLMTransport(ctx.serverDB, ctx.userId, ctx.workspaceId) : undefined,
+    llm: ctx.userId ? new ServerLLMTransport(ctx) : undefined,
     messages: new ServerMessageTransport(ctx.messageModel, {
       postProcessUrl: buildPostProcessUrl(ctx),
     }),

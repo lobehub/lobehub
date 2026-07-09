@@ -1,6 +1,11 @@
 import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
 
-import type { CallLLMPayload } from '../types';
+import type {
+  AgentInstructionCallLlm,
+  AgentState,
+  CallLLMPayload,
+  InstructionExecutor,
+} from '../types';
 
 export interface LLMStreamPayload {
   [key: string]: unknown;
@@ -32,6 +37,11 @@ export interface LLMStreamHandlers {
   onText?: (text: string) => void;
 }
 
+export interface LLMCallExecuteInput {
+  instruction: AgentInstructionCallLlm;
+  state: AgentState;
+}
+
 /**
  * Streams a model completion. Server adapter wraps `initModelRuntimeFromDB` +
  * `ModelRuntime.chat` + `consumeStreamUntilDone`; the client adapter wraps
@@ -42,6 +52,13 @@ export interface LLMStreamHandlers {
  * `@lobechat/model-runtime`.
  */
 export interface LLMTransport {
+  /**
+   * Executes a full agent `call_llm` instruction. This is a transitional port:
+   * the server adapter can keep provider/context/persistence specifics while
+   * the package owns the executor registration point. The internals are split
+   * into smaller context/stream/persist ports in the next migration slices.
+   */
+  executeCall?: (input: LLMCallExecuteInput) => ReturnType<InstructionExecutor>;
   stream: (
     payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,

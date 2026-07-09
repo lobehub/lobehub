@@ -103,11 +103,11 @@ import {
   sleep,
   timing,
 } from '../executorHelpers';
+import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
-import { resolveRunActiveDeviceId } from './resolveRunActiveDeviceId';
 
 const SERVER_LLM_RETRY_POLICY = {
   isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,

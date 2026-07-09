@@ -1,5 +1,6 @@
 import type { AgentInstruction, InstructionExecutor } from '@lobechat/agent-runtime';
 import {
+  callLlm as createCallLlmExecutor,
   callTool as createCallToolExecutor,
   callToolsBatch as createCallToolsBatchExecutor,
   compressContext as createCompressContextExecutor,
@@ -13,7 +14,6 @@ import {
 
 import { buildHost } from './buildHost';
 import type { RuntimeExecutorContext } from './context';
-import { callLlm } from './executors/callLlm';
 
 export { type RuntimeExecutorContext } from './context';
 
@@ -25,7 +25,7 @@ export const createRuntimeExecutors = (
   const host = buildHost(ctx);
 
   return {
-    call_llm: callLlm(ctx),
+    call_llm: createCallLlmExecutor(host),
     call_tool: createCallToolExecutor(host),
     call_tools_batch: createCallToolsBatchExecutor(host),
     compress_context: createCompressContextExecutor(host),
