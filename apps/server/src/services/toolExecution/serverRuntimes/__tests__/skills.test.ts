@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     findAll: vi.fn(),
     findById: vi.fn(),
     findByName: vi.fn(),
+    getAgentConfigById: vi.fn(),
     getAgentSkills: vi.fn(),
     getUserSettings: vi.fn(),
     marketService: {},
@@ -37,6 +38,12 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@lobechat/builtin-skills', () => ({
   builtinSkills: [],
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(() => ({
+    getAgentConfigById: mocks.getAgentConfigById,
+  })),
 }));
 
 vi.mock('@/database/models/agentSkill', () => ({
@@ -111,6 +118,7 @@ describe('skillsRuntime', () => {
     mocks.fileService.getFullFileUrl.mockResolvedValue('https://files.example.com/user-skill.zip');
     mocks.findAll.mockResolvedValue({ data: [], total: 0 });
     mocks.findById.mockResolvedValue(undefined);
+    mocks.getAgentConfigById.mockResolvedValue(undefined);
     mocks.findByName.mockImplementation(async (name: string) => {
       if (name === 'user-skill') {
         return {
@@ -135,6 +143,9 @@ describe('skillsRuntime', () => {
     });
   });
 
+  // First dynamic `import('../skills')` in the file pays the real transform
+  // cost for this (now larger) module — default 5s timeout is marginal for
+  // that cold cost alone, independent of test logic.
   it('executes scripts through the sandbox service and only attaches persisted skill zips', async () => {
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
@@ -167,7 +178,7 @@ describe('skillsRuntime', () => {
         },
       }),
     );
-  });
+  }, 20_000);
 
   it('tags sandbox exec results with executionEnv for plugin-state observability', async () => {
     const { skillsRuntime } = await import('../skills');
@@ -185,6 +196,59 @@ describe('skillsRuntime', () => {
     });
 
     expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+  });
+
+  describe('disabled skill enforcement', () => {
+    it('refuses to activate a DB skill the agent has disabled, even though it exists', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'disabled' }],
+      });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? { id: 'user-skill-id', identifier: 'user-skill-identifier', name: 'user-skill' }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('still activates the skill when it is not disabled', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+            }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+    });
   });
 
   // Regression guard for the server/gateway migration: when the execution plan
