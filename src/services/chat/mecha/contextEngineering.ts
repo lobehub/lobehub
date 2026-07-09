@@ -6,8 +6,10 @@ import {
   type ComposioServiceSummary,
   CredsIdentifier,
   type CredSummary,
+  excludeDisabledComposioServices,
   generateComposioServicesList,
   generateCredsList,
+  resolveAvailableComposioServices,
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
@@ -441,14 +443,17 @@ export const contextEngineering = async ({
       // "connected, use directly" (this agent shouldn't use it) nor as
       // "available to connect" (the user's account-level OAuth connection,
       // if any, is untouched; this agent just isn't meant to see it).
-      const connected: ComposioServiceSummary[] = allComposioServers
-        .filter((s) => s.status === ComposioServerStatus.ACTIVE && !disabledIdSet.has(s.identifier))
-        .map((s) => ({ identifier: s.identifier, name: s.label }));
+      const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
+        allComposioServers.filter((s) => s.status === ComposioServerStatus.ACTIVE),
+        disabledIdSet,
+      ).map((s) => ({ identifier: s.identifier, name: s.label }));
 
       const connectedIds = new Set(connected.map((s) => s.identifier));
-      const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-        (t) => !connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
-      ).map((t) => ({ identifier: t.identifier, name: t.label }));
+      const available = resolveAvailableComposioServices(
+        COMPOSIO_APP_TYPES,
+        connectedIds,
+        disabledIdSet,
+      );
 
       composioServicesList = generateComposioServicesList(connected, available);
       log(

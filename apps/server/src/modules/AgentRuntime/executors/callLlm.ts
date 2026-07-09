@@ -14,8 +14,10 @@ import {
 import {
   type ComposioServiceSummary,
   type CredSummary,
+  excludeDisabledComposioServices,
   generateComposioServicesList,
   generateCredsList,
+  resolveAvailableComposioServices,
 } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { builtinTools } from '@lobechat/builtin-tools';
@@ -662,12 +664,15 @@ export const callLlm =
               const agentConfig = await agentModel.getAgentConfigById(agentId);
               disabledIdSet = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
             }
-            const connected: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-              (t) => connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
+            const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
+              COMPOSIO_APP_TYPES.filter((t) => connectedIds.has(t.identifier)),
+              disabledIdSet,
             ).map((t) => ({ identifier: t.identifier, name: t.label }));
-            const available: ComposioServiceSummary[] = COMPOSIO_APP_TYPES.filter(
-              (t) => !connectedIds.has(t.identifier) && !disabledIdSet.has(t.identifier),
-            ).map((t) => ({ identifier: t.identifier, name: t.label }));
+            const available = resolveAvailableComposioServices(
+              COMPOSIO_APP_TYPES,
+              connectedIds,
+              disabledIdSet,
+            );
             composioServicesListStr = generateComposioServicesList(connected, available);
             log(
               'Fetched Composio services for {{COMPOSIO_SERVICES_LIST}}: connected=%d, available=%d',
