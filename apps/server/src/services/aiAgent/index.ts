@@ -2018,6 +2018,7 @@ export class AiAgentService {
 
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
             systemContext: deviceSystemContext,
