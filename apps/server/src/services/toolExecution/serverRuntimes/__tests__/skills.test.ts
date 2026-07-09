@@ -31,7 +31,9 @@ const mocks = vi.hoisted(() => {
     getUserSettings: vi.fn(),
     marketService: {},
     prepareSkillDirectory: vi.fn(),
+    preprocessLhCommand: vi.fn(),
     readResource: vi.fn(),
+    resolveRunWorkspaceId: vi.fn(),
     sandboxService,
   };
 });
@@ -99,6 +101,10 @@ vi.mock('@/server/services/skill/resource', () => ({
   })),
 }));
 
+vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
+  preprocessLhCommand: mocks.preprocessLhCommand,
+}));
+
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     executeToolCall: mocks.executeToolCall,
@@ -107,7 +113,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 }));
 
 vi.mock('../resolveWorkspaceScope', () => ({
-  resolveRunWorkspaceId: vi.fn(async () => undefined),
+  resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
 }));
 
 describe('skillsRuntime', () => {
@@ -132,6 +138,12 @@ describe('skillsRuntime', () => {
     });
     mocks.getAgentSkills.mockResolvedValue([]);
     mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
+    mocks.preprocessLhCommand.mockResolvedValue({
+      command: 'echo ok',
+      isLhCommand: false,
+      skipSkillLookup: false,
+    });
+    mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.sandboxService.callTool.mockResolvedValue({
       result: {
         exitCode: 0,
@@ -196,6 +208,63 @@ describe('skillsRuntime', () => {
     });
 
     expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+  });
+
+  it('passes workspace scope when preprocessing sandbox lh commands', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+    );
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+    });
+  });
+
+  it('recovers workspace scope for sandbox lh commands when context lost it', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+    mocks.resolveRunWorkspaceId.mockResolvedValueOnce('workspace-1');
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      agentId: 'agent-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.resolveRunWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1' }),
+    );
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+    );
   });
 
   describe('disabled skill enforcement', () => {
