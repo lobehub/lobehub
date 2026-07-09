@@ -375,6 +375,7 @@ describe('convertUsage', () => {
     const responseUsage = {
       input_tokens: 100,
       input_tokens_details: {
+        cache_write_tokens: 0,
         cached_tokens: 0,
       },
       output_tokens: 200,
@@ -413,9 +414,13 @@ describe('convertUsage', () => {
     const responseUsage = {
       input_tokens: 4198,
       input_tokens_details: {
+        cache_write_tokens: 0,
         cached_tokens: 4198,
       },
       output_tokens: 598,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
       total_tokens: 4796,
     } as OpenAI.Responses.ResponseUsage;
 
@@ -462,7 +467,14 @@ describe('convertUsage', () => {
 
     const responseUsage = {
       input_tokens: 1_000_000,
+      input_tokens_details: {
+        cache_write_tokens: 0,
+        cached_tokens: 0,
+      },
       output_tokens: 1_000_000,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
       total_tokens: 2_000_000,
     } as OpenAI.Responses.ResponseUsage;
 
