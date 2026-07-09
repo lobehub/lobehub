@@ -107,24 +107,35 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
 
   const allAgents = useMemo(() => [inboxAgent, ...agents], [inboxAgent, agents]);
 
+  const agentMap = useMemo(() => new Map(allAgents.map((agent) => [agent.id, agent])), [allAgents]);
+
   const agentOptions = useMemo(
     () =>
       allAgents.map((agent) => ({
-        label: (
-          <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
-              avatar={agent.avatar || undefined}
-              background={agent.backgroundColor || undefined}
-              size={20}
-              title={agent.title || ''}
-            />
-            <span>{agent.title}</span>
-          </span>
-        ),
+        label: agent.title || agent.id,
         title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
+  );
+
+  const renderAgentLabel = useCallback(
+    (agentId: string, fallback: React.ReactNode) => {
+      const agent = agentMap.get(agentId);
+
+      return (
+        <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+          <Avatar
+            avatar={agent?.avatar || undefined}
+            background={agent?.backgroundColor || undefined}
+            size={20}
+            title={agent?.title || String(fallback)}
+          />
+          <span>{agent?.title || fallback}</span>
+        </span>
+      );
+    },
+    [agentMap],
   );
 
   const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
@@ -193,6 +204,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
             allowClear
             showSearch
             className={styles.agentSelect}
+            labelRender={(option) => renderAgentLabel(String(option.value), option.label)}
             loading={loadingAgents}
             options={agentOptions}
             placeholder={t('run.create.agent.placeholder')}
@@ -206,7 +218,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                   justifyContent: 'space-between',
                 }}
               >
-                {option.label}
+                {renderAgentLabel(String(option.value), option.label)}
                 <ActionIcon
                   icon={SquareArrowOutUpRight}
                   size="small"
