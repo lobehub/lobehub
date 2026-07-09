@@ -1,9 +1,10 @@
-import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
+import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { userService } from '@/services/user';
+import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 
 import { initialOnboardingState } from './initialState';
@@ -337,6 +338,53 @@ describe('onboarding actions', () => {
       expect(result.current.isProcessingStepQueue).toBe(false);
 
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('toggleInboxAgentDefaultPlugin', () => {
+    const updateAgentConfigById = vi.fn();
+
+    beforeEach(() => {
+      updateAgentConfigById.mockClear();
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'inbox-agent-id': { plugins: ['plugin-1'] } as any },
+          builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent-id' },
+          updateAgentConfigById,
+        } as any);
+      });
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      act(() => {
+        useAgentStore.setState({
+          agentMap: {
+            'inbox-agent-id': {
+              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'disabled' }],
+            } as any,
+          },
+        } as any);
+      });
+
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.toggleInboxAgentDefaultPlugin('plugin-2', true);
+      });
+
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
+        plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+      });
+    });
+
+    it('setting open=false reverts the entry to auto, removing it from the array', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.toggleInboxAgentDefaultPlugin('plugin-1', false);
+      });
+
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', { plugins: [] });
     });
   });
 });

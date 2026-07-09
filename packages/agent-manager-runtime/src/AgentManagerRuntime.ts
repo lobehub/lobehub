@@ -20,7 +20,13 @@ import {
   modelsResultsPrompt,
   searchAgentsResultsPrompt,
 } from '@lobechat/prompts';
-import type { BuiltinToolResult, HeterogeneousProviderConfig } from '@lobechat/types';
+import {
+  type BuiltinToolResult,
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
@@ -173,18 +179,17 @@ export class AgentManagerRuntime {
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const currentPlugins = previousConfig?.plugins || [];
-        const isCurrentlyEnabled = currentPlugins.includes(pluginId);
+        const isCurrentlyEnabled = getPluginMode(previousConfig?.plugins, pluginId) === 'pinned';
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
-        let newPlugins: string[];
-        if (shouldEnable && !isCurrentlyEnabled) {
-          newPlugins = [...currentPlugins, pluginId];
-        } else if (!shouldEnable && isCurrentlyEnabled) {
-          newPlugins = currentPlugins.filter((id) => id !== pluginId);
-        } else {
-          newPlugins = currentPlugins;
-        }
+        // upsertPluginMode preserves an already-matching entry as-is and
+        // flips a disabled entry back to pinned in place, instead of
+        // blindly pushing a duplicate bare-string identifier.
+        const newPlugins = upsertPluginMode(
+          previousConfig?.plugins,
+          pluginId,
+          shouldEnable ? 'pinned' : 'auto',
+        );
 
         finalConfig = { ...finalConfig, plugins: newPlugins };
 
@@ -338,7 +343,15 @@ export class AgentManagerRuntime {
       if (detail.meta.description) parts.push(detail.meta.description);
       if (detail.config.model)
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-      if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      if (detail.config.plugins?.length) {
+        // Annotate non-pinned entries so the LLM sees a disabled plugin as
+        // disabled, not as a plain enabled identifier.
+        const pluginSummaries = detail.config.plugins.map((entry) => {
+          const { identifier, mode } = parsePluginEntry(entry);
+          return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+        });
+        parts.push(`Plugins: ${pluginSummaries.join(', ')}`);
+      }
       parts.push(...renderHeteroRuntimeLines(runtime));
       if (detail.config.systemRole) {
         parts.push(`System Prompt: ${detail.config.systemRole}`);
@@ -505,21 +518,19 @@ export class AgentManagerRuntime {
 
       const providers: AvailableProvider[] = filteredList.map((provider) => ({
         id: provider.id,
-        models: provider.children.map(
-          (model): AvailableModel => ({
-            abilities: model.abilities
-              ? {
-                  files: model.abilities.files,
-                  functionCall: model.abilities.functionCall,
-                  reasoning: model.abilities.reasoning,
-                  vision: model.abilities.vision,
-                }
-              : undefined,
-            description: model.description,
-            id: model.id,
-            name: model.displayName || model.id,
-          }),
-        ),
+        models: provider.children.map((model): AvailableModel => ({
+          abilities: model.abilities
+            ? {
+                files: model.abilities.files,
+                functionCall: model.abilities.functionCall,
+                reasoning: model.abilities.reasoning,
+                vision: model.abilities.vision,
+              }
+            : undefined,
+          description: model.description,
+          id: model.id,
+          name: model.displayName || model.id,
+        })),
         name: provider.name,
       }));
 
@@ -1035,11 +1046,14 @@ export class AgentManagerRuntime {
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
     await this.ensureAgentLoaded(agentId);
     const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins || [];
+    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins;
 
-    if (!currentPlugins.includes(pluginId)) {
+    // upsertPluginMode preserves an already-matching entry as-is and flips a
+    // disabled entry back to pinned in place, instead of blindly pushing a
+    // duplicate bare-string identifier.
+    if (getPluginMode(currentPlugins, pluginId) !== 'pinned') {
       await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-        plugins: [...currentPlugins, pluginId],
+        plugins: upsertPluginMode(currentPlugins, pluginId, 'pinned'),
       });
     }
   }

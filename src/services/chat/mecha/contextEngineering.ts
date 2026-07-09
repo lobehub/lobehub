@@ -36,11 +36,12 @@ import type {
 } from '@lobechat/context-engine';
 import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
-import type {
-  OpenAIChatMessage,
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  UIChatMessage,
+import {
+  getActivePluginIds,
+  type OpenAIChatMessage,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
+  type UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -228,12 +229,15 @@ export const contextEngineering = async ({
           const supervisorAgentConfig = agentSelectors.getAgentConfigById(
             activeGroupDetail.supervisorAgentId,
           )(agentStoreState);
+          // Pinned identifiers only — GroupAgentBuilderContext.supervisorConfig.plugins
+          // is a display/prompt-formatting DTO (still `string[]`) that joins
+          // entries as plain text, and a disabled plugin isn't "enabled".
+          enabledPlugins = getActivePluginIds(supervisorAgentConfig.plugins);
           supervisorConfig = {
             model: supervisorAgentConfig.model,
-            plugins: supervisorAgentConfig.plugins,
+            plugins: enabledPlugins,
             provider: supervisorAgentConfig.provider,
           };
-          enabledPlugins = supervisorAgentConfig.plugins || [];
         }
 
         // Build official tools list (builtin tools + Composio tools)
@@ -398,14 +402,12 @@ export const contextEngineering = async ({
     try {
       const credsResult = await lambdaClient.market.creds.list.query();
       const userCreds = (credsResult as any)?.data ?? [];
-      credsList = userCreds.map(
-        (cred: any): CredSummary => ({
-          description: cred.description,
-          key: cred.key,
-          name: cred.name,
-          type: cred.type,
-        }),
-      );
+      credsList = userCreds.map((cred: any): CredSummary => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        type: cred.type,
+      }));
       log('Creds context resolved: count=%d', credsList?.length ?? 0);
     } catch (error) {
       // Silently fail - creds context is optional
