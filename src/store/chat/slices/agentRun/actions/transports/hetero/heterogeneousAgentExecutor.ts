@@ -68,6 +68,10 @@ import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gat
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
 
+const markSkipMessageFetch = (event: AgentStreamEvent): void => {
+  event.data = { ...event.data, skipMessageFetch: true };
+};
+
 const CLI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,
   /invalid authentication credentials/i,
@@ -743,6 +747,7 @@ export const executeHeterogeneousAgent = async (
    * `persistToolResult` and the intervention handlers.
    */
   const toolMsgIdByCallId: Map<string, string> = new Map();
+  const mainToolCallIds = new Set<string>();
   /**
    * Shared main-agent run coordinator state — the pure reducer in
    * `@lobechat/heterogeneous-agents`. Owns the main turn/step state machine
@@ -846,6 +851,38 @@ export const executeHeterogeneousAgent = async (
    * was queued could start a second run and duplicate/interleave messages.
    */
   let sawStreamedEvent = false;
+
+  const getCurrentFrontendMessages = () =>
+    (get().dbMessagesMap?.[messageMapKey(context)] ??
+      get().messagesMap?.[messageMapKey(context)] ??
+      []) as UIChatMessage[];
+
+  const attachInitialAssistantSeed = (event: AgentStreamEvent): void => {
+    if (event.type !== 'stream_start') return;
+    if ((event.data as { newStep?: boolean } | undefined)?.newStep) return;
+    const data = (event.data ?? {}) as Record<string, any>;
+    if (data.assistantMessage?.id) return;
+
+    data.assistantMessage = {
+      agentId: context.agentId,
+      id: mainState.currentAssistantId,
+      model: data.model,
+      provider: data.provider,
+      role: 'assistant',
+      topicId: context.topicId ?? undefined,
+    };
+    event.data = data;
+  };
+
+  const attachTerminalFrontendSnapshot = (event: AgentStreamEvent): void => {
+    if (event.type !== 'agent_runtime_end') return;
+    const data = (event.data ?? {}) as Record<string, any>;
+    if (Array.isArray(data.uiMessages)) return;
+
+    const uiMessages = getCurrentFrontendMessages();
+    if (uiMessages.length === 0) return;
+    event.data = { ...data, uiMessages };
+  };
 
   // Subscribe to the operation's abort signal so we can drop late events and
   // stop writing to DB the moment the user clicks Stop. If the op is gone
@@ -957,6 +994,8 @@ export const executeHeterogeneousAgent = async (
     isError: boolean,
     pluginState?: Record<string, any>,
   ) => {
+    if (!mainToolCallIds.has(toolCallId)) return;
+
     const toolMsgId = toolMsgIdByCallId.get(toolCallId);
     if (!toolMsgId) {
       console.warn('[HeterogeneousAgent] tool_result for unknown toolCallId:', toolCallId);
@@ -1304,13 +1343,13 @@ export const executeHeterogeneousAgent = async (
   // ─── Main-agent run coordinator (shared reducer) interpreter ─────────────
 
   /**
-   * Apply ONE main-scoped coordinator intent against the renderer's DB
-   * surfaces. Best-effort (errors logged, never thrown) — mirroring the prior
-   * inline persist helpers, so the run state always advances regardless of a
-   * transient DB failure (the next event / terminal flush re-persists). Live
-   * UI is NOT driven here: the executor still forwards raw stream events to the
-   * gateway `eventHandler` for token-level streaming, so `streamContent` is a
-   * no-op (the server no-ops it too).
+   * Apply ONE main-scoped coordinator intent against the renderer's write-behind
+   * DB queue plus the local raw-message bucket. Best-effort (errors logged,
+   * never thrown) — mirroring the prior inline persist helpers, so the run state
+   * always advances regardless of a transient DB failure (the next event /
+   * terminal flush re-persists). Token-level text/reasoning still streams via the
+   * gateway handler; tool rows and result links are local SoT here so tool_end
+   * reconciliation does not need a DB fetch.
    */
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
@@ -1332,6 +1371,10 @@ export const executeHeterogeneousAgent = async (
           console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
           pendingMainCreates.set(intent.messageId, messageToCreate);
         });
+        get().internal_dispatchMessage(
+          { id: intent.messageId, type: 'createMessage', value: messageToCreate },
+          { operationId },
+        );
         // Associate so cancellation / cleanup tracks the new step's message.
         get().associateMessageWithOperation(intent.messageId, operationId);
         return;
@@ -1386,21 +1429,9 @@ export const executeHeterogeneousAgent = async (
           return update;
         };
 
-        // Phase 1: pre-register assistant.tools[] (no result_msg_id yet) so the
-        // conversation-flow parser finds matching ids the moment tool rows land.
-        messageWriteBatcher.enqueueUpdateMessage(
-          intent.assistantMessageId,
-          buildUpdate(false),
-          messageWriteCtx,
-          (err) => console.error('[HeterogeneousAgent] Failed to pre-register main tools:', err),
-        );
-
-        // Phase 2: create rows for new tools with their pre-allocated ids and
-        // register the global lookup so a later tool_result resolves.
-        for (const x of intent.tools) {
-          if (!x.isNew) continue;
+        const buildToolMessage = (x: (typeof intent.tools)[number]) => {
           const toolMetadata = heteroProvenance(mainState.currentMainMessageId);
-          messageWriteBatcher.enqueueCreateMessage({
+          return {
             agentId: context.agentId,
             content: '',
             id: x.toolMessageId,
@@ -1415,16 +1446,47 @@ export const executeHeterogeneousAgent = async (
             role: 'tool',
             tool_call_id: x.payload.id,
             topicId: context.topicId ?? undefined,
-          } as any);
+          } as any;
+        };
+
+        // Phase 1: pre-register assistant.tools[] (no result_msg_id yet) so the
+        // conversation-flow parser finds matching ids the moment tool rows land.
+        messageWriteBatcher.enqueueUpdateMessage(
+          intent.assistantMessageId,
+          buildUpdate(false),
+          messageWriteCtx,
+          (err) => console.error('[HeterogeneousAgent] Failed to pre-register main tools:', err),
+        );
+
+        // Phase 2: create rows for new tools with their pre-allocated ids and
+        // register the global lookup so a later tool_result resolves.
+        for (const x of intent.tools) {
+          if (!x.isNew) continue;
+          const toolMsg = buildToolMessage(x);
+          messageWriteBatcher.enqueueCreateMessage(toolMsg);
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
+          mainToolCallIds.add(x.payload.id);
+          get().internal_dispatchMessage(
+            { id: x.toolMessageId, type: 'createMessage', value: toolMsg },
+            { operationId },
+          );
         }
 
         // Phase 3: backfill result_msg_id on assistant.tools[].
+        const finalAssistantUpdate = buildUpdate(true);
         messageWriteBatcher.enqueueUpdateMessage(
           intent.assistantMessageId,
-          buildUpdate(true),
+          finalAssistantUpdate,
           messageWriteCtx,
           (err) => console.error('[HeterogeneousAgent] Failed to finalize main tools:', err),
+        );
+        get().internal_dispatchMessage(
+          {
+            id: intent.assistantMessageId,
+            type: 'updateMessage',
+            value: finalAssistantUpdate as Partial<UIChatMessage>,
+          },
+          { operationId },
         );
         return;
       }
@@ -1436,6 +1498,16 @@ export const executeHeterogeneousAgent = async (
           intent.isError,
           intent.pluginState,
         );
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (toolMsgId && mainToolCallIds.has(intent.toolCallId)) {
+          const update: Partial<UIChatMessage> = { content: intent.content };
+          if (intent.pluginState) (update as any).pluginState = intent.pluginState;
+          if (intent.isError) (update as any).pluginError = { message: intent.content };
+          get().internal_dispatchMessage(
+            { id: toolMsgId, type: 'updateMessage', value: update },
+            { operationId },
+          );
+        }
         return;
       }
 
@@ -1735,26 +1807,31 @@ export const executeHeterogeneousAgent = async (
 
       // Forward to the unified Gateway handler.
       //
-      // Events that drive `fetchAndReplaceMessages` on the handler side
-      // (`tool_end`, `step_complete:execution_complete`, `stream_chunk` with a
-      // server-attached `toolMessageIds`) must wait for `persistQueue` to drain
-      // — otherwise the handler reads `assistant.tools[]` while a parallel
-      // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
-      // the in-memory cumulative tools[] with a shorter snapshot. That's the
-      // "7 → 6 tool-calls" rollback users see on parallel CC tool batches.
+      // Events that used to drive `fetchAndReplaceMessages` on the handler side
+      // (`tool_end`, `step_complete:execution_complete`) now wait only for the
+      // reducer to settle local raw-message SoT, then tell the handler to skip
+      // the DB fetch. This keeps parallel tool batches from being overwritten by
+      // a stale DB snapshot while write-behind batchMutate drains independently.
+      // `stream_chunk` with server-attached `toolMessageIds` still fetches: that
+      // path means the server created rows the client does not have locally.
       //
       // Other forwards (text / reasoning / tools_calling dispatches) stay
       // synchronous so live streaming UX isn't gated on DB round-trips.
-      const triggersFetchAndReplace =
+      attachInitialAssistantSeed(event);
+      const hasFrontendSotReconciliation =
         event.type === 'tool_end' ||
         (event.type === 'step_complete' &&
-          (event.data as { phase?: string } | undefined)?.phase === 'execution_complete') ||
+          (event.data as { phase?: string } | undefined)?.phase === 'execution_complete');
+      const triggersFetchAndReplace =
+        hasFrontendSotReconciliation ||
         (event.type === 'stream_chunk' &&
           (event.data as { toolMessageIds?: unknown } | undefined)?.toolMessageIds !== undefined);
 
       if (pendingStepTransition || triggersFetchAndReplace) {
         persistQueue = persistQueue.then(async () => {
-          if (triggersFetchAndReplace) {
+          if (hasFrontendSotReconciliation) {
+            markSkipMessageFetch(event);
+          } else if (triggersFetchAndReplace) {
             await messageWriteBatcher.flush('before-fetch-replace');
           }
           eventHandler(event);
@@ -1785,8 +1862,7 @@ export const executeHeterogeneousAgent = async (
           // this guards against. Content persistence + the terminal forward still
           // wait for queued reducer state so terminal never flushes stale content.
           {
-            const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)
-              ?.reason;
+            const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason;
             if (isErrorTerminal) {
               writeTopicStatus('failed');
             } else if (!isAborted() && isCompletedRuntimeEnd(reason)) {
@@ -1874,9 +1950,10 @@ export const executeHeterogeneousAgent = async (
 
           if (!isErrorTerminal) {
             // Topic status was already reset ahead of the queue (top of
-            // onComplete); forward the deferred terminal only so the handler runs
-            // the final fetchAndReplaceMessages + completeOperation against the
-            // now-persisted state.
+            // onComplete); forward the deferred terminal with the current
+            // frontend SoT so the handler can complete the operation without a
+            // DB refresh that may race write-behind batchMutate.
+            attachTerminalFrontendSnapshot(terminalEvent);
             eventHandler(terminalEvent);
             if (!queueDrained) get().completeOperation(operationId);
           }

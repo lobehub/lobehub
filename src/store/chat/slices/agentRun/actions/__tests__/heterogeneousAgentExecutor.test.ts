@@ -552,8 +552,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
    * Runs the executor in background, then feeds CC events and completes.
    * Returns a promise that resolves when the executor finishes.
    */
-  async function runWithEvents(ccEvents: any[], opts?: { params?: Partial<typeof defaultParams> }) {
-    const store = createMockStore();
+  async function runWithEvents(
+    ccEvents: any[],
+    opts?: { params?: Partial<typeof defaultParams>; store?: any },
+  ) {
+    const store = opts?.store ?? createMockStore();
     const get = vi.fn(() => store);
 
     // sendPrompt will resolve after we emit all events
@@ -674,7 +677,8 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         types.filter((type: string) => type === 'updateMessage').length,
       ).toBeGreaterThanOrEqual(2);
       expect(types.filter((type: string) => type === 'createMessage')).toHaveLength(1);
-      expect(types.at(-1)).toBe('updateToolMessage');
+      expect(types.filter((type: string) => type === 'updateToolMessage')).toHaveLength(1);
+      expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
   });
 
@@ -1826,10 +1830,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(executorSettled).toBe(false);
       expect(ipc.getListeners().has('heteroAgentEvent')).toBe(true);
 
-      ipc.emitRawLine(
-        'ipc-sess-1',
-        codexAgentMessage('item_2', 'Final report after late stdout.'),
-      );
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_2', 'Final report after late stdout.'));
       ipc.emitRawLine('ipc-sess-1', codexTurnCompleted({ input_tokens: 10, output_tokens: 5 }));
       await flush();
 
@@ -4301,56 +4302,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // Parallel main tool batch: tool_end must not race ahead of persistQueue
+  // Parallel main tool batch: frontend raw state is SoT before tool_end
   // ────────────────────────────────────────────────────
 
   describe('parallel-tools rollback regression', () => {
+    it('forwards initial stream_start with the existing assistant id so the handler skips DB refresh', async () => {
+      await runWithEvents([ccInit(), ccResult()]);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)
+        ?.value as ReturnType<typeof vi.fn>;
+      const initialStreamStart = handlerSpy.mock.calls
+        .map(([event]: any[]) => event)
+        .find((event: any) => event?.type === 'stream_start' && !event.data?.newStep);
+
+      expect(initialStreamStart?.data?.assistantMessage).toMatchObject({
+        agentId: 'agent-1',
+        id: 'ast-initial',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+    });
+
+    it('forwards terminal runtime_end with frontend uiMessages so the handler skips DB refresh', async () => {
+      const frontendMessages = [
+        {
+          agentId: 'agent-1',
+          content: 'test prompt',
+          id: 'user-1',
+          role: 'user',
+          topicId: 'topic-1',
+        },
+        {
+          agentId: 'agent-1',
+          content: 'done',
+          id: 'ast-initial',
+          role: 'assistant',
+          topicId: 'topic-1',
+        },
+      ];
+      const store = createMockStore({
+        dbMessagesMap: { 'main_agent-1_topic-1': frontendMessages },
+        messagesMap: { 'main_agent-1_topic-1': frontendMessages },
+      });
+
+      await runWithEvents([ccInit(), ccText('msg_01', 'done'), ccResult()], { store });
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)
+        ?.value as ReturnType<typeof vi.fn>;
+      const terminalRuntimeEnd = handlerSpy.mock.calls
+        .map(([event]: any[]) => event)
+        .find((event: any) => event?.type === 'agent_runtime_end');
+
+      expect(terminalRuntimeEnd?.data?.uiMessages).toEqual(frontendMessages);
+    });
+
     /**
      * User-reported bug: when CC fires a large parallel tool batch (e.g. 7
      * Bash commands at once), the AssistantGroup tool count occasionally
      * "rolls back" — e.g. UI shows "7 次技能调用" then drops to 6.
      *
-     * Root cause: the executor's `persistQueue` (DB writes) and the gateway
-     * handler's `processingChain` (in-memory dispatch + fetchAndReplaceMessages
-     * on tool_end) are two independent serial queues with no happens-before
-     * between them. `tool_end` events are forwarded to the handler
-     * SYNCHRONOUSLY at the bottom of `handleStreamEvent` (the
-     * `pendingStepTransition` gate only fires on stream_start(newStep), not
-     * inside a single message.id with parallel tool_use). So when a fast
-     * tool_result lands before persistQueue has flushed the LAST
-     * persistToolBatch's Phase 1/3 write, the handler runs
-     * fetchAndReplaceMessages → reads `assistant.tools` with a partial array
-     * → replaceMessages clobbers in-memory state from N → N-k.
-     *
-     * Observable invariant: by the time the handler is invoked with the FIRST
-     * `tool_end` event (which is what triggers fetchAndReplaceMessages), the
-     * most recent `mockUpdateMessage` call that wrote a `tools` array must
-     * already carry the full cumulative tool list. Otherwise, in real life,
-     * the DB read at that moment would return a shorter array and the UI
-     * would visibly drop tools.
-     *
-     * The test slows down `mockUpdateMessage` whenever `val.tools` is present,
-     * simulating the lag between Phase 1/3 writes and the rest of the stream.
-     * `vi.fn().mock.invocationCallOrder` gives a total ordering across all
-     * mocks so we can compare "when was the Nth tools-write CALLED" against
-     * "when was the first tool_end forwarded to the handler".
+     * New invariant: the executor treats the renderer's raw message bucket as
+     * the streaming SoT. Before forwarding the first `tool_end`, it must have
+     * locally created all tool rows and updated the parent assistant's `tools[]`
+     * with pre-allocated `result_msg_id`s. The forwarded event is marked so the
+     * gateway handler skips its historical DB refetch; write-behind batchMutate
+     * can drain independently without clobbering the frontend snapshot.
      */
-    it('handler must not receive tool_end before persistQueue flushes full tools[]', async () => {
-      // Slow tools-bearing updateMessage writes — mirrors a real PG/lambda
-      // round trip taking long enough that a fast Bash tool_result can land
-      // before all 7 persistToolBatch operations finish their Phase 1/3.
+    it('handler receives tool_end only after local raw SoT has full tools[]', async () => {
+      // Slow DB writes to prove local SoT, not backend timing, is the ordering
+      // source. tool_end should no longer depend on these writes completing.
       const TOOLS_WRITE_DELAY_MS = 12;
       mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
         if (val?.tools) {
           await new Promise((r) => setTimeout(r, TOOLS_WRITE_DELAY_MS));
         }
-      });
-
-      // Give each tool message a deterministic id so we can spot-check.
-      let toolIdx = 0;
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') return { id: `tool-msg-${++toolIdx}` };
-        return { id: `ast-${params.role}-${Date.now()}` };
       });
 
       const PARALLEL = 7;
@@ -4369,59 +4394,111 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       }
       events.push(ccResult());
 
-      await runWithEvents(events);
+      const { store } = await runWithEvents(events);
 
       const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
         typeof vi.fn
       >;
       expect(handlerSpy).toBeDefined();
 
-      // Find the FIRST tool_end forwarded to the handler — this is the call
-      // that would trigger `fetchAndReplaceMessages` in real life and read
-      // assistant.tools[] from DB.
+      // Find the FIRST tool_end forwarded to the handler. Historically this
+      // would trigger `fetchAndReplaceMessages`; it now carries a skip marker
+      // after local raw SoT has settled.
       const handlerCalls = handlerSpy.mock.calls.map((args, i) => ({
         event: args[0] as any,
         order: handlerSpy.mock.invocationCallOrder[i],
       }));
       const firstToolEnd = handlerCalls.find(({ event }) => event?.type === 'tool_end');
       expect(firstToolEnd).toBeDefined();
+      expect(firstToolEnd!.event.data?.skipMessageFetch).toBe(true);
 
-      // All `mockUpdateMessage(_, { tools })` calls — these are persistToolBatch
-      // Phase 1 (pre-register) and Phase 3 (backfill) writes. Their invocation
-      // order is the moment Phase 1/3 ENTERED `await messageService.updateMessage`.
-      // Because persistToolBatch awaits each phase before moving on, the order
-      // here is a faithful proxy for the DB-write timeline.
-      const toolsWrites = mockUpdateMessage.mock.calls
-        .map((args, i) => ({
-          tools: (args[1] as any)?.tools,
-          order: mockUpdateMessage.mock.invocationCallOrder[i],
+      // Local raw-bucket assistant tools[] updates. This is the frontend SoT the
+      // UI reads while write-behind persistence is still draining.
+      const localToolsWrites = store.internal_dispatchMessage.mock.calls
+        .map((args: any[], i: number) => ({
+          payload: args[0] as any,
+          order: store.internal_dispatchMessage.mock.invocationCallOrder[i],
         }))
-        .filter(({ tools }) => Array.isArray(tools));
+        .filter(
+          ({ payload }: { payload: any }) =>
+            payload.type === 'updateMessage' && Array.isArray(payload.value?.tools),
+        );
 
       // The latest tools[] write that started BEFORE the handler's first tool_end.
-      // If the executor properly defers tool_end through persistQueue, this
-      // should be the FINAL Phase 3 write carrying all 7 tools.
-      const latestBeforeToolEnd = toolsWrites.findLast(({ order }) => order < firstToolEnd!.order);
+      // With frontend SoT this must be the final local update carrying all 7
+      // tools, regardless of whether DB updateMessage has completed.
+      const latestBeforeToolEnd = localToolsWrites.findLast(
+        ({ order }: { order: number }) => order < firstToolEnd!.order,
+      );
 
-      // The bug: without the deferral fix, persistQueue is still mid-flight
-      // (or hasn't started) when tool_end is forwarded, so the latest tools[]
-      // write seen at that point has fewer than PARALLEL entries — exactly
-      // the "7 → 6" rollback the user sees in the UI.
-      const writtenCount = latestBeforeToolEnd?.tools?.length ?? 0;
-      const writtenIds = (latestBeforeToolEnd?.tools ?? []).map((t: any) => t.id);
+      const writtenTools = latestBeforeToolEnd?.payload.value.tools ?? [];
+      const writtenCount = writtenTools.length;
+      const writtenIds = writtenTools.map((t: any) => t.id);
       const handlerEventTrail = handlerCalls.map(({ event }) => event?.type).join(',');
       expect(
         writtenCount,
         `tool_end forwarded to handler at order ${firstToolEnd!.order} ` +
-          `but the latest persistToolBatch tools[] write at that point had ` +
-          `${writtenCount}/${PARALLEL} tools — fetchAndReplaceMessages would ` +
-          `read partial assistant.tools[] and roll back the UI. ` +
+          `but the latest local tools[] write at that point had ` +
+          `${writtenCount}/${PARALLEL} tools. ` +
           `Handler event trail: [${handlerEventTrail}]`,
       ).toBe(PARALLEL);
       // All 7 tool ids must be present in that write — guards against any
       // weird ordering where the last write happens to have 7 entries but
       // the wrong ones (e.g. dedupe bug repopulating from a stale set).
       for (const id of toolIds) expect(writtenIds).toContain(id);
+      for (const tool of writtenTools) expect(tool.result_msg_id).toMatch(/^msg_/);
+    });
+
+    it('creates main tool rows and resolves tool results in the local raw bucket', async () => {
+      const toolIds = ['toolu_sot_1', 'toolu_sot_2', 'toolu_sot_3'];
+      const events: any[] = [ccInit()];
+      for (const id of toolIds) {
+        events.push(ccToolUse('msg_sot', id, 'Bash', { command: `echo ${id}` }));
+      }
+      for (const id of toolIds) {
+        events.push(ccToolResult(id, `result of ${id}`));
+      }
+      events.push(ccResult());
+
+      const { store } = await runWithEvents(events);
+      const dispatches = store.internal_dispatchMessage.mock.calls.map(
+        ([payload]: any[]) => payload,
+      );
+      const localToolCreates = dispatches.filter(
+        (payload: any) => payload.type === 'createMessage' && payload.value?.role === 'tool',
+      );
+
+      expect(localToolCreates).toHaveLength(toolIds.length);
+
+      const messageIdByToolCallId = new Map<string, string>();
+      for (const payload of localToolCreates) {
+        messageIdByToolCallId.set(payload.value.tool_call_id, payload.value.id);
+        expect(payload.value).toMatchObject({
+          parentId: 'ast-initial',
+          role: 'tool',
+          topicId: 'topic-1',
+        });
+      }
+
+      const finalAssistantTools = dispatches.findLast(
+        (payload: any) =>
+          payload.type === 'updateMessage' &&
+          payload.id === 'ast-initial' &&
+          Array.isArray(payload.value?.tools),
+      ).value.tools;
+
+      for (const id of toolIds) {
+        const tool = finalAssistantTools.find((item: any) => item.id === id);
+        expect(tool?.result_msg_id).toBe(messageIdByToolCallId.get(id));
+        expect(
+          dispatches.some(
+            (payload: any) =>
+              payload.type === 'updateMessage' &&
+              payload.id === messageIdByToolCallId.get(id) &&
+              payload.value?.content === `result of ${id}`,
+          ),
+        ).toBe(true);
+      }
     });
   });
 
