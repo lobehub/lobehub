@@ -62,7 +62,12 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  getActivePluginIds,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
@@ -688,9 +693,9 @@ export const callLlm =
               // search API — can't see installable builtin/Composio tools or their
               // enabled/connected status, so the model may pick invalid ids or
               // claim a supported tool is unavailable.
-              const enabledPlugins: string[] = Array.isArray(editingConfig.plugins)
-                ? (editingConfig.plugins as string[])
-                : [];
+              const enabledPlugins: string[] = getActivePluginIds(
+                Array.isArray(editingConfig.plugins) ? editingConfig.plugins : undefined,
+              );
               const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
               const officialTools: OfficialToolItem[] = [];
 
@@ -747,7 +752,7 @@ export const callLlm =
                   openingMessage: editingConfig.openingMessage ?? undefined,
                   openingQuestions: editingConfig.openingQuestions ?? undefined,
                   params: editingConfig.params ?? undefined,
-                  plugins: editingConfig.plugins ?? undefined,
+                  plugins: enabledPlugins,
                   provider: editingConfig.provider ?? undefined,
                   systemRole: editingConfig.systemRole ?? undefined,
                 },

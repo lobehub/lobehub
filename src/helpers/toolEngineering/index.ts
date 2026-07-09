@@ -13,6 +13,7 @@ import {
   type BuiltinToolManifest,
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
+  getActivePluginIds,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
@@ -185,7 +186,9 @@ export const createAgentToolsEngine = (
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
-  const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  // Pinned identifiers only — disabled entries must not reach the tools-engine
+  // whitelist, regardless of what `currentAgentPlugins` returns raw.
+  const userPlugins = getActivePluginIds(agentSelectors.currentAgentPlugins(agentState));
   const isChatMode =
     agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
     !isCanUseFC(workingModel.model, workingModel.provider);
