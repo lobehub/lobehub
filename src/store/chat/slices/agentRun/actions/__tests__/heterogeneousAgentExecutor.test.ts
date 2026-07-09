@@ -183,6 +183,19 @@ function setupIpcCapture() {
         });
       }
     },
+    /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
+    emitStreamEvent: (sessionId: string, event: any) => {
+      const handler = listeners.get('heteroAgentEvent');
+      handler?.(null, {
+        event: {
+          operationId: defaultParams.operationId,
+          stepIndex: 0,
+          timestamp: Date.now(),
+          ...event,
+        },
+        sessionId,
+      });
+    },
     /** Simulate session completion */
     emitComplete: (sessionId: string) => {
       const handler = listeners.get('heteroAgentSessionComplete');
@@ -679,6 +692,92 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.filter((type: string) => type === 'createMessage')).toHaveLength(1);
       expect(types.filter((type: string) => type === 'updateToolMessage')).toHaveLength(1);
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
+    });
+
+    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
+      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+      const updateTopicStatus = vi.fn(async () => {});
+      const store = createMockStore({
+        optimisticUpdateMessagePlugin,
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Scope',
+                options: [
+                  { description: 'Keep it narrow', label: 'Small' },
+                  { description: 'Do all of it', label: 'All' },
+                ],
+                question: 'How much should I do?',
+              },
+            ],
+          }),
+          deadline: Date.now() + 300_000,
+          identifier: 'claude-code',
+          toolCallId: 'toolu_ask',
+        },
+        type: 'agent_intervention_request',
+      });
+      await flush();
+
+      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
+
+      ipc.emitRawLine(
+        'ipc-sess-1',
+        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+          questions: [
+            {
+              header: 'Scope',
+              options: [
+                { description: 'Keep it narrow', label: 'Small' },
+                { description: 'Do all of it', label: 'All' },
+              ],
+              question: 'How much should I do?',
+            },
+          ],
+        }),
+      );
+      await flush();
+
+      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
+      );
+      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
+      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
+        { intervention: { status: 'pending' } },
+        { operationId: 'op-1' },
+      );
+      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
+        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
+      );
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+      );
+
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt();
+      await executorPromise;
     });
   });
 

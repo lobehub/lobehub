@@ -1180,8 +1180,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       const runtimeEndIdx = broadcasts.findIndex(
         (b) =>
-          b.channel === 'heteroAgentEvent' &&
-          (b.data as any)?.event?.type === 'agent_runtime_end',
+          b.channel === 'heteroAgentEvent' && (b.data as any)?.event?.type === 'agent_runtime_end',
       );
 
       expect(completeIdx).toBeGreaterThan(-1);
@@ -1190,6 +1189,111 @@ describe('HeterogeneousAgentCtr', () => {
       expect(finalChunkIdx).toBeLessThan(completeIdx);
       expect(runtimeEndIdx).toBeLessThan(completeIdx);
       expect(sendDurationMs).toBeGreaterThanOrEqual(900);
+    });
+
+    it('serializes AskUserQuestion bridge events behind already-queued stdout tool events', async () => {
+      const initLine = `${JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        session_id: 'cc-session-1',
+        subtype: 'init',
+        type: 'system',
+      })}\n`;
+      const askToolUseLine = `${JSON.stringify({
+        message: {
+          content: [
+            {
+              id: 'toolu_ask',
+              input: {
+                questions: [
+                  {
+                    header: 'Scope',
+                    options: [
+                      { description: 'Keep it narrow', label: 'Small' },
+                      { description: 'Do all of it', label: 'All' },
+                    ],
+                    question: 'How much should I do?',
+                  },
+                ],
+              },
+              name: 'mcp__lobe_cc__ask_user_question',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_ask',
+          model: 'claude-sonnet-4-6',
+          role: 'assistant',
+        },
+        type: 'assistant',
+      })}\n`;
+
+      const proc = new EventEmitter() as any;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      proc.stdout = stdout;
+      proc.stderr = stderr;
+      proc.stdin = {
+        end: vi.fn(),
+        write: vi.fn((_chunk: any, cb?: () => void) => {
+          cb?.();
+          return true;
+        }),
+      };
+      proc.kill = vi.fn();
+      proc.killed = false;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      proc.__start = () => {
+        setImmediate(() => {
+          stdout.write(initLine);
+          stdout.write(askToolUseLine);
+
+          const bridge = (ctr as any).opIdToIntervention.get('op-test')?.bridge;
+          void bridge?.pending({
+            arguments: {
+              questions: [
+                {
+                  header: 'Scope',
+                  options: [
+                    { description: 'Keep it narrow', label: 'Small' },
+                    { description: 'Do all of it', label: 'All' },
+                  ],
+                  question: 'How much should I do?',
+                },
+              ],
+            },
+            toolCallId: 'toolu_ask',
+          });
+
+          stderr.end();
+          stdout.end();
+          proc.emit('exit', 0);
+        });
+      };
+      nextFakeProc = proc;
+
+      const { sessionId } = await ctr.startSession({ agentType: 'claude-code', command: 'claude' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      const toolEventIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'stream_chunk' &&
+          (b.data as any)?.event?.data?.toolsCalling?.some((tool: any) => tool.id === 'toolu_ask'),
+      );
+      const interventionIdx = broadcasts.findIndex(
+        (b) =>
+          b.channel === 'heteroAgentEvent' &&
+          (b.data as any)?.event?.type === 'agent_intervention_request' &&
+          (b.data as any)?.event?.data?.toolCallId === 'toolu_ask',
+      );
+
+      expect(toolEventIdx).toBeGreaterThan(-1);
+      expect(interventionIdx).toBeGreaterThan(-1);
+      expect(toolEventIdx).toBeLessThan(interventionIdx);
     });
   });
 

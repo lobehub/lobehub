@@ -748,6 +748,8 @@ export const executeHeterogeneousAgent = async (
    */
   const toolMsgIdByCallId: Map<string, string> = new Map();
   const mainToolCallIds = new Set<string>();
+  const pendingInterventionRequests = new Map<string, AgentInterventionRequestData>();
+  const pendingInterventionResponses = new Map<string, AgentInterventionResponseData>();
   /**
    * Shared main-agent run coordinator state — the pure reducer in
    * `@lobechat/heterogeneous-agents`. Owns the main turn/step state machine
@@ -1013,6 +1015,80 @@ export const executeHeterogeneousAgent = async (
       (err) => console.error('[HeterogeneousAgent] Failed to update tool message content:', err),
     );
   };
+  const applyInterventionRequest = async (data: AgentInterventionRequestData): Promise<boolean> => {
+    const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
+    if (!toolMsgId) return false;
+
+    // The id is pre-allocated before the batched createMessage has necessarily
+    // flushed. Persist the row before writing plugin/intervention state.
+    await messageWriteBatcher.flush('before-intervention-request');
+
+    try {
+      await get().optimisticUpdateMessagePlugin(
+        toolMsgId,
+        { intervention: { status: 'pending' } },
+        { operationId },
+      );
+      // Sidebar topic row swaps the running spinner for a hand icon
+      // so it's obvious from the topic list that this conversation is
+      // blocked on the user, not still streaming.
+      writeTopicStatus('waitingForHuman');
+      // Parity with the homogeneous approval paths (client / gateway /
+      // aiAgent): a CC AskUserQuestion now also bumps the dock badge and
+      // bounces the macOS dock. The helper is desktop-guarded and only
+      // requests attention while the window is hidden/unfocused, so it's
+      // a no-op when the user is already looking at the approval.
+      void notifyDesktopHumanApprovalRequired(get, context);
+    } catch (err) {
+      console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
+    }
+
+    return true;
+  };
+  const applyInterventionResponse = async (
+    data: AgentInterventionResponseData,
+  ): Promise<boolean> => {
+    const { cancelled, cancelReason, toolCallId } = data;
+    if (!cancelled) return true;
+    if (cancelReason === 'user_cancelled') return true;
+
+    const toolMsgId = toolMsgIdByCallId.get(toolCallId);
+    if (!toolMsgId) return false;
+
+    await messageWriteBatcher.flush('before-intervention-response');
+
+    try {
+      await get().optimisticUpdateMessagePlugin(
+        toolMsgId,
+        {
+          intervention: {
+            rejectedReason: cancelReason ?? 'session_ended',
+            status: 'rejected',
+          },
+        },
+        { operationId },
+      );
+      // Bridge resolved without the user — drop the hand state so the
+      // sidebar reflects that we're back to whatever the stream does
+      // next (`active`/`failed` lands shortly after via runtime_end).
+      writeTopicStatus('running');
+    } catch (err) {
+      console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
+    }
+
+    return true;
+  };
+  const replayPendingInterventionsForToolCall = async (toolCallId: string): Promise<void> => {
+    const request = pendingInterventionRequests.get(toolCallId);
+    if (request && (await applyInterventionRequest(request))) {
+      pendingInterventionRequests.delete(toolCallId);
+    }
+
+    const response = pendingInterventionResponses.get(toolCallId);
+    if (response && (await applyInterventionResponse(response))) {
+      pendingInterventionResponses.delete(toolCallId);
+    }
+  };
   const retryWithoutResume = (error: unknown): boolean => {
     if (
       resumeFallbackTriggered ||
@@ -1265,6 +1341,7 @@ export const executeHeterogeneousAgent = async (
           }
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           t?.stream.create(toolMsg as UIChatMessage);
+          await replayPendingInterventionsForToolCall(x.payload.id);
         }
 
         // Phase 3: backfill result_msg_id on assistant.tools[].
@@ -1488,6 +1565,9 @@ export const executeHeterogeneousAgent = async (
           },
           { operationId },
         );
+        for (const x of intent.tools) {
+          if (x.isNew) await replayPendingInterventionsForToolCall(x.payload.id);
+        }
         return;
       }
 
@@ -1636,37 +1716,19 @@ export const executeHeterogeneousAgent = async (
       // rendered automatically by the framework while pending; the
       // eventual `tool_result` content (formatted answer text) gets
       // overwritten via the existing `tool_result` branch below.
-      // Deferred behind `persistQueue` so it lands AFTER `persistToolBatch`
-      // populates `toolMsgIdByCallId`.
+      // Deferred behind `persistQueue`; if the bridge event beats the stdout
+      // tool_use event, cache it and replay once the tool id is registered.
       if (event.type === 'agent_intervention_request') {
         const data = event.data as AgentInterventionRequestData;
         persistQueue = persistQueue.then(async () => {
-          const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
-          if (!toolMsgId) {
+          if (await applyInterventionRequest(data)) return;
+
+          pendingInterventionRequests.set(data.toolCallId, data);
+          if (!toolMsgIdByCallId.has(data.toolCallId)) {
             console.warn(
-              '[HeterogeneousAgent] intervention_request for unknown toolCallId:',
+              '[HeterogeneousAgent] deferred intervention_request for unknown toolCallId:',
               data.toolCallId,
             );
-            return;
-          }
-          try {
-            await get().optimisticUpdateMessagePlugin(
-              toolMsgId,
-              { intervention: { status: 'pending' } },
-              { operationId },
-            );
-            // Sidebar topic row swaps the running spinner for a hand icon
-            // so it's obvious from the topic list that this conversation is
-            // blocked on the user, not still streaming.
-            writeTopicStatus('waitingForHuman');
-            // Parity with the homogeneous approval paths (client / gateway /
-            // aiAgent): a CC AskUserQuestion now also bumps the dock badge and
-            // bounces the macOS dock. The helper is desktop-guarded and only
-            // requests attention while the window is hidden/unfocused, so it's
-            // a no-op when the user is already looking at the approval.
-            void notifyDesktopHumanApprovalRequired(get, context);
-          } catch (err) {
-            console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
           }
         });
         return;
@@ -1682,30 +1744,9 @@ export const executeHeterogeneousAgent = async (
       // a Submit click would throw `Operation not found`).
       if (event.type === 'agent_intervention_response') {
         const data = event.data as AgentInterventionResponseData;
-        const { cancelled, cancelReason, toolCallId } = data;
-        if (!cancelled) return;
-        if (cancelReason === 'user_cancelled') return;
         persistQueue = persistQueue.then(async () => {
-          const toolMsgId = toolMsgIdByCallId.get(toolCallId);
-          if (!toolMsgId) return;
-          try {
-            await get().optimisticUpdateMessagePlugin(
-              toolMsgId,
-              {
-                intervention: {
-                  rejectedReason: cancelReason ?? 'session_ended',
-                  status: 'rejected',
-                },
-              },
-              { operationId },
-            );
-            // Bridge resolved without the user — drop the hand state so the
-            // sidebar reflects that we're back to whatever the stream does
-            // next (`active`/`failed` lands shortly after via runtime_end).
-            writeTopicStatus('running');
-          } catch (err) {
-            console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
-          }
+          if (await applyInterventionResponse(data)) return;
+          pendingInterventionResponses.set(data.toolCallId, data);
         });
         return;
       }

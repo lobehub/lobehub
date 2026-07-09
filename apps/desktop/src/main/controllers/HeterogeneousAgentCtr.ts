@@ -253,7 +253,7 @@ interface CliTraceSession {
 interface InterventionSlot {
   bridge: AskUserBridge;
   /** Resolves once bridge.events() iterator ends (after `cancelAll`). */
-  pumpDone: Promise<void>;
+  pumpDone?: Promise<void>;
   /** Path to the per-op temp `mcp.json` we wrote for `--mcp-config`. */
   tmpConfigPath: string;
 }
@@ -755,17 +755,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   /**
    * Register a per-op AskUserQuestion bridge, write its temp `mcp.json`,
-   * and start pumping the bridge's outbound events into the regular
-   * `heteroAgentEvent` broadcast. Caller must invoke the returned cleanup
-   * after the spawn finishes (success, error, or cancel) to remove the
-   * temp file and tear down the bridge.
-   *
-   * Pump errors are logged but never thrown — they don't fail the spawn.
+   * and stash it for the spawn path. The actual bridge event pump is started
+   * from `handleSpawnedAgentProcess`, where it can share the stdout broadcast
+   * queue instead of racing the adapter pipeline as a second producer.
    */
   private async setupInterventionForOp(
     operationId: string,
-    sessionId: string,
-  ): Promise<{ cleanup: () => Promise<void>; tmpConfigPath: string }> {
+  ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
     const server = await this.ensureAskUserMcpServerStarted();
     const bridge = server.registerOperation(operationId);
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
@@ -785,31 +781,21 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     };
     await writeFile(tmpConfigPath, JSON.stringify(config), 'utf8');
 
-    // Pump bridge.events() into the `heteroAgentEvent` broadcast. The
-    // iterator only ends after `cancelAll()`, so `pumpDone` resolves at
-    // cleanup time and gates teardown.
-    const pumpDone = (async () => {
-      for await (const event of bridge.events()) {
-        this.broadcast('heteroAgentEvent', { event, sessionId });
-      }
-    })().catch((err) => {
-      logger.warn('AskUserQuestion bridge pump error:', err);
-    });
-
-    this.opIdToIntervention.set(operationId, { bridge, pumpDone, tmpConfigPath });
+    const slot: InterventionSlot = { bridge, tmpConfigPath };
+    this.opIdToIntervention.set(operationId, slot);
 
     const cleanup = async () => {
       // Unregistering on the server cancels all bridge pendings AND closes
       // the events iterator (cancelAll fires from within unregisterOperation).
       this.askUserMcpServer?.unregisterOperation(operationId);
-      await pumpDone;
+      await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
       await unlink(tmpConfigPath).catch(() => {
         /* file may already be gone if app crashed mid-prompt */
       });
     };
 
-    return { cleanup, tmpConfigPath };
+    return { bridge, cleanup, tmpConfigPath };
   }
 
   // ─── File cache ───
@@ -950,7 +936,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // into `--mcp-config`. Codex / future agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code'
-        ? await this.setupInterventionForOp(params.operationId, session.sessionId).catch((err) => {
+        ? await this.setupInterventionForOp(params.operationId).catch((err) => {
             logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
             return undefined;
           })
@@ -1201,6 +1187,15 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     });
     let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 
+    const broadcastStreamEvents = (events: AgentStreamEvent[]) => {
+      for (const event of events) {
+        this.broadcast('heteroAgentEvent', {
+          event,
+          sessionId: session.sessionId,
+        });
+      }
+    };
+
     const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
       stdoutBroadcastQueue = stdoutBroadcastQueue
         .then(async () => {
@@ -1219,17 +1214,35 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
               traceSession,
             })),
           );
-          for (const event of events) {
-            this.broadcast('heteroAgentEvent', {
-              event,
-              sessionId: session.sessionId,
-            });
-          }
+          broadcastStreamEvents(events);
         })
         .catch((error) => {
           logger.error('Failed to broadcast agent stream batch:', error);
         });
     };
+
+    const broadcastBridgeEvent = (event: AgentStreamEvent) => {
+      stdoutBroadcastQueue = stdoutBroadcastQueue
+        .then(() => {
+          broadcastStreamEvents([event]);
+        })
+        .catch((error) => {
+          logger.error('Failed to broadcast AskUserQuestion bridge event:', error);
+        });
+    };
+
+    if (intervention) {
+      const pumpDone = (async () => {
+        for await (const event of intervention.bridge.events()) {
+          broadcastBridgeEvent(event);
+        }
+        await stdoutBroadcastQueue;
+      })().catch((err) => {
+        logger.warn('AskUserQuestion bridge pump error:', err);
+      });
+      const slot = this.opIdToIntervention.get(params.operationId);
+      if (slot) slot.pumpDone = pumpDone;
+    }
 
     // Stream stdout events through the producer pipeline.
     const stdout = proc.stdout as Readable;
