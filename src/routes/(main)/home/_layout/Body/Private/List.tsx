@@ -13,9 +13,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import CreateAgentButton from '../Agent/CreateAgentButton';
 import Group from '../Agent/List/Group';
 import SessionList from '../Agent/List/List';
-import CreatePrivateButton from './CreatePrivateButton';
 
 interface PrivateListProps {
   hideCreateButton?: boolean;
@@ -53,7 +53,7 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
     if (hideCreateButton) return null;
     return (
       <Flexbox gap={1} paddingBlock={1}>
-        <CreatePrivateButton />
+        <CreateAgentButton visibility={'private'} />
       </Flexbox>
     );
   }
@@ -65,7 +65,7 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
       {hasMore && (
         <NavItem icon={MoreHorizontal} title={t('input.more')} onClick={handleMoreClick} />
       )}
-      {!hideCreateButton && <CreatePrivateButton />}
+      {!hideCreateButton && <CreateAgentButton visibility={'private'} />}
     </Flexbox>
   );
 });

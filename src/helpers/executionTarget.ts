@@ -75,6 +75,18 @@ export interface ResolveExecutionTargetOptions {
    * and are left untouched.
    */
   trigger?: RequestTrigger;
+  /**
+   * The agent belongs to a workspace (`agent.workspaceId` is set). Every
+   * member runs a workspace agent through the shared device pool, so the
+   * CURRENT member's own client is never a valid execution host — `local`
+   * would silently run the shared agent on whichever personal machine opened
+   * it. Treats client execution as unavailable: an unset target no longer
+   * defaults to `local`, and a stored `local` (synced from before the agent
+   * joined the workspace) coerces to `sandbox` — or, for hetero agents, to
+   * `device` when a (grandfathered) `boundDeviceId` pins a machine, matching
+   * the write-time guard in `AgentModel.assertWorkspaceDeviceBinding`.
+   */
+  workspaceScoped?: boolean;
 }
 
 /**
@@ -126,20 +138,24 @@ export const resolveExecutionTarget = (
     deviceRoutingAvailable,
     isHetero,
     trigger,
+    workspaceScoped,
   }: ResolveExecutionTargetOptions,
 ): DeviceExecutionTarget => {
+  // A workspace agent never executes on the current member's own client — see
+  // `workspaceScoped` above. Same coercions as a client-less environment.
+  const clientAvailable = clientExecutionAvailable && !workspaceScoped;
   const stored = agencyConfig?.executionTarget;
-  let effective = stored ?? (clientExecutionAvailable ? 'local' : 'none');
+  let effective = stored ?? (clientAvailable ? 'local' : 'none');
   if (
-    !clientExecutionAvailable &&
+    !clientAvailable &&
     (isHetero || deviceRoutingAvailable) &&
     stored === 'local' &&
     agencyConfig?.boundDeviceId
   ) {
     return 'device';
   }
-  if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';
-  if (!clientExecutionAvailable && effective === 'local') return 'sandbox';
+  if (isHetero && effective === 'none') effective = clientAvailable ? 'local' : 'sandbox';
+  if (!clientAvailable && effective === 'local') return 'sandbox';
   // Bot trigger: a `local` target can't run in-process from the cloud bot
   // server, so it has to reach a real device. If the user pinned a specific
   // machine (the switcher persists that desktop's own `deviceId` as
@@ -183,9 +199,14 @@ export const resolveRuntimeMode = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   clientExecutionAvailable: boolean,
   deviceRoutingAvailable?: boolean,
+  workspaceScoped?: boolean,
 ): RuntimeEnvMode =>
   executionTargetToRuntimeMode(
-    resolveExecutionTarget(agencyConfig, { clientExecutionAvailable, deviceRoutingAvailable }),
+    resolveExecutionTarget(agencyConfig, {
+      clientExecutionAvailable,
+      deviceRoutingAvailable,
+      workspaceScoped,
+    }),
   );
 
 export type ExecutionPlanUnroutedReason =
@@ -288,6 +309,8 @@ export interface ResolveExecutionPlanParams {
    * `resolveExecutionPlan`.
    */
   trigger?: RequestTrigger;
+  /** See {@link ResolveExecutionTargetOptions.workspaceScoped}. */
+  workspaceScoped?: boolean;
 }
 
 /**
@@ -321,6 +344,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     onlineDeviceIds,
     requestedDeviceId,
     trigger,
+    workspaceScoped,
   } = params;
 
   // Chat mode = no execution environment (plain chat). It's orthogonal to the
@@ -334,6 +358,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     isHetero,
     clientExecutionAvailable,
     trigger,
+    workspaceScoped,
   });
   const wantsDevice =
     !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';

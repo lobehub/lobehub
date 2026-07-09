@@ -388,6 +388,9 @@ export const generationSlice: StateCreator<
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
+        getAgentStoreState(),
+      ),
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -706,6 +709,9 @@ export const generationSlice: StateCreator<
         executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider,
         isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+        isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
+          getAgentStoreState(),
+        ),
       });
 
       // ── Gateway mode: trigger server-side regeneration ──

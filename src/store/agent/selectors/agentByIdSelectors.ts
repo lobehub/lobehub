@@ -178,6 +178,16 @@ const isAgentHeterogeneousById =
  */
 const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
 
+/**
+ * Workspace-scoped agent: shared across workspace members, so it executes on
+ * the workspace device pool / sandbox — never on the current member's own
+ * client. Feed this into `resolveExecutionTarget`'s `workspaceScoped` option.
+ */
+const isWorkspaceAgentById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!s.agentMap[agentId]?.workspaceId;
+
 export const agentByIdSelectors = {
   getAgencyConfigById,
   getAgentBuilderContextById,
@@ -198,4 +208,5 @@ export const agentByIdSelectors = {
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
+  isWorkspaceAgentById,
 };

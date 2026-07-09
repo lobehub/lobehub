@@ -120,6 +120,64 @@ describe('resolveExecutionTarget', () => {
     ).toBe('sandbox');
   });
 
+  describe('workspaceScoped — a workspace agent never executes on the member client', () => {
+    it('suppresses the desktop `local` default (unset → none, hetero → sandbox)', () => {
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('none');
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          isHetero: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('coerces a stored `local` (pre-workspace leftover) to sandbox on desktop', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('routes a hetero stored `local` with a (grandfathered) binding to that device', () => {
+      expect(
+        resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          isHetero: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('device');
+    });
+
+    it('leaves explicit non-local targets untouched', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('device');
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'auto' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('auto');
+    });
+  });
+
   describe('trigger=bot — upgrades a local target (bound → device, unbound → auto)', () => {
     it('coerces an UNBOUND desktop `local` (and the unset desktop default) to auto', () => {
       expect(

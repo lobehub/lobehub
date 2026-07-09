@@ -745,8 +745,6 @@
   "skillDetail.tabs.tools": "Yetenekler",
   "skillDetail.tools": "Araçlar",
   "skillDetail.trustWarning": "Yalnızca güvendiğiniz geliştiricilerin bağlayıcılarını kullanın. LobeHub, geliştiricilerin hangi araçları sunduğunu kontrol etmez ve bu araçların beklendiği gibi çalışacağını veya değişmeyeceğini garanti edemez.",
-  "skillInstallBanner.dismiss": "Kapat",
-  "skillInstallBanner.title": "Favori uygulamalarınızı Lobe AI'a bağlayın",
   "store.actions.cancel": "İptal",
   "store.actions.configure": "Yapılandır",
   "store.actions.confirmUninstall": "Skill yapılandırması silinecek. Devam edilsin mi?",

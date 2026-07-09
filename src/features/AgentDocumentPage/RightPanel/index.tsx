@@ -83,10 +83,14 @@ const AgentDocumentRightPanel = memo(() => {
     activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
   );
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
   const remoteDeviceId =
     effectiveTarget === 'device' && agencyConfig?.boundDeviceId
