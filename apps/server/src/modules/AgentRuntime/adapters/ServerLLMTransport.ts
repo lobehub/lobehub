@@ -10,6 +10,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { callLlm as createServerCallLlmExecutor } from './serverCallLlmExecutor';
+import { resolveServerCallLlmTooling } from './serverCallLlmTooling';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -35,6 +36,7 @@ export class ServerLLMTransport implements LLMTransport {
       parentId: input.parentId,
       provider: input.provider,
       stepLabel: input.stepLabel,
+      tooling: resolveServerCallLlmTooling(this.ctx, input.state),
     })(input.instruction, input.state);
   }
 

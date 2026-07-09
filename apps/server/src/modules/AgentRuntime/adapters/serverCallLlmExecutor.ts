@@ -19,7 +19,6 @@ import {
   generateCredsList,
   resolveAvailableComposioServices,
 } from '@lobechat/builtin-tool-creds';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
@@ -27,17 +26,10 @@ import {
   type AgentBuilderContext,
   type AgentContextDocument,
   type AgentGroupConfig,
-  buildStepSkillDelta,
-  buildStepToolDelta,
-  type LobeToolManifest,
   type OfficialToolItem,
   type OnboardingContext,
-  type OperationToolSet,
-  type ResolvedToolSet,
   resolveTopicReferences,
-  SkillResolver,
   ToolNameResolver,
-  ToolResolver,
 } from '@lobechat/context-engine';
 import {
   applyModelExtendParams,
@@ -96,18 +88,17 @@ import { nanoid } from '@/utils/uuid';
 import { type RuntimeExecutorContext } from '../context';
 import {
   buildPostProcessUrl,
-  buildToolDiscoveryConfig,
   isOperationInterrupted,
   log,
   resolveRuntimeHistoryCount,
   sleep,
   timing,
 } from '../executorHelpers';
-import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+import { resolveServerCallLlmTooling, type ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface PreparedCallLLMContext {
   assistantMessage: { id: string };
@@ -115,6 +106,7 @@ interface PreparedCallLLMContext {
   parentId?: string;
   provider: string;
   stepLabel?: string;
+  tooling?: ServerCallLlmTooling;
 }
 
 const SERVER_LLM_RETRY_POLICY = {
@@ -135,58 +127,8 @@ export const callLlm =
     const model = prepared?.model ?? llmPayload.model ?? state.modelRuntimeConfig?.model;
     const provider =
       prepared?.provider ?? llmPayload.provider ?? state.modelRuntimeConfig?.provider;
-    // Resolve tools via ToolResolver (unified tool injection).
-    //
-    // Single-track device gate: `buildStepToolDelta` treats activeDeviceId as
-    // an independent activation signal (it only dedupes against already-
-    // enabled tools), so any id that reaches it WILL inject local-system.
-    // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
-    // forbids devices — the same filter the tool executors apply.
-    const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
-    const operationToolSet: OperationToolSet = state.operationToolSet ?? {
-      enabledToolIds: [],
-      executorMap: state.toolExecutorMap ?? {},
-      manifestMap: state.toolManifestMap ?? {},
-      sourceMap: state.toolSourceMap ?? {},
-      tools: state.tools ?? [],
-    };
-
-    const stepDelta = buildStepToolDelta({
-      activeDeviceId,
-      enabledToolIds: operationToolSet.enabledToolIds,
-      forceFinish: state.forceFinish,
-      localSystemManifest: LocalSystemManifest as unknown as LobeToolManifest,
-      operationManifestMap: operationToolSet.manifestMap,
-    });
-
-    const toolResolver = new ToolResolver();
-    const resolved: ResolvedToolSet = toolResolver.resolve(
-      operationToolSet,
-      stepDelta,
-      state.activatedStepTools ?? [],
-    );
-
-    const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
-    const toolDiscoveryConfig = buildToolDiscoveryConfig(operationToolSet, resolved.enabledToolIds);
-
-    if (stepDelta.activatedTools.length > 0) {
-      log(
-        `[${operationId}:${stepIndex}] ToolResolver injected %d step-level tools: %o`,
-        stepDelta.activatedTools.length,
-        stepDelta.activatedTools.map((t) => t.id),
-      );
-    }
-
-    // Resolve skills via SkillResolver (unified skill injection)
-    const skillResolver = new SkillResolver();
-    const stepSkillDelta = buildStepSkillDelta();
-    const resolvedSkills = state.metadata?.operationSkillSet
-      ? skillResolver.resolve(
-          state.metadata.operationSkillSet,
-          stepSkillDelta,
-          state.activatedStepSkills ?? [],
-        )
-      : undefined;
+    const tooling = prepared?.tooling ?? resolveServerCallLlmTooling(ctx, state);
+    const { resolved, resolvedSkills, toolDiscoveryConfig, tools } = tooling;
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
