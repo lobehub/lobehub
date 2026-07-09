@@ -1,6 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';

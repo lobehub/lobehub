@@ -1,5 +1,8 @@
-import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import {
+  DEFAULT_AGENT_CONFIG,
+  DEFAULT_SUB_AGENT_MODEL,
+  DEFAULT_SUB_AGENT_PROVIDER,
+} from '@lobechat/const';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
