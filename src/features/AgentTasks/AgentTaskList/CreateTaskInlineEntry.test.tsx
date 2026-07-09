@@ -36,7 +36,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     disabled?: boolean;
     onClick?: () => void;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button disabled={disabled} type="button" onClick={onClick}>
       {children}
     </button>
   ),
