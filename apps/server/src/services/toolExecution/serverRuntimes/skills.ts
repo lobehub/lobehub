@@ -88,7 +88,12 @@ const LEGACY_DEVICE_CLIENT = Symbol('legacy-device-client');
 const LEGACY_FALLBACK_NOTE =
   "Note: the user's device client is outdated and does not support on-device skill execution, so this command ran in the cloud sandbox instead. Tell the user to update their LobeHub app to run skills on their device.";
 
+const LH_COMMAND_PATTERN = /(?:^|&&|\|\||;)\s*lh(?:\s|$)/;
+
+const isLhCommand = (command: string) => LH_COMMAND_PATTERN.test(command);
+
 class SkillServerRuntimeService implements SkillRuntimeService {
+  private agentId?: string;
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
   private marketService: MarketService;
@@ -97,9 +102,11 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private serverDB: LobeChatDatabase;
   private topicId?: string;
   private userId: string;
+  private workspaceId?: string;
   private device?: SkillDeviceExecution;
 
   constructor(options: {
+    agentId?: string;
     device?: SkillDeviceExecution;
     fileModel: FileModel;
     fileService: FileService;
@@ -109,7 +116,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     skillModel: AgentSkillModel;
     topicId?: string;
     userId: string;
+    workspaceId?: string;
   }) {
+    this.agentId = options.agentId;
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
     this.marketService = options.marketService;
@@ -118,6 +127,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
     this.device = options.device;
   }
 
@@ -131,6 +141,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
   findByName = (name: string): Promise<SkillItem | undefined> => {
     return this.skillModel.findByName(name);
+  };
+
+  private resolveWorkspaceId = async (): Promise<string | undefined> => {
+    return resolveRunWorkspaceId({
+      agentId: this.agentId,
+      serverDB: this.serverDB,
+      workspaceId: this.workspaceId,
+    });
   };
 
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
@@ -161,7 +179,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
-    const lhResult = await preprocessLhCommand(options.command, this.userId);
+    const workspaceId =
+      this.workspaceId ??
+      (isLhCommand(options.command) ? await this.resolveWorkspaceId() : undefined);
+    const lhResult = await preprocessLhCommand(options.command, this.userId, workspaceId);
     if (lhResult.error) {
       return {
         executionEnv: 'sandbox',
@@ -620,6 +641,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : undefined;
 
     const service = new SkillServerRuntimeService({
+      agentId: context.agentId,
       device,
       fileModel,
       fileService,
@@ -629,6 +651,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       skillModel,
       topicId: context.topicId,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
 
     // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped
