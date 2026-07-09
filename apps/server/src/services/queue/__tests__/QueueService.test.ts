@@ -169,14 +169,14 @@ describe('QueueService', () => {
       const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
       const result = impl.scheduleMessage({
         context: { phase: 'user_input' } as any,
-        delay: 50,
+        delay: 500,
         endpoint: 'https://example.com/api/agent/run',
         operationId: 'op-test',
         priority: 'high',
         stepIndex: 0,
       });
 
-      await vi.advanceTimersByTimeAsync(49);
+      await vi.advanceTimersByTimeAsync(499);
       expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(1);
@@ -185,6 +185,33 @@ describe('QueueService', () => {
       const request = qstashMocks.publishJSON.mock.calls[0][0];
       expect(request).not.toHaveProperty('delay');
       expect(request.body.timestamp).toEqual(expect.any(Number));
+    });
+
+    it('should floor zero delay at the 300ms minimum settling window', async () => {
+      vi.useFakeTimers();
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const result = impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      // 300ms minimum — not yet published at 299ms
+      await vi.advanceTimersByTimeAsync(299);
+      expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toBe('msg-test');
+
+      // Zero delay is sub-second, so it is not forwarded to QStash
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(request).not.toHaveProperty('delay');
     });
 
     it('should pass second-granularity delays through to QStash', async () => {

@@ -368,3 +368,29 @@ primary left action replaced by a chevron/popup icon.
 the default state and the collapsed/overflow state. If the design requires a
 specific action to stay visible, disable or bypass the toolbar collapse logic for
 that surface and include evidence that no collapse chevron is rendered.
+
+---
+
+## Case 16 — Publishing a component harness when the user asked for full product verification
+
+**Wrong approach**: when the isolated Electron instance failed once and local Docker
+was unavailable, declaring the product-surface verification blocked and publishing a
+component harness report as the main answer, even though another live Electron dev
+pool / CDP route was already running and previous runs had used it successfully.
+
+**Why it's wrong**: a component harness proves a narrow render contract, but it does
+not prove the full product composition, message list layout, app theme tokens,
+store plumbing, or that the evidence is inspectable in the actual desktop surface.
+Environment friction is the agent-testing job to solve, not a reason to downgrade
+without exhausting known running surfaces.
+
+**What it breaks**: the user opens a report expecting complete product evidence and
+gets a partial proof instead, then has to push back that the full verification used
+to run normally.
+
+**Correct approach**: before marking Electron/Web blocked, inventory existing dev
+instances and CDP ports, check whether a sibling worktree already runs the needed
+live branch, measure the target URL/bundle, and use that path if it renders current
+code. Only keep a harness as supporting evidence; the primary UI evidence must come
+from the product surface, or the report must clearly fail/block after every known
+path is measured.
