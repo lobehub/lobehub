@@ -2,6 +2,8 @@ import type { AgentInstruction, InstructionExecutor } from '@lobechat/agent-runt
 import {
   callTool as createCallToolExecutor,
   callToolsBatch as createCallToolsBatchExecutor,
+  execSubAgent as createExecSubAgentExecutor,
+  execSubAgents as createExecSubAgentsExecutor,
   finish as createFinishExecutor,
   requestHumanApprove as createRequestHumanApproveExecutor,
   resolveAbortedTools as createResolveAbortedToolsExecutor,
@@ -12,7 +14,6 @@ import { buildHost } from './buildHost';
 import type { RuntimeExecutorContext } from './context';
 import { callLlm } from './executors/callLlm';
 import { compressContext } from './executors/compressContext';
-import { execSubAgent, execSubAgents } from './executors/execSubAgent';
 
 export { type RuntimeExecutorContext } from './context';
 
@@ -28,8 +29,8 @@ export const createRuntimeExecutors = (
     call_tool: createCallToolExecutor(host),
     call_tools_batch: createCallToolsBatchExecutor(host),
     compress_context: compressContext(ctx),
-    exec_sub_agent: execSubAgent(ctx),
-    exec_sub_agents: execSubAgents(ctx),
+    exec_sub_agent: createExecSubAgentExecutor(host),
+    exec_sub_agents: createExecSubAgentsExecutor(host),
     // Migrated into @lobechat/agent-runtime as part of the IO transport port
     // abstraction — the server now only registers adapters via buildHost.
     finish: createFinishExecutor(host),

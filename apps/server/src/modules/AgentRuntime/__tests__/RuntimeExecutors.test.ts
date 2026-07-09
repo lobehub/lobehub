@@ -5319,7 +5319,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.nextContext).toBeUndefined();
     });
 
-    it('exec_sub_agent executor creates task message and calls execSubAgent callback', async () => {
+    it('exec_sub_agent executor dispatches from the source parent message', async () => {
       const mockExecSubAgent = vi
         .fn()
         .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
@@ -5347,26 +5347,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.exec_sub_agent!(instruction as any, state);
 
-      // Task message created with role:'task'
-      expect(mockMessageModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'parent-agent-id',
-          metadata: expect.objectContaining({
-            targetAgentId: 'target-agent-id',
-          }),
-          role: 'task',
-          parentId: 'tool-msg-id',
-          topicId: 'topic-123',
-        }),
-      );
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
 
       // execSubAgent callback fired with targetAgentId
       expect(mockExecSubAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'target-agent-id',
           instruction: 'Do something useful',
-          topicId: 'topic-123',
           parentOperationId: 'op-123',
+          parentMessageId: 'tool-msg-id',
+          topicId: 'topic-123',
         }),
       );
 
@@ -5433,10 +5423,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.exec_sub_agent!(instruction as any, state);
 
-      // Should still return sub_agent_result (not crash)
       expect(result.nextContext?.phase).toBe('sub_agent_result');
-      // Task message still created for UI
-      expect(mockMessageModel.create).toHaveBeenCalled();
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
     });
   });
 });
