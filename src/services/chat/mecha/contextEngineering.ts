@@ -89,6 +89,13 @@ interface ContextEngineeringContext {
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
   /**
+   * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
+   * Excluded from the client skill candidate pool entirely — not just left
+   * out of `plugins` (pinned) — so a disabled skill is neither listed in
+   * `<available_skills>` nor resolvable by name via `activateSkill`.
+   */
+  disabledPluginIds?: string[];
+  /**
    * Runtime-resolved agent mode. Callers may force chat mode for models without
    * function calling while keeping the stored chatConfig unchanged.
    */
@@ -142,6 +149,7 @@ export const contextEngineering = async ({
   agentBuilderContext,
   agentDocuments,
   agentId,
+  disabledPluginIds,
   enableAgentMode,
   groupId,
   initialContext,
@@ -667,7 +675,7 @@ export const contextEngineering = async ({
   // In manual mode: only expose user-selected skills (filtered by pluginIds).
   let enabledSkills: OperationSkillSet['skills'] | undefined;
   if (plugins) {
-    const skillSet = await resolveClientSkills(plugins);
+    const skillSet = await resolveClientSkills(plugins, disabledPluginIds);
     if (isInAutoSkillMode) {
       enabledSkills = skillSet.skills;
     } else {
