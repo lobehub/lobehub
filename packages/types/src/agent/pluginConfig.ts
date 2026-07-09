@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Three-state per-agent plugin config.
  *
@@ -19,6 +21,20 @@ export interface AgentPluginConfigItem {
 }
 
 export type AgentPluginEntry = string | AgentPluginConfigItem;
+
+export const AgentPluginModeSchema = z.enum(['pinned', 'auto', 'disabled']);
+
+/**
+ * Zod schema for a single `plugins[]` entry — for input validation on
+ * routers/procedures that accept a caller-supplied plugins array (e.g. group
+ * member creation). Accepts both the legacy bare string and the tri-state
+ * object shape, so a client can pre-seed a disabled/pinned entry instead of
+ * being rejected by a `z.array(z.string())` schema.
+ */
+export const AgentPluginEntrySchema: z.ZodType<AgentPluginEntry> = z.union([
+  z.string(),
+  z.object({ identifier: z.string(), mode: AgentPluginModeSchema.optional() }),
+]);
 
 /**
  * Normalizes a single entry: legacy strings and mode-less objects both
