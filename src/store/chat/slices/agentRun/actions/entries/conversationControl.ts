@@ -19,7 +19,8 @@ import {
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
-import { AI_RUNTIME_OPERATION_TYPES, type Operation } from '@/store/chat/slices/operation/types';
+import type { Operation } from '@/store/chat/slices/operation/types';
+import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
@@ -104,14 +105,14 @@ export class ConversationControlActionImpl {
   #resolveHeteroInterventionExecutionOperation = (
     initialOperationId: string,
   ): { operation?: Operation; operationId: string } => {
-    const { operations } = this.#get();
+    const operations: ChatStore['operations'] = this.#get().operations;
     const visited = new Set<string>();
     let currentOperationId: string | undefined = initialOperationId;
     let lastResolved: { operation?: Operation; operationId: string } | undefined;
 
     while (currentOperationId && !visited.has(currentOperationId)) {
       visited.add(currentOperationId);
-      const operation = operations[currentOperationId];
+      const operation: Operation | undefined = operations[currentOperationId];
       lastResolved = { operation, operationId: currentOperationId };
 
       if (!operation) break;
