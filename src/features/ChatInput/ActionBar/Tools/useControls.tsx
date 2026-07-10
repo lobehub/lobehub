@@ -1621,7 +1621,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
-              count: fixedDisabledItems.length + allAutoItems.length,
+              count: allAutoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),
@@ -2015,7 +2015,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   return {
-    autoCount: allAutoItems.length + fixedDisabledItems.length,
+    autoCount: allAutoItems.length,
     editPluginDrawer,
     installedPluginItems,
     marketFooter,
