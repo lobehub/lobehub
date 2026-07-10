@@ -2,6 +2,10 @@ export default {
   'actions.addNewTopic': 'Start New Topic',
   'actions.addNewTopicInProject': 'Start new topic in {{directory}}',
   'actions.autoRename': 'Smart Rename',
+  'actions.archiveMergedPullRequests': 'Archive Topics with Merged PRs',
+  'actions.archiveMergedPullRequestsNone': 'No topics with merged PRs found.',
+  'actions.archiveMergedPullRequestsSuccess_one': 'Archived {{count}} topic with a merged PR.',
+  'actions.archiveMergedPullRequestsSuccess_other': 'Archived {{count}} topics with merged PRs.',
   'actions.confirmRemoveAll': 'You are about to delete all topics. This action cannot be undone.',
   'actions.confirmRemoveTopic': 'You are about to delete this topic. This action cannot be undone.',
   'actions.confirmRemoveUnstarred':
