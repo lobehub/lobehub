@@ -153,6 +153,17 @@ export const createGatewayMemberStreamHandler = (
         // supervisor's terminal barrier refetches the group tree. Clear only
         // the member column's visible loading; terminal reconciliation still
         // belongs to agent_runtime_end/error.
+        //
+        // Same guard as the main handler (LOBE-11501): if the member row isn't
+        // in the store yet (group hydration in flight) or its streamed text
+        // hasn't landed, clearing loading would show a "done" column with no
+        // text — skip the hint and let the terminal barrier reconcile both.
+        if (currentAssistantMessageId) {
+          const stored = (get().dbMessagesMap[bucketKey] ?? []).find(
+            (m) => m.id === currentAssistantMessageId,
+          );
+          if (!stored || (accumulatedContent && !stored.content)) break;
+        }
         if (localOperationId) {
           get().updateOperationMetadata(localOperationId, { visibleLoadingDone: true });
         }

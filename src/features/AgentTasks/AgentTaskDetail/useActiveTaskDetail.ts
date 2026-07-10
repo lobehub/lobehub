@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 interface ActiveTaskDetailState {
+  /** A transient fetch failure (network / 500) with no cached detail — distinct from a resolved not-found. Render a reload state, not a 404. */
+  error?: unknown;
   /**
    * Hard loading gate: the first task snapshot isn't ready yet, OR it is but the
    * assignee agent's config (model / heterogeneous runtime) hasn't hydrated. The
@@ -13,8 +16,10 @@ interface ActiveTaskDetailState {
    * correctly, so we hold the skeleton until it lands.
    */
   isInitialLoading: boolean;
-  /** The task fetch settled with an error and there is no cached detail. */
+  /** The task fetch settled with a *resolved* not-found (deleted / never existed) and there is no cached detail. */
   isNotFound: boolean;
+  /** Retry the task fetch — wired to the error state's Reload. */
+  onRetry: () => void;
 }
 
 /**
@@ -49,18 +54,25 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
   // `fetchTaskDetail` throws on a missing task, so `error` is the definitive
   // "settled and absent" signal — using it (instead of `!isLoading`) avoids the
   // first-paint flash where no fetch has run yet but the cache is still empty.
-  const { error: taskError } = useFetchTaskDetail(taskId);
+  const { error: taskError, mutate } = useFetchTaskDetail(taskId);
 
   // Hydrate-only (never touches `activeAgentId`); no-ops on an empty id, so it
   // simply activates once the assignee is known from the task detail.
   const { isLoading: agentConfigLoading } = useHydrateAgentConfig(isLogin, assigneeAgentId ?? '');
 
-  if (!taskId) return { isInitialLoading: false, isNotFound: false };
+  if (!taskId) return { isInitialLoading: false, isNotFound: false, onRetry: () => {} };
 
-  const isNotFound = !!taskError && !hasTaskDetail;
-  // Anything that isn't "we have the detail" or "it's confirmed gone" is still
-  // resolving — keep the skeleton up instead of flashing empty/404.
-  const isTaskResolving = !hasTaskDetail && !isNotFound;
+  // Split the single `error` signal: `fetchTaskDetail` tags a *resolved*
+  // not-found with `code: 'TASK_NOT_FOUND'`, while a network / 500 rejection
+  // carries an HTTP status instead. Only the former is a real 404 (a dead-end);
+  // a transient failure must offer Reload, not tell the user the task was deleted.
+  const settledWithoutDetail = !!taskError && !hasTaskDetail;
+  const isResolvedNotFound = normalizeAsyncError(taskError).code === 'TASK_NOT_FOUND';
+  const isNotFound = settledWithoutDetail && isResolvedNotFound;
+  const fetchError = settledWithoutDetail && !isResolvedNotFound ? taskError : undefined;
+  // Anything that isn't "we have the detail", "confirmed gone", or "errored" is
+  // still resolving — keep the skeleton up instead of flashing empty/404.
+  const isTaskResolving = !hasTaskDetail && !settledWithoutDetail;
 
   // Block on the assignee config only while its fetch is genuinely in-flight and
   // we don't already have it cached. Gating on `isLoading` (not "absent from the
@@ -73,7 +85,9 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
     !!assigneeAgentId && isLogin === true && !assigneeInMap && agentConfigLoading;
 
   return {
+    error: fetchError,
     isInitialLoading: isTaskResolving || (hasTaskDetail && isAssigneeResolving),
     isNotFound,
+    onRetry: () => mutate(),
   };
 };

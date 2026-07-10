@@ -341,6 +341,7 @@ const reduceToolsChunk = (
     content: run.accContent || undefined,
     kind: 'persistToolBatch',
     reasoning: run.accReasoning || undefined,
+    subagentMessageId: run.currentSubagentMessageId || undefined,
     threadId: run.threadId,
     tools: run.toolState.payloads.map((p) => ({
       isNew: newToolMsgIds.includes(run.toolState.toolMsgIdByCallId.get(p.id)!),
@@ -438,6 +439,7 @@ export const reduce = (
           messageId: run.currentAssistantId,
           model: data.model,
           provider: data.provider,
+          subagentMessageId: run.currentSubagentMessageId || undefined,
           threadId: run.threadId,
           usage: data.usage,
         },

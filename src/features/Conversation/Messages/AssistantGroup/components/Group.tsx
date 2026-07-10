@@ -13,12 +13,11 @@ import type { AssistantContentBlock } from '@/types/index';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import CouncilList from '../../AgentCouncil/components/CouncilList';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
-import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
   formatReasoningDuration,
   getPostToolAnswerSplitIndex,
-  scoreBlockContentAsAnswerLike,
+  isFoldableStatusLine,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
@@ -214,7 +213,8 @@ const appendWorkflowBlock = (
 const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
   if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
 
-  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
+  // Only a single short status line stays folded with its tools; everything else is prose.
+  return !isFoldableStatusLine(block);
 };
 
 const appendWorkflowRangeBlock = (
@@ -555,9 +555,12 @@ const Group = memo<GroupChildrenProps>(
 
     // Codex-style turn folding: once the turn's op has ended, fold its whole
     // process (reasoning + tools + intermediate prose) under a single "已处理
-    // {duration}" header, leaving the final answer always visible. The latest
-    // turn folds only after a final answer exists; still-generating turns render
-    // in full.
+    // {duration}" header, leaving the final answer always visible — for every
+    // turn, latest or not. Folding must never swallow the final answer, since
+    // that is the turn's payload; only the process collapses. The latest turn
+    // is eligible only once its final answer exists (so a tool-only latest turn
+    // does not collapse into a lone header); still-generating turns render in
+    // full.
     const { processSegments, finalSegments } = splitFinalAnswer(segments);
     const processStepCount = countFoldedProcessSteps(processSegments);
     const foldProcess = shouldFoldProcess({

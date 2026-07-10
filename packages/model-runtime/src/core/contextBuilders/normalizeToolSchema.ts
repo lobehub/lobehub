@@ -15,6 +15,10 @@ import type OpenAI from 'openai';
  *    `type: 'array'`. Gemini rejects it with
  *    `field predicate failed: $type == Type.ARRAY`.
  *    → backfill `type: 'array'`.
+ *  - **Empty `enum`** (`enum: []`). An enum with no members constrains the
+ *    value to nothing; strict validators reject it — xAI/grok with
+ *    `/properties/sort/enum: [] has less than 1 item`.
+ *    → drop the empty enum constraint so the property stays usable.
  *
  * Normalization is the harness's responsibility (the same family as the Gemini
  * enum / required sanitizers), so we clean the schema before it reaches any
@@ -76,6 +80,13 @@ export const normalizeToolJsonSchema = (schema: any): any => {
       }
       normalized[key] = defs;
     }
+  }
+
+  // An empty `enum` ([]) allows no value at all — nonsensical, and strict
+  // validators (xAI/grok: `enum: [] has less than 1 item`) reject the whole
+  // request. Drop the constraint entirely rather than let it fail upstream.
+  if (Array.isArray(normalized.enum) && normalized.enum.length === 0) {
+    delete normalized.enum;
   }
 
   return normalized;

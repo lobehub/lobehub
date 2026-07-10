@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -93,6 +97,7 @@ vi.mock('../utils/logger', () => ({
 describe('agent command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let tempDir: string | undefined;
 
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -135,9 +140,13 @@ describe('agent command', () => {
     }
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
+    if (tempDir) {
+      await rm(tempDir, { force: true, recursive: true });
+      tempDir = undefined;
+    }
   });
 
   function createProgram() {
@@ -145,6 +154,14 @@ describe('agent command', () => {
     program.exitOverride();
     registerAgentCommand(program);
     return program;
+  }
+
+  async function writeGraphFixture(graph: unknown) {
+    tempDir = await mkdtemp(join(tmpdir(), 'lh-agent-graph-'));
+    const graphFile = join(tempDir, 'graph.json');
+    await writeFile(graphFile, JSON.stringify(graph), 'utf8');
+
+    return graphFile;
   }
 
   describe('list', () => {
@@ -300,6 +317,78 @@ describe('agent command', () => {
         agentId: 'resolved-id',
         value: { model: 'gemini-3-pro' },
       });
+    });
+
+    it('should update graph config from a validated graph file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Write the final answer.', to: 'answer' }],
+        fields: {},
+        name: 'answer-graph',
+        nodes: { answer: { type: 'llm' } },
+        terminal: 'answer',
+      };
+      const graphFile = await writeGraphFixture(graph);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--enable-graph',
+        '--graph-file',
+        graphFile,
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph,
+          },
+        },
+      });
+    });
+
+    it('should reject conflicting graph enable flags', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--enable-graph',
+        '--disable-graph',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(
+        'Use either --enable-graph or --disable-graph, not both.',
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid graph files before updating agent config', async () => {
+      const graphFile = await writeGraphFixture({
+        edges: [],
+        fields: {},
+        name: 'invalid-graph',
+        nodes: { answer: { type: 'llm' } },
+        terminal: 'answer',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'edit', 'a1', '--graph-file', graphFile]);
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to read graph JSON: Invalid ReasoningGraph'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
     });
   });
 

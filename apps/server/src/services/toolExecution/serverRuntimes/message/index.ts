@@ -7,6 +7,7 @@ import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
+import { assertBotFeatureAccess, BotFeatureAccessError } from '@/business/server/bot/featureAccess';
 import {
   getEnabledMessengerPlatforms,
   getMessengerDiscordConfig,
@@ -100,10 +101,16 @@ const maybeSynthesizeTelegramInstall = async (
 
 /**
  * Resolves credentials for the given platform from the user's configured bot providers.
+ *
+ * Every outbound platform service is built through here, so this is also the
+ * runtime paid-feature gate: an enabled provider whose plan no longer covers
+ * the channel must not keep sending through the Message tool while the
+ * inbound/gateway paths are already denied.
  */
 const resolveCredentials = async (
   providerModel: AgentBotProviderModel,
   platform: string,
+  userId: string,
 ): Promise<{ applicationId: string; credentials: Record<string, string> }> => {
   const providers = await providerModel.query({ platform });
   const enabled = providers.find((p) => p.enabled);
@@ -113,6 +120,13 @@ const resolveCredentials = async (
         `Please configure a ${platform} integration in your bot settings.`,
     );
   }
+  await assertBotFeatureAccess({
+    action: 'runtime',
+    applicationId: enabled.applicationId,
+    platform,
+    userId,
+    workspaceId: enabled.workspaceId ?? undefined,
+  });
   return { applicationId: enabled.applicationId, credentials: enabled.credentials };
 };
 
@@ -126,22 +140,37 @@ export const messageRuntime: ServerRuntimeRegistration = {
     }
 
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const providerModel = new AgentBotProviderModel(context.serverDB, context.userId, gateKeeper);
+    // Mirror the TRPC router (agentBotProviderProcedure): workspace runs scope
+    // bot rows and paid-feature checks to the workspace, not the personal plan.
+    const providerModel = new AgentBotProviderModel(
+      context.serverDB,
+      context.userId,
+      gateKeeper,
+      context.workspaceId ?? undefined,
+    );
 
     const service = new MessageDispatcherService({
       discord: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'discord');
+        const { credentials } = await resolveCredentials(providerModel, 'discord', context.userId!);
         return new DiscordMessageService(new DiscordApi(credentials.botToken));
       },
       feishu: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'feishu');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'feishu',
+          context.userId!,
+        );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
           'feishu',
         );
       },
       imessage: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'imessage');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'imessage',
+          context.userId!,
+        );
         return new ImessageMessageService(
           new ImessageDesktopBridgeApi({
             applicationId,
@@ -151,39 +180,59 @@ export const messageRuntime: ServerRuntimeRegistration = {
         );
       },
       lark: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'lark');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'lark',
+          context.userId!,
+        );
         return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
           'lark',
         );
       },
       qq: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'qq');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'qq',
+          context.userId!,
+        );
         return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
       },
       slack: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'slack');
+        const { credentials } = await resolveCredentials(providerModel, 'slack', context.userId!);
         return new SlackMessageService(new SlackApi(credentials.botToken));
       },
       telegram: async () => {
         // Per-agent provider takes precedence; fall back to the env-backed
         // singleton so the synthetic telegram:singleton install actually works.
         try {
-          const { credentials } = await resolveCredentials(providerModel, 'telegram');
+          const { credentials } = await resolveCredentials(
+            providerModel,
+            'telegram',
+            context.userId!,
+          );
           return new TelegramMessageService(new TelegramApi(credentials.botToken));
-        } catch {
+        } catch (error) {
+          // A paid-gate denial is not a "provider missing" condition — falling
+          // back to the env singleton here would bypass the feature gate.
+          if (error instanceof BotFeatureAccessError) throw error;
           const envConfig = await getMessengerTelegramConfig();
           if (!envConfig) {
             throw new Error(
               'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
                 'Please configure a telegram integration in your bot settings.',
+              { cause: error },
             );
           }
           return new TelegramMessageService(new TelegramApi(envConfig.botToken));
         }
       },
       wechat: async () => {
-        const { applicationId, credentials } = await resolveCredentials(providerModel, 'wechat');
+        const { applicationId, credentials } = await resolveCredentials(
+          providerModel,
+          'wechat',
+          context.userId!,
+        );
         return new WechatMessageService(
           new WechatApiClient(credentials.botToken, credentials.botId),
           applicationId,
@@ -195,11 +244,25 @@ export const messageRuntime: ServerRuntimeRegistration = {
       connectBot: async (botId) => {
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
+        await assertBotFeatureAccess({
+          action: 'manage',
+          applicationId: bot.applicationId,
+          platform: bot.platform,
+          userId: context.userId!,
+          workspaceId: bot.workspaceId ?? undefined,
+        });
         const gateway = new GatewayService();
         const status = await gateway.startClient(bot.platform, bot.applicationId, context.userId!);
         return { status };
       },
       createBot: async (params) => {
+        await assertBotFeatureAccess({
+          action: 'manage',
+          applicationId: params.applicationId,
+          platform: params.platform,
+          userId: context.userId!,
+          workspaceId: context.workspaceId ?? undefined,
+        });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
         assertBotAccessSettings(settings);
         const result = await providerModel.create({ ...params, settings });
@@ -272,6 +335,15 @@ export const messageRuntime: ServerRuntimeRegistration = {
       toggleBot: async (botId, enabled) => {
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
+        if (enabled) {
+          await assertBotFeatureAccess({
+            action: 'manage',
+            applicationId: existing.applicationId,
+            platform: existing.platform,
+            userId: context.userId!,
+            workspaceId: existing.workspaceId ?? undefined,
+          });
+        }
         await providerModel.update(botId, { enabled });
         await invalidateBotAfterUpdate(
           {
@@ -285,6 +357,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
       updateBot: async (botId, params) => {
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
+        await assertBotFeatureAccess({
+          action: 'manage',
+          applicationId: existing.applicationId,
+          platform: existing.platform,
+          userId: context.userId!,
+          workspaceId: existing.workspaceId ?? undefined,
+        });
 
         const value: { credentials?: Record<string, string>; settings?: Record<string, unknown> } =
           {};
@@ -331,9 +410,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
             applicationId: row.applicationId,
             enterpriseId:
               ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-                | string
-                | null
-                | undefined) ?? null,
+                string | null | undefined) ?? null,
             id: row.id,
             installedAt:
               row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
@@ -383,9 +460,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: row.applicationId,
           enterpriseId:
             ((row.metadata as Record<string, unknown> | null)?.enterpriseId as
-              | string
-              | null
-              | undefined) ?? null,
+              string | null | undefined) ?? null,
           id: row.id,
           installedAt:
             row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),

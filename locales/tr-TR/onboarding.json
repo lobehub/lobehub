@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Otomatik (Sistem dilini takip et)",
   "responseLanguage.desc": "Ajanın yanıt dili seçin",
   "responseLanguage.hint": "Bir dil seçtikten sonra, yapay zekâ bu dili kullanarak yanıt verecek ve arayüz dili de senkronize edilecek",
+  "responseLanguage.saveFailed": "Kaydedilemedi. Lütfen tekrar deneyin.",
   "responseLanguage.title": "Hangi dili kullanarak iletişim kuralım?",
   "responseLanguage.title2": "Dille başlayalım, gerçek anlayış inşa edelim.",
   "responseLanguage.title3": "Sizi daha iyi anlayabilmem için açık konuşayım~",

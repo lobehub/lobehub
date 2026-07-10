@@ -48,6 +48,7 @@ export const config = {
     '/signin(.*)',
     '/verify-email(.*)',
     '/verify-im(.*)',
+    '/verify',
     '/verify/(.*)',
     '/reset-password(.*)',
     '/auth-error(.*)',

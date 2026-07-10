@@ -3,7 +3,8 @@
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Input, Select, Spin, Tag, Typography } from 'antd';
+import { Button, Select } from '@lobehub/ui/base-ui';
+import { Avatar, Input, Spin, Tag, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -313,6 +314,21 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     const githubCreds = allCreds.filter(
       (c) => c.type === 'oauth' && c.oauthProvider?.toLowerCase().includes('github'),
     );
+    const githubCredOptions = githubCreds.map((cred) => ({
+      label: (
+        <span className={styles.credOption}>
+          {cred.oauthAvatar ? <Avatar size={16} src={cred.oauthAvatar} /> : <Github size={14} />}
+          <span>{cred.name}</span>
+          {cred.oauthUsername && (
+            <Typography.Text style={{ fontSize: 12 }} type="secondary">
+              @{cred.oauthUsername}
+            </Typography.Text>
+          )}
+        </span>
+      ),
+      title: [cred.name, cred.oauthUsername].filter(Boolean).join(' '),
+      value: cred.key,
+    }));
 
     const saveEnv = (patch: Record<string, string>) => {
       if (!canEdit) return;
@@ -361,35 +377,16 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
             <Select
               allowClear
               disabled={!canEdit}
-              placeholder={t('heterogeneousStatus.cloud.githubPlaceholder')}
+              options={githubCredOptions}
               style={{ width: '100%' }}
-              value={storedGithubCredKey || undefined}
-              notFoundContent={
-                <Flexbox style={{ padding: '8px 0', fontSize: 12 }}>
-                  {t('heterogeneousStatus.cloud.githubNoCreds')}
-                </Flexbox>
+              value={storedGithubCredKey || null}
+              placeholder={
+                githubCredOptions.length > 0
+                  ? t('heterogeneousStatus.cloud.githubPlaceholder')
+                  : t('heterogeneousStatus.cloud.githubNoCreds')
               }
-              onChange={(key: string) => saveEnv({ GITHUB_CRED_KEY: key })}
-              onClear={() => saveEnv({ GITHUB_CRED_KEY: '' })}
-            >
-              {githubCreds.map((cred) => (
-                <Select.Option key={cred.key} value={cred.key}>
-                  <span className={styles.credOption}>
-                    {cred.oauthAvatar ? (
-                      <Avatar size={16} src={cred.oauthAvatar} />
-                    ) : (
-                      <Github size={14} />
-                    )}
-                    <span>{cred.name}</span>
-                    {cred.oauthUsername && (
-                      <Typography.Text style={{ fontSize: 12 }} type="secondary">
-                        @{cred.oauthUsername}
-                      </Typography.Text>
-                    )}
-                  </span>
-                </Select.Option>
-              ))}
-            </Select>
+              onChange={(key) => saveEnv({ GITHUB_CRED_KEY: typeof key === 'string' ? key : '' })}
+            />
 
             <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.githubDesc')}</span>
           </Flexbox>

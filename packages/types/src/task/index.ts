@@ -13,6 +13,19 @@ export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
 // null = no automation
 export type TaskAutomationMode = 'heartbeat' | 'schedule';
 
+/**
+ * What triggered a given task run. Threaded from the run entry point
+ * (`TaskRunnerService.runTask`) through to `onTopicComplete` so lifecycle
+ * decisions can tell an ad-hoc manual "run now" apart from an automation tick.
+ *
+ * - `manual`    — user (or an agent tool call) invoked the run ad-hoc. Its
+ *                 failure is a one-off signal and must NOT change the task's
+ *                 scheduling state, nor count against the maxExecutions quota.
+ * - `schedule`  — a cron `schedule` tick fired the run.
+ * - `heartbeat` — a heartbeat interval tick fired the run.
+ */
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat';
+
 // ── Config types ──
 
 export interface CheckpointConfig {
@@ -111,6 +124,12 @@ export interface TaskTopicHandoff {
    * about the brief delivery itself, written by the lifecycle service.
    */
   briefDecision?: BriefDecision;
+  /**
+   * Raw last assistant message of the run, captured on completion.
+   * Shown on the run card alongside the LLM-synthesized `summary` so the feed
+   * surfaces the actual run output, not only the summary.
+   */
+  content?: string;
   keyFindings?: string[];
   nextAction?: string;
   summary?: string;
@@ -120,15 +139,41 @@ export interface TaskTopicHandoff {
 // ── Task context (runtime state pockets stored in tasks.context JSONB) ──
 
 export interface TaskSchedulerContext {
-  // Count of consecutive 'error' reasons since the last 'done'. When it hits
-  // the fuse threshold (currently 3) we stop re-arming until the user resolves
-  // the urgent brief.
+  // Count of consecutive automation-tick 'error' reasons since the last 'done'.
+  // When it hits the fuse threshold (currently 3) we pause the task / stop
+  // re-arming until the user resolves the urgent brief. Manual "run now"
+  // failures do NOT touch this counter.
   consecutiveFailures?: number;
   // ISO timestamp when the latest tick was scheduled. Informational only.
   scheduledAt?: string;
   // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
   // cancel when the user wants an interval change to take effect immediately.
   tickMessageId?: string;
+}
+
+/**
+ * Durable lifecycle audit trail for a task, stored under
+ * `tasks.context.lifecycle`. Unlike the live `tasks.error` column — which is
+ * cleared on the next successful run so the UI only shows the *current* error —
+ * this pocket is append-style history that a later success does NOT wipe. It
+ * exists so "the morning check silently didn't fire" is diagnosable after the
+ * fact instead of being masked by a later manual success (LOBE-11390).
+ */
+export interface TaskLifecycleAudit {
+  // Monotonic lifetime count of failed runs (never reset on success).
+  errorCount?: number;
+  // The most recent failure, retained even after a later success clears the
+  // live `error` column.
+  lastError?: {
+    at: string;
+    message: string;
+    trigger?: TaskRunTrigger;
+  };
+  lastPausedAt?: string;
+  // When the task was last auto-paused by the failure fuse, and why.
+  lastPauseReason?: string;
+  // When a successful run last cleared a prior error state (recovery marker).
+  lastRecoveredAt?: string;
 }
 
 // Pointer back to the agent conversation that spawned this task via the
@@ -151,6 +196,7 @@ export interface TaskOriginContext {
 }
 
 export interface TaskContext {
+  lifecycle?: TaskLifecycleAudit;
   origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
 }
@@ -369,6 +415,8 @@ export interface TaskDetailData {
   checkpoint?: CheckpointConfig;
   config?: Record<string, unknown>;
   createdAt?: string;
+  /** Creator of the task; used by the UI to gate creator-only actions (e.g. make private). */
+  createdByUserId?: string | null;
   dependencies?: Array<{ dependsOn: string; type: string }>;
   description?: string | null;
   /** Rich-editor JSON state for the instruction; preserves details markdown drops (image size, etc.). */

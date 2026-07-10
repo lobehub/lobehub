@@ -9,12 +9,15 @@
  *   - Content/reasoning/model/usage final writes
  *   - Sync snapshot + reset to prevent cross-step content contamination
  */
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,10 +26,12 @@ import { useChatStore } from '@/store/chat/store';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
+import { resolveHeteroResume } from '../transports/hetero/heteroResume';
 
 // ─── Mocks ───
 
 // messageService — the DB layer under test
+const mockBatchMutate = vi.fn();
 const mockCreateMessage = vi.fn();
 const mockUpdateMessage = vi.fn();
 const mockUpdateMessageError = vi.fn();
@@ -35,6 +40,7 @@ const mockGetMessages = vi.fn();
 
 vi.mock('@/services/message', () => ({
   messageService: {
+    batchMutate: (...args: any[]) => mockBatchMutate(...args),
     createMessage: (...args: any[]) => mockCreateMessage(...args),
     getMessages: (...args: any[]) => mockGetMessages(...args),
     updateMessage: (...args: any[]) => mockUpdateMessage(...args),
@@ -71,6 +77,10 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
+  // Faithful re-impl (the real one is unmocked to keep the import cycle out of
+  // this test): only 'interrupted' / 'waiting_for_async_tool' are non-clean.
+  isCompletedRuntimeEnd: (reason?: string | null) =>
+    reason !== 'interrupted' && reason !== 'waiting_for_async_tool',
 }));
 
 // isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
@@ -111,7 +121,9 @@ function setupIpcCapture() {
         on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
           listeners.set(channel, handler);
         }),
-        removeListener: vi.fn(),
+        removeListener: vi.fn((channel: string, handler: (...args: any[]) => void) => {
+          if (listeners.get(channel) === handler) listeners.delete(channel);
+        }),
       },
     },
   };
@@ -170,6 +182,19 @@ function setupIpcCapture() {
           sessionId,
         });
       }
+    },
+    /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
+    emitStreamEvent: (sessionId: string, event: any) => {
+      const handler = listeners.get('heteroAgentEvent');
+      handler?.(null, {
+        event: {
+          operationId: defaultParams.operationId,
+          stepIndex: 0,
+          timestamp: Date.now(),
+          ...event,
+        },
+        sessionId,
+      });
     },
     /** Simulate session completion */
     emitComplete: (sessionId: string) => {
@@ -250,6 +275,13 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setTimeout(r, 10));
   }
+};
+
+const flushFakeTimers = async () => {
+  for (let i = 0; i < 10; i++) {
+    await vi.advanceTimersByTimeAsync(10);
+  }
+  await Promise.resolve();
 };
 
 // ─── CC stream-json event factories ───
@@ -477,10 +509,55 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockUpdateMessage.mockResolvedValue(undefined);
     mockUpdateMessageError.mockResolvedValue({ success: false });
     mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockBatchMutate.mockImplementation(async (operations: any[]) => {
+      const results = [];
+      for (const [index, operation] of operations.entries()) {
+        try {
+          if (operation.type === 'createMessage') {
+            const created = await mockCreateMessage(operation.message);
+            results.push({ id: created?.id, index, success: true, type: operation.type });
+            continue;
+          }
+
+          if (operation.type === 'updateToolMessage') {
+            const result = await mockUpdateToolMessage(
+              operation.id,
+              operation.value,
+              operation.ctx,
+            );
+            results.push({
+              id: operation.id,
+              index,
+              success: result?.success !== false,
+              type: operation.type,
+            });
+            continue;
+          }
+
+          const result = await mockUpdateMessage(operation.id, operation.value, operation.ctx);
+          results.push({
+            id: operation.id,
+            index,
+            success: result?.success !== false,
+            type: operation.type,
+          });
+        } catch {
+          results.push({
+            id: operation.type === 'createMessage' ? operation.message.id : operation.id,
+            index,
+            success: false,
+            type: operation.type,
+          });
+        }
+      }
+
+      return { results, success: results.every((result) => result.success) };
+    });
     mockCreateThread.mockImplementation(async (params: any) => params.id || 'thread-generated');
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete (globalThis as any).window;
   });
 
@@ -488,8 +565,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
    * Runs the executor in background, then feeds CC events and completes.
    * Returns a promise that resolves when the executor finishes.
    */
-  async function runWithEvents(ccEvents: any[], opts?: { params?: Partial<typeof defaultParams> }) {
-    const store = createMockStore();
+  async function runWithEvents(
+    ccEvents: any[],
+    opts?: { params?: Partial<typeof defaultParams>; store?: any },
+  ) {
+    const store = opts?.store ?? createMockStore();
     const get = vi.fn(() => store);
 
     // sendPrompt will resolve after we emit all events
@@ -584,6 +664,120 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // Should only create ONE tool message despite two tool_use events with same id
       const toolCreates = mockCreateMessage.mock.calls.filter(([p]: any) => p.role === 'tool');
       expect(toolCreates.length).toBe(1);
+    });
+
+    it('batches main message writes before tool_end reconciliation', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_01', 'toolu_batch', 'Read', { file_path: '/batched.ts' }),
+        ccToolResult('toolu_batch', 'batched output'),
+        ccResult(),
+      ]);
+
+      const writeBatches = mockBatchMutate.mock.calls.map(([operations]: any[]) => operations);
+      const toolBatch = writeBatches.find((operations: any[]) => {
+        const types = operations.map((operation) => operation.type);
+        return (
+          types.includes('createMessage') &&
+          types.includes('updateMessage') &&
+          types.includes('updateToolMessage')
+        );
+      });
+
+      expect(toolBatch).toBeDefined();
+      const types = toolBatch.map((operation: any) => operation.type);
+      expect(
+        types.filter((type: string) => type === 'updateMessage').length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(types.filter((type: string) => type === 'createMessage')).toHaveLength(1);
+      expect(types.filter((type: string) => type === 'updateToolMessage')).toHaveLength(1);
+      expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
+    });
+
+    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
+      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+      const updateTopicStatus = vi.fn(async () => {});
+      const store = createMockStore({
+        optimisticUpdateMessagePlugin,
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Scope',
+                options: [
+                  { description: 'Keep it narrow', label: 'Small' },
+                  { description: 'Do all of it', label: 'All' },
+                ],
+                question: 'How much should I do?',
+              },
+            ],
+          }),
+          deadline: Date.now() + 300_000,
+          identifier: 'claude-code',
+          toolCallId: 'toolu_ask',
+        },
+        type: 'agent_intervention_request',
+      });
+      await flush();
+
+      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
+
+      ipc.emitRawLine(
+        'ipc-sess-1',
+        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+          questions: [
+            {
+              header: 'Scope',
+              options: [
+                { description: 'Keep it narrow', label: 'Small' },
+                { description: 'Do all of it', label: 'All' },
+              ],
+              question: 'How much should I do?',
+            },
+          ],
+        }),
+      );
+      await flush();
+
+      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
+      );
+      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
+      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
+        { intervention: { status: 'pending' } },
+        { operationId: 'op-1' },
+      );
+      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
+        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
+      );
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+      );
+
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt();
+      await executorPromise;
     });
   });
 
@@ -731,6 +925,64 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // provider is emitted by the CC adapter on turn_metadata so it rides
       // along with the final content/model write.
       expect(finalWrite![1].provider).toBe('claude-code');
+    });
+
+    // The run's first assistant already exists in `dbMessagesMap` before the
+    // executor starts, so the gateway handler's stream_start seed-insert (its
+    // only model/provider → store path) is skipped for it. The executor must
+    // therefore mirror the flush into the store itself, or the row renders
+    // without a model until the next refetch.
+    it('should dispatch model + provider into the store for the initial assistant', async () => {
+      const seeded = [
+        {
+          agentId: 'agent-1',
+          content: '',
+          id: 'ast-initial',
+          role: 'assistant',
+          topicId: 'topic-1',
+        },
+      ];
+      const store = createMockStore({
+        dbMessagesMap: { 'main_agent-1_topic-1': seeded },
+        messagesMap: { 'main_agent-1_topic-1': seeded },
+      });
+
+      await runWithEvents([ccInit(), ccText('msg_01', 'hi'), ccResult()], { store });
+
+      const dispatched = store.internal_dispatchMessage.mock.calls.find(
+        ([payload]: any) =>
+          payload.type === 'updateMessage' &&
+          payload.id === 'ast-initial' &&
+          payload.value?.provider === 'claude-code',
+      );
+      expect(dispatched).toBeDefined();
+      expect(dispatched![0].value.model).toBe('claude-sonnet-4-6');
+    });
+
+    // `recordUsage` is the main-agent twin of the subagent interpreter's
+    // `recordUsage`, which updates its thread bucket via `stream.update`.
+    // Without the store dispatch, per-turn usage never renders live.
+    it('should dispatch turn usage into the store', async () => {
+      const store = createMockStore();
+
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        { store },
+      );
+
+      const dispatched = store.internal_dispatchMessage.mock.calls.find(
+        ([payload]: any) =>
+          payload.type === 'updateMessage' && payload.value?.metadata?.usage !== undefined,
+      );
+      expect(dispatched).toBeDefined();
+      expect(dispatched![0].value.model).toBe('claude-opus-4-6');
+      expect(dispatched![0].value.provider).toBe('claude-code');
     });
 
     it('should write accumulated reasoning', async () => {
@@ -1225,6 +1477,36 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
     });
 
+    it('should forward context selections as heterogeneous system context', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        contextSelections: [
+          {
+            content: 'const answer = 42;',
+            filePath: 'src/example.ts',
+            id: 'selection-1',
+            lineRange: { endLine: 7, startLine: 7 },
+            source: 'code',
+          },
+        ],
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        'ipc-sess-1',
+        'test prompt',
+        'op-1',
+        undefined,
+        expect.stringContaining('<user_context_selections count="1">'),
+      );
+      expect(mockSendPrompt.mock.calls[0][4]).toContain('filePath="src/example.ts"');
+      expect(mockSendPrompt.mock.calls[0][4]).toContain('lines="7-7"');
+      expect(mockSendPrompt.mock.calls[0][4]).toContain('const answer = 42;');
+    });
+
     it('should pass Claude Code model and thinking effort as spawn args', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1360,7 +1642,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         heteroSessionId: undefined,
+        heteroSessionIdByWorkingDirectory: {},
         workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
       });
 
       ipc.emitRawLine('ipc-sess-2', { thread_id: 'thread_new_456', type: 'thread.started' });
@@ -1373,7 +1657,150 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         heteroSessionId: 'thread_new_456',
+        heteroSessionIdByWorkingDirectory: {
+          '/Users/me/repo': 'thread_new_456',
+        },
         workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
+    });
+
+    it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {
+      let topicMeta: ChatTopicMetadata = {};
+      const store = createMockStore({
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+      });
+      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+        topicMeta = { ...topicMeta, ...patch };
+        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+      });
+      const get = vi.fn(() => store);
+      let rejectSendPrompt!: (reason?: unknown) => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((_resolve, reject) => {
+          rejectSendPrompt = reject;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        workingDirectory: '/repo',
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-rate-limited'));
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'cc-session-rate-limited',
+        heteroSessionIdByWorkingDirectory: {
+          '/repo': 'cc-session-rate-limited',
+        },
+        workingDirectory: '/repo',
+        workingDirectoryConfig: { path: '/repo' },
+      });
+
+      rejectSendPrompt(new Error('rate limit'));
+      await executorPromise;
+      await flush();
+
+      expect(resolveHeteroResume(topicMeta, '/repo')).toEqual({
+        cwdChanged: false,
+        resumeSessionId: 'cc-session-rate-limited',
+      });
+    });
+
+    // ────────────────────────────────────────────────────
+    // Per-cwd session id lifecycle — executor keying primitive
+    // ────────────────────────────────────────────────────
+    it('keeps a per-cwd session id across cwds and resumes when a cwd recurs', async () => {
+      // The executor keys sessions by the cwd it is handed (CC stores sessions
+      // per-cwd). Runs one topic across cwd A → cwd B → back to A, driving the
+      // REAL executor completion write + REAL resolveHeteroResume with real
+      // evolving metadata; only the CLI/IPC is stubbed. Asserts a cwd change
+      // never loses or misroutes a prior session id, and a recurring cwd resumes
+      // its own session. (A worktree switch keeps the source cwd, so it stays on
+      // one session — this guards the primitive that also backs multi-repo runs.)
+      const cwdA = '/Users/me/repo';
+      const cwdB = '/Users/me/other-repo';
+
+      // A single topic whose metadata evolves across runs, like the real store:
+      // updateTopicMetadata shallow-merges and getTopicMetadataById reads it back.
+      let topicMeta: ChatTopicMetadata = {};
+      const store = createMockStore({
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+      });
+      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+        topicMeta = { ...topicMeta, ...patch };
+        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+      });
+      const get = vi.fn(() => store);
+
+      // Drive one full CC turn: spawn → init(session id) + result → complete.
+      // Returns the resumeSessionId the CLI was actually spawned with this turn.
+      const runTurn = async (
+        workingDirectory: string,
+        resumeSessionId: string | undefined,
+        agentSessionId: string,
+      ): Promise<string | undefined> => {
+        let resolveSendPrompt: () => void = () => {};
+        mockSendPrompt.mockReturnValue(new Promise<void>((r) => (resolveSendPrompt = r)));
+        mockStartSession.mockImplementation(async (params: any) => {
+          ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
+          return { sessionId: 'ipc-sess-1' };
+        });
+
+        const spawnedAt = mockStartSession.mock.calls.length;
+        const executorPromise = executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          resumeSessionId,
+          workingDirectory,
+        });
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit(agentSessionId));
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await flush();
+        await executorPromise;
+        await flush();
+        return mockStartSession.mock.calls[spawnedAt]?.[0]?.resumeSessionId;
+      };
+
+      // ── Turn 1: worktree A, no prior session → fresh spawn ──
+      const resumeForA1 = resolveHeteroResume(topicMeta, cwdA).resumeSessionId;
+      expect(resumeForA1).toBeUndefined();
+      const spawnedA1 = await runTurn(cwdA, resumeForA1, 'cc-session-A');
+      expect(spawnedA1).toBeUndefined(); // no --resume on a fresh cwd
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({ [cwdA]: 'cc-session-A' });
+      expect(topicMeta.workingDirectory).toBe(cwdA);
+
+      // ── Switch to worktree B and send: must NOT resume A's session in B ──
+      const decisionB = resolveHeteroResume(topicMeta, cwdB);
+      expect(decisionB).toEqual({
+        cwdChanged: true,
+        reason: 'cwd_changed',
+        resumeSessionId: undefined,
+      });
+      const spawnedB = await runTurn(cwdB, decisionB.resumeSessionId, 'cc-session-B');
+      expect(spawnedB).toBeUndefined(); // fresh session in B, not A's id
+      // A's session id survives; B's is added alongside.
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({
+        [cwdA]: 'cc-session-A',
+        [cwdB]: 'cc-session-B',
+      });
+      expect(topicMeta.workingDirectory).toBe(cwdB);
+
+      // ── Switch back to worktree A and send: A's session is found + resumed ──
+      const decisionA2 = resolveHeteroResume(topicMeta, cwdA);
+      expect(decisionA2).toEqual({ cwdChanged: false, resumeSessionId: 'cc-session-A' });
+      const spawnedA2 = await runTurn(cwdA, decisionA2.resumeSessionId, 'cc-session-A');
+      expect(spawnedA2).toBe('cc-session-A'); // CLI actually --resumes A's session
+      // Nothing lost by the detour: both worktrees keep their own session id.
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({
+        [cwdA]: 'cc-session-A',
+        [cwdB]: 'cc-session-B',
       });
     });
 
@@ -1424,43 +1851,61 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await flush();
 
       // Output already streamed → no second run, no resume-metadata clear.
+      // The fresh session id is still persisted early so the next turn can
+      // resume even if this non-retried run exits with an error.
       expect(startCount).toBe(1);
-      expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(store.updateTopicMetadata).not.toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({ heteroSessionId: undefined }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'cc-sess-1',
+        heteroSessionIdByWorkingDirectory: {
+          '/repo': 'cc-sess-1',
+        },
+        workingDirectory: '/repo',
+        workingDirectoryConfig: { path: '/repo' },
+      });
 
       releaseUpdate();
     });
 
-    it('does NOT advance currentAssistantId when a step-boundary assistant create fails', async () => {
-      // Regression: a transient createMessage failure on the new-step assistant
-      // must skip the reducer commit (like the subagent createMessage path),
-      // NOT advance currentAssistantId to a row that was never created — else
-      // every later content/tool write targets a missing assistant and is lost.
+    it('replays a failed write-behind assistant create without blocking live step state', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockCreateMessage.mockImplementation(async (p: any) => {
         if (p.role === 'assistant') throw new Error('transient create failure');
         return { id: p.id ?? `tool-${Date.now()}` };
       });
 
-      await runWithEvents([
-        ccInit(),
-        // Turn 1 on the seed assistant (ast-initial): text + tool + result.
-        ccText('msg_01', 'turn one'),
-        ccToolUse('msg_01', 't1', 'Bash', { command: 'ls' }),
-        ccToolResult('t1', 'ok'),
-        // Turn 2 (new message.id → step boundary): the new-assistant create FAILS,
-        // then a tool_use arrives for this turn.
-        ccToolUse('msg_02', 't2', 'Read', { file_path: '/a' }),
-        ccToolResult('t2', 'data'),
-        ccResult(),
-      ]);
+      try {
+        await runWithEvents([
+          ccInit(),
+          // Turn 1 on the seed assistant (ast-initial): text + tool + result.
+          ccText('msg_01', 'turn one'),
+          ccToolUse('msg_01', 't1', 'Bash', { command: 'ls' }),
+          ccToolResult('t1', 'ok'),
+          // Turn 2 (new message.id → step boundary): the new-assistant create
+          // is now write-behind, so live state advances immediately and a
+          // failed durable create is replayed after terminal flush.
+          ccToolUse('msg_02', 't2', 'Read', { file_path: '/a' }),
+          ccToolResult('t2', 'data'),
+          ccResult(),
+        ]);
 
-      // Commit was skipped on the failed create → currentAssistantId stayed at
-      // the seed, so turn-2's tool parents off ast-initial, never off the
-      // assistant row that was never created.
-      const t2Create = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 't2',
-      );
-      expect(t2Create).toBeDefined();
-      expect(t2Create![0].parentId).toBe('ast-initial');
+        const assistantCreateAttempts = mockCreateMessage.mock.calls.filter(
+          ([p]: any) => p.role === 'assistant',
+        );
+        expect(assistantCreateAttempts.length).toBeGreaterThanOrEqual(2);
+
+        const attemptedAssistantId = assistantCreateAttempts[0][0].id;
+        const t2Create = mockCreateMessage.mock.calls.find(
+          ([p]: any) => p.role === 'tool' && p.tool_call_id === 't2',
+        );
+        expect(t2Create).toBeDefined();
+        expect(t2Create![0].parentId).toBe(attemptedAssistantId);
+      } finally {
+        consoleError.mockRestore();
+      }
     });
   });
 
@@ -1501,6 +1946,65 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         model: 'gpt-5.5',
         provider: 'codex',
       });
+    });
+
+    it('waits for late Codex terminal events when Electron complete arrives before stdout tail', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      let executorSettled = false;
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      }).finally(() => {
+        executorSettled = true;
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', codexThreadStarted());
+      ipc.emitRawLine('ipc-sess-1', codexTurnStarted());
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_0', 'Checking prior state.'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandStarted('item_1', '/bin/zsh -lc pwd'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'));
+
+      // Reproduce the Electron race: completion notification reaches the
+      // renderer before the final agent_message + turn.completed stdout tail.
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      // Main resolves sendPrompt immediately after broadcasting complete. The
+      // executor must keep the IPC subscription alive while onComplete is
+      // waiting for the late terminal stdout tail.
+      resolveSendPrompt!();
+      await flush();
+      expect(executorSettled).toBe(false);
+      expect(ipc.getListeners().has('heteroAgentEvent')).toBe(true);
+
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_2', 'Final report after late stdout.'));
+      ipc.emitRawLine('ipc-sess-1', codexTurnCompleted({ input_tokens: 10, output_tokens: 5 }));
+      await flush();
+
+      await executorPromise;
+      await flush();
+
+      const finalWrite = mockUpdateMessage.mock.calls.find(
+        ([, value]: any) => value.content === 'Final report after late stdout.',
+      );
+      expect(finalWrite).toBeDefined();
+
+      const finalAssistantId = finalWrite![0];
+      expect(
+        mockCreateMessage.mock.calls.some(
+          ([params]: any) => params.role === 'assistant' && params.id === finalAssistantId,
+        ),
+      ).toBe(true);
     });
 
     it('should switch to a new assistant before persisting the next turn tool', async () => {
@@ -1592,6 +2096,167 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         (update) => update.assistantId === newAstId && update.toolIds.includes('item_3'),
       );
       expect(secondTurnToolWrites.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('does not leave a usage-only empty assistant when a final turn emits no agent_message', async () => {
+      // Repro for the cloud "usage-only empty shell" symptom (e.g. topic
+      // tpc_96sSE0Eb0DHw tail: assistant(tool call) -> tool result ->
+      // assistant(content='', usage only, parent = prior assistant)).
+      //
+      // Codex emits `turn.started` per model invocation. The previous adapter
+      // behavior emitted stream_start{newStep} immediately on 2nd+ turn.started,
+      // and the reducer's openTurn EAGERLY minted a new assistant at that
+      // boundary — BEFORE any content was seen. When that final turn produced
+      // NO agent_message text and NO tool call (only `turn.completed` with
+      // usage), the eagerly-created assistant was left with content='' +
+      // tools=null + only usage metadata: a permanent empty shell.
+      //
+      // This asserts the correct outcome: a turn that emits no content and no
+      // tools must NOT persist a standalone assistant whose only payload is usage.
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: params.id ?? `tool-${idCounter.tool}` };
+        }
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: params.id ?? `ast-new-${idCounter.assistant}` };
+        }
+        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
+      });
+
+      const contentByAssistant = new Map<string, string>();
+      const toolsByAssistant = new Map<string, string[]>();
+      const usageByAssistant = new Map<string, any>();
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (typeof val.content === 'string') contentByAssistant.set(id, val.content);
+        if (Array.isArray(val.tools)) {
+          toolsByAssistant.set(
+            id,
+            val.tools.map((tool: any) => tool.id),
+          );
+        }
+        if (val.metadata?.usage) usageByAssistant.set(id, val.metadata.usage);
+      });
+
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Running the first command.'),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
+          // Final turn: started, but the model emitted no agent_message and no
+          // tool — only a usage-bearing turn.completed.
+          codexTurnStarted(),
+          codexTurnCompleted({ input_tokens: 12, output_tokens: 4 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([params]: any) => params.role === 'assistant',
+      );
+
+      // An assistant row that ended up with empty content AND no tools is the
+      // empty-shell symptom — a turn that produced nothing should not persist a
+      // standalone assistant. (Whether usage lands on it depends on event
+      // ordering / the adapter terminal guard, so usage is intentionally NOT
+      // part of this assertion.)
+      const emptyShells = assistantCreates.filter(([params]: any) => {
+        const id = params.id;
+        const content = contentByAssistant.get(id);
+        const tools = toolsByAssistant.get(id);
+        return (!content || content.length === 0) && (!tools || tools.length === 0);
+      });
+
+      expect(emptyShells).toEqual([]);
+    });
+
+    it('REPLAY real trace: item_43 final agent_message text must persist (not be dropped)', async () => {
+      // Replays the actual recorded Codex stdout for topic tpc_96sSE0Eb0DHw
+      // (heteroSessionId 019f3c84-…-d4059626cb19). In production, the final
+      // agent_message item_43 ("结果是：这不是 Codex raw…") was emitted by Codex
+      // and turn.completed carried usage (output_tokens=16372) that DID land on
+      // the shell assistant — but item_43's text never reached the DB. This
+      // replay checks whether the client executor reproduces that text loss.
+      const tracePath = path.join(
+        os.homedir(),
+        'Library/Application Support/LobeHub/lobehub-storage/heteroAgent/tracing/codex',
+        '20260707-202328-11c75f72-2a74-4545-b39f-bf3e089c2d01',
+        'stdout.jsonl',
+      );
+      if (!fs.existsSync(tracePath)) {
+        console.log('SKIP replay — trace not present:', tracePath);
+        return;
+      }
+
+      const raw = fs.readFileSync(tracePath, 'utf8');
+      const events = raw
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter((v): v is Record<string, any> => v !== null);
+
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: params.id ?? `tool-${idCounter.tool}` };
+        }
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: params.id ?? `ast-new-${idCounter.assistant}` };
+        }
+        return { id: `created-${params.role}` };
+      });
+
+      const contentByAssistant = new Map<string, string>();
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (typeof val.content === 'string') {
+          contentByAssistant.set(id, val.content);
+        }
+      });
+
+      await runWithEvents(events, {
+        params: { heterogeneousProvider: { command: 'codex', type: 'codex' as const } },
+      });
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([params]: any) => params.role === 'assistant',
+      );
+
+      // item_43's final answer text MUST land on SOME assistant.
+      const allContent = [...contentByAssistant.values()].join('\n');
+      const hasItem43 = allContent.includes('结果');
+      const lastAssistantId = assistantCreates.at(-1)?.[0].id;
+      const lastAssistantContent = lastAssistantId
+        ? contentByAssistant.get(lastAssistantId)
+        : undefined;
+
+      console.log('REPLAY assistants=', assistantCreates.length, '| hasItem43Text=', hasItem43);
+
+      console.log(
+        'REPLAY last assistant=',
+        lastAssistantId,
+        '| contentLen=',
+        lastAssistantContent?.length ?? 0,
+      );
+
+      expect(hasItem43).toBe(true);
     });
 
     it('should forward cumulative tools_calling chunks for multiple Codex tools in one step', async () => {
@@ -1780,6 +2445,180 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(
         contentUpdates.findLast((update) => update.assistantId === newAst2)?.content,
       ).toContain('Confirmed the repo root');
+    });
+
+    it('replays the final Codex assistant content flush when the first terminal write reports success=false', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const dbMessages = new Map<string, any>([
+        ['ast-initial', { content: '', id: 'ast-initial', role: 'assistant' }],
+      ]);
+      const idCounter = { assistant: 0, tool: 0 };
+      const finalText = '结果是：raw 和 adapter 都有最后一条消息，缺的是 terminal content flush。';
+      const failedFinalContentWrite = new Set<string>();
+      const contentAttempts: string[] = [];
+
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        const id =
+          params.id ??
+          (params.role === 'assistant'
+            ? `ast-new-${++idCounter.assistant}`
+            : `tool-${++idCounter.tool}`);
+        dbMessages.set(id, { ...params, content: params.content ?? '', id });
+        return { id };
+      });
+
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (typeof val.content === 'string') {
+          contentAttempts.push(id);
+          if (val.content === finalText && !failedFinalContentWrite.has(id)) {
+            failedFinalContentWrite.add(id);
+            return { success: false };
+          }
+        }
+
+        const previous = dbMessages.get(id) ?? { content: '', id };
+        dbMessages.set(id, {
+          ...previous,
+          ...val,
+          metadata: {
+            ...previous.metadata,
+            ...val.metadata,
+          },
+        });
+        return { success: true };
+      });
+
+      try {
+        await runWithEvents(
+          [
+            codexThreadStarted(),
+            codexTurnStarted(),
+            codexAgentMessage('item_0', '我先跑一个命令。'),
+            codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+            codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+            codexAgentMessage('item_2', finalText),
+            codexTurnCompleted({ cached_input_tokens: 4, input_tokens: 10, output_tokens: 3 }),
+          ],
+          {
+            params: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+            },
+          },
+        );
+
+        const finalAssistantId = mockCreateMessage.mock.calls.find(
+          ([params]: any) => params.role === 'assistant',
+        )![0].id;
+        const finalRow = dbMessages.get(finalAssistantId);
+
+        expect(contentAttempts.filter((id) => id === finalAssistantId)).toHaveLength(2);
+        expect(finalRow.content).toBe(finalText);
+        expect(finalRow.metadata.usage).toMatchObject({
+          inputCachedTokens: 4,
+          inputCacheMissTokens: 6,
+          totalInputTokens: 10,
+          totalOutputTokens: 3,
+          totalTokens: 13,
+        });
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('waits for queued Codex text reductions before forwarding terminal completion', async () => {
+      const dbMessages = new Map<string, any>([
+        ['ast-initial', { content: '', id: 'ast-initial', role: 'assistant' }],
+      ]);
+      const idCounter = { assistant: 0, tool: 0 };
+      const finalText = '最后一条文本必须先进入 reducer，再由 terminal flush 写库。';
+      let releaseFirstToolWrite!: () => void;
+      let blockedFirstToolWrite = false;
+
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        const id =
+          params.id ??
+          (params.role === 'assistant'
+            ? `ast-new-${++idCounter.assistant}`
+            : `tool-${++idCounter.tool}`);
+        dbMessages.set(id, { ...params, content: params.content ?? '', id });
+        return { id };
+      });
+
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools && !blockedFirstToolWrite) {
+          blockedFirstToolWrite = true;
+          await new Promise<void>((resolve) => {
+            releaseFirstToolWrite = resolve;
+          });
+        }
+
+        const previous = dbMessages.get(id) ?? { content: '', id };
+        dbMessages.set(id, {
+          ...previous,
+          ...val,
+          metadata: {
+            ...previous.metadata,
+            ...val.metadata,
+          },
+        });
+        return { success: true };
+      });
+
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', codexThreadStarted());
+      ipc.emitRawLine('ipc-sess-1', codexTurnStarted());
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_0', '先跑一个命令。'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandStarted('item_1', '/bin/zsh -lc pwd'));
+      ipc.emitRawLine('ipc-sess-1', codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'));
+      ipc.emitRawLine('ipc-sess-1', codexAgentMessage('item_2', finalText));
+      ipc.emitRawLine(
+        'ipc-sess-1',
+        codexTurnCompleted({ cached_input_tokens: 4, input_tokens: 10, output_tokens: 3 }),
+      );
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]!.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      expect(
+        handlerSpy.mock.calls.some(([event]: any[]) => event?.type === 'agent_runtime_end'),
+      ).toBe(false);
+
+      releaseFirstToolWrite();
+      await flush();
+      resolveSendPrompt();
+      await executorPromise;
+      await flush();
+
+      const finalAssistantId = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'assistant',
+      )![0].id;
+      expect(dbMessages.get(finalAssistantId)?.content).toBe(finalText);
+      expect(
+        handlerSpy.mock.calls.some(([event]: any[]) => event?.type === 'agent_runtime_end'),
+      ).toBe(true);
     });
   });
 
@@ -3620,56 +4459,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // Parallel main tool batch: tool_end must not race ahead of persistQueue
+  // Parallel main tool batch: frontend raw state is SoT before tool_end
   // ────────────────────────────────────────────────────
 
   describe('parallel-tools rollback regression', () => {
+    it('forwards initial stream_start with the existing assistant id so the handler skips DB refresh', async () => {
+      await runWithEvents([ccInit(), ccResult()]);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)
+        ?.value as ReturnType<typeof vi.fn>;
+      const initialStreamStart = handlerSpy.mock.calls
+        .map(([event]: any[]) => event)
+        .find((event: any) => event?.type === 'stream_start' && !event.data?.newStep);
+
+      expect(initialStreamStart?.data?.assistantMessage).toMatchObject({
+        agentId: 'agent-1',
+        id: 'ast-initial',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+    });
+
+    it('forwards terminal runtime_end with frontend uiMessages so the handler skips DB refresh', async () => {
+      const frontendMessages = [
+        {
+          agentId: 'agent-1',
+          content: 'test prompt',
+          id: 'user-1',
+          role: 'user',
+          topicId: 'topic-1',
+        },
+        {
+          agentId: 'agent-1',
+          content: 'done',
+          id: 'ast-initial',
+          role: 'assistant',
+          topicId: 'topic-1',
+        },
+      ];
+      const store = createMockStore({
+        dbMessagesMap: { 'main_agent-1_topic-1': frontendMessages },
+        messagesMap: { 'main_agent-1_topic-1': frontendMessages },
+      });
+
+      await runWithEvents([ccInit(), ccText('msg_01', 'done'), ccResult()], { store });
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)
+        ?.value as ReturnType<typeof vi.fn>;
+      const terminalRuntimeEnd = handlerSpy.mock.calls
+        .map(([event]: any[]) => event)
+        .find((event: any) => event?.type === 'agent_runtime_end');
+
+      expect(terminalRuntimeEnd?.data?.uiMessages).toEqual(frontendMessages);
+    });
+
     /**
      * User-reported bug: when CC fires a large parallel tool batch (e.g. 7
      * Bash commands at once), the AssistantGroup tool count occasionally
      * "rolls back" — e.g. UI shows "7 次技能调用" then drops to 6.
      *
-     * Root cause: the executor's `persistQueue` (DB writes) and the gateway
-     * handler's `processingChain` (in-memory dispatch + fetchAndReplaceMessages
-     * on tool_end) are two independent serial queues with no happens-before
-     * between them. `tool_end` events are forwarded to the handler
-     * SYNCHRONOUSLY at the bottom of `handleStreamEvent` (the
-     * `pendingStepTransition` gate only fires on stream_start(newStep), not
-     * inside a single message.id with parallel tool_use). So when a fast
-     * tool_result lands before persistQueue has flushed the LAST
-     * persistToolBatch's Phase 1/3 write, the handler runs
-     * fetchAndReplaceMessages → reads `assistant.tools` with a partial array
-     * → replaceMessages clobbers in-memory state from N → N-k.
-     *
-     * Observable invariant: by the time the handler is invoked with the FIRST
-     * `tool_end` event (which is what triggers fetchAndReplaceMessages), the
-     * most recent `mockUpdateMessage` call that wrote a `tools` array must
-     * already carry the full cumulative tool list. Otherwise, in real life,
-     * the DB read at that moment would return a shorter array and the UI
-     * would visibly drop tools.
-     *
-     * The test slows down `mockUpdateMessage` whenever `val.tools` is present,
-     * simulating the lag between Phase 1/3 writes and the rest of the stream.
-     * `vi.fn().mock.invocationCallOrder` gives a total ordering across all
-     * mocks so we can compare "when was the Nth tools-write CALLED" against
-     * "when was the first tool_end forwarded to the handler".
+     * New invariant: the executor treats the renderer's raw message bucket as
+     * the streaming SoT. Before forwarding the first `tool_end`, it must have
+     * locally created all tool rows and updated the parent assistant's `tools[]`
+     * with pre-allocated `result_msg_id`s. The forwarded event is marked so the
+     * gateway handler skips its historical DB refetch; write-behind batchMutate
+     * can drain independently without clobbering the frontend snapshot.
      */
-    it('handler must not receive tool_end before persistQueue flushes full tools[]', async () => {
-      // Slow tools-bearing updateMessage writes — mirrors a real PG/lambda
-      // round trip taking long enough that a fast Bash tool_result can land
-      // before all 7 persistToolBatch operations finish their Phase 1/3.
+    it('handler receives tool_end only after local raw SoT has full tools[]', async () => {
+      // Slow DB writes to prove local SoT, not backend timing, is the ordering
+      // source. tool_end should no longer depend on these writes completing.
       const TOOLS_WRITE_DELAY_MS = 12;
       mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
         if (val?.tools) {
           await new Promise((r) => setTimeout(r, TOOLS_WRITE_DELAY_MS));
         }
-      });
-
-      // Give each tool message a deterministic id so we can spot-check.
-      let toolIdx = 0;
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') return { id: `tool-msg-${++toolIdx}` };
-        return { id: `ast-${params.role}-${Date.now()}` };
       });
 
       const PARALLEL = 7;
@@ -3688,59 +4551,111 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       }
       events.push(ccResult());
 
-      await runWithEvents(events);
+      const { store } = await runWithEvents(events);
 
       const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
         typeof vi.fn
       >;
       expect(handlerSpy).toBeDefined();
 
-      // Find the FIRST tool_end forwarded to the handler — this is the call
-      // that would trigger `fetchAndReplaceMessages` in real life and read
-      // assistant.tools[] from DB.
+      // Find the FIRST tool_end forwarded to the handler. Historically this
+      // would trigger `fetchAndReplaceMessages`; it now carries a skip marker
+      // after local raw SoT has settled.
       const handlerCalls = handlerSpy.mock.calls.map((args, i) => ({
         event: args[0] as any,
         order: handlerSpy.mock.invocationCallOrder[i],
       }));
       const firstToolEnd = handlerCalls.find(({ event }) => event?.type === 'tool_end');
       expect(firstToolEnd).toBeDefined();
+      expect(firstToolEnd!.event.data?.skipMessageFetch).toBe(true);
 
-      // All `mockUpdateMessage(_, { tools })` calls — these are persistToolBatch
-      // Phase 1 (pre-register) and Phase 3 (backfill) writes. Their invocation
-      // order is the moment Phase 1/3 ENTERED `await messageService.updateMessage`.
-      // Because persistToolBatch awaits each phase before moving on, the order
-      // here is a faithful proxy for the DB-write timeline.
-      const toolsWrites = mockUpdateMessage.mock.calls
-        .map((args, i) => ({
-          tools: (args[1] as any)?.tools,
-          order: mockUpdateMessage.mock.invocationCallOrder[i],
+      // Local raw-bucket assistant tools[] updates. This is the frontend SoT the
+      // UI reads while write-behind persistence is still draining.
+      const localToolsWrites = store.internal_dispatchMessage.mock.calls
+        .map((args: any[], i: number) => ({
+          payload: args[0] as any,
+          order: store.internal_dispatchMessage.mock.invocationCallOrder[i],
         }))
-        .filter(({ tools }) => Array.isArray(tools));
+        .filter(
+          ({ payload }: { payload: any }) =>
+            payload.type === 'updateMessage' && Array.isArray(payload.value?.tools),
+        );
 
       // The latest tools[] write that started BEFORE the handler's first tool_end.
-      // If the executor properly defers tool_end through persistQueue, this
-      // should be the FINAL Phase 3 write carrying all 7 tools.
-      const latestBeforeToolEnd = toolsWrites.findLast(({ order }) => order < firstToolEnd!.order);
+      // With frontend SoT this must be the final local update carrying all 7
+      // tools, regardless of whether DB updateMessage has completed.
+      const latestBeforeToolEnd = localToolsWrites.findLast(
+        ({ order }: { order: number }) => order < firstToolEnd!.order,
+      );
 
-      // The bug: without the deferral fix, persistQueue is still mid-flight
-      // (or hasn't started) when tool_end is forwarded, so the latest tools[]
-      // write seen at that point has fewer than PARALLEL entries — exactly
-      // the "7 → 6" rollback the user sees in the UI.
-      const writtenCount = latestBeforeToolEnd?.tools?.length ?? 0;
-      const writtenIds = (latestBeforeToolEnd?.tools ?? []).map((t: any) => t.id);
+      const writtenTools = latestBeforeToolEnd?.payload.value.tools ?? [];
+      const writtenCount = writtenTools.length;
+      const writtenIds = writtenTools.map((t: any) => t.id);
       const handlerEventTrail = handlerCalls.map(({ event }) => event?.type).join(',');
       expect(
         writtenCount,
         `tool_end forwarded to handler at order ${firstToolEnd!.order} ` +
-          `but the latest persistToolBatch tools[] write at that point had ` +
-          `${writtenCount}/${PARALLEL} tools — fetchAndReplaceMessages would ` +
-          `read partial assistant.tools[] and roll back the UI. ` +
+          `but the latest local tools[] write at that point had ` +
+          `${writtenCount}/${PARALLEL} tools. ` +
           `Handler event trail: [${handlerEventTrail}]`,
       ).toBe(PARALLEL);
       // All 7 tool ids must be present in that write — guards against any
       // weird ordering where the last write happens to have 7 entries but
       // the wrong ones (e.g. dedupe bug repopulating from a stale set).
       for (const id of toolIds) expect(writtenIds).toContain(id);
+      for (const tool of writtenTools) expect(tool.result_msg_id).toMatch(/^msg_/);
+    });
+
+    it('creates main tool rows and resolves tool results in the local raw bucket', async () => {
+      const toolIds = ['toolu_sot_1', 'toolu_sot_2', 'toolu_sot_3'];
+      const events: any[] = [ccInit()];
+      for (const id of toolIds) {
+        events.push(ccToolUse('msg_sot', id, 'Bash', { command: `echo ${id}` }));
+      }
+      for (const id of toolIds) {
+        events.push(ccToolResult(id, `result of ${id}`));
+      }
+      events.push(ccResult());
+
+      const { store } = await runWithEvents(events);
+      const dispatches = store.internal_dispatchMessage.mock.calls.map(
+        ([payload]: any[]) => payload,
+      );
+      const localToolCreates = dispatches.filter(
+        (payload: any) => payload.type === 'createMessage' && payload.value?.role === 'tool',
+      );
+
+      expect(localToolCreates).toHaveLength(toolIds.length);
+
+      const messageIdByToolCallId = new Map<string, string>();
+      for (const payload of localToolCreates) {
+        messageIdByToolCallId.set(payload.value.tool_call_id, payload.value.id);
+        expect(payload.value).toMatchObject({
+          parentId: 'ast-initial',
+          role: 'tool',
+          topicId: 'topic-1',
+        });
+      }
+
+      const finalAssistantTools = dispatches.findLast(
+        (payload: any) =>
+          payload.type === 'updateMessage' &&
+          payload.id === 'ast-initial' &&
+          Array.isArray(payload.value?.tools),
+      ).value.tools;
+
+      for (const id of toolIds) {
+        const tool = finalAssistantTools.find((item: any) => item.id === id);
+        expect(tool?.result_msg_id).toBe(messageIdByToolCallId.get(id));
+        expect(
+          dispatches.some(
+            (payload: any) =>
+              payload.type === 'updateMessage' &&
+              payload.id === messageIdByToolCallId.get(id) &&
+              payload.value?.content === `result of ${id}`,
+          ),
+        ).toBe(true);
+      }
     });
   });
 
@@ -3857,7 +4772,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           // body = markdownToTxt(finalContent)
           body: expect.stringContaining('All done with the task'),
           // navigate path resolved from agentId + topicId
-          navigate: { path: expect.any(String) },
+          navigate: expect.objectContaining({ escape: true, path: expect.any(String) }),
           title: expect.any(String),
         }),
       );
@@ -4074,7 +4989,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       // Characterize the actual behavior: onComplete's non-error branch still
       // writes 'active' while the user is viewing (the abort gate only guards
-      // the notification + drain, not the writeTopicStatus('active') call on a
+      // the notification + follow-up drain, not the writeTopicStatus('active') call on a
       // clean stream end).
       expect(updateTopicStatus).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -4082,6 +4997,112 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           topicId: 'topic-1',
         }),
       );
+    });
+
+    // ── 5. stuck-spinner regression: status reset must not wait on queued persistence ──
+    it('resets topic status even when the persist queue never drains', async () => {
+      // A DB write that never settles — mirrors a dropped desktop-IPC reply. It
+      // strands the executor's persistQueue, which onComplete used to `await`
+      // unbounded BEFORE resetting topic status, leaving the sidebar spinning
+      // forever after the CLI had already exited (the bug this guards against).
+      let releaseWrite!: () => void;
+      const hangingWrite = new Promise<void>((r) => {
+        releaseWrite = r;
+      });
+      mockUpdateMessage.mockReturnValue(hangingWrite);
+
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1', // viewing → a clean end writes 'active'
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      // A tool batch enqueues an awaited `updateMessage` onto persistQueue — the
+      // hanging write above stalls the queue before terminal completion.
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccToolUse('msg_01', 'toolu_1', 'Read', { file_path: '/a' }));
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_1', 'file content'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      // The fix: status is reset synchronously at the top of onComplete, BEFORE
+      // the stalled queue wait — so the spinner clears to 'active'
+      // even though the persist queue is still pending on the hanging write.
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+
+      // Release so the queue drains and the executor settles cleanly.
+      releaseWrite();
+      resolveSendPrompt();
+      await executorPromise;
+      await flush();
+    });
+
+    it('bounds clean terminal completion when the persist queue never drains', async () => {
+      vi.useFakeTimers();
+      const eventHandler = vi.fn();
+      vi.mocked(createGatewayEventHandler).mockReturnValueOnce(eventHandler);
+
+      // Never settles: mirrors a lost desktop IPC/network reply in the message
+      // write path. Terminal must still forward and complete the operation after
+      // the bounded drain timeout.
+      mockUpdateMessage.mockReturnValue(new Promise<void>(() => {}));
+
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        updateTopicStatus,
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt!: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flushFakeTimers();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccToolUse('msg_01', 'toolu_1', 'Read', { file_path: '/a' }));
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_1', 'file content'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flushFakeTimers();
+
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      expect(eventHandler).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'agent_runtime_end' }),
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+
+      expect(eventHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'agent_runtime_end' }),
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+
+      resolveSendPrompt();
+      await flushFakeTimers();
+      await executorPromise;
     });
   });
 });

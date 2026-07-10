@@ -65,6 +65,7 @@
   "navigation.tasks": "Aufgaben",
   "navigation.topics": "Themen",
   "navigation.unpin": "Loslösen",
+  "navigation.verifyReports": "Verifizierungsberichte",
   "notification.finishChatGeneration": "KI-Nachrichtenerstellung abgeschlossen",
   "proxy.auth": "Authentifizierung erforderlich",
   "proxy.authDesc": "Falls der Proxy-Server einen Benutzernamen und ein Passwort benötigt",

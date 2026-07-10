@@ -67,8 +67,11 @@ export interface VerifyStateResponse {
   verifyStatus: VerifyStatus | null;
 }
 
-/** One evidence artifact plus its resolved (signed) file URL, when file-backed. */
-export type VerifyEvidenceWithUrl = VerifyEvidence & { fileUrl: string | null };
+/** One evidence artifact plus resolved display metadata, when file-backed. */
+export type VerifyEvidenceWithUrl = VerifyEvidence & {
+  fileName: string | null;
+  fileUrl: string | null;
+};
 
 /** One check result plus the evidence artifacts attached to it. */
 export type VerifyResultWithEvidence = VerifyCheckResultItem & {
@@ -80,6 +83,32 @@ export interface VerifyReportBundle {
   report: VerifyReport | null;
   results: VerifyResultWithEvidence[];
   run: VerifyRunItem;
+}
+
+export interface VerifyReportSummary {
+  report: Pick<
+    VerifyReport,
+    | 'createdAt'
+    | 'failedChecks'
+    | 'generatedAt'
+    | 'id'
+    | 'overallConfidence'
+    | 'passedChecks'
+    | 'reviewedByUser'
+    | 'summary'
+    | 'totalChecks'
+    | 'uncertainChecks'
+    | 'verdict'
+    | 'verifyRunId'
+  > | null;
+  run: VerifyRunItem;
+}
+
+/** One cursor-paginated page of report summaries. */
+export interface VerifyReportSummaryPage {
+  items: VerifyReportSummary[];
+  /** Opaque token for the next page, or `null` when this is the last page. */
+  nextCursor: string | null;
 }
 
 export interface GenerateDraftPlanInput {
@@ -139,6 +168,24 @@ export class VerifyService {
     lambdaClient.verify.getReportBundle.query({
       verifyRunId,
     }) as Promise<VerifyReportBundle | null>;
+
+  /**
+   * One cursor-paginated page of the current user's verification sessions with
+   * report rollup fields. `cursor` comes from the previous page's `nextCursor`;
+   * `q` filters by title on the server so search spans the whole history.
+   */
+  listReportSummaries = (params?: {
+    cursor?: string;
+    limit?: number;
+    q?: string;
+  }): Promise<VerifyReportSummaryPage> =>
+    lambdaClient.verify.listReportSummaries.query(params) as Promise<VerifyReportSummaryPage>;
+
+  deleteRun = (verifyRunId: string): Promise<unknown> =>
+    lambdaClient.verify.deleteRun.mutate({ verifyRunId });
+
+  updateRunTitle = (verifyRunId: string, title: string): Promise<unknown> =>
+    lambdaClient.verify.updateRun.mutate({ value: { title }, verifyRunId });
 
   executeVerify = (input: {
     batchLlm?: boolean;

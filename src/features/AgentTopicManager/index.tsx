@@ -1,10 +1,15 @@
 'use client';
 
-import { groupTopicsByProject, groupTopicsByUpdatedTime } from '@lobechat/utils/client/topic';
+import {
+  getTopicWorkingDirectorySourcePath,
+  groupTopicsByProject,
+  groupTopicsByUpdatedTime,
+} from '@lobechat/utils/client/topic';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -19,7 +24,7 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
-  getProjectLabel,
+  getProjectFilterLabel,
   matchesGroup,
   matchesStatus,
   matchesTimeRange,
@@ -47,6 +52,7 @@ const AgentTopicManager = memo(() => {
   const allTopics = useChatStore(topicSelectors.agentTopicsViewTopics);
   const hasMore = useChatStore(topicSelectors.agentTopicsViewHasMore);
   const isLoadingMore = useChatStore(topicSelectors.agentTopicsViewIsLoadingMore);
+  const loadMoreError = useChatStore(topicSelectors.agentTopicsViewLoadMoreError);
 
   const reset = useTopicsViewStore((s) => s.reset);
   const search = useTopicsViewStore((s) => s.search);
@@ -73,7 +79,7 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
-  const { isLoading } = useFetchAgentTopicsView(true, {
+  const { error, isLoading, mutate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
     // Opt into the heavier card-detail columns (firstUserMessage,
@@ -142,9 +148,9 @@ const AgentTopicManager = memo(() => {
   const projects = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of baseTopics) {
-      const wd = t.metadata?.workingDirectory;
+      const wd = getTopicWorkingDirectorySourcePath(t);
       if (wd && !map.has(wd)) {
-        map.set(wd, getProjectLabel(t) ?? wd);
+        map.set(wd, getProjectFilterLabel(t) ?? wd);
       }
     }
     return Array.from(map, ([value, label]) => ({ label, value }));
@@ -184,7 +190,7 @@ const AgentTopicManager = memo(() => {
     if (!root || !sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && hasMore && !isLoadingMore) {
+        if (entry.isIntersecting && hasMore && !isLoadingMore && !loadMoreError) {
           void loadMoreAgentTopicsView();
         }
       },
@@ -192,7 +198,7 @@ const AgentTopicManager = memo(() => {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView]);
+  }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView, loadMoreError]);
 
   if (!activeAgentId) return <Loading debugId="AgentTopicManager" />;
 
@@ -220,7 +226,15 @@ const AgentTopicManager = memo(() => {
         >
           <Toolbar projects={projects} statusCounts={statusCounts} />
           <BulkActionBar />
-          {isLoading && baseTopics.length === 0 ? (
+          {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
+            <AsyncError
+              error={error}
+              variant={'block'}
+              onRetry={() => {
+                void mutate();
+              }}
+            />
+          ) : isLoading && baseTopics.length === 0 ? (
             <Skeleton active paragraph={{ rows: 6 }} title={false} />
           ) : totalAfterFilter === 0 ? (
             <EmptyState
@@ -253,6 +267,17 @@ const AgentTopicManager = memo(() => {
                   <span className={shinyTextStyles.shinyText} style={{ fontSize: 12 }}>
                     {t('management.loadingMore')}
                   </span>
+                </Flexbox>
+              )}
+              {!isSearchMode && loadMoreError && !isLoadingMore && (
+                <Flexbox align={'center'} paddingBlock={12}>
+                  <AsyncError
+                    error={loadMoreError}
+                    variant={'inline'}
+                    onRetry={() => {
+                      void loadMoreAgentTopicsView();
+                    }}
+                  />
                 </Flexbox>
               )}
             </>

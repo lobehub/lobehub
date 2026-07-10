@@ -13,6 +13,7 @@ import SessionList from './List';
 import { useAgentList } from './useAgentList';
 
 interface AgentListContentProps {
+  hideInbox?: boolean;
   onMoreClick?: () => void;
 }
 
@@ -25,7 +26,7 @@ interface AgentListContentProps {
 // or by a standalone caller (e.g. SwitchPanel). Subscribing here too would
 // re-fetch the list every time the accordion is expanded, animating the
 // spinner on both Public and Private headers for no good reason.
-const AgentListContent = memo<AgentListContentProps>(({ onMoreClick }) => {
+const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }) => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const { customList, pinnedList, defaultList } = useAgentList();
 
@@ -46,7 +47,7 @@ const AgentListContent = memo<AgentListContentProps>(({ onMoreClick }) => {
   // even when the user has only the built-in Lobe AI inbox.
   return (
     <>
-      <InboxItem style={{ minHeight: 36 }} />
+      {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
       {showPinned && <SessionList dataSource={pinnedList!} />}
       {showCustom && <Group dataSource={customList!} />}
       <SessionList

@@ -4,18 +4,18 @@ import { Flexbox } from '@lobehub/ui';
 import type { FC, ReactNode } from 'react';
 import { Outlet } from 'react-router';
 
-import Sidebar from './Sidebar';
 import { styles } from './style';
-import type { GenerationLayoutCommonProps } from './types';
 
-export interface GenerationLayoutProps extends GenerationLayoutCommonProps {
+export interface GenerationLayoutProps {
   /** Optional extra content (e.g. RegisterHotkeys for image) */
   extra?: ReactNode;
+  /** Sidebar wrapped in a NavPanelPortal by the caller (namespace-specific). */
+  sidebar: ReactNode;
 }
 
-const GenerationLayout: FC<GenerationLayoutProps> = ({ extra, ...commonProps }) => (
+const GenerationLayout: FC<GenerationLayoutProps> = ({ extra, sidebar }) => (
   <>
-    <Sidebar {...commonProps} />
+    {sidebar}
     <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
       <Outlet />
     </Flexbox>

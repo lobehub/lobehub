@@ -1,12 +1,9 @@
+import type { WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
 export type AgentSignalOperationKind =
-  | 'memory'
-  | 'nightly-review'
-  | 'self-feedback-intent'
-  | 'self-reflection'
-  | 'skill';
+  'memory' | 'nightly-review' | 'self-feedback-intent' | 'self-reflection' | 'skill';
 
 /**
  * Run-scoped Agent Signal marker stamped onto a background agent operation at
@@ -24,7 +21,14 @@ export interface AgentSignalOperationMarker {
    * completion projector prefers this over the run's agentId.
    */
   agentId?: string;
-  /** Assistant message a resulting receipt should anchor to. */
+  /**
+   * Explicit display anchor for receipts. Write this only when the producer
+   * already knows the exact assistant message that should own the receipt.
+   *
+   * Do not fall back to the triggering user message here. If the backend only
+   * knows the causal source, write `triggerMessageId` and let the conversation
+   * UI resolve the best display anchor from the current message graph.
+   */
   anchorMessageId?: string;
   /** Discriminator the completion handler dispatches on. */
   kind: AgentSignalOperationKind;
@@ -38,7 +42,11 @@ export interface AgentSignalOperationMarker {
   sourceId?: string;
   /** Topic the run is scoped to. */
   topicId?: string;
-  /** User message that initiated the originating feedback. */
+  /**
+   * Causal message source for the signal. For user-feedback flows this is the
+   * user message that triggered the receipt; it is not necessarily the message
+   * where the receipt should render.
+   */
   triggerMessageId?: string;
 }
 
@@ -80,6 +88,7 @@ export interface ExecAgentAppContext {
   initialTopicMetadata?: {
     repos?: string[];
     workingDirectory?: string;
+    workingDirectoryConfig?: WorkingDirConfig;
   };
   /**
    * Whether this operation is an isolated sub-agent execution. Used to disable

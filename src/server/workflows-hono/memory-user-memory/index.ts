@@ -1,52 +1,86 @@
-import { serve, serveMany } from '@upstash/workflow/hono';
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
+import { serve } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
 import { createWorkflowQstashClient } from '../qstashClient';
 import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly';
-import { personaUpdateHandler } from './workflows/personaUpdate';
-import { processTopicWorkflow } from './workflows/processTopic';
-import { processTopicsHandler } from './workflows/processTopics';
-import { processUsersHandler } from './workflows/processUsers';
-import { processUserTopicsHandler } from './workflows/processUserTopics';
+import { personaUpdateHandler, personaUpdateWorkflowOptions } from './workflows/personaUpdate';
+import { processTopicHandler, processTopicWorkflowOptions } from './workflows/processTopic';
+import { processTopicsHandler, processTopicsWorkflowOptions } from './workflows/processTopics';
+import { processUsersHandler, processUsersWorkflowOptions } from './workflows/processUsers';
+import {
+  processUserTopicsHandler,
+  processUserTopicsWorkflowOptions,
+} from './workflows/processUserTopics';
 
 const app = new Hono();
 
 app.post(
   '/call-cron-hourly-analysis',
-  serve(hourlyWorkflowHandler, {
-    ...hourlyWorkflowOptions,
-    qstashClient: createWorkflowQstashClient(),
-  }),
+  serve(
+    withOtelMetricsForUpstashWorkflows(hourlyWorkflowHandler, {
+      url: '/api/workflows/memory-user-memory/call-cron-hourly-analysis',
+    }),
+    {
+      ...hourlyWorkflowOptions,
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
 );
 
 app.post(
   '/pipelines/persona/update-writing',
-  serve(personaUpdateHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(
+    withOtelMetricsForUpstashWorkflows(personaUpdateHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
+    }),
+    { ...personaUpdateWorkflowOptions, qstashClient: createWorkflowQstashClient() },
+  ),
 );
 
 app.post(
   '/pipelines/chat-topic/process-users',
-  serve(processUsersHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(
+    withOtelMetricsForUpstashWorkflows(processUsersHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
+    }),
+    {
+      ...processUsersWorkflowOptions,
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
 );
 
 app.post(
   '/pipelines/chat-topic/process-user-topics',
-  serve(processUserTopicsHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(
+    withOtelMetricsForUpstashWorkflows(processUserTopicsHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
+    }),
+    {
+      ...processUserTopicsWorkflowOptions,
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
 );
 
 app.post(
   '/pipelines/chat-topic/process-topics',
-  serve(processTopicsHandler, { qstashClient: createWorkflowQstashClient() }),
+  serve(
+    withOtelMetricsForUpstashWorkflows(processTopicsHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
+    }),
+    { ...processTopicsWorkflowOptions, qstashClient: createWorkflowQstashClient() },
+  ),
 );
 
-// NOTICE: Must use serveMany here. The `context.invoke(processTopicWorkflow)` call in
-// process-topics rewrites the URL last segment to the workflowId ("process-topic"). serveMany
-// multiplexes by that final segment to dispatch to the right workflow.
 app.post(
   '/pipelines/chat-topic/process-topic',
-  serveMany(
-    { 'process-topic': processTopicWorkflow },
-    { qstashClient: createWorkflowQstashClient() },
+  serve(
+    withOtelMetricsForUpstashWorkflows(processTopicHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+    }),
+    { ...processTopicWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 

@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { AgentStreamPipeline } from './agentStreamPipeline';
+import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -61,6 +61,15 @@ export interface SpawnAgentOptions {
   prompt: AgentPromptInput;
   /** Resume an existing agent session by its native session id (CC) / thread id (Codex). */
   resumeSessionId?: string;
+  /**
+   * Runtime uploader for tool_result images (CC `Read` on an image file). The
+   * adapter emits the raw base64 on `pluginState.images`; the pipeline calls
+   * this to swap each entry for an uploaded `{ fileId, url }` reference before
+   * the event is persisted, so heavy base64 never reaches the ingest sinks.
+   * Omit in standalone/offline runs — the pipeline then drops the image and
+   * leaves the `[Image: …]` text placeholder as the fallback.
+   */
+  uploadImage?: UploadHeterogeneousImage;
 }
 
 export interface SpawnAgentHandle {
@@ -284,6 +293,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     initialCumulativeUsage,
     initialModel,
     operationId: options.operationId,
+    uploadImage: options.uploadImage,
   });
   const stdout = proc.stdout!;
   const stderr = proc.stderr!;

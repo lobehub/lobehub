@@ -1,8 +1,9 @@
 import { memo, useEffect, useState } from 'react';
 import { useMatches } from 'react-router';
 
+import ImperativeModal from '@/components/ImperativeModal';
+
 import { Fab } from './Fab';
-import { Modal } from './Modal';
 import { Popover } from './Popover';
 
 const STORAGE_KEY = 'LOBE_AGENT_MOCK_ENABLED';
@@ -41,7 +42,7 @@ const AgentMockDevtools = memo(() => {
     <>
       <Fab />
       <Popover />
-      <Modal />
+      <ImperativeModal />
     </>
   );
 });

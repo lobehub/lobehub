@@ -1,5 +1,4 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
@@ -10,10 +9,10 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
-import { workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -304,6 +303,7 @@ export const documentRouter = router({
     .input(
       z.object({
         documentId: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -318,18 +318,14 @@ export const documentRouter = router({
 
       // Workspace mode: only owners can transfer items created by others
       if (ctx.workspaceId && doc.userId !== ctx.userId) {
-        const [membership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, ctx.workspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!membership || membership.role !== 'owner') {
+        const canOverride = await hasWorkspaceScopedPermission({
+          action: 'DOCUMENT_UPDATE',
+          db: ctx.serverDB,
+          scopes: ['ALL'],
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (!canOverride) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
@@ -347,18 +343,13 @@ export const documentRouter = router({
       }
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'DOCUMENT_CREATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -374,14 +365,18 @@ export const documentRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.documentModel.transferTo(input.documentId, input.targetWorkspaceId, ctx.userId);
+      return ctx.documentModel.transferTo(
+        input.documentId,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   /**
-   * Publish a private document subtree into the workspace. **One-way** — once
-   * published, other workspace members may already reference the page, so it
-   * can't slip back to `private`. Only the creator can run this; the
-   * underlying SQL enforces both rules.
+   * Publish a private document subtree into the workspace. Thin wrapper
+   * around `setDocumentVisibility({ id, visibility: 'public' })`; kept for
+   * backwards compatibility with existing callers.
    */
   publishDocumentToWorkspace: documentProcedure
     .use(withScopedPermission('document:update'))
@@ -390,11 +385,47 @@ export const documentRouter = router({
       return ctx.documentService.publishToWorkspace(input.id);
     }),
 
+  /**
+   * Toggle a document subtree's workspace visibility. Cascades over the whole
+   * subtree so a folder Page and every nested child flip together (P1 tree
+   * consistency). Creator-only. Personal mode has no workspace visibility
+   * concept, so the call is rejected there.
+   */
+  setDocumentVisibility: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Document visibility only applies inside a workspace',
+        });
+      }
+
+      const doc = await ctx.documentModel.findById(input.id);
+      if (!doc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+
+      if (doc.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can change a document’s visibility',
+        });
+      }
+
+      return ctx.documentService.setVisibility(input.id, input.visibility);
+    }),
+
   copyDocumentToWorkspace: documentProcedure
     .use(withScopedPermission('document:create'))
     .input(
       z.object({
         documentId: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -408,18 +439,13 @@ export const documentRouter = router({
         });
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'DOCUMENT_CREATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -439,6 +465,7 @@ export const documentRouter = router({
         input.documentId,
         input.targetWorkspaceId,
         ctx.userId,
+        input.targetVisibility,
       );
     }),
 });

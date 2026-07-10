@@ -1,8 +1,8 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
 import { memo } from 'react';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import PageExplorer from '@/features/PageExplorer';
 
@@ -21,7 +21,7 @@ interface DocumentModalProps {
  */
 const DocumentModal = memo<DocumentModalProps>(({ documentId, open, onClose }) => {
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       centered
       destroyOnHidden
@@ -45,7 +45,7 @@ const DocumentModal = memo<DocumentModalProps>(({ documentId, open, onClose }) =
           />
         </PageAgentPanelOverrideProvider>
       )}
-    </Modal>
+    </ImperativeModal>
   );
 });
 

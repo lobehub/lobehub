@@ -58,7 +58,7 @@ export class AgentDocumentSkillsActionImpl {
     }
 
     try {
-      const docs = await agentDocumentService.listDocuments({ agentId });
+      const docs = await agentDocumentService.listDocuments({ agentId, excludeWeb: true });
       const items = mapDocsToSkills(docs);
       this.#set(
         { agentDocumentSkills: items, agentDocumentSkillsAgentId: agentId },
@@ -89,16 +89,18 @@ export class AgentDocumentSkillsActionImpl {
 
   /**
    * SWR-backed hook that fetches the agent's skill bundles and keeps the store
-   * in sync. Shares the same SWR key as the working-sidebar panel so the panel
-   * fetch and the registry sync collapse into one network request — both must
-   * fetch the same slim `listDocuments` payload to keep the cache shape stable.
+   * in sync. Fetches the `non-web` variant (drops the unbounded web-clip docs it
+   * never needs) so this eager, always-mounted slash-menu hook doesn't pull the
+   * full document list into the homepage batch. The working-sidebar panel keeps
+   * its own full-list fetch; both revalidate together via the shared
+   * `agent:documentsList` prefix (see `invalidateDocumentMutation`).
    */
   useFetchAgentDocumentSkills = (
     agentId: string | undefined,
   ): SWRResponse<AgentDocumentListItem[]> =>
     useSWR<AgentDocumentListItem[]>(
-      agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
-      async () => agentDocumentService.listDocuments({ agentId: agentId! }),
+      agentId ? agentDocumentSWRKeys.documentsNonWebList(agentId) : null,
+      async () => agentDocumentService.listDocuments({ agentId: agentId!, excludeWeb: true }),
       {
         onSuccess: (docs) => {
           if (!agentId) return;

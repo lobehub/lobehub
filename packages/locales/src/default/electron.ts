@@ -32,6 +32,7 @@ export default {
   'navigation.tasks': 'Tasks',
   'navigation.topics': 'Topics',
   'navigation.unpin': 'Unpin',
+  'navigation.verifyReports': 'Verification Reports',
   'fleet.addColumn': 'Add column',
   'fleet.createTask': 'Create task',
   'fleet.reply': 'Reply',

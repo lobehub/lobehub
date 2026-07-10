@@ -5,14 +5,13 @@ import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   copyToClipboard,
-  Drawer,
   DropdownMenu,
   Flexbox,
   Freeze,
   Tag,
   Text,
 } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { FloatingPanel } from '@lobehub/ui/base-ui';
 import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +36,7 @@ import { authSelectors } from '@/store/user/selectors';
 import TopicStatusIcon from '../TopicStatusIcon';
 import FeedbackInput from './FeedbackInput';
 
-const SHARE_ICON_SIZE = { blockSize: 36, size: 18 } as const;
+const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
@@ -205,50 +204,38 @@ const TopicChatDrawer = memo(() => {
     />
   );
 
-  const extra = topicId ? (
-    enableTopicLinkShare && canShare ? (
+  const actions =
+    !topicId ? null : enableTopicLinkShare && canShare ? (
       <SharePopover topicId={topicId} onOpenModal={openShareModal}>
         {shareIcon}
       </SharePopover>
     ) : (
       shareIcon
-    )
-  ) : null;
+    );
 
-  // Freeze title/extra/body during the close animation so the drawer keeps
+  // Freeze title/actions/body during the close animation so the panel keeps
   // its last rendered state instead of flashing to the empty/"untitled" view
   // while topicId/agentId clear.
   return (
-    <Drawer
-      destroyOnHidden
-      containerMaxWidth={'auto'}
-      extra={<Freeze frozen={!open}>{extra}</Freeze>}
+    <FloatingPanel
+      actions={<Freeze frozen={!open}>{actions}</Freeze>}
       getContainer={false}
+      height={'min(640px, calc(100dvh - 16px))'}
       mask={false}
+      minHeight={320}
+      minWidth={360}
       open={open}
-      placement={'right'}
-      push={false}
+      placement={'bottomRight'}
       title={<Freeze frozen={!open}>{title}</Freeze>}
       width={640}
       styles={{
         body: { padding: 0 },
-        bodyContent: { height: '100%' },
+        panel: { maxHeight: 'calc(100dvh - 16px)' },
         title: {
           boxSizing: 'border-box',
           maxWidth: '100%',
           minWidth: 0,
           overflow: 'hidden',
-          paddingInlineEnd: 48,
-        },
-        wrapper: {
-          border: `1px solid ${cssVar.colorBorderSecondary}`,
-          borderRadius: 12,
-          bottom: 8,
-          boxShadow: '0 6px 24px 0 rgba(0, 0, 0, 0.08), 0 2px 6px 0 rgba(0, 0, 0, 0.04)',
-          height: 'auto',
-          overflow: 'hidden',
-          right: 8,
-          top: 8,
         },
       }}
       onClose={closeTopicDrawer}
@@ -256,7 +243,7 @@ const TopicChatDrawer = memo(() => {
       <Freeze frozen={!open}>
         {open && activeTaskId && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
       </Freeze>
-    </Drawer>
+    </FloatingPanel>
   );
 });
 

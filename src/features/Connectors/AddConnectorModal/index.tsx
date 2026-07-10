@@ -1,9 +1,9 @@
-import { Modal } from '@lobehub/ui/base-ui';
 import { App, Input } from 'antd';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { ConnectorSourceType } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
@@ -316,7 +316,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
   const okText = isEditMode ? t('connector.add.update', 'Save') : t('connector.add.confirm', 'Add');
 
   return (
-    <Modal
+    <ImperativeModal
       cancelText={t('connector.add.cancel', 'Cancel')}
       confirmLoading={submitting}
       okButtonProps={{ disabled: !name.trim() || !url.trim() }}
@@ -386,7 +386,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           )}
         </div>
       </div>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

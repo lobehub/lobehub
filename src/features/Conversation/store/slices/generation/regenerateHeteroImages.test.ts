@@ -32,7 +32,10 @@ vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
-  operationSelectors: { isMessageProcessing: () => () => false },
+  operationSelectors: {
+    getOperationById: () => () => undefined,
+    isMessageProcessing: () => () => false,
+  },
 }));
 
 vi.mock('@/services/message', () => ({
@@ -42,7 +45,10 @@ vi.mock('@/services/message', () => ({
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgentWorkingDirectoryById: () => () => '/work/dir' },
+  agentByIdSelectors: {
+    getAgentWorkingDirectoryById: () => () => '/work/dir',
+    isWorkspaceAgentById: () => () => false,
+  },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {

@@ -10,7 +10,6 @@ import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
-  AI_RUNTIME_OPERATION_TYPES,
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
@@ -128,14 +127,34 @@ const QueueTray = memo(() => {
   const { t } = useTranslation('chat');
   const context = useConversationStore((s) => s.context);
 
+  // Key off the FULL context (threadId / scope / documentId / ...) so remove /
+  // edit / send-now target the same bucket the queue is stored under and
+  // getQueuedMessages reads from. A reduced agentId/groupId/topicId key would
+  // operate on the wrong bucket for thread / page / group_agent conversations.
+  // Pass the fields explicitly (not the `context` object, which may be a fresh
+  // ref each render) so the memo deps stay stable primitives.
   const contextKey = useMemo(
     () =>
       messageMapKey({
         agentId: context.agentId,
+        documentId: context.documentId,
         groupId: context.groupId,
+        isNew: context.isNew,
+        scope: context.scope,
+        subAgentId: context.subAgentId,
+        threadId: context.threadId,
         topicId: context.topicId,
       }),
-    [context.agentId, context.groupId, context.topicId],
+    [
+      context.agentId,
+      context.documentId,
+      context.groupId,
+      context.isNew,
+      context.scope,
+      context.subAgentId,
+      context.threadId,
+      context.topicId,
+    ],
   );
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
@@ -168,11 +187,15 @@ const QueueTray = memo(() => {
   const handleSendNow = useCallback(
     (msg: QueuedMessage) => {
       const chat = useChatStore.getState();
-      const runningOpId = chat.operationsByContext[contextKey]?.find((id) => {
-        const op = chat.operations[id];
-        return op && AI_RUNTIME_OPERATION_TYPES.includes(op.type) && op.status === 'running';
-      });
-      if (runningOpId) chat.cancelOperation(runningOpId, 'send_now');
+      // Cancel EVERY running blocker the item could be queued behind, not just the
+      // first: matching one op would miss an interim blocker or the second of the
+      // two concurrent `regenerate` ops a delAndRegenerate/delAndResendThread
+      // retry runs (outer wrapper + inner regenerateUserMessage). Leaving any
+      // blocker running would make the sendMessage below re-enqueue the item, so
+      // "Send now" becomes a no-op. The selector shares the queue-blocking
+      // predicate with the enqueue check.
+      const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
+      for (const id of runningOpIds) chat.cancelOperation(id, 'send_now');
       removeQueuedMessage(contextKey, msg.id);
 
       // Reconstruct UploadFileItem-shaped objects so the optimistic temp message

@@ -22,6 +22,7 @@ interface HeaderProps {
   agentDocumentId?: string;
   agentId: string;
   documentId: string;
+  itemError?: unknown;
   onBack: () => void;
   onDeleted: () => void;
   title?: string;
@@ -29,9 +30,13 @@ interface HeaderProps {
 }
 
 const Header = memo<HeaderProps>(
-  ({ agentId, agentDocumentId, documentId, onBack, onDeleted, title, updatedAt }) => {
+  ({ agentId, agentDocumentId, documentId, itemError, onBack, onDeleted, title, updatedAt }) => {
     const { t } = useTranslation(['file', 'chat']);
     const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+    const showTitleError = !!itemError && !title;
+    const resolvedTitle = showTitleError
+      ? t('workingPanel.resources.error', { ns: 'chat' })
+      : title || t('pageEditor.titlePlaceholder');
     const { menuItems } = useMenu({
       agentDocumentId,
       agentId,
@@ -57,8 +62,12 @@ const Header = memo<HeaderProps>(
               </Text>
             </Flexbox>
             <Text style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>/</Text>
-            <Text className={cx(oneLineEllipsis)} style={{ minWidth: 0 }} weight={500}>
-              {title || t('pageEditor.titlePlaceholder')}
+            <Text
+              className={cx(oneLineEllipsis)}
+              style={{ color: showTitleError ? cssVar.colorError : undefined, minWidth: 0 }}
+              weight={500}
+            >
+              {resolvedTitle}
             </Text>
           </Flexbox>
         }

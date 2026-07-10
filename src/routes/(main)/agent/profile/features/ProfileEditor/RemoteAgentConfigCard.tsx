@@ -6,8 +6,8 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button as BaseButton, createModal, Select, useModalContext } from '@lobehub/ui/base-ui';
-import { Button, Tag } from 'antd';
+import { Button, createModal, Select, useModalContext } from '@lobehub/ui/base-ui';
+import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
@@ -198,17 +198,17 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
           )}
         </Flexbox>
         <Flexbox horizontal gap={8} justify={'flex-end'}>
-          <BaseButton disabled={saving} onClick={close}>
+          <Button disabled={saving} onClick={close}>
             {t('cancel', { ns: 'common' })}
-          </BaseButton>
-          <BaseButton
+          </Button>
+          <Button
             disabled={!selectedDeviceId || checkingCapability || capabilityBad}
             loading={saving}
             type={'primary'}
             onClick={handleSave}
           >
             {t('platformAgentConfig.changeDevice')}
-          </BaseButton>
+          </Button>
         </Flexbox>
       </Flexbox>
     );

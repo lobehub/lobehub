@@ -49,6 +49,12 @@ export interface SidebarAgentItem {
   id: string;
   pinned: boolean;
   sessionId?: string | null;
+  /**
+   * Agent slug. Builtin agents (LobeAI / agent-builder / …) are identified by
+   * slug, letting the sidebar hide creator-only actions on official agents.
+   * Absent for chat groups.
+   */
+  slug?: string | null;
   title: string | null;
   type: SidebarItemType;
   /**
@@ -59,6 +65,11 @@ export interface SidebarAgentItem {
    */
   unreadCount?: number;
   updatedAt: Date;
+  /**
+   * Creator of the item. Lets the client gate creator-only actions (e.g.
+   * pulling a published agent back to private). Absent for chat groups.
+   */
+  userId?: string | null;
   /**
    * `private` items are only visible to their creator within a workspace.
    * Absent / `public` for items that are visible to every workspace member or

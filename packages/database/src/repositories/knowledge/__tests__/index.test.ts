@@ -226,6 +226,32 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.id !== 'other-doc')).toBe(true);
     });
 
+    it('should return uploader info for current user owned files and documents', async () => {
+      await serverDB
+        .update(users)
+        .set({
+          avatar: 'https://example.com/avatar.png',
+          fullName: 'Current User',
+          username: 'current-user',
+        })
+        .where(eq(users.id, userId));
+
+      const result = await knowledgeRepo.query({ showFilesInKnowledgeBase: true });
+
+      expect(result.find((item) => item.id === 'file-1')?.uploader).toMatchObject({
+        avatar: 'https://example.com/avatar.png',
+        fullName: 'Current User',
+        id: userId,
+        username: 'current-user',
+      });
+      expect(result.find((item) => item.id === 'doc-1')?.uploader).toMatchObject({
+        avatar: 'https://example.com/avatar.png',
+        fullName: 'Current User',
+        id: userId,
+        username: 'current-user',
+      });
+    });
+
     it('should filter by category - Images', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Images });
 

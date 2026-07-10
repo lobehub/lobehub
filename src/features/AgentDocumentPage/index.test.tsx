@@ -31,21 +31,34 @@ vi.mock('@/features/WideScreenContainer', () => ({
   ),
 }));
 
+const headerProps = vi.hoisted(() => ({
+  current: undefined as undefined | Record<string, unknown>,
+}));
+
 vi.mock('./Header', () => ({
-  default: ({ documentId }: { documentId?: string }) => (
-    <div data-document-id={documentId} data-testid="header" />
-  ),
+  default: (props: Record<string, unknown>) => {
+    headerProps.current = props;
+    return <div data-document-id={props.documentId as string | undefined} data-testid="header" />;
+  },
+}));
+
+const agentDocumentItemState = vi.hoisted(() => ({
+  current: {
+    error: undefined as unknown,
+    isNotFound: false as boolean | undefined,
+    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' } as unknown,
+    mutate: vi.fn(),
+    skillBundle: undefined as unknown,
+  },
 }));
 
 vi.mock('./useAgentDocumentItem', () => ({
-  useAgentDocumentItem: () => ({
-    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
-    mutate: vi.fn(),
-  }),
+  useAgentDocumentItem: () => agentDocumentItemState.current,
 }));
 
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
-  useWorkspaceAwareNavigate: () => vi.fn(),
+  useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
 const docChatTopicState = vi.hoisted(() => ({
@@ -89,15 +102,25 @@ vi.mock('@/store/user/selectors', () => ({
 describe('AgentDocumentPage', () => {
   beforeEach(() => {
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
+    agentDocumentItemState.current = {
+      error: undefined,
+      isNotFound: false,
+      item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
+      mutate: vi.fn(),
+      skillBundle: undefined,
+    };
     docChatTopicState.current = {
       error: undefined,
       isLoading: false,
       topicId: 'doc-topic-1',
     };
+    headerProps.current = undefined;
     panelProps.current = undefined;
+    navigateMock.mockClear();
   });
 
   afterEach(() => {
+    headerProps.current = undefined;
     panelProps.current = undefined;
   });
 
@@ -105,6 +128,27 @@ describe('AgentDocumentPage', () => {
     render(<AgentDocumentPage documentId="docs_abc" />);
     expect(screen.getByTestId('page-editor').dataset.pageId).toBe('docs_abc');
     expect(screen.getByTestId('header').dataset.documentId).toBe('docs_abc');
+  });
+
+  it('redirects to the docs index (no header/editor) when the doc is genuinely absent', () => {
+    agentDocumentItemState.current = { ...agentDocumentItemState.current, isNotFound: true };
+
+    render(<AgentDocumentPage documentId="docs_missing" />);
+
+    // A deleted/absent doc must not strand the user on a 404 — it redirects to
+    // the docs index empty state.
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-from-url/docs', { replace: true });
+    expect(screen.queryByTestId('page-editor')).toBeNull();
+    expect(screen.queryByTestId('header')).toBeNull();
+  });
+
+  it('passes document list fetch errors to the header', () => {
+    const itemError = new Error('metadata failed');
+    agentDocumentItemState.current = { ...agentDocumentItemState.current, error: itemError };
+
+    render(<AgentDocumentPage documentId="docs_abc" />);
+
+    expect(headerProps.current).toMatchObject({ itemError });
   });
 
   it('does not render FloatingChatPanel when the lab feature is disabled', () => {

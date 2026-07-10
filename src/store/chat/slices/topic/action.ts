@@ -11,14 +11,24 @@ import useSWR from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { cronKeys, topicKeys } from '@/libs/swr/keys';
+import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
+import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
+import {
+  canReadTopicGitTransport,
+  getTopicLinkedPullRequestBase,
+  isSuccessfulLinkedPullRequestLookup,
+  mergeWorkingDirGithubState,
+  resolveTopicGitTransport,
+  toWorkingDirGithubState,
+} from '@/store/chat/utils/topicWorkingDirGit';
 import { useGlobalStore } from '@/store/global';
+import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -39,10 +49,25 @@ import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
 
+const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
+const STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE = 500;
+
 type CronTopicsGroupWithJobInfo = {
   cronJob: unknown;
   cronJobId: string;
   topics: ChatTopic[];
+};
+
+type RunningTopicForWatchdog = Omit<ChatTopic, 'updatedAt'> & {
+  agentId?: string | null;
+  groupId?: string | null;
+  updatedAt: Date | number | string;
+};
+
+type TopicPatchScope = {
+  agentId?: string;
+  groupId?: string;
+  scope?: TopicMapScope;
 };
 
 /**
@@ -68,6 +93,15 @@ export interface SwitchTopicOptions {
 }
 
 type Setter = StoreSetter<ChatStore>;
+
+interface TopicLinkedPullRequestRefreshParams {
+  branch: string;
+  deviceId?: string;
+  path: string;
+  pullRequestNumber?: number;
+  topicId: string;
+}
+
 export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ChatTopicActionImpl(set, get, _api);
 
@@ -81,11 +115,36 @@ export class ChatTopicActionImpl {
   // clobber the newer topic (see ).
   #switchTopicEpoch = 0;
 
+  #staleRunningTopicCleanupInFlight = false;
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
   }
+
+  #resolveTopicLinkedPullRequestRefreshParams = (
+    topicId: string,
+    metadata?: ChatTopicMetadata,
+  ): TopicLinkedPullRequestRefreshParams | undefined => {
+    const sourceMetadata = metadata ?? topicSelectors.getTopicById(topicId)(this.#get())?.metadata;
+    const base = getTopicLinkedPullRequestBase(sourceMetadata);
+    if (!base) return undefined;
+
+    const { activeAgentId } = this.#get();
+    if (!activeAgentId) return undefined;
+
+    const transport = resolveTopicGitTransport(activeAgentId);
+    if (!canReadTopicGitTransport(transport)) return undefined;
+
+    return {
+      branch: base.branch,
+      deviceId: transport.deviceId,
+      path: base.path,
+      pullRequestNumber: base.pullRequestNumber,
+      topicId,
+    };
+  };
 
   closeAllTopicsDrawer = (): void => {
     this.#set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
@@ -101,6 +160,15 @@ export class ChatTopicActionImpl {
 
     if (hasTopic) switchTopic(null);
     else {
+      // A send from the new-topic view may still be in flight (the `_new`
+      // context holds only optimistic tmp_* messages while the run itself
+      // creates the real topic). Saving here would archive those tmp ids into
+      // a spurious "Default Topic" and race the in-flight topic creation,
+      // leaving the real topic's loading state stuck until reload. Skip:
+      // the running send owns topic creation. Entry buttons are disabled via
+      // the same selector, so this guard only backstops hotkey/command paths.
+      if (topicSelectors.isNewTopicSendInFlight(this.#get())) return;
+
       await saveToTopic();
       refreshMessages();
     }
@@ -326,6 +394,52 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * Optimistic `updateTopicStatus` writes that a topic-list refetch must not
+   * clobber. A refetch whose server query ran BEFORE a status write can land
+   * AFTER the optimistic dispatch and revert the row — e.g. a run-end 'unread'
+   * reverting to 'running', leaving the sidebar spinning forever on a finished
+   * topic. Fetched rows are reconciled against this map: a row still carrying
+   * the pre-write status gets the pending status re-applied; a row already
+   * reflecting it confirms propagation and drops the pin. TTL-bounded so a
+   * failed persist or a legit cross-device status change can't be suppressed
+   * indefinitely.
+   */
+  #pendingTopicStatusWrites = new Map<string, { expiresAt: number; status: ChatTopicStatus }>();
+
+  #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
+    let next = items;
+
+    if (this.#pendingTopicStatusWrites.size > 0) {
+      next = next.map((item) => {
+        const pending = this.#pendingTopicStatusWrites.get(item.id);
+        if (!pending) return item;
+        if (pending.expiresAt <= Date.now() || item.status === pending.status) {
+          this.#pendingTopicStatusWrites.delete(item.id);
+          return item;
+        }
+        return { ...item, status: pending.status };
+      });
+    }
+
+    // In-flight first-send optimistic rows (`tmp_topic_*`) are client-only, so
+    // any refetch landing mid-send (e.g. the fire-and-forget refreshTopic after
+    // a previous run's topic creation or terminal) would wipe them from the
+    // sidebar until the server returns the real topicId. Re-prepend the ones
+    // still in the bucket — they only ever leave it via replaceTopicId (send
+    // resolved) or deleteTopic (rollback), never via a fetch.
+    if (currentItems && currentItems.length > 0) {
+      const optimisticRows = currentItems.filter((item) => item.id.startsWith('tmp_topic_'));
+      if (optimisticRows.length > 0) {
+        const fetchedIds = new Set(next.map((item) => item.id));
+        const surviving = optimisticRows.filter((item) => !fetchedIds.has(item.id));
+        if (surviving.length > 0) next = [...surviving, ...next];
+      }
+    }
+
+    return next;
+  };
+
+  /**
    * Persist the topic's status. Optimistically patches the in-memory map so
    * the sidebar reflects the change immediately; persistence runs
    * fire-and-forget so a transient network blip never tears down the agent
@@ -341,19 +455,25 @@ export class ChatTopicActionImpl {
   updateTopicStatus = async (params: {
     agentId?: string;
     groupId?: string;
+    scope?: TopicMapScope;
     status: ChatTopicStatus;
     topicId: string;
   }): Promise<void> => {
-    const { topicId, status, agentId, groupId } = params;
+    const { topicId, status, agentId, groupId, scope } = params;
     const state = this.#get();
+    const scopedAgentId = scope ? agentId : (agentId ?? state.activeAgentId);
+    const scopedGroupId = scope ? groupId : (groupId ?? state.activeGroupId);
     const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
+      agentId: scopedAgentId,
+      groupId: scopedGroupId,
+      scope,
     });
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
 
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
+
+    this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
 
     // Scope on the payload routes the write to the owning bucket inside
     // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
@@ -364,11 +484,164 @@ export class ChatTopicActionImpl {
       value: { status },
       agentId,
       groupId,
+      scope,
     });
 
     await topicService.updateTopic(topicId, { status }).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
+      // The DB never got the write — stop pinning it over fetched rows.
+      this.#pendingTopicStatusWrites.delete(topicId);
     });
+  };
+
+  #getTopicUpdatedAt = (topic: RunningTopicForWatchdog): number | undefined => {
+    const timestamp =
+      typeof topic.updatedAt === 'number' ? topic.updatedAt : new Date(topic.updatedAt).getTime();
+
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  };
+
+  #hasAliveOperationForTopic = (topicId: string): boolean => {
+    const operations = Object.values(this.#get().operations);
+
+    return operations.some((operation) => {
+      if (operation.status !== 'running') return false;
+      if (operation.metadata.isAborting) return false;
+      if (operation.abortController.signal.aborted) return false;
+
+      return operation.context.topicId === topicId;
+    });
+  };
+
+  #getStaleRunningTopicPatchScope = (topic: RunningTopicForWatchdog): TopicPatchScope => {
+    const groupId = topic.groupId ?? undefined;
+
+    // Group main topic rows are persisted with the supervisor agentId, but the
+    // sidebar topic bucket is `group_${groupId}`. Patch that bucket explicitly
+    // instead of falling into `group_agent_${groupId}_${agentId}`.
+    if (groupId) return { groupId, scope: 'group' };
+
+    return { agentId: topic.agentId ?? undefined };
+  };
+
+  #clearStaleRunningOperationMetadata = async (
+    topic: RunningTopicForWatchdog,
+    patchScope: TopicPatchScope,
+  ): Promise<void> => {
+    if (!topic.metadata?.runningOperation) return;
+
+    const key = topicMapKey(patchScope);
+    const currentTopic = this.#get().topicDataMap[key]?.items.find((item) => item.id === topic.id);
+    const metadata = currentTopic?.metadata ?? topic.metadata;
+
+    await topicService.updateTopicMetadata(topic.id, { runningOperation: null });
+
+    this.#get().internal_dispatchTopic({
+      ...patchScope,
+      id: topic.id,
+      type: 'updateTopic',
+      value: { metadata: { ...metadata, runningOperation: null } },
+    });
+  };
+
+  cleanupStaleRunningTopics = async (): Promise<number> => {
+    if (this.#staleRunningTopicCleanupInFlight) return 0;
+
+    this.#staleRunningTopicCleanupInFlight = true;
+
+    try {
+      const runningTopics = (await topicService.queryTopics({
+        pageSize: STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE,
+        statuses: ['running'],
+      })) as RunningTopicForWatchdog[];
+
+      const now = Date.now();
+      const staleTopics = runningTopics.filter((topic) => {
+        const updatedAt = this.#getTopicUpdatedAt(topic);
+        if (!updatedAt) return false;
+        if (now - updatedAt <= STALE_RUNNING_TOPIC_TIMEOUT) return false;
+
+        return !this.#hasAliveOperationForTopic(topic.id);
+      });
+
+      const cleanedResults = await Promise.all(
+        staleTopics.map(async (topic) => {
+          try {
+            const patchScope = this.#getStaleRunningTopicPatchScope(topic);
+
+            await this.#clearStaleRunningOperationMetadata(topic, patchScope);
+
+            await this.updateTopicStatus({
+              ...patchScope,
+              status: 'active',
+              topicId: topic.id,
+            });
+
+            return true;
+          } catch (err) {
+            console.error('[cleanupStaleRunningTopics] retire stale topic failed:', err);
+            return false;
+          }
+        }),
+      );
+
+      const cleanedCount = cleanedResults.filter(Boolean).length;
+
+      if (cleanedCount > 0) {
+        void getHomeStoreState().refreshAgentList?.();
+      }
+
+      return cleanedCount;
+    } catch (err) {
+      console.error('[cleanupStaleRunningTopics] failed:', err);
+      return 0;
+    } finally {
+      this.#staleRunningTopicCleanupInFlight = false;
+    }
+  };
+
+  useFetchTopicLinkedPullRequest = (
+    topicId?: string,
+    metadata?: ChatTopicMetadata,
+  ): SWRResponse<GitLinkedPRSummary | undefined> => {
+    const params = topicId
+      ? this.#resolveTopicLinkedPullRequestRefreshParams(topicId, metadata)
+      : undefined;
+
+    return useClientDataSWRWithSync<GitLinkedPRSummary | undefined>(
+      params
+        ? deviceKeys.gitLinkedPR(
+            params.deviceId ?? 'local',
+            params.path,
+            params.branch,
+            params.pullRequestNumber,
+          )
+        : null,
+      params
+        ? () =>
+            gitService.getLinkedPullRequest({
+              branch: params.branch,
+              deviceId: params.deviceId,
+              path: params.path,
+              pullRequestNumber: params.pullRequestNumber,
+            })
+        : null,
+      {
+        dedupingInterval: 60 * 1000,
+        focusThrottleInterval: 60 * 1000,
+        onData: (prData) => {
+          if (!params) return;
+
+          void this.#get()
+            .internal_updateTopicLinkedPullRequest(params, prData)
+            .catch((error) => {
+              console.error('[useFetchTopicLinkedPullRequest] sync failed:', error);
+            });
+        },
+        revalidateOnFocus: true,
+        shouldRetryOnError: false,
+      },
+    );
   };
 
   autoRenameTopicTitle = async (id: string): Promise<void> => {
@@ -463,9 +736,10 @@ export class ChatTopicActionImpl {
         onData: (result) => {
           if (!hasValidContainer) return;
 
-          const { items: topics, total: totalCount } = result;
+          const { total: totalCount } = result;
 
           const currentData = this.#get().topicDataMap[containerKey];
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
 
           const isRefreshingExpandedList =
             !!currentData &&
@@ -512,6 +786,7 @@ export class ChatTopicActionImpl {
                   isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -569,9 +844,10 @@ export class ChatTopicActionImpl {
       {
         onData: (result) => {
           if (!hasValidAgent) return;
-          const { items: topics, total: totalCount } = result;
+          const { total: totalCount } = result;
 
           const currentData = this.#get().agentTopicsViewMap[containerKey];
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
 
           // Preserve appended pages on refresh — same convention as
           // `useFetchTopics` so the user keeps their scroll position after
@@ -609,6 +885,7 @@ export class ChatTopicActionImpl {
                   hasMore,
                   isExpandingPageSize: false,
                   isLoadingMore: false,
+                  loadMoreError: undefined,
                   items: nextItems,
                   pageSize,
                   total: totalCount,
@@ -640,7 +917,7 @@ export class ChatTopicActionImpl {
       {
         agentTopicsViewMap: {
           ...agentTopicsViewMap,
-          [key]: { ...currentData, isLoadingMore: true },
+          [key]: { ...currentData, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -667,6 +944,7 @@ export class ChatTopicActionImpl {
               currentPage: nextPage,
               hasMore,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               total: result.total,
             },
@@ -675,12 +953,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreAgentTopicsView(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           agentTopicsViewMap: {
             ...this.#get().agentTopicsViewMap,
-            [key]: { ...this.#get().agentTopicsViewMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().agentTopicsViewMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,
@@ -712,7 +994,7 @@ export class ChatTopicActionImpl {
       {
         topicDataMap: {
           ...topicDataMap,
-          [key]: { ...currentData!, isLoadingMore: true },
+          [key]: { ...currentData!, isLoadingMore: true, loadMoreError: undefined },
         },
       },
       false,
@@ -752,6 +1034,7 @@ export class ChatTopicActionImpl {
               hasMore,
               isInbox: currentData?.isInbox,
               isLoadingMore: false,
+              loadMoreError: undefined,
               items: nextItems,
               pageSize,
               total: result.total,
@@ -762,12 +1045,16 @@ export class ChatTopicActionImpl {
         false,
         n('loadMoreTopics(success)'),
       );
-    } catch {
+    } catch (error) {
       this.#set(
         {
           topicDataMap: {
             ...this.#get().topicDataMap,
-            [key]: { ...this.#get().topicDataMap[key]!, isLoadingMore: false },
+            [key]: {
+              ...this.#get().topicDataMap[key]!,
+              isLoadingMore: false,
+              loadMoreError: error,
+            },
           },
         },
         false,
@@ -792,8 +1079,11 @@ export class ChatTopicActionImpl {
         topicService.searchTopics(keywords, agentId, groupId),
       {
         onSuccess: (data) => {
+          // Search rows render the same status icon as the sidebar — pin
+          // pending status writes here too (no tmp-row re-prepend: optimistic
+          // rows don't belong in search results).
           this.#set(
-            { searchTopics: data, isSearchingTopic: false },
+            { searchTopics: this.#reconcileFetchedTopics(data), isSearchingTopic: false },
             false,
             n('useSearchTopics(success)', { keywords }),
           );
@@ -835,7 +1125,7 @@ export class ChatTopicActionImpl {
     }
 
     this.#set(
-      { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
+      { activeTopicId: id || (null as any), activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );
@@ -1076,6 +1366,69 @@ export class ChatTopicActionImpl {
     }
   };
 
+  internal_updateTopicLinkedPullRequest = async (
+    params: TopicLinkedPullRequestRefreshParams,
+    prData?: GitLinkedPRSummary,
+  ): Promise<void> => {
+    if (!isSuccessfulLinkedPullRequestLookup(prData)) return;
+
+    const topic = topicSelectors.getTopicById(params.topicId)(this.#get());
+    if (!topic) return;
+
+    const base = getTopicLinkedPullRequestBase(topic.metadata);
+    if (
+      !base ||
+      base.branch !== params.branch ||
+      base.path !== params.path ||
+      base.pullRequestNumber !== params.pullRequestNumber
+    ) {
+      return;
+    }
+
+    const github = toWorkingDirGithubState(prData);
+    if (!github) return;
+
+    if (
+      base.pullRequestNumber !== undefined &&
+      github.pullRequest?.number !== base.pullRequestNumber
+    ) {
+      return;
+    }
+
+    const nextConfig = mergeWorkingDirGithubState({
+      branch: base.branch,
+      currentConfig: base.currentConfig,
+      github,
+      path: base.path,
+    });
+
+    if (isEqual(base.currentConfig, nextConfig)) return;
+
+    this.#get().internal_dispatchTopic(
+      {
+        id: params.topicId,
+        type: 'updateTopic',
+        value: {
+          metadata: {
+            ...topic.metadata,
+            workingDirectoryConfig: nextConfig,
+          },
+        },
+      },
+      n('refreshTopicLinkedPullRequest'),
+    );
+
+    try {
+      await topicService.updateTopicMetadata(params.topicId, {
+        workingDirectoryConfig: nextConfig,
+      });
+      await this.#get().refreshTopic();
+    } catch (error) {
+      await this.#get().refreshTopic();
+      throw error;
+    }
+  };
+
   internal_createTopic = async (params: CreateTopicParams): Promise<string> => {
     const tmpId = Date.now().toString();
     this.#get().internal_dispatchTopic(
@@ -1103,9 +1456,12 @@ export class ChatTopicActionImpl {
    */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
     const { activeAgentId, activeGroupId } = this.#get();
+    const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
+    const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);
     const key = topicMapKey({
-      agentId: payload.agentId ?? activeAgentId,
-      groupId: payload.groupId ?? activeGroupId,
+      agentId: scopedAgentId,
+      groupId: scopedGroupId,
+      scope: payload.scope,
     });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
@@ -1180,9 +1536,15 @@ export class ChatTopicActionImpl {
       total: number;
     },
   ): void => {
-    const { items, total, pageSize, currentPage = 0, append = false, groupId } = params;
+    const { total, pageSize, currentPage = 0, append = false, groupId } = params;
     const key = topicMapKey({ agentId, groupId });
     const currentData = this.#get().topicDataMap[key];
+    // Append mode keeps the existing items (optimistic rows included) in front,
+    // so only pass them for reconciliation on full replacement.
+    const items = this.#reconcileFetchedTopics(
+      params.items,
+      append ? undefined : currentData?.items,
+    );
 
     const nextItems = append ? [...(currentData?.items || []), ...items] : items;
 

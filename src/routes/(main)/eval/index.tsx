@@ -6,6 +6,7 @@ import { FlaskConical, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useEvalStore } from '@/store/eval';
 
 import BenchmarkCard from './features/BenchmarkCard';
@@ -19,14 +20,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   grid: css`
     display: grid;
-    gap: 20px;
     grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 20px;
   `,
   skeletonCard: css`
     padding: 20px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgContainer};
   `,
   title: css`
@@ -58,14 +58,33 @@ const EvalOverview = memo(() => {
   const { t } = useTranslation('eval');
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
-  const { isLoading } = useFetchBenchmarks();
+  const { data, isLoading, error, mutate } = useFetchBenchmarks();
+
+  // Purpose-built onboarding empty — only reached when the fetch succeeded with
+  // zero benchmarks. A *failed* fetch is gated ahead of this by AsyncBoundary so
+  // we never invite the user to re-create benchmarks they already own (ux Read
+  // §1.1 error-as-empty trap).
+  const emptyState = (
+    <Flexbox align={'center'} flex={1} justify={'center'}>
+      <Empty description={t('benchmark.empty')} icon={FlaskConical}>
+        <Button
+          icon={Plus}
+          style={{ marginTop: 16 }}
+          type={'primary'}
+          onClick={() => createCreateBenchmarkModal()}
+        >
+          {t('overview.createBenchmark')}
+        </Button>
+      </Empty>
+    </Flexbox>
+  );
 
   return (
     <Flexbox className={styles.container} gap={32} height={'100%'} width={'100%'}>
       {/* Header */}
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         <Flexbox gap={4} style={{ minWidth: 0 }}>
-          <Text as={'h1'} className={styles.title} ellipsis fontSize={30} weight={600}>
+          <Text ellipsis as={'h1'} className={styles.title} fontSize={30} weight={600}>
             {t('overview.title')}
           </Text>
           <Text type={'secondary'}>{t('overview.subtitle')}</Text>
@@ -77,23 +96,17 @@ const EvalOverview = memo(() => {
         )}
       </Flexbox>
 
-      {/* Body: loading / empty / grid */}
-      {isLoading ? (
-        <SkeletonGrid />
-      ) : benchmarkList.length === 0 ? (
-        <Flexbox align={'center'} flex={1} justify={'center'}>
-          <Empty description={t('benchmark.empty')} icon={FlaskConical}>
-            <Button
-              icon={Plus}
-              style={{ marginTop: 16 }}
-              type={'primary'}
-              onClick={() => createCreateBenchmarkModal()}
-            >
-              {t('overview.createBenchmark')}
-            </Button>
-          </Empty>
-        </Flexbox>
-      ) : (
+      {/* Body: error / loading / empty / grid (error gated before empty) */}
+      <AsyncBoundary
+        data={data}
+        empty={emptyState}
+        error={error}
+        errorVariant={'block'}
+        isEmpty={benchmarkList.length === 0}
+        isLoading={isLoading}
+        loading={<SkeletonGrid />}
+        onRetry={() => mutate()}
+      >
         <div className={styles.grid}>
           {benchmarkList.map((benchmark: any) => (
             <BenchmarkCard
@@ -111,7 +124,7 @@ const EvalOverview = memo(() => {
             />
           ))}
         </div>
-      )}
+      </AsyncBoundary>
     </Flexbox>
   );
 });

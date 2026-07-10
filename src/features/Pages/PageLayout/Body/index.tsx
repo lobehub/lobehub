@@ -11,10 +11,11 @@ import {
   Text,
 } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
-import React, { memo, Suspense } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AsyncBoundary from '@/components/AsyncBoundary';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
@@ -48,9 +49,12 @@ const Body = memo(() => {
   // header can show a subtle in-flight indicator (mirrors the Private Agent
   // pattern in `home/_layout/Body/Private`).
   const useFetchDocuments = usePageStore((s) => s.useFetchDocuments);
-  const { isValidating } = useFetchDocuments();
-
-  const isLoading = usePageStore(pageSelectors.isDocumentsLoading);
+  // Use the SWR result as the settled signal: `data` is `undefined` until the
+  // first fetch succeeds, so a failed load surfaces error + Retry instead of a
+  // permanent skeleton. The store's `documents` field can't be the signal — it
+  // initializes to `[]` (a settled-looking empty), so a failed fetch would fall
+  // through to the "no pages" empty rather than the error.
+  const { data, error, isLoading, isValidating, mutate } = useFetchDocuments();
 
   const filteredDocumentsCount = usePageStore(pageSelectors.filteredDocumentsCount);
   const privateCount = usePageStore(pageSelectors.privateFilteredDocumentsCount);
@@ -121,30 +125,33 @@ const Body = memo(() => {
               </Flexbox>
             }
           >
-            <Suspense fallback={<SkeletonList />}>
-              {isLoading ? (
-                <SkeletonList />
-              ) : (
-                <Flexbox gap={1} paddingBlock={1}>
-                  {privateCount === 0 ? (
-                    searchActive ? (
-                      <Text
-                        align="center"
-                        fontSize={12}
-                        style={{ paddingBlock: 12, paddingInline: 8 }}
-                        type={'secondary'}
-                      >
-                        {t('pageList.noResults')}
-                      </Text>
-                    ) : (
-                      renderEmptyCreate('private')
-                    )
+            <AsyncBoundary
+              data={data}
+              error={error}
+              errorVariant={'inline'}
+              isLoading={isLoading}
+              loading={<SkeletonList />}
+              onRetry={() => mutate()}
+            >
+              <Flexbox gap={1} paddingBlock={1}>
+                {privateCount === 0 ? (
+                  searchActive ? (
+                    <Text
+                      align="center"
+                      fontSize={12}
+                      style={{ paddingBlock: 12, paddingInline: 8 }}
+                      type={'secondary'}
+                    >
+                      {t('pageList.noResults')}
+                    </Text>
                   ) : (
-                    <List visibility="private" />
-                  )}
-                </Flexbox>
-              )}
-            </Suspense>
+                    renderEmptyCreate('private')
+                  )
+                ) : (
+                  <List visibility="private" />
+                )}
+              </Flexbox>
+            </AsyncBoundary>
           </AccordionItem>
           <AccordionItem
             action={<AddButton compact visibility="public" />}
@@ -164,30 +171,33 @@ const Body = memo(() => {
               </Flexbox>
             }
           >
-            <Suspense fallback={<SkeletonList />}>
-              {isLoading ? (
-                <SkeletonList />
-              ) : (
-                <Flexbox gap={1} paddingBlock={1}>
-                  {workspaceCount === 0 ? (
-                    searchActive ? (
-                      <Text
-                        align="center"
-                        fontSize={12}
-                        style={{ paddingBlock: 12, paddingInline: 8 }}
-                        type={'secondary'}
-                      >
-                        {t('pageList.noResults')}
-                      </Text>
-                    ) : (
-                      renderEmptyCreate('public')
-                    )
+            <AsyncBoundary
+              data={data}
+              error={error}
+              errorVariant={'inline'}
+              isLoading={isLoading}
+              loading={<SkeletonList />}
+              onRetry={() => mutate()}
+            >
+              <Flexbox gap={1} paddingBlock={1}>
+                {workspaceCount === 0 ? (
+                  searchActive ? (
+                    <Text
+                      align="center"
+                      fontSize={12}
+                      style={{ paddingBlock: 12, paddingInline: 8 }}
+                      type={'secondary'}
+                    >
+                      {t('pageList.noResults')}
+                    </Text>
                   ) : (
-                    <List visibility="workspace" />
-                  )}
-                </Flexbox>
-              )}
-            </Suspense>
+                    renderEmptyCreate('public')
+                  )
+                ) : (
+                  <List visibility="workspace" />
+                )}
+              </Flexbox>
+            </AsyncBoundary>
           </AccordionItem>
         </Accordion>
       ) : (
@@ -210,15 +220,18 @@ const Body = memo(() => {
               </Flexbox>
             }
           >
-            <Suspense fallback={<SkeletonList />}>
-              {isLoading ? (
-                <SkeletonList />
-              ) : (
-                <Flexbox gap={1} paddingBlock={1}>
-                  {filteredDocumentsCount === 0 ? <PageEmpty search={searchActive} /> : <List />}
-                </Flexbox>
-              )}
-            </Suspense>
+            <AsyncBoundary
+              data={data}
+              error={error}
+              errorVariant={'inline'}
+              isLoading={isLoading}
+              loading={<SkeletonList />}
+              onRetry={() => mutate()}
+            >
+              <Flexbox gap={1} paddingBlock={1}>
+                {filteredDocumentsCount === 0 ? <PageEmpty search={searchActive} /> : <List />}
+              </Flexbox>
+            </AsyncBoundary>
           </AccordionItem>
         </Accordion>
       )}

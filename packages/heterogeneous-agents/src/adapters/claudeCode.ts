@@ -35,12 +35,14 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   ExternalSignalContext,
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
+  HeterogeneousToolResultImage,
   StreamChunkData,
   SubagentEventContext,
   SubagentSpawnMetadata,
@@ -104,6 +106,21 @@ const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
  * back to the subject text, same as TodoWrite's content-fallback.
  */
 const TASK_LIST_LINE_PATTERN = /^#(\d+) \[(pending|in_progress|completed)\] (.+)$/;
+
+/**
+ * `system init` tags the model id with a beta marker (`claude-opus-4-8[1m]`)
+ * that no other event — and no model-bank entry — uses. Strip it so the id the
+ * run opens with is the same canonical one `turn_metadata` later confirms;
+ * otherwise the assistant renders the tagged id until the first turn ends.
+ *
+ * Sliced rather than matched: an unanchored `/\[[^\]]*\]$/` rescans from every
+ * start offset, which is quadratic on a `[[[[…` input (CodeQL flags it).
+ */
+const stripModelBetaMarker = (model?: string) => {
+  if (!model?.endsWith(']')) return model;
+  const markerStart = model.lastIndexOf('[');
+  return markerStart === -1 ? model : model.slice(0, markerStart);
+};
 
 /**
  * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
@@ -457,7 +474,28 @@ const toUsageData = (
 
 // ─── Adapter ───
 
+interface ClaudeCodeAdapterOptions {
+  /**
+   * CLI print-mode treats `result` as the end of the whole process. The Agent
+   * SDK streaming transport can emit multiple `result` messages from one Query,
+   * so runtime completion must be emitted by the transport when the Query closes.
+   */
+  runtimeEndStrategy?: 'on-result' | 'on-transport-close';
+  /**
+   * Background Bash tasks may have no intermediate callback turns: the first
+   * model turn starts the task, and the next model turn is triggered only after
+   * `task_notification`. Treat that final turn as a task-completion signal.
+   */
+  signalBackgroundTaskCompletion?: boolean;
+}
+
+const DEFAULT_ADAPTER_OPTIONS: Required<ClaudeCodeAdapterOptions> = {
+  runtimeEndStrategy: 'on-result',
+  signalBackgroundTaskCompletion: false,
+};
+
 export class ClaudeCodeAdapter implements AgentEventAdapter {
+  private readonly options: Required<ClaudeCodeAdapterOptions>;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
 
@@ -556,6 +594,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private mainToolInputsById = new Map<string, Record<string, any>>();
   /**
+   * `tool_use.id → ToolCallPayload`, so `tool_end` can re-attach the same
+   * `{ toolCalling }` payload the server ships — aligning the hetero event
+   * stream with the gateway/server one so renderer `onAfterCall` hooks fire
+   * identically regardless of runtime.
+   */
+  private toolPayloadById = new Map<string, ToolCallPayload>();
+  /**
    * Set of parent tool_use ids whose spawn metadata has already been
    * announced on a subagent event. Guarantees `spawnMetadata` appears
    * exactly once per subagent run — on the first subagent event for that
@@ -606,7 +651,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private activeTasks = new Map<
     string,
-    { callbackCount: number; sourceToolName: string; toolUseId: string }
+    {
+      callbackCount: number;
+      shouldSignalCompletion: boolean;
+      sourceToolName: string;
+      toolUseId: string;
+    }
   >();
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
@@ -645,6 +695,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
 
+  constructor(options: ClaudeCodeAdapterOptions = {}) {
+    this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
+  }
+
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
 
@@ -674,9 +728,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   flush(): HeterogeneousAgentEvent[] {
-    // Close any still-open tools (shouldn't happen in normal flow, but be safe)
+    // A still-pending tool never produced a result (the CLI ended / was cancelled
+    // mid-tool), so mark it UNSUCCESSFUL — mirrors Codex's drain and stops a
+    // side-effect hook (e.g. worktree detection) from treating an unfinished
+    // `git worktree add` as a success.
     const events = [...this.pendingToolCalls].map((id) =>
-      this.makeEvent('tool_end', { isSuccess: true, toolCallId: id }),
+      this.makeEvent('tool_end', this.buildToolEndData(id, false)),
     );
     this.pendingToolCalls.clear();
     return events;
@@ -692,8 +749,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // callback in `openMainMessage`.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
+      const toolInput = this.mainToolInputsById.get(toolUseId);
+      const shouldSignalCompletion =
+        this.options.signalBackgroundTaskCompletion && toolInput?.run_in_background === true;
       this.activeTasks.set(raw.task_id, {
         callbackCount: 0,
+        shouldSignalCompletion,
         sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
         toolUseId,
       });
@@ -717,7 +778,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // normal main chain. Tagging that turn `task-completion` mis-anchors it and
       // drops it from the rendered chain — so leave it untagged.
       const ending = this.activeTasks.get(raw.task_id);
-      if (ending && ending.callbackCount > 0) {
+      if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
         this.pendingTaskCompletion = {
           sourceToolCallId: ending.toolUseId,
           sourceToolName: ending.sourceToolName,
@@ -736,8 +797,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     this.started = true;
     return [
       this.makeEvent('stream_start', {
-        model: raw.model,
+        model: stripModelBetaMarker(raw.model),
         provider: 'claude-code',
+        // The CC session id every message this run produces belongs to. A
+        // change in this value across a topic means CC forked a new session.
+        sessionId: this.sessionId,
       }),
     ];
   }
@@ -811,14 +875,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
           // Cache EVERY main-agent tool_use input so the subagent-spawn
           // handler (`emitToolChunk`) can look up the parent's args on
           // first subagent event regardless of which spawn-tool name CC
@@ -1012,14 +1081,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
           if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
@@ -1130,6 +1204,33 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   /**
+   * Build `tool_end` event data aligned with the server/gateway shape: alongside
+   * `{ isSuccess, toolCallId }`, re-attach the tool's `{ toolCalling }` payload
+   * (from `toolPayloadById`) and a `result` mirroring a `BuiltinToolResult`. This
+   * is what lets the renderer's `onAfterCall` dispatch resolve the executor (by
+   * `identifier`) and observe the result — otherwise hetero tool_end carried no
+   * payload/result and `onAfterCall` was a silent no-op for CLI runs.
+   */
+  private buildToolEndData(
+    toolCallId: string,
+    isSuccess: boolean,
+    opts?: { content?: string; state?: unknown; subagent?: SubagentEventContext },
+  ): Record<string, any> {
+    const data: Record<string, any> = { isSuccess, toolCallId };
+    if (opts?.subagent) data.subagent = opts.subagent;
+
+    const toolCalling = this.toolPayloadById.get(toolCallId);
+    if (toolCalling) data.payload = { toolCalling };
+
+    data.result = {
+      content: opts?.content ?? '',
+      success: isSuccess,
+      ...(opts?.state ? { state: opts.state } : {}),
+    };
+    return data;
+  }
+
+  /**
    * Handle user events — these contain tool_result blocks.
    * NOTE: In Claude Code, tool results are emitted as `type: 'user'` events
    * (representing the synthetic user turn that feeds results back to the LLM).
@@ -1164,6 +1265,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.hasUnhandledUserInput = true;
       }
 
+      // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
+      // gather their base64 bodies here (in the SAME pass that builds the
+      // human-readable content) so the runtime pipeline can upload them and the
+      // UI can echo a thumbnail — see `pluginState.images` below.
+      const images: HeterogeneousToolResultImage[] = [];
       const resultContent =
         typeof block.content === 'string'
           ? block.content
@@ -1177,12 +1283,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                   // the UI's StatusIndicator stuck on the spinner ().
                   if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
                   // `Read` on images yields `{type: 'image', source: {...}}` blocks
-                  // with no text. Drop a minimal placeholder so the tool message
-                  // has non-empty content (); richer image echo is a
-                  // follow-up that needs structured ToolResultData.
+                  // with no text. Keep the `[Image: …]` placeholder as the
+                  // content fallback () and preserve the base64 body on
+                  // `pluginState.images` for rich echo ().
                   if (c?.type === 'image') {
                     const mediaType = c.source?.media_type || 'image';
-                    return `[Image: ${mediaType}]`;
+                    if (c.source?.type === 'base64' && typeof c.source.data === 'string') {
+                      images.push({ data: c.source.data, mediaType });
+                    }
+                    return imagePlaceholder(mediaType);
                   }
                   return c.text || c.content || '';
                 })
@@ -1219,7 +1328,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
           : undefined;
 
-      const pluginState = todoWritePluginState ?? taskPluginState;
+      // Images are mutually exclusive with Todo/Task results in practice (a
+      // `Read` is neither), but merge defensively so a future producer that
+      // carries both doesn't clobber one. `data` is still raw base64 here; the
+      // runtime pipeline uploads and rewrites these entries before persistence.
+      let pluginState: Record<string, any> | undefined = todoWritePluginState ?? taskPluginState;
+      if (images.length > 0) {
+        pluginState = { ...pluginState, images };
+      }
 
       // Emit tool_result for executor to persist content to tool message
       events.push(
@@ -1236,11 +1352,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       if (this.pendingToolCalls.has(toolCallId)) {
         this.pendingToolCalls.delete(toolCallId);
         events.push(
-          this.makeEvent('tool_end', {
-            isSuccess: !block.is_error,
-            subagent: subagentCtx,
-            toolCallId,
-          }),
+          this.makeEvent(
+            'tool_end',
+            this.buildToolEndData(toolCallId, !block.is_error, {
+              content: resultContent,
+              state: pluginState,
+              subagent: subagentCtx,
+            }),
+          ),
         );
       }
     }
@@ -1359,7 +1478,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
     const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent = raw.is_error
+    const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
@@ -1373,7 +1492,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
               message: resultMessage,
             },
         )
-      : this.makeEvent('agent_runtime_end', {});
+      : this.options.runtimeEndStrategy === 'on-result'
+        ? this.makeEvent('agent_runtime_end', {})
+        : undefined;
 
     this.pendingRateLimitInfo = undefined;
     this.streamedTextByMessageId.clear();
@@ -1383,11 +1504,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // wrongly inherit the previous run's task-completion tag).
     this.pendingTaskCompletion = undefined;
 
+    const shouldEmitVisibleOutputEnd =
+      this.options.runtimeEndStrategy === 'on-result' || this.activeTasks.size === 0;
+
     return [
       ...events,
       this.makeEvent('stream_end', {}),
-      this.makeEvent('visible_output_end', {}),
-      finalEvent,
+      ...(shouldEmitVisibleOutputEnd ? [this.makeEvent('visible_output_end', {})] : []),
+      ...(finalEvent ? [finalEvent] : []),
     ];
   }
 
@@ -1488,7 +1612,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.started = true;
       this.currentMessageId = messageId;
       this.currentTurnHadToolUse = false;
-      return [this.makeEvent('stream_start', { model, provider: 'claude-code' })];
+      return [
+        this.makeEvent('stream_start', {
+          model,
+          provider: 'claude-code',
+          sessionId: this.sessionId,
+        }),
+      ];
     }
 
     if (messageId === this.currentMessageId) {
@@ -1524,15 +1654,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           model,
           newStep: true,
           provider: 'claude-code',
+          sessionId: this.sessionId,
         }),
       ];
     }
 
     if (this.currentMessageId === undefined) {
       // First assistant/delta after system init — record without step boundary.
+      // Emit a non-newStep stream_start carrying this turn's CC message.id so
+      // the reducer records `currentMainMessageId` for the SEEDED assistant.
+      // system:init opened the seed with no id, so without this the first turn's
+      // rows (assistant / tools / usage) would carry no `heteroMessageId` — the
+      // exact first turn of a resumed/forked operation this provenance targets.
       this.currentMessageId = messageId;
       this.currentTurnHadToolUse = false;
-      return [];
+      return [
+        this.makeEvent('stream_start', {
+          messageId,
+          model,
+          provider: 'claude-code',
+          sessionId: this.sessionId,
+        }),
+      ];
     }
 
     this.currentMessageId = messageId;
@@ -1588,6 +1731,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         model,
         newStep: true,
         provider: 'claude-code',
+        sessionId: this.sessionId,
       }),
     ];
   }
@@ -1626,5 +1770,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
   private makeChunkEvent(data: StreamChunkData): HeterogeneousAgentEvent {
     return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type: 'stream_chunk' };
+  }
+}
+
+export class ClaudeCodeSdkAdapter extends ClaudeCodeAdapter {
+  constructor() {
+    super({
+      runtimeEndStrategy: 'on-transport-close',
+      signalBackgroundTaskCompletion: true,
+    });
   }
 }

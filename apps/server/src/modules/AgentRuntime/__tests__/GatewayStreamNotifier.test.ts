@@ -29,6 +29,7 @@ function createMockInner(): IStreamEventManager & { calls: Record<string, any[][
     publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
     publishStreamChunk: track('publishStreamChunk') as any,
     publishStreamEvent: track('publishStreamEvent') as any,
+    readEventsOnce: track('readEventsOnce') as any,
     subscribeStreamEvents: track('subscribeStreamEvents') as any,
   };
 }

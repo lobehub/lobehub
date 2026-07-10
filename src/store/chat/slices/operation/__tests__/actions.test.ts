@@ -86,6 +86,48 @@ describe('Operation Actions', () => {
       expect(merged.filesPreview[0]).toMatchObject({ id: 'f1', name: 'a.png' });
       expect(merged.filesPreview[2]).toMatchObject({ id: 'f3', mimeType: 'application/pdf' });
     });
+
+    it('should preserve context selections from queued messages', () => {
+      const merged = mergeQueuedMessages([
+        {
+          content: 'first',
+          createdAt: 1,
+          id: 'q1',
+          interruptMode: 'soft',
+          metadata: {
+            contextSelections: [
+              {
+                content: 'const first = true;',
+                filePath: 'src/first.ts',
+                id: 'selection-1',
+                source: 'code',
+              },
+            ],
+          },
+        },
+        {
+          content: 'second',
+          createdAt: 2,
+          id: 'q2',
+          interruptMode: 'soft',
+          metadata: {
+            contextSelections: [
+              {
+                content: 'const second = true;',
+                filePath: 'src/second.ts',
+                id: 'selection-2',
+                source: 'code',
+              },
+            ],
+          },
+        },
+      ]);
+
+      expect(merged.metadata?.contextSelections).toEqual([
+        expect.objectContaining({ filePath: 'src/first.ts', id: 'selection-1' }),
+        expect.objectContaining({ filePath: 'src/second.ts', id: 'selection-2' }),
+      ]);
+    });
   });
 
   describe('startOperation', () => {

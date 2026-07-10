@@ -128,6 +128,18 @@ export class VerifyCheckResultModel {
   };
 
   /**
+   * Delete one result by id (ownership-scoped). Its evidence rows cascade via the
+   * `verify_evidence.check_result_id` FK. Used by the re-ingest path to prune a
+   * case that a later report round dropped, so a re-run stays a full replace
+   * rather than accreting stale checks.
+   */
+  delete = async (id: string) => {
+    return this.db
+      .delete(verifyCheckResults)
+      .where(and(eq(verifyCheckResults.id, id), this.ownership()));
+  };
+
+  /**
    * Update a result by its stable `(verifyRunId, checkItemId)` key rather than
    * the row id — used by the executor / batch judge which produces verdicts keyed
    * by check item id, never by array position.

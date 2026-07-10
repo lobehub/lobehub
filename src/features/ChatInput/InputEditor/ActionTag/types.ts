@@ -4,9 +4,9 @@
  * 1. Command      — Built-in, line-start only (slash menu), executed client-side before send
  * 2. Skill        — Skill package, inserted via @ mention, preloaded before execution
  * 3. Tool         — Explicit tool selection, inserted via @ mention, context injected directly
- * 4. ProjectSkill — Hetero-agent project skill (e.g. `.agents/skills/<name>/SKILL.md`),
+ * 4. ProjectSkill — Filesystem skill discovered from the project or execution device,
  *                   inserted via slash menu, serialized as literal `/skill-name` so the
- *                   underlying CLI agent resolves and runs the skill itself.
+ *                   runtime resolves and runs the skill itself.
  * 5. AgentSkill   — Agent-document skill bundle from `agentDocumentService`; the runtime
  *                   resolves the chip's identifier (`agent-document:<filename>`) against
  *                   the agent's document store at preload time.

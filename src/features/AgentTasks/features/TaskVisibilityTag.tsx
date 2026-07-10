@@ -48,7 +48,7 @@ interface TaskVisibilityTagProps {
   disableDropdown?: boolean;
   /** When set, treats the chip as locked: dropdown is suppressed and a
    *  tooltip explains why. Used by the create form when the selected agent
-   *  is private (see LOBE-10961). */
+   *  is private (a private agent can only run private tasks). */
   lockedReason?: string;
   /** Controlled mode (e.g. create form): caller owns the state. */
   onChange?: (next: 'private' | 'public') => void;

@@ -16,16 +16,17 @@ interface MenuItem {
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: 'ws-1' as string | undefined,
   confirmModal: vi.fn(),
+  currentUserId: 'user-1' as string | undefined,
   deleteTask: vi.fn(),
   dropdownItems: [] as MenuItem[],
+  isWorkspaceOwner: false,
   messageSuccess: vi.fn(),
   navigate: vi.fn(),
   taskState: {
     activeTaskId: 'T-1' as string | undefined,
-    taskDetailMap: { 'T-1': { visibility: 'private' as 'private' | 'public' } } as Record<
-      string,
-      { visibility?: 'private' | 'public' }
-    >,
+    taskDetailMap: {
+      'T-1': { visibility: 'private' as 'private' | 'public' },
+    } as Record<string, { createdByUserId?: string | null; visibility?: 'private' | 'public' }>,
   },
   transferItems: [
     { key: 'transfer-task', label: 'Transfer to...' },
@@ -70,6 +71,24 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => 'ws-slug',
 }));
 
+vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
+  useIsWorkspaceOwner: () => mocks.isWorkspaceOwner,
+}));
+
+vi.mock('@/features/VisibilityConfirmContent', () => ({
+  default: () => <div />,
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: {
+    userId: () => mocks.currentUserId,
+  },
+}));
+
 vi.mock('@/business/client/hooks/useTaskTransferMenuItem', () => ({
   useTaskTransferMenuItem: vi.fn(() => mocks.transferItems),
 }));
@@ -102,6 +121,8 @@ describe('TaskDetailHeaderActions', () => {
     mocks.taskState.activeTaskId = 'T-1';
     mocks.taskState.taskDetailMap = { 'T-1': { visibility: 'private' } };
     mocks.activeWorkspaceId = 'ws-1';
+    mocks.currentUserId = 'user-1';
+    mocks.isWorkspaceOwner = false;
   });
 
   it('includes task transfer and copy actions in the detail menu', () => {
@@ -129,6 +150,65 @@ describe('TaskDetailHeaderActions', () => {
     render(<TaskDetailHeaderActions />);
 
     expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('publishToWorkspace');
+  });
+
+  it('shows "make private" on public tasks for the creator', () => {
+    mocks.taskState.taskDetailMap = {
+      'T-1': { createdByUserId: 'user-1', visibility: 'public' },
+    };
+    render(<TaskDetailHeaderActions />);
+
+    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
+  });
+
+  it('shows "make private" on public tasks for a workspace owner (non-creator)', () => {
+    mocks.isWorkspaceOwner = true;
+    mocks.taskState.taskDetailMap = {
+      'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
+    };
+    render(<TaskDetailHeaderActions />);
+
+    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
+  });
+
+  it('hides "make private" from non-creator members', () => {
+    mocks.taskState.taskDetailMap = {
+      'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
+    };
+    render(<TaskDetailHeaderActions />);
+
+    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
+  });
+
+  it('hides "make private" on private tasks', () => {
+    mocks.taskState.taskDetailMap = {
+      'T-1': { createdByUserId: 'user-1', visibility: 'private' },
+    };
+    render(<TaskDetailHeaderActions />);
+
+    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
+  });
+
+  it('make-private action opens a destructive confirmation and updates visibility', () => {
+    mocks.taskState.taskDetailMap = {
+      'T-1': { createdByUserId: 'user-1', visibility: 'public' },
+    };
+    render(<TaskDetailHeaderActions />);
+    const item = mocks.dropdownItems.find((i) => i?.key === 'makePrivate') as
+      { onClick?: () => void } | undefined;
+    item?.onClick?.();
+
+    expect(mocks.confirmModal).toHaveBeenCalledTimes(1);
+    const opts = mocks.confirmModal.mock.calls[0][0] as {
+      okButtonProps?: { danger?: boolean };
+      onOk: () => Promise<void>;
+      title: string;
+    };
+    expect(opts.title).toBe('makePrivate.confirm.title');
+    expect(opts.okButtonProps?.danger).toBe(true);
+    return opts.onOk().then(() => {
+      expect(mocks.updateTaskVisibility).toHaveBeenCalledWith('T-1', 'private');
+    });
   });
 
   it('publish action opens a one-way confirmation modal', () => {

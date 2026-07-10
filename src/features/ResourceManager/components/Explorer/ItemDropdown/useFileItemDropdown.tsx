@@ -7,6 +7,7 @@ import {
   BookMinusIcon,
   BookPlusIcon,
   DownloadIcon,
+  EyeOffIcon,
   FolderInputIcon,
   GlobeIcon,
   LinkIcon,
@@ -20,6 +21,7 @@ import { shallow } from 'zustand/shallow';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { documentService } from '@/services/document';
@@ -69,12 +71,19 @@ export const useFileItemDropdown = ({
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
 
-  const { deleteResource, moveResource, refreshFileList, publishFileToWorkspace } = useFileStore(
+  const {
+    deleteResource,
+    moveResource,
+    refreshFileList,
+    publishFileToWorkspace,
+    setFileVisibility,
+  } = useFileStore(
     (s) => ({
       deleteResource: s.deleteResource,
       moveResource: s.moveResource,
       publishFileToWorkspace: s.publishFileToWorkspace,
       refreshFileList: s.refreshFileList,
+      setFileVisibility: s.setFileVisibility,
     }),
     shallow,
   );
@@ -103,8 +112,17 @@ export const useFileItemDropdown = ({
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
   const menuItems = useCallback(() => {
-    // Filter out current knowledge base and create submenu items
-    const availableKnowledgeBases = libraries.filter((kb) => kb.id !== libraryId);
+    // Filter out current knowledge base and constrain by visibility scope:
+    // a private file can only join a private KB, a workspace-public file can
+    // only join a public KB. Personal-mode files (visibility null/undefined)
+    // ignore the scope filter.
+    const availableKnowledgeBases = libraries.filter((kb) => {
+      if (kb.id === libraryId) return false;
+      if (visibility === 'private' || visibility === 'public') {
+        return kb.visibility === visibility;
+      }
+      return true;
+    });
 
     // Submenu for adding files to a library (used when NOT in a library)
     const addToKnowledgeBaseSubmenu: ItemType[] = availableKnowledgeBases.map((kb) => ({
@@ -225,6 +243,14 @@ export const useFileItemDropdown = ({
       visibility === 'private' &&
       !!currentUserId &&
       userId === currentUserId;
+    // Bidirectional counterpart: workspace-public files owned by the caller
+    // can be pulled back to private via the same guarded server path.
+    const isOwnPublicFile =
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      visibility === 'public' &&
+      !!currentUserId &&
+      userId === currentUserId;
 
     return (
       [
@@ -237,8 +263,8 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: t('resources.publishToWorkspace.confirm', { ns: 'chat' }),
-                okText: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+                content: <VisibilityConfirmContent variant="publish" />,
+                okText: t('continue', { ns: 'common' }),
                 title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
                 onOk: async () => {
                   try {
@@ -253,6 +279,32 @@ export const useFileItemDropdown = ({
             },
           },
         canEditResources && isOwnPrivateFile && { type: 'divider' },
+        canEditResources &&
+          isOwnPublicFile && {
+            icon: <Icon icon={EyeOffIcon} />,
+            key: 'makePrivate',
+            label: t('makePrivate', { ns: 'common' }),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: <VisibilityConfirmContent variant="makePrivate" />,
+                okButtonProps: { danger: true },
+                okText: t('continue', { ns: 'common' }),
+                title: t('makePrivate.confirm.title', { ns: 'common' }),
+                onOk: async () => {
+                  try {
+                    await setFileVisibility(id, 'private');
+                    message.success(t('makePrivate.success', { ns: 'common' }));
+                  } catch (error) {
+                    console.error(error);
+                    message.error(t('makePrivate.error', { ns: 'common' }));
+                  }
+                },
+              });
+            },
+          },
+        canEditResources && isOwnPublicFile && { type: 'divider' },
         ...libraryRelatedActions,
         hasKnowledgeBaseActions && {
           type: 'divider',
@@ -398,6 +450,7 @@ export const useFileItemDropdown = ({
     moveResource,
     onRenameStart,
     publishFileToWorkspace,
+    setFileVisibility,
     refreshFileList,
     removeFilesFromKnowledgeBase,
     sourceType,

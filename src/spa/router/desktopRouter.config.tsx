@@ -19,7 +19,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyRouteMeta } from '@/features/Verify/routeMeta';
+import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
@@ -74,6 +74,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/docs'),
+                  'Desktop > Chat > DocumentsIndex',
+                ),
+                index: true,
+              },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/agent/docs/[docId]'),
@@ -807,6 +814,13 @@ export const desktopRoutes: RouteObject[] = [
                 ),
                 path: 'skill',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
+                  'Desktop > Workspace > Settings > Connector',
+                ),
+                path: 'connector',
+              },
               // Padded tabs share a centered, max-width container layout.
               {
                 children: [
@@ -990,12 +1004,26 @@ export const desktopRoutes: RouteObject[] = [
     path: '/verify-im',
   },
 
-  // Standalone verification-report viewer (outside main layout)
+  // Verify report workspace — standalone master-detail (outside main layout)
   {
-    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/verify/empty'),
+          'Desktop > Verify Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify'),
     errorElement: <ErrorBoundary />,
-    handle: { meta: verifyRouteMeta },
-    path: '/verify/:runId',
+    handle: { meta: verifyReportsRouteMeta },
+    path: '/verify',
   },
 
   // Devtools route (outside main layout, dev-only)

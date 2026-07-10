@@ -84,9 +84,19 @@ export interface IAgentStateManager {
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
 
   /**
+   * Extend the step execution lock if it is still owned by the caller.
+   */
+  refreshStepLock: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
+
+  /**
    * Release the step execution lock.
    */
-  releaseStepLock: (operationId: string, stepIndex: number) => Promise<void>;
+  releaseStepLock: (operationId: string, stepIndex: number, ownerId?: string) => Promise<void>;
 
   /**
    * Save Agent state
@@ -102,7 +112,12 @@ export interface IAgentStateManager {
    * Atomically try to claim a step for execution (distributed lock).
    * Returns true if the lock was acquired, false if another execution already holds it.
    */
-  tryClaimStep: (operationId: string, stepIndex: number, ttlSeconds?: number) => Promise<boolean>;
+  tryClaimStep: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -161,6 +176,24 @@ export interface IStreamEventManager {
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ) => Promise<string>;
+
+  /**
+   * Single bounded read of a stream — the long-poll primitive. Returns every
+   * event after `lastEventId`, blocking up to `blockMs` for the first one; on
+   * timeout returns an empty list. The returned `lastEventId` is always a
+   * CONCRETE stream id (never the `'$'` sentinel), so the caller can immediately
+   * re-poll from it without a gap. Unlike `subscribeStreamEvents` this does NOT
+   * loop — one request, one bounded wait.
+   *
+   * Used by the heterogeneous `lh hetero exec` producer (which holds only an
+   * op-scoped JWT + tRPC, never Redis) to pull `agent_intervention_response`
+   * back into its in-process `AskUserBridge`. See `aiAgent.waitInterventionResponse`.
+   */
+  readEventsOnce: (
+    operationId: string,
+    lastEventId?: string,
+    blockMs?: number,
+  ) => Promise<{ events: StreamEvent[]; lastEventId: string }>;
 
   /**
    * Optional: dispatch a tool execution request to the client via Agent Gateway.

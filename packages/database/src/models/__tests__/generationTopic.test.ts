@@ -546,4 +546,53 @@ describe('GenerationTopicModel', () => {
       expect(updateResult).toBeUndefined();
     });
   });
+
+  describe('setVisibility', () => {
+    it('should flip the creator’s own public topic back to private', async () => {
+      const workspaceModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+      const created = await workspaceModel.create('Public Topic', 'image', 'public');
+
+      const result = await workspaceModel.setVisibility(created.id, 'private');
+
+      expect(result?.visibility).toBe('private');
+      const row = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, created.id),
+      });
+      expect(row?.visibility).toBe('private');
+    });
+
+    it('should be a no-op when the topic already sits at the target visibility', async () => {
+      const workspaceModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+      const created = await workspaceModel.create('Already Private', 'image', 'private');
+      const before = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, created.id),
+      });
+
+      const result = await workspaceModel.setVisibility(created.id, 'private');
+
+      // No row satisfied the (id, ownership, userId, visibility=public) filter,
+      // so RETURNING is empty and no row was touched.
+      expect(result).toBeUndefined();
+      const after = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, created.id),
+      });
+      expect(after?.visibility).toBe('private');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to flip another member’s topic', async () => {
+      const ownerModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+      const memberModel = new GenerationTopicModel(serverDB, otherUserId, workspaceId);
+      const owned = await ownerModel.create('Owner Public', 'image', 'public');
+
+      const result = await memberModel.setVisibility(owned.id, 'private');
+      expect(result).toBeUndefined();
+
+      const row = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, owned.id),
+      });
+      expect(row?.visibility).toBe('public');
+      expect(row?.userId).toBe(userId);
+    });
+  });
 });

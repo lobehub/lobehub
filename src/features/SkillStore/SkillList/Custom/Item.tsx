@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
-import PluginDetailModal from '@/features/PluginDetailModal';
+import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import DevModal from '@/features/PluginDevModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -47,7 +47,6 @@ interface ItemProps {
 const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
   const { t } = useTranslation('plugin');
   const [configOpen, setConfigOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [customPlugin, uninstallPlugin, updateCustomPlugin, pluginManifest] = useToolStore((s) => [
@@ -90,7 +89,16 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
           <PluginAvatar avatar={avatar} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+              <span
+                className={styles.title}
+                onClick={() => {
+                  createPluginDetailModal({
+                    id: identifier,
+                    schema: pluginManifest?.settings,
+                    tab: 'info',
+                  });
+                }}
+              >
                 {title || identifier}
               </span>
               <MCPTag showText={false} />
@@ -142,13 +150,6 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
           }}
         />
       )}
-      <PluginDetailModal
-        id={identifier}
-        open={detailOpen}
-        schema={pluginManifest?.settings}
-        tab="info"
-        onClose={() => setDetailOpen(false)}
-      />
     </>
   );
 });

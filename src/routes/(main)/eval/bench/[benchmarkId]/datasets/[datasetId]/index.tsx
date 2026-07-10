@@ -9,6 +9,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
@@ -69,7 +70,6 @@ const styles = createStaticStyles(({ css }) => ({
   heroBand: css`
     padding: 20px;
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   heroValue: css`
@@ -109,7 +109,7 @@ const DatasetDetail = memo(() => {
   const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
   const refreshDatasetDetail = useEvalStore((s) => s.refreshDatasetDetail);
 
-  const { data: dataset } = useFetchDatasetDetail(datasetId);
+  const { data: dataset, error, isLoading, mutate } = useFetchDatasetDetail(datasetId);
   useFetchDatasetRuns(datasetId);
 
   const sortedRuns = useMemo(
@@ -199,177 +199,187 @@ const DatasetDetail = memo(() => {
     });
   }, [benchmarkId, datasetId, message, navigate, t]);
 
-  if (!dataset) return null;
-
+  // Skeleton → error → (resolved-null) blank, replacing a bare `return null`
+  // that flashed blank on the happy path and stayed permanently blank on a
+  // failed fetch (ux Read §1.1). A page-level failure gets a reason + Reload.
   return (
-    <>
-      <Flexbox horizontal style={{ flex: 1, minHeight: 0 }}>
-        <Flexbox
-          flex={1}
-          gap={24}
-          style={{ minWidth: 0, overflow: 'auto', paddingBlock: 24, paddingInline: 32 }}
-        >
-          {/* Back link */}
-          <WorkspaceLink className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
-            <ArrowLeft size={16} />
-            {t('dataset.detail.backToBenchmark')}
-          </WorkspaceLink>
-
-          {/* Header */}
-          <Flexbox horizontal align="start" justify="space-between">
-            <Flexbox horizontal align="start" gap={12}>
-              <div className={styles.header}>
-                <Database size={20} style={{ color: cssVar.colorPrimary }} />
-              </div>
-              <Flexbox gap={4}>
-                <Text as="h4" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-                  {dataset.name}
-                </Text>
-                {dataset.description && <Text type="secondary">{dataset.description}</Text>}
-              </Flexbox>
-            </Flexbox>
-
-            <Flexbox horizontal gap={8}>
-              <Button
-                icon={Pencil}
-                size="small"
-                variant="outlined"
-                onClick={() => createDatasetEditModal({ dataset, onSuccess: handleRefresh })}
-              >
-                {t('common.edit')}
-              </Button>
-              <Button danger icon={Trash2} size="small" variant="outlined" onClick={handleDelete}>
-                {t('common.delete')}
-              </Button>
-            </Flexbox>
-          </Flexbox>
-
-          {/* Summary hero — headline case count + difficulty mix */}
+    <AsyncBoundary
+      data={dataset}
+      error={error}
+      errorVariant={'page'}
+      isEmpty={!dataset}
+      isLoading={isLoading}
+      onRetry={() => mutate()}
+    >
+      {dataset && (
+        <Flexbox horizontal style={{ flex: 1, minHeight: 0 }}>
           <Flexbox
-            horizontal
-            align="center"
-            className={styles.heroBand}
-            gap={16}
-            justify="space-between"
+            flex={1}
+            gap={24}
+            style={{ minWidth: 0, overflow: 'auto', paddingBlock: 24, paddingInline: 32 }}
           >
-            <Flexbox gap={6}>
-              <span className={styles.heroValue}>{total}</span>
-              <Text color={cssVar.colorTextTertiary} fontSize={12}>
-                {t('dataset.detail.testCases')}
-              </Text>
-            </Flexbox>
-            {difficulty.tagged > 0 && (
-              <Flexbox gap={8} style={{ maxWidth: 280, minWidth: 0, width: '100%' }}>
-                <SegmentBar segments={difficulty.segments} />
-                <Flexbox horizontal gap={12} justify="flex-end" style={{ flexWrap: 'wrap' }}>
-                  {(['easy', 'medium', 'hard'] as const).map((d) => (
-                    <Flexbox horizontal align="center" gap={6} key={d}>
-                      <span
-                        className={styles.summaryDot}
-                        style={{
-                          background:
-                            d === 'easy'
-                              ? cssVar.colorSuccess
-                              : d === 'medium'
-                                ? cssVar.colorWarning
-                                : cssVar.colorError,
-                        }}
-                      />
-                      <Text color={cssVar.colorTextTertiary} fontSize={12}>
-                        {t(`difficulty.${d}`)} {difficulty.counts[d]}
-                      </Text>
-                    </Flexbox>
-                  ))}
+            {/* Back link */}
+            <WorkspaceLink className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
+              <ArrowLeft size={16} />
+              {t('dataset.detail.backToBenchmark')}
+            </WorkspaceLink>
+
+            {/* Header */}
+            <Flexbox horizontal align="start" justify="space-between">
+              <Flexbox horizontal align="start" gap={12}>
+                <div className={styles.header}>
+                  <Database size={20} style={{ color: cssVar.colorPrimary }} />
+                </div>
+                <Flexbox gap={4}>
+                  <Text as="h4" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
+                    {dataset.name}
+                  </Text>
+                  {dataset.description && <Text type="secondary">{dataset.description}</Text>}
                 </Flexbox>
               </Flexbox>
-            )}
-          </Flexbox>
 
-          {/* Test Cases */}
-          <Flexbox gap={12}>
-            <Flexbox horizontal align="center" justify="space-between">
-              <Text weight={600}>{t('dataset.detail.testCases')}</Text>
-              <Text type="secondary">{t('dataset.detail.caseCount', { count: total })}</Text>
-            </Flexbox>
-
-            <div className={styles.tableWrapper}>
-              <TestCaseTable
-                datasetEvalMode={dataset?.evalMode}
-                diffFilter={diffFilter}
-                pagination={pagination}
-                search={search}
-                selectedId={previewCase?.id}
-                testCases={filteredCases}
-                total={total}
-                onDelete={handleDeleteCase}
-                onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
-                onPreview={setPreviewCase}
-                onAddCase={() =>
-                  createTestCaseCreateModal({ datasetId: datasetId!, onSuccess: handleRefresh })
-                }
-                onDiffFilterChange={(f) => {
-                  setDiffFilter(f);
-                  setPagination((prev) => ({ ...prev, current: 1 }));
-                }}
-                onEdit={(testCase) =>
-                  createTestCaseEditModal({ onSuccess: handleRefresh, testCase })
-                }
-                onImport={() =>
-                  createDatasetImportModal({ datasetId: datasetId!, onSuccess: handleRefresh })
-                }
-                onSearchChange={(v) => {
-                  setSearch(v);
-                  setPagination((prev) => ({ ...prev, current: 1 }));
-                }}
-              />
-            </div>
-          </Flexbox>
-
-          {/* Related Runs */}
-          <Flexbox gap={12}>
-            <Flexbox horizontal align="center" justify="space-between">
-              <Text weight={600}>
-                {t('dataset.detail.relatedRuns', { count: sortedRuns.length })}
-              </Text>
-              <Button
-                icon={Plus}
-                size="small"
-                onClick={() =>
-                  createRunCreateModal({
-                    benchmarkId: benchmarkId!,
-                    datasetId: datasetId!,
-                    datasetName: dataset.name,
-                  })
-                }
-              >
-                {t('dataset.detail.addRun')}
-              </Button>
-            </Flexbox>
-            {sortedRuns.length > 0 ? (
-              <Flexbox gap={12}>
-                {sortedRuns.map((run) => (
-                  <RunCard benchmarkId={benchmarkId!} key={run.id} run={run} />
-                ))}
+              <Flexbox horizontal gap={8}>
+                <Button
+                  icon={Pencil}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => createDatasetEditModal({ dataset, onSuccess: handleRefresh })}
+                >
+                  {t('common.edit')}
+                </Button>
+                <Button danger icon={Trash2} size="small" variant="outlined" onClick={handleDelete}>
+                  {t('common.delete')}
+                </Button>
               </Flexbox>
-            ) : (
-              <EmptyState
-                onCreate={() =>
-                  createRunCreateModal({
-                    benchmarkId: benchmarkId!,
-                    datasetId: datasetId!,
-                    datasetName: dataset.name,
-                  })
-                }
-              />
-            )}
-          </Flexbox>
-        </Flexbox>
+            </Flexbox>
 
-        {previewCase && (
-          <TestCasePreviewPanel testCase={previewCase} onClose={() => setPreviewCase(null)} />
-        )}
-      </Flexbox>
-    </>
+            {/* Summary hero — headline case count + difficulty mix */}
+            <Flexbox
+              horizontal
+              align="center"
+              className={styles.heroBand}
+              gap={16}
+              justify="space-between"
+            >
+              <Flexbox gap={6}>
+                <span className={styles.heroValue}>{total}</span>
+                <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                  {t('dataset.detail.testCases')}
+                </Text>
+              </Flexbox>
+              {difficulty.tagged > 0 && (
+                <Flexbox gap={8} style={{ maxWidth: 280, minWidth: 0, width: '100%' }}>
+                  <SegmentBar segments={difficulty.segments} />
+                  <Flexbox horizontal gap={12} justify="flex-end" style={{ flexWrap: 'wrap' }}>
+                    {(['easy', 'medium', 'hard'] as const).map((d) => (
+                      <Flexbox horizontal align="center" gap={6} key={d}>
+                        <span
+                          className={styles.summaryDot}
+                          style={{
+                            background:
+                              d === 'easy'
+                                ? cssVar.colorSuccess
+                                : d === 'medium'
+                                  ? cssVar.colorWarning
+                                  : cssVar.colorError,
+                          }}
+                        />
+                        <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                          {t(`difficulty.${d}`)} {difficulty.counts[d]}
+                        </Text>
+                      </Flexbox>
+                    ))}
+                  </Flexbox>
+                </Flexbox>
+              )}
+            </Flexbox>
+
+            {/* Test Cases */}
+            <Flexbox gap={12}>
+              <Flexbox horizontal align="center" justify="space-between">
+                <Text weight={600}>{t('dataset.detail.testCases')}</Text>
+                <Text type="secondary">{t('dataset.detail.caseCount', { count: total })}</Text>
+              </Flexbox>
+
+              <div className={styles.tableWrapper}>
+                <TestCaseTable
+                  datasetEvalMode={dataset?.evalMode}
+                  diffFilter={diffFilter}
+                  pagination={pagination}
+                  search={search}
+                  selectedId={previewCase?.id}
+                  testCases={filteredCases}
+                  total={total}
+                  onDelete={handleDeleteCase}
+                  onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
+                  onPreview={setPreviewCase}
+                  onAddCase={() =>
+                    createTestCaseCreateModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                  }
+                  onDiffFilterChange={(f) => {
+                    setDiffFilter(f);
+                    setPagination((prev) => ({ ...prev, current: 1 }));
+                  }}
+                  onEdit={(testCase) =>
+                    createTestCaseEditModal({ onSuccess: handleRefresh, testCase })
+                  }
+                  onImport={() =>
+                    createDatasetImportModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                  }
+                  onSearchChange={(v) => {
+                    setSearch(v);
+                    setPagination((prev) => ({ ...prev, current: 1 }));
+                  }}
+                />
+              </div>
+            </Flexbox>
+
+            {/* Related Runs */}
+            <Flexbox gap={12}>
+              <Flexbox horizontal align="center" justify="space-between">
+                <Text weight={600}>
+                  {t('dataset.detail.relatedRuns', { count: sortedRuns.length })}
+                </Text>
+                <Button
+                  icon={Plus}
+                  size="small"
+                  onClick={() =>
+                    createRunCreateModal({
+                      benchmarkId: benchmarkId!,
+                      datasetId: datasetId!,
+                      datasetName: dataset.name,
+                    })
+                  }
+                >
+                  {t('dataset.detail.addRun')}
+                </Button>
+              </Flexbox>
+              {sortedRuns.length > 0 ? (
+                <Flexbox gap={12}>
+                  {sortedRuns.map((run) => (
+                    <RunCard benchmarkId={benchmarkId!} key={run.id} run={run} />
+                  ))}
+                </Flexbox>
+              ) : (
+                <EmptyState
+                  onCreate={() =>
+                    createRunCreateModal({
+                      benchmarkId: benchmarkId!,
+                      datasetId: datasetId!,
+                      datasetName: dataset.name,
+                    })
+                  }
+                />
+              )}
+            </Flexbox>
+          </Flexbox>
+
+          {previewCase && (
+            <TestCasePreviewPanel testCase={previewCase} onClose={() => setPreviewCase(null)} />
+          )}
+        </Flexbox>
+      )}
+    </AsyncBoundary>
   );
 });
 

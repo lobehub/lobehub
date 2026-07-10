@@ -1,12 +1,7 @@
 import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
-import type { BuiltinRender, RenderDisplayControl } from '@lobechat/types';
+import type { BuiltinRender } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
-import {
-  isLinearMcpApiName,
-  LINEAR_MCP_PREFIX,
-  LINEAR_MCP_TOOL_NAMES,
-} from '../Inspector/linearMcpLabels';
 import Agent from './Agent';
 import AskUserQuestion from './AskUserQuestion';
 import Edit from './Edit';
@@ -63,32 +58,7 @@ export const ClaudeCodeRenders = new Proxy(FixedClaudeCodeRenders, {
   },
 }) as unknown as Record<string, BuiltinRender>;
 
-/**
- * Per-APIName default display control for CC tool renders.
- *
- * CC doesn't ship a LobeChat manifest (its tools come from Anthropic tool_use
- * blocks at runtime), so the store's manifest-based `getRenderDisplayControl`
- * can't reach these. The builtin-tools aggregator exposes this map via
- * `getBuiltinRenderDisplayControl` as a fallback.
- */
-const FixedClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
-  [ClaudeCodeApiName.Edit]: 'expand',
-  [ClaudeCodeApiName.SendMessage]: 'expand',
-  [ClaudeCodeApiName.TaskList]: 'expand',
-  [ClaudeCodeApiName.TaskUpdate]: 'expand',
-  [ClaudeCodeApiName.TodoWrite]: 'expand',
-  [ClaudeCodeApiName.Write]: 'expand',
-  ...Object.fromEntries(
-    LINEAR_MCP_TOOL_NAMES.map((tool) => [`${LINEAR_MCP_PREFIX}${tool}`, 'expand']),
-  ),
-};
-
-export const ClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = new Proxy(
-  FixedClaudeCodeRenderDisplayControls,
-  {
-    get: (target, prop) => {
-      if (typeof prop !== 'string') return undefined;
-      return target[prop] || (isLinearMcpApiName(prop) ? 'expand' : undefined);
-    },
-  },
-);
+export {
+  ClaudeCodeRenderDisplayControls,
+  resolveClaudeCodeRenderDisplayControl,
+} from './displayControls';

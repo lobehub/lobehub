@@ -13,7 +13,6 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
-import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
@@ -184,7 +183,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
               onSubtaskClick={handleSubtaskClick}
             />
           </Flexbox>
-          <TaskLatestActivity activities={taskDetail?.activities} />
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
             <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
             {scheduleNode}
@@ -206,7 +204,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
             {timeNode}
           </Flexbox>
         </Flexbox>
-        <TaskLatestActivity activities={taskDetail?.activities} />
       </Block>
     </ContextMenuTrigger>
   );

@@ -1,3 +1,7 @@
+import {
+  getTopicWorkingDirectoryEffectivePath,
+  getTopicWorkingDirectorySourcePath,
+} from '@lobechat/utils/client/topic';
 import dayjs from 'dayjs';
 
 import type { ChatTopic } from '@/types/topic';
@@ -31,9 +35,10 @@ export const matchesStatus = (topic: ChatTopic, status: StatusFilter): boolean =
 
 export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
   if (groupIds.length === 0) return true;
-  // ChatTopic doesn't surface groupId on the client type; fall back to metadata.workingDirectory
-  // as the project bucket key (matches sidebar ByProjectMode).
-  const project = topic.metadata?.workingDirectory ?? '';
+  // ChatTopic doesn't surface groupId on the client type; fall back to the
+  // working-directory source path as the project bucket key (matches sidebar
+  // ByProjectMode). A selected git worktree still belongs to its source repo.
+  const project = getTopicWorkingDirectorySourcePath(topic) ?? '';
   return groupIds.includes(project);
 };
 
@@ -88,12 +93,25 @@ export const sortTopics = (topics: ChatTopic[], sortBy: SortBy): ChatTopic[] => 
   return sorted;
 };
 
+const getPathName = (path: string): string => path.split(/[/\\]+/).findLast(Boolean) ?? path;
+
+export const getProjectFilterLabel = (topic: ChatTopic): string | undefined => {
+  const source = getTopicWorkingDirectorySourcePath(topic);
+  return source ? getPathName(source) : undefined;
+};
+
 export const getProjectLabel = (topic: ChatTopic): string | undefined => {
-  const wd = topic.metadata?.workingDirectory;
-  if (!wd) return undefined;
-  // Show last segment of path for readability
-  const parts = wd.split('/').filter(Boolean);
-  return parts.at(-1) ?? wd;
+  const source = getTopicWorkingDirectorySourcePath(topic);
+  const effective = getTopicWorkingDirectoryEffectivePath(topic);
+  const labelPath = effective ?? source;
+  if (!labelPath) return undefined;
+
+  const label = getPathName(labelPath);
+  const sourceName = source ? getPathName(source) : undefined;
+  const pathLabel = sourceName && sourceName !== label ? `${sourceName}/${label}` : label;
+  const branch = topic.metadata?.workingDirectoryConfig?.git?.branch;
+
+  return branch ? `${pathLabel} · ${branch}` : pathLabel;
 };
 
 /**

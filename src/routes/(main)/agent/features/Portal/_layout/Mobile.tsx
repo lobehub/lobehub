@@ -1,10 +1,11 @@
 'use client';
 
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';
@@ -36,7 +37,7 @@ const Layout = () => {
   );
 
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       destroyOnHidden
       className={cx(isPortalThread && styles.container)}
@@ -51,7 +52,7 @@ const Layout = () => {
       onCancel={() => clearPortalStack()}
     >
       <PortalContent renderBody={renderBody} />
-    </Modal>
+    </ImperativeModal>
   );
 };
 

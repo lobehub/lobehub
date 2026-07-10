@@ -20,6 +20,7 @@ import { useElectronStore } from '@/store/electron';
 export const useSelectExecutionTarget = (agentId: string) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   // The current machine's own gateway deviceId (desktop only); used to pin a
@@ -29,6 +30,13 @@ export const useSelectExecutionTarget = (agentId: string) => {
 
   return useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
+      // A workspace agent may only bind devices enrolled in the same workspace
+      // (server-enforced by `assertWorkspaceDeviceBinding`). `local` pins this
+      // machine's PERSONAL gateway deviceId — a different identity from its
+      // workspace enrollment — so the write would always be rejected; refuse it
+      // here instead of letting the save silently fail.
+      if (target === 'local' && isWorkspaceAgent) return;
+
       const boundDeviceId = agencyConfig?.boundDeviceId;
       let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
       if (target === 'local') {
@@ -53,6 +61,6 @@ export const useSelectExecutionTarget = (agentId: string) => {
         },
       });
     },
-    [agentId, agencyConfig, currentDeviceId, isHetero, updateAgentConfigById],
+    [agentId, agencyConfig, currentDeviceId, isHetero, isWorkspaceAgent, updateAgentConfigById],
   );
 };

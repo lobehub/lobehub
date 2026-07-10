@@ -9,7 +9,7 @@ import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-verifier-terminal');
 
-const TERMINAL_RESULT_STATUSES = new Set(['passed', 'failed', 'skipped']);
+const TERMINAL_RESULT_STATUSES = new Set(['passed', 'failed', 'errored', 'skipped']);
 
 export interface SettleVerifierCheckFromTerminalParams {
   checkItemId: string;
@@ -52,10 +52,12 @@ export const settleVerifierCheckFromTerminal = async (
 
     await resultModel.updateByCheckItem(run.id, checkItemId, {
       completedAt: new Date(),
-      status: 'failed',
+      // The verifier terminated without producing a verdict — an infra/verifier
+      // malfunction, not a delivery judgment. `errored` (no verdict) keeps it out
+      // of the delivery gate and the auto-repair set.
+      status: 'errored',
       suggestion: 'Review the verifier configuration and rerun verification.',
       toulmin: { limitation },
-      verdict: 'uncertain',
       verifierOperationId,
     });
 

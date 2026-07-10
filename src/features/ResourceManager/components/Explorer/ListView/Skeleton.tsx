@@ -1,20 +1,23 @@
 import { Center, Checkbox, Flexbox, Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 
-import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem/constants';
+import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH, getListViewMinWidth } from './ListItem/constants';
 
 interface ListViewSkeletonProps {
   columnWidths?: {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   count?: number;
+  showUploader?: boolean;
 }
 
 const ListViewSkeleton = ({
-  columnWidths = { date: FILE_DATE_WIDTH, name: 400, size: FILE_SIZE_WIDTH },
+  columnWidths = { date: FILE_DATE_WIDTH, name: 400, size: FILE_SIZE_WIDTH, uploader: 180 },
   count = 6,
+  showUploader = true,
 }: ListViewSkeletonProps) => {
   // Calculate opacity gradient from 100% to 20%
   const getOpacity = (index: number) => 1 - (index / (count - 1)) * 0.8;
@@ -31,6 +34,7 @@ const ListViewSkeleton = ({
           style={{
             background: index % 2 === 0 ? cssVar.colorFillQuaternary : 'transparent',
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            minWidth: getListViewMinWidth(showUploader),
             opacity: getOpacity(index),
           }}
         >
@@ -54,6 +58,18 @@ const ListViewSkeleton = ({
           <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.date}>
             <Skeleton.Button active style={{ height: 16, width: '80%' }} />
           </Flexbox>
+          {showUploader && (
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={8}
+              style={{ flexShrink: 0, paddingInline: '0 24px' }}
+              width={columnWidths.uploader}
+            >
+              <Skeleton.Avatar active size={20} />
+              <Skeleton.Button active style={{ height: 16, width: '70%' }} />
+            </Flexbox>
+          )}
           <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.size}>
             <Skeleton.Button active style={{ height: 16, width: '60%' }} />
           </Flexbox>

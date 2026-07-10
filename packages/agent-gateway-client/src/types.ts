@@ -83,8 +83,31 @@ export interface StreamChunkData {
 
 // ─── Typed Event Data ───
 
+/**
+ * The assistant message row the server created for this step.
+ *
+ * `id` is always present. Newer servers also ship the seed fields the client
+ * needs to insert the message into its local store: the `step_start`
+ * uiMessages snapshot is resolved BEFORE this row is created, so the snapshot
+ * never contains it — without a local insert, every stream_chunk/stream_end
+ * dispatch for the step targets a missing id and is silently dropped
+ * (LOBE-11501). Older servers send only `{ id }`; clients fall back to a DB
+ * refetch in that case.
+ */
+export interface StreamStartAssistantMessage {
+  agentId?: string | null;
+  groupId?: string | null;
+  id: string;
+  model?: string | null;
+  parentId?: string | null;
+  provider?: string | null;
+  role?: string;
+  threadId?: string | null;
+  topicId?: string | null;
+}
+
 export interface StreamStartData {
-  assistantMessage: { id: string };
+  assistantMessage: StreamStartAssistantMessage;
   model?: string;
   provider?: string;
 }
@@ -200,11 +223,7 @@ export interface ToolResultMessage {
 }
 
 export type ClientMessage =
-  | AuthMessage
-  | HeartbeatMessage
-  | InterruptMessage
-  | ResumeMessage
-  | ToolResultMessage;
+  AuthMessage | HeartbeatMessage | InterruptMessage | ResumeMessage | ToolResultMessage;
 
 // Server → Client
 export interface AuthSuccessMessage {
@@ -245,12 +264,7 @@ export interface SessionCompleteMessage {
  * Authoritative session status. Mirrors the gateway DO's `SessionStatus`.
  */
 export type SessionStatus =
-  | 'running'
-  | 'waiting_input'
-  | 'waiting_confirmation'
-  | 'completed'
-  | 'error'
-  | 'interrupted';
+  'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
 
 /**
  * Server → Client: sent right after a `resume` replay, carrying the DO's
@@ -277,11 +291,7 @@ export type ServerMessage =
 // ─── Connection Status ───
 
 export type ConnectionStatus =
-  | 'authenticating'
-  | 'connected'
-  | 'connecting'
-  | 'disconnected'
-  | 'reconnecting';
+  'authenticating' | 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
 
 // ─── Client Events ───
 

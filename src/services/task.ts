@@ -175,11 +175,18 @@ class TaskService {
 
   // ── Transfer / Copy ──
 
-  transferTask = async (taskId: string, targetWorkspaceId: string | null) =>
-    lambdaClient.task.transferTask.mutate({ targetWorkspaceId, taskId });
+  transferTask = async (
+    taskId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) => lambdaClient.task.transferTask.mutate({ targetVisibility, targetWorkspaceId, taskId });
 
-  copyTaskToWorkspace = async (taskId: string, targetWorkspaceId: string | null) =>
-    lambdaClient.task.copyTaskToWorkspace.mutate({ targetWorkspaceId, taskId });
+  copyTaskToWorkspace = async (
+    taskId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) =>
+    lambdaClient.task.copyTaskToWorkspace.mutate({ targetVisibility, targetWorkspaceId, taskId });
 }
 
 export const taskService = new TaskService();

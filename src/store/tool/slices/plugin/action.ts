@@ -42,11 +42,6 @@ export class PluginActionImpl {
     this.#set({ installedPlugins: data }, false, 'refreshPlugins');
   };
 
-  removeAllPlugins = async (): Promise<void> => {
-    await pluginService.removeAllPlugins();
-    await this.#get().refreshPlugins();
-  };
-
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
     this.#set(
       { pluginInstallLoading: { ...this.#get().pluginInstallLoading, [id]: loading } },

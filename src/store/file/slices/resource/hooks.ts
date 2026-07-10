@@ -82,10 +82,16 @@ export const useFetchResources = (params: ResourceQueryParams | null, enable: an
   useEffect(() => {
     if (!data || !params) return;
 
-    const { resourceList, resourceMap } = useFileStore.getState();
+    const { hasMore, queryParams, resourceList, resourceMap, total } = useFileStore.getState();
     const merged = mergeServerResourcesWithOptimistic(data.items, resourceMap, params);
 
-    if (!isEqual(merged.resourceList, resourceList) || !isEqual(merged.resourceMap, resourceMap)) {
+    if (
+      !isEqual(queryParams, params) ||
+      hasMore !== data.hasMore ||
+      total !== data.total ||
+      !isEqual(merged.resourceList, resourceList) ||
+      !isEqual(merged.resourceMap, resourceMap)
+    ) {
       useFileStore.setState(
         {
           hasMore: data.hasMore,

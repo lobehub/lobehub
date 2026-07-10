@@ -18,6 +18,26 @@ a confirm step stating exactly what happens → an in-progress view with **dismi
 locked** → a done (or error) view in the same modal. Never fire-and-forget with only a
 toast; never leave a dead spinner.
 
+But **the confirm modal is not the progress surface**. That state-machine is for ops that
+_earn_ a modal — multi-step, or where watching progress is the point. A **single
+slow-but-atomic** op behind an _already-shown_ confirm — a `git worktree remove`, a file
+delete that round-trips a device, any \~seconds-long backend call — is the opposite trap:
+holding the confirm dialog open and **blocking on the round-trip**, its OK button spinning
+for the whole call, freezes a dialog that should have closed the instant the user
+committed. "In-progress (locked)" means the user can't dismiss a surface that's _showing
+them progress_ — it does not license a confirm box held hostage to a 30s call it isn't even
+narrating. Close the confirm the moment the user commits (a base-ui `confirmModal` `onOk`
+that returns **synchronously**, not an `async` thenable the modal awaits) and move the
+in-progress signal onto the **originating surface**: an optimistic removal of the row, or a
+per-row "removing…" spinner that also guards a duplicate trigger, reconciled on settle via
+the list revalidate. This is **not** the "fire-and-forget with only a toast" the rule above
+forbids — failure still surfaces (an error toast carrying the real reason: a
+`git worktree remove` _refuses_ a dirty worktree), so the shape is confirm → (dialog closes)
+→ surface shows in-progress → done/**error**. One inversion of the usual "a delete's success
+toast is redundant, the row vanishing is the confirmation": when the affected list lives
+behind an **already-dismissed** surface (the dropdown that hosted the row closed on confirm),
+a **success** toast _is_ warranted — it's the only signal the backgrounded op finished.
+
 A **long-running or costly** async op — an AI generation (image / video), an export, a
 large upload, a batch job that runs for seconds-to-minutes and often bills tokens — owes one
 more affordance: a **Cancel / Stop while it runs**. "In-progress (locked)" means the user
@@ -106,6 +126,16 @@ triggers is a lie the user waits on.
 > old value — visible when list + detail are mounted together (Chat portal) or on cached
 > back-navigation (`revalidateOnFocus:false`). ✅ Share one normalized map, or invalidate the list
 > on every successful field write (not a gated subset).
+> ❌ **Confirm dialog held hostage to a slow op**: the worktree switcher's remove holds the
+> danger `confirmModal` open and blocks on `await gitService.removeGitWorktree()` — a
+> `git worktree remove` with a 30s timeout **plus** a device round-trip — so after the user
+> already confirmed, the dialog sits with its OK button spinning for seconds
+> (`ChatInput/ControlBar/WorktreeSwitcher.tsx`). ✅ `onOk` returns **synchronously** and runs
+> the removal detached: the dialog closes instantly, the originating row shows a "removing…"
+> spinner (which also guards a duplicate delete), success + failure surface as bottom-left
+> toasts (`toast.error` carries the real git reason — e.g. a dirty worktree), and the list
+> reconciles on the `onWorktreesChange` revalidate. The success toast stays because the
+> dropdown that hosted the row is already closed — it's the only "it finished" signal.
 
 **Checklist**
 
@@ -118,6 +148,7 @@ triggers is a lie the user waits on.
 - [ ] "Auto-closing / redirecting in Ns" copy only when the close / redirect can actually fire (e.g. `window.opener` present); otherwise show a manual action. _(Certainty)_
 - [ ] Bulk ⇄ single-item parity (toolbar action also on the item, and vice versa). _(Certainty)_
 - [ ] Bulk / irreversible / async: confirm → in-progress (locked) → done/error, one surface. _(Certainty・Meaningful)_
+- [ ] A **slow but atomic** confirm-gated op (device/file delete, git op, seconds-long call) closes the confirm **immediately** (non-blocking `onOk` that returns synchronously) and shows in-progress on the **originating surface** (optimistic removal / row spinner) — never a confirm dialog held spinning on the round-trip; done/error still surface (a success toast is warranted when the affected list is already dismissed). _(Natural・Certainty)_
 - [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (abort the work), not just delete-after-the-fact, and keeps an **in-place Retry** on the error state — named as a generation-class norm so an absent Cancel is caught. _(Meaningful・Certainty)_
 
 ## 3.2 One primary button, and it's the visually dominant one・Certainty

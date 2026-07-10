@@ -298,6 +298,102 @@ describe('StreamEventManager', () => {
     });
   });
 
+  describe('readEventsOnce', () => {
+    it("resolves '$' to the current tail and returns it (not '$') on timeout", async () => {
+      // Stream has a tail entry; xread then times out (no newer events).
+      mockRedis.xrevrange.mockResolvedValue([['7-0', ['type', 'stream_chunk']]]);
+      mockRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '$', 25_000);
+
+      // '$' was resolved to the concrete tail before blocking…
+      expect(mockRedis.xrevrange).toHaveBeenCalledWith(
+        'agent_runtime_stream:op-1',
+        '+',
+        '-',
+        'COUNT',
+        1,
+      );
+      expect(mockRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        25_000,
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '7-0',
+      );
+      // …so the timeout hands back the concrete id, keeping the next poll gap-free.
+      expect(res).toEqual({ events: [], lastEventId: '7-0' });
+    });
+
+    it("resolves '$' on an empty stream to '0'", async () => {
+      mockRedis.xrevrange.mockResolvedValue([]);
+      mockRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '$');
+
+      expect(mockRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        expect.any(Number),
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '0',
+      );
+      expect(res).toEqual({ events: [], lastEventId: '0' });
+    });
+
+    it('does not resolve an explicit cursor and blocks from it directly', async () => {
+      mockRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(mockRedis.xrevrange).not.toHaveBeenCalled();
+      expect(mockRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        expect.any(Number),
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '5-0',
+      );
+      expect(res).toEqual({ events: [], lastEventId: '5-0' });
+    });
+
+    it('parses events and advances the cursor to the last id', async () => {
+      mockRedis.xread.mockResolvedValue([
+        [
+          'agent_runtime_stream:op-1',
+          [
+            [
+              '8-0',
+              [
+                'type',
+                'agent_intervention_response',
+                'stepIndex',
+                '2',
+                'operationId',
+                'op-1',
+                'data',
+                JSON.stringify({ toolCallId: 't1' }),
+                'timestamp',
+                '123',
+              ],
+            ],
+          ],
+        ],
+      ]);
+
+      const res = await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(res.lastEventId).toBe('8-0');
+      expect(res.events).toHaveLength(1);
+      expect(res.events[0]).toMatchObject({
+        id: '8-0',
+        type: 'agent_intervention_response',
+        stepIndex: 2,
+        data: { toolCallId: 't1' },
+      });
+    });
+  });
+
   describe('stripFinalStateInEventData', () => {
     it('returns data unchanged when finalState is absent', () => {
       const data = { phase: 'execution_complete', reason: 'done' };

@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import type { ContextSelection, PageSelection } from '@lobechat/types';
 
 import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { chatGroupService } from '@/services/chatGroup';
@@ -20,9 +21,12 @@ import { type StarterMode } from './initialState';
 const n = setNamespace('homeInput');
 
 interface SendMessageWithEditorParams {
+  contextSelections?: ContextSelection[];
   editorData?: Record<string, any>;
   groupId?: string;
   message: string;
+  pageSelections?: PageSelection[];
+  workspaceSlug?: string | null;
 }
 
 /**
@@ -62,9 +66,12 @@ export class HomeInputActionImpl {
   };
 
   sendAsAgent = async ({
+    contextSelections,
     editorData,
     groupId,
     message,
+    pageSelections,
+    workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
@@ -130,9 +137,15 @@ export class HomeInputActionImpl {
 
         if (agentBuilderId) {
           await sendMessage({
-            context: { agentId: agentBuilderId, scope: 'agent_builder' },
+            context: {
+              agentId: agentBuilderId,
+              scope: 'agent_builder',
+              ...(workspaceSlug ? { workspaceSlug } : {}),
+            },
+            contextSelections,
             editorData,
             message,
+            pageSelections,
           });
         }
       }
@@ -147,9 +160,12 @@ export class HomeInputActionImpl {
   };
 
   sendAsGroup = async ({
+    contextSelections,
     editorData,
     groupId,
     message,
+    pageSelections,
+    workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
@@ -201,9 +217,15 @@ export class HomeInputActionImpl {
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
-          context: { agentId: groupAgentBuilderId, scope: 'group_agent_builder' },
+          context: {
+            agentId: groupAgentBuilderId,
+            scope: 'group_agent_builder',
+            ...(workspaceSlug ? { workspaceSlug } : {}),
+          },
+          contextSelections,
           editorData,
           message,
+          pageSelections,
         });
       }
 
@@ -224,7 +246,13 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
   };
 
-  sendAsWrite = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
+  sendAsWrite = async ({
+    contextSelections,
+    editorData,
+    message,
+    pageSelections,
+    workspaceSlug,
+  }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
@@ -264,9 +292,16 @@ export class HomeInputActionImpl {
           // has not mounted yet, so the page editor runtime singleton may still
           // be bound to the previously open document — relying on its fallback
           // here would scope server-side PageAgent tools to the wrong document.
-          context: { agentId: pageAgentId, documentId: newDoc.id, scope: 'page' },
+          context: {
+            agentId: pageAgentId,
+            documentId: newDoc.id,
+            scope: 'page',
+            ...(workspaceSlug ? { workspaceSlug } : {}),
+          },
+          contextSelections,
           editorData,
           message,
+          pageSelections,
         });
       }
 
