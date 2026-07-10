@@ -550,6 +550,9 @@ describe('convertUsage', () => {
         cache_write_tokens: 400_000,
       },
       output_tokens: 0,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
       total_tokens: 1_000_000,
     } as OpenAI.Responses.ResponseUsage;
 

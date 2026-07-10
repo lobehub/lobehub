@@ -36,7 +36,11 @@ export class ServerLLMTransport implements LLMTransport {
       parentId: input.parentId,
       provider: input.provider,
       stepLabel: input.stepLabel,
-      tooling: resolveServerCallLlmTooling(this.ctx, input.state),
+      tooling: resolveServerCallLlmTooling(
+        this.ctx,
+        input.state,
+        input.instruction.payload.allowedToolNames,
+      ),
     })(input.instruction, input.state);
   }
 

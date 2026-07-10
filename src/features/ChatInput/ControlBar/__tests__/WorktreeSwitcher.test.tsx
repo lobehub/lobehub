@@ -32,7 +32,7 @@ vi.mock('@/services/git', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Icon: () => <span data-testid="icon" />,
+  Icon: ({ icon }: any) => <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />,
   Input: ({ value, onChange, placeholder }: any) => (
     <input placeholder={placeholder} value={value} onChange={onChange} />
   ),
@@ -87,6 +87,14 @@ beforeEach(() => {
   removeGitWorktreeMock.mockResolvedValue({ success: true });
 });
 
+const triggerIconName = () =>
+  within(screen.getByTestId('worktree-dropdown-trigger'))
+    .getAllByTestId('icon')[0]
+    .getAttribute('data-icon');
+
+/** Text of the worktree row owning `el` — rows render as `<button>` (mocked DropdownMenuItem). */
+const rowTextOf = (el: HTMLElement) => el.closest('button')?.textContent ?? '';
+
 describe('WorktreeSwitcher', () => {
   it('keeps the dropdown trigger anchored to a stable DOM wrapper', () => {
     render(
@@ -116,6 +124,62 @@ describe('WorktreeSwitcher', () => {
     const trigger = screen.getByTestId('worktree-dropdown-trigger');
     expect(trigger.firstElementChild?.tagName).toBe('DIV');
     expect(within(trigger).getByTestId('worktree-tooltip')).toBeTruthy();
+  });
+
+  it('shows a branch icon on the main worktree and a fork icon on a linked one', () => {
+    const cleanStatus = { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
+    const worktrees = [
+      { branch: 'canary', current: true, path: '/repo', status: cleanStatus },
+      { branch: 'feat/x', current: false, path: '/repo-feat', status: cleanStatus },
+    ];
+
+    const { rerender } = render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="canary"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={worktrees}
+      />,
+    );
+    expect(triggerIconName()).toBe('GitBranch');
+
+    // The user picked the linked worktree directly as the working directory, so
+    // `sourcePath` is the worktree itself — the icon must still read "worktree".
+    rerender(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/x"
+        path="/repo-feat"
+        sourcePath="/repo-feat"
+        worktrees={[
+          { ...worktrees[0], current: false },
+          { ...worktrees[1], current: true },
+        ]}
+      />,
+    );
+    expect(triggerIconName()).toBe('GitFork');
+  });
+
+  it('treats every checkout of a bare repository as a linked worktree', () => {
+    const cleanStatus = { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="canary"
+        path="/repo/canary"
+        sourcePath="/repo/canary"
+        worktrees={[
+          { bare: true, current: false, path: '/repo' },
+          { branch: 'canary', current: true, path: '/repo/canary', status: cleanStatus },
+        ]}
+      />,
+    );
+
+    expect(triggerIconName()).toBe('GitFork');
   });
 
   it('renders dirty stats and omits clean labels in the worktree list', () => {
@@ -187,6 +251,32 @@ describe('WorktreeSwitcher', () => {
     expect(screen.getByText('/Users/me/projects/project')).toBeTruthy();
     expect(screen.getByText('../project-fix')).toBeTruthy();
     expect(screen.getByText('/tmp/project-scratch')).toBeTruthy();
+  });
+
+  it('never offers to remove the main worktree, even when it is not the source path', () => {
+    const cleanStatus = { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/x"
+        path="/repo-feat"
+        sourcePath="/repo-feat"
+        worktrees={[
+          // main worktree — listed first, and `current: false` because the
+          // conversation runs on a linked one. `git worktree remove` would error.
+          { branch: 'canary', current: false, path: '/repo', status: cleanStatus },
+          { branch: 'feat/x', current: true, path: '/repo-feat', status: cleanStatus },
+          { branch: 'feat/y', current: false, path: '/repo-other', status: cleanStatus },
+        ]}
+      />,
+    );
+
+    // Only `/repo-other` is removable: `/repo` is the main worktree and
+    // `/repo-feat` is both the current worktree and the conversation's source.
+    const removeButtons = screen.getAllByLabelText('workingDirectory.removeWorktreeAction');
+    expect(removeButtons).toHaveLength(1);
+    expect(rowTextOf(removeButtons[0])).toContain('feat/y');
   });
 
   it('confirms and removes a non-current worktree', async () => {

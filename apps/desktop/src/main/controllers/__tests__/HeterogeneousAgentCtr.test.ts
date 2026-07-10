@@ -442,6 +442,9 @@ describe('HeterogeneousAgentCtr', () => {
           cwd: FAKE_DESKTOP_PATH,
           operationId: 'op-test',
           stdinPayload: expect.stringContaining('watch ci'),
+          // `Read` on an image echoes base64; without this the SDK path would
+          // persist an `[Image: …]` placeholder instead of a thumbnail.
+          uploadImage: expect.any(Function),
         }),
       );
 
@@ -681,9 +684,9 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('spawns through the detector-resolved absolute path when the bare command is off PATH', async () => {
       // Codex desktop app case: `codex` is not on PATH, but the preflight
-      // detector finds the CLI bundled inside Codex.app. Spawning the bare
+      // detector finds the CLI bundled inside ChatGPT.app. Spawning the bare
       // command would ENOENT — spawn must use the resolved absolute path.
-      const resolvedPath = '/Applications/Codex.app/Contents/Resources/codex';
+      const resolvedPath = '/Applications/ChatGPT.app/Contents/Resources/codex';
       const detect = vi.fn().mockResolvedValue({ available: true, path: resolvedPath });
       const { proc } = createFakeProc();
       nextFakeProc = proc;

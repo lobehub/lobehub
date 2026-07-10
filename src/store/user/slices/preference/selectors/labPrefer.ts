@@ -7,6 +7,10 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentDocumentFloatingChatPanel ??
     DEFAULT_PREFERENCE.lab?.enableAgentDocumentFloatingChatPanel ??
     false,
+  enableAgentGraphConfig: (s: UserState): boolean =>
+    s.preference.lab?.enableAgentGraphConfig ??
+    DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??
+    false,
   enableAgentSelfIteration: (s: UserState): boolean =>
     s.preference.lab?.enableAgentSelfIteration ?? false,
   enableFleet: (s: UserState): boolean => s.preference.lab?.enableFleet ?? false,

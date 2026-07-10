@@ -18,6 +18,32 @@ describe('ClaudeCodeAdapter', () => {
       expect(adapter.sessionId).toBe('sess_123');
     });
 
+    // `system init` beta-tags the id; every later event reports it clean. The
+    // renderer stamps the assistant from this event, so the tag must not leak.
+    it('strips the beta marker from the init model id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus-4-8[1m]',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus-4-8');
+    });
+
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
+    });
+
     it('emits visible_output_end before agent_runtime_end on success result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });

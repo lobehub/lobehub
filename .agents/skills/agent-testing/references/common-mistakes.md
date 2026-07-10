@@ -211,6 +211,39 @@ skill's job to solve and then iterate back into these logs.
 
 ---
 
+## Case 8b — Handing the user the sign-in click when the app under test is signed out
+
+**Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
+earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
+the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
+"skip the screenshot".
+
+**Why it's wrong**: this is Case 8 wearing a different hat. `auth.md` says "Electron: log in once manually
+in the app" — that line is addressed to the **agent**, not the user. Auth is environment mechanics, and the
+standing rule is that the skill owns those end to end. The user's words: " 你以后都自己点 sign in 授权，不应
+该让我操作 ".
+
+**What it breaks**: burns a round on a question the user doesn't want, and stalls a UI-touching change
+(Case 9 / Case 10) one click short of its screenshot.
+
+**Correct approach**: drive the sign-in yourself — click the app's own "Sign in" entry, follow the OAuth
+flow in the browser it opens, and get back into the app. Only escalate when a step genuinely needs
+something you cannot supply (a 2FA push on their phone), and then name the exact blocking step instead of
+offering to drop the evidence.
+
+**What this run changed**: `electron-dev.sh stop <id>` used to delete the instance's userData and its login
+with it, so every run re-entered the sign-in flow. It now snapshots the login into
+`~/.lobehub/agent-testing/electron-login` first, and `start` seeds new instances from that snapshot
+(`login-status` shows the source + expiry; `save-login <id>` captures a live instance before anything
+risky, since a _killed_ instance loses its rotated refresh token).
+
+**Corollary**: never assume a profile is signed in because it exists — probe for a real signed-in state
+(`user().user?.id`, or a cheap authed mutation) before building a fixture on top of it. A rendered sidebar
+is not proof: the signed-out onboarding screen has text too, so `innerText.length > 50` passes while
+`createAgent` returns `UNAUTHORIZED`.
+
+---
+
 ## Case 9 — Self-judging a screenshot as "too costly" and asking the user to picture the result
 
 **Wrong approach**: after a small user-facing UI change (a padding tweak), skipping

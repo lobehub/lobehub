@@ -1478,6 +1478,22 @@ export const executeHeterogeneousAgent = async (
             });
           },
         );
+        // Mirror ONLY model/provider into the store: content/reasoning already
+        // stream live via the gateway handler's raw stream_chunk forward. The
+        // CLI's model has no live path at all — the run's FIRST assistant is
+        // already in `dbMessagesMap` when the run starts, so the gateway's
+        // stream_start seed insert (its one model→store hop) is skipped for it
+        // and the flush above is DB-only. `provider` is already seeded from the
+        // agent config; re-stamping it keeps the store and the row identical.
+        const liveUpdate: Record<string, any> = {};
+        if (intent.model) liveUpdate.model = intent.model;
+        if (intent.provider) liveUpdate.provider = intent.provider;
+        if (Object.keys(liveUpdate).length > 0) {
+          get().internal_dispatchMessage(
+            { id: intent.messageId, type: 'updateMessage', value: liveUpdate },
+            { operationId },
+          );
+        }
         return;
       }
 
@@ -1604,6 +1620,14 @@ export const executeHeterogeneousAgent = async (
         };
         messageWriteBatcher.enqueueUpdateMessage(intent.messageId, update, messageWriteCtx, (err) =>
           console.error('[HeterogeneousAgent] Failed to record main usage:', err),
+        );
+        // Same payload into the store so usage + model/provider render live —
+        // the subagent interpreter's `recordUsage` already does this via
+        // `stream.update`. Dispatching `update` verbatim keeps the store's
+        // metadata identical to the row the batcher writes.
+        get().internal_dispatchMessage(
+          { id: intent.messageId, type: 'updateMessage', value: update as any },
+          { operationId },
         );
         return;
       }

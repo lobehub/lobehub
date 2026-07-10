@@ -58,12 +58,11 @@ export interface UploadFileBufferInput {
 
 /**
  * Upload an in-memory buffer to S3 via a pre-signed URL and create the file
- * record. This is the buffer-based core shared by {@link uploadLocalFile} (path
- * source) and in-memory producers such as the heterogeneous-agent image echo.
+ * record — the buffer-based core behind {@link uploadLocalFile}.
  *
  * @returns the created file record (`{ id, url, ... }`)
  */
-export const uploadFileBuffer = async (
+const uploadFileBuffer = async (
   client: TrpcClient,
   { buffer, fileName, fileType }: UploadFileBufferInput,
   options: UploadLocalFileOptions = {},

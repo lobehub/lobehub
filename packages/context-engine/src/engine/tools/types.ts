@@ -220,6 +220,7 @@ export interface ResolvedToolSet {
   enabledToolIds: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
+  promptManifestMap: Record<string, LobeToolManifest>;
   sourceMap: Record<string, ToolSource>;
   tools: UniformTool[];
 }

@@ -487,7 +487,7 @@ export const buildServerCallLlmContext = async ({
     systemRole: agentConfig.systemRole ?? undefined,
     toolDiscoveryConfig,
     toolsConfig: {
-      manifests: Object.values(resolved.manifestMap),
+      manifests: Object.values(resolved.promptManifestMap),
       tools: resolved.enabledToolIds,
     },
     userMemory: state.metadata?.userMemory,

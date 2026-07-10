@@ -110,12 +110,53 @@ describe('codex model metadata helpers', () => {
     });
   });
 
-  it('reads the latest cumulative usage from a Codex rollout session file', async () => {
+  it('prefers real rollout cumulative usage over legacy usage fields', async () => {
     const codexHome = await makeTempCodexHome();
     const sessionDir = path.join(codexHome, 'sessions', '2026', '06', '11');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
       path.join(sessionDir, 'rollout-2026-06-11T01-31-27-thread-usage.jsonl'),
+      [
+        JSON.stringify({
+          payload: {
+            info: {
+              total_token_usage: {
+                cached_input_tokens: 5,
+                input_tokens: 25,
+                output_tokens: 9,
+                reasoning_output_tokens: 4,
+              },
+            },
+            type: 'token_count',
+            usage: { input_tokens: 100, output_tokens: 100 },
+          },
+          type: 'event_msg',
+          usage: { input_tokens: 200, output_tokens: 200 },
+        }),
+      ].join('\n'),
+    );
+
+    await expect(
+      readCodexSessionModel('thread-usage', { env: { CODEX_HOME: codexHome } }),
+    ).resolves.toMatchObject({
+      cumulativeUsage: {
+        inputCachedTokens: 5,
+        inputCacheMissTokens: 20,
+        outputReasoningTokens: 4,
+        outputTextTokens: 5,
+        totalInputTokens: 25,
+        totalOutputTokens: 9,
+        totalTokens: 34,
+      },
+    });
+  });
+
+  it('keeps legacy rollout usage fields as a fallback', async () => {
+    const codexHome = await makeTempCodexHome();
+    const sessionDir = path.join(codexHome, 'sessions', '2026', '06', '11');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      path.join(sessionDir, 'rollout-2026-06-11T01-31-27-thread-legacy-usage.jsonl'),
       [
         JSON.stringify({
           payload: { usage: { input_tokens: 10, output_tokens: 2 } },
@@ -129,7 +170,7 @@ describe('codex model metadata helpers', () => {
     );
 
     await expect(
-      readCodexSessionModel('thread-usage', { env: { CODEX_HOME: codexHome } }),
+      readCodexSessionModel('thread-legacy-usage', { env: { CODEX_HOME: codexHome } }),
     ).resolves.toMatchObject({
       cumulativeUsage: {
         inputCachedTokens: 5,

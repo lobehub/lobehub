@@ -263,4 +263,140 @@ describe('createGatewayEventHandler', () => {
       visibleLoadingDone: true,
     });
   });
+
+  // ────────────────────────────────────────────────────
+  // Gateway completion notification body
+  // ────────────────────────────────────────────────────
+
+  const createLifecycle = () => ({
+    afterRunComplete: vi.fn().mockResolvedValue(undefined),
+    completeRun: vi.fn().mockResolvedValue({ requeued: false }),
+  });
+
+  it('passes the streamed report text as the gateway completion notification body', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    // Stream the report text so `accumulatedContent` (the optimistic in-memory
+    // source) holds it, then end the run with no terminal uiMessages snapshot.
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final report.' }));
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(lifecycle.completeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed' }),
+    );
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: { content: 'The final report.' },
+        status: 'completed',
+      }),
+    );
+  });
+
+  it('prefers the terminal snapshot final assistant text over the streamed accumulator', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    // The stream dropped the tail; the server-finalized snapshot has the whole
+    // report, and the chat is reconciled to it — so must the notification be.
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final rep' }));
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: 'run it', id: 'user-msg', role: 'user' },
+          { content: 'The final report.', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: 'The final report.' } }),
+    );
+  });
+
+  it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final report.' }));
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: '', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: 'The final report.' } }),
+    );
+  });
+
+  it('passes empty notification content when nothing streamed so afterRunComplete can fall back to the store', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: '' } }),
+    );
+  });
+
+  it('does not fire afterRunComplete on a cancelled (non-completed) gateway run', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial' }));
+    handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
+    await flush();
+
+    expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
+  });
 });

@@ -26,6 +26,7 @@ export interface ServerCallLlmTooling {
 export const resolveServerCallLlmTooling = (
   ctx: Pick<RuntimeExecutorContext, 'operationId' | 'stepIndex'>,
   state: AgentState,
+  allowedToolNames?: string[],
 ): ServerCallLlmTooling => {
   // Resolve tools via ToolResolver (unified tool injection).
   //
@@ -56,6 +57,7 @@ export const resolveServerCallLlmTooling = (
     operationToolSet,
     stepDelta,
     state.activatedStepTools ?? [],
+    allowedToolNames,
   );
 
   const tools = resolved.tools.length > 0 ? resolved.tools : undefined;

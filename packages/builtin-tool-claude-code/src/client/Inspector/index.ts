@@ -25,6 +25,7 @@ import { TodoWriteInspector } from './TodoWrite';
 import { ToolSearchInspector } from './ToolSearch';
 import { WebFetchInspector } from './WebFetch';
 import { WebSearchInspector } from './WebSearch';
+import { EnterWorktreeInspector, ExitWorktreeInspector } from './Worktree';
 import { WriteInspector } from './Write';
 
 // CC's own tool names (Bash / Edit / Glob / Grep / Read / Write) are already
@@ -40,6 +41,8 @@ const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
   [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
   [ClaudeCodeApiName.Edit]: EditInspector,
+  [ClaudeCodeApiName.EnterWorktree]: EnterWorktreeInspector,
+  [ClaudeCodeApiName.ExitWorktree]: ExitWorktreeInspector,
   [ClaudeCodeApiName.Glob]: createGlobLocalFilesInspector(ClaudeCodeApiName.Glob),
   [ClaudeCodeApiName.Grep]: createGrepContentInspector({
     noResultsKey: 'No results',

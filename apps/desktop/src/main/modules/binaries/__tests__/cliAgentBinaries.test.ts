@@ -239,7 +239,7 @@ describe('cliAgentBinaries', () => {
       }
     });
 
-    it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
+    it('falls back to the ChatGPT.app bundled CLI when `codex` is not on any PATH', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       // Deterministic env: no SHELL → no login-shell lookup, merged PATH
@@ -255,13 +255,13 @@ describe('cliAgentBinaries', () => {
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
         expect(status.version).toBe('codex-cli 0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
         expect(execFileMock.mock.calls[1]![0]).toBe(
-          '/Applications/Codex.app/Contents/Resources/codex',
+          '/Applications/ChatGPT.app/Contents/Resources/codex',
         );
       } finally {
         process.env.PATH = originalPath;
@@ -278,15 +278,17 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications candidate
-        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(3);
-        expect(execFileMock.mock.calls[2]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(5);
+        expect(execFileMock.mock.calls[4]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {

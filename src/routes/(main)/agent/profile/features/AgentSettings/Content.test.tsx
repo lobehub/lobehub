@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'inbox-agent',
     config: {},
+    isCurrentAgentHeterogeneous: false,
     isInbox: true,
     meta: {},
     optimisticUpdateAgentConfig: vi.fn(),
@@ -61,6 +62,8 @@ vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     currentAgentConfig: (state: typeof mocks.agentState) => state.config,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
+    isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
+      state.isCurrentAgentHeterogeneous,
   },
   builtinAgentSelectors: {
     isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,

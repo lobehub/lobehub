@@ -14,6 +14,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   },
   lab: {
     enableAgentDocumentFloatingChatPanel: false,
+    enableAgentGraphConfig: false,
     enableAgentSelfIteration: false,
     enableFleet: false,
     enableInputMarkdown: true,

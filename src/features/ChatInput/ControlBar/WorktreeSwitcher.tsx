@@ -384,15 +384,24 @@ const getWorktreeBranch = (
 const isDisabled = (worktree: DeviceGitWorktreeListItem): boolean =>
   !!worktree.bare || !!worktree.prunable;
 
-// The main/source worktree can never be removed (`git worktree remove <main>`
-// fails with "is a main working tree"), and when the agent runs on a linked
-// worktree it is listed with `current: false` — so exclude it by path too, not
-// just via the `current` flag, to avoid offering a delete that always errors.
-const canRemoveWorktree = (worktree: DeviceGitWorktreeListItem, sourcePath: string): boolean =>
+// The main worktree can never be removed (`git worktree remove <main>` fails with
+// "is a main working tree"), and when the agent runs on a linked worktree it is
+// listed with `current: false` — so exclude it by path too, not just via the
+// `current` flag, to avoid offering a delete that always errors. `sourcePath` is
+// NOT the main worktree whenever the user picks a linked worktree directly as the
+// working directory, so it is excluded separately (removing the conversation's own
+// source repo would strand it), not used as a stand-in for the main worktree.
+const canRemoveWorktree = (
+  worktree: DeviceGitWorktreeListItem,
+  sourcePath: string,
+  mainWorktreePath?: string,
+): boolean =>
   !worktree.current &&
   !worktree.locked &&
   !isDisabled(worktree) &&
-  normalizeDisplayPath(worktree.path) !== normalizeDisplayPath(sourcePath);
+  normalizeDisplayPath(worktree.path) !== normalizeDisplayPath(sourcePath) &&
+  (!mainWorktreePath ||
+    normalizeDisplayPath(worktree.path) !== normalizeDisplayPath(mainWorktreePath));
 
 interface DirtyStatProps {
   status?: DeviceGitWorktreeListItem['status'];
@@ -609,8 +618,17 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const triggerTitle = detached
       ? t('workingDirectory.detachedHead', { sha: currentBranch })
       : `${currentName} · ${branchLabel}`;
-    const isSourceWorktree = normalizeDisplayPath(currentPath) === normalizeDisplayPath(sourcePath);
-    const triggerIcon = isSourceWorktree ? GitBranchIcon : GitForkIcon;
+    // `git worktree list` always emits the main worktree first (a bare repo has
+    // none, so every checkout is linked). Compare against it rather than
+    // `sourcePath`, which is itself a linked worktree whenever the user picks one
+    // directly as the working directory — that would show a branch icon while
+    // standing inside a worktree.
+    const [mainWorktree] = worktrees;
+    const isLinkedWorktree =
+      !!mainWorktree &&
+      (!!mainWorktree.bare ||
+        normalizeDisplayPath(currentPath) !== normalizeDisplayPath(mainWorktree.path));
+    const triggerIcon = isLinkedWorktree ? GitForkIcon : GitBranchIcon;
 
     const trigger = (
       <div
@@ -670,7 +688,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       const displayPath = getRelativeDisplayPath(worktree.path, sourcePath);
                       const disabled = isDisabled(worktree);
                       const removing = removingPaths.has(worktree.path);
-                      const removable = canRemoveWorktree(worktree, sourcePath) && !removing;
+                      const removable =
+                        canRemoveWorktree(worktree, sourcePath, mainWorktree?.path) && !removing;
 
                       return (
                         <DropdownMenuItem

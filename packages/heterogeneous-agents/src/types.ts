@@ -275,6 +275,10 @@ export interface UsageData {
   inputCacheMissTokens: number;
   /** Input tokens written into the prompt cache (cache creation). */
   inputWriteCacheTokens?: number;
+  /** Output tokens used for model reasoning. */
+  outputReasoningTokens?: number;
+  /** Non-reasoning output tokens. */
+  outputTextTokens?: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;

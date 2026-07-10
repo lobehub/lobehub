@@ -6,6 +6,7 @@ import {
 } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  allowedToolNames?: string[];
   /**
    * Reuse an existing assistant message instead of creating a new one. Set when
    * resuming from a tool-first step (e.g. tools activator) whose seeded
@@ -78,6 +79,8 @@ export interface GeneralAgentConfig {
     [key: string]: any;
     maxSteps?: number;
   };
+  /** Explicit tool-name allow-list for agents that intentionally restrict tools. */
+  allowedToolNames?: string[];
   /**
    * Context compression configuration
    * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
@@ -114,6 +117,8 @@ export interface GeneralAgentConfig {
     provider: string;
   };
   operationId: string;
+  /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
+  tools?: any[];
   userId?: string;
 }
 

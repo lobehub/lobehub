@@ -485,6 +485,78 @@
     server's `S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY=S3RVER`, `S3_ENABLE_PATH_STYLE=1`,
     `S3_PUBLIC_DOMAIN=http://127.0.0.1:29000/<bucket>`.
 
+### E8. ✅ WORKS — a git-worktree checkout needs its OWN `pnpm install`, not a symlinked `node_modules`
+
+- **Situation**: verifying a UI change from a `git worktree` (e.g. `.claude/worktrees/<name>`), which
+  starts with no `node_modules`.
+- **Doesn't work**: symlinking the main checkout's `node_modules` (root and/or `apps/desktop`) into the
+  worktree. The workspace links inside it point `@lobechat/*` at the MAIN checkout's `packages/`, which
+  sits on a different branch — the Electron main build then dies with
+  `[MISSING_EXPORT] "X" is not exported by "../../packages/<pkg>/src/..."`. Renderer source resolves from
+  the worktree while packages resolve from the main repo, so the two disagree.
+- **Works**: run `pnpm install` at the worktree root AND `cd apps/desktop && pnpm install` (standalone,
+  not in the workspace). \~5 min total, mostly hardlinked from the store.
+- **Also**: a Vite dev server left over from an earlier failed `electron-dev.sh start <id>` is REUSED by
+  the retry (`CDP already reachable … Skipping start`) and can keep serving pre-edit module text. If the
+  DOM shows markup that contradicts the source, curl the dev server for the file and grep for a token you
+  just added (`curl -s 127.0.0.1:<vitePort>/src/path/File.tsx | grep -c myNewSymbol`) before blaming the
+  code. `electron-dev.sh stop <id>` then start again to get a clean server.
+
+### E9. Electron dev's FIRST cold boot sits on the splash with an empty `#root` for 1–3 minutes
+
+- **Situation**: after `electron-dev.sh start <id>`, `app-probe.sh auth` returns `isSignedIn:false`,
+  `#root` has providers but `innerText.length === 0`, and the screenshot is just the LobeHub splash. The
+  main log shows `Proactive token refresh failed` / `invalid_grant`.
+- **Doesn't work**: concluding the copied login state expired. That refresh error is a red herring — the
+  app recovers, and `RENDERER_WAIT_S` (60s) can expire while Vite is still on
+  `[optimizer] bundling dependencies`, which ends in `optimized dependencies changed. reloading`.
+- **Works**: poll until the DOM actually has content instead of sleeping a fixed amount:
+  ```bash
+  until [ "$(agent-browser --session s \
+    '(function(){return String(document.getElementById("root").innerText.trim().length>50)})()' < port > --cdp < port > eval \
+    | tr -d '"')" = "true" ]; do sleep 5; done
+  ```
+  Also note `zsh does NOT word-split unquoted vars` — `S="--session x --cdp 9226"; agent-browser $S eval`
+  fails with `Unknown command`. Inline the flags or use an array.
+
+### E10. ✅ WORKS — stop the main process from yanking the renderer back to its last tab
+
+- **Situation**: driving the SPA to a specific route for a screenshot. `history.pushState` + `popstate`
+  lands correctly, then \~15–20s later `location.pathname` snaps back to whatever tab the main process
+  has stored (e.g. `/devtools/claude-code`). A hard `location.href` nav is reverted the same way.
+- **Cause**: the main process broadcasts `navigate`, and `src/features/DesktopNavigationBridge` obeys it.
+- **Works**: HMR-neutralize the bridge for the run, then revert:
+  ```tsx
+  // src/features/DesktopNavigationBridge/index.tsx — [AGENT-TEST] REMOVE
+  useWatchBroadcast('navigate', () => {
+    void handleNavigate;
+  });
+  ```
+  `git checkout -- src/features/DesktopNavigationBridge/index.tsx` afterwards; `grep -rn AGENT-TEST src/`
+  must come back empty.
+
+### E11. ✅ WORKS — drive the working-directory / git-status ControlBar without the native dir picker
+
+- The picker opens a native dialog, but the same write path is reachable from the store. With no active
+  topic, `commit()` persists to `agencyConfig.workingDirByDevice[deviceId]`:
+  ```js
+  const a = window.__LOBE_STORES.agent(),
+    d = window.__LOBE_STORES.device();
+  const did = window.__LOBE_STORES.electron().gatewayDeviceInfo.deviceId;
+  const entry = { path: '/abs/repo', repoType: 'git' };
+  await a.updateAgentConfigById(agentId, {
+    agencyConfig: { workingDirByDevice: { [did]: entry } },
+  });
+  await d.updateDeviceCwd(did, entry, { setDefault: false }); // so the entry exists → sourcePath resolves
+  ```
+  Create a throwaway agent with `agent().createAgent({ title })` and delete it afterwards with
+  `session().removeSession(agentId)` (there is no `deleteAgent` on the agent store) plus
+  `device().removeDeviceWorkingDir(did, path)` — otherwise the fixture cwd lingers in the real account.
+- **Identify icons precisely**: lucide renders `svg.lucide.lucide-git-fork`. Several git icons live in the
+  same bar (the dir picker's `DirIcon` is `git-branch`, the review toggle is `git-compare`), so scope the
+  assertion to the trigger: `document.querySelector('[role=button][aria-label="Worktrees"]') svg`, and
+  still open the PNG to confirm (Case 1).
+
 ### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
 
 - **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
@@ -515,3 +587,78 @@
 - With `http_proxy`/`HTTP_PROXY` set, `curl http://localhost:<port>` returns the
   proxy's 502 instead of connection-refused, faking a "server up but broken" signal.
   Always `curl --noproxy '*'` for local port probes.
+
+### E8. ✅ WORKS — Electron pool instance boots BLANK because the copied golden login is dead
+
+- **Situation**: `electron-dev.sh start <id>` seeds userData from the golden dev profile,
+  but the app renders an empty `#root` (innerText length 0, only the LobeHub watermark) and
+  `app-probe.sh auth` returns `isSignedIn:false`. The instance log shows
+  `Refresh response missing access_token or refresh_token { error: 'invalid_grant' }`.
+- **Cause (measured, not guessed)**: OIDC refresh tokens are single-use. Every prior
+  `start <id>` copied the same golden profile and consumed/rotated its refresh token, so the
+  copy's token is already dead. A blank shell here is an AUTH failure, not a render bug —
+  read the instance log before chasing the SPA.
+- **Doesn't work**: pointing `LOBE_GOLDEN_PROFILE` at the packaged app's profile
+  (`~/Library/Application Support/LobeHub`) — the pool instance's startup refresh will rotate
+  that token too and log the user out of their real desktop app.
+- **Works — inject a valid credential the app already owns, no new OAuth grant**:
+  the prod lambda accepts any of the user's valid OIDC access tokens via the `Oidc-Auth`
+  header, and the CLI keeps one in `~/.lobehub`. Extract it with the CLI's own
+  `getValidToken()` (it auto-refreshes), then override the single main-process accessor:
+  ```ts
+  // apps/desktop/src/main/controllers/RemoteServerConfigCtr.ts — [AGENT-TEST] REMOVE
+  async getAccessToken(): Promise<string | null> {
+    if (process.env.LOBE_TEST_ACCESS_TOKEN) return process.env.LOBE_TEST_ACCESS_TOKEN;
+    ...
+  ```
+  `export LOBE_TEST_ACCESS_TOKEN=...` before `electron-dev.sh start <id>` (the script forwards
+  the shell env). This authenticates BOTH the renderer (BackendProxyProtocolManager injects the
+  same token) and any main-process fetch, so the whole app comes up signed in. Revert with
+  `git checkout --` + `grep -rn AGENT-TEST` afterwards, and never echo the token.
+- **Works — alternative, no source edit, when you can approve a browser prompt**: seed a
+  PRISTINE profile so the app takes the signed-out path and renders the real login screen
+  instead of hanging:
+  ```bash
+  mkdir -p /tmp/empty-golden
+  LOBE_GOLDEN_PROFILE=/tmp/empty-golden ./electron-dev.sh start <id>
+  ```
+  Drive onboarding (`开始` → `下一步` ×2 → `登录 LobeHub Cloud`). The device-code flow opens the
+  browser and auto-approves against an existing app.lobehub.com session, giving the instance its
+  OWN token — so it never rotates the one the user's resident app holds.
+- **Why the blank shell has no login button**: the failed refresh leaves `isUserStateInit:false`
+  (with `isLoaded:true, user:null`), and the desktop first-frame gate waits on it forever. Every
+  route — `/`, `/desktop-onboarding` — renders empty. Reloading, soft-navving, and waiting all
+  fail to resolve it, so it reads exactly like a Case-1 blank page.
+- **Gotcha**: a worktree installed with `pnpm install --ignore-scripts` has NO electron binary
+  (`node_modules/.pnpm/electron@*/node_modules/electron/dist` missing). Fix with
+  `cd apps/desktop && pnpm rebuild electron`. Also remember `apps/desktop` and `apps/cli` are
+  NOT in the root pnpm workspace — install inside each.
+- **Gotcha**: `electron-dev.sh restart <id>` keeps the userData dir, but a device-code session
+  did NOT survive it — budget for one more login after any restart (e.g. when a main-process
+  change forces one, see E9).
+
+### C5. ✅ WORKS — main-process `logger.info` is invisible unless `DEBUG` is set
+
+- **Situation**: proving WHICH code path the Electron main process took (e.g. hetero
+  `ClaudeAgentSdkSession` vs the CLI-spawn `AgentStreamPipeline`). Both produce identical
+  user-visible output, so the verdict needs a main-process log line.
+- **Doesn't work**: grepping the instance log for the `logger.info('Starting Claude Code SDK
+session:')` line. In development `createLogger().info` routes to the `debug` package, which
+  prints nothing unless its namespace is enabled (only `console.error` shows up unconditionally).
+  Absence of the line is NOT evidence the branch didn't run.
+- **Works**: `export DEBUG='controllers:*'` before `electron-dev.sh start <id>`, then
+  `grep -oE "controllers:HeterogeneousAgentCtr INFO: [^']*" /tmp/lobe-electron-pool/instance-<id>.log`.
+  Don't trust the hetero tracing dir for this — it is gated and the copied golden profile ships
+  STALE trace sessions from months earlier that look like a fresh run.
+### E9. Main-process code changes need a restart; Vite HMR only covers the renderer
+
+- Adapters under `packages/heterogeneous-agents` run in the **main** process
+  (JSONL framing + adapter + `toStreamEvent`). Editing one and reloading the
+  renderer verifies nothing — the old adapter is still running.
+- Prove which code each process has before trusting a run:
+  ```bash
+  # renderer: vite serves working-tree src (VITE_BASE + id)
+  curl -s --noproxy '*' "http://127.0.0.1:<vitePort>/src/<path>.ts" | grep -c '<marker>'
+  # main: rebuilt on start into the desktop dist bundle
+  grep -c '<marker>' apps/desktop/dist/main/index.js
+  ```

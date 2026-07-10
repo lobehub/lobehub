@@ -7,7 +7,7 @@ import type { BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManag
 import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 
 // The command-resolution + validation logic (which/where lookup, login-shell
-// PATH retry, well-known install fallbacks incl. the Codex.app bundled CLI,
+// PATH retry, well-known install fallbacks incl. app-bundled Codex CLIs,
 // `--version` keyword validation) lives in the shared `@lobechat/heterogeneous-
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
@@ -65,7 +65,7 @@ export const claudeCodeBinary: BinarySpec = {
  * OpenAI Codex CLI
  * @see https://github.com/openai/codex
  *
- * Goes through `detectHeterogeneousCliCommand` so the Codex.app bundled-CLI
+ * Goes through `detectHeterogeneousCliCommand` so the app-bundled CLI
  * fallback applies here too, keeping the manager path and the custom-command
  * path in sync.
  */

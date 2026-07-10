@@ -1620,7 +1620,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onClick={(event) => {
             event.stopPropagation();
             closeDropdown?.();
-            navigate('/settings/skill');
+            navigate('/settings/connector');
           }}
         >
           <Icon icon={Settings} size={SKILL_ICON_SIZE} />

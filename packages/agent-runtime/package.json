@@ -9,6 +9,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "p-map": "^7.0.5"
   },
   "devDependencies": {

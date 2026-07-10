@@ -826,6 +826,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
+          // The terminal snapshot, when the server pushed one — the reconciled
+          // Source of Truth for this run's final assistant text.
+          let terminalMessages: UIChatMessage[] | undefined;
+
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
           //
@@ -834,6 +838,7 @@ export const createGatewayEventHandler = (
           // to a DB refetch only if the snapshot is absent (older server
           // builds, or push-event delivery edge cases).
           if (Array.isArray(data?.uiMessages)) {
+            terminalMessages = data.uiMessages;
             get().replaceMessages(data.uiMessages, {
               action: 'gateway/agent_runtime_end',
               context,
@@ -879,7 +884,28 @@ export const createGatewayEventHandler = (
               status,
             });
             if (!requeued && status === 'completed') {
-              await runLifecycle.afterRunComplete({ ...lifecycleEventBase, status });
+              // Notification body, resolved most-authoritative first:
+              //
+              // 1. the terminal snapshot's final assistant text — server-
+              //    finalized, so it wins over the optimistic stream even when
+              //    the two disagree (dropped chunks, server-side rewrites);
+              // 2. `accumulatedContent`, the in-memory stream (a closure
+              //    untouched by `replaceMessages`), for the no-snapshot path
+              //    where `fetchAndReplaceMessages` races the executor's DB
+              //    write and would otherwise leave the body empty. Its stale
+              //    predecessor is NOT read back from that refetch: a not-yet-
+              //    written assistant row would surface the PRIOR turn's reply;
+              // 3. nothing (`''`), letting `afterRunComplete` fall back to its
+              //    store read and then to the generic "generation finished".
+              const finalAssistantContent = terminalMessages?.findLast(
+                (message) => message.role === 'assistant',
+              )?.content;
+
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { content: finalAssistantContent || accumulatedContent },
+                status,
+              });
             }
           } else {
             // hetero reuses this handler only for message reconciliation; its

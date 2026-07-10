@@ -4,6 +4,8 @@ import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   codexModelSupportsFastSpeed,
+  codexModelSupportsReasoningEffort,
+  getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveClaudeCodeModel,
@@ -163,6 +165,10 @@ describe('buildHeteroSpawnArgs', () => {
         effort: 'low',
       }),
     ).toBe('xhigh');
+    expect(resolveCodexReasoningEffort({ effort: 'max' })).toBe('max');
+    expect(resolveCodexReasoningEffort({ args: ['-c', 'model_reasoning_effort="ultra"'] })).toBe(
+      'ultra',
+    );
   });
 
   it('appends --model and model_reasoning_effort config for Codex', () => {
@@ -171,6 +177,21 @@ describe('buildHeteroSpawnArgs', () => {
       'gpt-5.5',
       '-c',
       'model_reasoning_effort="high"',
+    ]);
+  });
+
+  it('passes extended Codex reasoning efforts through spawn and exec args', () => {
+    expect(buildHeteroSpawnArgs({ effort: 'ultra', model: 'gpt-5.6-sol', type: 'codex' })).toEqual([
+      '--model',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort="ultra"',
+    ]);
+    expect(buildHeteroExecArgs({ effort: 'max', model: 'gpt-5.6-luna', type: 'codex' })).toEqual([
+      '--model',
+      'gpt-5.6-luna',
+      '--effort',
+      'max',
     ]);
   });
 
@@ -247,6 +268,36 @@ describe('buildHeteroSpawnArgs', () => {
   });
 });
 
+describe('codex reasoning effort capabilities', () => {
+  const commonLevels = ['low', 'medium', 'high', 'xhigh'];
+  const maxLevels = [...commonLevels, 'max'];
+  const ultraLevels = [...maxLevels, 'ultra'];
+
+  it('returns the extended levels supported by each GPT-5.6 model', () => {
+    expect(getCodexReasoningEffortLevels('gpt-5.6')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-sol')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-terra')).toEqual(ultraLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
+  });
+
+  it('reports model-specific Max and Ultra support', () => {
+    expect(codexModelSupportsReasoningEffort('gpt-5.6', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-sol', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-terra', 'ultra')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'max')).toBe(true);
+    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'ultra')).toBe(false);
+  });
+
+  it('uses conservative common levels for old, unknown, and default models', () => {
+    expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels('custom-codex-model')).toEqual(commonLevels);
+    expect(getCodexReasoningEffortLevels(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toEqual(
+      commonLevels,
+    );
+  });
+});
+
 describe('codex speed mode', () => {
   it('resolves missing / default selections to Default', () => {
     expect(resolveCodexSpeedMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
@@ -271,6 +322,10 @@ describe('codex speed mode', () => {
 
   it('reports fast support for catalog models and the default selection', () => {
     expect(codexModelSupportsFastSpeed(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-sol')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-terra')).toBe(true);
+    expect(codexModelSupportsFastSpeed('gpt-5.6-luna')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.5')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.4')).toBe(true);
     expect(codexModelSupportsFastSpeed('gpt-5.4-mini')).toBe(false);

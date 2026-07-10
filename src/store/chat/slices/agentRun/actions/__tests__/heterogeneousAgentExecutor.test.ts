@@ -927,6 +927,64 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalWrite![1].provider).toBe('claude-code');
     });
 
+    // The run's first assistant already exists in `dbMessagesMap` before the
+    // executor starts, so the gateway handler's stream_start seed-insert (its
+    // only model/provider → store path) is skipped for it. The executor must
+    // therefore mirror the flush into the store itself, or the row renders
+    // without a model until the next refetch.
+    it('should dispatch model + provider into the store for the initial assistant', async () => {
+      const seeded = [
+        {
+          agentId: 'agent-1',
+          content: '',
+          id: 'ast-initial',
+          role: 'assistant',
+          topicId: 'topic-1',
+        },
+      ];
+      const store = createMockStore({
+        dbMessagesMap: { 'main_agent-1_topic-1': seeded },
+        messagesMap: { 'main_agent-1_topic-1': seeded },
+      });
+
+      await runWithEvents([ccInit(), ccText('msg_01', 'hi'), ccResult()], { store });
+
+      const dispatched = store.internal_dispatchMessage.mock.calls.find(
+        ([payload]: any) =>
+          payload.type === 'updateMessage' &&
+          payload.id === 'ast-initial' &&
+          payload.value?.provider === 'claude-code',
+      );
+      expect(dispatched).toBeDefined();
+      expect(dispatched![0].value.model).toBe('claude-sonnet-4-6');
+    });
+
+    // `recordUsage` is the main-agent twin of the subagent interpreter's
+    // `recordUsage`, which updates its thread bucket via `stream.update`.
+    // Without the store dispatch, per-turn usage never renders live.
+    it('should dispatch turn usage into the store', async () => {
+      const store = createMockStore();
+
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        { store },
+      );
+
+      const dispatched = store.internal_dispatchMessage.mock.calls.find(
+        ([payload]: any) =>
+          payload.type === 'updateMessage' && payload.value?.metadata?.usage !== undefined,
+      );
+      expect(dispatched).toBeDefined();
+      expect(dispatched![0].value.model).toBe('claude-opus-4-6');
+      expect(dispatched![0].value.provider).toBe('claude-code');
+    });
+
     it('should write accumulated reasoning', async () => {
       await runWithEvents([
         ccInit(),

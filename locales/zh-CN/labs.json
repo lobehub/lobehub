@@ -1,6 +1,8 @@
 {
   "features.agentDocumentFloatingChatPanel.desc": "仅当启用此实验功能时，在代理文档预览中显示浮动聊天面板。",
   "features.agentDocumentFloatingChatPanel.title": "代理文档浮动聊天面板",
+  "features.agentGraphConfig.desc": "在助理档案的进阶设置中显示 Graph 运行时配置。",
+  "features.agentGraphConfig.title": "Agent Graph 运行时配置",
   "features.agentSelfIteration.desc": "允许助理自我反思、自我感知，并在持续的尝试与交互中不断自我迭代。",
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
