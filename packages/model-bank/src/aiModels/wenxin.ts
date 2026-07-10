@@ -745,27 +745,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     abilities: {
       vision: true,
     },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen3 VL 235B A22B Instruct is a flagship multimodal model for demanding understanding and creation.',
-    displayName: 'Qwen3 VL 235B A22B Instruct',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen3-vl-235b-a22b-instruct',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
     contextWindowTokens: 65_536,
     description:
       'GLM-4.5V is a multimodal vision-language model for general image understanding and QA.',
