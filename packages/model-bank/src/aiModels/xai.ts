@@ -5,6 +5,35 @@ const xaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
+      "SpaceXAI's flagship model for coding, agentic tasks, and knowledge work — configurable reasoning (low/medium/high, always on).",
+    displayName: 'Grok 4.5',
+    enabled: true,
+    family: 'grok',
+    generation: 'grok-4.5',
+    id: 'grok-4.5',
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-08',
+    settings: {
+      extendParams: ['grok4_5ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       search: true,
       structuredOutput: true,
       vision: true,
