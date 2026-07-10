@@ -1,7 +1,7 @@
 # Auth Setup for Local Agent Testing
 
 **Auth is the gate for all automated testing.** Complete
-[Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) first so
+[Step 2.0](../SKILL.md#20-resolve-the-current-test-environment) first so
 `SERVER_URL` and ports are resolved, then verify auth before writing any test
 step.
 

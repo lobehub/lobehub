@@ -25,6 +25,7 @@
 #
 # Overrides:
 #   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080
+#   AGENT_TESTING_DEV_STATE_FILE=.records/runtime/agent-testing-dev.state
 
 set -euo pipefail
 
@@ -50,6 +51,7 @@ fi
 # seed-user, dev, web-seed) and test-env.sh all agree on the same port. Delete
 # the ports file (or pass SERVER_PORT=... explicitly) to re-allocate.
 PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$WORKSPACE_ROOT/.records/env/agent-testing-ports.env}"
+DEV_STATE_FILE="${AGENT_TESTING_DEV_STATE_FILE:-$WORKSPACE_ROOT/.records/runtime/agent-testing-dev.state}"
 
 _port_in_use() { lsof -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1; }
 _pick_free_port() {
@@ -539,6 +541,85 @@ cmd_qstash() {
   exec pnpm run qstash -- -port "$QSTASH_DEV_PORT"
 }
 
+process_start() {
+  ps -p "$1" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+process_cwd() {
+  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+}
+
+write_dev_state() {
+  local mode="$1" start
+  start="$(process_start "$$")"
+  mkdir -p "$(dirname "$DEV_STATE_FILE")"
+  {
+    printf 'PID=%q\n' "$$"
+    printf 'PROCESS_START=%q\n' "$start"
+    printf 'MODE=%q\n' "$mode"
+    printf 'REPO_ROOT=%q\n' "$REPO_ROOT"
+    printf 'SERVER_PORT=%q\n' "$SERVER_PORT"
+    printf 'SPA_PORT=%q\n' "$SPA_PORT"
+  } > "$DEV_STATE_FILE"
+  note "recorded dev server ownership: $DEV_STATE_FILE (pid $$)"
+}
+
+prepare_dev_state() {
+  local PID PROCESS_START MODE REPO_ROOT SERVER_PORT SPA_PORT
+  [[ -f "$DEV_STATE_FILE" ]] || return 0
+  # shellcheck disable=SC1090
+  source "$DEV_STATE_FILE"
+  if state_owns_process "$PID" "$PROCESS_START" "$REPO_ROOT" "$MODE"; then
+    bad "an owned $MODE dev server is already running (pid $PID)"
+    note "stop it first with: $0 stop-dev"
+    return 1
+  fi
+  note "replacing stale dev ownership state: $DEV_STATE_FILE"
+  rm -f "$DEV_STATE_FILE"
+}
+
+collect_descendants() {
+  local parent="$1" child
+  while IFS= read -r child; do
+    [[ -n "$child" ]] || continue
+    collect_descendants "$child"
+    printf '%s\n' "$child"
+  done < <(pgrep -P "$parent" 2>/dev/null || true)
+}
+
+state_owns_process() {
+  local pid="$1" expected_start="$2" expected_root="$3" mode="$4"
+  local actual_start actual_cwd command
+  kill -0 "$pid" 2>/dev/null || return 1
+  actual_start="$(process_start "$pid")"
+  [[ -n "$actual_start" && "$actual_start" == "$expected_start" ]] || return 1
+  actual_cwd="$(process_cwd "$pid")"
+  [[ "$actual_cwd" == "$expected_root" || "$actual_cwd" == "$expected_root/"* ]] || return 1
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  case "$mode" in
+    dev) [[ "$command" == *"bun"* && "$command" == *"run dev"* ]] ;;
+    dev-next) [[ "$command" == *"next"* && "$command" == *"dev"* ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+stop_owned_process_tree() {
+  local root_pid="$1" descendants pid
+  descendants="$(collect_descendants "$root_pid")"
+  for pid in $descendants; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  kill -TERM "$root_pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    kill -0 "$root_pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  for pid in $descendants; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  kill -KILL "$root_pid" 2>/dev/null || true
+}
+
 cmd_dev_next() {
   apply_env
   cd "$REPO_ROOT"
@@ -547,12 +628,16 @@ cmd_dev_next() {
   # SERVER_PORT was auto-allocated to something else. apply_env already exported
   # every env this needs (there is no .env to load in this mode), so invoking
   # next directly is equivalent and port-correct in both cloud and submodule.
+  prepare_dev_state
+  write_dev_state dev-next
   exec pnpm exec next dev -p "$SERVER_PORT"
 }
 
 cmd_dev() {
   apply_env
   cd "$REPO_ROOT"
+  prepare_dev_state
+  write_dev_state dev
   exec bun run dev
 }
 
@@ -579,27 +664,22 @@ cmd_clean_db() {
 }
 
 cmd_stop_dev() {
-  apply_env
-  local any=0 pids port
-  for port in "$SERVER_PORT" "$SPA_PORT"; do
-    pids="$(lsof -ti "tcp:$port" -sTCP:LISTEN 2>/dev/null || true)"
-    if [[ -n "$pids" ]]; then
-      # shellcheck disable=SC2086
-      kill $pids 2>/dev/null || true
-      note "stopped listener(s) on :$port ($(echo "$pids" | tr '\n' ' '))"
-      any=1
-    fi
-  done
-  # `bun run dev` supervises Next + Vite; kill the parent too so neither respawns.
-  if pkill -f "bun run dev" 2>/dev/null; then
-    note "stopped 'bun run dev' supervisor"
-    any=1
+  local PID PROCESS_START MODE REPO_ROOT SERVER_PORT SPA_PORT
+  if [[ ! -f "$DEV_STATE_FILE" ]]; then
+    note "no owned dev server state found: $DEV_STATE_FILE"
+    return 0
   fi
-  if [[ "$any" == 1 ]]; then
-    ok "dev server stopped"
-  else
-    note "no dev server running on :$SERVER_PORT / :$SPA_PORT"
+  # shellcheck disable=SC1090
+  source "$DEV_STATE_FILE"
+  if ! state_owns_process "$PID" "$PROCESS_START" "$REPO_ROOT" "$MODE"; then
+    bad "refusing to stop PID $PID: ownership metadata no longer matches the live process"
+    note "stale state removed; inspect listeners manually if cleanup is still needed"
+    rm -f "$DEV_STATE_FILE"
+    return 1
   fi
+  stop_owned_process_tree "$PID"
+  rm -f "$DEV_STATE_FILE"
+  ok "stopped owned $MODE process tree (root pid $PID)"
 }
 
 cmd_clean() {
