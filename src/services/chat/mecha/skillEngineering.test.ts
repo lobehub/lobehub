@@ -181,4 +181,52 @@ describe('resolveClientSkills', () => {
     expect(skill?.content).toBeUndefined();
     expect(skill?.activated).toBeFalsy();
   });
+
+  describe('disabled skills', () => {
+    it('excludes a disabled DB skill entirely, not just from the pinned set', async () => {
+      setToolState({
+        agentSkills: [
+          { description: 'A user skill', id: 'db-1', identifier: 'my-skill', name: 'My Skill' },
+        ],
+      });
+
+      const result = await resolveClientSkills([], ['my-skill']);
+
+      // Not merely unpinned — absent from the candidate pool entirely, so it
+      // can't be listed in <available_skills> or resolved by activateSkill.
+      expect(findSkill(result.skills, 'my-skill')).toBeUndefined();
+    });
+
+    it('excludes a disabled builtin skill entirely', async () => {
+      setToolState({
+        builtinSkills: [
+          {
+            content: '<artifacts_guide>build UI</artifacts_guide>',
+            description: 'Generate interactive UI',
+            identifier: 'artifacts',
+            name: 'Artifacts',
+            source: 'builtin',
+          },
+        ],
+      });
+
+      const result = await resolveClientSkills([], ['artifacts']);
+
+      expect(findSkill(result.skills, 'artifacts')).toBeUndefined();
+    });
+
+    it('keeps a non-disabled skill even when other skills are disabled', async () => {
+      setToolState({
+        agentSkills: [
+          { description: '', id: 'db-1', identifier: 'disabled-skill', name: 'Disabled' },
+          { description: '', id: 'db-2', identifier: 'enabled-skill', name: 'Enabled' },
+        ],
+      });
+
+      const result = await resolveClientSkills([], ['disabled-skill']);
+
+      expect(findSkill(result.skills, 'disabled-skill')).toBeUndefined();
+      expect(findSkill(result.skills, 'enabled-skill')).toBeDefined();
+    });
+  });
 });

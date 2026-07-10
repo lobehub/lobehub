@@ -278,10 +278,10 @@ describe('LobeOpenAI', () => {
       expect(createCall.model).toBe('o1-pro');
     });
 
-    it('should use responses API for future GPT-5 minor models', async () => {
+    it('should use responses API for GPT-5.6 family models', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-5.6',
+        model: 'gpt-5.6-sol',
         temperature: 0.7,
       };
 
@@ -289,7 +289,7 @@ describe('LobeOpenAI', () => {
 
       expect(instance['client'].responses.create).toHaveBeenCalled();
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
-      expect(createCall.model).toBe('gpt-5.6');
+      expect(createCall.model).toBe('gpt-5.6-sol');
     });
 
     it('should use responses API when enabledSearch is true', async () => {
@@ -350,13 +350,17 @@ describe('LobeOpenAI', () => {
   });
 
   describe('responses.handlePayload', () => {
-    it('should add web_search tool when enabledSearch is true', async () => {
+    it('should add web_search and prune legacy sampling params for GPT-5.6', async () => {
       const payload = {
         enabledSearch: true,
+        frequency_penalty: 0.5,
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-4o',
-        // 使用常规模型，通过 enabledSearch 触发 responses API
+        model: 'gpt-5.6-sol',
+        presence_penalty: 0.3,
+        reasoning: { mode: 'pro' as const },
+        reasoning_effort: 'max' as const,
         temperature: 0.7,
+        top_p: 0.9,
         tools: [{ function: { description: 'test', name: 'test' }, type: 'function' as const }],
       };
 
@@ -367,6 +371,14 @@ describe('LobeOpenAI', () => {
         { description: 'test', name: 'test', type: 'function' },
         { type: 'web_search' },
       ]);
+      expect(createCall).toMatchObject({
+        model: 'gpt-5.6-sol',
+        reasoning: { effort: 'max', mode: 'pro', summary: 'auto' },
+      });
+      expect(createCall.frequency_penalty).toBeUndefined();
+      expect(createCall.presence_penalty).toBeUndefined();
+      expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_p).toBeUndefined();
     });
 
     it('should add search_context_size to web_search tool when OPENAI_SEARCH_CONTEXT_SIZE is set', async () => {
@@ -443,10 +455,10 @@ describe('LobeOpenAI', () => {
       expect(createCall.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     });
 
-    it('should set reasoning.effort to high for future gpt-5.x-pro models', async () => {
+    it('should set reasoning.effort to high for gpt-5.5-pro', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-5.6-pro',
+        model: 'gpt-5.5-pro',
         temperature: 0.7,
       };
 

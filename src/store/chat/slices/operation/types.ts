@@ -409,6 +409,29 @@ export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
 ];
 
 /**
+ * Interim operations that approve / submit / skip / regenerate each start
+ * synchronously on click, before the whitelisted `execServerAgentRuntime` op is
+ * created 2–4 serial tRPC round-trips later. The interim op stays running until
+ * `executeGatewayAgent` spins up the runtime op, so it bridges the pre-generation
+ * window seamlessly.
+ *
+ * Shared by two whitelists so the whole window behaves consistently:
+ * - INPUT_LOADING_OPERATION_TYPES — show input loading/Stop the instant the user clicks.
+ * - QUEUE_BLOCKING_OPERATION_TYPES — a fast follow-up Enter queues behind the interim
+ *   op instead of starting a concurrent `sendMessage` that interleaves with the
+ *   approve/retry flow before the real runtime op exists.
+ *
+ * Kept out of AI_RUNTIME_OPERATION_TYPES on purpose to avoid flipping
+ * isAgentRuntimeRunning / isMessageGenerating and their gating logic.
+ */
+export const INTERIM_LOADING_OPERATION_TYPES: OperationType[] = [
+  'approveToolCalling',
+  'submitToolInteraction',
+  'skipToolInteraction',
+  'regenerate',
+];
+
+/**
  * Operation types that should block input and show loading state
  * Superset of AI_RUNTIME_OPERATION_TYPES, also includes sendMessage
  * since the input should be in loading state from the moment user sends until AI finishes
@@ -419,4 +442,32 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // The auto-retry waiting period is part of the same in-progress turn — keep
   // the input in loading state (and let Stop target it) across the countdown.
   'autoRetryPending',
+  // Interim approve/submit/skip/regenerate ops light up the input the instant
+  // the user clicks, mirroring how `sendMessage` already does — instead of only
+  // after the round-trips. See INTERIM_LOADING_OPERATION_TYPES for the bridge
+  // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
+  //
+  // Known limitation (accepted): this also makes Stop appear during the pre-
+  // generation window. Because these gateway branches don't forward
+  // `parentOperationId` to `executeGatewayAgent`, hitting Stop in that narrow
+  // window doesn't actually abort the in-flight request (loading briefly
+  // flickers, generation proceeds). No stuck state; wiring the abort handoff
+  // through these branches is deferred.
+  ...INTERIM_LOADING_OPERATION_TYPES,
+];
+
+/**
+ * Operation types that block a fresh `sendMessage`: a send fired while one of
+ * these runs enqueues behind it instead of starting a concurrent run.
+ *
+ * Single source of truth shared by the enqueue check (conversationLifecycle) and
+ * the QueueTray "Send now" cancel path — so both agree on what a follow-up is
+ * queued behind. Kept in sync with INPUT_LOADING via the shared
+ * INTERIM_LOADING_OPERATION_TYPES: if the input shows loading for an op, a
+ * follow-up must queue behind it, and "Send now" must be able to cancel it.
+ */
+export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+  ...INTERIM_LOADING_OPERATION_TYPES,
 ];

@@ -294,7 +294,7 @@
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.19.1",
     "@lobehub/icons": "^5.10.0",
-    "@lobehub/market-sdk": "0.39.1",
+    "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",
     "@lobehub/ui": "^5.19.0",
     "@modelcontextprotocol/sdk": "^1.29.0",

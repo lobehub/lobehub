@@ -1251,6 +1251,57 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should enqueue behind a running interim approve/retry op (preflight window)', async () => {
+        // Interim ops (approve/submit/skip/regenerate) show input loading the
+        // instant the user clicks, but the real runtime op is only created 2–4
+        // tRPC round-trips later. A fast follow-up Enter in that window must
+        // queue behind the interim op — not fire a concurrent sendMessage that
+        // interleaves with the approve/retry flow. Guards QUEUE_BLOCKING staying
+        // in sync with INPUT_LOADING for INTERIM_LOADING_OPERATION_TYPES.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-regenerate': {
+                childOperationIds: [],
+                context,
+                id: 'op-regenerate',
+                metadata: {},
+                status: 'running',
+                type: 'regenerate',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-regenerate'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+        const sendMessageInServerSpy = vi.spyOn(aiChatService, 'sendMessageInServer');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'follow-up during regenerate preflight',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'follow-up during regenerate preflight',
+            interruptMode: 'soft',
+          }),
+          'op-regenerate',
+        );
+        // Must queue, not start a concurrent send.
+        expect(sendMessageInServerSpy).not.toHaveBeenCalled();
+      });
+
       it('should enqueue while the first new-topic message is still being persisted', async () => {
         const { result } = renderHook(() => useChatStore());
         const context = createTestContext();
@@ -1978,8 +2029,8 @@ describe('ConversationLifecycle actions', () => {
       });
     });
 
-    describe('optimistic topic updatedAt', () => {
-      it('should optimistically update topic updatedAt when sending message to existing topic', async () => {
+    describe('optimistic topic sortUpdatedAt', () => {
+      it('should optimistically bump topic sortUpdatedAt when sending message to existing topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const topicId = TEST_IDS.TOPIC_ID;
 
@@ -2001,17 +2052,17 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        // Should call internal_dispatchTopic with updateTopic to touch updatedAt
+        // Should call internal_dispatchTopic with updateTopic to bump the sidebar sort key
         expect(dispatchTopicSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'updateTopic',
             id: topicId,
-            value: { updatedAt: expect.any(Number) },
+            value: { sortUpdatedAt: expect.any(Number) },
           }),
         );
       });
 
-      it('should NOT optimistically update topic updatedAt when server returns topics (new topic)', async () => {
+      it('should NOT optimistically bump topic sortUpdatedAt when server returns topics (new topic)', async () => {
         const { result } = renderHook(() => useChatStore());
 
         const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
@@ -2035,9 +2086,9 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        // Should NOT call internal_dispatchTopic with updateTopic for updatedAt
+        // Should NOT call internal_dispatchTopic with updateTopic for sortUpdatedAt
         const updateTopicCalls = dispatchTopicSpy.mock.calls.filter(
-          ([payload]) => payload.type === 'updateTopic' && 'updatedAt' in (payload.value || {}),
+          ([payload]) => payload.type === 'updateTopic' && 'sortUpdatedAt' in (payload.value || {}),
         );
         expect(updateTopicCalls).toHaveLength(0);
       });

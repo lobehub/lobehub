@@ -1,8 +1,7 @@
 'use client';
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import React, { memo, Suspense, useState } from 'react';
@@ -111,7 +110,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
 
     if (installing) {
       return (
-        <Button size="small" variant={'filled'} onClick={handleCancel}>
+        <Button size="small" type="fill" onClick={handleCancel}>
           {t('store.actions.cancel')}
         </Button>
       );

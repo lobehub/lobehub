@@ -165,6 +165,28 @@ describe('selectRuntimeType', () => {
     });
   });
 
+  describe('isWorkspaceAgent — workspace agents never spawn in-process on the member desktop', () => {
+    it('routes desktop local / unset targets to gateway for workspace agents', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: true,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: heteroProvider, isGatewayMode: false, isWorkspaceAgent: true },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+    });
+  });
+
   describe('parentRuntime override', () => {
     it('parentRuntime wins over every other signal', () => {
       expect(

@@ -9,16 +9,7 @@ import { getRunningDaemonPid } from '../daemon/manager';
 
 const SERVICE_NAME = 'lobehub-connect.service';
 const ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
-const SERVICE_ENV_NAMES = [
-  'AGENT_GATEWAY_URL',
-  'DEBUG',
-  'LH_GATEWAY_URL',
-  'LOBEHUB_CLI_CHANNEL',
-  'LOBEHUB_CLI_HOME',
-  CLI_API_KEY_ENV,
-  'LOBEHUB_JWT',
-  'LOBEHUB_SERVER',
-];
+const SERVICE_ENV_FILE_NAME = 'connect-service.env';
 
 export interface ConnectServiceStatus {
   active: boolean;
@@ -46,6 +37,14 @@ function getUserServiceDir(): string {
   );
 }
 
+function getCliHomeDir(): string {
+  return path.join(os.homedir(), process.env.LOBEHUB_CLI_HOME || '.lobehub');
+}
+
+function getServiceEnvFilePath(): string {
+  return path.join(getCliHomeDir(), SERVICE_ENV_FILE_NAME);
+}
+
 function getExecErrorMessage(error: unknown): string {
   const stderr =
     error && typeof error === 'object' && 'stderr' in error
@@ -61,8 +60,9 @@ function renderUnit(): string {
   const escapeSystemdEnvValue = (value: string): string =>
     value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   const homeDir = os.homedir();
-  const cliHomeDir = path.join(homeDir, process.env.LOBEHUB_CLI_HOME || '.lobehub');
+  const cliHomeDir = getCliHomeDir();
   const logPath = path.join(cliHomeDir, 'daemon.log');
+  const envFilePath = getServiceEnvFilePath();
   const scriptPath = fs.realpathSync(process.argv[1]!);
   const execStart = [process.execPath, scriptPath, 'connect', '--service-child']
     .map(quoteSystemdValue)
@@ -79,6 +79,7 @@ function renderUnit(): string {
     '[Service]',
     'Type=simple',
     `WorkingDirectory=${homeDir}`,
+    `EnvironmentFile=${envFilePath}`,
     `Environment=HOME=${escapeSystemdEnvValue(homeDir)}`,
     'Environment=LOBEHUB_CONNECT_SERVICE=1',
     `ExecStart=${execStart}`,
@@ -121,16 +122,27 @@ function requireLinuxSystemd() {
   }
 }
 
-function importServiceEnvironment(): void {
-  const staleServiceEnvNames = SERVICE_ENV_NAMES.filter((name) => process.env[name] === undefined);
-  if (staleServiceEnvNames.length > 0) {
-    systemctl(['unset-environment', ...staleServiceEnvNames], 'inherit');
-  }
+function writeServiceEnvironmentFile(): void {
+  const quoteEnvironmentFileValue = (value: string): string =>
+    `"${value
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('`', '\\`')
+      .replaceAll('$', '\\$')}"`;
 
-  const environmentNames = Object.keys(process.env).filter((name) => ENV_NAME_PATTERN.test(name));
-  if (environmentNames.length > 0) {
-    systemctl(['import-environment', ...environmentNames], 'inherit');
-  }
+  const lines = Object.entries(process.env)
+    .filter((entry): entry is [string, string] => {
+      const [name, value] = entry;
+      return ENV_NAME_PATTERN.test(name) && value !== undefined;
+    })
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${name}=${quoteEnvironmentFileValue(value)}`);
+
+  const envFilePath = getServiceEnvFilePath();
+  fs.mkdirSync(path.dirname(envFilePath), { mode: 0o700, recursive: true });
+  // The captured shell environment can include provider API keys; keep it owner-only.
+  fs.writeFileSync(envFilePath, `${lines.join('\n')}\n`, { mode: 0o600 });
+  fs.chmodSync(envFilePath, 0o600);
 }
 
 function assertNoConnectDaemonRunning(): void {
@@ -159,14 +171,10 @@ export function installConnectService(): void {
   assertNoConnectDaemonRunning();
   assertConnectServiceAuthAvailable();
 
-  fs.mkdirSync(path.join(os.homedir(), process.env.LOBEHUB_CLI_HOME || '.lobehub'), {
-    mode: 0o700,
-    recursive: true,
-  });
+  writeServiceEnvironmentFile();
   fs.mkdirSync(getUserServiceDir(), { mode: 0o700, recursive: true });
   fs.writeFileSync(path.join(getUserServiceDir(), SERVICE_NAME), renderUnit(), { mode: 0o644 });
 
-  importServiceEnvironment();
   systemctl(['daemon-reload'], 'inherit');
   systemctl(['enable', '--now', SERVICE_NAME], 'inherit');
 }
@@ -184,6 +192,7 @@ export function uninstallConnectService(): boolean {
   }
 
   fs.unlinkSync(unitPath);
+  fs.rmSync(getServiceEnvFilePath(), { force: true });
   systemctl(['daemon-reload'], 'inherit');
 
   return true;
@@ -194,7 +203,7 @@ export function startConnectService(): boolean {
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
   assertConnectServiceAuthAvailable();
-  importServiceEnvironment();
+  writeServiceEnvironmentFile();
   systemctl(['start', SERVICE_NAME], 'inherit');
   return true;
 }
@@ -211,7 +220,7 @@ export function restartConnectService(): boolean {
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
   assertConnectServiceAuthAvailable();
-  importServiceEnvironment();
+  writeServiceEnvironmentFile();
   systemctl(['restart', SERVICE_NAME], 'inherit');
   return true;
 }

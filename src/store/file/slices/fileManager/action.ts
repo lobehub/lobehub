@@ -437,10 +437,6 @@ export class FileManageActionImpl {
     await this.#get().refreshFileList();
   };
 
-  removeAllFiles = async (): Promise<void> => {
-    await fileService.removeAllFiles();
-  };
-
   removeFileItem = async (id: string): Promise<void> => {
     await fileService.removeFile(id);
     await this.#get().refreshFileList();

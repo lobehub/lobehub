@@ -1,4 +1,10 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type {
+  Agent,
+  AgentRuntimeContext,
+  AgentState,
+  GeneralAgentConfig,
+} from '@lobechat/agent-runtime';
+import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -40,6 +46,7 @@ import type {
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
   LobeAgentAgencyConfig,
+  LobeAgentConfig,
   MessagePluginItem,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -47,12 +54,16 @@ import type {
 } from '@lobechat/types';
 import {
   buildHeteroExecArgs,
+  getActivePluginIds,
+  getDisabledPluginIds,
   getWorkingDirEffectivePath,
+  ReasoningGraphSchema,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -145,6 +156,32 @@ import {
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+const createGraphAwareAgentFactory =
+  (
+    upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
+  ): ((config: GeneralAgentConfig) => Agent) =>
+  (config) => {
+    if (upstreamFactory) {
+      return upstreamFactory(config);
+    }
+
+    const runtimeAgentConfig = isRecord(config.agentConfig)
+      ? (config.agentConfig as LobeAgentConfig)
+      : undefined;
+    const graph = runtimeAgentConfig?.chatConfig?.graph;
+    if (runtimeAgentConfig?.chatConfig?.enableGraphMode && graph) {
+      const graphResult = ReasoningGraphSchema.safeParse(graph);
+
+      if (graphResult.success) {
+        return new GraphAgent({ ...config, graph: graphResult.data });
+      }
+
+      log('Invalid graph agent snapshot, falling back to default runtime: %O', graphResult.error);
+    }
+
+    return new GeneralChatAgent(config);
+  };
 
 /**
  * Format error for storage in thread metadata
@@ -464,6 +501,7 @@ export class AiAgentService {
     this.topicModel = new TopicModel(db, userId, wsId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
+      agentFactory: createGraphAwareAgentFactory(options?.runtimeOptions?.agentFactory),
       // ── Runtime delegate ─────────────────────────────────────────────────
       // Operations the runtime delegates back UP to this layer. The dependency
       // arrow is one-way (AiAgentService → AgentRuntimeService), so the runtime
@@ -1068,6 +1106,20 @@ export class AiAgentService {
       agentConfig.provider,
     );
 
+    // Capture disabled identifiers before collapsing to pinned-only ids below
+    // — everything from here on (builtin runtime merge, page/task/sub-agent
+    // injection, the `agentPlugins` build further down) expects a plain
+    // pinned-id string[], matching pre-tri-state behavior. Operating on a
+    // local `string[]` (rather than repeatedly re-reading/writing
+    // `agentConfig.plugins`, whose declared type is the wider
+    // `AgentPluginEntry[]`) keeps this whole block free of per-line casts;
+    // `agentConfig.plugins` is written back once, at the end.
+    // `disabledPluginIds` is consumed later to filter the auto-discovery
+    // candidate pool (installedPlugins) so disabled plugins can't be
+    // rediscovered/activated by the auto activator.
+    const disabledPluginIds = getDisabledPluginIds(agentConfig.plugins);
+    let activePluginIds: string[] = getActivePluginIds(agentConfig.plugins);
+
     // 2. Merge builtin agent runtime config (systemRole, plugins)
     // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
     const agentSlug = agentConfig.slug;
@@ -1083,7 +1135,7 @@ export class AiAgentService {
 
       const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
         userLocale,
       });
       if (runtimeConfig) {
@@ -1094,7 +1146,7 @@ export class AiAgentService {
         }
         // Runtime plugins merged (runtime plugins take priority if provided)
         if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
-          agentConfig.plugins = runtimeConfig.plugins;
+          activePluginIds = runtimeConfig.plugins;
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
         if (runtimeConfig.agencyConfig) {
@@ -1108,13 +1160,13 @@ export class AiAgentService {
     }
 
     if (appContext?.scope !== 'page') {
-      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== PageAgentIdentifier);
+      activePluginIds = activePluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
     if (appContext?.scope === 'page' && agentSlug !== BUILTIN_AGENT_SLUGS.pageAgent) {
       const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
       });
       const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
 
@@ -1124,9 +1176,9 @@ export class AiAgentService {
           : pageAgentSystemRole;
       }
 
-      agentConfig.plugins = agentConfig.plugins?.includes(PageAgentIdentifier)
-        ? agentConfig.plugins
-        : [PageAgentIdentifier, ...(agentConfig.plugins ?? [])];
+      activePluginIds = activePluginIds.includes(PageAgentIdentifier)
+        ? activePluginIds
+        : [PageAgentIdentifier, ...activePluginIds];
       agentConfig.chatConfig = {
         ...agentConfig.chatConfig,
         enableHistoryCount: false,
@@ -1137,7 +1189,7 @@ export class AiAgentService {
     if (appContext?.scope === 'task' && agentSlug !== BUILTIN_AGENT_SLUGS.taskAgent) {
       const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {
         model: agentConfig.model,
-        plugins: agentConfig.plugins ?? [],
+        plugins: activePluginIds,
       });
       const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
 
@@ -1147,15 +1199,17 @@ export class AiAgentService {
           : taskAgentSystemRole;
       }
 
-      agentConfig.plugins = agentConfig.plugins?.includes(TaskIdentifier)
-        ? agentConfig.plugins
-        : [TaskIdentifier, ...(agentConfig.plugins ?? [])];
+      activePluginIds = activePluginIds.includes(TaskIdentifier)
+        ? activePluginIds
+        : [TaskIdentifier, ...activePluginIds];
       log('execAgent: injected task-agent runtime for task scope');
     }
 
     if (appContext?.isSubAgent) {
-      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== LobeAgentIdentifier);
+      activePluginIds = activePluginIds.filter((id) => id !== LobeAgentIdentifier);
     }
+
+    agentConfig.plugins = activePluginIds;
 
     await throwIfExecutionAborted('agent configuration');
 
@@ -1632,10 +1686,15 @@ export class AiAgentService {
       const githubCredKey =
         agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
       try {
-        const list = await this.marketService.market.creds.list();
+        // Inside a workspace, the GitHub cred must come from the workspace's shared
+        // organization credentials, not the operator's personal creds (LOBE-10978).
+        const credsAccessor = this.workspaceId
+          ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
+          : this.marketService.market.creds;
+        const list = await credsAccessor.list();
         const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
         if (cred) {
-          const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
+          const full = await credsAccessor.get(cred.id, { decrypt: true });
           const vals = (full as any).plaintext ?? (full as any).values ?? {};
           githubToken = vals.access_token ?? vals.token;
         }
@@ -1995,6 +2054,7 @@ export class AiAgentService {
 
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
             systemContext: deviceSystemContext,
@@ -2159,7 +2219,7 @@ export class AiAgentService {
     // connector) is both queried for manifests and enabled by the tools engine.
     let agentPlugins: string[] = [
       ...new Set([
-        ...(agentConfig?.plugins ?? []),
+        ...getActivePluginIds(agentConfig?.plugins),
         ...(additionalPluginIds || []),
         ...(selectedToolIds || []),
         ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
@@ -2246,9 +2306,20 @@ export class AiAgentService {
     if (params.disableTools) {
       log('execAgent: tools disabled by disableTools flag, skipping all tool discovery');
     } else {
-      // 5a. Get installed plugins from database
-      const installedPlugins = await this.pluginModel.query();
-      log('execAgent: got %d installed plugins', installedPlugins.length);
+      // 5a. Get installed plugins from database. Disabled identifiers are
+      // excluded from this candidate pool entirely — not just from the pinned
+      // `rules` allowlist — because `createEnableChecker`'s explicit-activation
+      // bypass (auto activator) short-circuits before rules are consulted, so a
+      // present-but-rule-disabled manifest could still be auto-activated.
+      const disabledPluginIdSet = new Set(disabledPluginIds);
+      const installedPlugins = (await this.pluginModel.query()).filter(
+        (p) => !disabledPluginIdSet.has(p.identifier),
+      );
+      log(
+        'execAgent: got %d installed plugins (%d disabled excluded)',
+        installedPlugins.length,
+        disabledPluginIdSet.size,
+      );
 
       // 5a-1. Resolve connectors — connector identifier takes priority over plugin.
       // Credentials (OAuth tokens) are encrypted at rest, so decrypt them with a
@@ -2563,11 +2634,24 @@ export class AiAgentService {
         operationAgentGroup = buildBotConversationGroupContext(resolvedAgentId, agentConfig);
       }
 
+      // Skills/Composio/connector identifiers share the same `plugins`
+      // identifier space as installed plugins, so a disabled entry must be
+      // excluded from their manifests too — otherwise the disabled tool stays
+      // discoverable/activatable via these additionalManifests even though
+      // `installedPlugins` above already dropped it.
+      const dropDisabledManifests = <T extends { identifier: string }>(manifests: T[]): T[] =>
+        disabledPluginIdSet.size === 0
+          ? manifests
+          : manifests.filter((m) => !disabledPluginIdSet.has(m.identifier));
+      const activeLobehubSkillManifests = dropDisabledManifests(lobehubSkillManifests);
+      const activeComposioManifests = dropDisabledManifests(composioManifests);
+      const activeConnectorManifests = dropDisabledManifests(connectorManifests);
+
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [
-          ...lobehubSkillManifests,
-          ...composioManifests,
-          ...connectorManifests,
+          ...activeLobehubSkillManifests,
+          ...activeComposioManifests,
+          ...activeConnectorManifests,
         ],
         agentConfig: {
           chatConfig: agentConfig.chatConfig ?? undefined,
@@ -2614,10 +2698,10 @@ export class AiAgentService {
           ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
           RemoteDeviceManifest.identifier,
           // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
-          ...lobehubSkillManifests.map((m) => m.identifier),
-          ...composioManifests.map((m) => m.identifier),
+          ...activeLobehubSkillManifests.map((m) => m.identifier),
+          ...activeComposioManifests.map((m) => m.identifier),
           // Connector manifests are also injected as additionalManifests
-          ...connectorManifests.map((m) => m.identifier),
+          ...activeConnectorManifests.map((m) => m.identifier),
         ]),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
@@ -2722,25 +2806,30 @@ export class AiAgentService {
         toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
       }
 
-      // Include lobehub skill and composio manifests for activator discovery
-      for (const manifest of lobehubSkillManifests) {
+      // Include lobehub skill and composio manifests for activator discovery.
+      // Uses the disabled-filtered `active*Manifests` (not the raw
+      // lobehubSkillManifests/composioManifests) — otherwise a disabled
+      // skill/composio integration would be re-ingested here and shown to
+      // the model as discoverable in <available_tools>, even though it was
+      // correctly excluded from the actual invocation pool above.
+      for (const manifest of activeLobehubSkillManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
         }
       }
-      for (const manifest of composioManifests) {
+      for (const manifest of activeComposioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
         }
       }
 
-      for (const manifest of lobehubSkillManifests) {
+      for (const manifest of activeLobehubSkillManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
       }
-      for (const manifest of composioManifests) {
+      for (const manifest of activeComposioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'composio';
       }
@@ -3396,9 +3485,17 @@ export class AiAgentService {
       // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
       // can only collide with each other — but we still dedupe by name to keep
       // a single shape for the SkillEngine input.
+      //
+      // Disabled skills are dropped here, not just rule-gated later: this
+      // `skills` array is the sole candidate pool SkillEngine/SkillResolver
+      // build `<available_skills>` from AND the pool `activateSkill` resolves
+      // against, so a disabled identifier absent here is neither listed nor
+      // activatable — mirrors the tool-manifest treatment above (installedPlugins/
+      // additionalManifests), which this array had never received.
       const seenNames = new Set<string>();
       const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
         (skill) => {
+          if (disabledPluginIds.includes(skill.identifier)) return false;
           if (seenNames.has(skill.name)) return false;
           seenNames.add(skill.name);
           return true;

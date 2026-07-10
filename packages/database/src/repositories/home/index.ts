@@ -311,6 +311,16 @@ export class HomeRepository {
     const groupedMap = new Map<string, SidebarAgentItem[]>();
     const privateGroupedMap = new Map<string, SidebarAgentItem[]>();
 
+    // Group ids that will actually render, split by visibility bucket. An
+    // item whose groupId resolves to no visible folder (e.g. a folder from
+    // another scope left behind by a transfer, or a deleted folder) must fall
+    // back to the ungrouped list instead of being silently dropped.
+    const groupIds = new Set<string>();
+    const privateGroupIds = new Set<string>();
+    for (const g of groupItems) {
+      (g.visibility === 'private' ? privateGroupIds : groupIds).add(g.id);
+    }
+
     for (const item of allItems) {
       const { groupId, isPrivate, ...sidebarItem } = item;
       const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
@@ -320,7 +330,8 @@ export class HomeRepository {
         continue;
       }
 
-      if (groupId) {
+      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
+      if (groupId && validGroupIds.has(groupId)) {
         const bucket = isPrivate ? privateGroupedMap : groupedMap;
         const existing = bucket.get(groupId) || [];
         existing.push(cleanedItem);

@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { marketRouter } from './market';
 
+const mockPreprocessLhCommand = vi.hoisted(() => vi.fn());
+const mockSandboxCallTool = vi.hoisted(() => vi.fn());
+const mockCreateSandboxService = vi.hoisted(() =>
+  vi.fn(() => ({
+    callTool: mockSandboxCallTool,
+  })),
+);
 const mockMarketSDK = vi.hoisted(() => ({
   skills: {
     callTool: vi.fn(),
@@ -29,6 +36,18 @@ vi.mock('@/libs/trpc/lambda/middleware/marketSDK', () => ({
   requireMarketAuth: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
 }));
 
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(() => ({})),
+}));
+
+vi.mock('@/server/services/sandbox', () => ({
+  createSandboxService: mockCreateSandboxService,
+}));
+
+vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
+  preprocessLhCommand: mockPreprocessLhCommand,
+}));
+
 vi.mock('debug', () => ({
   default: vi.fn(() => vi.fn()),
 }));
@@ -36,6 +55,35 @@ vi.mock('debug', () => ({
 describe('tools marketRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('should pass workspace scope when preprocessing sandbox lh commands', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+    mockPreprocessLhCommand.mockResolvedValue({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent view agt_1',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+    mockSandboxCallTool.mockResolvedValue({ result: { ok: true }, success: true });
+
+    await caller.execInSandbox({
+      params: { command: 'lh agent view agt_1' },
+      toolName: 'runCommand',
+      topicId: 'topic-1',
+    });
+
+    expect(mockPreprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent view agt_1',
+      'user-1',
+      'workspace-1',
+    );
+    expect(mockSandboxCallTool).toHaveBeenCalledWith('runCommand', {
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent view agt_1',
+    });
   });
 
   it('should fall back to static tools when live discovery fails', async () => {

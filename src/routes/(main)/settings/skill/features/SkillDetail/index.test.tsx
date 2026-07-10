@@ -78,11 +78,9 @@ vi.mock('@lobehub/ui', () => ({
   Skeleton: () => <div data-testid="skeleton" />,
 }));
 
+// Stub the base-ui Button to a native button — it needs a MotionProvider the
+// app sets up globally but the unit env doesn't.
 vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: mocks.confirmModal,
-}));
-
-vi.mock('antd', () => ({
   Button: ({
     children,
     disabled,
@@ -92,10 +90,11 @@ vi.mock('antd', () => ({
     disabled?: boolean;
     onClick?: () => void;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button disabled={disabled} type="button" onClick={onClick}>
       {children}
     </button>
   ),
+  confirmModal: mocks.confirmModal,
 }));
 
 vi.mock('antd-style', () => ({

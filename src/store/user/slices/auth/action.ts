@@ -1,5 +1,6 @@
 import { type SSOProvider } from '@lobechat/types';
 
+import { clearActiveScopeKey } from '@/libs/swr/useCacheScope';
 import { type StoreSetter } from '@/store/types';
 
 import { type UserStore } from '../../store';
@@ -74,6 +75,9 @@ export class UserAuthActionImpl {
     await signOut({
       fetchOptions: {
         onSuccess: () => {
+          // Drop the persisted active scope so the next boot doesn't hydrate the
+          // signed-out user's cache (localStorage survives the reload below).
+          clearActiveScopeKey();
           // Use window.location.href to trigger a full page reload
           // This ensures all client-side state (React, Zustand, cache) is cleared
           window.location.href = '/signin';

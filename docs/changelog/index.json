@@ -1,6 +1,12 @@
 {
   "$schema": "https://github.com/lobehub/lobe-chat/blob/main/docs/changelog/schema.json",
-  "cloud": [],
+  "cloud": [
+    {
+      "id": "2026-07-08-wechat-chat-adjustment",
+      "date": "2026-07-08",
+      "versionRange": ["2.2.11"]
+    }
+  ],
   "community": [
     {
       "image": "/blog/assets001f03cc00b8dc0f1c49f387aa7b19a8.webp",

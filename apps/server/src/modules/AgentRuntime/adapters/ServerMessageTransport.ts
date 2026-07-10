@@ -1,9 +1,11 @@
 import type {
   MessageTransport,
   QueryMessagesInput,
+  QueryMessagesOptions,
   RuntimeMessageRef,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { parse } from '@lobechat/conversation-flow';
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
@@ -17,7 +19,15 @@ import {
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
  */
 export class ServerMessageTransport implements MessageTransport {
-  constructor(private readonly messageModel: MessageModel) {}
+  constructor(
+    private readonly messageModel: MessageModel,
+    private readonly options: {
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
+    } = {},
+  ) {}
 
   createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     return this.messageModel.create(params);
@@ -40,11 +50,33 @@ export class ServerMessageTransport implements MessageTransport {
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
     const message = await this.messageModel.findById(id);
-    return message ? { id: message.id } : undefined;
+    return message
+      ? {
+          agentId: message.agentId,
+          groupId: message.groupId,
+          id: message.id,
+          model: message.model,
+          parentId: message.parentId,
+          provider: message.provider,
+          role: message.role,
+          threadId: message.threadId,
+          topicId: message.topicId,
+        }
+      : undefined;
   }
 
-  query(params?: QueryMessagesInput): Promise<UIChatMessage[]> {
-    return this.messageModel.query(params);
+  async query(
+    params?: QueryMessagesInput,
+    options?: QueryMessagesOptions,
+  ): Promise<UIChatMessage[]> {
+    const messages = await this.messageModel.query(params, {
+      postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
+    });
+
+    if (!options?.flatten) return messages;
+
+    const { flatList } = parse(messages);
+    return flatList;
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {

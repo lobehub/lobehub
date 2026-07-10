@@ -35,7 +35,7 @@ not `127.0.0.1`.
 | -------- | ---------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------- |
 | CLI      | Seeded API key or OIDC Device Code Flow  | `.records/env/agent-testing-cli.env` + `$HOME/.lobehub-dev`       | No for seed path; yes for device-code fallback |
 | Web      | Seeded better-auth login or cookie copy  | `~/.lobehub-agent-testing/web-state.json` + agent-browser session | No for seed path; copy cookie only as fallback |
-| Electron | App's own login state                    | Electron user-data dir                                            | Log in once manually in the app                |
+| Electron | App's own login state                    | `~/.lobehub/agent-testing/electron-login` (snapshot on `stop`)    | No — the agent drives the sign-in itself       |
 | Bot      | Native apps (Discord/WeChat/…) logged in | Each app's own session                                            | Once per app                                   |
 
 ## CLI — Seeded API key
@@ -147,10 +147,19 @@ agent-browser --session lobehub-dev snapshot -i | head -20
 
 ## Electron
 
-The desktop app keeps its own persistent login state in its user-data
-directory — log in once manually inside the app and it survives restarts of
-`electron-dev.sh`. No injection needed. The standard check (do NOT hand-roll a
-store eval) once Electron is up with CDP:
+The desktop app keeps its login in its user-data directory. Pool instances get a
+throwaway userData, so `electron-dev.sh` persists the login **for you**: `stop`
+snapshots it into `~/.lobehub/agent-testing/electron-login` before wiping the dir,
+and `start` seeds every new instance from that snapshot. Sign in once, not once
+per run.
+
+```bash
+EDEV=./.agents/skills/agent-testing/scripts/electron-dev.sh
+$EDEV login-status        # which source seeds the next instance, and its expiry
+$EDEV save-login <id>     # snapshot a live instance without stopping it
+```
+
+The standard check (do NOT hand-roll a store eval) once Electron is up with CDP:
 
 ```bash
 ./.agents/skills/agent-testing/scripts/app-probe.sh auth
@@ -159,6 +168,42 @@ store eval) once Electron is up with CDP:
 
 `setup-auth.sh status` runs this probe automatically when CDP 9222 is
 reachable.
+
+### When the instance comes up signed out
+
+Sign it in **yourself** — never hand this step to the user. The desktop flow is
+OAuth+PKCE against `/oidc/auth`, and the redirect target is a **server page the app
+then polls** (`/oidc/callback/desktop`), not a `lobehub://` deep link — so no other
+app can steal the callback, and no click is needed when the default browser already
+has a LobeHub session:
+
+```bash
+agent-browser --session s<port> --cdp <port> eval --stdin << 'EOF'
+(async () => {
+  const m = await import('/src/services/electron/remoteServer.ts');
+  return JSON.stringify(await (m.remoteServerService || m.default).requestAuthorization({ storageMode: 'cloud' }));
+})()
+EOF
+# poll until user().user.id appears, then capture it:
+$EDEV save-login <id>
+```
+
+Three traps behind a signed-out instance:
+
+- **The refresh token rotates on every boot.** Only the instance that booted last
+  holds a usable one, so a `stop` is what keeps the snapshot alive. If an instance is
+  _killed_ instead (crash, command timeout) its rotated token dies with it —
+  `save-login <id>` before anything risky.
+- **`encryptedTokens.expiresAt` is the ACCESS token's expiry, not the refresh
+  token's.** It is `Date.now() + data.expires_in * 1000` in
+  `RemoteServerConfigCtr.saveTokens`, so it goes stale on a perfectly refreshable
+  login and must never gate whether a profile is kept. The signal that _does_ mean
+  signed out is a **missing `refreshToken`**: the app calls `clearTokens()` (deleting
+  the whole `encryptedTokens` key) when a refresh fails non-retryably
+  (`invalid_grant` \&co), and preserves it on transient failures.
+- **Even a missing token does not always mean signed out.** A better-auth cookie can
+  outlive it. `stop` / `save-login` probe the _running renderer_ for a user id, so a
+  live cookie-only session is captured too; the on-disk token alone would miss it.
 
 ## Scope
 

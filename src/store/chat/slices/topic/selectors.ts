@@ -10,6 +10,7 @@ import {
   type TopicSortBy,
 } from '@/types/topic';
 import {
+  getTopicSortTime,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
@@ -130,7 +131,7 @@ const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
 
 const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
   const field = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
-  return [...topics].sort((a, b) => b[field] - a[field]);
+  return [...topics].sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
 };
 
 // Limit topics for sidebar display based on user's page size preference

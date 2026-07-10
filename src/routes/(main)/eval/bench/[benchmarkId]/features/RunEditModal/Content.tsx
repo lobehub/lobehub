@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input, InputNumber, Select, Space } from 'antd';
+import { Select, useModalContext } from '@lobehub/ui/base-ui';
+import { App, Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -107,24 +107,35 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
 
   const allAgents = useMemo(() => [inboxAgent, ...agents], [inboxAgent, agents]);
 
+  const agentMap = useMemo(() => new Map(allAgents.map((agent) => [agent.id, agent])), [allAgents]);
+
   const agentOptions = useMemo(
     () =>
       allAgents.map((agent) => ({
-        label: (
-          <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
-              avatar={agent.avatar || undefined}
-              background={agent.backgroundColor || undefined}
-              size={20}
-              title={agent.title || ''}
-            />
-            <span>{agent.title}</span>
-          </span>
-        ),
-        searchLabel: agent.title || '',
+        label: agent.title || agent.id,
+        title: agent.title || '',
         value: agent.id,
       })),
     [allAgents],
+  );
+
+  const renderAgentLabel = useCallback(
+    (agentId: string, fallback: React.ReactNode) => {
+      const agent = agentMap.get(agentId);
+
+      return (
+        <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+          <Avatar
+            avatar={agent?.avatar || undefined}
+            background={agent?.backgroundColor || undefined}
+            size={20}
+            title={agent?.title || String(fallback)}
+          />
+          <span>{agent?.title || fallback}</span>
+        </span>
+      );
+    },
+    [agentMap],
   );
 
   const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
@@ -193,13 +204,11 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
             allowClear
             showSearch
             className={styles.agentSelect}
+            labelRender={(option) => renderAgentLabel(String(option.value), option.label)}
             loading={loadingAgents}
             options={agentOptions}
             placeholder={t('run.create.agent.placeholder')}
             variant="filled"
-            filterOption={(input, option) =>
-              (option?.searchLabel as string)?.toLowerCase().includes(input.toLowerCase())
-            }
             optionRender={(option) => (
               <span
                 style={{
@@ -209,7 +218,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                   justifyContent: 'space-between',
                 }}
               >
-                {option.label}
+                {renderAgentLabel(String(option.value), option.label)}
                 <ActionIcon
                   icon={SquareArrowOutUpRight}
                   size="small"

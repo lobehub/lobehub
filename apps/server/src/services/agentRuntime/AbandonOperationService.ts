@@ -15,6 +15,7 @@ import type { LobeChatDatabase } from '@/database/type';
 // its workspace-package transitive deps in the unit-test environment.
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
+import { CompletionLifecycle } from './CompletionLifecycle';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
 
@@ -108,9 +109,14 @@ export class AbandonOperationService {
       isSubAgent?: boolean;
       orchestrationRole?: 'supervisor' | 'member';
       threadId?: string | null;
+      topicId?: string | null;
       userId?: string;
       workspaceId?: string;
     };
+    const shouldDispatchAbandonedLifecycle =
+      state.status === 'running' ||
+      state.status === 'waiting_for_human' ||
+      state.status === 'waiting_for_async_tool';
     const message = `Operation abandoned: ${reason}`;
     const error: ChatMessageError = {
       body: { message },
@@ -151,6 +157,36 @@ export class AbandonOperationService {
         result.assistantMessageUpdated = true;
       } catch (e) {
         log('[%s] assistant message update failed (non-fatal): %O', operationId, e);
+      }
+    }
+
+    if (!metadata.isSubAgent && metadata.userId) {
+      if (metadata.topicId) {
+        try {
+          const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
+          const topic = await topicModel.findById(metadata.topicId);
+          const running = topic?.metadata?.runningOperation as
+            { assistantMessageId?: string; operationId?: string } | undefined;
+          if (running?.operationId === operationId) {
+            await topicModel.updateMetadata(metadata.topicId, { runningOperation: null });
+          }
+        } catch (e) {
+          log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
+        }
+      }
+
+      if (shouldDispatchAbandonedLifecycle) {
+        try {
+          await new CompletionLifecycle(
+            this.db,
+            metadata.userId,
+            metadata.workspaceId,
+          ).dispatchHooks(operationId, finalState, 'error', {
+            skipErrorMessageWrite: result.assistantMessageUpdated,
+          });
+        } catch (e) {
+          log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
+        }
       }
     }
 
@@ -293,8 +329,7 @@ export class AbandonOperationService {
         topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
         const topic = await topicModel.findById(op.topicId);
         const running = topic?.metadata?.runningOperation as
-          | { assistantMessageId?: string; operationId?: string }
-          | undefined;
+          { assistantMessageId?: string; operationId?: string } | undefined;
 
         if (running?.operationId && running.operationId !== operationId) return undefined;
 

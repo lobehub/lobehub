@@ -3,6 +3,7 @@
 import { type UserCredSummary } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
+import { TRPCClientError } from '@trpc/client';
 import { Empty, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LogIn } from 'lucide-react';
@@ -45,7 +46,7 @@ const CredsList: FC = () => {
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const credsApi = useCredsApi();
 
-  const { data, isLoading, error, refetch } = credsApi.query.list.useQuery(undefined, {
+  const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
@@ -64,12 +65,13 @@ const CredsList: FC = () => {
   const handleEdit = (cred: UserCredSummary) => {
     createEditCredModal({
       cred,
+      credsApi,
       onSuccess: () => refetch(),
     });
   };
 
   const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred });
+    createViewCredModal({ cred, credsApi });
   };
 
   if (isAuthLoading) {
@@ -87,6 +89,15 @@ const CredsList: FC = () => {
         <Button icon={LogIn} type={'primary'} onClick={() => signIn()}>
           {t('creds.signIn')}
         </Button>
+      </div>
+    );
+  }
+
+  // Org not created: guide users to complete Community Profile setup first.
+  if (!isLoading && error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND') {
+    return (
+      <div className={styles.signInPrompt}>
+        <Empty description={t('creds.orgSetupRequired')} />
       </div>
     );
   }

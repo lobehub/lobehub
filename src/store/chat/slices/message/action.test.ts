@@ -41,7 +41,6 @@ vi.mock('@/services/message', () => ({
     updateMessagePlugin: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
     updateMessagePluginError: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
     updateMessageRAG: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    removeAllMessages: vi.fn(() => Promise.resolve()),
   },
 }));
 vi.mock('@/services/topic', () => ({
@@ -549,21 +548,6 @@ describe('chatMessage actions', () => {
           topicId,
         },
       );
-    });
-  });
-
-  describe('clearAllMessages', () => {
-    it('clearAllMessages should remove all messages', async () => {
-      const { result } = renderHook(() => useChatStore());
-      const clearAllSpy = vi.spyOn(result.current, 'clearAllMessages');
-      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
-
-      await act(async () => {
-        await result.current.clearAllMessages();
-      });
-
-      expect(clearAllSpy).toHaveBeenCalled();
-      expect(replaceMessagesSpy).toHaveBeenCalledWith([]);
     });
   });
 
@@ -1172,11 +1156,9 @@ describe('chatMessage actions', () => {
     it('should preserve groupId from operation context', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      let operationId: string;
-
       await act(async () => {
         // Create operation with group context
-        const op = result.current.startOperation({
+        result.current.startOperation({
           type: 'sendMessage',
           context: {
             agentId: 'agent1',
@@ -1184,7 +1166,6 @@ describe('chatMessage actions', () => {
             topicId: 'topic1',
           },
         });
-        operationId = op.operationId;
 
         const messages = [{ id: 'msg1', role: 'user', content: 'Hello' }] as any;
 

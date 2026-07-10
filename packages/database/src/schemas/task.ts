@@ -235,6 +235,12 @@ export const taskTopics = pgTable(
     // 'running' | 'completed' | 'failed' | 'timeout' | 'canceled'
     status: text('status').notNull().default('running'),
 
+    // What triggered this run: 'manual' (ad-hoc run-now / agent tool call),
+    // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
+    // rows created before this column existed. Used so the maxExecutions quota
+    // counts only automation ticks, not manual runs (LOBE-11391).
+    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat'>(),
+
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }
     handoff: jsonb('handoff'),

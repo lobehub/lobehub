@@ -55,6 +55,7 @@ export interface FinalizeParams {
    */
   error?: {
     attribution?: ChatMessageErrorAttribution;
+    body?: unknown;
     category?: string;
     countAsFailure?: boolean;
     httpStatus?: number;
@@ -70,7 +71,7 @@ export interface FinalizeParams {
    * so the catch caller passes this to keep step counts aligned with the
    * assistant message that triggered the call. See .
    */
-  failedStep?: { startedAt: number; stepIndex: number };
+  failedStep?: { startedAt: number; stepIndex: number; stepType?: 'call_llm' | 'call_tool' };
   state: any;
 }
 
@@ -151,12 +152,7 @@ export class OperationTraceRecorder {
             executionTimeMs: now - params.failedStep.startedAt,
             startedAt: params.failedStep.startedAt,
             stepIndex: params.failedStep.stepIndex,
-            // StepSnapshot.stepType is strictly 'call_llm' | 'call_tool';
-            // persist-fatal originates in the tool path so 'call_tool' is the
-            // truthful label. LLM-side failures still map here — the
-            // surrounding `events: [{type: 'error'}]` is the discriminant
-            // consumers read.
-            stepType: 'call_tool',
+            stepType: params.failedStep.stepType ?? 'call_tool',
             totalCost: params.state?.cost?.total ?? 0,
             totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
           });

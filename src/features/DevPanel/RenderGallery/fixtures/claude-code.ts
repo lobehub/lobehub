@@ -40,6 +40,14 @@ export default defineFixtures({
       name: 'Edit',
     },
     {
+      description: 'Create a new git worktree or enter an existing one.',
+      name: 'EnterWorktree',
+    },
+    {
+      description: 'Leave the active Claude Code worktree and optionally remove it.',
+      name: 'ExitWorktree',
+    },
+    {
       description: 'Find files by glob pattern.',
       name: 'Glob',
     },
@@ -242,6 +250,44 @@ export default defineFixtures({
         old_string: "path: 'tasks',",
       },
     }),
+    EnterWorktree: variants([
+      {
+        args: { name: 'worktree-icon-in-worktree' },
+        content:
+          'Created worktree at /workspace/.claude/worktrees/worktree-icon-in-worktree on branch worktree-worktree-icon-in-worktree.',
+        label: 'Create named',
+      },
+      {
+        args: {
+          path: '/workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name',
+        },
+        content:
+          'Entered existing worktree at /workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name.',
+        label: 'Enter existing',
+      },
+      {
+        args: {},
+        content: 'Created worktree with a generated name.',
+        label: 'Create generated',
+      },
+    ]),
+    ExitWorktree: variants([
+      {
+        args: { action: 'keep' },
+        content: 'Left the worktree. The worktree and branch remain on disk.',
+        label: 'Keep on disk',
+      },
+      {
+        args: { action: 'remove' },
+        content: 'Removed the worktree and branch.',
+        label: 'Remove clean',
+      },
+      {
+        args: { action: 'remove', discard_changes: true },
+        content: 'Removed the worktree and discarded 3 files and 1 commit.',
+        label: 'Discard changes',
+      },
+    ]),
     Glob: single({
       args: { path: 'src/routes', pattern: '**/index.tsx' },
       content: 'src/routes/(main)/agent/index.tsx\nsrc/routes/(main)/devtools/index.tsx',

@@ -211,6 +211,39 @@ skill's job to solve and then iterate back into these logs.
 
 ---
 
+## Case 8b — Handing the user the sign-in click when the app under test is signed out
+
+**Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
+earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
+the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
+"skip the screenshot".
+
+**Why it's wrong**: this is Case 8 wearing a different hat. `auth.md` says "Electron: log in once manually
+in the app" — that line is addressed to the **agent**, not the user. Auth is environment mechanics, and the
+standing rule is that the skill owns those end to end. The user's words: " 你以后都自己点 sign in 授权，不应
+该让我操作 ".
+
+**What it breaks**: burns a round on a question the user doesn't want, and stalls a UI-touching change
+(Case 9 / Case 10) one click short of its screenshot.
+
+**Correct approach**: drive the sign-in yourself — click the app's own "Sign in" entry, follow the OAuth
+flow in the browser it opens, and get back into the app. Only escalate when a step genuinely needs
+something you cannot supply (a 2FA push on their phone), and then name the exact blocking step instead of
+offering to drop the evidence.
+
+**What this run changed**: `electron-dev.sh stop <id>` used to delete the instance's userData and its login
+with it, so every run re-entered the sign-in flow. It now snapshots the login into
+`~/.lobehub/agent-testing/electron-login` first, and `start` seeds new instances from that snapshot
+(`login-status` shows the source + expiry; `save-login <id>` captures a live instance before anything
+risky, since a _killed_ instance loses its rotated refresh token).
+
+**Corollary**: never assume a profile is signed in because it exists — probe for a real signed-in state
+(`user().user?.id`, or a cheap authed mutation) before building a fixture on top of it. A rendered sidebar
+is not proof: the signed-out onboarding screen has text too, so `innerText.length > 50` passes while
+`createAgent` returns `UNAUTHORIZED`.
+
+---
+
 ## Case 9 — Self-judging a screenshot as "too costly" and asking the user to picture the result
 
 **Wrong approach**: after a small user-facing UI change (a padding tweak), skipping
@@ -324,3 +357,73 @@ attach the static shot of the asserted state as the primary evidence. If the
 expected-failure terminal state is worth showing, say so explicitly in the
 case's `observation` ("ends in the error page because the test session id is
 fake — expected, not the assertion") so the viewer is told before they see it.
+
+---
+
+## Case 14 — Verifying only the entry compose surface when a shared component also appears in deeper pages
+
+**Wrong approach**: after changing a shared chat input component, publishing a
+passing UI report from the home compose surface only, even though the same
+component also renders after entering an agent/conversation page.
+
+**Why it's wrong**: shared components can be composed with different wrappers,
+slots, and responsive containers across surfaces. A fix that looks correct on the
+home input can still be misplaced on an inner conversation page.
+
+**What it breaks**: the verify report goes green while a deeper product path
+still shows the old or awkward warning placement, and the user has to point out
+that the page after entry was never checked.
+
+**Correct approach**: enumerate all product surfaces where the changed shared UI
+renders before publishing. For ChatInput placement changes, verify both the home
+input and an inner agent/conversation page, attach separate screenshot evidence
+for each, and mark any skipped surface explicitly blocked or untested.
+
+---
+
+## Case 15 — Verifying action-bar placement without covering collapsed toolbar state
+
+**Wrong approach**: after moving a warning into a chat input action bar, checking
+only the normal expanded toolbar state and publishing the layout as passed,
+without forcing the toolbar into its persisted collapsed / auto-collapsed state.
+
+**Why it's wrong**: action bars often have their own overflow behavior and saved
+user preference. Adding a warning beside the toolbar can shrink the measured
+available width enough to trigger a popup collapse, or a previously saved
+collapsed preference can hide the exact action the change is supposed to sit
+beside.
+
+**What it breaks**: the screenshot can look acceptable for a fresh profile while
+real users who have collapsed the toolbar, or narrower input containers, see the
+primary left action replaced by a chevron/popup icon.
+
+**Correct approach**: for any UI change inside an action/toolbar row, verify both
+the default state and the collapsed/overflow state. If the design requires a
+specific action to stay visible, disable or bypass the toolbar collapse logic for
+that surface and include evidence that no collapse chevron is rendered.
+
+---
+
+## Case 16 — Publishing a component harness when the user asked for full product verification
+
+**Wrong approach**: when the isolated Electron instance failed once and local Docker
+was unavailable, declaring the product-surface verification blocked and publishing a
+component harness report as the main answer, even though another live Electron dev
+pool / CDP route was already running and previous runs had used it successfully.
+
+**Why it's wrong**: a component harness proves a narrow render contract, but it does
+not prove the full product composition, message list layout, app theme tokens,
+store plumbing, or that the evidence is inspectable in the actual desktop surface.
+Environment friction is the agent-testing job to solve, not a reason to downgrade
+without exhausting known running surfaces.
+
+**What it breaks**: the user opens a report expecting complete product evidence and
+gets a partial proof instead, then has to push back that the full verification used
+to run normally.
+
+**Correct approach**: before marking Electron/Web blocked, inventory existing dev
+instances and CDP ports, check whether a sibling worktree already runs the needed
+live branch, measure the target URL/bundle, and use that path if it renders current
+code. Only keep a harness as supporting evidence; the primary UI evidence must come
+from the product surface, or the report must clearly fail/block after every known
+path is measured.

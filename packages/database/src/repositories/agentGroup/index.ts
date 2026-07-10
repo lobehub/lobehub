@@ -1,5 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import type { AgentGroupDetail, AgentGroupMember } from '@lobechat/types';
+import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, eq, inArray, not } from 'drizzle-orm';
 
@@ -41,7 +41,7 @@ export interface SupervisorAgentConfig {
   description?: string;
   model?: string;
   params?: any;
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
   provider?: string;
   systemRole?: string;
   tags?: string[];
@@ -427,7 +427,11 @@ export class AgentGroupRepository {
         description: supervisorConfig?.description,
         model: supervisorConfig?.model,
         params: supervisorConfig?.params,
-        plugins: supervisorConfig?.plugins,
+        // The `plugins` column is still typed `string[]` at the schema layer
+        // (widening deferred to the tri-state rollout's final phase) but
+        // legitimately holds mixed AgentPluginEntry[] at runtime — JSONB has
+        // no schema enforcement.
+        plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
         provider: supervisorConfig?.provider,
         systemRole: supervisorConfig?.systemRole,
         tags: supervisorConfig?.tags,

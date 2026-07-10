@@ -549,6 +549,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('Hệ thống đang bận'),
     note: 'Vietnamese proxy: system busy, retry shortly',
   },
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('Vision is temporarily unavailable. Send text-only requests for now.'),
+  },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('服务器问题调试中') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('undergoing an upgrade') },
 
@@ -615,6 +619,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   // NoAvailableChannel — router / proxy has no upstream
   // ─────────────────────────────────────────────────────────────────────────
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('No available accounts') },
+  {
+    code: AgentRuntimeErrorType.NoAvailableChannel,
+    match: sub('All available accounts exhausted'),
+  },
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('No endpoints found') },
   {
     code: AgentRuntimeErrorType.NoAvailableChannel,
@@ -708,6 +716,8 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.ModelNotFound, match: sub('not available for integrator') },
   { code: AgentRuntimeErrorType.ModelNotFound, match: sub('is not available. Please use') },
   { code: AgentRuntimeErrorType.ModelNotFound, match: sub('The requested model is not available') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('Requested model is not valid') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('invalid params, unknown model') },
   {
     code: AgentRuntimeErrorType.ModelNotFound,
     match: sub('Unknown Model, please check the model code'),
@@ -744,6 +754,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     match: sub('API key expired. Please renew the API key'),
+  },
+  { code: AgentRuntimeErrorType.InvalidProviderAPIKey, match: sub('API key is disabled.') },
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('This API key has been suspended.'),
   },
   {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
@@ -802,6 +817,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('not available for trial users') },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('403 Forbidden') },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('403 | Forbidden') },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('You have no permission to access this resource'),
+  },
   {
     code: AgentRuntimeErrorType.PermissionDenied,
     match: sub('Access denied due to Virtual Network'),
@@ -1078,6 +1098,16 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('error getting file type: failed to download file'),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('Unable to download the file. Please verify the URL and try again.'),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub(
+      'The request is invalid for this endpoint. Check your model name, messages, tools, and parameters.',
+    ),
   },
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('422 status code (no body)') },
 

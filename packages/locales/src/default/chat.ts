@@ -123,6 +123,9 @@ export default {
   'extendParams.imageResolution.title': 'Image Resolution',
   'extendParams.reasoningBudgetToken.title': 'Thinking Consumption Token',
   'extendParams.reasoningEffort.title': 'Reasoning Intensity',
+  'extendParams.reasoningMode.desc':
+    'Standard balances speed and cost. Pro performs more model work for difficult tasks and may use more tokens.',
+  'extendParams.reasoningMode.title': 'Reasoning Mode',
   'extendParams.textVerbosity.title': 'Output Text Detail Level',
   'extendParams.thinking.title': 'Deep Thinking Switch',
   'extendParams.thinkingBudget.title': 'Thinking Budget',
@@ -195,6 +198,15 @@ export default {
     'This agent uses an API key / custom endpoint, so subscription quota does not apply.',
   'heteroAgent.claudeQuota.unavailableNotFound':
     'No Claude Code login found. Run claude in a terminal to sign in first.',
+  'heteroAgent.claudeSdkRuntime.state.closed': 'SDK closed',
+  'heteroAgent.claudeSdkRuntime.state.closing': 'SDK closing',
+  'heteroAgent.claudeSdkRuntime.state.error': 'SDK error',
+  'heteroAgent.claudeSdkRuntime.state.idle': 'SDK idle',
+  'heteroAgent.claudeSdkRuntime.state.monitoring': 'SDK monitoring',
+  'heteroAgent.claudeSdkRuntime.state.running': 'SDK running',
+  'heteroAgent.claudeSdkRuntime.state.stale': 'SDK stale',
+  'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
+  'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.expiresIn': 'Expires in {{duration}}',
   'heteroAgent.codexQuota.nextExpiresIn': 'Next expires in {{duration}}',
   'heteroAgent.codexQuota.resetCredits_one': '1 rate-limit reset available',
@@ -233,6 +245,7 @@ export default {
   'heteroAgent.modelSelector.reasoning.low': 'Low',
   'heteroAgent.modelSelector.reasoning.max': 'Max',
   'heteroAgent.modelSelector.reasoning.medium': 'Medium',
+  'heteroAgent.modelSelector.reasoning.ultra': 'Ultra',
   'heteroAgent.modelSelector.reasoning.xhigh': 'Extra High',
   'heteroAgent.modelSelector.speed': 'Speed',
   'heteroAgent.modelSelector.speed.fast': 'Fast',
@@ -270,6 +283,8 @@ export default {
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':
     'No remote devices yet. Run `lh connect` on another machine to add one.',
+  'heteroAgent.executionTarget.noWorkspaceDevices':
+    'No workspace devices yet. Run `{{cmd}}` on a machine to enroll it for every member.',
   'heteroAgent.executionTarget.none': 'No device',
   'heteroAgent.executionTarget.noneDesc': 'No device enabled',
   'heteroAgent.executionTarget.offline': 'Offline',

@@ -392,8 +392,11 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
     {
       cases: [
         ['no channel available for model', AgentRuntimeErrorType.NoAvailableChannel],
+        ['All available accounts exhausted', AgentRuntimeErrorType.NoAvailableChannel],
         ['"code":"NOT_FOUND","msg":"route not found"', AgentRuntimeErrorType.NoAvailableChannel],
         ['Unknown Model, please check the model code', AgentRuntimeErrorType.ModelNotFound],
+        ['Requested model is not valid', AgentRuntimeErrorType.ModelNotFound],
+        ['invalid params, unknown model', AgentRuntimeErrorType.ModelNotFound],
         ['404 page not found', AgentRuntimeErrorType.UserConfigError],
         ['OpenAIException - {"detail":"Not Found"}', AgentRuntimeErrorType.UserConfigError],
       ],
@@ -407,7 +410,11 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
           'vertexai',
         ],
         ['No active credentials for provider', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['API key is disabled.', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['This API key has been suspended.', AgentRuntimeErrorType.InvalidProviderAPIKey],
         ['<h1>403 Forbidden</h1>', AgentRuntimeErrorType.PermissionDenied],
+        ['403 | Forbidden', AgentRuntimeErrorType.PermissionDenied],
+        ['You have no permission to access this resource', AgentRuntimeErrorType.PermissionDenied],
       ],
       name: 'credentials and access',
     },
@@ -436,6 +443,14 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
           'error getting file type: failed to download file, status code: 404',
           AgentRuntimeErrorType.InvalidRequestFormat,
         ],
+        [
+          'Unable to download the file. Please verify the URL and try again.',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'The request is invalid for this endpoint. Check your model name, messages, tools, and parameters.',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
         ['422 status code (no body)', AgentRuntimeErrorType.InvalidRequestFormat],
       ],
       name: 'request format and file retrieval',
@@ -444,6 +459,10 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
       cases: [
         ['503 "Service Unavailable"', AgentRuntimeErrorType.ProviderServiceUnavailable],
         ['Hệ thống đang bận', AgentRuntimeErrorType.ProviderServiceUnavailable],
+        [
+          'Vision is temporarily unavailable. Send text-only requests for now.',
+          AgentRuntimeErrorType.ProviderServiceUnavailable,
+        ],
       ],
       name: 'service unavailable',
     },

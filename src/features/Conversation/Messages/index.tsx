@@ -9,6 +9,8 @@ import { memo, Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import SafeBoundary from '@/components/ErrorBoundary';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
@@ -70,6 +72,9 @@ const MessageItem = memo<MessageItemProps>(
     isLatestItem,
   }) => {
     const topic = useConversationStore((s) => s.context.topicId);
+    const enableMessageTextSelectionActions = useUserStore(
+      labPreferSelectors.enableMessageTextSelectionActions,
+    );
 
     // Get message from ConversationStore
     const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
@@ -93,6 +98,7 @@ const MessageItem = memo<MessageItemProps>(
       role === 'assistant' || role === 'assistantGroup' || role === 'supervisor';
     const supportsTextSelectionActions =
       role === 'user' || role === 'assistant' || role === 'assistantGroup';
+    const shouldDimCreatingMessage = isMessageCreating && role !== 'user';
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
@@ -222,17 +228,18 @@ const MessageItem = memo<MessageItemProps>(
       </SafeBoundary>
     );
 
-    const selectableContent = supportsTextSelectionActions ? (
-      <TextSelectionActionLayer>{content}</TextSelectionActionLayer>
-    ) : (
-      content
-    );
+    const selectableContent =
+      enableMessageTextSelectionActions && supportsTextSelectionActions ? (
+        <TextSelectionActionLayer>{content}</TextSelectionActionLayer>
+      ) : (
+        content
+      );
 
     return (
       <>
         {enableHistoryDivider && <History />}
         <Flexbox
-          className={cx(styles.message, className, isMessageCreating && styles.loading)}
+          className={cx(styles.message, className, shouldDimCreatingMessage && styles.loading)}
           data-index={index}
           onContextMenu={onContextMenu}
         >

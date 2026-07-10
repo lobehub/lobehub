@@ -153,13 +153,6 @@ export const sessionRouter = router({
       return ctx.sessionModel.query({ current, pageSize });
     }),
 
-  // Owner-only — bulk wipes everyone's sessions in the workspace.
-  removeAllSessions: sessionProcedure
-    .use(withScopedPermission('session:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.sessionModel.deleteAll();
-    }),
-
   removeSession: sessionProcedure
     .use(withScopedPermission('session:delete'))
     .input(z.object({ id: z.string() }))

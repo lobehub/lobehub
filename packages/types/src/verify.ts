@@ -302,6 +302,8 @@ export interface VerifyEvidence {
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;
+  /** Generic extension bag; concrete capturer-specific shape is not fixed yet. */
+  metadata?: unknown | null;
   type: VerifyEvidenceType;
 }
 

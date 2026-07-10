@@ -16,7 +16,12 @@ import {
   type MetaData,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, KnowledgeType } from '@lobechat/types';
+import {
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getWorkingDirEffectivePath,
+  KnowledgeType,
+} from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -119,10 +124,29 @@ const currentAgentModelProvider = (s: AgentStoreState) => {
   return config?.provider || DEFAULT_PROVIDER;
 };
 
+/**
+ * Pinned plugin identifiers for the current agent — disabled entries are
+ * excluded. Matches the pre-tri-state semantics where array-membership meant
+ * pinned; consumers that need the disabled set use `getDisabledPluginIds`
+ * directly.
+ */
 const currentAgentPlugins = (s: AgentStoreState) => {
   const config = currentAgentConfig(s);
 
-  return config?.plugins || [];
+  return getActivePluginIds(config?.plugins);
+};
+
+/**
+ * Disabled plugin identifiers for the current agent. Consumers that build a
+ * tool/skill candidate pool (not just the "always whitelisted" rule map)
+ * need this to actually drop a disabled entry from the pool — being absent
+ * from `currentAgentPlugins` alone doesn't stop it from being present (and
+ * explicit-activation-eligible) in an unfiltered manifest source.
+ */
+const currentAgentDisabledPlugins = (s: AgentStoreState) => {
+  const config = currentAgentConfig(s);
+
+  return getDisabledPluginIds(config?.plugins);
 };
 
 /**
@@ -312,6 +336,7 @@ export const agentSelectors = {
   currentAgentRuntimeEnvConfig,
   currentAgentMeta,
   currentAgentMode,
+  currentAgentDisabledPlugins,
   currentAgentModel,
   currentAgentModelProvider,
   currentAgentPlugins,

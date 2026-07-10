@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClaudeCodeAdapter } from './claudeCode';
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 
 describe('ClaudeCodeAdapter', () => {
   describe('lifecycle', () => {
@@ -16,6 +16,32 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].type).toBe('stream_start');
       expect(events[0].data.model).toBe('claude-sonnet-4-6');
       expect(adapter.sessionId).toBe('sess_123');
+    });
+
+    // `system init` beta-tags the id; every later event reports it clean. The
+    // renderer stamps the assistant from this event, so the tag must not leak.
+    it('strips the beta marker from the init model id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus-4-8[1m]',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus-4-8');
+    });
+
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
     });
 
     it('emits visible_output_end before agent_runtime_end on success result', () => {
@@ -35,6 +61,14 @@ describe('ClaudeCodeAdapter', () => {
       const events = adapter.adapt({ is_error: true, result: 'boom', type: 'result' });
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
       expect(events[2].data.message).toBe('boom');
+    });
+
+    it('keeps runtime open until transport close in SDK mode', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end']);
     });
 
     it('classifies auth failures from failed result events', () => {
@@ -706,9 +740,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.toolCallId).toBe('r1');
       expect(result!.data.content).toBe('[Image: image/png]');
       expect(result!.data.isError).toBe(false);
-      expect(result!.data.pluginState.images).toEqual([
-        { data: 'AAAA', mediaType: 'image/png' },
-      ]);
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image/png' }]);
 
       const end = events.find((e) => e.type === 'tool_end');
       expect(end).toBeDefined();
@@ -2974,6 +3006,46 @@ describe('ClaudeCodeAdapter', () => {
       expect(
         followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();
+    });
+
+    it('treats SDK background Bash completion notification as task-completion lineage', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_bash',
+              input: { command: 'sleep 1 && echo done', run_in_background: true },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
+      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
+
+      const firstResult = adapter.adapt({
+        is_error: false,
+        result: 'Background command started',
+        type: 'result',
+      });
+      expect(firstResult.map((e) => e.type)).toEqual(['stream_end']);
+
+      adapter.adapt(ccTaskNotification('task_1'));
+
+      const completion = adapter.adapt(ccMessageStart('msg_02'));
+      expect(
+        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sourceToolCallId: 'toolu_bash',
+        sourceToolName: 'Bash',
+        type: 'task-completion',
+      });
     });
 
     /**

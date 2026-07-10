@@ -1,6 +1,5 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';

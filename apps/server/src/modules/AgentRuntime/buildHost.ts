@@ -1,10 +1,15 @@
 import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
 
+import { ServerCompressionTransport } from './adapters/ServerCompressionTransport';
 import { ServerLifecycleSink } from './adapters/ServerLifecycleSink';
+import { ServerLLMTransport } from './adapters/ServerLLMTransport';
 import { ServerMessageTransport } from './adapters/ServerMessageTransport';
 import { ServerOperationStore } from './adapters/ServerOperationStore';
 import { ServerStreamSink } from './adapters/ServerStreamSink';
-import { type RuntimeExecutorContext } from './context';
+import { ServerSubAgentTransport } from './adapters/ServerSubAgentTransport';
+import { ServerToolTransport } from './adapters/ServerToolTransport';
+import type { RuntimeExecutorContext } from './context';
+import { buildPostProcessUrl } from './executorHelpers';
 
 /**
  * Build the {@link AgentRuntimeHost} from the server's `RuntimeExecutorContext`:
@@ -31,7 +36,13 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
     workspaceId: ctx.workspaceId,
   },
   transports: {
-    messages: new ServerMessageTransport(ctx.messageModel),
+    compression: ctx.userId
+      ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
+      : undefined,
+    llm: ctx.userId ? new ServerLLMTransport(ctx) : undefined,
+    messages: new ServerMessageTransport(ctx.messageModel, {
+      postProcessUrl: buildPostProcessUrl(ctx),
+    }),
     operationStore: new ServerOperationStore(
       ctx.serverDB,
       ctx.userId,
@@ -39,5 +50,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
       ctx.topicId,
     ),
     stream: new ServerStreamSink(ctx.streamManager, ctx.operationId),
+    subAgent: ctx.execSubAgent ? new ServerSubAgentTransport(ctx) : undefined,
+    tools: new ServerToolTransport(ctx),
   },
 });

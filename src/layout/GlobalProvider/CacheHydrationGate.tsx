@@ -1,14 +1,11 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import type { PropsWithChildren } from 'react';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 
 import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
 // first-write-wins: only the very first paint records the boot timing mark.
 let firstPaintMarked = false;
@@ -16,28 +13,26 @@ let firstPaintMarked = false;
 const HYDRATION_TIMEOUT = 1500;
 
 /**
- * Blocks the first paint until the initial identity scope's IndexedDB cache has
- * hydrated, so the app never flashes empty on cold boot — the static
- * `loading-screen` overlay covers exactly this window.
+ * Blocks the first paint until the active scope's IndexedDB cache has hydrated,
+ * so the app never flashes empty on cold boot — the static `loading-screen`
+ * overlay covers exactly this window.
  *
  * This is a one-way latch: once released it never blanks again. A later scope
  * change (anonymous → signed-in, or workspace switch) re-hydrates the SWR cache
  * *in place* via `Query.tsx`'s `reloadScope()`, keeping the current tree mounted
- * while the new scope's data swaps in underneath. Re-blocking here (as the old
- * `key={scope}` remount did) would unmount the whole app and expose a
- * full-screen white flash on login.
+ * while the new scope's data swaps in underneath.
  *
- * On desktop the first paint additionally waits for `isUserStateInit` — the
- * `getUserState()` identity round-trip that populates `userId`. Without it the
- * cold boot would paint the anonymous scope first and then flip to the signed-in
- * scope, briefly flashing the logged-out shell. Anonymous desktop still resolves
- * (the round-trip completes with a null cloud `userId`), and the 1500ms timeout
- * is a hard backstop so a hung round-trip never keeps the app blank.
+ * The active scope is known synchronously at boot from the persisted
+ * `activeScopeKey` (the last-known `${userId}:${workspace}`), so the provider
+ * hydrates the *real* user partition in parallel with the session check — the
+ * gate only waits for that hydration (`ready`), not for the identity
+ * round-trip. That parallelism is what restores instant-from-cache first paint.
+ * Writes made before the session confirms the scope are quarantined by the
+ * cache provider (`isEphemeralScope`), so the optimistic window can't orphan or
+ * pollute a partition. The 1500ms timeout is a pure hung-hydration backstop.
  */
 const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
-  const isAuthLoaded = Boolean(useUserStore(authSelectors.isLoaded));
-  const isUserStateInit = useUserStore((s) => s.isUserStateInit);
 
   const ready = useSyncExternalStore(
     cacheHydration.subscribe,
@@ -57,18 +52,11 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     if (released) return;
-    // Hard backstop: never stay blank past the timeout, whatever is pending.
-    if (timedOut) {
-      setReleased(true);
-      return;
-    }
-    if (!isAuthLoaded) return;
-    // Desktop paints against the final identity scope, not the anonymous one.
-    if (isDesktop && !isUserStateInit) return;
-    if (!ready) return;
-
-    setReleased(true);
-  }, [isAuthLoaded, isUserStateInit, ready, released, timedOut]);
+    // Release the moment the active scope's cache has hydrated — the persisted
+    // activeScopeKey means that's already the real user partition, so this paints
+    // straight from cache. The timeout backstop guards a hung hydration only.
+    if (ready || timedOut) setReleased(true);
+  }, [ready, timedOut, released]);
 
   useLayoutEffect(() => {
     if (!released) return;
