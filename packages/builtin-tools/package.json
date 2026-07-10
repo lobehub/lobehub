@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",

@@ -30,7 +30,7 @@ const runStatusSchema = z.enum([
 
 const reportResultItemSchema = z.object({
   correct: z.boolean(),
-  result: z.record(z.unknown()).optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
   score: z.number(),
   threadId: z.string().optional(),
   topicId: z.string(),
@@ -350,7 +350,7 @@ export const agentEvalExternalRouter = router({
     .input(
       z.object({
         correct: z.boolean(),
-        result: z.record(z.unknown()).optional(),
+        result: z.record(z.string(), z.unknown()).optional(),
         runId: z.string(),
         score: z.number(),
         threadId: z.string().optional(),
@@ -463,7 +463,7 @@ export const agentEvalExternalRouter = router({
     .input(
       z.object({
         correct: z.boolean(),
-        result: z.record(z.unknown()).optional(),
+        result: z.record(z.string(), z.unknown()).optional(),
         runId: z.string(),
         score: z.number(),
         threadId: z.string().optional(),

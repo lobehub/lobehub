@@ -306,7 +306,7 @@ export const botMessageRouter = router({
           botId: z.string().optional(),
           channelId: z.string(),
           content: z.string(),
-          embeds: z.array(z.record(z.unknown())).optional(),
+          embeds: z.array(z.record(z.string(), z.unknown())).optional(),
           messengerInstallationId: z.string().optional(),
           replyTo: z.string().optional(),
         })

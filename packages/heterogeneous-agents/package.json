@@ -23,7 +23,7 @@
     "@lobehub/icons": "^5.10.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.4",
-    "zod": "^4.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

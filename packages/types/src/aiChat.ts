@@ -131,7 +131,7 @@ export const AiSendMessageServerSchema = z.object({
   agentId: z.string().optional(),
   groupId: z.string().optional(),
   newAssistantMessage: z.object({
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
   }),
@@ -148,7 +148,7 @@ export const AiSendMessageServerSchema = z.object({
   newUserMessage: z.object({
     content: z.string(),
     contextSelections: z.array(ContextSelectionSchema).optional(),
-    editorData: z.record(z.unknown()).optional(),
+    editorData: z.record(z.string(), z.unknown()).optional(),
     files: z.array(z.string()).optional(),
     metadata: MessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),

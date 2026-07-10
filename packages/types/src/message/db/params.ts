@@ -126,7 +126,7 @@ export interface NewMessageQueryParams {
 export const UpdateMessageParamsSchema = z
   .object({
     content: z.string().optional(),
-    editorData: z.record(z.any()).nullish(),
+    editorData: z.record(z.string(), z.any()).nullish(),
     error: ChatMessageErrorSchema.nullish(),
     imageList: z.array(ChatImageItemSchema).optional(),
     metadata: MessageMetadataSchema.optional(),

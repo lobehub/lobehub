@@ -135,7 +135,7 @@ const agentGroupWriteProcedure = agentGroupProcedure.use(withScopedPermission('a
 const memberAgentSchema = z.object({
   avatar: z.string().nullish(),
   category: z.string().optional(),
-  config: z.record(z.any()),
+  config: z.record(z.string(), z.any()),
   description: z.string(),
   displayOrder: z.number().optional(),
   identifier: z.string(),

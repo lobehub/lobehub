@@ -20,7 +20,7 @@ export const composioToolsRouter = router({
     .input(
       z.object({
         identifier: z.string(),
-        toolArgs: z.record(z.unknown()).optional(),
+        toolArgs: z.record(z.string(), z.unknown()).optional(),
         toolSlug: z.string(),
       }),
     )

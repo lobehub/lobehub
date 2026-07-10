@@ -643,7 +643,7 @@ export const messageRouter = router({
       z
         .object({
           toolCallId: z.string(),
-          value: z.union([z.string(), z.record(z.unknown())]),
+          value: z.union([z.string(), z.record(z.string(), z.unknown())]),
         })
         .extend(basicContextSchema.shape),
     )

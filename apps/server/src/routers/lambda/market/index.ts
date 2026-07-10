@@ -777,7 +777,7 @@ export const marketRouter = router({
         errorMessage: z.string().optional(),
         identifier: z.string(),
         isCustomPlugin: z.boolean().optional(),
-        metadata: z.record(z.any()).optional(),
+        metadata: z.record(z.string(), z.any()).optional(),
         methodName: z.string(),
         methodType: z.enum(['tool', 'prompt', 'resource']),
         platform: z.string().optional(),

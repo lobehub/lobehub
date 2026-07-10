@@ -648,7 +648,7 @@ export const topicRouter = router({
         metadata: z.object({
           boundDeviceId: z.string().optional(),
           heteroSessionId: z.string().optional(),
-          heteroSessionIdByWorkingDirectory: z.record(z.string()).optional(),
+          heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
           model: z.string().optional(),
           onboardingFeedback: z
             .object({

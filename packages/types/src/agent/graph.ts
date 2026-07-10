@@ -76,7 +76,7 @@ const AgentGraphNodeSchema = z.discriminatedUnion('type', [
 
 const AgentGraphFieldSchema = z.object({
   desc: z.string().min(1),
-  schema: z.record(z.unknown()),
+  schema: z.record(z.string(), z.unknown()),
 });
 
 const AgentGraphFieldRefSchema = z.object({
@@ -92,7 +92,7 @@ const AgentGraphInputFieldSchema = AgentGraphFieldRefSchema.extend({
 const AgentGraphOutputFieldSchema = AgentGraphFieldRefSchema;
 
 const AgentGraphEdgeSchema = z.object({
-  condition: z.record(z.unknown()).optional(),
+  condition: z.record(z.string(), z.unknown()).optional(),
   from: z.string(),
   input: z
     .object({
@@ -139,10 +139,10 @@ const findSchemaDescriptionPath = (
 export const ReasoningGraphSchema: z.ZodType<ReasoningGraph> = z
   .object({
     description: z.string().optional(),
-    fields: z.record(AgentGraphFieldSchema),
+    fields: z.record(z.string(), AgentGraphFieldSchema),
     maxInstructionCount: z.number().int().positive().optional(),
     name: z.string().min(1),
-    nodes: z.record(AgentGraphNodeSchema),
+    nodes: z.record(z.string(), AgentGraphNodeSchema),
     terminal: z.string().min(1),
     edges: z.array(AgentGraphEdgeSchema),
   })
